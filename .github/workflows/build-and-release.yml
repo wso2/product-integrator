@@ -106,7 +106,7 @@ jobs:
           sudo apt-get install build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3  
 
       - name: Install dependencies
-        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') == '' }}
+        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') == '' }}
         working-directory: lib/vscode
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
@@ -119,13 +119,13 @@ jobs:
           done
 
       - name: Create node_modules archive
-        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') == '' }}
+        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') == '' }}
         working-directory: lib/vscode
         run: |
           set -e
-          node build/azure-pipelines/common/listNodeModules.js ../../.build/node_modules_list.txt
-          mkdir -p ../../.build/node_modules_cache
-          tar -czf ../../.build/node_modules_cache/cache.tgz --files-from ../../.build/node_modules_list.txt
+          node build/azure-pipelines/common/listNodeModules.js .build/node_modules_list.txt
+          mkdir -p .build/node_modules_cache
+          tar -czf .build/node_modules_cache/cache.tgz --files-from .build/node_modules_list.txt
 
       - name: Compile & Hygiene
         working-directory: lib/vscode
@@ -138,7 +138,7 @@ jobs:
 
       - name: Compress compilation artifact
         run: |
-          tar -cz --exclude='.build/node_modules_cache' --exclude='.build/node_modules_list.txt' --exclude='.build/distro' -f compilation.tar.gz $(ls -d .build lib/vscode/out-* lib/vscode/test/integration/browser/out lib/vscode/test/smoke/out lib/vscode/test/automation/out 2>/dev/null)
+          tar -cz --exclude='lib/vscode/.build/node_modules_cache' --exclude='lib/vscode/.build/node_modules_list.txt' --exclude='lib/vscode/.build/distro' -f compilation.tar.gz $(ls -d .build lib/vscode/out-* lib/vscode/test/integration/browser/out lib/vscode/test/smoke/out lib/vscode/test/automation/out 2>/dev/null)
 
       - name: Upload compilation artifact
         uses: actions/upload-artifact@v4
@@ -192,7 +192,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build/node_modules_cache
-          key: node_modules-${{ hashFiles('.build/packagelockhash') }}
+          key: node_modules-${{ hashFiles('lib/vscode/.build/packagelockhash') }}
 
       - name: Extract node_modules cache
         if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') != '' }}
@@ -218,9 +218,9 @@ jobs:
         working-directory: lib/vscode
         run: |
           set -e
-          node build/azure-pipelines/common/listNodeModules.js ../../.build/node_modules_list.txt
-          mkdir -p ../../.build/node_modules_cache
-          tar -czf ../../.build/node_modules_cache/cache.tgz --files-from ../../.build/node_modules_list.txt
+          node build/azure-pipelines/common/listNodeModules.js .build/node_modules_list.txt
+          mkdir -p .build/node_modules_cache
+          tar -czf .build/node_modules_cache/cache.tgz --files-from .build/node_modules_list.txt
 
       - name: Update product.json and branding
         run: |
@@ -233,7 +233,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run gulp vscode-linux-${VSCODE_ARCH}-min-ci
-          ARCHIVE_PATH=../../.build/linux/client/code-${VSCODE_ARCH}-$(date +%s).tar.gz
+          ARCHIVE_PATH=.build/linux/client/code-${VSCODE_ARCH}-$(date +%s).tar.gz
           mkdir -p $(dirname $ARCHIVE_PATH)
           echo "CLIENT_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
 
@@ -248,7 +248,7 @@ jobs:
         run: |
           npm run gulp vscode-reh-linux-${VSCODE_ARCH}-min-ci
           mv ../vscode-reh-linux-${VSCODE_ARCH} ../vscode-server-linux-${VSCODE_ARCH}
-          ARCHIVE_PATH=../../.build/linux/server/vscode-server-linux-${VSCODE_ARCH}.tar.gz
+          ARCHIVE_PATH=.build/linux/server/vscode-server-linux-${VSCODE_ARCH}.tar.gz
           mkdir -p $(dirname $ARCHIVE_PATH)
           tar --owner=0 --group=0 -czf "$ARCHIVE_PATH" -C .. vscode-server-linux-${VSCODE_ARCH}
           echo "SERVER_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
@@ -260,7 +260,7 @@ jobs:
         run: |
           npm run gulp vscode-reh-web-linux-${VSCODE_ARCH}-min-ci
           mv ../vscode-reh-web-linux-${VSCODE_ARCH} ../vscode-server-linux-${VSCODE_ARCH}-web
-          ARCHIVE_PATH=../../.build/linux/web/vscode-server-linux-${VSCODE_ARCH}-web.tar.gz
+          ARCHIVE_PATH=.build/linux/web/vscode-server-linux-${VSCODE_ARCH}-web.tar.gz
           mkdir -p $(dirname $ARCHIVE_PATH)
           tar --owner=0 --group=0 -czf "$ARCHIVE_PATH" -C .. vscode-server-linux-${VSCODE_ARCH}-web
           echo "WEB_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
@@ -273,7 +273,7 @@ jobs:
         working-directory: lib/vscode
         run: |
           npm run gulp vscode-linux-${VSCODE_ARCH}-build-deb
-          echo "DEB_PATH=$(ls ../../.build/linux/deb/*/deb/*.deb)" >> $GITHUB_ENV
+          echo "DEB_PATH=$(ls .build/linux/deb/*/deb/*.deb)" >> $GITHUB_ENV
 
       - name: Prepare RPM
         working-directory: lib/vscode
@@ -285,7 +285,7 @@ jobs:
         working-directory: lib/vscode
         run: |
           npm run gulp vscode-linux-${VSCODE_ARCH}-build-rpm
-          echo "RPM_PATH=$(ls ../../.build/linux/rpm/*/*.rpm)" >> $GITHUB_ENV
+          echo "RPM_PATH=$(ls .build/linux/rpm/*/*.rpm)" >> $GITHUB_ENV
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -337,14 +337,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build/node_modules_cache
-          key: node_modules-${{ hashFiles('.build/packagelockhash') }}
+          key: node_modules-${{ hashFiles('lib/vscode/.build/packagelockhash') }}
 
       - name: Extract node_modules cache
-        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') != '' }}
+        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') != '' }}
         run: tar -xzf .build/node_modules_cache/cache.tgz || true
 
       - name: Install dependencies
-        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') == '' }}
+        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') == '' }}
         working-directory: lib/vscode
         env:
           npm_config_arch: ${{ env.VSCODE_ARCH }}
@@ -360,13 +360,13 @@ jobs:
           done
 
       - name: Create node_modules archive
-        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') == '' }}
+        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') == '' }}
         working-directory: lib/vscode
         run: |
           set -e
-          node build/azure-pipelines/common/listNodeModules.js ../../.build/node_modules_list.txt
-          mkdir -p ../../.build/node_modules_cache
-          tar -czf ../../.build/node_modules_cache/cache.tgz --files-from ../../.build/node_modules_list.txt
+          node build/azure-pipelines/common/listNodeModules.js .build/node_modules_list.txt
+          mkdir -p .build/node_modules_cache
+          tar -czf .build/node_modules_cache/cache.tgz --files-from .build/node_modules_list.txt
 
       - name: Update product.json and branding
         run: |
@@ -388,7 +388,7 @@ jobs:
         run: |
           npm run gulp vscode-reh-darwin-${VSCODE_ARCH}-min-ci
           mv ../vscode-reh-darwin-${VSCODE_ARCH} ../vscode-server-darwin-${VSCODE_ARCH}
-          ARCHIVE_PATH=../../.build/darwin/server/vscode-server-darwin-${VSCODE_ARCH}.zip
+          ARCHIVE_PATH=.build/darwin/server/vscode-server-darwin-${VSCODE_ARCH}.zip
           mkdir -p $(dirname $ARCHIVE_PATH)
           (cd .. && zip -Xry $(pwd)/$ARCHIVE_PATH vscode-server-darwin-${VSCODE_ARCH})
           echo "SERVER_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
@@ -400,7 +400,7 @@ jobs:
         run: |
           npm run gulp vscode-reh-web-darwin-${VSCODE_ARCH}-min-ci
           mv ../vscode-reh-web-darwin-${VSCODE_ARCH} ../vscode-server-darwin-${VSCODE_ARCH}-web
-          ARCHIVE_PATH=../../.build/darwin/server/vscode-server-darwin-${VSCODE_ARCH}-web.zip
+          ARCHIVE_PATH=.build/darwin/server/vscode-server-darwin-${VSCODE_ARCH}-web.zip
           mkdir -p $(dirname $ARCHIVE_PATH)
           (cd .. && zip -Xry $(pwd)/$ARCHIVE_PATH vscode-server-darwin-${VSCODE_ARCH}-web)
           echo "WEB_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
@@ -462,15 +462,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build/node_modules_cache
-          key: node_modules-${{ hashFiles('.build/packagelockhash') }}
+          key: node_modules-${{ hashFiles('lib/vscode/.build/packagelockhash') }}
 
       - name: Extract node_modules cache
-        if: ${{ hashFiles('.build/node_modules_cache/cache.7z') != '' }}
+        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.7z') != '' }}
         shell: pwsh
         run: 7z.exe x .build/node_modules_cache/cache.7z -aoa
 
       - name: Install dependencies
-        if: ${{ hashFiles('.build/node_modules_cache/cache.7z') == '' }}
+        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.7z') == '' }}
         shell: pwsh
         working-directory: lib/vscode
         env:
@@ -485,13 +485,13 @@ jobs:
           }
 
       - name: Create node_modules archive
-        if: ${{ hashFiles('.build/node_modules_cache/cache.7z') == '' }}
+        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.7z') == '' }}
         shell: pwsh
         working-directory: lib/vscode
         run: |
-          node build/azure-pipelines/common/listNodeModules.js ../../.build/node_modules_list.txt
-          mkdir -Force ../../.build/node_modules_cache
-          7z.exe a ../../.build/node_modules_cache/cache.7z -mx3 @../../.build/node_modules_list.txt
+          node build/azure-pipelines/common/listNodeModules.js .build/node_modules_list.txt
+          mkdir -Force .build/node_modules_cache
+          7z.exe a .build/node_modules_cache/cache.7z -mx3 @.build/node_modules_list.txt
 
       - name: Update product.json and branding
         run: |
