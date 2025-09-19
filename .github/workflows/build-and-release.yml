@@ -48,7 +48,7 @@ jobs:
       - name: Use Node from .nvmrc
         uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: lib/vscode/.nvmrc
 
       - name: Compute node_modules cache key
         id: cache-key
@@ -133,7 +133,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: lib/vscode/.nvmrc
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -282,7 +282,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: lib/vscode/.nvmrc
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -404,7 +404,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: lib/vscode/.nvmrc
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
