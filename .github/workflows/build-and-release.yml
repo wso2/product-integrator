@@ -1,0 +1,533 @@
+name: Build and Release Artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      build_linux:
+        description: Build Linux artifacts
+        required: false
+        default: true
+        type: boolean
+      build_macos:
+        description: Build macOS artifacts
+        required: false
+        default: true
+        type: boolean
+      build_windows:
+        description: Build Windows artifacts
+        required: false
+        default: true
+        type: boolean
+      linux_arches:
+        description: JSON array of Linux ARCHes ["x64","arm64"]
+        required: false
+        default: '["x64","arm64"]'
+        type: string
+      macos_arches:
+        description: JSON array of macOS ARCHes ["x64","arm64"]
+        required: false
+        default: '["x64","arm64"]'
+        type: string
+      windows_arches:
+        description: JSON array of Windows ARCHes ["x64","arm64"]
+        required: false
+        default: '["x64","arm64"]'
+        type: string
+
+jobs:
+  compile:
+    name: Compile (cacheable)
+    runs-on: ubuntu-latest
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Use Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Compute node_modules cache key
+        id: cache-key
+        run: |
+          mkdir -p .build
+          node lib/vscode/build/azure-pipelines/common/computeNodeModulesCacheKey.js compile $(node -p process.arch) > .build/packagelockhash
+          echo "key=$(cat .build/packagelockhash)" >> $GITHUB_OUTPUT
+
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: .build/node_modules_cache
+          key: node_modules-${{ steps.cache-key.outputs.key }}
+
+      - name: Extract node_modules cache
+        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') != '' }}
+        run: |
+          tar -xzf .build/node_modules_cache/cache.tgz || true
+
+      - name: Install dependencies
+        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') == '' }}
+        working-directory: lib/vscode
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+        run: |
+          set -e
+          for i in 1 2 3 4 5; do
+            npm ci && break
+            echo "npm ci failed $i, retrying..."
+          done
+
+      - name: Create node_modules archive
+        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') == '' }}
+        working-directory: lib/vscode
+        run: |
+          set -e
+          node build/azure-pipelines/common/listNodeModules.js ../../.build/node_modules_list.txt
+          mkdir -p ../../.build/node_modules_cache
+          tar -czf ../../.build/node_modules_cache/cache.tgz --files-from ../../.build/node_modules_list.txt
+
+      - name: Update product.json and branding
+        run: |
+          ./ci/build/update-product.sh
+
+      - name: Compile & Hygiene
+        working-directory: lib/vscode
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+        run: |
+          npm exec -- npm-run-all -lp core-ci extensions-ci hygiene eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+          npm run compile
+
+      - name: Compress compilation artifact
+        run: |
+          tar -cz --exclude='.build/node_modules_cache' --exclude='.build/node_modules_list.txt' --exclude='.build/distro' -f compilation.tar.gz $(ls -d .build lib/vscode/out-* lib/vscode/test/integration/browser/out lib/vscode/test/smoke/out lib/vscode/test/automation/out 2>/dev/null)
+
+      - name: Upload compilation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Compilation
+          path: compilation.tar.gz
+
+  build-linux:
+    name: Build Linux ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    needs: compile
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_linux == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.linux_arches) || fromJSON('["x64","arm64"]') }}
+    env:
+      VSCODE_ARCH: ${{ matrix.arch }}
+      NPM_ARCH: ${{ matrix.arch == 'x64' && 'x64' || 'arm64' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download compilation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Compilation
+          path: .
+
+      - name: Extract compilation artifact
+        run: tar -xzf compilation.tar.gz
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config xvfb libgtk-3-0 libxkbfile-dev libkrb5-dev libgbm1 rpm
+
+      - name: Prepare node_modules cache key
+        run: |
+          mkdir -p .build
+          node lib/vscode/build/azure-pipelines/common/computeNodeModulesCacheKey.js linux $VSCODE_ARCH $(node -p process.arch) > .build/packagelockhash
+
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: .build/node_modules_cache
+          key: node_modules-${{ hashFiles('.build/packagelockhash') }}
+
+      - name: Extract node_modules cache
+        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') != '' }}
+        run: tar -xzf .build/node_modules_cache/cache.tgz || true
+
+      - name: Install dependencies
+        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') == '' }}
+        working-directory: lib/vscode
+        env:
+          npm_config_arch: ${{ env.NPM_ARCH }}
+          VSCODE_ARCH: ${{ env.VSCODE_ARCH }}
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+        run: |
+          set -e
+          for i in 1 2 3 4 5; do
+            npm ci && break
+            echo "npm ci failed $i, retrying..."
+          done
+
+      - name: Create node_modules archive
+        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') == '' }}
+        working-directory: lib/vscode
+        run: |
+          set -e
+          node build/azure-pipelines/common/listNodeModules.js ../../.build/node_modules_list.txt
+          mkdir -p ../../.build/node_modules_cache
+          tar -czf ../../.build/node_modules_cache/cache.tgz --files-from ../../.build/node_modules_list.txt
+
+      - name: Update product.json and branding
+        run: |
+          ./ci/build/update-product.sh
+
+      - name: Build client
+        working-directory: lib/vscode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp vscode-linux-${VSCODE_ARCH}-min-ci
+          ARCHIVE_PATH=../../.build/linux/client/code-${VSCODE_ARCH}-$(date +%s).tar.gz
+          mkdir -p $(dirname $ARCHIVE_PATH)
+          echo "CLIENT_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
+
+      - name: Archive client
+        run: |
+          tar -czf "$CLIENT_PATH" -C lib/vscode/.. VSCode-linux-${{ env.VSCODE_ARCH }}
+
+      - name: Build server
+        working-directory: lib/vscode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp vscode-reh-linux-${VSCODE_ARCH}-min-ci
+          mv ../vscode-reh-linux-${VSCODE_ARCH} ../vscode-server-linux-${VSCODE_ARCH}
+          ARCHIVE_PATH=../../.build/linux/server/vscode-server-linux-${VSCODE_ARCH}.tar.gz
+          mkdir -p $(dirname $ARCHIVE_PATH)
+          tar --owner=0 --group=0 -czf "$ARCHIVE_PATH" -C .. vscode-server-linux-${VSCODE_ARCH}
+          echo "SERVER_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
+
+      - name: Build server (web)
+        working-directory: lib/vscode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp vscode-reh-web-linux-${VSCODE_ARCH}-min-ci
+          mv ../vscode-reh-web-linux-${VSCODE_ARCH} ../vscode-server-linux-${VSCODE_ARCH}-web
+          ARCHIVE_PATH=../../.build/linux/web/vscode-server-linux-${VSCODE_ARCH}-web.tar.gz
+          mkdir -p $(dirname $ARCHIVE_PATH)
+          tar --owner=0 --group=0 -czf "$ARCHIVE_PATH" -C .. vscode-server-linux-${VSCODE_ARCH}-web
+          echo "WEB_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
+
+      - name: Prepare DEB
+        working-directory: lib/vscode
+        run: npm run gulp vscode-linux-${VSCODE_ARCH}-prepare-deb
+
+      - name: Build DEB
+        working-directory: lib/vscode
+        run: |
+          npm run gulp vscode-linux-${VSCODE_ARCH}-build-deb
+          echo "DEB_PATH=$(ls ../../.build/linux/deb/*/deb/*.deb)" >> $GITHUB_ENV
+
+      - name: Prepare RPM
+        working-directory: lib/vscode
+        env:
+          VSCODE_ARCH: ${{ env.VSCODE_ARCH }}
+        run: npm run gulp vscode-linux-${VSCODE_ARCH}-prepare-rpm
+
+      - name: Build RPM
+        working-directory: lib/vscode
+        run: |
+          npm run gulp vscode-linux-${VSCODE_ARCH}-build-rpm
+          echo "RPM_PATH=$(ls ../../.build/linux/rpm/*/*.rpm)" >> $GITHUB_ENV
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}-artifacts
+          path: |
+            ${{ env.CLIENT_PATH }}
+            ${{ env.SERVER_PATH }}
+            ${{ env.WEB_PATH }}
+            ${{ env.DEB_PATH }}
+            ${{ env.RPM_PATH }}
+
+  build-macos:
+    name: Build macOS ${{ matrix.arch }}
+    runs-on: macos-latest
+    needs: compile
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_macos == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.macos_arches) || fromJSON('["x64","arm64"]') }}
+    env:
+      VSCODE_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download compilation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Compilation
+          path: .
+
+      - name: Extract compilation artifact
+        run: tar -xzf compilation.tar.gz
+
+      - name: Prepare node_modules cache key
+        run: |
+          mkdir -p .build
+          node lib/vscode/build/azure-pipelines/common/computeNodeModulesCacheKey.js darwin $VSCODE_ARCH $(node -p process.arch) > .build/packagelockhash
+
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: .build/node_modules_cache
+          key: node_modules-${{ hashFiles('.build/packagelockhash') }}
+
+      - name: Extract node_modules cache
+        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') != '' }}
+        run: tar -xzf .build/node_modules_cache/cache.tgz || true
+
+      - name: Install dependencies
+        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') == '' }}
+        working-directory: lib/vscode
+        env:
+          npm_config_arch: ${{ env.VSCODE_ARCH }}
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          GYP_DEFINES: kerberos_use_rtld=false
+        run: |
+          set -e
+          python3 -m pip install setuptools
+          for i in 1 2 3 4 5; do
+            npm ci && break
+            echo "npm ci failed $i, retrying..."
+          done
+
+      - name: Create node_modules archive
+        if: ${{ hashFiles('.build/node_modules_cache/cache.tgz') == '' }}
+        working-directory: lib/vscode
+        run: |
+          set -e
+          node build/azure-pipelines/common/listNodeModules.js ../../.build/node_modules_list.txt
+          mkdir -p ../../.build/node_modules_cache
+          tar -czf ../../.build/node_modules_cache/cache.tgz --files-from ../../.build/node_modules_list.txt
+
+      - name: Update product.json and branding
+        run: |
+          ./ci/build/update-product.sh
+
+      - name: Build client
+        working-directory: lib/vscode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp vscode-darwin-${VSCODE_ARCH}-min-ci
+          echo "BUILT_CLIENT=true" >> $GITHUB_ENV
+
+      - name: Build server
+        working-directory: lib/vscode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp vscode-reh-darwin-${VSCODE_ARCH}-min-ci
+          mv ../vscode-reh-darwin-${VSCODE_ARCH} ../vscode-server-darwin-${VSCODE_ARCH}
+          ARCHIVE_PATH=../../.build/darwin/server/vscode-server-darwin-${VSCODE_ARCH}.zip
+          mkdir -p $(dirname $ARCHIVE_PATH)
+          (cd .. && zip -Xry $(pwd)/$ARCHIVE_PATH vscode-server-darwin-${VSCODE_ARCH})
+          echo "SERVER_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
+
+      - name: Build server (web)
+        working-directory: lib/vscode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp vscode-reh-web-darwin-${VSCODE_ARCH}-min-ci
+          mv ../vscode-reh-web-darwin-${VSCODE_ARCH} ../vscode-server-darwin-${VSCODE_ARCH}-web
+          ARCHIVE_PATH=../../.build/darwin/server/vscode-server-darwin-${VSCODE_ARCH}-web.zip
+          mkdir -p $(dirname $ARCHIVE_PATH)
+          (cd .. && zip -Xry $(pwd)/$ARCHIVE_PATH vscode-server-darwin-${VSCODE_ARCH}-web)
+          echo "WEB_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
+
+      - name: Package client (unsigned)
+        if: ${{ env.BUILT_CLIENT == 'true' }}
+        run: |
+          APP_ROOT="$GITHUB_WORKSPACE/lib/vscode/../VSCode-darwin-${VSCODE_ARCH}"
+          APP_NAME="$(ls $APP_ROOT | head -n 1)"
+          (cd "$APP_ROOT" && zip -Xry "$GITHUB_WORKSPACE/VSCode-darwin-${VSCODE_ARCH}.zip" "$APP_NAME")
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-artifacts
+          path: |
+            VSCode-darwin-${{ matrix.arch }}.zip
+            ${{ env.SERVER_PATH }}
+            ${{ env.WEB_PATH }}
+
+  build-windows:
+    name: Build Windows ${{ matrix.arch }}
+    runs-on: windows-latest
+    needs: compile
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_windows == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.windows_arches) || fromJSON('["x64","arm64"]') }}
+    env:
+      VSCODE_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download compilation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Compilation
+          path: .
+
+      - name: Extract compilation artifact
+        shell: bash
+        run: tar -xzf compilation.tar.gz
+
+      - name: Prepare node_modules cache key
+        shell: pwsh
+        run: |
+          mkdir .build -ea 0
+          node lib/vscode/build/azure-pipelines/common/computeNodeModulesCacheKey.js win32 $env:VSCODE_ARCH $(node -p process.arch) > .build/packagelockhash
+
+      - name: Restore node_modules cache
+        uses: actions/cache@v4
+        with:
+          path: .build/node_modules_cache
+          key: node_modules-${{ hashFiles('.build/packagelockhash') }}
+
+      - name: Extract node_modules cache
+        if: ${{ hashFiles('.build/node_modules_cache/cache.7z') != '' }}
+        shell: pwsh
+        run: 7z.exe x .build/node_modules_cache/cache.7z -aoa
+
+      - name: Install dependencies
+        if: ${{ hashFiles('.build/node_modules_cache/cache.7z') == '' }}
+        shell: pwsh
+        working-directory: lib/vscode
+        env:
+          npm_config_arch: ${{ env.VSCODE_ARCH }}
+          npm_config_foreground_scripts: "true"
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+        run: |
+          $ErrorActionPreference = "Stop"
+          for ($i = 1; $i -le 5; $i++) {
+            try { npm ci; break } catch { echo "npm ci failed $i, retrying..." }
+          }
+
+      - name: Create node_modules archive
+        if: ${{ hashFiles('.build/node_modules_cache/cache.7z') == '' }}
+        shell: pwsh
+        working-directory: lib/vscode
+        run: |
+          node build/azure-pipelines/common/listNodeModules.js ../../.build/node_modules_list.txt
+          mkdir -Force ../../.build/node_modules_cache
+          7z.exe a ../../.build/node_modules_cache/cache.7z -mx3 @../../.build/node_modules_list.txt
+
+      - name: Update product.json and branding
+        run: |
+          ./ci/build/update-product.sh
+
+      - name: Build client
+        shell: pwsh
+        working-directory: lib/vscode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp "vscode-win32-$env:VSCODE_ARCH-min-ci"
+          npm run gulp "vscode-win32-$env:VSCODE_ARCH-inno-updater"
+          echo "BUILT_CLIENT=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build server
+        shell: pwsh
+        working-directory: lib/vscode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp "vscode-reh-win32-$env:VSCODE_ARCH-min-ci"
+          Move-Item ..\vscode-reh-win32-$env:VSCODE_ARCH ..\vscode-server-win32-$env:VSCODE_ARCH
+          echo "SERVER_ROOT=$pwd/../vscode-server-win32-$env:VSCODE_ARCH" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build server (web)
+        shell: pwsh
+        working-directory: lib/vscode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp "vscode-reh-web-win32-$env:VSCODE_ARCH-min-ci"
+          Move-Item ..\vscode-reh-web-win32-$env:VSCODE_ARCH ..\vscode-server-win32-$env:VSCODE_ARCH-web
+          echo "SERVER_WEB_ROOT=$pwd/../vscode-server-win32-$env:VSCODE_ARCH-web" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Zip artifacts
+        shell: pwsh
+        run: |
+          $PackageJson = Get-Content -Raw -Path lib/vscode/../VSCode-win32-$env:VSCODE_ARCH\resources\app\package.json | ConvertFrom-Json
+          $Version = $PackageJson.version
+          $ClientArchivePath = ".build\win32-$env:VSCODE_ARCH\VSCode-win32-$env:VSCODE_ARCH-$Version.zip"
+          $ServerArchivePath = ".build\win32-$env:VSCODE_ARCH\vscode-server-win32-$env:VSCODE_ARCH.zip"
+          $WebArchivePath = ".build\win32-$env:VSCODE_ARCH\vscode-server-win32-$env:VSCODE_ARCH-web.zip"
+          mkdir -Force (Split-Path $ClientArchivePath)
+          Compress-Archive -Path lib/vscode/../VSCode-win32-$env:VSCODE_ARCH\* -DestinationPath $ClientArchivePath
+          Compress-Archive -Path $env:SERVER_ROOT\* -DestinationPath $ServerArchivePath
+          Compress-Archive -Path $env:SERVER_WEB_ROOT\* -DestinationPath $WebArchivePath
+          echo "CLIENT_PATH=$ClientArchivePath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "SERVER_PATH=$ServerArchivePath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "WEB_PATH=$WebArchivePath" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build installers (system/user)
+        shell: pwsh
+        run: |
+          $PackageJson = Get-Content -Raw -Path lib/vscode/../VSCode-win32-$env:VSCODE_ARCH\resources\app\package.json | ConvertFrom-Json
+          $Version = $PackageJson.version
+          $SystemSetupPath = ".build\win32-$env:VSCODE_ARCH\system-setup\VSCodeSetup-$env:VSCODE_ARCH-$Version.exe"
+          $UserSetupPath = ".build\win32-$env:VSCODE_ARCH\user-setup\VSCodeUserSetup-$env:VSCODE_ARCH-$Version.exe"
+          mkdir -Force (Split-Path $SystemSetupPath)
+          mkdir -Force (Split-Path $UserSetupPath)
+          Move-Item .build\win32-$env:VSCODE_ARCH\system-setup\VSCodeSetup.exe $SystemSetupPath
+          Move-Item .build\win32-$env:VSCODE_ARCH\user-setup\VSCodeSetup.exe $UserSetupPath
+          echo "SYSTEM_SETUP_PATH=$SystemSetupPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "USER_SETUP_PATH=$UserSetupPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}-artifacts
+          path: |
+            ${{ env.CLIENT_PATH }}
+            ${{ env.SERVER_PATH }}
+            ${{ env.WEB_PATH }}
+            ${{ env.SYSTEM_SETUP_PATH }}
+            ${{ env.USER_SETUP_PATH }}
