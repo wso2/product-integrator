@@ -3,10 +3,10 @@ Change activities locations and order in VS Code workbench
 This patch modifies the view container locations for the search, debug, testing and extensions activities in the VS Code workbench.
 It also adjusts the order of the explorer viewlet to ensure a more logical arrangement of activities in the sidebar.
 
-Index: code-server/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
+Index: product-integrator/ib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
 ===================================================================
---- code-server.orig/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
-+++ code-server/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
++++ product-integrator/ib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
 @@ -457,7 +457,7 @@ const viewContainer = Registry.as<IViewC
  	icon: icons.runViewIcon,
  	alwaysUseContainerInfo: true,
@@ -16,10 +16,10 @@ Index: code-server/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contr
  
  // Register default debug views
  const viewsRegistry = Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry);
-Index: code-server/lib/vscode/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+Index: product-integrator/ib/vscode/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
 ===================================================================
---- code-server.orig/lib/vscode/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
-+++ code-server/lib/vscode/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
++++ product-integrator/ib/vscode/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
 @@ -124,7 +124,7 @@ export const VIEW_CONTAINER = Registry.a
  		order: 4,
  		rejectAddedViews: true,
@@ -29,10 +29,10 @@ Index: code-server/lib/vscode/src/vs/workbench/contrib/extensions/browser/extens
  
  Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
  	.registerConfiguration({
-Index: code-server/lib/vscode/src/vs/workbench/contrib/files/browser/explorerViewlet.ts
+Index: product-integrator/ib/vscode/src/vs/workbench/contrib/files/browser/explorerViewlet.ts
 ===================================================================
---- code-server.orig/lib/vscode/src/vs/workbench/contrib/files/browser/explorerViewlet.ts
-+++ code-server/lib/vscode/src/vs/workbench/contrib/files/browser/explorerViewlet.ts
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/files/browser/explorerViewlet.ts
++++ product-integrator/ib/vscode/src/vs/workbench/contrib/files/browser/explorerViewlet.ts
 @@ -262,7 +262,7 @@ export const VIEW_CONTAINER: ViewContain
  	icon: explorerViewIcon,
  	alwaysUseContainerInfo: true,
@@ -51,10 +51,10 @@ Index: code-server/lib/vscode/src/vs/workbench/contrib/files/browser/explorerVie
  
  const openFolder = localize('openFolder', "Open Folder");
  const addAFolder = localize('addAFolder', "add a folder");
-Index: code-server/lib/vscode/src/vs/workbench/contrib/search/browser/search.contribution.ts
+Index: product-integrator/ib/vscode/src/vs/workbench/contrib/search/browser/search.contribution.ts
 ===================================================================
---- code-server.orig/lib/vscode/src/vs/workbench/contrib/search/browser/search.contribution.ts
-+++ code-server/lib/vscode/src/vs/workbench/contrib/search/browser/search.contribution.ts
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/search/browser/search.contribution.ts
++++ product-integrator/ib/vscode/src/vs/workbench/contrib/search/browser/search.contribution.ts
 @@ -63,7 +63,7 @@ const viewContainer = Registry.as<IViewC
  	hideIfEmpty: true,
  	icon: searchViewIcon,
@@ -64,10 +64,10 @@ Index: code-server/lib/vscode/src/vs/workbench/contrib/search/browser/search.con
  
  const viewDescriptor: IViewDescriptor = {
  	id: VIEW_ID,
-Index: code-server/lib/vscode/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
+Index: product-integrator/ib/vscode/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
 ===================================================================
---- code-server.orig/lib/vscode/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
-+++ code-server/lib/vscode/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
++++ product-integrator/ib/vscode/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
 @@ -75,7 +75,7 @@ const viewContainer = Registry.as<IViewC
  		order: 4,
  	},

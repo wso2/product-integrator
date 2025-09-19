@@ -15,10 +15,10 @@ This can be tested by setting EXTENSIONS_GALLERY set to:
     '{"serviceUrl": "https://my-extensions/api"}'
 
 
-Index: code-server/lib/vscode/src/vs/platform/product/common/product.ts
+Index: product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
 ===================================================================
---- code-server.orig/lib/vscode/src/vs/platform/product/common/product.ts
-+++ code-server/lib/vscode/src/vs/platform/product/common/product.ts
+--- product-integrator.orig/lib/vscode/src/vs/platform/product/common/product.ts
++++ product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
 @@ -49,6 +49,16 @@ else if (globalThis._VSCODE_PRODUCT_JSON
  			version: pkg.version
  		});
@@ -36,11 +36,11 @@ Index: code-server/lib/vscode/src/vs/platform/product/common/product.ts
  }
  
  // Web environment or unknown
-Index: code-server/lib/vscode/src/vs/server/node/webClientServer.ts
+Index: product-integrator/lib/vscode/src/vs/server/node/webClientServer.ts
 ===================================================================
---- code-server.orig/lib/vscode/src/vs/server/node/webClientServer.ts
-+++ code-server/lib/vscode/src/vs/server/node/webClientServer.ts
-@@ -326,7 +326,6 @@ export class WebClientServer {
+--- product-integrator.orig/lib/vscode/src/vs/server/node/webClientServer.ts
++++ product-integrator/lib/vscode/src/vs/server/node/webClientServer.ts
+@@ -320,7 +320,6 @@ export class WebClientServer {
  
  		const staticRoute = posix.join(basePath, this._productPath, STATIC_PATH);
  		const callbackRoute = posix.join(basePath, this._productPath, CALLBACK_PATH);
@@ -48,9 +48,9 @@ Index: code-server/lib/vscode/src/vs/server/node/webClientServer.ts
  
  		const resolveWorkspaceURI = (defaultLocation?: string) => defaultLocation && URI.file(resolve(defaultLocation)).with({ scheme: Schemas.vscodeRemote, authority: remoteAuthority });
  
-@@ -342,14 +341,7 @@ export class WebClientServer {
- 			codeServerVersion: this._productService.codeServerVersion,
- 			rootEndpoint: rootBase,
+@@ -334,14 +333,7 @@ export class WebClientServer {
+ 
+ 		const productConfiguration: Partial<Mutable<IProductConfiguration>> = {
  			embedderIdentifier: 'server-distro',
 -			extensionsGallery: this._webExtensionResourceUrlTemplate && this._productService.extensionsGallery ? {
 -				...this._productService.extensionsGallery,
@@ -64,10 +64,10 @@ Index: code-server/lib/vscode/src/vs/server/node/webClientServer.ts
  		};
  
  		const proposedApi = this._environmentService.args['enable-proposed-api'];
-Index: code-server/lib/vscode/src/vs/platform/extensionResourceLoader/common/extensionResourceLoader.ts
+Index: product-integrator/lib/vscode/src/vs/platform/extensionResourceLoader/common/extensionResourceLoader.ts
 ===================================================================
---- code-server.orig/lib/vscode/src/vs/platform/extensionResourceLoader/common/extensionResourceLoader.ts
-+++ code-server/lib/vscode/src/vs/platform/extensionResourceLoader/common/extensionResourceLoader.ts
+--- product-integrator.orig/lib/vscode/src/vs/platform/extensionResourceLoader/common/extensionResourceLoader.ts
++++ product-integrator/lib/vscode/src/vs/platform/extensionResourceLoader/common/extensionResourceLoader.ts
 @@ -15,7 +15,6 @@ import { getServiceMachineId } from '../
  import { IStorageService } from '../../storage/common/storage.js';
  import { TelemetryLevel } from '../../telemetry/common/telemetry.js';
