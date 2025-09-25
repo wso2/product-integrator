@@ -36,7 +36,7 @@ on:
 jobs:
   compile:
     name: Compile (cacheable)
-    runs-on: ubuntu-latest
+    runs-on: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}
     outputs:
       cache-key: ${{ steps.cache-key.outputs.key }}
     steps:
@@ -148,7 +148,7 @@ jobs:
 
   build-linux:
     name: Build Linux ${{ matrix.arch }}
-    runs-on: ubuntu-latest
+    runs-on: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}
     needs: compile
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_linux == true }}
     strategy:
