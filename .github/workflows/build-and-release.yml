@@ -83,6 +83,7 @@ jobs:
         run: quilt push -a
   
       - name: Update product.json and branding
+        working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh
