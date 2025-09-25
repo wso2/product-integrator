@@ -1,0 +1,23 @@
+Index: product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/platform/product/common/product.ts
++++ product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
+@@ -71,12 +71,12 @@ else {
+ 	if (Object.keys(product).length === 0) {
+ 		Object.assign(product, {
+ 			version: '1.104.0-dev',
+-			nameShort: 'Code - OSS Dev',
+-			nameLong: 'Code - OSS Dev',
+-			applicationName: 'code-oss',
+-			dataFolderName: '.vscode-oss',
+-			urlProtocol: 'code-oss',
+-			reportIssueUrl: 'https://github.com/microsoft/vscode/issues/new',
++			nameShort: 'WSO2 Integrator',
++			nameLong: 'WSO2 Integrator',
++			applicationName: 'wso2-integrator',
++			dataFolderName: '.wso2-integrator',
++			urlProtocol: 'wso2-integrator',
++			reportIssueUrl: 'https://github.com/wso2/product-integrator/issues/new',
+ 			licenseName: 'MIT',
+ 			licenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt',
+ 			serverLicenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt'

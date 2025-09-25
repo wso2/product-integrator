@@ -1,0 +1,79 @@
+Change activities locations and order in VS Code workbench
+
+This patch modifies the view container locations for the search, debug, testing and extensions activities in the VS Code workbench.
+It also adjusts the order of the explorer viewlet to ensure a more logical arrangement of activities in the sidebar.
+
+Index: product-integrator/ib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
++++ product-integrator/ib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
+@@ -457,7 +457,7 @@ const viewContainer = Registry.as<IViewC
+ 	icon: icons.runViewIcon,
+ 	alwaysUseContainerInfo: true,
+ 	order: 3,
+-}, ViewContainerLocation.Sidebar);
++}, ViewContainerLocation.AuxiliaryBar);
+ 
+ // Register default debug views
+ const viewsRegistry = Registry.as<IViewsRegistry>(ViewExtensions.ViewsRegistry);
+Index: product-integrator/ib/vscode/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
++++ product-integrator/ib/vscode/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+@@ -124,7 +124,7 @@ export const VIEW_CONTAINER = Registry.a
+ 		order: 4,
+ 		rejectAddedViews: true,
+ 		alwaysUseContainerInfo: true,
+-	}, ViewContainerLocation.Sidebar);
++	}, ViewContainerLocation.AuxiliaryBar);
+ 
+ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
+ 	.registerConfiguration({
+Index: product-integrator/ib/vscode/src/vs/workbench/contrib/files/browser/explorerViewlet.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/files/browser/explorerViewlet.ts
++++ product-integrator/ib/vscode/src/vs/workbench/contrib/files/browser/explorerViewlet.ts
+@@ -262,7 +262,7 @@ export const VIEW_CONTAINER: ViewContain
+ 	icon: explorerViewIcon,
+ 	alwaysUseContainerInfo: true,
+ 	hideIfEmpty: true,
+-	order: 0,
++	order: 10,
+ 	openCommandActionDescriptor: {
+ 		id: VIEWLET_ID,
+ 		title: localize2('explore', "Explorer"),
+@@ -270,7 +270,7 @@ export const VIEW_CONTAINER: ViewContain
+ 		keybindings: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyE },
+ 		order: 0
+ 	},
+-}, ViewContainerLocation.Sidebar, { isDefault: true });
++}, ViewContainerLocation.Sidebar, { isDefault: false });
+ 
+ const openFolder = localize('openFolder', "Open Folder");
+ const addAFolder = localize('addAFolder', "add a folder");
+Index: product-integrator/ib/vscode/src/vs/workbench/contrib/search/browser/search.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/search/browser/search.contribution.ts
++++ product-integrator/ib/vscode/src/vs/workbench/contrib/search/browser/search.contribution.ts
+@@ -63,7 +63,7 @@ const viewContainer = Registry.as<IViewC
+ 	hideIfEmpty: true,
+ 	icon: searchViewIcon,
+ 	order: 1,
+-}, ViewContainerLocation.Sidebar, { doNotRegisterOpenCommand: true });
++}, ViewContainerLocation.AuxiliaryBar, { doNotRegisterOpenCommand: true });
+ 
+ const viewDescriptor: IViewDescriptor = {
+ 	id: VIEW_ID,
+Index: product-integrator/ib/vscode/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
++++ product-integrator/ib/vscode/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
+@@ -75,7 +75,7 @@ const viewContainer = Registry.as<IViewC
+ 		order: 4,
+ 	},
+ 	hideIfEmpty: true,
+-}, ViewContainerLocation.Sidebar);
++}, ViewContainerLocation.AuxiliaryBar);
+ 
+ 
+ const testResultsViewContainer = Registry.as<IViewContainersRegistry>(ViewContainerExtensions.ViewContainersRegistry).registerViewContainer({
