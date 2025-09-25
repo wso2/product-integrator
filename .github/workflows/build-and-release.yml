@@ -28,8 +28,10 @@ jobs:
       run:
         working-directory: lib/vscode
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -53,6 +55,13 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
         run: |
           npm ci
+          - name: Apply patches
+          run: quilt push -a
+  
+      - name: Update product.json and branding
+        run: |
+          chmod +x ./ci/build/update-product.sh
+          ./ci/build/update-product.sh
 
       - name: Mixin distro modules
         run: |
