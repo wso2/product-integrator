@@ -23,7 +23,7 @@ jobs:
   build-linux:
     if: ${{ github.event.inputs.build_linux == 'true' }}
     name: Build (Linux)
-    runs-on: ubuntu-latest
+    runs-on: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}
     defaults:
       run:
         working-directory: lib/vscode
