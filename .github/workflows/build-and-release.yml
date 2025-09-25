@@ -72,7 +72,13 @@ jobs:
         with:
           path: lib/vscode/.build/extensions
           key: vscode-reh-extensions-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh') }}
-  
+
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: quilt
+          version: 1.0
+
       - name: Apply patches
         run: quilt push -a
   
