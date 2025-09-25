@@ -55,8 +55,26 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
         run: |
           npm ci
-          - name: Apply patches
-          run: quilt push -a
+
+      - name: Get latest lib/vscode rev
+        id: vscode-rev
+        run: echo "rev=$(git rev-parse HEAD:./lib/vscode)" >> $GITHUB_OUTPUT
+  
+      - name: Fetch prebuilt Code package from cache
+        id: cache-vscode
+        uses: actions/cache@v4
+        with:
+          path: lib/vscode-reh-web-*
+          key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh') }}
+
+      - name: Fetch extensions from cache
+        uses: actions/cache@v4
+        with:
+          path: lib/vscode/.build/extensions
+          key: vscode-reh-extensions-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh') }}
+  
+      - name: Apply patches
+        run: quilt push -a
   
       - name: Update product.json and branding
         run: |
