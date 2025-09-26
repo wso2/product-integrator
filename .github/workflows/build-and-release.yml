@@ -20,15 +20,15 @@ on:
         type: boolean
 
 jobs:
-  build-linux:
-    if: ${{ github.event.inputs.build_linux == 'true' }}
-    name: Build (Linux)
+  compile:
+    name: Compile
     runs-on: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}
     defaults:
       run:
         working-directory: lib/vscode
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
@@ -39,22 +39,6 @@ jobs:
           node-version-file: lib/vscode/.nvmrc
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
-
-      - name: Install system dependencies (Linux)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config xvfb libgtk-3-0 libxkbfile-dev libkrb5-dev libgbm1 rpm zip
-
-      - name: Prepare artifacts dir
-        run: |
-          mkdir -p ../artifacts
-
-      - name: Install dependencies
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
-        run: |
-          npm ci
 
       - name: Get latest lib/vscode rev
         id: vscode-rev
@@ -88,19 +72,41 @@ jobs:
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh
 
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci
+
       - name: Mixin distro modules
         run: |
           node build/azure-pipelines/distro/mixin-npm || true
           node build/azure-pipelines/distro/mixin-quality || true
 
-      - name: Build client (Linux)
+      - name: Install builtin extensions
+        run: |
+          npm run download-builtin-extensions
+
+      - name: Compile & Hygiene
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run gulp vscode-linux-x64-min-ci
-          ARCHIVE_PATH=../artifacts/vscode-linux-x64.tar.gz
-          tar -czf "$ARCHIVE_PATH" -C .. VSCode-linux-x64
+          npm exec -- npm-run-all -lp core-ci extensions-ci hygiene eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
 
+      - name: Compress compilation artifact
+        run: |
+          tar -cz --exclude='.build/node_modules_cache' --exclude='.build/node_modules_list.txt' --exclude='.build/distro' -f ../compilation.tar.gz $(ls -d .build out-* test/integration/browser/out test/smoke/out test/automation/out 2>/dev/null)
+
+          - name: Build client (Linux)
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          run: |
+            npm run gulp vscode-linux-x64-min-ci
+            ARCHIVE_PATH=../artifacts/vscode-linux-x64.tar.gz
+            tar -czf "$ARCHIVE_PATH" -C .. VSCode-linux-x64
+  
       - name: Build Linux packages (deb, rpm)
         run: |
           npm run gulp "vscode-linux-x64-prepare-deb"
@@ -119,10 +125,18 @@ jobs:
             lib/vscode/../artifacts/*
           if-no-files-found: error
 
+      - name: Upload compilation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compilation
+          path: lib/vscode/../compilation.tar.gz
+          if-no-files-found: error
+
   build-macos:
     if: ${{ github.event.inputs.build_macos == 'true' }}
     name: Build (macOS)
     runs-on: macos-latest
+    needs: compile
     defaults:
       run:
         working-directory: lib/vscode
@@ -137,6 +151,15 @@ jobs:
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
+      - name: Download compilation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: compilation
+          path: .
+
+      - name: Extract compilation output
+        run: tar -xzf compilation.tar.gz
+
       - name: Validate Xcode tools (macOS)
         run: |
           xcode-select -p
@@ -150,6 +173,7 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm ci
 
@@ -157,6 +181,10 @@ jobs:
         run: |
           node build/azure-pipelines/distro/mixin-npm || true
           node build/azure-pipelines/distro/mixin-quality || true
+
+      - name: Install builtin extensions
+        run: |
+          npm run download-builtin-extensions
 
       - name: Build client (macOS)
         env:
@@ -178,6 +206,7 @@ jobs:
     if: ${{ github.event.inputs.build_windows == 'true' }}
     name: Build (Windows)
     runs-on: windows-latest
+    needs: compile
     defaults:
       run:
         working-directory: lib/vscode
@@ -192,6 +221,16 @@ jobs:
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
+      - name: Download compilation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: compilation
+          path: .
+
+      - name: Extract compilation output
+        shell: pwsh
+        run: tar -xzf compilation.tar.gz
+
       - name: Prepare artifacts dir
         run: |
           mkdir -p ../artifacts
@@ -200,6 +239,7 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm ci
 
@@ -207,6 +247,10 @@ jobs:
         run: |
           node build/azure-pipelines/distro/mixin-npm || true
           node build/azure-pipelines/distro/mixin-quality || true
+
+      - name: Install builtin extensions
+        run: |
+          npm run download-builtin-extensions
 
       - name: Build client (Windows)
         shell: pwsh
