@@ -100,13 +100,13 @@ jobs:
         run: |
           tar -cz --exclude='.build/node_modules_cache' --exclude='.build/node_modules_list.txt' --exclude='.build/distro' -f ../compilation.tar.gz $(ls -d .build out-* test/integration/browser/out test/smoke/out test/automation/out 2>/dev/null)
 
-          - name: Build client (Linux)
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          run: |
-            npm run gulp vscode-linux-x64-min-ci
-            ARCHIVE_PATH=../artifacts/vscode-linux-x64.tar.gz
-            tar -czf "$ARCHIVE_PATH" -C .. VSCode-linux-x64
+      - name: Build client (Linux)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp vscode-linux-x64-min-ci
+          ARCHIVE_PATH=../artifacts/vscode-linux-x64.tar.gz
+          tar -czf "$ARCHIVE_PATH" -C .. VSCode-linux-x64
   
       - name: Build Linux packages (deb, rpm)
         run: |
