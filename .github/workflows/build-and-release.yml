@@ -104,7 +104,27 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run gulp vscode-linux-x64-min-ci
-  
+          ARCHIVE_PATH=../artifacts/vscode-linux-x64.tar.gz
+          tar -czf "$ARCHIVE_PATH" -C .. VSCode-linux-x64
+
+      - name: Build CLI (Linux)
+        run: |
+          npm run compile-cli
+
+      - name: Mix in built CLI into client (Linux)
+        run: |
+          set -e
+          # Find built CLI binary (Rust output)
+          CLI_BIN=$(ls ./cli/target/*/release/code 2>/dev/null | head -n1 || true)
+          if [ -z "$CLI_BIN" ]; then
+            echo "CLI binary not found in ./cli/target/*/release/code" >&2
+            exit 1
+          fi
+          CLI_APP_NAME=$(node -p "require('../VSCode-linux-x64/resources/app/product.json').tunnelApplicationName")
+          mkdir -p ../VSCode-linux-x64/bin
+          cp "$CLI_BIN" "../VSCode-linux-x64/bin/$CLI_APP_NAME"
+          chmod +x "../VSCode-linux-x64/bin/$CLI_APP_NAME"
+
       - name: Build Linux packages (deb, rpm)
         run: |
           npm run gulp "vscode-linux-x64-prepare-deb"
