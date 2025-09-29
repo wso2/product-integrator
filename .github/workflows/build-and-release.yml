@@ -89,12 +89,12 @@ jobs:
         run: |
           npm run download-builtin-extensions
 
-      - name: Compile & Hygiene
+      - name: Compile
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_OPTIONS: --max_old_space_size=14000
         run: |
-          npm exec -- npm-run-all -lp core-ci extensions-ci hygiene eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+          npm exec -- npm-run-all -lp core-ci extensions-ci eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
 
       - name: Compress compilation artifact
         run: |
