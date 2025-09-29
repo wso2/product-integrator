@@ -93,8 +93,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          node --max-old-space-size=32768 ./node_modules/gulp/bin/gulp.js core-ci-pr
-          npm exec -- npm-run-all -ls extensions-ci eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+          npm exec -- npm-run-all -lp core-ci-pr extensions-ci-pr hygiene eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
 
       - name: Compress compilation artifact
         run: |
