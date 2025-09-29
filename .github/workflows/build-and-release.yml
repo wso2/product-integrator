@@ -48,7 +48,8 @@ jobs:
       - name: Install Rust toolchain
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          source "$HOME/.cargo/env"
+          rustup target add x86_64-unknown-linux-gnu
   
       - name: Get latest lib/vscode rev
         id: vscode-rev
@@ -120,15 +121,17 @@ jobs:
 
       - name: Build CLI (Linux)
         run: |
-          npm run compile-cli
+          source "$HOME/.cargo/env"
+          cd cli
+          cargo build --release --bin=code
 
       - name: Mix in built CLI into client (Linux)
         run: |
           set -e
-          # Find built CLI binary (Rust output)
-          CLI_BIN=$(ls ./cli/target/*/release/code 2>/dev/null | head -n1 || true)
-          if [ -z "$CLI_BIN" ]; then
-            echo "CLI binary not found in ./cli/target/*/release/code" >&2
+          CLI_BIN=./cli/target/release/code
+          if [ ! -f "$CLI_BIN" ]; then
+            echo "CLI binary not found at $CLI_BIN" >&2
+            find ./cli/target -type f -name code 2>/dev/null || true
             exit 1
           fi
           CLI_APP_NAME=$(node -p "require('../VSCode-linux-x64/resources/app/product.json').tunnelApplicationName")
