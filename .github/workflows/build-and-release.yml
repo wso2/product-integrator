@@ -161,55 +161,9 @@ jobs:
           # DEB build
           npm run gulp "vscode-linux-x64-prepare-deb"
           npm run gulp "vscode-linux-x64-build-deb"
-          
-          # RPM build
-          TRIPLE="x86_64-linux-gnu"
-          export VSCODE_SYSROOT_DIR="$(pwd)/.build/sysroots/glibc-2.28-gcc-10.5.0"
-          export STRIP="$VSCODE_SYSROOT_DIR/$TRIPLE/$TRIPLE/bin/strip"
-          
-          npm run gulp "vscode-linux-x64-prepare-rpm"
-          
-          # Comprehensive RPM spec file cleanup
-          RPM_SPEC=".build/linux/rpm/x86_64/rpmbuild/SPECS/wso2-integrator.spec"
-          if [ -f "$RPM_SPEC" ]; then
-            echo "Cleaning RPM spec file dependencies..."
-            
-            # Create a temporary file for cleaned dependencies
-            TEMP_SPEC=$(mktemp)
-            
-            # Process the spec file line by line
-            while IFS= read -r line; do
-              if [[ "$line" =~ ^Requires: ]]; then
-                # Extract the dependency part after "Requires: "
-                dep="${line#*Requires: }"
-                
-                # Skip malformed dependencies
-                if [[ "$dep" == ")" ]] || [[ "$dep" =~ ^[^a-zA-Z0-9_/] ]] || [[ -z "${dep// }" ]]; then
-                  echo "Skipping malformed dependency: '$dep'"
-                  continue
-                fi
-                
-                # Clean up double parentheses
-                dep=$(echo "$dep" | sed 's/()(/(/g')
-                
-                # Write cleaned dependency
-                echo "Requires: $dep" >> "$TEMP_SPEC"
-              else
-                # Copy non-dependency lines as-is
-                echo "$line" >> "$TEMP_SPEC"
-              fi
-            done < "$RPM_SPEC"
-            
-            # Replace original spec with cleaned version
-            mv "$TEMP_SPEC" "$RPM_SPEC"
-            echo "RPM spec file cleaned successfully."
-          fi
-          
-          npm run gulp "vscode-linux-x64-build-rpm"
-          
+
           # Copy outputs
           cp .build/linux/deb/*/deb/*.deb ../artifacts/ || true
-          cp .build/linux/rpm/*/*.rpm ../artifacts/ || true
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
