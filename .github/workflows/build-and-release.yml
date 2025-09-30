@@ -237,9 +237,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: lib/vscode/.nvmrc
+          node-version-file: .nvmrc
           cache: npm
-          cache-dependency-path: lib/vscode/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Cache Rust toolchain (macOS)
         uses: actions/cache@v4
@@ -259,9 +259,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            lib/vscode/node_modules
-            lib/vscode/.build/node_modules_cache
-          key: native-modules-macos-${{ matrix.arch }}-${{ hashFiles('lib/vscode/package-lock.json') }}
+            node_modules
+            .build/node_modules_cache
+          key: native-modules-macos-${{ matrix.arch }}-${{ hashFiles('lib/vscode/package-lock.json', 'patches/*.diff') }}
           restore-keys: |
             native-modules-macos-${{ matrix.arch }}-
             native-modules-macos-
