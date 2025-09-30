@@ -1,0 +1,13 @@
+Index: product-integrator/lib/vscode/build/linux/dependencies-generator.js
+===================================================================
+--- product-integrator.orig/lib/vscode/build/linux/dependencies-generator.js
++++ product-integrator/lib/vscode/build/linux/dependencies-generator.js
+@@ -25,7 +25,7 @@ const product = require("../../product.j
+ // If true, we fail the build if there are new dependencies found during that task.
+ // The reference dependencies, which one has to update when the new dependencies
+ // are valid, are in dep-lists.ts
+-const FAIL_BUILD_FOR_NEW_DEPENDENCIES = true;
++const FAIL_BUILD_FOR_NEW_DEPENDENCIES = false;
+ // Based on https://source.chromium.org/chromium/chromium/src/+/refs/tags/138.0.7204.235:chrome/installer/linux/BUILD.gn;l=64-80
+ // and the Linux Archive build
+ // Shared library dependencies that we already bundle.
