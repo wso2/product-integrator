@@ -233,13 +233,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: lib/vscode/.nvmrc
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: lib/vscode/package-lock.json
 
       - name: Cache Rust toolchain (macOS)
         uses: actions/cache@v4
@@ -371,6 +374,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
