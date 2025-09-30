@@ -9,7 +9,7 @@ on:
         default: true
         type: boolean
       build_macos:
-        description: 'Build for macOS'
+        description: 'Build for macOS (Apple Silicon)'
         required: false
         default: true
         type: boolean
@@ -188,6 +188,9 @@ jobs:
     defaults:
       run:
         working-directory: lib/vscode
+    strategy:
+      matrix:
+        arch: [arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -213,6 +216,17 @@ jobs:
           xcode-select -p
           python3 -m pip install --user setuptools || true
 
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+          # Add ARM64 target for cross-compilation
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            rustup target add aarch64-apple-darwin
+          else
+            rustup target add x86_64-apple-darwin
+          fi
+
       - name: Prepare artifacts dir
         run: |
           mkdir -p ../artifacts
@@ -234,18 +248,50 @@ jobs:
         run: |
           npm run download-builtin-extensions
 
-      - name: Build client (macOS)
+      - name: Build client (macOS ${{ matrix.arch }})
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run gulp vscode-darwin-x64-min-ci
-          ARCHIVE_PATH=../artifacts/VSCode-darwin-x64.zip
-          (cd .. && zip -qry "$ARCHIVE_PATH" VSCode-darwin-x64)
+          npm run gulp vscode-darwin-${{ matrix.arch }}-min-ci
+          ARCHIVE_PATH=../artifacts/VSCode-darwin-${{ matrix.arch }}.zip
+          (cd .. && zip -qry "$ARCHIVE_PATH" VSCode-darwin-${{ matrix.arch }})
+
+      - name: Build CLI (macOS ${{ matrix.arch }})
+        run: |
+          source "$HOME/.cargo/env"
+          cd cli
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            cargo build --release --bin=code --target=aarch64-apple-darwin
+            CLI_BIN=./target/aarch64-apple-darwin/release/code
+          else
+            cargo build --release --bin=code --target=x86_64-apple-darwin
+            CLI_BIN=./target/x86_64-apple-darwin/release/code
+          fi
+          
+          # Verify CLI binary was built
+          if [ ! -f "$CLI_BIN" ]; then
+            echo "CLI binary not found at $CLI_BIN" >&2
+            find ./target -type f -name code 2>/dev/null || true
+            exit 1
+          fi
+          
+          # Copy CLI to build output
+          CLI_APP_NAME=$(node -p "require('../VSCode-darwin-${{ matrix.arch }}/Contents/Resources/app/product.json').tunnelApplicationName")
+          mkdir -p "../VSCode-darwin-${{ matrix.arch }}/Contents/Resources/app/bin"
+          cp "$CLI_BIN" "../VSCode-darwin-${{ matrix.arch }}/Contents/Resources/app/bin/$CLI_APP_NAME"
+          chmod +x "../VSCode-darwin-${{ matrix.arch }}/Contents/Resources/app/bin/$CLI_APP_NAME"
+
+      - name: Re-package with CLI (macOS ${{ matrix.arch }})
+        run: |
+          # Re-create the zip with the CLI included
+          ARCHIVE_PATH=../artifacts/VSCode-darwin-${{ matrix.arch }}.zip
+          rm -f "$ARCHIVE_PATH"
+          (cd .. && zip -qry "$ARCHIVE_PATH" VSCode-darwin-${{ matrix.arch }})
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts-darwin
+          name: artifacts-darwin-${{ matrix.arch }}
           path: |
             lib/vscode/../artifacts/*
           if-no-files-found: error
@@ -316,3 +362,47 @@ jobs:
           path: |
             lib/vscode/../artifacts/*
           if-no-files-found: error
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [compile, build-macos, build-windows]
+    if: always() && (needs.compile.result == 'success')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+
+      - name: Create unified release artifact
+        run: |
+          mkdir -p release-artifacts
+          
+          # Copy Linux artifacts if available
+          if [ -d "all-artifacts/artifacts-linux" ]; then
+            cp all-artifacts/artifacts-linux/* release-artifacts/ || true
+          fi
+          
+          # Copy macOS artifacts if available
+          if [ -d "all-artifacts/artifacts-darwin-x64" ]; then
+            cp all-artifacts/artifacts-darwin-x64/* release-artifacts/ || true
+          fi
+          if [ -d "all-artifacts/artifacts-darwin-arm64" ]; then
+            cp all-artifacts/artifacts-darwin-arm64/* release-artifacts/ || true
+          fi
+          
+          # Copy Windows artifacts if available
+          if [ -d "all-artifacts/artifacts-win32" ]; then
+            cp all-artifacts/artifacts-win32/* release-artifacts/ || true
+          fi
+          
+          # List all created artifacts
+          echo "Created release artifacts:"
+          ls -la release-artifacts/
+
+      - name: Upload unified release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wso2-integrator-release
+          path: release-artifacts/*
+          if-no-files-found: warn
