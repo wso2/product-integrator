@@ -23,3 +23,7 @@ test/test-results
 # Quilt's internal data.
 /.pc
 /patches/*.diff~
+
+# VScode build output
+lib/
+!lib/vscode
