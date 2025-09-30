@@ -40,10 +40,54 @@ jobs:
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3
+      - name: Cache TypeScript compilation
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/out
+            lib/vscode/out-*
+            lib/vscode/.build/node_modules_cache
+          key: typescript-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+          restore-keys: |
+            typescript-${{ runner.os }}-
+
+      - name: Cache built-in extensions
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/.build/builtInExtensions
+            lib/vscode/.build/extensions
+          key: extensions-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+          restore-keys: |
+            extensions-${{ runner.os }}-
+
+      - name: Cache Rust toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            lib/vscode/cli/target/
+          key: cargo-${{ runner.os }}-${{ hashFiles('lib/vscode/cli/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Cache Linux sysroots
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/.build/sysroots
+          key: sysroots-${{ runner.os }}-glibc-2.28-gcc
+          restore-keys: |
+            sysroots-${{ runner.os }}-
+
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3 quilt
+          version: 1.0
 
       - name: Install Rust toolchain
         run: |
@@ -60,19 +104,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: lib/vscode-reh-web-*
-          key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh') }}
-
-      - name: Fetch extensions from cache
-        uses: actions/cache@v4
-        with:
-          path: lib/vscode/.build/extensions
-          key: vscode-reh-extensions-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh') }}
-
-      - name: Cache apt packages
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: quilt
-          version: 1.0
+          key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
 
       - name: Apply patches
         run: quilt push -a
@@ -100,11 +132,18 @@ jobs:
         run: |
           npm run download-builtin-extensions
 
-      - name: Compile
+      - name: Compile (with cache optimization)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm exec -- npm-run-all -lp core-ci-pr extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+          # Check if we can use cached compilation
+          if [ -d "out" ] && [ -d "out-build" ]; then
+            echo "Using cached compilation output"
+            npm exec -- npm-run-all -lp extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+          else
+            echo "Full compilation required"
+            npm exec -- npm-run-all -lp core-ci-pr extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+          fi
 
       - name: Compress compilation artifact
         run: |
@@ -202,6 +241,31 @@ jobs:
           node-version-file: lib/vscode/.nvmrc
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
+
+      - name: Cache Rust toolchain (macOS)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            lib/vscode/cli/target/
+          key: cargo-macos-${{ matrix.arch }}-${{ hashFiles('lib/vscode/cli/Cargo.lock') }}
+          restore-keys: |
+            cargo-macos-${{ matrix.arch }}-
+            cargo-macos-
+
+      - name: Cache native modules (macOS)
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/node_modules
+            lib/vscode/.build/node_modules_cache
+          key: native-modules-macos-${{ matrix.arch }}-${{ hashFiles('lib/vscode/package-lock.json') }}
+          restore-keys: |
+            native-modules-macos-${{ matrix.arch }}-
+            native-modules-macos-
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -315,6 +379,16 @@ jobs:
           node-version-file: lib/vscode/.nvmrc
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
+
+      - name: Cache native modules (Windows)
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/node_modules
+            lib/vscode/.build/node_modules_cache
+          key: native-modules-windows-${{ hashFiles('lib/vscode/package-lock.json') }}
+          restore-keys: |
+            native-modules-windows-
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
