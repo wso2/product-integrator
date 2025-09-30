@@ -108,15 +108,15 @@ jobs:
 
       - name: Compress compilation artifact
         run: |
-          tar -cz --exclude='.build/node_modules_cache' --exclude='.build/node_modules_list.txt' --exclude='.build/distro' -f ../compilation.tar.gz $(ls -d .build out-* test/integration/browser/out test/smoke/out test/automation/out 2>/dev/null)
+          tar -cz --exclude='.build/node_modules_cache' --exclude='.build/node_modules_list.txt' --exclude='.build/distro' -f compilation.tar.gz $(ls -d .build out-* test/integration/browser/out test/smoke/out test/automation/out 2>/dev/null)
 
       - name: Build client (Linux)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run gulp vscode-linux-x64-min-ci
-          ARCHIVE_PATH=../artifacts/vscode-linux-x64.tar.gz
-          mkdir -p ../artifacts
+          ARCHIVE_PATH=./artifacts/vscode-linux-x64.tar.gz
+          mkdir -p ./artifacts
           tar -czf "$ARCHIVE_PATH" -C .. VSCode-linux-x64
 
       - name: Build CLI (Linux)
@@ -168,16 +168,17 @@ jobs:
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
+          working-directory: lib
           name: artifacts-linux
           path: |
-            lib/vscode/../artifacts/*
+            artifacts/*
           if-no-files-found: error
 
       - name: Upload compilation artifact
         uses: actions/upload-artifact@v4
         with:
           name: compilation
-          path: lib/vscode/../compilation.tar.gz
+          path: compilation.tar.gz
           if-no-files-found: error
 
   build-macos:
