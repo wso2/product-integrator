@@ -41,6 +41,7 @@ jobs:
           cache-dependency-path: lib/vscode/package-lock.json
 
       - name: Cache TypeScript compilation
+        id: cache-typescript
         uses: actions/cache@v4
         with:
           path: |
@@ -52,6 +53,7 @@ jobs:
             typescript-${{ runner.os }}-
 
       - name: Cache built-in extensions
+        id: cache-extensions
         uses: actions/cache@v4
         with:
           path: |
@@ -130,18 +132,24 @@ jobs:
 
       - name: Install builtin extensions
         run: |
-          npm run download-builtin-extensions
+          if [ "${{ steps.cache-extensions.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ Extensions cache hit - using cached extensions"
+          else
+            echo "⬇️ Downloading built-in extensions"
+            npm run download-builtin-extensions
+          fi
 
       - name: Compile (with cache optimization)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Check if we can use cached compilation
-          if [ -d "out" ] && [ -d "out-build" ]; then
-            echo "Using cached compilation output"
+          if [ "${{ steps.cache-typescript.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ TypeScript cache hit - using cached compilation"
+            echo "Skipping core compilation, running validation only"
             npm exec -- npm-run-all -lp extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           else
-            echo "Full compilation required"
+            echo "❌ TypeScript cache miss - full compilation required"
+            echo "Running complete compilation pipeline"
             npm exec -- npm-run-all -lp core-ci-pr extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           fi
 
@@ -273,7 +281,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: compilation
-          path: .
+          path: lib/vscode
 
       - name: Extract compilation output
         run: tar -xzf compilation.tar.gz
@@ -360,7 +368,7 @@ jobs:
         with:
           name: artifacts-darwin-${{ matrix.arch }}
           path: |
-            lib/vscode/../artifacts/*
+            lib/artifacts/*
           if-no-files-found: error
 
   build-windows:
