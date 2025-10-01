@@ -382,8 +382,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run gulp vscode-darwin-${{ matrix.arch }}-min-ci
-          ARCHIVE_PATH=../artifacts/VSCode-darwin-${{ matrix.arch }}.zip
-          (cd .. && zip -qry "$ARCHIVE_PATH" VSCode-darwin-${{ matrix.arch }})
+          mkdir -p ../artifacts
+          (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
 
       - name: Build CLI (macOS ${{ matrix.arch }})
         run: |
@@ -429,9 +429,8 @@ jobs:
       - name: Re-package with CLI (macOS ${{ matrix.arch }})
         run: |
           # Re-create the zip with the CLI included
-          ARCHIVE_PATH=../artifacts/VSCode-darwin-${{ matrix.arch }}.zip
-          rm -f "$ARCHIVE_PATH"
-          (cd .. && zip -qry "$ARCHIVE_PATH" VSCode-darwin-${{ matrix.arch }})
+          (cd .. && rm -f "artifacts/VSCode-darwin-${{ matrix.arch }}.zip")
+          (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
