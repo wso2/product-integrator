@@ -333,6 +333,19 @@ jobs:
       - name: Extract compilation output
         run: tar -xzf compilation.tar.gz
 
+      - name: Install quilt (macOS)
+        run: |
+          brew install quilt
+
+      - name: Apply patches (macOS)
+        run: quilt push -a
+
+      - name: Update product.json and branding
+        working-directory: .
+        run: |
+          chmod +x ./ci/build/update-product.sh
+          ./ci/build/update-product.sh
+
       - name: Validate Xcode tools (macOS)
         run: |
           xcode-select -p
@@ -401,30 +414,41 @@ jobs:
             echo "✅ CLI cache hit - checking for cached CLI binary"
             if [ -f "$TARGET_DIR/code" ]; then
               echo "Cached CLI binary found and ready to use"
-              CLI_BIN="$TARGET_DIR/code"
             else
               echo "⚠️ Cache hit but binary missing - rebuilding"
               cargo build --release --bin=code --target=$TARGET_TRIPLE
-              CLI_BIN="$TARGET_DIR/code"
             fi
           else
             echo "❌ CLI cache miss - compiling CLI"
             cargo build --release --bin=code --target=$TARGET_TRIPLE
-            CLI_BIN="$TARGET_DIR/code"
           fi
           
+          # Set CLI_BIN path relative to parent directory (after cd ..)
+          CLI_BIN="./cli/$TARGET_DIR/code"
+          cd ..
+
           # Verify CLI binary was built
           if [ ! -f "$CLI_BIN" ]; then
             echo "CLI binary not found at $CLI_BIN" >&2
-            find ./target -type f -name code 2>/dev/null || true
+            find ./cli/target -type f -name code 2>/dev/null || true
+            exit 1
+          fi
+          
+          # Get CLI app name from the source product.json
+          CLI_APP_NAME=$(node -p "require('./product.json').tunnelApplicationName")
+          
+          # Find the .app directory inside VSCode-darwin-arm64
+          APP_DIR=$(find "../VSCode-darwin-${{ matrix.arch }}" -name "*.app" -type d | head -1)
+          if [ -z "$APP_DIR" ]; then
+            echo "Error: Could not find .app directory in VSCode-darwin-${{ matrix.arch }}" >&2
+            ls -la "../VSCode-darwin-${{ matrix.arch }}/"
             exit 1
           fi
           
           # Copy CLI to build output
-          CLI_APP_NAME=$(node -p "require('../VSCode-darwin-${{ matrix.arch }}/Contents/Resources/app/product.json').tunnelApplicationName")
-          mkdir -p "../VSCode-darwin-${{ matrix.arch }}/Contents/Resources/app/bin"
-          cp "$CLI_BIN" "../VSCode-darwin-${{ matrix.arch }}/Contents/Resources/app/bin/$CLI_APP_NAME"
-          chmod +x "../VSCode-darwin-${{ matrix.arch }}/Contents/Resources/app/bin/$CLI_APP_NAME"
+          mkdir -p "$APP_DIR/Contents/Resources/app/bin"
+          cp "$CLI_BIN" "$APP_DIR/Contents/Resources/app/bin/$CLI_APP_NAME"
+          chmod +x "$APP_DIR/Contents/Resources/app/bin/$CLI_APP_NAME"
 
       - name: Re-package with CLI (macOS ${{ matrix.arch }})
         run: |
@@ -513,6 +537,22 @@ jobs:
         shell: pwsh
         run: tar -xzf compilation.tar.gz
 
+      - name: Install quilt (Windows)
+        shell: pwsh
+        run: |
+          choco install quilt -y
+
+      - name: Apply patches (Windows)
+        shell: bash
+        run: quilt push -a
+
+      - name: Update product.json and branding
+        shell: bash
+        working-directory: .
+        run: |
+          chmod +x ./ci/build/update-product.sh
+          ./ci/build/update-product.sh
+
       - name: Install Rust toolchain (Windows)
         shell: pwsh
         run: |
@@ -592,8 +632,8 @@ jobs:
           cd cli
           $cliBin = "./target/release/code.exe"
           
-          # Get CLI app name from product.json
-          $productJson = Get-Content "../VSCode-win32-x64/resources/app/product.json" | ConvertFrom-Json
+          # Get CLI app name from source product.json (not from app bundle)
+          $productJson = Get-Content "../product.json" | ConvertFrom-Json
           $cliAppName = $productJson.tunnelApplicationName + ".exe"
           
           # Create bin directory and copy CLI
