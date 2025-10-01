@@ -77,10 +77,19 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            lib/vscode/cli/target/
-          key: cargo-${{ runner.os }}-${{ hashFiles('lib/vscode/cli/Cargo.lock') }}
+          key: cargo-toolchain-${{ runner.os }}-${{ hashFiles('lib/vscode/cli/Cargo.lock') }}
           restore-keys: |
-            cargo-${{ runner.os }}-
+            cargo-toolchain-${{ runner.os }}-
+
+      - name: Cache CLI compilation
+        id: cache-cli
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/cli/target/
+          key: cli-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'lib/vscode/cli/Cargo.lock', 'lib/vscode/cli/src/**/*.rs', 'lib/vscode/cli/Cargo.toml') }}
+          restore-keys: |
+            cli-${{ runner.os }}-
 
       - name: Cache Linux sysroots
         uses: actions/cache@v4
@@ -178,7 +187,19 @@ jobs:
         run: |
           source "$HOME/.cargo/env"
           cd cli
-          cargo build --release --bin=code
+          if [ "${{ steps.cache-cli.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ CLI cache hit - using cached CLI binary"
+            # Verify the binary exists and is executable
+            if [ -f "./target/release/code" ]; then
+              echo "Cached CLI binary found and ready to use"
+            else
+              echo "⚠️ Cache hit but binary missing - rebuilding"
+              cargo build --release --bin=code
+            fi
+          else
+            echo "❌ CLI cache miss - compiling CLI"
+            cargo build --release --bin=code
+          fi
 
       - name: Mix in built CLI into client (Linux)
         run: |
@@ -268,11 +289,20 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            lib/vscode/cli/target/
-          key: cargo-macos-${{ matrix.arch }}-${{ hashFiles('lib/vscode/cli/Cargo.lock') }}
+          key: cargo-toolchain-macos-${{ matrix.arch }}-${{ hashFiles('lib/vscode/cli/Cargo.lock') }}
           restore-keys: |
-            cargo-macos-${{ matrix.arch }}-
-            cargo-macos-
+            cargo-toolchain-macos-${{ matrix.arch }}-
+            cargo-toolchain-macos-
+
+      - name: Cache CLI compilation (macOS)
+        id: cache-cli-macos
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/cli/target/
+          key: cli-macos-${{ matrix.arch }}-${{ hashFiles('patches/*.diff', 'lib/vscode/cli/Cargo.lock', 'lib/vscode/cli/src/**/*.rs', 'lib/vscode/cli/Cargo.toml') }}
+          restore-keys: |
+            cli-macos-${{ matrix.arch }}-
 
       - name: Cache native modules (macOS)
         uses: actions/cache@v4
@@ -360,11 +390,27 @@ jobs:
           source "$HOME/.cargo/env"
           cd cli
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-            cargo build --release --bin=code --target=aarch64-apple-darwin
-            CLI_BIN=./target/aarch64-apple-darwin/release/code
+            TARGET_DIR="./target/aarch64-apple-darwin/release"
+            TARGET_TRIPLE="aarch64-apple-darwin"
           else
-            cargo build --release --bin=code --target=x86_64-apple-darwin
-            CLI_BIN=./target/x86_64-apple-darwin/release/code
+            TARGET_DIR="./target/x86_64-apple-darwin/release"
+            TARGET_TRIPLE="x86_64-apple-darwin"
+          fi
+          
+          if [ "${{ steps.cache-cli-macos.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ CLI cache hit - checking for cached CLI binary"
+            if [ -f "$TARGET_DIR/code" ]; then
+              echo "Cached CLI binary found and ready to use"
+              CLI_BIN="$TARGET_DIR/code"
+            else
+              echo "⚠️ Cache hit but binary missing - rebuilding"
+              cargo build --release --bin=code --target=$TARGET_TRIPLE
+              CLI_BIN="$TARGET_DIR/code"
+            fi
+          else
+            echo "❌ CLI cache miss - compiling CLI"
+            cargo build --release --bin=code --target=$TARGET_TRIPLE
+            CLI_BIN="$TARGET_DIR/code"
           fi
           
           # Verify CLI binary was built
@@ -427,6 +473,28 @@ jobs:
           restore-keys: |
             native-modules-windows-
 
+      - name: Cache Rust toolchain (Windows)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-toolchain-windows-${{ hashFiles('lib/vscode/cli/Cargo.lock') }}
+          restore-keys: |
+            cargo-toolchain-windows-
+
+      - name: Cache CLI compilation (Windows)
+        id: cache-cli-windows
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/cli/target/
+          key: cli-windows-${{ hashFiles('patches/*.diff', 'lib/vscode/cli/Cargo.lock', 'lib/vscode/cli/src/**/*.rs', 'lib/vscode/cli/Cargo.toml') }}
+          restore-keys: |
+            cli-windows-
+
       - name: Cache built-in extensions
         id: cache-extensions-windows
         uses: actions/cache@v4
@@ -445,6 +513,15 @@ jobs:
       - name: Extract compilation output
         shell: pwsh
         run: tar -xzf compilation.tar.gz
+
+      - name: Install Rust toolchain (Windows)
+        shell: pwsh
+        run: |
+          # Download and install Rust
+          Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"
+          ./rustup-init.exe -y --default-toolchain stable
+          # Add Rust to PATH for this session
+          $env:PATH += ";$env:USERPROFILE\.cargo\bin"
 
       - name: Prepare artifacts dir
         run: |
@@ -481,6 +558,56 @@ jobs:
         run: |
           npm run gulp "vscode-win32-x64-min-ci"
           $archivePath = "../artifacts/VSCode-win32-x64.zip"
+          Compress-Archive -Path ../VSCode-win32-x64/* -DestinationPath $archivePath -Force
+
+      - name: Build CLI (Windows)
+        shell: pwsh
+        run: |
+          # Add Rust to PATH
+          $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+          cd cli
+          
+          if ("${{ steps.cache-cli-windows.outputs.cache-hit }}" -eq "true") {
+            Write-Host "✅ CLI cache hit - checking for cached CLI binary"
+            if (Test-Path "./target/release/code.exe") {
+              Write-Host "Cached CLI binary found and ready to use"
+            } else {
+              Write-Host "⚠️ Cache hit but binary missing - rebuilding"
+              cargo build --release --bin=code
+            }
+          } else {
+            Write-Host "❌ CLI cache miss - compiling CLI"
+            cargo build --release --bin=code
+          }
+          
+          # Verify CLI binary was built
+          if (-not (Test-Path "./target/release/code.exe")) {
+            Write-Host "CLI binary not found at ./target/release/code.exe" -ForegroundColor Red
+            Get-ChildItem -Path ./target -Recurse -Name "code.exe" -ErrorAction SilentlyContinue
+            exit 1
+          }
+
+      - name: Mix in built CLI into client (Windows)
+        shell: pwsh
+        run: |
+          cd cli
+          $cliBin = "./target/release/code.exe"
+          
+          # Get CLI app name from product.json
+          $productJson = Get-Content "../VSCode-win32-x64/resources/app/product.json" | ConvertFrom-Json
+          $cliAppName = $productJson.tunnelApplicationName + ".exe"
+          
+          # Create bin directory and copy CLI
+          $binDir = "../VSCode-win32-x64/bin"
+          New-Item -ItemType Directory -Path $binDir -Force
+          Copy-Item $cliBin "$binDir/$cliAppName"
+
+      - name: Re-package with CLI (Windows)
+        shell: pwsh
+        run: |
+          # Re-create the zip with the CLI included
+          $archivePath = "../artifacts/VSCode-win32-x64.zip"
+          Remove-Item $archivePath -ErrorAction SilentlyContinue
           Compress-Archive -Path ../VSCode-win32-x64/* -DestinationPath $archivePath -Force
 
       - name: Upload Windows artifacts
