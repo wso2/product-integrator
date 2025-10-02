@@ -362,10 +362,6 @@ jobs:
             rustup target add x86_64-apple-darwin
           fi
 
-      - name: Prepare artifacts dir
-        run: |
-          mkdir -p ../artifacts
-
       - name: Install dependencies
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
@@ -395,8 +391,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run gulp vscode-darwin-${{ matrix.arch }}-min-ci
-          mkdir -p ../artifacts
-          (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
 
       - name: Build CLI (macOS ${{ matrix.arch }})
         run: |
@@ -453,8 +447,27 @@ jobs:
       - name: Re-package with CLI (macOS ${{ matrix.arch }})
         run: |
           # Re-create the zip with the CLI included
-          (cd .. && rm -f "artifacts/VSCode-darwin-${{ matrix.arch }}.zip")
+          mkdir -p ../artifacts
           (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
+
+      - name: Sign macOS application
+        run: |
+          # Find the app directory
+          APP_DIR=$(find "../VSCode-darwin-${{ matrix.arch }}" -name "*.app" -type d | head -1)
+          
+          if [ -n "$APP_DIR" ]; then
+            echo "Signing application: $APP_DIR"
+            
+            # Ad-hoc signing (for local development/testing)
+            codesign --force --deep --sign - "$APP_DIR"
+            
+            # Verify the signature
+            codesign --verify --verbose "$APP_DIR"
+            
+            echo "Application signed successfully"
+          else
+            echo "No .app directory found to sign"
+          fi
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
