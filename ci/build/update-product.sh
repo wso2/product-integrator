@@ -78,4 +78,4 @@ echo '{
 
 # copy resources
 # from resources folder with relative path in lib folder. also replace existing resources using rsync
-rsync -av --progress --ignore-existing resources/ lib/vscode/resources/
+rsync -av --progress resources/ lib/
