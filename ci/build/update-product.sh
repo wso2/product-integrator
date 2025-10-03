@@ -47,6 +47,14 @@ echo '{
       "serviceUrl": "https://open-vsx.org/vscode/gallery",
       "itemUrl": "https://open-vsx.org/vscode/item"
     },
+    "win32ContextMenu": {
+      "x64": {
+        "clsid": "{D5A1C07C-A03F-4c26-B1FC-3D1444FDD333}"
+      },
+      "arm64": {
+        "clsid": "{D5A1C07C-A03F-4c26-B1FC-3D1444FDD444}"
+      }
+    },
 	  "builtInExtensions": [
       {
         "name": "wso2.wso2-platform",

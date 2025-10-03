@@ -544,20 +544,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: compilation
-          path: .
+          path: lib/vscode
 
       - name: Extract compilation output
         shell: pwsh
         run: tar -xzf compilation.tar.gz
 
-      - name: Install quilt (Windows)
+      - name: Install Rsync (Windows)
         shell: pwsh
         run: |
-          choco install quilt -y
-
-      - name: Apply patches (Windows)
-        shell: bash
-        run: quilt push -a
+          choco install -y rsync  
 
       - name: Update product.json and branding
         shell: bash
@@ -575,10 +571,6 @@ jobs:
           # Add Rust to PATH for this session
           $env:PATH += ";$env:USERPROFILE\.cargo\bin"
 
-      - name: Prepare artifacts dir
-        run: |
-          mkdir -p ../artifacts
-
       - name: Install dependencies
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
@@ -593,6 +585,7 @@ jobs:
           node build/azure-pipelines/distro/mixin-quality || true
 
       - name: Install builtin extensions
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -603,14 +596,16 @@ jobs:
             npm run download-builtin-extensions
           fi
 
+      - name: Download exlporer Dll
+        shell: pwsh
+        run: node build/win32/explorer-dll-fetcher .build/win32/appx
+
       - name: Build client (Windows)
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run gulp "vscode-win32-x64-min-ci"
-          $archivePath = "../artifacts/VSCode-win32-x64.zip"
-          Compress-Archive -Path ../VSCode-win32-x64/* -DestinationPath $archivePath -Force
 
       - name: Build CLI (Windows)
         shell: pwsh
@@ -658,6 +653,7 @@ jobs:
         shell: pwsh
         run: |
           # Re-create the zip with the CLI included
+          mkdir -p ../artifacts
           $archivePath = "../artifacts/VSCode-win32-x64.zip"
           Remove-Item $archivePath -ErrorAction SilentlyContinue
           Compress-Archive -Path ../VSCode-win32-x64/* -DestinationPath $archivePath -Force
