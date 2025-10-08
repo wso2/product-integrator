@@ -1,0 +1,240 @@
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/activitybarPart.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/activitybar/activitybarPart.ts
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/activitybarPart.ts
+@@ -28,7 +28,7 @@ import { GestureEvent } from '../../../.
+ import { IPaneCompositePart } from '../paneCompositePart.js';
+ import { IPaneCompositeBarOptions, PaneCompositeBar } from '../paneCompositeBar.js';
+ import { GlobalCompositeBar } from '../globalCompositeBar.js';
+-import { IStorageService } from '../../../../platform/storage/common/storage.js';
++import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
+ import { Action2, IMenuService, MenuId, MenuRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
+ import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+ import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
+@@ -38,6 +38,15 @@ import { IExtensionService } from '../..
+ import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
+ import { IViewsService } from '../../../services/views/common/viewsService.js';
+ import { SwitchCompositeViewAction } from '../compositeBarActions.js';
++import { IHostService } from '../../../services/host/browser/host.js';
++import { INotificationService } from '../../../../platform/notification/common/notification.js';
++
++// WSO2 Integration Mode Configuration
++const WSO2_MODE_CONFIG_KEY = 'wso2.integrationMode';
++const WSO2_BI_MODE = 'bi';
++const WSO2_MI_MODE = 'mi';
++const WSO2_BI_EXTENSION_ID = 'ballerina-integrator';
++const WSO2_MI_EXTENSION_ID = 'micro-integrator';
+ 
+ export class ActivitybarPart extends Part {
+ 
+@@ -201,6 +210,8 @@ export class ActivityBarCompositeBar ext
+ 
+ 	private readonly keyboardNavigationDisposables = this._register(new DisposableStore());
+ 
++	private wso2StorageService: IStorageService | undefined;
++
+ 	constructor(
+ 		options: IPaneCompositeBarOptions,
+ 		part: Parts,
+@@ -225,6 +236,9 @@ export class ActivityBarCompositeBar ext
+ 			}
+ 		}, part, paneCompositePart, instantiationService, storageService, extensionService, viewDescriptorService, viewService, contextKeyService, environmentService, layoutService);
+ 
++		// Store the storage service for mode filtering after super call
++		this.wso2StorageService = storageService;
++
+ 		if (showGlobalActivities) {
+ 			this.globalCompositeBar = this._register(instantiationService.createInstance(GlobalCompositeBar, () => this.getContextMenuActions(), (theme: IColorTheme) => this.options.colors(theme), this.options.activityHoverOptions));
+ 		}
+@@ -241,6 +255,71 @@ export class ActivityBarCompositeBar ext
+ 		}));
+ 	}
+ 
++	private shouldFilterComposite(id: string): boolean {
++		if (!this.wso2StorageService) {
++			return false;
++		}
++
++		// Only filter extension composites
++		if (!id.startsWith('workbench.view.extension.')) {
++			return false;
++		}
++
++		const currentMode = this.wso2StorageService.get(WSO2_MODE_CONFIG_KEY, StorageScope.PROFILE, WSO2_BI_MODE);
++		const disallowedExtensionId = currentMode === WSO2_BI_MODE ? WSO2_MI_EXTENSION_ID : WSO2_BI_EXTENSION_ID;
++
++		// Check if this composite should be filtered based on current mode
++		return id.includes(disallowedExtensionId);
++	}
++
++	override getVisiblePaneCompositeIds(): string[] {
++		const visibleIds = super.getVisiblePaneCompositeIds();
++
++		// Apply WSO2 mode filtering
++		if (!this.wso2StorageService) {
++			return visibleIds;
++		}
++
++		const currentMode = this.wso2StorageService.get(WSO2_MODE_CONFIG_KEY, StorageScope.PROFILE, WSO2_BI_MODE);
++		const disallowedExtensionId = currentMode === WSO2_BI_MODE ? WSO2_MI_EXTENSION_ID : WSO2_BI_EXTENSION_ID;
++
++		return visibleIds.filter(id => {
++			// Keep all non-extension items
++			if (!id.startsWith('workbench.view.extension.')) {
++				return true;
++			}
++
++			// Filter out the disallowed WSO2 extension
++			const shouldFilter = id.includes(disallowedExtensionId);
++
++			return !shouldFilter;
++		});
++	}
++
++	override getPinnedPaneCompositeIds(): string[] {
++		const pinnedIds = super.getPinnedPaneCompositeIds();
++
++		// Apply WSO2 mode filtering
++		if (!this.wso2StorageService) {
++			return pinnedIds;
++		}
++
++		const currentMode = this.wso2StorageService.get(WSO2_MODE_CONFIG_KEY, StorageScope.PROFILE, WSO2_BI_MODE);
++		const disallowedExtensionId = currentMode === WSO2_BI_MODE ? WSO2_MI_EXTENSION_ID : WSO2_BI_EXTENSION_ID;
++
++		return pinnedIds.filter(id => {
++			// Keep all non-extension items
++			if (!id.startsWith('workbench.view.extension.')) {
++				return true;
++			}
++
++			// Filter out the disallowed WSO2 extension
++			const shouldFilter = id.includes(disallowedExtensionId);
++
++			return !shouldFilter;
++		});
++	}
++
+ 	private fillContextMenuActions(actions: IAction[], e?: MouseEvent | GestureEvent) {
+ 		// Menu
+ 		const menuBarVisibility = getMenuBarVisibility(this.configurationService);
+@@ -337,6 +416,20 @@ export class ActivityBarCompositeBar ext
+ 		// View Containers action bar
+ 		this.compositeBarContainer = super.create(this.element);
+ 
++		// Wrap the compositeBar's addComposite to filter at registration time
++		const compositeBar = (this as any).compositeBar;
++		if (compositeBar) {
++			const originalAddComposite = compositeBar.addComposite.bind(compositeBar);
++			compositeBar.addComposite = (composite: any) => {
++				// Check if this is an extension composite we should filter
++				if (this.shouldFilterComposite(composite.id)) {
++					console.log(`[WSO2 Mode] Blocking registration of composite: ${composite.id}`);
++					return; // Don't add it
++				}
++				return originalAddComposite(composite);
++			};
++		}
++
+ 		// Global action bar
+ 		if (this.globalCompositeBar) {
+ 			this.globalCompositeBar.create(this.element);
+@@ -544,6 +637,98 @@ registerAction2(
+ 		}
+ 	});
+ 
++// WSO2 Mode Switching Actions
++registerAction2(
++	class SwitchToBIModeAction extends Action2 {
++		constructor() {
++			super({
++				id: 'wso2.switchToBIMode',
++				title: localize2('switchToBIMode', 'Switch to BI Mode (Ballerina Integrator)'),
++				category: localize2('wso2Category', 'WSO2'),
++				f1: true
++			});
++		}
++
++		async run(accessor: ServicesAccessor): Promise<void> {
++			const storageService = accessor.get(IStorageService);
++			const notificationService = accessor.get(INotificationService);
++			const hostService = accessor.get(IHostService);
++
++			// Set the mode in storage
++			storageService.store(WSO2_MODE_CONFIG_KEY, WSO2_BI_MODE, StorageScope.PROFILE, 1 /* StorageTarget.USER */);
++
++			// Filter activity bar to show only BI extension
++			await filterActivityBarByMode(WSO2_BI_MODE, storageService);
++
++			notificationService.info(localize('biModeActivated', 'BI Mode activated. Reloading...'));
++
++			// Reload to apply changes
++			await hostService.reload();
++		}
++	});
++
++registerAction2(
++	class SwitchToMIModeAction extends Action2 {
++		constructor() {
++			super({
++				id: 'wso2.switchToMIMode',
++				title: localize2('switchToMIMode', 'Switch to MI Mode (Micro Integrator)'),
++				category: localize2('wso2Category', 'WSO2'),
++				f1: true
++			});
++		}
++
++		async run(accessor: ServicesAccessor): Promise<void> {
++			const storageService = accessor.get(IStorageService);
++			const notificationService = accessor.get(INotificationService);
++			const hostService = accessor.get(IHostService);
++
++			// Set the mode in storage
++			storageService.store(WSO2_MODE_CONFIG_KEY, WSO2_MI_MODE, StorageScope.PROFILE, 1 /* StorageTarget.USER */);
++
++			// Filter activity bar to show only MI extension
++			await filterActivityBarByMode(WSO2_MI_MODE, storageService);
++
++			notificationService.info(localize('miModeActivated', 'MI Mode activated. Reloading...'));
++
++			// Reload to apply changes
++			await hostService.reload();
++		}
++	});
++
++registerAction2(
++	class ShowCurrentModeAction extends Action2 {
++		constructor() {
++			super({
++				id: 'wso2.showCurrentMode',
++				title: localize2('showCurrentMode', 'Show Current Integration Mode'),
++				category: localize2('wso2Category', 'WSO2'),
++				f1: true
++			});
++		}
++
++		async run(accessor: ServicesAccessor): Promise<void> {
++			const storageService = accessor.get(IStorageService);
++			const notificationService = accessor.get(INotificationService);
++
++			const currentMode = storageService.get(WSO2_MODE_CONFIG_KEY, StorageScope.PROFILE, WSO2_BI_MODE);
++			const modeName = currentMode === WSO2_BI_MODE ? 'BI Mode (Ballerina Integrator)' : 'MI Mode (Micro Integrator)';
++
++			notificationService.info(localize('currentMode', 'Current Integration Mode: {0}', modeName));
++		}
++	});
++
++/**
++ * Filter activity bar items based on WSO2 integration mode
++ * This is a simpler version that just clears the cache to allow the override methods to work
++ */
++async function filterActivityBarByMode(mode: string, storageService: IStorageService): Promise<void> {
++	// Clear the cached activity bar state to force a refresh with the new mode
++	storageService.remove(ActivitybarPart.pinnedViewContainersKey, StorageScope.PROFILE);
++	storageService.remove(ActivitybarPart.placeholderViewContainersKey, StorageScope.PROFILE);
++}
++
++
+ registerThemingParticipant((theme, collector) => {
+ 
+ 	const activityBarActiveBorderColor = theme.getColor(ACTIVITY_BAR_ACTIVE_BORDER);
