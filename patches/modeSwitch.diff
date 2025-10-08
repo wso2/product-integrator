@@ -11,12 +11,13 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
  import { Action2, IMenuService, MenuId, MenuRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
  import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
  import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
-@@ -38,6 +38,15 @@ import { IExtensionService } from '../..
+@@ -38,6 +38,33 @@ import { IExtensionService } from '../..
  import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
  import { IViewsService } from '../../../services/views/common/viewsService.js';
  import { SwitchCompositeViewAction } from '../compositeBarActions.js';
 +import { IHostService } from '../../../services/host/browser/host.js';
 +import { INotificationService } from '../../../../platform/notification/common/notification.js';
++import { ICommandService } from '../../../../platform/commands/common/commands.js';
 +
 +// WSO2 Integration Mode Configuration
 +const WSO2_MODE_CONFIG_KEY = 'wso2.integrationMode';
@@ -24,10 +25,27 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
 +const WSO2_MI_MODE = 'mi';
 +const WSO2_BI_EXTENSION_ID = 'ballerina-integrator';
 +const WSO2_MI_EXTENSION_ID = 'micro-integrator';
++
++/**
++ * Focus the WSO2 extension view container based on the current mode using ViewsService
++ */
++async function focusWSO2Extension(mode: string, viewsService: IViewsService): Promise<void> {
++	const extensionId = mode === WSO2_BI_MODE ? WSO2_BI_EXTENSION_ID : WSO2_MI_EXTENSION_ID;
++	
++	// Try to find and open the view container through views service
++	// The view container ID format is typically 'workbench.view.extension.{extensionId}'
++	const viewContainerId = `workbench.view.extension.${extensionId}`;
++	
++	try {
++		await viewsService.openViewContainer(viewContainerId, true);
++	} catch (error) {
++		console.warn(`[WSO2 Mode] Failed to focus extension view: ${viewContainerId}`, error);
++	}
++}
  
  export class ActivitybarPart extends Part {
  
-@@ -201,6 +210,8 @@ export class ActivityBarCompositeBar ext
+@@ -201,6 +228,8 @@ export class ActivityBarCompositeBar ext
  
  	private readonly keyboardNavigationDisposables = this._register(new DisposableStore());
  
@@ -36,7 +54,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
  	constructor(
  		options: IPaneCompositeBarOptions,
  		part: Parts,
-@@ -225,6 +236,9 @@ export class ActivityBarCompositeBar ext
+@@ -225,6 +254,9 @@ export class ActivityBarCompositeBar ext
  			}
  		}, part, paneCompositePart, instantiationService, storageService, extensionService, viewDescriptorService, viewService, contextKeyService, environmentService, layoutService);
  
@@ -46,10 +64,20 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
  		if (showGlobalActivities) {
  			this.globalCompositeBar = this._register(instantiationService.createInstance(GlobalCompositeBar, () => this.getContextMenuActions(), (theme: IColorTheme) => this.options.colors(theme), this.options.activityHoverOptions));
  		}
-@@ -241,6 +255,71 @@ export class ActivityBarCompositeBar ext
+@@ -239,6 +271,79 @@ export class ActivityBarCompositeBar ext
+ 				}
+ 			}
  		}));
- 	}
- 
++		
++		// Auto-focus WSO2 extension based on current mode after extensions load
++		setTimeout(() => {
++			const currentMode = this.wso2StorageService?.get(WSO2_MODE_CONFIG_KEY, StorageScope.PROFILE, WSO2_BI_MODE);
++			if (currentMode) {
++				focusWSO2Extension(currentMode, viewService);
++			}
++		}, 2000);
++	}
++
 +	private shouldFilterComposite(id: string): boolean {
 +		if (!this.wso2StorageService) {
 +			return false;
@@ -113,12 +141,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
 +
 +			return !shouldFilter;
 +		});
-+	}
-+
+ 	}
+ 
  	private fillContextMenuActions(actions: IAction[], e?: MouseEvent | GestureEvent) {
- 		// Menu
- 		const menuBarVisibility = getMenuBarVisibility(this.configurationService);
-@@ -337,6 +416,20 @@ export class ActivityBarCompositeBar ext
+@@ -337,6 +442,20 @@ export class ActivityBarCompositeBar ext
  		// View Containers action bar
  		this.compositeBarContainer = super.create(this.element);
  
@@ -139,7 +165,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
  		// Global action bar
  		if (this.globalCompositeBar) {
  			this.globalCompositeBar.create(this.element);
-@@ -544,6 +637,98 @@ registerAction2(
+@@ -544,6 +663,128 @@ registerAction2(
  		}
  	});
  
@@ -159,6 +185,15 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
 +			const storageService = accessor.get(IStorageService);
 +			const notificationService = accessor.get(INotificationService);
 +			const hostService = accessor.get(IHostService);
++			const commandService = accessor.get(ICommandService);
++			const viewsService = accessor.get(IViewsService);
++
++			// Check if already in BI mode
++			const currentMode = storageService.get(WSO2_MODE_CONFIG_KEY, StorageScope.PROFILE, WSO2_BI_MODE);
++			if (currentMode === WSO2_BI_MODE) {
++				notificationService.info(localize('alreadyInBIMode', 'Already in BI Mode (Ballerina Integrator)'));
++				return;
++			}
 +
 +			// Set the mode in storage
 +			storageService.store(WSO2_MODE_CONFIG_KEY, WSO2_BI_MODE, StorageScope.PROFILE, 1 /* StorageTarget.USER */);
@@ -166,7 +201,13 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
 +			// Filter activity bar to show only BI extension
 +			await filterActivityBarByMode(WSO2_BI_MODE, storageService);
 +
++			// Focus the BI extension view before reload
++			await focusWSO2Extension(WSO2_BI_MODE, viewsService);
++
 +			notificationService.info(localize('biModeActivated', 'BI Mode activated. Reloading...'));
++
++			// Close all active editors before reload
++			await commandService.executeCommand('workbench.action.closeAllEditors');
 +
 +			// Reload to apply changes
 +			await hostService.reload();
@@ -188,6 +229,15 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
 +			const storageService = accessor.get(IStorageService);
 +			const notificationService = accessor.get(INotificationService);
 +			const hostService = accessor.get(IHostService);
++			const commandService = accessor.get(ICommandService);
++			const viewsService = accessor.get(IViewsService);
++
++			// Check if already in MI mode
++			const currentMode = storageService.get(WSO2_MODE_CONFIG_KEY, StorageScope.PROFILE, WSO2_BI_MODE);
++			if (currentMode === WSO2_MI_MODE) {
++				notificationService.info(localize('alreadyInMIMode', 'Already in MI Mode (Micro Integrator)'));
++				return;
++			}
 +
 +			// Set the mode in storage
 +			storageService.store(WSO2_MODE_CONFIG_KEY, WSO2_MI_MODE, StorageScope.PROFILE, 1 /* StorageTarget.USER */);
@@ -195,7 +245,13 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
 +			// Filter activity bar to show only MI extension
 +			await filterActivityBarByMode(WSO2_MI_MODE, storageService);
 +
++			// Focus the MI extension view before reload
++			await focusWSO2Extension(WSO2_MI_MODE, viewsService);
++
 +			notificationService.info(localize('miModeActivated', 'MI Mode activated. Reloading...'));
++
++			// Close all active editors before reload
++			await commandService.executeCommand('workbench.action.closeAllEditors');
 +
 +			// Reload to apply changes
 +			await hostService.reload();
