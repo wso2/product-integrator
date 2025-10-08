@@ -31,11 +31,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
 + */
 +async function focusWSO2Extension(mode: string, viewsService: IViewsService): Promise<void> {
 +	const extensionId = mode === WSO2_BI_MODE ? WSO2_BI_EXTENSION_ID : WSO2_MI_EXTENSION_ID;
-+	
++
 +	// Try to find and open the view container through views service
 +	// The view container ID format is typically 'workbench.view.extension.{extensionId}'
 +	const viewContainerId = `workbench.view.extension.${extensionId}`;
-+	
++
 +	try {
 +		await viewsService.openViewContainer(viewContainerId, true);
 +	} catch (error) {
@@ -68,7 +68,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
  				}
  			}
  		}));
-+		
++
 +		// Auto-focus WSO2 extension based on current mode after extensions load
 +		setTimeout(() => {
 +			const currentMode = this.wso2StorageService?.get(WSO2_MODE_CONFIG_KEY, StorageScope.PROFILE, WSO2_BI_MODE);
@@ -165,7 +165,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
  		// Global action bar
  		if (this.globalCompositeBar) {
  			this.globalCompositeBar.create(this.element);
-@@ -544,6 +663,128 @@ registerAction2(
+@@ -544,6 +663,157 @@ registerAction2(
  		}
  	});
  
@@ -277,6 +277,35 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/activitybar/
 +			const modeName = currentMode === WSO2_BI_MODE ? 'BI Mode (Ballerina Integrator)' : 'MI Mode (Micro Integrator)';
 +
 +			notificationService.info(localize('currentMode', 'Current Integration Mode: {0}', modeName));
++		}
++	});
++
++
++registerAction2(
++	class ResetActivityBarAction extends Action2 {
++		constructor() {
++			super({
++				id: 'workbench.action.resetActivityBar',
++				title: localize2('resetActivityBar', 'Reset Activity Bar'),
++				category: Categories.View,
++				f1: true
++			});
++		}
++
++		async run(accessor: ServicesAccessor): Promise<void> {
++			const storageService = accessor.get(IStorageService);
++
++			// Clear all activity bar storage keys
++			storageService.remove(ActivitybarPart.pinnedViewContainersKey, StorageScope.PROFILE);
++			storageService.remove(ActivitybarPart.placeholderViewContainersKey, StorageScope.PROFILE);
++			storageService.remove(ActivitybarPart.viewContainersWorkspaceStateKey, StorageScope.WORKSPACE);
++
++			// Also clear sidebar view container order
++			storageService.remove('workbench.views.service.sidebar', StorageScope.PROFILE);
++
++			// Reload the window to apply changes
++			const hostService = accessor.get(IHostService);
++			await hostService.reload();
 +		}
 +	});
 +
