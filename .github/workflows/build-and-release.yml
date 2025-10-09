@@ -571,6 +571,23 @@ jobs:
           # Add Rust to PATH for this session
           $env:PATH += ";$env:USERPROFILE\.cargo\bin"
 
+      - name: Install OpenSSL (Windows)
+        shell: pwsh
+        run: |
+          # Install vcpkg and OpenSSL
+          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+          cd C:\vcpkg
+          .\bootstrap-vcpkg.bat
+          .\vcpkg.exe install openssl:x64-windows-static
+          # Set environment variables for OpenSSL
+          $env:VCPKG_ROOT = "C:\vcpkg"
+          $env:OPENSSL_DIR = "C:\vcpkg\installed\x64-windows-static"
+          # Make environment variables persistent for subsequent steps
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+          echo "OPENSSL_DIR=C:\vcpkg\installed\x64-windows-static" >> $env:GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=C:\vcpkg\installed\x64-windows-static\lib" >> $env:GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=C:\vcpkg\installed\x64-windows-static\include" >> $env:GITHUB_ENV
+
       - name: Install dependencies
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
@@ -609,6 +626,12 @@ jobs:
 
       - name: Build CLI (Windows)
         shell: pwsh
+        env:
+          VCPKG_ROOT: C:\vcpkg
+          OPENSSL_DIR: C:\vcpkg\installed\x64-windows-static
+          OPENSSL_LIB_DIR: C:\vcpkg\installed\x64-windows-static\lib
+          OPENSSL_INCLUDE_DIR: C:\vcpkg\installed\x64-windows-static\include
+          OPENSSL_STATIC: 1
         run: |
           # Add Rust to PATH
           $env:PATH += ";$env:USERPROFILE\.cargo\bin"
