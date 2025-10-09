@@ -686,7 +686,7 @@ jobs:
         with:
           name: artifacts-win32
           path: |
-            lib/vscode/../artifacts/*
+            lib/artifacts/*
           if-no-files-found: error
 
   create-release:
