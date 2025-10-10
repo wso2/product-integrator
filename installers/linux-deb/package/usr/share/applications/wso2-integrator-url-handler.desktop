@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=WSO2 Integrator - URL Handler
+Comment=Code Editing. Redefined.
+GenericName=Text Editor
+Exec=/usr/share/wso2-integrator/wso2-integrator --open-url %U
+Icon=com.wso2.integrator
+Type=Application
+NoDisplay=true
+StartupNotify=true
+Categories=Utility;TextEditor;Development;IDE;
+MimeType=x-scheme-handler/,;
+Keywords=vscode;
