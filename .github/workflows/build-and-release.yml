@@ -215,31 +215,39 @@ jobs:
           cp "$CLI_BIN" "../VSCode-linux-x64/bin/$CLI_APP_NAME"
           chmod +x "../VSCode-linux-x64/bin/$CLI_APP_NAME"
 
-      - name: Setup sysroots for Linux build
-        run: |
-          set -e
-          SYSROOT_ARCH="amd64"  # for x64 builds
-          export VSCODE_SYSROOT_DIR="$(pwd)/.build/sysroots"
-          
-          # Download dependency check sysroot
-          SYSROOT_ARCH="$SYSROOT_ARCH" VSCODE_SYSROOT_PREFIX="-glibc-2.28-gcc-8.5.0" node -e '(async () => { const { getVSCodeSysroot } = require("./build/linux/debian/install-sysroot.js"); await getVSCodeSysroot(process.env["SYSROOT_ARCH"]); })()'
-          
-          # Download RPM build sysroot  
-          SYSROOT_ARCH="$SYSROOT_ARCH" VSCODE_SYSROOT_PREFIX="-glibc-2.28-gcc-10.5.0" node -e '(async () => { const { getVSCodeSysroot } = require("./build/linux/debian/install-sysroot.js"); await getVSCodeSysroot(process.env["SYSROOT_ARCH"]); })()'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build Linux packages (deb, rpm)
+      - name: Build Linux packages - deb
         env:
           VSCODE_ARCH: x64
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # DEB build
-          npm run gulp "vscode-linux-x64-prepare-deb"
-          npm run gulp "vscode-linux-x64-build-deb"
+          npm run gulp "vscode-linux-$VSCODE_ARCH-prepare-deb"
+          npm run gulp "vscode-linux-$VSCODE_ARCH-build-deb"
 
           # Copy outputs
           cp .build/linux/deb/*/deb/*.deb ../artifacts/ || true
+
+      - name: Build Linux packages - rpm
+        env:
+          VSCODE_ARCH: x64
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TRIPLE=""
+          if [ "$VSCODE_ARCH" == "x64" ]; then
+            TRIPLE="x86_64-linux-gnu"
+          elif [ "$VSCODE_ARCH" == "arm64" ]; then
+            TRIPLE="aarch64-linux-gnu"
+          elif [ "$VSCODE_ARCH" == "armhf" ]; then
+            TRIPLE="arm-rpi-linux-gnueabihf"
+          fi
+          export VSCODE_SYSROOT_DIR=.build/sysroots/glibc-2.28-gcc-10.5.0
+          export STRIP="$VSCODE_SYSROOT_DIR/$TRIPLE/$TRIPLE/bin/strip"
+          npm run gulp "vscode-linux-$VSCODE_ARCH-prepare-rpm"
+          npm run gulp "vscode-linux-$VSCODE_ARCH-build-rpm"
+
+          # Copy outputs
+          cp .build/linux/rpm/*/*.rpm ../artifacts/ || true
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
