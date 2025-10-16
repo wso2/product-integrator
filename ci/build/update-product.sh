@@ -20,6 +20,7 @@ echo '{
     "win32ShellNameShort": "w&so2-integrator",
     "darwinBundleIdentifier": "com.wso2.integrator",
     "linuxIconName": "com.wso2.integrator",
+    "urlProtocol": "wso2-integrator",
 	  "licenseFileName": "LICENSE.txt",
     "reportIssueUrl": "https://github.com/wso2/vscode-extensions/issues/new",
     "documentationUrl": "https://go.microsoft.com/fwlink/?LinkID=533484#vscode",
