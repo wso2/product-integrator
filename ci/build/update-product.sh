@@ -75,11 +75,11 @@ echo '{
       },
       {
         "name": "wso2.ballerina",
-        "version": "5.4.0"
+        "version": "5.4.2"
       },
       {
         "name": "wso2.ballerina-integrator",
-        "version": "1.3.0"
+        "version": "1.3.2"
       },
       {
         "name": "wso2.micro-integrator",
