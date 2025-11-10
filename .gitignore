@@ -38,3 +38,5 @@ installers/windows/CustomAction1/bin/
 installers/windows/WixPackage/obj/
 installers/windows/WixPackage/bin/
 installers/windows/WixPackage/payload/ICP/
+installers/linux-deb/package/usr/lib/
+installers/linux-deb/package/usr/share/wso2-integrator

@@ -9,4 +9,3 @@ NoDisplay=true
 StartupNotify=true
 Categories=Utility;TextEditor;Development;IDE;
 MimeType=x-scheme-handler/,;
-Keywords=vscode;

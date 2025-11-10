@@ -4,10 +4,10 @@
 	<metadata_license>MIT</metadata_license>
 	<project_license>MIT</project_license>
 	<name>WSO2 Integrator</name>
-	<url type="homepage">https://code.visualstudio.com</url>
-	<summary>Visual Studio Code. Code editing. Redefined.</summary>
+	<url type="homepage">https://wso2.com/integration/</url>
+	<summary>WSO2 Integrator. Integration made simple.</summary>
 	<description>
-		<p>Visual Studio Code is a new choice of tool that combines the simplicity of a code editor with what developers need for the core edit-build-debug cycle. See https://code.visualstudio.com/docs/setup/linux for installation instructions and FAQ.</p>
+		<p>WSO2 Integrator is a comprehensive integration solution that enables seamless connectivity and orchestration of services. See https://wso2.com/integration/ for more information.</p>
 	</description>
 	<screenshots>
 		<screenshot type="default">

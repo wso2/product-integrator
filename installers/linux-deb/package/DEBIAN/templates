@@ -1,6 +1,1 @@
-Template: wso2-integrator/add-microsoft-repo
-Type: boolean
-Default: true
-Description: Add Microsoft apt repository for Visual Studio Code?
- The installer would like to add the Microsoft repository and signing
- key to update VS Code through apt.
+# No templates needed for WSO2 Integrator

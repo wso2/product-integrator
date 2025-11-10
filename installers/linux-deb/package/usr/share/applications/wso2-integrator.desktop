@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=WSO2 Integrator
-Comment=Code Editing. Redefined.
+Comment=Low code integration.
 GenericName=Text Editor
 Exec=/usr/share/wso2-integrator/wso2-integrator %F
 Icon=com.wso2.integrator
@@ -10,7 +10,6 @@ StartupWMClass=WSO2 Integrator
 Categories=TextEditor;Development;IDE;
 MimeType=application/x-wso2-integrator-workspace;
 Actions=new-empty-window;
-Keywords=vscode;
 
 [Desktop Action new-empty-window]
 Name=New Empty Window
