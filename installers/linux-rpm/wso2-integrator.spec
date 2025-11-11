@@ -123,7 +123,7 @@ fi
 
 %preun
 # Remove from alternatives system
-/if update-alternatives --display editor >/dev/null 2>&1; then
+if update-alternatives --display editor >/dev/null 2>&1; then
 	update-alternatives --remove editor /usr/bin/wso2-integrator || true
 fi
 

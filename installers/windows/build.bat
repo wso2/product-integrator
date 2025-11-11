@@ -1,16 +1,16 @@
-REM Accepts three arguments: ballerina.zip and integrator.zip ICP.zip
-REM Extracts them to WixPackage\payload\Ballerina and WixPackage\payload\Integrator and WixPackage\payload\ICP respectively
+REM Accepts four arguments: ballerina.zip, integrator.zip, ICP.zip, and version
+REM Extracts the zip files to their respective payload directories and applies the version to Package.wxs before building the installer
 
 @echo off
 setlocal
 
 REM Check for required arguments
 if "%~1"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^>
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
     exit /b 1
 )
 if "%~2"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^>  
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
     exit /b 1
 )
 
@@ -26,7 +26,7 @@ if "%~4"=="" (
 
 
 @REM REM Extract ballerina.zip
-ppowershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', '.\temp_ballerina'); }"
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', '.\temp_ballerina'); }"
 move ".\temp_ballerina\ballerina-*" ".\WixPackage\payload\Ballerina"
 if exist ".\temp_ballerina" rmdir /s /q ".\temp_ballerina"
 if errorlevel 1 (
