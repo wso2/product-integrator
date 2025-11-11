@@ -13,15 +13,20 @@ if "%~2"=="" (
     echo Usage: build.bat ^<path-to-ballerina.zip^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^>  
     exit /b 1
 )
+
 if "%~3"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^>  
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
     exit /b 1
 )
 
-@REM REM Remove existing Ballerina and Integrator directories if they exist
-@REM powershell -Command "if (Test-Path '.\WixPackage\payload\Ballerina') { Remove-Item -Recurse -Force '.\WixPackage\payload\Ballerina' }"
-@REM powershell -Command "if (Test-Path '.\WixPackage\payload\Integrator') { Remove-Item -Recurse -Force '.\WixPackage\payload\Integrator' }"
-@REM powershell -Command "if (Test-Path '.\WixPackage\payload\ICP') { Remove-Item -Recurse -Force '.\WixPackage\payload\ICP' }"
+if "%~4"=="" (
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
+    exit /b 1
+)
+
+
+REM Update version in Package.wxs
+powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%~4' | Set-Content '.\WixPackage\Package.wxs'"
 
 @REM REM Extract ballerina.zip
 @REM powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', 'C:\'); }"
@@ -35,4 +40,7 @@ if "%~3"=="" (
 
 dotnet build .\CustomAction1\CustomAction1.csproj
 dotnet build .\WixPackage\WixPackage.wixproj -p:Platform=x64
+
+REM Revert version placeholder in Package.wxs
+powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%~4', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
 endlocal
