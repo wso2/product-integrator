@@ -34,7 +34,7 @@ WSO2_ZIP="$2"
 ICP_ZIP="$3"
 VERSION="$4"
 
-OUTPUT_PKG="WSO2 Integrator.pkg"
+OUTPUT_PKG="WSO2_Integrator.pkg"
 BUNDLE_IDENTIFIER="com.wso2.integrator"
 EXTRACTION_TARGET="$WORK_DIR/payload"
 
@@ -68,7 +68,7 @@ WSO2_UNZIPPED_FOLDER=$(unzip -Z1 "$WSO2_ZIP" | head -1 | cut -d/ -f1)
 WSO2_UNZIPPED_PATH="$EXTRACTION_TARGET/$WSO2_UNZIPPED_FOLDER"
 mv "$WSO2_UNZIPPED_PATH" "$WSO2_TARGET"
 rm -rf "$WSO2_UNZIPPED_PATH"
-chmod +x "$WSO2_TARGET/WSO2 Integrator.app"/*
+chmod +x "$WSO2_TARGET/WSO2 Integrator.app/Contents/MacOS"/* 2>/dev/null || true
 xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
 
 rm -rf "$EXTRACTION_TARGET/__MACOSX"

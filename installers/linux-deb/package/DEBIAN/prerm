@@ -3,4 +3,6 @@
 # Copyright (c) WSO2. All rights reserved.
 
 # Deregister wso2-integrator from the alternatives system
-update-alternatives --remove editor /usr/bin/wso2-integrator
+if update-alternatives --display editor >/dev/null 2>&1; then
+	update-alternatives --remove editor /usr/bin/wso2-integrator || true
+fi

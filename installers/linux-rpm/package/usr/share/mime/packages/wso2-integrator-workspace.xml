@@ -2,6 +2,6 @@
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
 	<mime-type type="application/x-wso2-integrator-workspace">
 		<comment>WSO2 Integrator Workspace</comment>
-		<glob pattern="*.code-workspace"/>
+		<glob pattern="*.wso2-workspace"/>
 	</mime-type>
 </mime-info>

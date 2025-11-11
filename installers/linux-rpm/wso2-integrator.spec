@@ -123,7 +123,9 @@ fi
 
 %preun
 # Remove from alternatives system
-/usr/sbin/update-alternatives --remove editor /usr/bin/wso2-integrator 2>/dev/null || true
+/if update-alternatives --display editor >/dev/null 2>&1; then
+	update-alternatives --remove editor /usr/bin/wso2-integrator || true
+fi
 
 %postun
 # Remove symlink

@@ -25,18 +25,32 @@ if "%~4"=="" (
 )
 
 
-REM Update version in Package.wxs
-powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%~4' | Set-Content '.\WixPackage\Package.wxs'"
-
 @REM REM Extract ballerina.zip
-powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', 'C:\'); }"
-move "C:\ballerina-"* ".\WixPackage\payload\Ballerina"
+ppowershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', '.\temp_ballerina'); }"
+move ".\temp_ballerina\ballerina-*" ".\WixPackage\payload\Ballerina"
+if exist ".\temp_ballerina" rmdir /s /q ".\temp_ballerina"
+if errorlevel 1 (
+    echo Ballerina extraction failed
+    exit /b 1
+)
 
 @REM REM Extract integrator.zip
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~2', '.\WixPackage\payload\Integrator'); }"
+if errorlevel 1 (
+    echo Integrator extraction failed
+    exit /b 1
+)
 
 @REM REM Extract ICP.zip
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~3', '.\temp_icp'); Move-Item -Path '.\temp_icp\*' -Destination '.\WixPackage\payload\ICP' -Force; Remove-Item -Recurse -Force '.\temp_icp' }"
+if errorlevel 1 (
+    echo ICP extraction failed
+    exit /b 1
+)
+
+REM Update version in Package.wxs
+powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%~4' | Set-Content '.\WixPackage\Package.wxs'"
+
 
 dotnet build .\CustomAction1\CustomAction1.csproj -c Release
 if errorlevel 1 (

@@ -130,9 +130,9 @@ else
 fi
 
 # Cleanup extracted files (commented out to match RPM behavior)
-rm -rf "$INTEGRATOR_TARGET"
-rm -rf "$BALLERINA_TARGET"
-rm -rf "$ICP_TARGET"
+rm -rf "${INTEGRATOR_TARGET:?}"
+rm -rf "${BALLERINA_TARGET:?}"
+rm -rf "${ICP_TARGET:?}"
 
 print_info "DEB package build completed successfully!"
 print_info "You can install the package using: sudo dpkg -i $OUTPUT_DEB"
