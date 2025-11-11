@@ -1,13 +1,13 @@
 [Desktop Entry]
 Name=WSO2 Integrator
-Comment=Low code integration.
-GenericName=Text Editor
+Comment=Low-code integration platform.
+GenericName=Integration Platform
 Exec=/usr/share/wso2-integrator/wso2-integrator %F
 Icon=com.wso2.integrator
 Type=Application
 StartupNotify=false
 StartupWMClass=WSO2 Integrator
-Categories=TextEditor;Development;IDE;
+Categories=Development;IDE;Utility;
 MimeType=application/x-wso2-integrator-workspace;
 Actions=new-empty-window;
 

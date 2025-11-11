@@ -125,9 +125,9 @@ rpmbuild --define "_topdir $BUILD_DIR" \
          --define "_buildrootdir $BUILD_DIR/BUILDROOT" \
          -ba "$SPECS_DIR/wso2-integrator.spec"
 
-# rm -rf "$INTEGRATOR_TARGET"
-# rm -rf "$BALLERINA_TARGET"
-# rm -rf "$ICP_TARGET"
+rm -rf "$INTEGRATOR_TARGET"
+rm -rf "$BALLERINA_TARGET"
+rm -rf "$ICP_TARGET"
 
 # Copy built RPM to current directory
 print_info "Copying RPM package to current directory..."

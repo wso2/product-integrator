@@ -17,7 +17,7 @@ if [ -d "/Library/Ballerina" ]; then
     chown -R root:wheel "/Library/Ballerina"
     chmod -R ugo+r /Library/Ballerina/distributions/ballerina-*
     chmod -R ugo+rx /Library/Ballerina/bin
-    find dependencies -type d -exec chmod ugo+rx \{\} \;
+    find dependencies -type d -exec chmod ugo+rx {} \;
     chmod -R ugo+r /Library/Ballerina/lib
     chmod o-w .
     rm -f /Library/Ballerina/bin/ballerina

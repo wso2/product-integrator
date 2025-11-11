@@ -107,7 +107,7 @@ set_curr_bal_active() {
 
     user_bal_version_file="$user_ballerina_dir/ballerina-version"
     rm -f "$user_bal_version_file"
-    echo "Removed ballerina-version file for user: $USERNAME"
+    echo "Removed ballerina-version file for user: $username"
 }
 
 while IFS=: read -r username _ uid _ _ home _; do

@@ -11,9 +11,9 @@
     <script>
     <![CDATA[
         function checkSystem() {
-            if(!(system.compareVersions(system.version.ProductVersion, '10.6.0') >= 0)){
+            if(!(system.compareVersions(system.version.ProductVersion, '10.13.0') >= 0)){
                 my.result.title = 'Unable to install';
-                my.result.message = 'WSO2 Integrator requires Mac OS X 10.6 or later.';
+                my.result.message = 'WSO2 Integrator requires Mac OS X 10.13 or later.';
                 my.result.type = 'Fatal';
                 return false;
             }

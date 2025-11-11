@@ -47,7 +47,7 @@ BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$BALLERINA_ZIP" | head -1 | cut -d/ -f1)
 BALLERINA_UNZIPPED_PATH="$EXTRACTION_TARGET/$BALLERINA_UNZIPPED_FOLDER"
 mv "$BALLERINA_UNZIPPED_PATH"/* "$BALLERINA_TARGET"
 rm -rf "$BALLERINA_UNZIPPED_PATH"
-chmod +x "$BALLERINA_TARGET/bin/"
+chmod +x "$BALLERINA_TARGET/bin"/*
 
 # Extract icp zip
 ICP_TARGET="$WORK_DIR/payload/Library/WSO2/ICP"
@@ -58,7 +58,7 @@ ICP_UNZIPPED_FOLDER=$(unzip -Z1 "$ICP_ZIP" | head -1 | cut -d/ -f1)
 ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
 mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
-chmod +x "$ICP_TARGET/bin/"
+chmod +x "$ICP_TARGET/bin"/*
 
 # Extract wso2 zip
 WSO2_TARGET="$WORK_DIR/payload/Applications"
@@ -110,8 +110,8 @@ else
     exit 1
 fi
 
-rm -rf "$BALLERINA_TARGET"/*
-rm -rf "$WSO2_TARGET"/*
-rm -rf "$ICP_TARGET"/*
+rm -rf "${BALLERINA_TARGET:?}"/*
+rm -rf "${WSO2_TARGET:?}"/*
+rm -rf "${ICP_TARGET:?}"/*
 
 print_info "Done!"

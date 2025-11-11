@@ -9,7 +9,7 @@
     Compressed="yes"
   >
     <Property Id="BALLERINA_INSTALLATION_WARNING" Value="0" />
-    <Binary Id="ExtActionsDll" SourceFile="..\CustomAction1\bin\Debug\net472\CustomAction1.CA.dll" />
+    <Binary Id="ExtActionsDll" SourceFile="..\CustomAction1\bin\$(Configuration)\net472\CustomAction1.CA.dll" />
     <CustomAction Id="clearCurrentActiveBallerinaVersionCA" BinaryRef="ExtActionsDll"
       DllEntry="clearCurrentActiveBallerinaVersion" Execute="deferred" Impersonate="no"
       Return="check" />
