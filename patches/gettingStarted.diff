@@ -11,3 +11,620 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
  			'description': localize('workbench.startupEditor', "Controls which editor is shown at startup, if none are restored from the previous session.")
  		},
  		'workbench.welcomePage.preferReducedMotion': {
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
+@@ -0,0 +1,22 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
++ *
++ *  WSO2 Inc. licenses this file to you under the Apache License,
++ *  Version 2.0 (the "License"); you may not use this file except
++ *  in compliance with the License.
++ *  You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ *  Unless required by applicable law or agreed to in writing,
++ *  software distributed under the License is distributed on an
++ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ *  KIND, either express or implied.  See the License for the
++ *  specific language governing permissions and limitations
++ *  under the License.
++ *--------------------------------------------------------------------------------------------*/
++
++export const WI_MODE_SETTING_ID = 'integrator.defaultIntegrator';
++export const WI_CREATE_PROJECT_COMMAND_ID = 'wso2.integrator.createProject';
++export const WI_EXPLORE_SAMPLES_COMMAND_ID = 'wso2.integrator.exploreSamples';
++export const WI_IMPORT_PROJECT_COMMAND_ID = 'wso2.integrator.importProject';
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
+@@ -0,0 +1,560 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
++ *
++ *  WSO2 Inc. licenses this file to you under the Apache License,
++ *  Version 2.0 (the "License"); you may not use this file except
++ *  in compliance with the License.
++ *  You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ *  Unless required by applicable law or agreed to in writing,
++ *  software distributed under the License is distributed on an
++ *  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ *  KIND, either express or implied.  See the License for the
++ *  specific language governing permissions and limitations
++ *  under the License.
++ *--------------------------------------------------------------------------------------------*/
++
++import { $, append, clearNode } from '../../../../base/browser/dom.js';
++import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
++import { IWorkspacesService, IRecentlyOpened, isRecentFolder, isRecentWorkspace } from '../../../../platform/workspaces/common/workspaces.js';
++import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
++import { ILabelService, Verbosity } from '../../../../platform/label/common/label.js';
++import { ICommandService } from '../../../../platform/commands/common/commands.js';
++import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
++import { WI_CREATE_PROJECT_COMMAND_ID, WI_EXPLORE_SAMPLES_COMMAND_ID, WI_IMPORT_PROJECT_COMMAND_ID, WI_MODE_SETTING_ID } from './wso2Constants.js';
++
++export class WSO2EditorGroupWatermark extends Disposable {
++
++	private readonly container: HTMLElement;
++	private readonly transientDisposables = this._register(new DisposableStore());
++	private enabled = false;
++	private workbenchState: WorkbenchState;
++
++	constructor(
++		parent: HTMLElement,
++		@IWorkspacesService private readonly workspacesService: IWorkspacesService,
++		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService,
++		@ILabelService private readonly labelService: ILabelService,
++		@ICommandService private readonly commandService: ICommandService,
++		@IConfigurationService private readonly configurationService: IConfigurationService
++	) {
++		super();
++
++		this.workbenchState = this.contextService.getWorkbenchState();
++
++		// Create container - CSS will handle visibility based on parent's .empty class
++		this.container = append(parent, $('.wso2-editor-watermark'));
++
++		// Add CSS styles
++		this.addStyles();
++
++		this.registerListeners();
++		this.render();
++	}
++
++	private registerListeners(): void {
++		this._register(this.configurationService.onDidChangeConfiguration(e => {
++			if (e.affectsConfiguration('workbench.tips.enabled')) {
++				this.render();
++			}
++		}));
++
++		this._register(this.contextService.onDidChangeWorkbenchState(workbenchState => {
++			if (this.workbenchState !== workbenchState) {
++				this.workbenchState = workbenchState;
++				this.render();
++			}
++		}));
++
++		// Listen for workspace changes to update recent projects
++		this._register(this.workspacesService.onDidChangeRecentlyOpened(() => {
++			if (this.enabled) {
++				this.render();
++			}
++		}));
++	}
++
++	private addStyles(): void {
++		const style = document.createElement('style');
++		style.textContent = `
++			/* WSO2 Watermark Container - hidden when editor group is not empty */
++			.monaco-workbench .part.editor > .content .editor-group-container:not(.empty) > .wso2-editor-watermark {
++				display: none;
++			}
++
++			.wso2-editor-watermark {
++				position: absolute;
++				top: 0;
++				left: 0;
++				right: 0;
++				bottom: 0;
++				overflow-y: auto;
++				pointer-events: all;
++				background: var(--vscode-sideBar-background);
++			}
++
++			.wso2-editor-watermark .wrapper {
++				max-width: 100%;
++				height: 100%;
++				min-height: 100vh;
++			}
++
++			.wso2-editor-watermark .top-section {
++				background: linear-gradient(135deg, #667eea 0%, #204377 100%);
++				padding: 40px 60px 80px;
++				position: relative;
++				display: flex;
++				flex-direction: column;
++				color: white;
++			}
++
++		.wso2-editor-watermark .configure-btn {
++			position: absolute;
++			top: 40px;
++			right: 60px;
++			height: 33px;
++			font-size: 14px;
++			font-weight: 500;
++			border-radius: 8px;
++			padding: 0 24px;
++			background: var(--vscode-button-background);
++			color: var(--vscode-button-foreground);
++			border: none;
++			transition: all 0.2s ease;
++			display: flex;
++			align-items: center;
++			gap: 10px;
++			cursor: pointer;
++		}
++
++		.wso2-editor-watermark .configure-btn:hover {
++			background: var(--vscode-button-hoverBackground);
++			transform: translateY(-1px);
++		}			.wso2-editor-watermark .get-started-badge {
++				display: inline-block;
++				background: rgba(255, 255, 255, 0.2);
++				backdrop-filter: blur(10px);
++				border: 1px solid rgba(255, 255, 255, 0.3);
++				border-radius: 20px;
++				padding: 8px 16px;
++				margin-bottom: 24px;
++				font-size: 13px;
++				font-weight: 500;
++				width: fit-content;
++			}
++
++			.wso2-editor-watermark .headline {
++				font-size: 48px;
++				font-weight: 700;
++				margin: 0;
++				line-height: 1.2;
++			}
++
++			.wso2-editor-watermark .caption {
++				font-size: 16px;
++				line-height: 1.6;
++				font-weight: 400;
++				color: rgba(255, 255, 255, 0.9);
++				margin: 16px 0 0 0;
++				max-width: 800px;
++			}
++
++			.wso2-editor-watermark .cards-container {
++				padding: 0 60px 60px;
++				margin-top: -40px;
++				position: relative;
++				z-index: 1;
++			}
++
++			.wso2-editor-watermark .cards-grid {
++				display: grid;
++				grid-template-columns: repeat(3, 1fr);
++				gap: 24px;
++			}
++
++			@media (max-width: 1200px) {
++				.wso2-editor-watermark .cards-grid {
++					grid-template-columns: repeat(2, 1fr);
++				}
++			}
++
++			@media (max-width: 768px) {
++				.wso2-editor-watermark .cards-grid {
++					grid-template-columns: 1fr;
++				}
++			}
++
++			.wso2-editor-watermark .action-card {
++				background: var(--vscode-editor-background, white);
++				border-radius: 12px;
++				padding: 32px 24px;
++				display: flex;
++				flex-direction: column;
++				transition: all 0.3s ease;
++				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.05);
++				min-height: 280px;
++			}
++
++			.wso2-editor-watermark .action-card:hover {
++				transform: translateY(-4px);
++				box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12), 0 6px 12px rgba(0, 0, 0, 0.08);
++			}
++
++			.wso2-editor-watermark .card-icon-container {
++				display: flex;
++				justify-content: flex-start;
++				margin-bottom: 20px;
++			}
++
++			.wso2-editor-watermark .card-icon {
++				width: 56px;
++				height: 56px;
++				border-radius: 12px;
++				display: flex;
++				align-items: center;
++				justify-content: center;
++				color: white;
++				flex-shrink: 0;
++				font-size: 24px;
++			}
++
++			.wso2-editor-watermark .gradient-purple {
++				background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
++			}
++
++			.wso2-editor-watermark .gradient-blue {
++				background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
++			}
++
++			.wso2-editor-watermark .gradient-pink {
++				background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
++			}
++
++			.wso2-editor-watermark .card-title {
++				font-size: 20px;
++				font-weight: 600;
++				margin: 0 0 12px 0;
++				color: var(--vscode-foreground);
++			}
++
++			.wso2-editor-watermark .card-description {
++				font-size: 14px;
++				line-height: 1.6;
++				margin: 0 0 24px 0;
++				color: var(--vscode-descriptionForeground);
++				flex: 1;
++			}
++
++		.wso2-editor-watermark .styled-btn {
++			height: 44px;
++			font-size: 14px;
++			font-weight: 500;
++			border-radius: 8px;
++			padding: 0 24px;
++			color: var(--vscode-button-foreground);
++			border: none;
++			transition: all 0.2s ease;
++			cursor: pointer;
++		}
++
++		.wso2-editor-watermark .styled-btn.primary {
++			background: var(--vscode-button-background);
++		}
++
++		.wso2-editor-watermark .styled-btn.primary:hover {
++			background: var(--vscode-button-hoverBackground);
++			transform: translateY(-1px);
++		}
++
++		.wso2-editor-watermark .styled-btn.secondary {
++			background: var(--vscode-button-secondaryBackground);
++			color: var(--vscode-button-secondaryForeground);
++		}
++
++		.wso2-editor-watermark .styled-btn.secondary:hover {
++			background: var(--vscode-button-secondaryHoverBackground);
++			transform: translateY(-1px);
++		}			.wso2-editor-watermark .bottom-section {
++				padding: 10px 60px 60px 60px;
++				text-align: center;
++			}
++
++			.wso2-editor-watermark .already-have-text {
++				font-size: 14px;
++				color: var(--vscode-foreground);
++				opacity: 0.6;
++				margin-bottom: 32px;
++			}
++
++			.wso2-editor-watermark .already-have-text a {
++				color: var(--vscode-textLink-foreground);
++				text-decoration: none;
++				margin-left: 6px;
++				cursor: pointer;
++			}
++
++			.wso2-editor-watermark .already-have-text a:hover {
++				color: var(--vscode-textLink-activeForeground);
++				text-decoration: underline;
++			}
++
++			.wso2-editor-watermark .recent-projects-section {
++				max-width: 900px;
++				margin: 0 auto;
++			}
++
++			.wso2-editor-watermark .recent-projects-header {
++				display: flex;
++				justify-content: space-between;
++				align-items: center;
++				margin-bottom: 20px;
++				padding: 0 4px;
++			}
++
++			.wso2-editor-watermark .recent-projects-title {
++				font-size: 13px;
++				font-weight: 400;
++				color: var(--vscode-foreground);
++				opacity: 0.6;
++				margin: 0;
++			}
++
++			.wso2-editor-watermark .view-all-link {
++				font-size: 13px;
++				color: var(--vscode-textLink-foreground);
++				text-decoration: none;
++				cursor: pointer;
++			}
++
++			.wso2-editor-watermark .view-all-link:hover {
++				color: var(--vscode-textLink-activeForeground);
++				text-decoration: underline;
++			}
++
++			.wso2-editor-watermark .projects-list {
++				display: grid;
++				grid-template-columns: repeat(2, 1fr);
++				gap: 8px 16px;
++				text-align: left;
++			}
++
++			.wso2-editor-watermark .project-item {
++				display: flex;
++				justify-content: space-between;
++				align-items: center;
++				padding: 8px 4px;
++				font-size: 13px;
++				color: var(--vscode-foreground);
++				cursor: pointer;
++				transition: all 0.15s ease;
++				border-radius: 4px;
++			}
++
++			.wso2-editor-watermark .project-item:hover {
++				background: var(--vscode-list-hoverBackground);
++			}
++
++			.wso2-editor-watermark .project-path {
++				color: var(--vscode-descriptionForeground);
++				font-size: 12px;
++				margin-left: 12px;
++			}
++		`;
++		document.head.appendChild(style);
++		this._register({ dispose: () => style.remove() });
++	}
++
++	private async render(): Promise<void> {
++		this.enabled = this.configurationService.getValue<boolean>('workbench.tips.enabled') !== false;
++
++		// Only render content for empty workspace
++		const shouldShow = this.workbenchState === WorkbenchState.EMPTY && this.enabled;
++
++		clearNode(this.container);
++		this.transientDisposables.clear();
++
++		if (!shouldShow) {
++			return;
++		}
++
++		const wrapper = append(this.container, $('.wrapper'));
++
++		// Top section
++		const topSection = append(wrapper, $('.top-section'));
++
++		const configureBtn = append(topSection, $('button.configure-btn'));
++		const configIcon = append(configureBtn, $('span'));
++		configIcon.textContent = '⚙';
++		configIcon.style.fontSize = '25px';
++		const configText = append(configureBtn, $('span'));
++		configText.textContent = 'Configure';
++		this.transientDisposables.add(this.addClickHandler(configureBtn, 'workbench.action.openSettings', [WI_MODE_SETTING_ID]));
++
++		const badge = append(topSection, $('.get-started-badge'));
++		badge.textContent = 'Get Started';
++
++		const headline = append(topSection, $('h1.headline'));
++		headline.textContent = 'WSO2 Integrator';
++
++		const caption = append(topSection, $('p.caption'));
++		caption.textContent = 'A comprehensive integration solution that simplifies your digital transformation journey. Streamlines connectivity among applications, services, data, and cloud using a user-friendly low-code graphical designing experience.';
++
++		// Cards section
++		const cardsContainer = append(wrapper, $('.cards-container'));
++		const cardsGrid = append(cardsContainer, $('.cards-grid'));
++
++		// Create New Project Card
++		this.createActionCard(
++			cardsGrid,
++			'＋',
++			'gradient-purple',
++			'Create New Project',
++			'Ready to build? Start a new integration project using our intuitive graphical designer.',
++			'Create',
++			'primary',
++			WI_CREATE_PROJECT_COMMAND_ID
++		);
++
++		// Explore Samples Card
++		this.createActionCard(
++			cardsGrid,
++			'★',
++			'gradient-blue',
++			'Explore Samples',
++			'Need inspiration? Browse through sample projects to see how WSO2 Integrator works in real-world scenarios.',
++			'Explore',
++			'secondary',
++			WI_EXPLORE_SAMPLES_COMMAND_ID
++		);
++
++		// Import External Integration Card
++		this.createActionCard(
++			cardsGrid,
++			'⇄',
++			'gradient-pink',
++			'Import External Integration',
++			'Have an integration from another platform? Import your MuleSoft or TIBCO integration project and continue building.',
++			'Import',
++			'secondary',
++			WI_IMPORT_PROJECT_COMMAND_ID
++		);
++
++		// Bottom section
++		const bottomSection = append(wrapper, $('.bottom-section'));
++
++		const alreadyHaveText = append(bottomSection, $('.already-have-text'));
++		alreadyHaveText.textContent = 'Already have a project? ';
++		const openLink = append(alreadyHaveText, $('a'));
++		openLink.textContent = 'Open';
++		this.transientDisposables.add(this.addClickHandler(openLink, 'workbench.action.files.openFolder'));
++
++		// Recent projects section
++		await this.renderRecentProjects(bottomSection);
++	}
++
++	private createActionCard(
++		parent: HTMLElement,
++		icon: string,
++		gradientClass: string,
++		title: string,
++		description: string,
++		buttonText: string,
++		buttonClass: string,
++		commandId: string
++	): HTMLElement {
++		const card = append(parent, $('.action-card'));
++
++		const iconContainer = append(card, $('.card-icon-container'));
++		const iconElement = append(iconContainer, $(`.card-icon.${gradientClass}`));
++		iconElement.textContent = icon;
++
++		const content = append(card, $('.card-content'));
++
++		const titleElement = append(content, $('h3.card-title'));
++		titleElement.textContent = title;
++
++		const descriptionElement = append(content, $('p.card-description'));
++		descriptionElement.textContent = description;
++
++		const button = append(content, $(`button.styled-btn.${buttonClass}`));
++		button.textContent = buttonText;
++		this.transientDisposables.add(this.addClickHandler(button, commandId));
++
++		return card;
++	}
++
++	private async renderRecentProjects(parent: HTMLElement): Promise<void> {
++		try {
++			const recentlyOpened: IRecentlyOpened = await this.workspacesService.getRecentlyOpened();
++			const recentWorkspaces = recentlyOpened.workspaces.slice(0, 5);
++
++			if (recentWorkspaces.length === 0) {
++				return;
++			}
++
++			const recentSection = append(parent, $('.recent-projects-section'));
++
++			const header = append(recentSection, $('.recent-projects-header'));
++
++			const titleElement = append(header, $('h3.recent-projects-title'));
++			titleElement.textContent = 'Recent projects';
++
++			const viewAllLink = append(header, $('a.view-all-link'));
++			viewAllLink.textContent = `View all (${recentlyOpened.workspaces.length})`;
++			this.transientDisposables.add(this.addClickHandler(viewAllLink, 'workbench.action.openRecent'));
++
++			const projectsList = append(recentSection, $('.projects-list'));
++
++			for (const recent of recentWorkspaces) {
++				const projectItem = append(projectsList, $('.project-item'));
++
++				let label: string;
++				let uri: any;
++
++				if (isRecentFolder(recent)) {
++					uri = recent.folderUri;
++					label = recent.label || this.labelService.getWorkspaceLabel(uri, { verbose: Verbosity.SHORT });
++				} else if (isRecentWorkspace(recent)) {
++					uri = recent.workspace.configPath;
++					label = recent.label || this.labelService.getWorkspaceLabel(recent.workspace, { verbose: Verbosity.SHORT });
++				} else {
++					continue;
++				} const nameSpan = append(projectItem, $('span'));
++				nameSpan.textContent = label;
++
++				const pathSpan = append(projectItem, $('span.project-path'));
++				const path = this.labelService.getUriLabel(uri, { relative: true });
++				pathSpan.textContent = path;
++
++				// Add click handler to open workspace/folder
++				this.transientDisposables.add(this.addClickHandler(projectItem, 'vscode.openFolder', [uri, { forceNewWindow: false }]));
++			}
++		} catch (error) {
++			console.error('Failed to render recent projects:', error);
++		}
++	}
++
++	private addClickHandler(element: HTMLElement, commandId: string, args?: any[]): { dispose: () => void } {
++		const handler = async (e: MouseEvent) => {
++			e.preventDefault();
++			e.stopPropagation();
++			try {
++				if (args) {
++					await this.commandService.executeCommand(commandId, ...args);
++				} else {
++					await this.commandService.executeCommand(commandId);
++				}
++			} catch (error) {
++				console.error(`Failed to execute command ${commandId}:`, error);
++			}
++		};
++
++		element.addEventListener('click', handler);
++
++		return {
++			dispose: () => element.removeEventListener('click', handler)
++		};
++	}
++}
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
+@@ -51,7 +51,8 @@ import { ILogService } from '../../../..
+ import { TelemetryTrustedValue } from '../../../../platform/telemetry/common/telemetryUtils.js';
+ import { defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+ import { IBoundarySashes } from '../../../../base/browser/ui/sash/sash.js';
+-import { EditorGroupWatermark } from './editorGroupWatermark.js';
++import { WSO2EditorGroupWatermark } from './wso2EditorGroupWatermark.js';
++import './wso2Constants.js'; 
+ import { EditorTitleControl } from './editorTitleControl.js';
+ import { EditorPane } from './editorPane.js';
+ import { IEditorResolverService } from '../../../services/editor/common/editorResolverService.js';
+@@ -190,8 +191,8 @@ export class EditorGroupView extends The
+ 			// Container context menu
+ 			this.createContainerContextMenu();
+ 
+-			// Watermark & shortcuts
+-			this._register(this.instantiationService.createInstance(EditorGroupWatermark, this.element));
++			// Watermark & shortcuts - Use WSO2 custom watermark
++			this._register(this.instantiationService.createInstance(WSO2EditorGroupWatermark, this.element));
+ 
+ 			// Progress bar
+ 			this.progressBar = this._register(new ProgressBar(this.element, defaultProgressBarStyles));
