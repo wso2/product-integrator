@@ -1,0 +1,20 @@
+{
+  "name": "product-integrator",
+  "version": "1.0.0",
+  "description": "Open source integration platform offering a powerful low-code development experience with enhanced capabilities.",
+  "scripts": {
+    "init-submodules": "git submodule update --init --recursive",
+    "apply-patches": "quilt push -a",
+    "unapply-patches": "quilt pop -a",
+    "symlink-extension": "ln -sfn $PWD/wi/wi-extension lib/vscode/extensions/wso2.integrator",
+    "install": "rush install",
+    "update-product": "bash ci/build/update-product.sh",
+    "build": "npm run build:wi && npm run update-product",
+    "clean": "rush purge && git clean -dfX"
+  },
+  "devDependencies": {
+    "@microsoft/rush": "^5.138.4"
+  },
+  "author": "WSO2",
+  "license": "Apache-2.0"
+}
