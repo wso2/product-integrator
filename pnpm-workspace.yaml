@@ -1,0 +1,4 @@
+packages:
+  - 'wi/*'
+  - 'external/wso2-vscode-extensions/workspaces/common-libs/font-wso2-vscode'
+  - 'external/wso2-vscode-extensions/workspaces/common-libs/ui-toolkit'
