@@ -1,0 +1,29 @@
+{
+  "name": "@wso2/wi-core",
+  "version": "1.0.0",
+  "description": "Contains models and types for WSO2 Integrator Extension",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "build": "tsc --pretty",
+    "watch": "tsc --pretty --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "WSO2",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "@biomejs/biome": "^1.9.4",
+    "@types/vscode": "^1.100.0"
+  },
+  "dependencies": {
+    "vscode-messenger-common": "^0.5.1",
+    "vscode-messenger-webview": "^0.5.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wso2/ballerina-plugin-vscode.git"
+  }
+}
