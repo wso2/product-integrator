@@ -178,7 +178,8 @@
           "group": "navigation"
         }
       ]
-    }
+    },
+    "icons": {}
   },
   "scripts": {
     "lint": "biome check .",
@@ -190,8 +191,7 @@
     "compile": "tsc -p ./",
     "compile-tests": "tsc -p . --outDir out",
     "test": "node ./out/test/runTest.js",
-    "package": "node ../../common-libs/scripts/package-vsix.js"
-
+    "package": "node ../../external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js"
   },
   "devDependencies": {
     "@vscode/vsce": "^3.4.0",
@@ -212,13 +212,11 @@
     "webpack": "^5.102.1",
     "webpack-cli": "^6.0.1",
     "webpack-permissions-plugin": "^1.0.9",
-    "@playwright/test": "~1.55.1",
-    "@wso2/playwright-vscode-tester": "workspace:*"
+    "@playwright/test": "~1.55.1"
   },
   "dependencies": {
     "@wso2/wi-core": "workspace:*",
     "vscode-messenger": "~0.5.1",
-    "@wso2/font-wso2-vscode": "workspace:*",
     "xstate": "~4.38.3",
     "@emotion/styled": "~11.14.1",
     "@wso2/ui-toolkit": "workspace:*",

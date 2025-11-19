@@ -3,3 +3,4 @@ out
 dist
 *.vsix
 .vscode-test
+resources/jslibs/*

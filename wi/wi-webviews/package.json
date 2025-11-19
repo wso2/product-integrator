@@ -17,8 +17,8 @@
   "dependencies": {
     "@vscode/webview-ui-toolkit": "^1.4.0",
     "@wso2/wi-core": "workspace:*",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
     "vscode-messenger-common": "^0.5.1",
     "vscode-messenger-webview": "^0.5.1",
     "classnames": "~2.5.1",
@@ -28,7 +28,9 @@
     "@wso2/ui-toolkit": "workspace:*",
     "yup": "~1.7.1",
     "react-hook-form": "~7.66.0",
-    "@hookform/resolvers": "^5.2.2"
+    "@hookform/resolvers": "^5.2.2",
+    "react-refresh": "~0.18.0",
+    "@ts-morph/common": "~0.28.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
