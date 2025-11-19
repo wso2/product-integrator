@@ -23,6 +23,7 @@ import { MigrationStatusContent } from "./components/MigrationStatusContent";
 import { BodyText, ButtonWrapper, NextButtonWrapper, StepWrapper } from "./styles";
 import { MigrationProgressProps, MigrationReportJSON } from "./types";
 import { getMigrationDisplayState, getMigrationProgressHeaderData } from "./utils";
+import { useVisualizerContext } from "../../contexts";
 
 export function MigrationProgressView({
     migrationState,
@@ -34,6 +35,7 @@ export function MigrationProgressView({
     onBack,
 }: MigrationProgressProps) {
     const [isLogsOpen, setIsLogsOpen] = useState(false);
+    const { rpcClient } = useVisualizerContext();
 
     // Parse migration report JSON when available
     const parsedReportData = useMemo(() => {
@@ -61,10 +63,10 @@ export function MigrationProgressView({
         try {
             if (migrationResponse?.report) {
                 console.log("Report found, opening via RPC...");
-                // rpcClient.getMigrateIntegrationRpcClient().openMigrationReport({
-                //     reportContent: migrationResponse.report,
-                //     fileName: "migration-report.html",
-                // });
+                rpcClient.getMainRpcClient().openMigrationReport({
+                    reportContent: migrationResponse.report,
+                    fileName: "migration-report.html",
+                });
             }
         } catch (error) {
             console.error("Failed to open migration report:", error);
@@ -81,10 +83,10 @@ export function MigrationProgressView({
 
             // VSCode extension environment - use RPC to show save dialog
             console.log("Saving report via VSCode save dialog...");
-            // rpcClient.getMigrateIntegrationRpcClient().saveMigrationReport({
-            //     reportContent: migrationResponse.report,
-            //     defaultFileName: "migration-report.html",
-            // });
+            rpcClient.getMainRpcClient().saveMigrationReport({
+                reportContent: migrationResponse.report,
+                defaultFileName: "migration-report.html",
+            });
         } catch (error) {
             console.error("Failed to save migration report:", error);
         }

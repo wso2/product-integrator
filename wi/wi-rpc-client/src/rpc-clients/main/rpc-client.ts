@@ -43,6 +43,8 @@ import {
     pullMigrationTool,
     importIntegration,
     showErrorMessage,
+    openMigrationReport,
+    saveMigrationReport,
     GetConfigurationRequest,
     GetConfigurationResponse,
     GetSubFoldersRequest,
@@ -59,7 +61,9 @@ import {
     PullMigrationToolRequest,
     ImportIntegrationRPCRequest,
     ImportIntegrationResponse,
-    ShowErrorMessageRequest
+    ShowErrorMessageRequest,
+    OpenMigrationReportRequest,
+    SaveMigrationReportRequest
 } from "@wso2/wi-core";
 import { HOST_EXTENSION } from "vscode-messenger-common";
 import { Messenger } from "vscode-messenger-webview";
@@ -145,6 +149,14 @@ export class MainRpcClient implements WIVisualizerAPI {
 
     showErrorMessage(params: ShowErrorMessageRequest): Promise<void> {
         return this._messenger.sendRequest(showErrorMessage, HOST_EXTENSION, params);
+    }
+
+    openMigrationReport(params: OpenMigrationReportRequest): Promise<void> {
+        return this._messenger.sendRequest(openMigrationReport, HOST_EXTENSION, params);
+    }
+
+    saveMigrationReport(params: SaveMigrationReportRequest): Promise<void> {
+        return this._messenger.sendRequest(saveMigrationReport, HOST_EXTENSION, params);
     }
 
     getMessenger(): Messenger {

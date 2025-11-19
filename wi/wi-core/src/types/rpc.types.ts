@@ -186,3 +186,13 @@ export interface MigrationToolStateData {
 export interface MigrationToolLogData {
     log: string;
 }
+
+export interface OpenMigrationReportRequest {
+    reportContent: string;
+    fileName: string;
+}
+
+export interface SaveMigrationReportRequest {
+    reportContent: string;
+    defaultFileName: string;
+}

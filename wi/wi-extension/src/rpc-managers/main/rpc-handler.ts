@@ -37,6 +37,8 @@ import {
     pullMigrationTool,
     importIntegration,
     showErrorMessage,
+    openMigrationReport,
+    saveMigrationReport,
     RunCommandRequest,
     FileOrDirRequest,
     GetConfigurationRequest,
@@ -47,7 +49,9 @@ import {
     MigrateRequest,
     PullMigrationToolRequest,
     ImportIntegrationRPCRequest,
-    ShowErrorMessageRequest
+    ShowErrorMessageRequest,
+    OpenMigrationReportRequest,
+    SaveMigrationReportRequest
 } from "@wso2/wi-core";
 import { Messenger } from "vscode-messenger";
 import { MainRpcManager } from "./rpc-manager";
@@ -73,4 +77,6 @@ export function registerMainRpcHandlers(messenger: Messenger) {
     messenger.onRequest(pullMigrationTool, (args: PullMigrationToolRequest) => rpcManger.pullMigrationTool(args));
     messenger.onRequest(importIntegration, (args: ImportIntegrationRPCRequest) => rpcManger.importIntegration(args));
     messenger.onRequest(showErrorMessage, (args: ShowErrorMessageRequest) => rpcManger.showErrorMessage(args));
+    messenger.onRequest(openMigrationReport, (args: OpenMigrationReportRequest) => rpcManger.openMigrationReport(args));
+    messenger.onRequest(saveMigrationReport, (args: SaveMigrationReportRequest) => rpcManger.saveMigrationReport(args));
 }

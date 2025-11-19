@@ -17,7 +17,7 @@
  * 
  * THIS FILE INCLUDES AUTO GENERATED CODE
  */
-import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, DownloadProgress, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, MigrationToolStateData, MigrationToolLogData } from "../../types/rpc.types";
+import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, DownloadProgress, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, MigrationToolStateData, MigrationToolLogData, OpenMigrationReportRequest, SaveMigrationReportRequest } from "../../types/rpc.types";
 import { NotificationType, RequestType } from "vscode-messenger-common";
 
 const _preFix = "main";
@@ -43,3 +43,5 @@ export const migrateProject: RequestType<MigrateRequest, void> = { method: `${_p
 export const pullMigrationTool: RequestType<PullMigrationToolRequest, void> = { method: `${_preFix}/pullMigrationTool` };
 export const importIntegration: RequestType<ImportIntegrationRPCRequest, ImportIntegrationResponse> = { method: `${_preFix}/importIntegration` };
 export const showErrorMessage: RequestType<ShowErrorMessageRequest, void> = { method: `${_preFix}/showErrorMessage` };
+export const openMigrationReport: RequestType<OpenMigrationReportRequest, void> = { method: `${_preFix}/openMigrationReport` };
+export const saveMigrationReport: RequestType<SaveMigrationReportRequest, void> = { method: `${_preFix}/saveMigrationReport` };
