@@ -185,8 +185,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "vscode:prepublish": "npm run copyJSLibs",
-    "build": "npm run compile && npm run package",
-    "copyJSLibs": "copyfiles -f ../wi-webviews/lib/main.js resources/jslibs",
+    "build": "webpack --mode production && npm run package",
+    "copyJSLibs": "copyfiles -f ../wi-webviews/build/main.js resources/jslibs",
     "watch": "tsc -p . -w",
     "compile": "tsc -p ./",
     "compile-tests": "tsc -p . --outDir out",
@@ -222,6 +222,7 @@
     "@wso2/ui-toolkit": "workspace:*",
     "unzipper": "~0.12.3",
     "@types/unzipper": "~0.10.11",
-    "axios": "~1.13.2"
+    "axios": "~1.13.2",
+    "dotenv": "~17.2.3"
   }
 }
