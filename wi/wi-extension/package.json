@@ -72,7 +72,7 @@
         "icon": "$(home)"
       },
       {
-        "command": "wso2.integrator.refreshView",
+        "command": "wso2-integrator.explorer.refresh",
         "title": "Refresh",
         "category": "WSO2 Integrator",
         "icon": "$(refresh)"
@@ -158,7 +158,7 @@
       ],
       "view/title": [
         {
-          "command": "wso2.integrator.refreshView",
+          "command": "wso2-integrator.explorer.refresh",
           "when": "view == wso2-integrator.explorer",
           "group": "navigation@2"
         },
