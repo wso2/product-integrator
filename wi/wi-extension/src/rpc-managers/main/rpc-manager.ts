@@ -42,7 +42,8 @@ import {
     ImportIntegrationRPCRequest,
     ImportIntegrationResponse,
     ImportIntegrationRequest,
-    ShowErrorMessageRequest
+    ShowErrorMessageRequest,
+    COMMANDS
 } from "@wso2/wi-core";
 import { commands, window, workspace, Uri, MarkdownString, extensions } from "vscode";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getUsername, handleOpenFile, sanitizeName } from "./utils";
@@ -57,15 +58,15 @@ export class MainRpcManager implements WIVisualizerAPI {
     constructor(private projectUri?: string) { }
 
     async closeWebview(): Promise<void> {
-        commands.executeCommand("wso2.integrator.closeWebview");
+        commands.executeCommand(COMMANDS.CLOSE_WEBVIEW, this.projectUri);
     }
 
     async openBiExtension(): Promise<void> {
-        commands.executeCommand("wso2.integrator.openBIIntegration");
+        commands.executeCommand(COMMANDS.OPEN_BI_INTEGRATION);
     }
 
     async openMiExtension(): Promise<void> {
-        commands.executeCommand("wso2.integrator.openMIIntegration");
+        commands.executeCommand(COMMANDS.OPEN_MI_INTEGRATION);
     }
 
     async runCommand(props: RunCommandRequest): Promise<RunCommandResponse> {
