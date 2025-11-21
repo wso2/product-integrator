@@ -114,4 +114,16 @@ export function registerCommands(
 			}
 		}),
 	);
+
+	// Close webview command
+	context.subscriptions.push(
+		vscode.commands.registerCommand(COMMANDS.CLOSE_WEBVIEW, () => {
+			try {
+				webviewManager.closeWebview();
+			} catch (error) {
+				ext.logError("Failed to close webview", error as Error);
+				vscode.window.showErrorMessage("Failed to close webview");
+			}
+		}),
+	);
 }

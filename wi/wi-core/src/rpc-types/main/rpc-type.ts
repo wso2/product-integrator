@@ -21,6 +21,7 @@ import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirRespo
 import { NotificationType, RequestType } from "vscode-messenger-common";
 
 const _preFix = "main";
+export const closeWebview: NotificationType<void> = { method: `${_preFix}/closeWebview` };
 export const openBiExtension: NotificationType<void> = { method: `${_preFix}/openBiExtension` };
 export const openMiExtension: NotificationType<void> = { method: `${_preFix}/openMiExtension` };
 export const runCommand: RequestType<RunCommandRequest, RunCommandResponse> = { method: `${_preFix}/runCommand` };

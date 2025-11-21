@@ -21,12 +21,17 @@ import { WelcomeView } from "./views/WelcomeView";
 import { CreationView } from "./views/creationView";
 import { ImportIntegration } from "./views/ImportIntegration";
 import { SamplesView } from "./views/samplesView";
+import { useVisualizerContext } from "./contexts";
 
 export interface WebviewProps {
 	type: ViewType;
 }
 function IntegratorWebview(props: WebviewProps) {
-	const goBackToWelcome = () => {};
+	const { rpcClient } = useVisualizerContext();
+
+	const goBackToWelcome = () => { 
+		rpcClient.getMainRpcClient().closeWebview();
+	};
 
 	switch (props.type) {
 		case ViewType.WELCOME:

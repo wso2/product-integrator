@@ -56,6 +56,10 @@ import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi
 export class MainRpcManager implements WIVisualizerAPI {
     constructor(private projectUri?: string) { }
 
+    async closeWebview(): Promise<void> {
+        commands.executeCommand("wso2.integrator.closeWebview");
+    }
+
     async openBiExtension(): Promise<void> {
         commands.executeCommand("wso2.integrator.openBIIntegration");
     }

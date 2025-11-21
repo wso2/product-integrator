@@ -33,6 +33,7 @@ export enum ProjectType {
 }
 
 interface MachineContext {
+    projectUri: string;
     projectType: ProjectType;
     isBI?: boolean;
     isBallerina?: boolean;
@@ -66,6 +67,7 @@ const stateMachine = createMachine<MachineContext>({
     initial: 'initialize',
     predictableActionArguments: true,
     context: {
+        projectUri: vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || 'global',
         projectType: ProjectType.NONE,
         extensionAPIs: new ExtensionAPIs(),
         mode: getDefaultIntegratorMode()
@@ -142,7 +144,7 @@ const stateMachine = createMachine<MachineContext>({
                 vscode.commands.executeCommand('setContext', 'WI.projectType', 'mi');
             } else {
                 // No known project type, show welcome screen
-                showWelcomeScreen(context);
+                // showWelcomeScreen(context);
             }
         },
         showWelcomeScreen: (context, event) => {
@@ -170,7 +172,7 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
     await vscode.commands.executeCommand("setContext", CONTEXT_KEYS.MI_AVAILABLE, context.extensionAPIs.isMIAvailable());
 
     // Create webview manager
-    context.webviewManager = new WebviewManager(context.extensionAPIs);
+    context.webviewManager = new WebviewManager(context.projectUri);
     ext.context.subscriptions.push({
         dispose: () => context.webviewManager?.dispose(),
     });
@@ -217,7 +219,7 @@ async function detectProjectType(): Promise<{
 function showWelcomeScreen(context: MachineContext): void {
     if (!context.webviewManager) {
         const extensionAPIs = context.extensionAPIs || new ExtensionAPIs();
-        const webviewManager = new WebviewManager(extensionAPIs);
+        const webviewManager = new WebviewManager(context.projectUri);
         context.webviewManager = webviewManager;
 
         ext.context.subscriptions.push({

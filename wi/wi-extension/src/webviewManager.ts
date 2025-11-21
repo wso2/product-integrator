@@ -31,7 +31,7 @@ export class WebviewManager {
 	private currentPanel: vscode.WebviewPanel | undefined;
 	private currentViewType: ViewType | undefined;
 
-	constructor(private extensionAPIs: ExtensionAPIs) { }
+	constructor(private projectUri: string) { }
 
 	/**
 	 * Show webview with specified type
@@ -74,12 +74,12 @@ export class WebviewManager {
 			() => {
 				this.currentPanel = undefined;
 				this.currentViewType = undefined;
-				RPCLayer.dispose("wi-webview"); // Use a constant identifier for WI webview
+				RPCLayer.dispose(this.projectUri);
 			},
 			null,
 			ext.context.subscriptions,
 		);
-		RPCLayer.create(this.currentPanel, "wi-webview");
+		RPCLayer.create(this.currentPanel, this.projectUri);
 	}
 
 	/**
@@ -87,6 +87,13 @@ export class WebviewManager {
 	 */
 	public showWelcome(): void {
 		this.show(ViewType.WELCOME);
+	}
+
+	public closeWebview(): void {
+		if (this.currentPanel) {
+			this.dispose();
+			RPCLayer.dispose(this.projectUri);
+		}
 	}
 
 	/**
@@ -111,11 +118,12 @@ export class WebviewManager {
 	 */
 	private getWebviewContent(webview: vscode.Webview, type: ViewType): string {
 		const isDevMode = process.env.WEB_VIEW_DEV_MODE === "true";
+		const devHost = process.env.WEB_VIEW_DEV_HOST || "http://localhost:3000/";
 
 		const componentName = "main";
 		const filePath = path.join(ext.context.extensionPath, 'resources', 'jslibs', componentName + '.js');
 		const scriptUri = isDevMode
-			? new URL('lib/' + componentName + '.js', process.env.WEB_VIEW_DEV_HOST).toString()
+			? new URL('lib/' + componentName + '.js', devHost).toString()
 			: webview.asWebviewUri(Uri.file(filePath)).toString();
 
 		// CSP: allow dev server in dev mode
@@ -254,6 +262,7 @@ export class WebviewManager {
 		if (this.currentPanel) {
 			this.currentPanel.dispose();
 			this.currentPanel = undefined;
+			this.currentViewType = undefined;
 		}
 	}
 }

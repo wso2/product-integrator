@@ -24,6 +24,7 @@ import {
     FileOrDirResponse,
     WorkspaceRootResponse,
     WIVisualizerAPI,
+    closeWebview,
     openBiExtension,
     openMiExtension,
     runCommand,
@@ -73,6 +74,10 @@ export class MainRpcClient implements WIVisualizerAPI {
 
     constructor(messenger: Messenger) {
         this._messenger = messenger;
+    }
+
+    closeWebview(): void {
+        return this._messenger.sendNotification(closeWebview, HOST_EXTENSION);
     }
 
     openBiExtension(): void {

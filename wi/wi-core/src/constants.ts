@@ -34,6 +34,7 @@ export const COMMANDS = {
 	CREATE_PROJECT: "wso2.integrator.createProject",
 	EXPLORE_SAMPLES: "wso2.integrator.exploreSamples",
 	IMPORT_PROJECT: "wso2.integrator.importProject",
+	CLOSE_WEBVIEW: "wso2.integrator.closeWebview",
 };
 
 /**
