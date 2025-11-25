@@ -607,7 +607,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/edito
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
-@@ -51,7 +51,8 @@ import { ILogService } from '../../../..
+@@ -51,13 +51,15 @@ import { ILogService } from '../../../..
  import { TelemetryTrustedValue } from '../../../../platform/telemetry/common/telemetryUtils.js';
  import { defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
  import { IBoundarySashes } from '../../../../base/browser/ui/sash/sash.js';
@@ -617,7 +617,24 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/edito
  import { EditorTitleControl } from './editorTitleControl.js';
  import { EditorPane } from './editorPane.js';
  import { IEditorResolverService } from '../../../services/editor/common/editorResolverService.js';
-@@ -190,8 +191,8 @@ export class EditorGroupView extends The
+ import { IHostService } from '../../../services/host/browser/host.js';
+ import { DiffEditorInput } from '../../../common/editor/diffEditorInput.js';
+ import { FileSystemProviderCapabilities, IFileService } from '../../../../platform/files/common/files.js';
++import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
+ 
+ export class EditorGroupView extends Themable implements IEditorGroupView {
+ 
+@@ -161,7 +163,8 @@ export class EditorGroupView extends The
+ 		@IEditorResolverService private readonly editorResolverService: IEditorResolverService,
+ 		@IHostService private readonly hostService: IHostService,
+ 		@IDialogService private readonly dialogService: IDialogService,
+-		@IFileService private readonly fileService: IFileService
++		@IFileService private readonly fileService: IFileService,
++		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService
+ 	) {
+ 		super(themeService);
+ 
+@@ -190,8 +193,8 @@ export class EditorGroupView extends The
  			// Container context menu
  			this.createContainerContextMenu();
  
@@ -628,6 +645,30 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/edito
  
  			// Progress bar
  			this.progressBar = this._register(new ProgressBar(this.element, defaultProgressBarStyles));
+@@ -378,6 +381,11 @@ export class EditorGroupView extends The
+ 
+ 		// Open new file via doubleclick on empty container
+ 		this._register(addDisposableListener(this.element, EventType.DBLCLICK, e => {
++			// Skip double-click in empty workspace (WSO2 watermark is shown)
++			if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++				return;
++			}
++
+ 			if (this.isEmpty) {
+ 				EventHelper.stop(e);
+ 
+@@ -445,6 +453,11 @@ export class EditorGroupView extends The
+ 			return; // only for empty editor groups
+ 		}
+ 
++		// Skip context menu in empty workspace (WSO2 watermark is shown)
++		if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++			return;
++		}
++
+ 		// Find target anchor
+ 		let anchor: HTMLElement | StandardMouseEvent = this.element;
+ 		if (e) {
 Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/browser/layout.ts
