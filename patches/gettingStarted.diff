@@ -771,7 +771,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/edito
  
  			// Progress bar
  			this.progressBar = this._register(new ProgressBar(this.element, defaultProgressBarStyles));
-@@ -378,6 +394,11 @@ export class EditorGroupView extends The
+@@ -379,6 +395,11 @@ export class EditorGroupView extends The
  
  		// Open new file via doubleclick on empty container
  		this._register(addDisposableListener(this.element, EventType.DBLCLICK, e => {
@@ -783,7 +783,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/edito
  			if (this.isEmpty) {
  				EventHelper.stop(e);
  
-@@ -445,6 +466,11 @@ export class EditorGroupView extends The
+@@ -446,6 +467,11 @@ export class EditorGroupView extends The
  			return; // only for empty editor groups
  		}
  
@@ -808,7 +808,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  import { ITitleService } from '../services/title/browser/titleService.js';
  import { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
  import { StartupKind, ILifecycleService } from '../services/lifecycle/common/lifecycle.js';
-@@ -337,6 +337,15 @@ export abstract class Layout extends Dis
+@@ -338,6 +338,15 @@ export abstract class Layout extends Dis
  
  	private registerLayoutListeners(): void {
  
@@ -824,7 +824,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  		// Restore editor if hidden and an editor is to show
  		const showEditorIfHidden = () => {
  			if (!this.isVisible(Parts.EDITOR_PART, mainWindow)) {
-@@ -702,7 +711,8 @@ export abstract class Layout extends Dis
+@@ -703,7 +712,8 @@ export abstract class Layout extends Dis
  		};
  
  		// Sidebar View Container To Restore
@@ -834,7 +834,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  			let viewContainerToRestore = this.storageService.get(SidebarPart.activeViewletSettingsKey, StorageScope.WORKSPACE, this.viewDescriptorService.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id);
  			if (
  				!this.environmentService.isBuilt ||
-@@ -748,6 +758,35 @@ export abstract class Layout extends Dis
+@@ -749,6 +759,35 @@ export abstract class Layout extends Dis
  
  		// Window border
  		this.updateWindowBorder(true);
@@ -870,7 +870,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  	}
  
  	private getDefaultLayoutViews(environmentService: IBrowserWorkbenchEnvironmentService, storageService: IStorageService): string[] | undefined {
-@@ -1048,6 +1087,11 @@ export abstract class Layout extends Dis
+@@ -1049,6 +1088,11 @@ export abstract class Layout extends Dis
  				return;
  			}
  
@@ -882,7 +882,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  			mark('code/willRestoreViewlet');
  
  			await this.openViewContainer(ViewContainerLocation.Sidebar, this.state.initialization.views.containerToRestore.sideBar);
-@@ -1625,6 +1669,14 @@ export abstract class Layout extends Dis
+@@ -1626,6 +1670,14 @@ export abstract class Layout extends Dis
  			// Auxiliary Bar State
  			this.stateModel.setInitializationValue(LayoutStateKeys.AUXILIARYBAR_EMPTY, this.paneCompositeService.getPaneCompositeIds(ViewContainerLocation.AuxiliaryBar).length === 0);
  		}));
@@ -897,7 +897,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  	}
  
  	layout(): void {
-@@ -2846,9 +2898,9 @@ class LayoutStateModel extends Disposabl
+@@ -2848,9 +2900,9 @@ class LayoutStateModel extends Disposabl
  		}
  
  		// Apply legacy settings
@@ -910,63 +910,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  
  		// Set dynamic defaults: part sizing and side bar visibility
  		const workbenchState = this.contextService.getWorkbenchState();
-Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
-===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
-+++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
-@@ -24,6 +24,7 @@ import { IInstantiationService, Services
- import { Emitter, Event } from '../../../../base/common/event.js';
- import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
- import { Parts, IWorkbenchLayoutService, ActivityBarPosition, LayoutSettings, EditorActionsLocation, EditorTabsMode } from '../../../services/layout/browser/layoutService.js';
-+import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
- import { createActionViewItem, fillInActionBarActions as fillInActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
- import { Action2, IMenu, IMenuService, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
- import { IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
-@@ -306,7 +307,8 @@ export class BrowserTitlebarPart extends
- 		@IHostService private readonly hostService: IHostService,
- 		@IEditorService private readonly editorService: IEditorService,
- 		@IMenuService private readonly menuService: IMenuService,
--		@IKeybindingService private readonly keybindingService: IKeybindingService
-+		@IKeybindingService private readonly keybindingService: IKeybindingService,
-+		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService
- 	) {
- 		super(id, { hasTitle: false }, themeService, storageService, layoutService);
- 
-@@ -783,6 +785,11 @@ export class BrowserTitlebarPart extends
- 	}
- 
- 	protected onContextMenu(e: MouseEvent, menuId: MenuId): void {
-+		// Don't show context menu in empty workspace
-+		if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
-+			return;
-+		}
-+
- 		const event = new StandardMouseEvent(getWindow(this.element), e);
- 
- 		// Show it
-@@ -906,8 +913,9 @@ export class MainBrowserTitlebarPart ext
- 		@IEditorService editorService: IEditorService,
- 		@IMenuService menuService: IMenuService,
- 		@IKeybindingService keybindingService: IKeybindingService,
-+		@IWorkspaceContextService contextService: IWorkspaceContextService
- 	) {
--		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService);
-+		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, contextService);
- 	}
- }
- 
-@@ -941,9 +949,10 @@ export class AuxiliaryBrowserTitlebarPar
- 		@IEditorService editorService: IEditorService,
- 		@IMenuService menuService: IMenuService,
- 		@IKeybindingService keybindingService: IKeybindingService,
-+		@IWorkspaceContextService contextService: IWorkspaceContextService
- 	) {
- 		const id = AuxiliaryBrowserTitlebarPart.COUNTER++;
--		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService);
-+		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, contextService);
- 	}
- 
- 	override get preventZoom(): boolean {
 Index: product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
