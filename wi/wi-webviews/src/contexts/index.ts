@@ -16,5 +16,5 @@
  * under the License.
  */
 
-export { Context, VisualizerContextProvider, useVisualizerContext } from './RpcContext';
+export { Context, WebviewContextProvider as VisualizerContextProvider, useVisualizerContext } from './RpcContext';
 export type { VisualizerContext } from './RpcContext';

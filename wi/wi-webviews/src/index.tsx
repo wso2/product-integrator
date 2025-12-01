@@ -18,18 +18,17 @@
 
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { ViewType } from "@wso2/wi-core";
 import IntegratorWebview from "./IntegratorWebview";
-import { VisualizerContextProvider } from "./contexts/RpcContext";
+import { WebviewContextProvider } from "./contexts/RpcContext";
 import "./style.css";
 
-export function renderWebview(target: HTMLElement, type: ViewType) {
+export function renderWebview(target: HTMLElement) {
 	const reactRoot = ReactDOM.createRoot(target);
 	reactRoot.render(
 		<React.StrictMode>
-			<VisualizerContextProvider>
-				<IntegratorWebview type={type} />
-			</VisualizerContextProvider>
+			<WebviewContextProvider>
+				<IntegratorWebview />
+			</WebviewContextProvider>
 		</React.StrictMode>,
 	);
 }

@@ -28,6 +28,7 @@ export enum IntegrationType {
  * View types for webviews
  */
 export enum ViewType {
+	LOADING = "loading",
 	WELCOME = "welcome",
     CREATE_PROJECT = "create_project",
     SAMPLES = "samples",

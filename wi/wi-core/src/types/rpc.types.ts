@@ -16,6 +16,23 @@
  * under the License.
  */
 
+import { ViewType } from "../enums";
+
+export declare enum Platform {
+    WINDOWS = 1,
+    MAC = 2,
+    LINUX = 3
+}
+export interface WebviewContext {
+    currentView: ViewType;
+    projectUri?: string;
+    platform?: Platform;
+    pathSeparator?: string;
+    env?: {
+        [key: string]: string | undefined;
+    };
+}
+
 export interface RunCommandRequest {
     command: string;
     args?: any[];

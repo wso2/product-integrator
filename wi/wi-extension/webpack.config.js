@@ -1,7 +1,7 @@
 const path = require("path");
 const dotenv = require('dotenv');
 const webpack = require('webpack');
-const { createEnvDefinePlugin } = require("../../../common/scripts/env-webpack-helper");
+const { createEnvDefinePlugin } = require("../../external/wso2-vscode-extensions/common/scripts/env-webpack-helper");
 
 const envPath = path.resolve(__dirname, '.env');
 const env = dotenv.config({ path: envPath }).parsed;
@@ -47,6 +47,7 @@ const config = {
 	},
 	plugins: [
         new webpack.DefinePlugin(envKeys),
+		new webpack.IgnorePlugin({ resourceRegExp: /^@aws-sdk\/client-s3$/ }),
     ],
 };
 

@@ -19,6 +19,8 @@
 import { WebviewPanel } from 'vscode';
 import { Messenger } from 'vscode-messenger';
 import { registerMainRpcHandlers } from './rpc-managers/main/rpc-handler';
+import { onStateChanged, WebviewContext } from '@wso2/wi-core';
+import { WEB_VIEW_TYPE } from './webviewManager';
 
 export class RPCLayer {
     static _messengers: Map<string, Messenger> = new Map();
@@ -34,6 +36,13 @@ export class RPCLayer {
 
         // Register RPC handlers
         registerMainRpcHandlers(messenger);
+    }
+
+    static notifyStateChanged(projectUri: string, context: WebviewContext): void {
+        const messenger = this._messengers.get(projectUri);
+        if (messenger) {
+            messenger.sendNotification(onStateChanged, { type: 'webview', webviewType: WEB_VIEW_TYPE }, context);
+        }
     }
 
     static dispose(projectUri: string): void {

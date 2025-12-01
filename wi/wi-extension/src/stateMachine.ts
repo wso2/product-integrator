@@ -18,7 +18,7 @@
 
 import { assign, createMachine, interpret } from 'xstate';
 import * as vscode from 'vscode';
-import { CONTEXT_KEYS } from '@wso2/wi-core';
+import { CONTEXT_KEYS, ViewType } from '@wso2/wi-core';
 import { ext } from './extensionVariables';
 import { fetchProjectInfo, ProjectInfo } from './bi/utils';
 import { checkIfMiProject } from './mi/utils';
@@ -42,6 +42,7 @@ interface MachineContext {
     extensionAPIs: ExtensionAPIs;
     webviewManager?: WebviewManager;
     mode: ProjectType;
+    currentView: ViewType;
 }
 
 /**
@@ -67,10 +68,11 @@ const stateMachine = createMachine<MachineContext>({
     initial: 'initialize',
     predictableActionArguments: true,
     context: {
-        projectUri: vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || 'global',
+        projectUri: 'global',
         projectType: ProjectType.NONE,
         extensionAPIs: new ExtensionAPIs(),
-        mode: getDefaultIntegratorMode()
+        mode: getDefaultIntegratorMode(),
+        currentView: ViewType.LOADING
     },
     states: {
         initialize: {
@@ -114,6 +116,14 @@ const stateMachine = createMachine<MachineContext>({
                             return event.mode;
                         }
                     })
+                },
+                UPDATE_VIEW: {
+                    actions: assign({
+                        currentView: (context, event: any) => {
+                            ext.log(`View updated in context: ${event.view}`);
+                            return event.view;
+                        }
+                    })
                 }
             }
         },
@@ -126,6 +136,14 @@ const stateMachine = createMachine<MachineContext>({
                         mode: (context, event: any) => {
                             ext.log(`Mode updated in context: ${event.mode}`);
                             return event.mode;
+                        }
+                    })
+                },
+                UPDATE_VIEW: {
+                    actions: assign({
+                        currentView: (context, event: any) => {
+                            ext.log(`View updated in context: ${event.view}`);
+                            return event.view;
                         }
                     })
                 }
@@ -142,13 +160,12 @@ const stateMachine = createMachine<MachineContext>({
             } else if (context.projectType === ProjectType.MI) {
                 ext.log('MI project detected - MI tree view would be activated here');
                 vscode.commands.executeCommand('setContext', 'WI.projectType', 'mi');
-            } else {
-                // No known project type, show welcome screen
-                // showWelcomeScreen(context);
             }
         },
         showWelcomeScreen: (context, event) => {
-            showWelcomeScreen(context);
+            if (context.webviewManager) {
+                context.webviewManager.showWelcome();
+            }
         }
     }
 });
@@ -216,20 +233,6 @@ async function detectProjectType(): Promise<{
     };
 }
 
-function showWelcomeScreen(context: MachineContext): void {
-    if (!context.webviewManager) {
-        const extensionAPIs = context.extensionAPIs || new ExtensionAPIs();
-        const webviewManager = new WebviewManager(context.projectUri);
-        context.webviewManager = webviewManager;
-
-        ext.context.subscriptions.push({
-            dispose: () => webviewManager.dispose(),
-        });
-    }
-
-    context.webviewManager.showWelcome();
-}
-
 // Create a service to interpret the machine
 export const stateService = interpret(stateMachine);
 
@@ -256,5 +259,25 @@ export const StateMachine = {
         // Register disposable
         ext.context.subscriptions.push(configChangeDisposable);
     },
-    getContext: () => stateService.getSnapshot().context
+    getContext: () => stateService.getSnapshot().context,
+    openWebview: (view: ViewType) => {
+        ext.log(`Opening webview with view: ${view}`);
+        
+        // Update the current view in state machine
+        stateService.send({
+            type: 'UPDATE_VIEW',
+            view: view
+        });
+        
+        // Get the webview manager from context and show the view
+        const context = stateService.getSnapshot().context;
+        if (context.webviewManager) {
+            context.webviewManager.show(view);
+        } else {
+            ext.log('WebviewManager not available in state machine context');
+        }
+    },
+    subscribe: (callback: () => void) => {
+        return stateService.subscribe(callback);
+    }
 };

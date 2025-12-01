@@ -64,7 +64,9 @@ import {
     ImportIntegrationResponse,
     ShowErrorMessageRequest,
     OpenMigrationReportRequest,
-    SaveMigrationReportRequest
+    SaveMigrationReportRequest,
+    WebviewContext,
+    getWebviewContext
 } from "@wso2/wi-core";
 import { HOST_EXTENSION } from "vscode-messenger-common";
 import { Messenger } from "vscode-messenger-webview";
@@ -74,6 +76,10 @@ export class MainRpcClient implements WIVisualizerAPI {
 
     constructor(messenger: Messenger) {
         this._messenger = messenger;
+    }
+
+    getWebviewContext(): Promise<WebviewContext> {
+        return this._messenger.sendRequest(getWebviewContext, HOST_EXTENSION);
     }
 
     closeWebview(): void {

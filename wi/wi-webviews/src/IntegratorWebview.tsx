@@ -23,17 +23,22 @@ import { ImportIntegration } from "./views/ImportIntegration";
 import { SamplesView } from "./views/samplesView";
 import { useVisualizerContext } from "./contexts";
 
-export interface WebviewProps {
-	type: ViewType;
-}
-function IntegratorWebview(props: WebviewProps) {
-	const { rpcClient } = useVisualizerContext();
+function IntegratorWebview() {
+	const { rpcClient, webviewContext } = useVisualizerContext();
 
 	const goBackToWelcome = () => { 
 		rpcClient.getMainRpcClient().closeWebview();
 	};
 
-	switch (props.type) {
+	switch (webviewContext?.currentView) {
+		case ViewType.LOADING:
+		case undefined:		
+			return (
+				<div style={{ padding: "2rem", textAlign: "center" }}>
+					<h2>Loading...</h2>
+					<p>Please wait while the content is being loaded.</p>
+				</div>
+			);
 		case ViewType.WELCOME:
 			return <WelcomeView />;
 		case ViewType.CREATE_PROJECT:

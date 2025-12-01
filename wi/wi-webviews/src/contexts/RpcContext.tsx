@@ -16,22 +16,35 @@
  * under the License.
  */
 
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useState, useEffect } from 'react';
 import { RpcClient } from '@wso2/wi-rpc-client';
+import { ViewType, WebviewContext as WIWebviewContext } from '@wso2/wi-core';
 
 export interface VisualizerContext {
     rpcClient: RpcClient;
+    webviewContext?: WIWebviewContext;
 }
 
 export const Context = React.createContext<VisualizerContext | undefined>(undefined);
 
-export function VisualizerContextProvider({ children }: { children: ReactNode }) {
-    const [visualizerState] = useState<VisualizerContext>({
-        rpcClient: new RpcClient(), // Create the root RPC layer client object
-    });
+export function WebviewContextProvider({ children }: { children: ReactNode }) {
+    const [rpcClient] = useState(() => new RpcClient());
+    const [webviewContext, setWebviewContext] = useState<WIWebviewContext | undefined>();
+
+    useEffect(() => {
+        // Get initial context
+        rpcClient.getMainRpcClient().getWebviewContext().then((context) => {
+            setWebviewContext(context);
+        });
+
+        // Listen to state changes
+        rpcClient.onStateChanged((context) => {
+            setWebviewContext(context);
+        });
+    }, [rpcClient]);
 
     return (
-        <Context.Provider value={visualizerState}>
+        <Context.Provider value={{ rpcClient, webviewContext }}>
             {children}
         </Context.Provider>
     );

@@ -18,6 +18,7 @@
  * THIS FILE INCLUDES AUTO GENERATED CODE
  */
 import {
+    getWebviewContext,
     closeWebview,
     openBiExtension,
     openMiExtension,
@@ -59,6 +60,7 @@ import { MainRpcManager } from "./rpc-manager";
 
 export function registerMainRpcHandlers(messenger: Messenger) {
     const rpcManger = new MainRpcManager();
+    messenger.onRequest(getWebviewContext, () => rpcManger.getWebviewContext());
     messenger.onNotification(closeWebview, () => rpcManger.closeWebview());
     messenger.onNotification(openBiExtension, () => rpcManger.openBiExtension());
     messenger.onNotification(openMiExtension, () => rpcManger.openMiExtension());

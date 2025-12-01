@@ -22,6 +22,7 @@ import { ViewType } from "@wso2/wi-core";
 import { ext } from "./extensionVariables";
 import { WebviewManager } from "./webviewManager";
 import { ExtensionAPIs } from "./extensionAPIs";
+import { StateMachine } from "./stateMachine";
 
 /**
  * Register all extension commands
@@ -35,7 +36,7 @@ export function registerCommands(
 	context.subscriptions.push(
 		vscode.commands.registerCommand(COMMANDS.OPEN_WELCOME, () => {
 			try {
-				webviewManager.show(ViewType.WELCOME);
+				StateMachine.openWebview(ViewType.WELCOME);
 			} catch (error) {
 				ext.logError("Failed to open welcome page", error as Error);
 				vscode.window.showErrorMessage("Failed to open welcome page");
@@ -47,7 +48,7 @@ export function registerCommands(
 	context.subscriptions.push(
 		vscode.commands.registerCommand(COMMANDS.CREATE_PROJECT, () => {
 			try {
-				webviewManager.show(ViewType.CREATE_PROJECT);
+				StateMachine.openWebview(ViewType.CREATE_PROJECT);
 			} catch (error) {
 				ext.logError("Failed to open create project view", error as Error);
 				vscode.window.showErrorMessage("Failed to open create project view");
@@ -59,7 +60,7 @@ export function registerCommands(
 	context.subscriptions.push(
 		vscode.commands.registerCommand(COMMANDS.EXPLORE_SAMPLES, () => {
 			try {
-				webviewManager.show(ViewType.SAMPLES);
+				StateMachine.openWebview(ViewType.SAMPLES);
 			} catch (error) {
 				ext.logError("Failed to open samples view", error as Error);
 				vscode.window.showErrorMessage("Failed to open samples view");
@@ -71,7 +72,7 @@ export function registerCommands(
 	context.subscriptions.push(
 		vscode.commands.registerCommand(COMMANDS.IMPORT_PROJECT, () => {
 			try {
-				webviewManager.show(ViewType.IMPORT_EXTERNAL);
+				StateMachine.openWebview(ViewType.IMPORT_EXTERNAL);
 			} catch (error) {
 				ext.logError("Failed to open import project view", error as Error);
 				vscode.window.showErrorMessage("Failed to open import project view");

@@ -43,19 +43,38 @@ import {
     ImportIntegrationResponse,
     ImportIntegrationRequest,
     ShowErrorMessageRequest,
-    COMMANDS
+    COMMANDS,
+    WebviewContext,
+    Platform
 } from "@wso2/wi-core";
-import { commands, window, workspace, Uri, MarkdownString, extensions } from "vscode";
-import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getUsername, handleOpenFile, sanitizeName } from "./utils";
+import { commands, window, workspace, MarkdownString, extensions } from "vscode";
+import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, sanitizeName } from "./utils";
 import * as fs from "fs";
 import * as path from "path";
 import axios from "axios";
 import { pullMigrationTool } from "./migrate-integration";
 import { MigrationReportWebview } from "../../migration-report/webview";
 import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi-core";
+import { StateMachine } from "../../stateMachine";
+const platform = getPlatform();
 
 export class MainRpcManager implements WIVisualizerAPI {
     constructor(private projectUri?: string) { }
+
+    async getWebviewContext(): Promise<WebviewContext> {
+        const context = StateMachine.getContext();
+        return new Promise((resolve) => {
+            resolve({
+                currentView: context.currentView,
+                projectUri: this.projectUri,
+                platform,
+                pathSeparator: path.sep,
+                env: {
+                    MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
+                }
+            });
+        });
+    }
 
     async closeWebview(): Promise<void> {
         commands.executeCommand(COMMANDS.CLOSE_WEBVIEW, this.projectUri);
@@ -183,7 +202,7 @@ export class MainRpcManager implements WIVisualizerAPI {
                 };
 
                 const result = await commands.executeCommand("MI.project-explorer.create-project", miCommandParams);
-                
+
                 if (result) {
                     resolve(result as CreateMiProjectResponse);
                 } else {
@@ -353,3 +372,5 @@ export class MainRpcManager implements WIVisualizerAPI {
         }
     }
 }
+
+

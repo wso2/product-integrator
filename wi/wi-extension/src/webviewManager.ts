@@ -18,11 +18,14 @@
 
 import * as vscode from "vscode";
 import { ViewType } from "@wso2/wi-core";
-import { ExtensionAPIs } from "./extensionAPIs";
 import { ext } from "./extensionVariables";
 import { Uri } from "vscode";
 import path from "path";
 import { RPCLayer } from "./RPCLayer";
+import { StateMachine } from "./stateMachine";
+import { getPlatform } from "./rpc-managers/main/utils";
+
+export const WEB_VIEW_TYPE = "wso2IntegratorWebview";
 
 /**
  * Webview manager for WSO2 Integrator
@@ -30,6 +33,7 @@ import { RPCLayer } from "./RPCLayer";
 export class WebviewManager {
 	private currentPanel: vscode.WebviewPanel | undefined;
 	private currentViewType: ViewType | undefined;
+	private stateSubscription: any;
 
 	constructor(private projectUri: string) { }
 
@@ -51,7 +55,7 @@ export class WebviewManager {
 		// Create new panel
 		const panelTitle = this.getPanelTitle(viewType);
 		this.currentPanel = vscode.window.createWebviewPanel(
-			"wso2IntegratorWelcome",
+			WEB_VIEW_TYPE,
 			panelTitle,
 			columnToShowIn || vscode.ViewColumn.One,
 			{
@@ -74,12 +78,30 @@ export class WebviewManager {
 			() => {
 				this.currentPanel = undefined;
 				this.currentViewType = undefined;
+				if (this.stateSubscription) {
+					this.stateSubscription.unsubscribe();
+				}
 				RPCLayer.dispose(this.projectUri);
 			},
 			null,
 			ext.context.subscriptions,
 		);
+		
 		RPCLayer.create(this.currentPanel, this.projectUri);
+		
+		// Subscribe to state machine changes
+		this.stateSubscription = StateMachine.subscribe(() => {
+			const context = StateMachine.getContext();
+			RPCLayer.notifyStateChanged(this.projectUri, {
+				currentView: context.currentView,
+				projectUri: this.projectUri,
+				platform: getPlatform(),
+				pathSeparator: path.sep,
+				env: {
+					MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
+				}
+			});
+		});
 	}
 
 	/**
@@ -246,7 +268,7 @@ export class WebviewManager {
 				<script>
 					function render() {
 						wiWebview.renderWebview(
-							document.getElementById("root"), "${type}"
+							document.getElementById("root")
 						);
 					}
 					render();

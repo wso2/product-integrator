@@ -16,13 +16,13 @@
  * under the License.
  */
 
-import { commands, debug, Progress, ProgressLocation, Uri, window, workspace } from "vscode";
+import { commands, debug, env, Progress, ProgressLocation, Uri, window, workspace } from "vscode";
 import * as os from 'os';
 import path from "path";
 import * as fs from 'fs';
 import * as unzipper from 'unzipper';
 import axios from "axios";
-import { DownloadProgress, onDownloadProgress } from "@wso2/wi-core";
+import { DownloadProgress, onDownloadProgress, Platform } from "@wso2/wi-core";
 import { RPCLayer } from "../../RPCLayer";
 
 interface ProgressMessage {
@@ -234,4 +234,17 @@ export function getUsername(): string {
         username = process.env.USER || 'myOrg';
     }
     return username;
+}
+
+export function getPlatform(): any {
+    if (os.platform() === 'linux' || env.remoteName === 'wsl') {
+        return Platform.LINUX;
+    }
+    if (os.platform()?.startsWith('win')) {
+        return Platform.WINDOWS;
+    }
+    if (os.platform() === 'darwin') {
+        return Platform.MAC;
+    }
+    return Platform.LINUX; // fallback
 }

@@ -8,7 +8,7 @@ module.exports = {
     devtool: !process.env.CI ? "inline-source-map" : undefined,
     mode: !process.env.CI ? "development" : "production",
     output: {
-        path: path.resolve(__dirname, "lib"),
+        path: path.resolve(__dirname, "build"),
         filename: "main.js",
         library: "wiWebview",
         publicPath: "http://localhost:3000/lib/",
@@ -69,9 +69,6 @@ module.exports = {
     plugins: [
         new webpack.ProvidePlugin({
             process: "process/browser",
-        }),
-        new webpack.DefinePlugin({
-            'process.env.MI_SAMPLE_ICONS_GITHUB_URL': JSON.stringify('https://mi-connectors.wso2.com/samples/icons/')
         }),
         new ReactRefreshWebpackPlugin(),
     ],
