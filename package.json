@@ -6,10 +6,13 @@
     "init-submodules": "git submodule update --init --recursive",
     "apply-patches": "quilt push -a",
     "unapply-patches": "quilt pop -a",
-    "symlink-extension": "ln -sfn $PWD/wi/wi-extension lib/vscode/extensions/wso2.integrator",
+    "symlink-wi-extension": "ln -sfn $PWD/wi/wi-extension lib/vscode/extensions/wso2.integrator",
+    "symlink-bal-extension": "ln -sfn $PWD/wi/wi-extension lib/vscode/extensions/wso2.ballerina",
+    "symlink-bi-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/bi/bi-extension lib/vscode/extensions/wso2.ballerina-integrator",
+    "symlink-mi-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/mi/mi-extension lib/vscode/extensions/wso2.micro-integrator",
     "install": "rush install",
     "update-product": "bash ci/build/update-product.sh",
-    "build": "npm run build:wi && npm run update-product",
+    "link-extensions": "npm run symlink-wi-extension && npm run symlink-bal-extension && npm run symlink-bi-extension && npm run symlink-mi-extension",
     "clean": "rush purge && git clean -dfX"
   },
   "devDependencies": {
