@@ -1606,3 +1606,60 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		this._register({ dispose: () => style.remove() });
 +	}
 +}
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
+@@ -55,6 +55,7 @@ import { IHoverDelegate } from '../../..
+ import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+ import { safeIntl } from '../../../../base/common/date.js';
+ import { IsCompactTitleBarContext, TitleBarVisibleContext } from '../../../common/contextkeys.js';
++import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
+ 
+ export interface ITitleVariable {
+ 	readonly name: string;
+@@ -306,7 +307,8 @@ export class BrowserTitlebarPart extends
+ 		@IHostService private readonly hostService: IHostService,
+ 		@IEditorService private readonly editorService: IEditorService,
+ 		@IMenuService private readonly menuService: IMenuService,
+-		@IKeybindingService private readonly keybindingService: IKeybindingService
++		@IKeybindingService private readonly keybindingService: IKeybindingService,
++		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService
+ 	) {
+ 		super(id, { hasTitle: false }, themeService, storageService, layoutService);
+ 
+@@ -784,6 +786,11 @@ export class BrowserTitlebarPart extends
+ 	}
+ 
+ 	protected onContextMenu(e: MouseEvent, menuId: MenuId): void {
++		// Don't show context menu in empty workspace
++		if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++			return;
++		}
++
+ 		const event = new StandardMouseEvent(getWindow(this.element), e);
+ 
+ 		// Show it
+@@ -908,8 +915,9 @@ export class MainBrowserTitlebarPart ext
+ 		@IEditorService editorService: IEditorService,
+ 		@IMenuService menuService: IMenuService,
+ 		@IKeybindingService keybindingService: IKeybindingService,
++		@IWorkspaceContextService contextService: IWorkspaceContextService
+ 	) {
+-		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService);
++		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, contextService);
+ 	}
+ }
+ 
+@@ -943,9 +951,10 @@ export class AuxiliaryBrowserTitlebarPar
+ 		@IEditorService editorService: IEditorService,
+ 		@IMenuService menuService: IMenuService,
+ 		@IKeybindingService keybindingService: IKeybindingService,
++		@IWorkspaceContextService contextService: IWorkspaceContextService
+ 	) {
+ 		const id = AuxiliaryBrowserTitlebarPart.COUNTER++;
+-		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService);
++		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, contextService);
+ 	}
+ 
+ 	override get preventZoom(): boolean {
