@@ -59,19 +59,19 @@ echo '{
 	  "builtInExtensions": [
       {
         "name": "wso2.wso2-platform",
-        "version": "1.0.16"
+        "version": "latest"
       },
       {
         "name": "redhat.vscode-yaml",
-        "version": "1.18.0"
+        "version": "latest"
       },
       {
         "name": "anweber.httpbook",
-        "version": "3.2.6"
+        "version": "latest"
       },
       {
         "name": "anweber.vscode-httpyac",
-        "version": "6.16.7"
+        "version": "latest"
       }
 	  ]
 }
