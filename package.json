@@ -7,7 +7,7 @@
     "apply-patches": "quilt push -a",
     "unapply-patches": "quilt pop -a",
     "symlink-wi-extension": "ln -sfn $PWD/wi/wi-extension lib/vscode/extensions/wso2.integrator",
-    "symlink-bal-extension": "ln -sfn $PWD/wi/wi-extension lib/vscode/extensions/wso2.ballerina",
+    "symlink-bal-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/ballerina/ballerina-extension lib/vscode/extensions/wso2.ballerina",
     "symlink-bi-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/bi/bi-extension lib/vscode/extensions/wso2.ballerina-integrator",
     "symlink-mi-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/mi/mi-extension lib/vscode/extensions/wso2.micro-integrator",
     "install": "rush install",
