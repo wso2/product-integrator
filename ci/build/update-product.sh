@@ -72,6 +72,18 @@ echo '{
       {
         "name": "anweber.vscode-httpyac",
         "version": "latest"
+      },
+      {
+        "name": "wso2.ballerina",
+        "version": "latest"
+      },
+      {
+        "name": "wso2.ballerina-integrator",
+        "version": "latest"
+      },
+      {
+        "name": "wso2.micro-integrator",
+        "version": "latest"
       }
 	  ]
 }
