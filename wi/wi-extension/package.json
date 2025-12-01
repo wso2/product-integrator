@@ -16,11 +16,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
-  ],
-  "extensionDependencies": [
-    "wso2.ballerina",
-    "wso2.micro-integrator"
+    "*"
   ],
   "main": "./dist/extension.js",
   "contributes": {
