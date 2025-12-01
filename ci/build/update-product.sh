@@ -59,7 +59,7 @@ echo '{
 	  "builtInExtensions": [
       {
         "name": "wso2.wso2-platform",
-        "version": "1.0.11"
+        "version": "1.0.16"
       },
       {
         "name": "redhat.vscode-yaml",
@@ -72,18 +72,6 @@ echo '{
       {
         "name": "anweber.vscode-httpyac",
         "version": "6.16.7"
-      },
-      {
-        "name": "wso2.ballerina",
-        "version": "5.4.2"
-      },
-      {
-        "name": "wso2.ballerina-integrator",
-        "version": "1.3.2"
-      },
-      {
-        "name": "wso2.micro-integrator",
-        "version": "2.4.1"
       }
 	  ]
 }
