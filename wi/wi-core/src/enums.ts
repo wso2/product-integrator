@@ -45,3 +45,12 @@ export enum ExtensionStatus {
 	NO_LS = "noLS",
 	UPDATE_NEEDED = "updateNeed",
 }
+
+/**
+ * Platform enumeration
+ */
+export enum Platform {
+	WINDOWS = 1,
+	MAC = 2,
+	LINUX = 3
+}

@@ -16,13 +16,8 @@
  * under the License.
  */
 
-import { ViewType } from "../enums";
+import { ViewType, Platform } from "../enums";
 
-export declare enum Platform {
-    WINDOWS = 1,
-    MAC = 2,
-    LINUX = 3
-}
 export interface WebviewContext {
     currentView: ViewType;
     projectUri?: string;
