@@ -1,5 +1,8 @@
-marketplace.diff
+skipCompilationChecks.diff
 activities.diff
 productNameChange.diff
 removeExtensionsActivity.diff
 disable-builtin-ext-update.diff
+gettingStarted.diff
+wso2-font-pkg-update
+disableAiFeatures.diff

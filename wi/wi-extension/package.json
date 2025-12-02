@@ -1,0 +1,224 @@
+{
+  "name": "wso2-integrator",
+  "displayName": "WSO2 Integrator",
+  "description": "Unified integration development environment for WSO2 BI and MI in VS Code",
+  "version": "1.0.0",
+  "publisher": "wso2",
+  "icon": "resources/icons/wso2-integrator-logo.png",
+  "license": "Apache-2.0",
+  "repository": {
+    "url": "https://github.com/wso2/vscode-extensions"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "WSO2 Integrator",
+      "properties": {
+        "integrator.defaultIntegrator": {
+          "type": "string",
+          "default": "WSO2: BI",
+          "scope": "resource",
+          "description": "Choose the default integrator for the lowcode experience.",
+          "enum": [
+            "WSO2: BI",
+            "WSO2: MI"
+          ]
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "wso2-integrator",
+          "title": "WSO2 Integrator",
+          "icon": "resources/icons/integrator-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "wso2-integrator": [
+        {
+          "id": "wso2-integrator.explorer",
+          "name": "Integrations",
+          "contextualTitle": "WSO2 Integrator"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": ""
+      }
+    ],
+    "commands": [
+      {
+        "command": "wso2.integrator.openWelcome",
+        "title": "Open Welcome Page",
+        "category": "WSO2 Integrator",
+        "icon": "$(home)"
+      },
+      {
+        "command": "wso2-integrator.explorer.refresh",
+        "title": "Refresh",
+        "category": "WSO2 Integrator",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "wso2.integrator.openBIIntegration",
+        "title": "Open BI Integration",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "wso2.integrator.openMIIntegration",
+        "title": "Open MI Integration",
+        "category": "WSO2 Integrator"
+      }
+    ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "ballerina.showVisualizer",
+          "when": "view == wso2-integrator.explorer && viewItem == bi-project",
+          "group": "inline"
+        },
+        {
+          "command": "ballerina.force.update.artifacts",
+          "when": "view == wso2-integrator.explorer && viewItem == bi-project",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.add-connection",
+          "when": "view == wso2-integrator.explorer && viewItem == connections",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.delete",
+          "when": "view == wso2-integrator.explorer && viewItem == CONNECTION || viewItem == SERVICE || viewItem == FUNCTION || viewItem == AUTOMATION || viewItem == TYPE || viewItem == CONFIGURABLE || viewItem == DATA_MAPPER || viewItem == NP_FUNCTION || viewItem == localConnector",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.add-entry-point",
+          "when": "view == wso2-integrator.explorer && viewItem == entryPoint",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.add-type",
+          "when": "view == wso2-integrator.explorer && viewItem == types",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.view-type-diagram",
+          "when": "view == wso2-integrator.explorer && viewItem == types",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.add-function",
+          "when": "view == wso2-integrator.explorer && viewItem == functions",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.add-configuration",
+          "when": "view == wso2-integrator.explorer && viewItem == configurations",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.view-configuration",
+          "when": "view == wso2-integrator.explorer && viewItem == configurations",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.add-data-mapper",
+          "when": "view == wso2-integrator.explorer && viewItem == dataMappers",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.add-natural-function",
+          "when": "view == wso2-integrator.explorer && viewItem == naturalFunctions",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.add-custom-connector",
+          "when": "view == wso2-integrator.explorer && viewItem == localConnectors",
+          "group": "inline"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "wso2-integrator.explorer.refresh",
+          "when": "view == wso2-integrator.explorer",
+          "group": "navigation@2"
+        },
+        {
+          "command": "BI.project-explorer.switch-project",
+          "when": "view == wso2-integrator.explorer && BI.isMultiRoot == true",
+          "group": "navigation"
+        },
+        {
+          "command": "BI.project-explorer.add",
+          "when": "view == wso2-integrator.explorer && BI.project == true",
+          "group": "navigation"
+        },
+        {
+          "command": "BI.project-explorer.overview",
+          "when": "view == wso2-integrator.explorer && BI.project == true",
+          "group": "navigation"
+        }
+      ]
+    },
+    "icons": {}
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "vscode:prepublish": "npm run copyJSLibs",
+    "build": "webpack --mode production && npm run package",
+    "copyJSLibs": "copyfiles -f ../wi-webviews/build/main.js resources/jslibs",
+    "watch": "tsc -p . -w",
+    "compile": "tsc -p ./",
+    "compile-tests": "tsc -p . --outDir out",
+    "test": "node ./out/test/runTest.js",
+    "package": "node ../../external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.4.0",
+    "@types/vscode": "^1.100.0",
+    "@types/mocha": "^10.0.3",
+    "@types/node": "^22.15.21",
+    "@typescript-eslint/eslint-plugin": "^8.32.1",
+    "@typescript-eslint/parser": "^8.32.1",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.27.0",
+    "glob": "^11.0.2",
+    "mocha": "^11.2.2",
+    "typescript": "5.8.3",
+    "copyfiles": "^2.4.1",
+    "copy-webpack-plugin": "^13.0.0",
+    "source-map-support": "^0.5.21",
+    "ts-loader": "^9.5.2",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1",
+    "webpack-permissions-plugin": "^1.0.9",
+    "@playwright/test": "~1.55.1"
+  },
+  "dependencies": {
+    "@wso2/wi-core": "workspace:*",
+    "vscode-messenger": "~0.5.1",
+    "xstate": "~4.38.3",
+    "@emotion/styled": "~11.14.1",
+    "@wso2/ui-toolkit": "workspace:*",
+    "unzipper": "~0.12.3",
+    "@types/unzipper": "~0.10.11",
+    "axios": "~1.13.2",
+    "dotenv": "~17.2.3"
+  }
+}

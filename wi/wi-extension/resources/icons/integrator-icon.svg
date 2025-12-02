@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Two connected nodes representing integration -->
+  <circle cx="6" cy="6" r="3" fill="#FF7300"/>
+  <circle cx="18" cy="6" r="3" fill="#FF7300"/>
+  <circle cx="12" cy="18" r="3" fill="#FF7300"/>
+  
+  <!-- Connection lines -->
+  <line x1="8" y1="7" x2="10" y2="16" stroke="#FF7300"/>
+  <line x1="16" y1="7" x2="14" y2="16" stroke="#FF7300"/>
+</svg>

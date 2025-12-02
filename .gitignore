@@ -39,3 +39,16 @@ installers/windows/WixPackage/bin/
 installers/windows/WixPackage/payload/ICP/
 installers/linux-deb/package/usr/lib/
 installers/linux-deb/package/usr/share/wso2-integrator
+
+# VScode build output
+lib/
+build/
+!lib/vscode
+
+# Rush temporary files
+common/deploy/
+common/temp/
+common/autoinstallers/*/.npmrc
+**/.rush/temp/
+
+**/rush-logs/

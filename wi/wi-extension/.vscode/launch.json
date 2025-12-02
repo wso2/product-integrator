@@ -1,0 +1,30 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Run Extension",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/workspaces/wi/wi-extension"
+			],
+			"outFiles": [
+				"${workspaceFolder}/workspaces/wi/wi-extension/dist/**/*.js"
+			],
+			"preLaunchTask": "${defaultBuildTask}"
+		},
+		{
+			"name": "Extension Tests",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/workspaces/wi/wi-extension",
+				"--extensionTestsPath=${workspaceFolder}/workspaces/wi/wi-extension/out/test/suite/index"
+			],
+			"outFiles": [
+				"${workspaceFolder}/workspaces/wi/wi-extension/out/test/**/*.js"
+			],
+			"preLaunchTask": "npm: compile-tests"
+		}
+	]
+}

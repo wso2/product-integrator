@@ -1,0 +1,1665 @@
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
+@@ -315,7 +315,7 @@ configurationRegistry.registerConfigurat
+ 				localize({ comment: ['This is the description for a setting. Values surrounded by single quotes are not to be translated.'], key: 'workbench.startupEditor.welcomePageInEmptyWorkbench' }, "Open the Welcome page when opening an empty workbench."),
+ 				localize({ comment: ['This is the description for a setting. Values surrounded by single quotes are not to be translated.'], key: 'workbench.startupEditor.terminal' }, "Open a new terminal in the editor area."),
+ 			],
+-			'default': 'welcomePage',
++			'default': 'none',
+ 			'description': localize('workbench.startupEditor', "Controls which editor is shown at startup, if none are restored from the previous session.")
+ 		},
+ 		'workbench.welcomePage.preferReducedMotion': {
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
+@@ -0,0 +1,29 @@
++/**
++ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
++ *
++ * WSO2 LLC. licenses this file to you under the Apache License,
++ * Version 2.0 (the "License"); you may not use this file except
++ * in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied. See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++
++export const WI_MODE_SETTING_ID = 'integrator.defaultIntegrator';
++export const WI_CREATE_PROJECT_COMMAND_ID = 'wso2.integrator.createProject';
++export const WI_EXPLORE_SAMPLES_COMMAND_ID = 'wso2.integrator.exploreSamples';
++export const WI_IMPORT_PROJECT_COMMAND_ID = 'wso2.integrator.importProject';
++
++// Authentication constants
++export const WI_LOGIN_COMPLETED_KEY = 'wso2.integrator.loginCompleted';
++export const WI_LOGIN_SKIPPED_KEY = 'wso2.integrator.loginSkipped';
++export const WI_LOGIN_PROVIDER_ID = 'wso2.integrator.auth';
++export const WI_SHOW_LOGIN_COMMAND_ID = 'wso2.integrator.showLogin';
++export const WI_LOGOUT_COMMAND_ID = 'wso2.integrator.logout';
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
+@@ -0,0 +1,658 @@
++/**
++ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
++ *
++ * WSO2 LLC. licenses this file to you under the Apache License,
++ * Version 2.0 (the "License"); you may not use this file except
++ * in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied. See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++
++import { $, append, clearNode } from '../../../../base/browser/dom.js';
++import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
++import { IWorkspacesService, IRecentlyOpened, isRecentFolder, isRecentWorkspace } from '../../../../platform/workspaces/common/workspaces.js';
++import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
++import { ILabelService, Verbosity } from '../../../../platform/label/common/label.js';
++import { ICommandService } from '../../../../platform/commands/common/commands.js';
++import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
++import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
++import { IAuthenticationService } from '../../../services/authentication/common/authentication.js';
++import { WI_CREATE_PROJECT_COMMAND_ID, WI_EXPLORE_SAMPLES_COMMAND_ID, WI_IMPORT_PROJECT_COMMAND_ID, WI_MODE_SETTING_ID, WI_LOGIN_COMPLETED_KEY, WI_LOGIN_PROVIDER_ID, WI_SHOW_LOGIN_COMMAND_ID, WI_LOGOUT_COMMAND_ID } from './wso2Constants.js';
++
++export class WSO2EditorGroupWatermark extends Disposable {
++
++	private readonly container: HTMLElement;
++	private readonly transientDisposables = this._register(new DisposableStore());
++	private enabled = false;
++	private workbenchState: WorkbenchState;
++	private isLoggedIn = false;
++	private userEmail: string | undefined;
++
++	constructor(
++		parent: HTMLElement,
++		@IWorkspacesService private readonly workspacesService: IWorkspacesService,
++		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService,
++		@ILabelService private readonly labelService: ILabelService,
++		@ICommandService private readonly commandService: ICommandService,
++		@IConfigurationService private readonly configurationService: IConfigurationService,
++		@IStorageService private readonly storageService: IStorageService,
++		@IAuthenticationService private readonly authService: IAuthenticationService
++	) {
++		super();
++
++		this.workbenchState = this.contextService.getWorkbenchState();
++
++		// Create container - CSS will handle visibility based on parent's .empty class
++		this.container = append(parent, $('.wso2-editor-watermark'));
++
++		// Add CSS styles
++		this.addStyles();
++
++		this.registerListeners();
++		this.checkLoginState().then(() => this.render());
++	}
++
++	private registerListeners(): void {
++		this._register(this.configurationService.onDidChangeConfiguration(e => {
++			if (e.affectsConfiguration('workbench.tips.enabled')) {
++				this.render();
++			}
++		}));
++
++		this._register(this.contextService.onDidChangeWorkbenchState(workbenchState => {
++			if (this.workbenchState !== workbenchState) {
++				this.workbenchState = workbenchState;
++				this.render();
++			}
++		}));
++
++		// Listen for workspace changes to update recent projects
++		this._register(this.workspacesService.onDidChangeRecentlyOpened(() => {
++			if (this.enabled) {
++				this.render();
++			}
++		}));
++
++		// Listen for authentication changes
++		this._register(this.authService.onDidChangeSessions(e => {
++			if (e.providerId === WI_LOGIN_PROVIDER_ID) {
++				this.checkLoginState().then(() => this.render());
++			}
++		}));
++	}
++
++	private addStyles(): void {
++		const style = document.createElement('style');
++		style.textContent = `
++			/* WSO2 Watermark Container - hidden when editor group is not empty */
++			.monaco-workbench .part.editor > .content .editor-group-container:not(.empty) > .wso2-editor-watermark {
++				display: none;
++			}
++
++			.wso2-editor-watermark {
++				position: absolute;
++				top: 0;
++				left: 0;
++				right: 0;
++				bottom: 0;
++				overflow-y: auto;
++				pointer-events: all;
++				background: var(--vscode-sideBar-background);
++			}
++
++			.wso2-editor-watermark .wrapper {
++				max-width: 100%;
++				height: 100%;
++			}
++
++			.wso2-editor-watermark .top-section {
++				background: linear-gradient(135deg, #667eea 0%, #204377 100%);
++				padding: 40px 60px 80px;
++				position: relative;
++				display: flex;
++				flex-direction: column;
++				color: white;
++			}
++
++		.wso2-editor-watermark .top-right-controls {
++			position: absolute;
++			top: 40px;
++			right: 60px;
++			display: flex;
++			align-items: center;
++			gap: 12px;
++		}
++
++		.wso2-editor-watermark .user-info {
++			display: flex;
++			align-items: center;
++			gap: 10px;
++			background: rgba(255, 255, 255, 0.15);
++			border: 1px solid rgba(255, 255, 255, 0.2);
++			border-radius: 8px;
++			padding: 8px 16px;
++			color: white;
++			font-size: 13px;
++		}
++
++		.wso2-editor-watermark .user-avatar {
++			width: 24px;
++			height: 24px;
++			border-radius: 50%;
++			background: white;
++			color: #667eea;
++			display: flex;
++			align-items: center;
++			justify-content: center;
++			font-weight: 600;
++			font-size: 12px;
++		}
++
++		.wso2-editor-watermark .configure-btn,
++		.wso2-editor-watermark .sign-in-btn,
++		.wso2-editor-watermark .logout-btn {
++			height: 33px;
++			font-size: 14px;
++			font-weight: 500;
++			border-radius: 8px;
++			padding: 0 24px;
++			background: var(--vscode-button-background);
++			color: var(--vscode-button-foreground);
++			border: none;
++			transition: all 0.2s ease;
++			display: flex;
++			align-items: center;
++			gap: 10px;
++			cursor: pointer;
++		}
++
++		.wso2-editor-watermark .configure-btn:hover,
++		.wso2-editor-watermark .sign-in-btn:hover,
++		.wso2-editor-watermark .logout-btn:hover {
++			background: var(--vscode-button-hoverBackground);
++			transform: translateY(-1px);
++		}
++
++		.wso2-editor-watermark .logout-btn {
++			background: rgba(255, 255, 255, 0.15);
++			border: 1px solid rgba(255, 255, 255, 0.2);
++		}
++
++		.wso2-editor-watermark .logout-btn:hover {
++			background: rgba(255, 255, 255, 0.25);
++		}			.wso2-editor-watermark .get-started-badge {
++				display: inline-block;
++				background: rgba(255, 255, 255, 0.2);
++				backdrop-filter: blur(10px);
++				border: 1px solid rgba(255, 255, 255, 0.3);
++				border-radius: 20px;
++				padding: 8px 16px;
++				margin-bottom: 24px;
++				font-size: 13px;
++				font-weight: 500;
++				width: fit-content;
++			}
++
++			.wso2-editor-watermark .headline {
++				font-size: 48px;
++				font-weight: 700;
++				margin: 0;
++				line-height: 1.2;
++			}
++
++			.wso2-editor-watermark .caption {
++				font-size: 16px;
++				line-height: 1.6;
++				font-weight: 400;
++				color: rgba(255, 255, 255, 0.9);
++				margin: 16px 0 0 0;
++				max-width: 800px;
++			}
++
++			.wso2-editor-watermark .cards-container {
++				padding: 0 60px 60px;
++				margin-top: -40px;
++				position: relative;
++				z-index: 1;
++			}
++
++			.wso2-editor-watermark .cards-grid {
++				display: grid;
++				grid-template-columns: repeat(3, 1fr);
++				gap: 24px;
++			}
++
++			@media (max-width: 1200px) {
++				.wso2-editor-watermark .cards-grid {
++					grid-template-columns: repeat(2, 1fr);
++				}
++			}
++
++			@media (max-width: 768px) {
++				.wso2-editor-watermark .cards-grid {
++					grid-template-columns: 1fr;
++				}
++			}
++
++			.wso2-editor-watermark .action-card {
++				background: var(--vscode-editor-background, white);
++				border-radius: 12px;
++				padding: 32px 24px;
++				display: flex;
++				flex-direction: column;
++				transition: all 0.3s ease;
++				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.05);
++				min-height: 280px;
++			}
++
++			.wso2-editor-watermark .action-card:hover {
++				transform: translateY(-4px);
++				box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12), 0 6px 12px rgba(0, 0, 0, 0.08);
++			}
++
++			.wso2-editor-watermark .card-icon-container {
++				display: flex;
++				justify-content: flex-start;
++				margin-bottom: 20px;
++			}
++
++			.wso2-editor-watermark .card-icon {
++				width: 56px;
++				height: 56px;
++				border-radius: 12px;
++				display: flex;
++				align-items: center;
++				justify-content: center;
++				color: white;
++				flex-shrink: 0;
++				font-size: 24px;
++			}
++
++			.wso2-editor-watermark .gradient-purple {
++				background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
++			}
++
++			.wso2-editor-watermark .gradient-blue {
++				background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
++			}
++
++			.wso2-editor-watermark .gradient-pink {
++				background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
++			}
++
++			.wso2-editor-watermark .card-title {
++				font-size: 20px;
++				font-weight: 600;
++				margin: 0 0 12px 0;
++				color: var(--vscode-foreground);
++			}
++
++			.wso2-editor-watermark .card-description {
++				font-size: 14px;
++				line-height: 1.6;
++				margin: 0 0 24px 0;
++				color: var(--vscode-descriptionForeground);
++				flex: 1;
++			}
++
++		.wso2-editor-watermark .styled-btn {
++			height: 44px;
++			font-size: 14px;
++			font-weight: 500;
++			border-radius: 8px;
++			padding: 0 24px;
++			color: var(--vscode-button-foreground);
++			border: none;
++			transition: all 0.2s ease;
++			cursor: pointer;
++		}
++
++		.wso2-editor-watermark .styled-btn.primary {
++			background: var(--vscode-button-background);
++		}
++
++		.wso2-editor-watermark .styled-btn.primary:hover {
++			background: var(--vscode-button-hoverBackground);
++			transform: translateY(-1px);
++		}
++
++		.wso2-editor-watermark .styled-btn.secondary {
++			background: var(--vscode-button-secondaryBackground);
++			color: var(--vscode-button-secondaryForeground);
++		}
++
++		.wso2-editor-watermark .styled-btn.secondary:hover {
++			background: var(--vscode-button-secondaryHoverBackground);
++			transform: translateY(-1px);
++		}			.wso2-editor-watermark .bottom-section {
++				padding: 10px 60px 10px 60px;
++				text-align: center;
++			}
++
++			.wso2-editor-watermark .already-have-text {
++				font-size: 14px;
++				color: var(--vscode-foreground);
++				opacity: 0.6;
++				margin-bottom: 32px;
++			}
++
++			.wso2-editor-watermark .already-have-text a {
++				color: var(--vscode-textLink-foreground);
++				text-decoration: none;
++				margin-left: 6px;
++				cursor: pointer;
++			}
++
++			.wso2-editor-watermark .already-have-text a:hover {
++				color: var(--vscode-textLink-activeForeground);
++				text-decoration: underline;
++			}
++
++			.wso2-editor-watermark .recent-projects-section {
++				max-width: 900px;
++				margin: 0 auto;
++			}
++
++			.wso2-editor-watermark .recent-projects-header {
++				display: flex;
++				justify-content: space-between;
++				align-items: center;
++				margin-bottom: 20px;
++				padding: 0 4px;
++			}
++
++			.wso2-editor-watermark .recent-projects-title {
++				font-size: 13px;
++				font-weight: 400;
++				color: var(--vscode-foreground);
++				opacity: 0.6;
++				margin: 0;
++			}
++
++			.wso2-editor-watermark .view-all-link {
++				font-size: 13px;
++				color: var(--vscode-textLink-foreground);
++				text-decoration: none;
++				cursor: pointer;
++			}
++
++			.wso2-editor-watermark .view-all-link:hover {
++				color: var(--vscode-textLink-activeForeground);
++				text-decoration: underline;
++			}
++
++			.wso2-editor-watermark .projects-list {
++				display: grid;
++				grid-template-columns: repeat(2, 1fr);
++				gap: 8px 16px;
++				text-align: left;
++			}
++
++			.wso2-editor-watermark .project-item {
++				display: flex;
++				justify-content: space-between;
++				align-items: center;
++				padding: 8px 4px;
++				font-size: 13px;
++				color: var(--vscode-foreground);
++				cursor: pointer;
++				transition: all 0.15s ease;
++				border-radius: 4px;
++			}
++
++			.wso2-editor-watermark .project-item:hover {
++				background: var(--vscode-list-hoverBackground);
++			}
++
++			.wso2-editor-watermark .project-path {
++				color: var(--vscode-descriptionForeground);
++				font-size: 12px;
++				margin-left: 12px;
++			}
++		`;
++		document.head.appendChild(style);
++		this._register({ dispose: () => style.remove() });
++	}
++
++	private async render(): Promise<void> {
++		this.enabled = this.configurationService.getValue<boolean>('workbench.tips.enabled') !== false;
++
++		// Only render content for empty workspace
++		const shouldShow = this.workbenchState === WorkbenchState.EMPTY && this.enabled;
++
++		clearNode(this.container);
++		this.transientDisposables.clear();
++
++		if (!shouldShow) {
++			return;
++		}
++
++		const wrapper = append(this.container, $('.wrapper'));
++
++		// Top section
++		const topSection = append(wrapper, $('.top-section'));
++
++		// Top right controls
++		const topRightControls = append(topSection, $('.top-right-controls'));
++
++		if (this.isLoggedIn && this.userEmail) {
++			// Show user info
++			const userInfo = append(topRightControls, $('.user-info'));
++			const avatar = append(userInfo, $('.user-avatar'));
++			avatar.textContent = this.userEmail.charAt(0).toUpperCase();
++			const email = append(userInfo, $('span'));
++			email.textContent = this.userEmail;
++
++			// Logout button
++			const logoutBtn = append(topRightControls, $('button.logout-btn'));
++			logoutBtn.textContent = 'Logout';
++			this.transientDisposables.add(this.addClickHandler(logoutBtn, WI_LOGOUT_COMMAND_ID));
++		} else {
++			// Show sign in button
++			const signInBtn = append(topRightControls, $('button.sign-in-btn'));
++			signInBtn.textContent = 'Sign In';
++			this.transientDisposables.add(this.addClickHandler(signInBtn, WI_SHOW_LOGIN_COMMAND_ID));
++		}
++
++		const configureBtn = append(topRightControls, $('button.configure-btn'));
++		const configIcon = append(configureBtn, $('span'));
++		configIcon.textContent = '⚙';
++		configIcon.style.fontSize = '25px';
++		const configText = append(configureBtn, $('span'));
++		configText.textContent = 'Configure';
++		this.transientDisposables.add(this.addClickHandler(configureBtn, 'workbench.action.openSettings', [WI_MODE_SETTING_ID]));
++
++		const badge = append(topSection, $('.get-started-badge'));
++		badge.textContent = 'Get Started';
++
++		const headline = append(topSection, $('h1.headline'));
++		headline.textContent = 'WSO2 Integrator';
++
++		const caption = append(topSection, $('p.caption'));
++		caption.textContent = 'A comprehensive integration solution that simplifies your digital transformation journey. Streamlines connectivity among applications, services, data, and cloud using a user-friendly low-code graphical designing experience.';
++
++		// Cards section
++		const cardsContainer = append(wrapper, $('.cards-container'));
++		const cardsGrid = append(cardsContainer, $('.cards-grid'));
++
++		// Create New Project Card
++		this.createActionCard(
++			cardsGrid,
++			'＋',
++			'gradient-purple',
++			'Create New Project',
++			'Ready to build? Start a new integration project using our intuitive graphical designer.',
++			'Create',
++			'primary',
++			WI_CREATE_PROJECT_COMMAND_ID
++		);
++
++		// Explore Samples Card
++		this.createActionCard(
++			cardsGrid,
++			'★',
++			'gradient-blue',
++			'Explore Samples',
++			'Need inspiration? Browse through sample projects to see how WSO2 Integrator works in real-world scenarios.',
++			'Explore',
++			'secondary',
++			WI_EXPLORE_SAMPLES_COMMAND_ID
++		);
++
++		// Import External Integration Card
++		this.createActionCard(
++			cardsGrid,
++			'⇄',
++			'gradient-pink',
++			'Import External Integration',
++			'Have an integration from another platform? Import your MuleSoft or TIBCO integration project and continue building.',
++			'Import',
++			'secondary',
++			WI_IMPORT_PROJECT_COMMAND_ID
++		);
++
++		// Bottom section
++		const bottomSection = append(wrapper, $('.bottom-section'));
++
++		const alreadyHaveText = append(bottomSection, $('.already-have-text'));
++		alreadyHaveText.textContent = 'Already have a project? ';
++		const openLink = append(alreadyHaveText, $('a'));
++		openLink.textContent = 'Open';
++		this.transientDisposables.add(this.addClickHandler(openLink, 'workbench.action.files.openFolder'));
++
++		// Recent projects section
++		await this.renderRecentProjects(bottomSection);
++	}
++
++	private createActionCard(
++		parent: HTMLElement,
++		icon: string,
++		gradientClass: string,
++		title: string,
++		description: string,
++		buttonText: string,
++		buttonClass: string,
++		commandId: string
++	): HTMLElement {
++		const card = append(parent, $('.action-card'));
++
++		const iconContainer = append(card, $('.card-icon-container'));
++		const iconElement = append(iconContainer, $(`.card-icon.${gradientClass}`));
++		iconElement.textContent = icon;
++
++		const content = append(card, $('.card-content'));
++
++		const titleElement = append(content, $('h3.card-title'));
++		titleElement.textContent = title;
++
++		const descriptionElement = append(content, $('p.card-description'));
++		descriptionElement.textContent = description;
++
++		const button = append(content, $(`button.styled-btn.${buttonClass}`));
++		button.textContent = buttonText;
++		this.transientDisposables.add(this.addClickHandler(button, commandId));
++
++		return card;
++	}
++
++	private async renderRecentProjects(parent: HTMLElement): Promise<void> {
++		try {
++			const recentlyOpened: IRecentlyOpened = await this.workspacesService.getRecentlyOpened();
++			const recentWorkspaces = recentlyOpened.workspaces.slice(0, 5);
++
++			if (recentWorkspaces.length === 0) {
++				return;
++			}
++
++			const recentSection = append(parent, $('.recent-projects-section'));
++
++			const header = append(recentSection, $('.recent-projects-header'));
++
++			const titleElement = append(header, $('h3.recent-projects-title'));
++			titleElement.textContent = 'Recent projects';
++
++			const viewAllLink = append(header, $('a.view-all-link'));
++			viewAllLink.textContent = `View all (${recentlyOpened.workspaces.length})`;
++			this.transientDisposables.add(this.addClickHandler(viewAllLink, 'workbench.action.openRecent'));
++
++			const projectsList = append(recentSection, $('.projects-list'));
++
++			for (const recent of recentWorkspaces) {
++				const projectItem = append(projectsList, $('.project-item'));
++
++				let label: string;
++				let uri: any;
++
++				if (isRecentFolder(recent)) {
++					uri = recent.folderUri;
++					label = recent.label || this.labelService.getWorkspaceLabel(uri, { verbose: Verbosity.SHORT });
++				} else if (isRecentWorkspace(recent)) {
++					uri = recent.workspace.configPath;
++					label = recent.label || this.labelService.getWorkspaceLabel(recent.workspace, { verbose: Verbosity.SHORT });
++				} else {
++					continue;
++				} const nameSpan = append(projectItem, $('span'));
++				nameSpan.textContent = label;
++
++				const pathSpan = append(projectItem, $('span.project-path'));
++				const path = this.labelService.getUriLabel(uri, { relative: true });
++				pathSpan.textContent = path;
++
++				// Add click handler to open workspace/folder
++				this.transientDisposables.add(this.addClickHandler(projectItem, 'vscode.openFolder', [uri, { forceNewWindow: false }]));
++			}
++		} catch (error) {
++			console.error('Failed to render recent projects:', error);
++		}
++	}
++
++	private async checkLoginState(): Promise<void> {
++		try {
++			this.isLoggedIn = this.storageService.getBoolean(WI_LOGIN_COMPLETED_KEY, StorageScope.APPLICATION, false);
++
++			if (this.isLoggedIn) {
++				const sessions = await this.authService.getSessions(WI_LOGIN_PROVIDER_ID);
++				if (sessions.length > 0) {
++					this.userEmail = sessions[0].account.label;
++				} else {
++					// Session was cleared but storage not updated
++					this.isLoggedIn = false;
++					this.storageService.remove(WI_LOGIN_COMPLETED_KEY, StorageScope.APPLICATION);
++				}
++			}
++		} catch (error) {
++			console.error('Failed to check login state:', error);
++			this.isLoggedIn = false;
++		}
++	}
++
++	private addClickHandler(element: HTMLElement, commandId: string, args?: any[]): { dispose: () => void } {
++		const handler = async (e: MouseEvent) => {
++			e.preventDefault();
++			e.stopPropagation();
++			try {
++				if (args) {
++					await this.commandService.executeCommand(commandId, ...args);
++				} else {
++					await this.commandService.executeCommand(commandId);
++				}
++			} catch (error) {
++				console.error(`Failed to execute command ${commandId}:`, error);
++			}
++		};
++
++		element.addEventListener('click', handler);
++
++		return {
++			dispose: () => element.removeEventListener('click', handler)
++		};
++	}
++}
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
+@@ -51,18 +51,24 @@ import { ILogService } from '../../../..
+ import { TelemetryTrustedValue } from '../../../../platform/telemetry/common/telemetryUtils.js';
+ import { defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+ import { IBoundarySashes } from '../../../../base/browser/ui/sash/sash.js';
+-import { EditorGroupWatermark } from './editorGroupWatermark.js';
++import { WSO2EditorGroupWatermark } from './wso2EditorGroupWatermark.js';
++import { WSO2LoginDialog } from './wso2LoginDialog.js';
++import { WSO2AuthenticationContribution } from './wso2AuthenticationContribution.js';
++import './wso2Constants.js';
+ import { EditorTitleControl } from './editorTitleControl.js';
+ import { EditorPane } from './editorPane.js';
+ import { IEditorResolverService } from '../../../services/editor/common/editorResolverService.js';
+ import { IHostService } from '../../../services/host/browser/host.js';
+ import { DiffEditorInput } from '../../../common/editor/diffEditorInput.js';
+ import { FileSystemProviderCapabilities, IFileService } from '../../../../platform/files/common/files.js';
++import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
+ 
+ export class EditorGroupView extends Themable implements IEditorGroupView {
+ 
+ 	//#region factory
+ 
++	private static wso2AuthContributionRegistered = false;
++
+ 	static createNew(editorPartsView: IEditorPartsView, groupsView: IEditorGroupsView, groupsLabel: string, groupIndex: number, instantiationService: IInstantiationService, options?: IEditorGroupViewOptions): IEditorGroupView {
+ 		return instantiationService.createInstance(EditorGroupView, null, editorPartsView, groupsView, groupsLabel, groupIndex, options);
+ 	}
+@@ -161,10 +167,17 @@ export class EditorGroupView extends The
+ 		@IEditorResolverService private readonly editorResolverService: IEditorResolverService,
+ 		@IHostService private readonly hostService: IHostService,
+ 		@IDialogService private readonly dialogService: IDialogService,
+-		@IFileService private readonly fileService: IFileService
++		@IFileService private readonly fileService: IFileService,
++		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService
+ 	) {
+ 		super(themeService);
+ 
++		// Register WSO2 authentication provider and commands (only once)
++		if (!EditorGroupView.wso2AuthContributionRegistered) {
++			this._register(this.instantiationService.createInstance(WSO2AuthenticationContribution));
++			EditorGroupView.wso2AuthContributionRegistered = true;
++		}
++
+ 		if (from instanceof EditorGroupView) {
+ 			this.model = this._register(from.model.clone());
+ 		} else if (isSerializedEditorGroupModel(from)) {
+@@ -190,8 +203,11 @@ export class EditorGroupView extends The
+ 			// Container context menu
+ 			this.createContainerContextMenu();
+ 
+-			// Watermark & shortcuts
+-			this._register(this.instantiationService.createInstance(EditorGroupWatermark, this.element));
++			// Watermark & shortcuts - Use WSO2 custom watermark with login dialog
++			const loginDialog = this._register(this.instantiationService.createInstance(WSO2LoginDialog, this.element));
++			loginDialog.show().then(() => {
++				this._register(this.instantiationService.createInstance(WSO2EditorGroupWatermark, this.element));
++			});
+ 
+ 			// Progress bar
+ 			this.progressBar = this._register(new ProgressBar(this.element, defaultProgressBarStyles));
+@@ -379,6 +395,11 @@ export class EditorGroupView extends The
+ 
+ 		// Open new file via doubleclick on empty container
+ 		this._register(addDisposableListener(this.element, EventType.DBLCLICK, e => {
++			// Skip double-click in empty workspace (WSO2 watermark is shown)
++			if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++				return;
++			}
++
+ 			if (this.isEmpty) {
+ 				EventHelper.stop(e);
+ 
+@@ -446,6 +467,11 @@ export class EditorGroupView extends The
+ 			return; // only for empty editor groups
+ 		}
+ 
++		// Skip context menu in empty workspace (WSO2 watermark is shown)
++		if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++			return;
++		}
++
+ 		// Find target anchor
+ 		let anchor: HTMLElement | StandardMouseEvent = this.element;
+ 		if (e) {
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/browser/layout.ts
++++ product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
+@@ -14,7 +14,7 @@ import { PanelPart } from './parts/panel
+ import { Position, Parts, PartOpensMaximizedOptions, IWorkbenchLayoutService, positionFromString, positionToString, partOpensMaximizedFromString, PanelAlignment, ActivityBarPosition, LayoutSettings, MULTI_WINDOW_PARTS, SINGLE_WINDOW_PARTS, ZenModeSettings, EditorTabsMode, EditorActionsLocation, shouldShowCustomTitleBar, isHorizontal, isMultiWindowPart } from '../services/layout/browser/layoutService.js';
+ import { isTemporaryWorkspace, IWorkspaceContextService, WorkbenchState } from '../../platform/workspace/common/workspace.js';
+ import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
+-import { IConfigurationChangeEvent, IConfigurationService, isConfigured } from '../../platform/configuration/common/configuration.js';
++import { IConfigurationChangeEvent, IConfigurationService, isConfigured, ConfigurationTarget } from '../../platform/configuration/common/configuration.js';
+ import { ITitleService } from '../services/title/browser/titleService.js';
+ import { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
+ import { StartupKind, ILifecycleService } from '../services/lifecycle/common/lifecycle.js';
+@@ -338,6 +338,15 @@ export abstract class Layout extends Dis
+ 
+ 	private registerLayoutListeners(): void {
+ 
++		// Listen for workspace state changes to restore UI when opening a folder
++		this._register(this.contextService.onDidChangeWorkbenchState(workbenchState => {
++			if (workbenchState !== WorkbenchState.EMPTY) {
++				this.restoreUIForNonEmptyWorkspace();
++			} else {
++				this.configureEmptyWorkspaceUI();
++			}
++		}));
++
+ 		// Restore editor if hidden and an editor is to show
+ 		const showEditorIfHidden = () => {
+ 			if (!this.isVisible(Parts.EDITOR_PART, mainWindow)) {
+@@ -703,7 +712,8 @@ export abstract class Layout extends Dis
+ 		};
+ 
+ 		// Sidebar View Container To Restore
+-		if (this.isVisible(Parts.SIDEBAR_PART)) {
++		// Don't restore sidebar for empty workspace (show watermark instead)
++		if (this.isVisible(Parts.SIDEBAR_PART) && this.contextService.getWorkbenchState() !== WorkbenchState.EMPTY) {
+ 			let viewContainerToRestore = this.storageService.get(SidebarPart.activeViewletSettingsKey, StorageScope.WORKSPACE, this.viewDescriptorService.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id);
+ 			if (
+ 				!this.environmentService.isBuilt ||
+@@ -749,6 +759,35 @@ export abstract class Layout extends Dis
+ 
+ 		// Window border
+ 		this.updateWindowBorder(true);
++
++		// Configure UI for empty workspace
++		if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++			this.configureEmptyWorkspaceUI();
++		} else {
++			this.restoreUIForNonEmptyWorkspace();
++		}
++	}
++
++	private async configureEmptyWorkspaceUI(): Promise<void> {
++		// Hide command center, layout controls, navigation controls, chat controls, and set activity bar location to hidden for empty workspace
++		// Using MEMORY target so these don't persist and can be easily cleared
++		await Promise.all([
++			this.configurationService.updateValue(LayoutSettings.COMMAND_CENTER, false, ConfigurationTarget.MEMORY),
++			this.configurationService.updateValue(LayoutSettings.LAYOUT_ACTIONS, false, ConfigurationTarget.MEMORY),
++			this.configurationService.updateValue('workbench.navigationControl.enabled', false, ConfigurationTarget.MEMORY),
++			this.configurationService.updateValue('chat.commandCenter.enabled', false, ConfigurationTarget.MEMORY),
++			this.configurationService.updateValue(LayoutSettings.ACTIVITY_BAR_LOCATION, 'hidden', ConfigurationTarget.MEMORY)
++		]);
++	}
++
++	private async restoreUIForNonEmptyWorkspace(): Promise<void> {
++		await Promise.all([
++			this.configurationService.updateValue(LayoutSettings.COMMAND_CENTER, true, ConfigurationTarget.MEMORY),
++			this.configurationService.updateValue(LayoutSettings.LAYOUT_ACTIONS, true, ConfigurationTarget.MEMORY),
++			this.configurationService.updateValue('workbench.navigationControl.enabled', true, ConfigurationTarget.MEMORY),
++			this.configurationService.updateValue('chat.commandCenter.enabled', true, ConfigurationTarget.MEMORY),
++			this.configurationService.updateValue(LayoutSettings.ACTIVITY_BAR_LOCATION, 'default', ConfigurationTarget.MEMORY)
++		]);
+ 	}
+ 
+ 	private getDefaultLayoutViews(environmentService: IBrowserWorkbenchEnvironmentService, storageService: IStorageService): string[] | undefined {
+@@ -1049,6 +1088,11 @@ export abstract class Layout extends Dis
+ 				return;
+ 			}
+ 
++			// Don't restore sidebar in empty workspace (show watermark instead)
++			if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++				return;
++			}
++
+ 			mark('code/willRestoreViewlet');
+ 
+ 			await this.openViewContainer(ViewContainerLocation.Sidebar, this.state.initialization.views.containerToRestore.sideBar);
+@@ -1626,6 +1670,14 @@ export abstract class Layout extends Dis
+ 			// Auxiliary Bar State
+ 			this.stateModel.setInitializationValue(LayoutStateKeys.AUXILIARYBAR_EMPTY, this.paneCompositeService.getPaneCompositeIds(ViewContainerLocation.AuxiliaryBar).length === 0);
+ 		}));
++
++		// Ensure sidebar, statusbar, and activitybar are hidden for empty workspaces
++		// Keep titlebar visible for window controls (close, minimize, maximize)
++		if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++			this.workbenchGrid.setViewVisible(this.sideBarPartView, false);
++			this.workbenchGrid.setViewVisible(this.statusBarPartView, false);
++			this.workbenchGrid.setViewVisible(this.activityBarPartView, false);
++		}
+ 	}
+ 
+ 	layout(): void {
+@@ -2848,9 +2900,9 @@ class LayoutStateModel extends Disposabl
+ 		}
+ 
+ 		// Apply legacy settings
+-		this.stateCache.set(LayoutStateKeys.ACTIVITYBAR_HIDDEN.name, this.isActivityBarHidden());
+-		this.stateCache.set(LayoutStateKeys.STATUSBAR_HIDDEN.name, !this.configurationService.getValue(LegacyWorkbenchLayoutSettings.STATUSBAR_VISIBLE));
+-		this.stateCache.set(LayoutStateKeys.SIDEBAR_POSITON.name, positionFromString(this.configurationService.getValue(LegacyWorkbenchLayoutSettings.SIDEBAR_POSITION) ?? 'left'));
++		// this.stateCache.set(LayoutStateKeys.ACTIVITYBAR_HIDDEN.name, this.isActivityBarHidden());
++		// this.stateCache.set(LayoutStateKeys.STATUSBAR_HIDDEN.name, !this.configurationService.getValue(LegacyWorkbenchLayoutSettings.STATUSBAR_VISIBLE));
++		// this.stateCache.set(LayoutStateKeys.SIDEBAR_POSITON.name, positionFromString(this.configurationService.getValue(LegacyWorkbenchLayoutSettings.SIDEBAR_POSITION) ?? 'left'));
+ 
+ 		// Set dynamic defaults: part sizing and side bar visibility
+ 		const workbenchState = this.contextService.getWorkbenchState();
+Index: product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
++++ product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
+@@ -28,6 +28,7 @@ import { IEditorService } from '../../..
+ import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+ import { CodeWindow, mainWindow } from '../../../../base/browser/window.js';
+ import { IsWindowAlwaysOnTopContext } from '../../../common/contextkeys.js';
++import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+ 
+ export class NativeTitlebarPart extends BrowserTitlebarPart {
+ 
+@@ -76,9 +77,10 @@ export class NativeTitlebarPart extends
+ 		@IEditorGroupsService editorGroupService: IEditorGroupsService,
+ 		@IEditorService editorService: IEditorService,
+ 		@IMenuService menuService: IMenuService,
+-		@IKeybindingService keybindingService: IKeybindingService
++		@IKeybindingService keybindingService: IKeybindingService,
++		@IWorkspaceContextService contextService: IWorkspaceContextService
+ 	) {
+-		super(id, targetWindow, editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService);
++		super(id, targetWindow, editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, contextService);
+ 
+ 		this.bigSurOrNewer = isBigSurOrNewer(environmentService.os.release);
+ 
+@@ -306,9 +308,10 @@ export class MainNativeTitlebarPart exte
+ 		@IEditorGroupsService editorGroupService: IEditorGroupsService,
+ 		@IEditorService editorService: IEditorService,
+ 		@IMenuService menuService: IMenuService,
+-		@IKeybindingService keybindingService: IKeybindingService
++		@IKeybindingService keybindingService: IKeybindingService,
++		@IWorkspaceContextService contextService: IWorkspaceContextService
+ 	) {
+-		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService);
++		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService, contextService);
+ 	}
+ }
+ 
+@@ -335,10 +338,11 @@ export class AuxiliaryNativeTitlebarPart
+ 		@IEditorGroupsService editorGroupService: IEditorGroupsService,
+ 		@IEditorService editorService: IEditorService,
+ 		@IMenuService menuService: IMenuService,
+-		@IKeybindingService keybindingService: IKeybindingService
++		@IKeybindingService keybindingService: IKeybindingService,
++		@IWorkspaceContextService contextService: IWorkspaceContextService
+ 	) {
+ 		const id = AuxiliaryNativeTitlebarPart.COUNTER++;
+-		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService);
++		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService, contextService);
+ 	}
+ 
+ 	override get preventZoom(): boolean {
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationContribution.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationContribution.ts
+@@ -0,0 +1,102 @@
++/**
++ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
++ *
++ * WSO2 LLC. licenses this file to you under the Apache License,
++ * Version 2.0 (the "License"); you may not use this file except
++ * in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied. See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++
++import { Disposable } from '../../../../base/common/lifecycle.js';
++import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
++import { IAuthenticationService } from '../../../services/authentication/common/authentication.js';
++import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
++import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
++import { WSO2AuthenticationProvider } from './wso2AuthenticationProvider.js';
++import { WI_LOGIN_PROVIDER_ID, WI_SHOW_LOGIN_COMMAND_ID, WI_LOGOUT_COMMAND_ID, WI_LOGIN_COMPLETED_KEY, WI_LOGIN_SKIPPED_KEY } from './wso2Constants.js';
++import { WSO2LoginDialog } from './wso2LoginDialog.js';
++
++/**
++ * Registers WSO2 authentication provider and related commands
++ */
++export class WSO2AuthenticationContribution extends Disposable {
++
++	constructor(
++		@IAuthenticationService private readonly authService: IAuthenticationService,
++		@IInstantiationService private readonly instantiationService: IInstantiationService
++	) {
++		super();
++		this.registerAuthenticationProvider();
++		this.registerCommands();
++	}
++
++	private registerAuthenticationProvider(): void {
++		// Register WSO2 authentication provider
++		const provider = this._register(this.instantiationService.createInstance(WSO2AuthenticationProvider));
++		this.authService.registerAuthenticationProvider(WI_LOGIN_PROVIDER_ID, provider);
++
++		// Cleanup on dispose
++		this._register({
++			dispose: () => {
++				this.authService.unregisterAuthenticationProvider(WI_LOGIN_PROVIDER_ID);
++			}
++		});
++	}
++
++	private registerCommands(): void {
++		// Register show login command
++		this._register(CommandsRegistry.registerCommand(WI_SHOW_LOGIN_COMMAND_ID, async (accessor) => {
++			const instantiationService = accessor.get(IInstantiationService);
++			const storageService = accessor.get(IStorageService);
++
++			// Clear skip flag if it exists
++			storageService.remove(WI_LOGIN_SKIPPED_KEY, StorageScope.APPLICATION);
++
++			// Create and show login dialog
++			// We need to append to the workbench container
++			const workbenchElement = document.querySelector('.monaco-workbench');
++			if (workbenchElement) {
++				const loginDialog = instantiationService.createInstance(WSO2LoginDialog, workbenchElement as HTMLElement);
++				await loginDialog.show();
++				loginDialog.dispose();
++
++				// Reload window to refresh UI
++				window.location.reload();
++			}
++		}));
++
++		// Register logout command
++		this._register(CommandsRegistry.registerCommand(WI_LOGOUT_COMMAND_ID, async (accessor) => {
++			const authService = accessor.get(IAuthenticationService);
++			const storageService = accessor.get(IStorageService);
++
++			try {
++				// Get current sessions
++				const sessions = await authService.getSessions(WI_LOGIN_PROVIDER_ID);
++
++				// Remove all sessions
++				for (const session of sessions) {
++					await authService.removeSession(WI_LOGIN_PROVIDER_ID, session.id);
++				}
++
++				// Clear storage flags
++				storageService.remove(WI_LOGIN_COMPLETED_KEY, StorageScope.APPLICATION);
++				storageService.remove(WI_LOGIN_SKIPPED_KEY, StorageScope.APPLICATION);
++
++				// Reload window to show login dialog again
++				window.location.reload();
++			} catch (error) {
++				console.error('Logout failed:', error);
++			}
++		}));
++	}
++}
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationProvider.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationProvider.ts
+@@ -0,0 +1,117 @@
++/**
++ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
++ *
++ * WSO2 LLC. licenses this file to you under the Apache License,
++ * Version 2.0 (the "License"); you may not use this file except
++ * in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied. See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++
++import { Emitter } from '../../../../base/common/event.js';
++import { Disposable } from '../../../../base/common/lifecycle.js';
++import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
++import { AuthenticationSession, AuthenticationSessionAccount, AuthenticationSessionsChangeEvent, IAuthenticationProvider, IAuthenticationProviderSessionOptions } from '../../../services/authentication/common/authentication.js';
++import { WI_LOGIN_PROVIDER_ID } from './wso2Constants.js';
++
++interface WSO2Session {
++	id: string;
++	accessToken: string;
++	account: AuthenticationSessionAccount;
++	scopes: ReadonlyArray<string>;
++	timestamp: number;
++}
++
++export class WSO2AuthenticationProvider extends Disposable implements IAuthenticationProvider {
++	readonly id = WI_LOGIN_PROVIDER_ID;
++	readonly label = 'WSO2 Integrator';
++	readonly supportsMultipleAccounts = false;
++
++	private readonly _onDidChangeSessions = this._register(new Emitter<AuthenticationSessionsChangeEvent>());
++	readonly onDidChangeSessions = this._onDidChangeSessions.event;
++
++	private readonly SESSION_KEY = 'wso2.integrator.session';
++
++	constructor(
++		@ISecretStorageService private readonly secretStorage: ISecretStorageService
++	) {
++		super();
++	}
++
++	async getSessions(scopes: string[] | undefined, options: IAuthenticationProviderSessionOptions): Promise<readonly AuthenticationSession[]> {
++		try {
++			const sessionData = await this.secretStorage.get(this.SESSION_KEY);
++			if (sessionData) {
++				const session: WSO2Session = JSON.parse(sessionData);
++				return [session];
++			}
++		} catch (error) {
++			console.error('Failed to get WSO2 sessions:', error);
++		}
++		return [];
++	}
++
++	async createSession(scopes: string[], options: IAuthenticationProviderSessionOptions): Promise<AuthenticationSession> {
++		// Mock authentication - in production, this would call a real auth endpoint
++		const sessionId = 'wso2-session-' + Date.now();
++		const email = (options as any).email || 'user@wso2.com';
++
++		const session: WSO2Session = {
++			id: sessionId,
++			accessToken: 'mock-token-' + Math.random().toString(36).substring(2),
++			account: {
++				id: email,
++				label: email
++			},
++			scopes: scopes || [],
++			timestamp: Date.now()
++		};
++
++		try {
++			await this.secretStorage.set(this.SESSION_KEY, JSON.stringify(session));
++			this._onDidChangeSessions.fire({ added: [session], removed: [], changed: [] });
++			return session;
++		} catch (error) {
++			console.error('Failed to create WSO2 session:', error);
++			throw error;
++		}
++	}
++
++	async removeSession(sessionId: string): Promise<void> {
++		try {
++			const sessions = await this.getSessions(undefined, {});
++			const session = sessions.find(s => s.id === sessionId);
++
++			await this.secretStorage.delete(this.SESSION_KEY);
++
++			if (session) {
++				this._onDidChangeSessions.fire({ added: [], removed: [session], changed: [] });
++			}
++		} catch (error) {
++			console.error('Failed to remove WSO2 session:', error);
++			throw error;
++		}
++	}
++
++	async removeAllSessions(): Promise<void> {
++		try {
++			const sessions = await this.getSessions(undefined, {});
++			await this.secretStorage.delete(this.SESSION_KEY);
++
++			if (sessions.length > 0) {
++				this._onDidChangeSessions.fire({ added: [], removed: [...sessions], changed: [] });
++			}
++		} catch (error) {
++			console.error('Failed to remove all WSO2 sessions:', error);
++			throw error;
++		}
++	}
++}
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
+@@ -0,0 +1,410 @@
++/**
++ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
++ *
++ * WSO2 LLC. licenses this file to you under the Apache License,
++ * Version 2.0 (the "License"); you may not use this file except
++ * in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied. See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++
++import { $, append } from '../../../../base/browser/dom.js';
++import { Disposable } from '../../../../base/common/lifecycle.js';
++import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
++import { IAuthenticationService } from '../../../services/authentication/common/authentication.js';
++import { WI_LOGIN_COMPLETED_KEY, WI_LOGIN_PROVIDER_ID, WI_LOGIN_SKIPPED_KEY } from './wso2Constants.js';
++import { FileAccess } from '../../../../base/common/network.js';
++
++export class WSO2LoginDialog extends Disposable {
++
++	private container: HTMLElement | null = null;
++	private resolvePromise: ((value: boolean) => void) | null = null;
++
++	constructor(
++		private readonly parent: HTMLElement,
++		@IStorageService private readonly storageService: IStorageService,
++		@IAuthenticationService private readonly authService: IAuthenticationService
++	) {
++		super();
++	}
++
++	async show(): Promise<boolean> {
++		// Check if already logged in or skipped
++		const loginCompleted = this.storageService.getBoolean(WI_LOGIN_COMPLETED_KEY, StorageScope.APPLICATION, false);
++		const loginSkipped = this.storageService.getBoolean(WI_LOGIN_SKIPPED_KEY, StorageScope.APPLICATION, false);
++
++		if (loginCompleted || loginSkipped) {
++			return loginCompleted;
++		}
++
++		// Show login UI
++		this.createLoginUI();
++
++		// Return promise that resolves when login completes or is skipped
++		return new Promise<boolean>((resolve) => {
++			this.resolvePromise = resolve;
++		});
++	}
++
++	private createLoginUI(): void {
++		// Create overlay container
++		this.container = append(this.parent, $('.wso2-login-dialog'));
++
++		// Add styles
++		this.addStyles();
++
++		const wrapper = append(this.container, $('.login-wrapper'));
++
++		// Left section with branding
++		const leftSection = append(wrapper, $('.login-left-section'));
++
++		const logoContainer = append(leftSection, $('.logo-container'));
++		const logo = append(logoContainer, $('img.logo')) as HTMLImageElement;
++		logo.src = FileAccess.asBrowserUri('vs/workbench/browser/parts/editor/media/wso2.png').toString(true);
++		logo.alt = 'WSO2';
++
++		const headline = append(leftSection, $('h1.login-headline'));
++		headline.textContent = 'Welcome to WSO2 Integrator';
++
++		const caption = append(leftSection, $('p.login-caption'));
++		caption.textContent = 'A comprehensive integration solution that simplifies your digital transformation journey. Sign in to access premium features and sync your projects across devices.';
++
++		// Right section with login form
++		const rightSection = append(wrapper, $('.login-right-section'));
++
++		const formContainer = append(rightSection, $('.login-form-container'));
++
++		const formTitle = append(formContainer, $('h2.form-title'));
++		formTitle.textContent = 'Sign In';
++
++		const formSubtitle = append(formContainer, $('p.form-subtitle'));
++		formSubtitle.textContent = 'Enter your credentials to continue';
++
++		// Email input
++		const emailGroup = append(formContainer, $('.input-group'));
++		const emailLabel = append(emailGroup, $('label'));
++		emailLabel.textContent = 'Email';
++		const emailInput = append(emailGroup, $('input.input-field')) as HTMLInputElement;
++		emailInput.type = 'email';
++		emailInput.placeholder = 'you@example.com';
++		emailInput.id = 'wso2-login-email';
++
++		// Password input
++		const passwordGroup = append(formContainer, $('.input-group'));
++		const passwordLabel = append(passwordGroup, $('label'));
++		passwordLabel.textContent = 'Password';
++		const passwordInput = append(passwordGroup, $('input.input-field')) as HTMLInputElement;
++		passwordInput.type = 'password';
++		passwordInput.placeholder = '••••••••';
++		passwordInput.id = 'wso2-login-password';
++
++		// Error message container
++		const errorContainer = append(formContainer, $('.error-message'));
++		errorContainer.style.display = 'none';
++
++		// Sign In button
++		const signInButton = append(formContainer, $('button.sign-in-btn')) as HTMLButtonElement;
++		signInButton.textContent = 'Sign In';
++
++		// Skip link
++		const skipContainer = append(formContainer, $('.skip-container'));
++		skipContainer.textContent = 'Want to explore first? ';
++		const skipLink = append(skipContainer, $('a.skip-link'));
++		skipLink.textContent = 'Skip for now';
++
++		// Add event listeners
++		signInButton.addEventListener('click', () => this.handleSignIn(emailInput, passwordInput, errorContainer, signInButton));
++		skipLink.addEventListener('click', () => this.handleSkip());
++
++		// Handle Enter key
++		const handleEnter = (e: KeyboardEvent) => {
++			if (e.key === 'Enter') {
++				this.handleSignIn(emailInput, passwordInput, errorContainer, signInButton);
++			}
++		};
++		emailInput.addEventListener('keypress', handleEnter);
++		passwordInput.addEventListener('keypress', handleEnter);
++
++		// Focus email input
++		emailInput.focus();
++	}
++
++	private async handleSignIn(emailInput: HTMLInputElement, passwordInput: HTMLInputElement, errorContainer: HTMLElement, button: HTMLButtonElement): Promise<void> {
++		const email = emailInput.value.trim();
++		const password = passwordInput.value;
++
++		// Clear previous error
++		errorContainer.style.display = 'none';
++		errorContainer.textContent = '';
++
++		// Basic validation
++		if (!email) {
++			errorContainer.textContent = 'Please enter your email address';
++			errorContainer.style.display = 'block';
++			emailInput.focus();
++			return;
++		}
++
++		if (!this.isValidEmail(email)) {
++			errorContainer.textContent = 'Please enter a valid email address';
++			errorContainer.style.display = 'block';
++			emailInput.focus();
++			return;
++		}
++
++		if (!password) {
++			errorContainer.textContent = 'Please enter your password';
++			errorContainer.style.display = 'block';
++			passwordInput.focus();
++			return;
++		}
++
++		if (password.length < 6) {
++			errorContainer.textContent = 'Password must be at least 6 characters';
++			errorContainer.style.display = 'block';
++			passwordInput.focus();
++			return;
++		}
++
++		// Disable button during authentication
++		button.disabled = true;
++		button.textContent = 'Signing in...';
++
++		try {
++			// Create authentication session
++			await this.authService.createSession(WI_LOGIN_PROVIDER_ID, [], { email } as any);
++
++			// Store login state
++			this.storageService.store(WI_LOGIN_COMPLETED_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
++			this.storageService.remove(WI_LOGIN_SKIPPED_KEY, StorageScope.APPLICATION);
++
++			// Close dialog and resolve
++			this.close(true);
++		} catch (error) {
++			console.error('Login failed:', error);
++			errorContainer.textContent = 'Authentication failed. Please try again.';
++			errorContainer.style.display = 'block';
++			button.disabled = false;
++			button.textContent = 'Sign In';
++		}
++	}
++
++	private handleSkip(): void {
++		// Store skip state
++		this.storageService.store(WI_LOGIN_SKIPPED_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
++		this.storageService.remove(WI_LOGIN_COMPLETED_KEY, StorageScope.APPLICATION);
++
++		// Close dialog and resolve
++		this.close(false);
++	}
++
++	private close(loggedIn: boolean): void {
++		if (this.container) {
++			this.container.remove();
++			this.container = null;
++		}
++
++		if (this.resolvePromise) {
++			this.resolvePromise(loggedIn);
++			this.resolvePromise = null;
++		}
++	}
++
++	private isValidEmail(email: string): boolean {
++		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
++		return emailRegex.test(email);
++	}
++
++	private addStyles(): void {
++		const style = document.createElement('style');
++		style.textContent = `
++			.wso2-login-dialog {
++				position: fixed;
++				top: 0;
++				left: 0;
++				right: 0;
++				bottom: 0;
++				background: var(--vscode-editor-background);
++				z-index: 10000;
++				display: flex;
++				align-items: center;
++				justify-content: center;
++			}
++
++			.wso2-login-dialog .login-wrapper {
++				display: grid;
++				grid-template-columns: 1fr 1fr;
++				width: 100%;
++				height: 100%;
++				max-width: 1400px;
++				max-height: 900px;
++				margin: 0 auto;
++			}
++
++			@media (max-width: 968px) {
++				.wso2-login-dialog .login-wrapper {
++					grid-template-columns: 1fr;
++				}
++
++				.wso2-login-dialog .login-left-section {
++					display: none;
++				}
++			}
++
++			.wso2-login-dialog .login-left-section {
++				background: linear-gradient(135deg, #667eea 0%, #204377 100%);
++				padding: 80px 60px;
++				display: flex;
++				flex-direction: column;
++				justify-content: center;
++				color: white;
++			}
++
++			.wso2-login-dialog .logo-container {
++				margin-bottom: 60px;
++			}
++
++			.wso2-login-dialog .logo {
++				max-width: 200px;
++				height: auto;
++				display: block;
++			}
++
++			.wso2-login-dialog .login-headline {
++				font-size: 42px;
++				font-weight: 700;
++				margin: 0 0 24px 0;
++				line-height: 1.2;
++			}
++
++			.wso2-login-dialog .login-caption {
++				font-size: 18px;
++				line-height: 1.6;
++				margin: 0;
++				color: rgba(255, 255, 255, 0.9);
++				max-width: 500px;
++			}
++
++			.wso2-login-dialog .login-right-section {
++				background: var(--vscode-sideBar-background);
++				padding: 80px 60px;
++				display: flex;
++				align-items: center;
++				justify-content: center;
++				overflow-y: auto;
++			}
++
++			.wso2-login-dialog .login-form-container {
++				width: 100%;
++				max-width: 400px;
++			}
++
++			.wso2-login-dialog .form-title {
++				font-size: 32px;
++				font-weight: 600;
++				margin: 0 0 12px 0;
++				color: var(--vscode-foreground);
++			}
++
++			.wso2-login-dialog .form-subtitle {
++				font-size: 14px;
++				margin: 0 0 40px 0;
++				color: var(--vscode-descriptionForeground);
++			}
++
++			.wso2-login-dialog .input-group {
++				margin-bottom: 24px;
++			}
++
++			.wso2-login-dialog .input-group label {
++				display: block;
++				font-size: 13px;
++				font-weight: 500;
++				margin-bottom: 8px;
++				color: var(--vscode-foreground);
++			}
++
++			.wso2-login-dialog .input-field {
++				width: 100%;
++				height: 42px;
++				padding: 0 14px;
++				font-size: 14px;
++				border: 1px solid var(--vscode-input-border);
++				border-radius: 6px;
++				background: var(--vscode-input-background);
++				color: var(--vscode-input-foreground);
++				box-sizing: border-box;
++				transition: all 0.2s ease;
++			}
++
++			.wso2-login-dialog .input-field:focus {
++				outline: none;
++				border-color: var(--vscode-focusBorder);
++			}
++
++			.wso2-login-dialog .input-field::placeholder {
++				color: var(--vscode-input-placeholderForeground);
++			}
++
++			.wso2-login-dialog .error-message {
++				padding: 10px 14px;
++				margin-bottom: 20px;
++				background: var(--vscode-inputValidation-errorBackground);
++				border: 1px solid var(--vscode-inputValidation-errorBorder);
++				border-radius: 6px;
++				color: var(--vscode-inputValidation-errorForeground);
++				font-size: 13px;
++			}
++
++			.wso2-login-dialog .sign-in-btn {
++				width: 100%;
++				height: 44px;
++				font-size: 15px;
++				font-weight: 500;
++				border-radius: 6px;
++				background: var(--vscode-button-background);
++				color: var(--vscode-button-foreground);
++				border: none;
++				cursor: pointer;
++				transition: all 0.2s ease;
++				margin-bottom: 24px;
++			}
++
++			.wso2-login-dialog .sign-in-btn:hover:not(:disabled) {
++				background: var(--vscode-button-hoverBackground);
++			}
++
++			.wso2-login-dialog .sign-in-btn:disabled {
++				opacity: 0.6;
++				cursor: not-allowed;
++			}
++
++			.wso2-login-dialog .skip-container {
++				text-align: center;
++				font-size: 13px;
++				color: var(--vscode-descriptionForeground);
++			}
++
++			.wso2-login-dialog .skip-link {
++				color: var(--vscode-textLink-foreground);
++				text-decoration: none;
++				cursor: pointer;
++			}
++
++			.wso2-login-dialog .skip-link:hover {
++				color: var(--vscode-textLink-activeForeground);
++				text-decoration: underline;
++			}
++		`;
++		document.head.appendChild(style);
++		this._register({ dispose: () => style.remove() });
++	}
++}
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
+@@ -55,6 +55,7 @@ import { IHoverDelegate } from '../../..
+ import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+ import { safeIntl } from '../../../../base/common/date.js';
+ import { IsCompactTitleBarContext, TitleBarVisibleContext } from '../../../common/contextkeys.js';
++import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
+ 
+ export interface ITitleVariable {
+ 	readonly name: string;
+@@ -306,7 +307,8 @@ export class BrowserTitlebarPart extends
+ 		@IHostService private readonly hostService: IHostService,
+ 		@IEditorService private readonly editorService: IEditorService,
+ 		@IMenuService private readonly menuService: IMenuService,
+-		@IKeybindingService private readonly keybindingService: IKeybindingService
++		@IKeybindingService private readonly keybindingService: IKeybindingService,
++		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService
+ 	) {
+ 		super(id, { hasTitle: false }, themeService, storageService, layoutService);
+ 
+@@ -784,6 +786,11 @@ export class BrowserTitlebarPart extends
+ 	}
+ 
+ 	protected onContextMenu(e: MouseEvent, menuId: MenuId): void {
++		// Don't show context menu in empty workspace
++		if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++			return;
++		}
++
+ 		const event = new StandardMouseEvent(getWindow(this.element), e);
+ 
+ 		// Show it
+@@ -908,8 +915,9 @@ export class MainBrowserTitlebarPart ext
+ 		@IEditorService editorService: IEditorService,
+ 		@IMenuService menuService: IMenuService,
+ 		@IKeybindingService keybindingService: IKeybindingService,
++		@IWorkspaceContextService contextService: IWorkspaceContextService
+ 	) {
+-		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService);
++		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, contextService);
+ 	}
+ }
+ 
+@@ -943,9 +951,10 @@ export class AuxiliaryBrowserTitlebarPar
+ 		@IEditorService editorService: IEditorService,
+ 		@IMenuService menuService: IMenuService,
+ 		@IKeybindingService keybindingService: IKeybindingService,
++		@IWorkspaceContextService contextService: IWorkspaceContextService
+ 	) {
+ 		const id = AuxiliaryBrowserTitlebarPart.COUNTER++;
+-		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService);
++		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, contextService);
+ 	}
+ 
+ 	override get preventZoom(): boolean {

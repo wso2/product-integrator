@@ -1,17 +1,27 @@
 echo '{
     "quality": "stable",
-    "nameShort": "wso2-integrator",
-    "nameLong": "wso2-integrator",
+    "nameShort": "WSO2 Integrator",
+    "nameLong": "WSO2 Integrator",
     "applicationName": "wso2-integrator",
     "dataFolderName": ".wso2-integrator",
     "win32MutexName": "wso2-integrator",
-    "licenseUrl": "https://github.com/wso2/vscode-extensions",
+    "licenseName": "MIT",
+    "licenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
+    "serverLicenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
+    "serverGreeting": [],
+    "serverLicense": [],
+    "serverLicensePrompt": "",
+    "serverApplicationName": "wso2-integrator",
+    "serverDataFolderName": ".wso2-integrator",
+    "tunnelApplicationName": "wso2-integrator-tunnel",
     "win32DirName": "wso2-integrator",
     "win32NameVersion": "wso2-integrator",
     "win32AppUserModelId": "wso2.wso2-integrator",
     "win32ShellNameShort": "w&so2-integrator",
     "darwinBundleIdentifier": "com.wso2.integrator",
     "linuxIconName": "com.wso2.integrator",
+    "urlProtocol": "wso2-integrator",
+	  "licenseFileName": "LICENSE.txt",
     "reportIssueUrl": "https://github.com/wso2/vscode-extensions/issues/new",
     "documentationUrl": "https://go.microsoft.com/fwlink/?LinkID=533484#vscode",
     "keyboardShortcutsUrlMac": "https://go.microsoft.com/fwlink/?linkid=832143",
@@ -38,10 +48,18 @@ echo '{
       "serviceUrl": "https://open-vsx.org/vscode/gallery",
       "itemUrl": "https://open-vsx.org/vscode/item"
     },
+    "win32ContextMenu": {
+      "x64": {
+        "clsid": "{D5A1C07C-A03F-4c26-B1FC-3D1444FDD333}"
+      },
+      "arm64": {
+        "clsid": "{D5A1C07C-A03F-4c26-B1FC-3D1444FDD444}"
+      }
+    },
 	  "builtInExtensions": [
       {
         "name": "wso2.wso2-platform",
-        "version": "1.0.11"
+        "version": "1.0.16"
       },
       {
         "name": "redhat.vscode-yaml",
@@ -54,14 +72,6 @@ echo '{
       {
         "name": "anweber.vscode-httpyac",
         "version": "6.16.7"
-      },
-      {
-        "name": "wso2.ballerina",
-        "version": "5.3.3"
-      },
-      {
-        "name": "wso2.ballerina-integrator",
-        "version": "1.2.1"
       }
 	  ]
 }
@@ -69,4 +79,4 @@ echo '{
 
 # copy resources
 # from resources folder with relative path in lib folder. also replace existing resources using rsync
-rsync -av --progress --ignore-existing resources/ lib/vscode/resources/
+rsync -av --progress resources/ lib/

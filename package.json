@@ -1,0 +1,23 @@
+{
+  "name": "product-integrator",
+  "version": "1.0.0",
+  "description": "Open source integration platform offering a powerful low-code development experience with enhanced capabilities.",
+  "scripts": {
+    "init-submodules": "git submodule update --init --recursive",
+    "apply-patches": "quilt push -a",
+    "unapply-patches": "quilt pop -a",
+    "symlink-wi-extension": "ln -sfn $PWD/wi/wi-extension lib/vscode/extensions/wso2.integrator",
+    "symlink-bal-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/ballerina/ballerina-extension lib/vscode/extensions/wso2.ballerina",
+    "symlink-bi-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/bi/bi-extension lib/vscode/extensions/wso2.ballerina-integrator",
+    "symlink-mi-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/mi/mi-extension lib/vscode/extensions/wso2.micro-integrator",
+    "install": "rush install",
+    "update-product": "bash ci/build/update-product.sh",
+    "link-extensions": "npm run symlink-wi-extension && npm run symlink-bal-extension && npm run symlink-bi-extension && npm run symlink-mi-extension",
+    "clean": "rush purge && git clean -dfX"
+  },
+  "devDependencies": {
+    "@microsoft/rush": "^5.138.4"
+  },
+  "author": "WSO2",
+  "license": "Apache-2.0"
+}

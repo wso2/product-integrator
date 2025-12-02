@@ -1,0 +1,7 @@
+node_modules
+out
+dist
+*.vsix
+.vscode-test
+resources/jslibs/*
+.env

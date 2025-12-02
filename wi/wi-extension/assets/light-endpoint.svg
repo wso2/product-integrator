@@ -1,0 +1,23 @@
+<!--
+ ~ Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ ~
+ ~ WSO2 LLC. licenses this file to you under the Apache License,
+ ~ Version 2.0 (the "License"); you may not use this file except
+ ~ in compliance with the License.
+ ~ You may obtain a copy of the License at
+ ~
+ ~     http://www.apache.org/licenses/LICENSE-2.0
+ ~
+ ~ Unless required by applicable law or agreed to in writing,
+ ~ software distributed under the License is distributed on an
+ ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ ~ KIND, either express or implied. See the License for the
+ ~ specific language governing permissions and limitations
+ ~ under the License.
+-->
+<svg width="16" height="16" viewBox="-2 -2 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M6.99992 3.49995C4.52084 3.49995 2.49992 5.52087 2.49992 7.99995C2.49992 10.479 4.52084 12.5 6.99992 12.5C9.47901 12.5 11.4999 10.479 11.4999 7.99995C11.4999 5.52087 9.47901 3.49995 6.99992 3.49995ZM1.69992 7.99995C1.69992 5.07904 4.07901 2.69995 6.99992 2.69995C9.92084 2.69995 12.2999 5.07904 12.2999 7.99995C12.2999 10.9209 9.92084 13.2999 6.99992 13.2999C4.07901 13.2999 1.69992 10.9209 1.69992 7.99995Z" fill="black"/>
+<path d="M6.99992 0.199951C7.22084 0.199951 7.39992 0.379037 7.39992 0.599951V6.09995C7.39992 6.32087 7.22084 6.49995 6.99992 6.49995C6.77901 6.49995 6.59992 6.32087 6.59992 6.09995V0.599951C6.59992 0.379037 6.77901 0.199951 6.99992 0.199951Z" fill="black"/>
+<path d="M8.25263 8.7015C8.36223 8.50969 8.60657 8.44305 8.79838 8.55265L13.6984 11.3527C13.8902 11.4623 13.9568 11.7066 13.8472 11.8984C13.7376 12.0902 13.4933 12.1569 13.3015 12.0472L8.40147 9.24725C8.20966 9.13764 8.14302 8.8933 8.25263 8.7015Z" fill="black"/>
+<path d="M5.64856 8.70385C5.75686 8.89639 5.68857 9.14028 5.49603 9.24858L0.696029 11.9486C0.503486 12.0569 0.2596 11.9886 0.151294 11.7961C0.0429887 11.6035 0.111277 11.3596 0.30382 11.2513L5.10382 8.55132C5.29636 8.44301 5.54025 8.5113 5.64856 8.70385Z" fill="black"/>
+</svg>

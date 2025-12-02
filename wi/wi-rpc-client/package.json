@@ -1,0 +1,37 @@
+{
+  "name": "@wso2/wi-rpc-client",
+  "version": "1.0.0",
+  "description": "Contains RPC related client registrations",
+  "main": "lib/index.js",
+  "scripts": {
+    "lint": "eslint .",
+    "build": "pnpm run lint && tsc --pretty",
+    "watch": "tsc --pretty --watch",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "npm publish"
+  },
+  "author": "WSO2",
+  "devDependencies": {
+    "@types/react": "18.2.0",
+    "@types/react-dom": "18.2.0",
+    "typescript": "5.8.3",
+    "@typescript-eslint/parser": "^8.32.1",
+    "@typescript-eslint/eslint-plugin": "^8.32.1",
+    "eslint": "^9.27.0"
+  },
+  "dependencies": {
+    "@types/vscode-webview": "^1.57.5",
+    "vscode-messenger-common": "^0.5.1",
+    "vscode-messenger-webview": "^0.5.1",
+    "@wso2/wi-core": "workspace:*",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wso2/ballerina-plugin-vscode.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  }
+}
