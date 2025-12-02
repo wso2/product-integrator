@@ -59,7 +59,7 @@ echo '{
 	  "builtInExtensions": [
       {
         "name": "wso2.wso2-platform",
-        "version": "1.0.16"
+        "version": "1.0.11"
       },
       {
         "name": "redhat.vscode-yaml",

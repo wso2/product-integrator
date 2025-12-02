@@ -58,7 +58,7 @@ justify-content: center;
 `;
 
 export function MiSamplesView() {
-    const { rpcClient } = useVisualizerContext();
+    const { rpcClient, webviewContext } = useVisualizerContext();
     const [filteredSampleData, setFilteredSamples] = React.useState<GettingStartedSample[]>(null);
     const [filteredSampleDataCopy, setFilteredSampleDataCopy] = React.useState<GettingStartedSample[]>(null);
     const [SampleData, setSampleData] = React.useState<GettingStartedSample[]>(null);
@@ -75,12 +75,13 @@ export function MiSamplesView() {
             samples.categories.unshift({ id: 0, title: "All", icon: "" });
             setCategories(samples.categories);
             let urls = [];
+            const sampleIconUrl = webviewContext?.env?.MI_SAMPLE_ICONS_GITHUB_URL || '';
             for (let i = 0; i < samples.categories.length; i++) {
-                urls.push(process.env.MI_SAMPLE_ICONS_GITHUB_URL + samples.categories[i].icon);
+                urls.push(sampleIconUrl + samples.categories[i].icon);
             }
             setImages(urls);
         });
-    }, []);
+    }, [webviewContext]);
 
     const handleChange = (value: string) => {
         if (value === "All") {
