@@ -1,0 +1,47 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+  xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+  xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="WSO2 Integrator"
+    Version="@VERSION@"
+    Manufacturer="WSO2"
+    UpgradeCode="344b046a-fa6a-4452-be40-2794f59fe7b0"
+    InstallerVersion="500"
+    Compressed="yes"
+  >
+    <Property Id="BALLERINA_INSTALLATION_WARNING" Value="0" />
+    <Binary Id="ExtActionsDll" SourceFile="..\CustomAction1\bin\$(Configuration)\net472\CustomAction1.CA.dll" />
+    <CustomAction Id="clearCurrentActiveBallerinaVersionCA" BinaryRef="ExtActionsDll"
+      DllEntry="clearCurrentActiveBallerinaVersion" Execute="deferred" Impersonate="no"
+      Return="check" />
+    <CustomAction Id="checkBallerinaInstallationCA" BinaryRef="ExtActionsDll"
+      DllEntry="checkBallerinaInstallation" Execute="immediate" Impersonate="no"
+      Return="check" />
+
+    <InstallUISequence>
+      <Custom Action="checkBallerinaInstallationCA" After="CostFinalize" />
+    </InstallUISequence>
+
+    <InstallExecuteSequence>
+      <Custom Action="clearCurrentActiveBallerinaVersionCA" After="InstallFiles" />
+    </InstallExecuteSequence>
+
+    <MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" />
+    <MediaTemplate EmbedCab="yes" />
+
+    <ui:WixUI Id="WixUI_InstallDir_Custom" InstallDirectory="INSTALLFOLDER" />
+
+    <WixVariable Id="WixUILicenseRtf" Value=".\resources\LICENSE.rtf" />
+    <WixVariable Id="WixUIBannerBmp" Value=".\resources\Banner_i.png" />
+    <WixVariable Id="WixUIDialogBmp" Value=".\resources\Dialog_i.png" />
+
+    <Feature Id="Main">
+      <ComponentGroupRef Id="IntegratorComponents" />
+      <ComponentGroupRef Id="BallerinaComponents" />
+      <ComponentGroupRef Id="ICPComponents" />
+      <ComponentRef Id="IntegratorShortcutComponent" />
+      <ComponentRef Id="BallerinaEnvironmentComponent" />
+      <!-- <ComponentGroupRef Id="SettingsComponents" /> -->
+    </Feature>
+
+  </Package>
+</Wix>
