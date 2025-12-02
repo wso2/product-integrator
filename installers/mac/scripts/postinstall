@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# postinstall script for WSO2 Integrator
+# This script runs after the package installation
+
+set -e
+
+echo "Starting WSO2 Integrator post-installation..."
+
+echo "Post-install script started"
+
+echo "Setting system-wide permissions"
+
+# Set permissions for /Library/Ballerina
+if [ -d "/Library/Ballerina" ]; then
+    cd /Library/Ballerina
+    chown -R root:wheel "/Library/Ballerina"
+    chmod -R ugo+r /Library/Ballerina/distributions/ballerina-*
+    chmod -R ugo+rx /Library/Ballerina/bin
+    find dependencies -type d -exec chmod ugo+rx {} \;
+    chmod -R ugo+r /Library/Ballerina/lib
+    chmod o-w .
+    rm -f /Library/Ballerina/bin/ballerina
+    rm -f /etc/paths.d/ballerina
+    echo "Set permissions for Ballerina directory"
+fi
+
+USER_HOMES=$(dscl . list /Users NFSHomeDirectory | awk '$2 ~ /^\/Users\// {print $2}')
+
+# set the integrator version as active ballerina version for all users
+for USER_HOME in $USER_HOMES; do
+    if [ ! -d "$USER_HOME" ]; then
+        echo "Skipping non-existent home: $USER_HOME"
+        continue
+    fi
+    
+    USERNAME=$(basename "$USER_HOME")
+    
+    if [ "$USERNAME" = "Shared" ] || [ "$USERNAME" = "Guest" ]; then
+        echo "Skipping system user: $USERNAME"
+        continue
+    fi
+    
+    USER_BAL_VERSION_FILE="$USER_HOME/.ballerina/ballerina-version"
+    rm -f "$USER_BAL_VERSION_FILE"
+    echo "Removed ballerina-version file for user: $USERNAME"
+done
+
+# Set permissions for the .app in /Applications
+if [ -d "/Applications/WSO2 Integrator.app" ]; then
+    chmod -R 755 "/Applications/WSO2 Integrator.app"
+    chown -R root:wheel "/Applications/WSO2 Integrator.app"
+    echo "Set permissions for application"
+fi
+
+echo "Post-install script completed successfully"
+
+echo "WSO2 Integrator installation completed successfully!"
+
+exit 0
