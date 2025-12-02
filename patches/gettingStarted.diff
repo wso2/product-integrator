@@ -15,24 +15,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2C
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
-@@ -0,0 +1,29 @@
-+/**
-+ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
-+ *
-+ * WSO2 LLC. licenses this file to you under the Apache License,
-+ * Version 2.0 (the "License"); you may not use this file except
-+ * in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing,
-+ * software distributed under the License is distributed on an
-+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-+ * KIND, either express or implied. See the License for the
-+ * specific language governing permissions and limitations
-+ * under the License.
-+ */
+@@ -0,0 +1,16 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
 +
 +export const WI_MODE_SETTING_ID = 'integrator.defaultIntegrator';
 +export const WI_CREATE_PROJECT_COMMAND_ID = 'wso2.integrator.createProject';
@@ -49,24 +36,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
-@@ -0,0 +1,658 @@
-+/**
-+ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
-+ *
-+ * WSO2 LLC. licenses this file to you under the Apache License,
-+ * Version 2.0 (the "License"); you may not use this file except
-+ * in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing,
-+ * software distributed under the License is distributed on an
-+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-+ * KIND, either express or implied. See the License for the
-+ * specific language governing permissions and limitations
-+ * under the License.
-+ */
+@@ -0,0 +1,645 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
 +
 +import { $, append, clearNode } from '../../../../base/browser/dom.js';
 +import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -966,24 +940,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationContribution.ts
-@@ -0,0 +1,102 @@
-+/**
-+ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
-+ *
-+ * WSO2 LLC. licenses this file to you under the Apache License,
-+ * Version 2.0 (the "License"); you may not use this file except
-+ * in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing,
-+ * software distributed under the License is distributed on an
-+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-+ * KIND, either express or implied. See the License for the
-+ * specific language governing permissions and limitations
-+ * under the License.
-+ */
+@@ -0,0 +1,89 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
 +
 +import { Disposable } from '../../../../base/common/lifecycle.js';
 +import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
@@ -1073,24 +1034,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationProvider.ts
-@@ -0,0 +1,117 @@
-+/**
-+ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
-+ *
-+ * WSO2 LLC. licenses this file to you under the Apache License,
-+ * Version 2.0 (the "License"); you may not use this file except
-+ * in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing,
-+ * software distributed under the License is distributed on an
-+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-+ * KIND, either express or implied. See the License for the
-+ * specific language governing permissions and limitations
-+ * under the License.
-+ */
+@@ -0,0 +1,104 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
 +
 +import { Emitter } from '../../../../base/common/event.js';
 +import { Disposable } from '../../../../base/common/lifecycle.js';
@@ -1195,24 +1143,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
-@@ -0,0 +1,410 @@
-+/**
-+ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
-+ *
-+ * WSO2 LLC. licenses this file to you under the Apache License,
-+ * Version 2.0 (the "License"); you may not use this file except
-+ * in compliance with the License.
-+ * You may obtain a copy of the License at
-+ *
-+ *     http://www.apache.org/licenses/LICENSE-2.0
-+ *
-+ * Unless required by applicable law or agreed to in writing,
-+ * software distributed under the License is distributed on an
-+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-+ * KIND, either express or implied. See the License for the
-+ * specific language governing permissions and limitations
-+ * under the License.
-+ */
+@@ -0,0 +1,397 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
 +
 +import { $, append } from '../../../../base/browser/dom.js';
 +import { Disposable } from '../../../../base/common/lifecycle.js';
