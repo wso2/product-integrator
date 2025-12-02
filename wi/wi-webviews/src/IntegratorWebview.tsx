@@ -22,21 +22,21 @@ import { CreationView } from "./views/creationView";
 import { ImportIntegration } from "./views/ImportIntegration";
 import { SamplesView } from "./views/samplesView";
 import { useVisualizerContext } from "./contexts";
+import { ProgressIndicator } from "@wso2/ui-toolkit";
 
 function IntegratorWebview() {
 	const { rpcClient, webviewContext } = useVisualizerContext();
 
-	const goBackToWelcome = () => { 
+	const goBackToWelcome = () => {
 		rpcClient.getMainRpcClient().closeWebview();
 	};
 
 	switch (webviewContext?.currentView) {
 		case ViewType.LOADING:
-		case undefined:		
+		case undefined:
 			return (
-				<div style={{ padding: "2rem", textAlign: "center" }}>
-					<h2>Loading...</h2>
-					<p>Please wait while the content is being loaded.</p>
+				<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100px' }}>
+					<ProgressIndicator />
 				</div>
 			);
 		case ViewType.WELCOME:
