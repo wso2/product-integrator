@@ -248,3 +248,7 @@ export function getPlatform(): any {
     }
     return Platform.LINUX; // fallback
 }
+
+export function openInVSCode(projectRoot: string) {
+    commands.executeCommand('vscode.openFolder', Uri.file(path.resolve(projectRoot)));
+}

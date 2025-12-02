@@ -48,7 +48,7 @@ import {
     Platform
 } from "@wso2/wi-core";
 import { commands, window, workspace, MarkdownString, extensions } from "vscode";
-import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, sanitizeName } from "./utils";
+import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, openInVSCode, sanitizeName } from "./utils";
 import * as fs from "fs";
 import * as path from "path";
 import axios from "axios";
@@ -288,7 +288,8 @@ export class MainRpcManager implements WIVisualizerAPI {
     async createBIProject(params: BIProjectRequest): Promise<void> {
         return new Promise(async (resolve, reject) => {
             try {
-                const result = await commands.executeCommand('BI.project.createBIProjectPure', params);
+                const projectRoot: string = await commands.executeCommand('BI.project.createBIProjectPure', params);
+                openInVSCode(projectRoot);
                 resolve();
             } catch (error) {
                 console.error("Error creating BI project:", error);
