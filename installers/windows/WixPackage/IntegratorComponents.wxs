@@ -1,0 +1,39 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+  xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Fragment>
+    <ComponentGroup Id="IntegratorComponents" Directory="INTEGRATORFOLDER">
+      <Files Include=".\payload\Integrator\**">
+        <Exclude Files=".\payload\Integrator\WSO2 Integrator.exe" />
+      </Files>
+    </ComponentGroup>
+
+    <Component Id="IntegratorShortcutComponent" Bitness="always64" Directory="INTEGRATORFOLDER" Guid="{4ab08ec1-a630-40d2-bf90-db740135b414}">
+      <File Id="IntegratorExe"
+        Source=".\payload\Integrator\WSO2 Integrator.exe" 
+        KeyPath="yes">
+
+        <!-- Desktop Shortcut -->
+        <Shortcut Id="DesktopShortcut"
+          Directory="DesktopFolder"
+          Name="WSO2 Integrator"
+          Description="Launch WSO2 Integrator"
+          WorkingDirectory="INTEGRATORFOLDER"
+          Icon="Integrator.exe"
+          IconIndex="0"
+          Advertise="yes" />
+
+        <!-- Start Menu Shortcut -->
+        <Shortcut Id="StartMenuShortcut"
+          Directory="ProgramMenuFolder"
+          Name="WSO2 Integrator"
+          Description="Launch WSO2 Integrator"
+          WorkingDirectory="INTEGRATORFOLDER"
+          Icon="Integrator.exe"
+          IconIndex="0"
+          Advertise="yes" />
+      </File>
+    </Component>
+    <Icon Id="Integrator.exe" SourceFile=".\resources\wso2.ico" />
+    <Property Id="ARPPRODUCTICON" Value="Integrator.exe" />
+  </Fragment>
+</Wix>

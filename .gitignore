@@ -24,6 +24,22 @@ test/test-results
 # Quilt's internal data.
 /.pc
 /patches/*.diff~
+installers/mac/WSO2_Integrator.pkg
+installers/mac/artifacts-darwin.zip
+installers/mac/ballerina-home.zip
+installers/mac/WSO2 Integrator.pkg
+installers/mac/payload/Application Support/
+installers/mac/payload/Applications/
+installers/mac/payload/Library/Ballerina/
+installers/windows/WixPackage/payload/Ballerina/
+installers/windows/WixPackage/payload/Integrator/
+installers/windows/CustomAction1/obj/
+installers/windows/CustomAction1/bin/
+installers/windows/WixPackage/obj/
+installers/windows/WixPackage/bin/
+installers/windows/WixPackage/payload/ICP/
+installers/linux-deb/package/usr/lib/
+installers/linux-deb/package/usr/share/wso2-integrator
 
 # VScode build output
 lib/

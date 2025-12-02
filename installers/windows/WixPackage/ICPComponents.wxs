@@ -1,0 +1,8 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+  xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Fragment>
+    <ComponentGroup Id="ICPComponents" Directory="ICPFOLDER">
+      <Files Include=".\payload\ICP\**"/>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

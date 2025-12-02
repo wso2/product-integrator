@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+	<id>wso2-integrator.desktop</id>
+	<metadata_license>MIT</metadata_license>
+	<project_license>MIT</project_license>
+	<name>WSO2 Integrator</name>
+	<url type="homepage">https://wso2.com/integration/</url>
+	<summary>WSO2 Integrator. Integration made simple.</summary>
+	<description>
+		<p>WSO2 Integrator is a comprehensive integration solution that enables seamless connectivity and orchestration of services. See https://wso2.com/integration/ for more information.</p>
+	</description>
+	<screenshots>
+		<screenshot type="default">
+			<image>https://code.visualstudio.com/home/home-screenshot-linux-lg.png</image>
+			<caption>Editing TypeScript and searching for extensions</caption>
+		</screenshot>
+	</screenshots>
+</component>
