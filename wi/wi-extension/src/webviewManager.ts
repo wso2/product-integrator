@@ -124,14 +124,14 @@ export class WebviewManager {
 	private getPanelTitle(viewType: ViewType): string {
 		switch (viewType) {
 			case ViewType.CREATE_PROJECT:
-				return "WSO2 Integrator - Create Project";
+				return "Create Project";
 			case ViewType.SAMPLES:
-				return "WSO2 Integrator - Explore Samples";
+				return "Explore Samples";
 			case ViewType.IMPORT_EXTERNAL:
-				return "WSO2 Integrator - Import Project";
+				return "Import Project";
 			case ViewType.WELCOME:
 			default:
-				return "WSO2 Integrator - Welcome";
+				return "Welcome";
 		}
 	}
 
