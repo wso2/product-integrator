@@ -193,8 +193,10 @@ jobs:
         run: |
           cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-deb/
           cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-rpm/
+
       - name: Build Linux packages - deb
         run: |
+          cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
@@ -207,10 +209,21 @@ jobs:
           wget -O icp.zip "$ICP_URL"
           ./build.sh ballerina.zip vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
+
+      - name: Upload Deb artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-linux-deb
+          path: |
+            installers/linux-deb/*.deb
+          if-no-files-found: error
+
         
       - name: Build Linux packages - rpm
         run: |
+          cd ../..
           ROOT_DIR=$(pwd)
+          echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-linux.zip"
           ICP_VERSION="${{ github.event.inputs.icp_version }}"
@@ -221,14 +234,6 @@ jobs:
           wget -O icp.zip "$ICP_URL"
           ./build.sh ballerina.zip vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
-      - name: Upload Deb artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: artifacts-linux-deb
-          path: |
-            installers/linux-deb/*.deb
-          if-no-files-found: error
-
       - name: Upload RPM artifacts
         uses: actions/upload-artifact@v4
         with:
