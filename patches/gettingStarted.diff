@@ -36,7 +36,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
-@@ -0,0 +1,645 @@
+@@ -0,0 +1,647 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -52,6 +52,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
 +import { IAuthenticationService } from '../../../services/authentication/common/authentication.js';
 +import { WI_CREATE_PROJECT_COMMAND_ID, WI_EXPLORE_SAMPLES_COMMAND_ID, WI_IMPORT_PROJECT_COMMAND_ID, WI_MODE_SETTING_ID, WI_LOGIN_COMPLETED_KEY, WI_LOGIN_PROVIDER_ID, WI_SHOW_LOGIN_COMMAND_ID, WI_LOGOUT_COMMAND_ID } from './wso2Constants.js';
++import { URI } from '../../../../base/common/uri.js';
++import { mainWindow } from '../../../../base/browser/window.js';
 +
 +export class WSO2EditorGroupWatermark extends Disposable {
 +
@@ -444,7 +446,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +				margin-left: 12px;
 +			}
 +		`;
-+		document.head.appendChild(style);
++		mainWindow.document.head.appendChild(style);
 +		this._register({ dispose: () => style.remove() });
 +	}
 +
@@ -615,7 +617,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +				const projectItem = append(projectsList, $('.project-item'));
 +
 +				let label: string;
-+				let uri: any;
++				let uri: URI;
 +
 +				if (isRecentFolder(recent)) {
 +					uri = recent.folderUri;
@@ -660,7 +662,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		}
 +	}
 +
-+	private addClickHandler(element: HTMLElement, commandId: string, args?: any[]): { dispose: () => void } {
++	private addClickHandler(element: HTMLElement, commandId: string, args?: string[] | (URI | { forceNewWindow: boolean })[] | undefined): { dispose: () => void } {
 +		const handler = async (e: MouseEvent) => {
 +			e.preventDefault();
 +			e.stopPropagation();
@@ -940,7 +942,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationContribution.ts
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,91 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -954,6 +956,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 +import { WSO2AuthenticationProvider } from './wso2AuthenticationProvider.js';
 +import { WI_LOGIN_PROVIDER_ID, WI_SHOW_LOGIN_COMMAND_ID, WI_LOGOUT_COMMAND_ID, WI_LOGIN_COMPLETED_KEY, WI_LOGIN_SKIPPED_KEY } from './wso2Constants.js';
 +import { WSO2LoginDialog } from './wso2LoginDialog.js';
++import { mainWindow } from '../../../../base/browser/window.js';
 +
 +/**
 + * Registers WSO2 authentication provider and related commands
@@ -993,14 +996,15 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 +
 +			// Create and show login dialog
 +			// We need to append to the workbench container
-+			const workbenchElement = document.querySelector('.monaco-workbench');
++			// eslint-disable-next-line no-restricted-syntax
++			const workbenchElement = mainWindow.document.querySelector('.monaco-workbench');
 +			if (workbenchElement) {
 +				const loginDialog = instantiationService.createInstance(WSO2LoginDialog, workbenchElement as HTMLElement);
 +				await loginDialog.show();
 +				loginDialog.dispose();
 +
 +				// Reload window to refresh UI
-+				window.location.reload();
++				mainWindow.document.location.reload();
 +			}
 +		}));
 +
@@ -1023,7 +1027,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 +				storageService.remove(WI_LOGIN_SKIPPED_KEY, StorageScope.APPLICATION);
 +
 +				// Reload window to show login dialog again
-+				window.location.reload();
++				mainWindow.document.location.reload();
 +			} catch (error) {
 +				console.error('Logout failed:', error);
 +			}
@@ -1086,7 +1090,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 +	async createSession(scopes: string[], options: IAuthenticationProviderSessionOptions): Promise<AuthenticationSession> {
 +		// Mock authentication - in production, this would call a real auth endpoint
 +		const sessionId = 'wso2-session-' + Date.now();
-+		const email = (options as any).email || 'user@wso2.com';
++		const email = (options as IAuthenticationProviderSessionOptions & { email?: string }).email || 'user@wso2.com';
 +
 +		const session: WSO2Session = {
 +			id: sessionId,
@@ -1143,7 +1147,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
-@@ -0,0 +1,397 @@
+@@ -0,0 +1,398 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -1155,6 +1159,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +import { IAuthenticationService } from '../../../services/authentication/common/authentication.js';
 +import { WI_LOGIN_COMPLETED_KEY, WI_LOGIN_PROVIDER_ID, WI_LOGIN_SKIPPED_KEY } from './wso2Constants.js';
 +import { FileAccess } from '../../../../base/common/network.js';
++import { mainWindow } from '../../../../base/browser/window.js';
 +
 +export class WSO2LoginDialog extends Disposable {
 +
@@ -1313,7 +1318,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +
 +		try {
 +			// Create authentication session
-+			await this.authService.createSession(WI_LOGIN_PROVIDER_ID, [], { email } as any);
++			await this.authService.createSession(WI_LOGIN_PROVIDER_ID, [], { email });
 +
 +			// Store login state
 +			this.storageService.store(WI_LOGIN_COMPLETED_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
@@ -1537,7 +1542,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +				text-decoration: underline;
 +			}
 +		`;
-+		document.head.appendChild(style);
++		mainWindow.document.head.appendChild(style);
 +		this._register({ dispose: () => style.remove() });
 +	}
 +}

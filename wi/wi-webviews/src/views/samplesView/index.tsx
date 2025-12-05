@@ -21,6 +21,7 @@ import {
     Icon,
     Typography,
     Dropdown,
+    ProgressIndicator,
 } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 // import { BIProjectForm } from "./biForm";
@@ -98,11 +99,9 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
     // Show loading while fetching configuration
     if (isLoading) {
         return (
-            <FormContainer>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100px' }}>
-                    <Typography variant="body1">Loading...</Typography>
-                </div>
-            </FormContainer>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100px' }}>
+                <ProgressIndicator />
+            </div>
         );
     }
 

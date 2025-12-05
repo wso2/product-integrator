@@ -19,6 +19,7 @@
 import { useState, useEffect } from "react";
 import {
     Icon,
+    ProgressIndicator,
     Typography
 } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
@@ -102,11 +103,9 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
     // Show loading while fetching configuration
     if (isLoading) {
         return (
-            <FormContainer>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100px' }}>
-                    <Typography variant="body1">Loading...</Typography>
-                </div>
-            </FormContainer>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100px' }}>
+                <ProgressIndicator />
+            </div>
         );
     }
 
