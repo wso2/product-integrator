@@ -21,10 +21,12 @@ import { Button, Codicon, Typography } from "@wso2/ui-toolkit";
 
 // Main container styles
 export const FormContainer = styled.div`
-    max-width: 660px;
-    margin: 80px 120px;
-    height: calc(100vh - 160px);
     overflow-y: auto;
+    align-items: center;
+    min-height: 100vh;
+    max-width: 600px;
+    margin: 0 auto;
+    margin-top: calc(25vh - 80px);
     
     /* Ensure dropdowns have proper stacking context */
     position: relative;

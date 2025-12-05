@@ -30,8 +30,12 @@ import { IntegrationTypeSelector } from "../../components/IntegrationTypeSelecto
 const FormContainer = styled.div`
     display: flex;
     flex-direction: column;
-    margin: 80px 120px;
+    overflow: hidden;
+    align-items: center;
+    height: 100vh;
     max-width: 600px;
+    margin: 0 auto;
+    margin-top: calc(25vh - 80px);
 `;
 
 const TitleContainer = styled.div`
@@ -107,21 +111,23 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
     }
 
     return (
-        <div style={{ position: 'absolute', background: 'var(--vscode-editor-background)', height: '100%', width: '100%' }} >
+        <div style={{ position: 'absolute', background: 'var(--vscode-editor-background)', height: '100vh', width: '100%', overflow: 'hidden' }} >
             <FormContainer>
-                <TitleContainer>
-                    <IconButton onClick={gotToWelcome}>
-                        <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
-                    </IconButton>
-                    <Typography variant="h2">Create Your Integration</Typography>
-                </TitleContainer>
-                {defaultType === "WSO2: MI" && (
-                    <IntegrationTypeSelector
-                        value={projectType}
-                        options={projectTypeOptions}
-                        onChange={setProjectType}
-                    />
-                )}
+                <div style={{ width: "100%" }}>
+                    <TitleContainer>
+                        <IconButton onClick={gotToWelcome}>
+                            <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
+                        </IconButton>
+                        <Typography variant="h2">Create Your Integration</Typography>
+                    </TitleContainer>
+                    {defaultType === "WSO2: MI" && (
+                        <IntegrationTypeSelector
+                            value={projectType}
+                            options={projectTypeOptions}
+                            onChange={setProjectType}
+                        />
+                    )}
+                </div>
                 {projectType === "WSO2: BI" && <BIProjectForm />}
                 {projectType === "WSO2: MI" && <MiProjectWizard />}
             </FormContainer>

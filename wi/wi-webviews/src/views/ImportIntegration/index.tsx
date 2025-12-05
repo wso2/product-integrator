@@ -157,7 +157,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     }, [toolPullProgress, importParams, selectedIntegration]);
 
     return (
-        <div style={{ position: 'absolute', background: 'var(--vscode-editor-background)', height: '100%', width: '100%' }} >
+        <div style={{ position: 'absolute', background: 'var(--vscode-editor-background)', height: '100vh', width: '100%', overflow: 'hidden' }} >
             <FormContainer>
                 <TitleContainer>
                     <IconButton onClick={onBack}>
