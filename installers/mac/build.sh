@@ -96,15 +96,15 @@ sed -i '' "s/version=\"__VERSION__\"/version=\"$VERSION\"/g" "$WORK_DIR/Distribu
 productbuild --distribution "$WORK_DIR/Distribution.xml" \
              --resources "$WORK_DIR" \
              --package-path "$WORK_DIR" \
-             "WSO2_Integrator.pkg"
+             "WSO2-Integrator-$VERSION.pkg"
 
 sed -i '' "s/version=\"$VERSION\"/version=\"__VERSION__\"/g" "$WORK_DIR/Distribution.xml"
 
 
 # Check if the build was successful
-if [ -f "$OUTPUT_PKG" ]; then
-    print_info "Successfully created: $OUTPUT_PKG"
-    print_info "Package size: $(du -h "$OUTPUT_PKG" | cut -f1)"
+if [ -f "WSO2-Integrator-$VERSION.pkg" ]; then
+    print_info "Successfully created: WSO2-Integrator-$VERSION.pkg"
+    print_info "Package size: $(du -h "WSO2-Integrator-$VERSION.pkg" | cut -f1)"
 else
     print_error "Failed to create pkg package"
     exit 1
@@ -113,5 +113,6 @@ fi
 rm -rf "${BALLERINA_TARGET:?}"/*
 rm -rf "${WSO2_TARGET:?}"/*
 rm -rf "${ICP_TARGET:?}"/*
+rm -rf "$WORK_DIR/WSO2 Integrator.pkg"
 
 print_info "Done!"
