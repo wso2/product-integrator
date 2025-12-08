@@ -29,7 +29,6 @@ mkdir -p %{buildroot}/usr/lib64/wso2/icp
 mkdir -p %{buildroot}/usr/share/applications
 mkdir -p %{buildroot}/usr/share/appdata
 mkdir -p %{buildroot}/usr/share/bash-completion/completions
-mkdir -p %{buildroot}/usr/share/zsh/vendor-completions
 mkdir -p %{buildroot}/usr/share/mime/packages
 mkdir -p %{buildroot}/usr/share/pixmaps
 mkdir -p %{buildroot}/usr/bin
@@ -54,9 +53,6 @@ if [ -d usr/share/pixmaps ]; then
 fi
 if [ -d usr/share/bash-completion/completions ]; then
     cp usr/share/bash-completion/completions/* %{buildroot}/usr/share/bash-completion/completions/ 2>/dev/null || true
-fi
-if [ -d usr/share/zsh/vendor-completions ]; then
-    cp usr/share/zsh/vendor-completions/* %{buildroot}/usr/share/zsh/vendor-completions/ 2>/dev/null || true
 fi
 
 # Ensure executable permissions
@@ -147,7 +143,6 @@ fi
 /usr/share/applications/*
 /usr/share/appdata/*
 /usr/share/bash-completion/completions/*
-/usr/share/zsh/vendor-completions/*
 /usr/share/mime/packages/*
 /usr/share/pixmaps/*
 /usr/lib64/ballerina/*
