@@ -263,8 +263,8 @@ jobs:
       - name: Verify signature of the deb, rpm installers
         run: |
           cd ../..
-          cosign verify-blob installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb --certificate installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.pem --signature installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sig --certificate-identity=https://github.com/Thevakumar-Luheerathan/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-          cosign verify-blob installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm --certificate installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.pem --signature installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sig --certificate-identity=https://github.com/Thevakumar-Luheerathan/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb --certificate installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.pem --signature installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm --certificate installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.pem --signature installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           
       - name: Generate Hashes for deb, rpm installers
         run: |
@@ -552,7 +552,7 @@ jobs:
       - name: Verify signature of the pkg installer
         run: |
           cd ../..
-          cosign verify-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --certificate-identity=https://github.com/Thevakumar-Luheerathan/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           
       - name: Generate Hashes for pkg installer
         run: |
@@ -810,7 +810,7 @@ jobs:
       - name: Verify signature of the msi installer
         run: |
           cd ../..
-          cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/Thevakumar-Luheerathan/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 
           
       - name: Generate Hashes for msi installer
