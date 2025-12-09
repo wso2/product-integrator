@@ -1,0 +1,13 @@
+Index: product-integrator/lib/vscode/package.json
+===================================================================
+--- product-integrator.orig/lib/vscode/package.json
++++ product-integrator/lib/vscode/package.json
+@@ -48,7 +48,7 @@
+     "tsec-compile-check": "node node_modules/tsec/bin/tsec -p src/tsconfig.tsec.json",
+     "vscode-dts-compile-check": "tsgo --project src/tsconfig.vscode-dts.json && tsgo --project src/tsconfig.vscode-proposed-dts.json",
+     "valid-layers-check": "node build/checker/layersChecker.ts && tsgo --project build/checker/tsconfig.browser.json && tsgo --project build/checker/tsconfig.worker.json && tsgo --project build/checker/tsconfig.node.json && tsgo --project build/checker/tsconfig.electron-browser.json && tsgo --project build/checker/tsconfig.electron-main.json && tsgo --project build/checker/tsconfig.electron-utility.json",
+-    "define-class-fields-check": "node build/lib/propertyInitOrderChecker.ts && tsgo --project src/tsconfig.defineClassFields.json",
++    "define-class-fields-check": "node --max-old-space-size=8192 build/lib/propertyInitOrderChecker.ts && tsgo --project src/tsconfig.defineClassFields.json",
+     "update-distro": "node build/npm/update-distro.ts",
+     "web": "echo 'npm run web' is replaced by './scripts/code-server' or './scripts/code-web'",
+     "compile-cli": "gulp compile-cli",

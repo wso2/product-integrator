@@ -6,3 +6,4 @@ disable-builtin-ext-update.diff
 gettingStarted.diff
 wso2-font-pkg-update
 disableAiFeatures.diff
+increaseHeap.diff
