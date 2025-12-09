@@ -4,6 +4,6 @@ on:
 jobs:
   Hello-World-Job:
     runs-on:
-      - codebuild-lakindu-${{ github.run_id }}-${{ github.run_attempt }}
+      - codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - run: echo "Hello World"
