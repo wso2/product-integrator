@@ -1,0 +1,249 @@
+name: Compile
+
+on: 
+  workflow_call:
+    inputs: 
+      runOnAWS:
+        default: false
+        type: boolean
+      awsRunnerId:
+        default: 'codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}'
+        type: string
+
+jobs:
+  compile:
+    name: Build repo
+    timeout-minutes: 45
+    runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
+    defaults:
+      run:
+        working-directory: lib/vscode
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+          cache: npm
+          cache-dependency-path: lib/vscode/package-lock.json
+
+      - name: Cache TypeScript compilation
+        id: cache-typescript
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/out
+            lib/vscode/out-*
+            lib/vscode/.build/node_modules_cache
+          key: typescript-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+          restore-keys: |
+            typescript-${{ runner.os }}-
+
+      - name: Cache built-in extensions
+        id: cache-extensions
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/.build/builtInExtensions
+            lib/vscode/.build/extensions
+          key: extensions-shared-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+
+      - name: Cache Rust toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-toolchain-${{ runner.os }}-${{ hashFiles('lib/vscode/cli/Cargo.lock') }}
+          restore-keys: |
+            cargo-toolchain-${{ runner.os }}-
+
+      - name: Cache CLI compilation
+        id: cache-cli
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/cli/target/
+          key: cli-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'lib/vscode/cli/Cargo.lock', 'lib/vscode/cli/src/**/*.rs', 'lib/vscode/cli/Cargo.toml') }}
+          restore-keys: |
+            cli-${{ runner.os }}-
+
+      - name: Cache Linux sysroots
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/.build/sysroots
+          key: sysroots-${{ runner.os }}-glibc-2.28-gcc
+          restore-keys: |
+            sysroots-${{ runner.os }}-
+
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3 quilt
+          version: 1.0
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+          rustup target add x86_64-unknown-linux-gnu
+  
+      - name: Get latest lib/vscode rev
+        id: vscode-rev
+        run: echo "rev=$(git rev-parse HEAD:./lib/vscode)" >> $GITHUB_OUTPUT
+  
+      - name: Fetch prebuilt Code package from cache
+        id: cache-vscode
+        uses: actions/cache@v4
+        with:
+          path: lib/vscode-reh-web-*
+          key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+
+      - name: Apply patches
+        run: quilt push -a
+  
+      - name: Update product.json and branding
+        working-directory: .
+        run: |
+          chmod +x ./ci/build/update-product.sh
+          ./ci/build/update-product.sh
+
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci
+
+      - name: Mixin distro modules
+        run: |
+          node build/azure-pipelines/distro/mixin-npm || true
+          node build/azure-pipelines/distro/mixin-quality || true
+
+      - name: Install builtin extensions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ steps.cache-extensions.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ Extensions cache hit - using cached extensions"
+          else
+            echo "⬇️ Downloading built-in extensions"
+            npm run download-builtin-extensions
+          fi
+
+      - name: Compile (with cache optimization)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ steps.cache-typescript.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ TypeScript cache hit - using cached compilation"
+            echo "Skipping core compilation, running validation only"
+            npm exec -- npm-run-all -lp extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+          else
+            echo "❌ TypeScript cache miss - full compilation required"
+            echo "Running complete compilation pipeline"
+            npm exec -- npm-run-all -lp core-ci-pr extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+          fi
+
+      - name: Compress compilation artifact
+        run: |
+          tar -cz --exclude='.build/node_modules_cache' --exclude='.build/node_modules_list.txt' --exclude='.build/distro' -f ../compilation.tar.gz $(ls -d .build out-* test/integration/browser/out test/smoke/out test/automation/out 2>/dev/null)
+
+      - name: Build client (Linux)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp vscode-linux-x64-min-ci
+          ARCHIVE_PATH=../artifacts/vscode-linux-x64.tar.gz
+          mkdir -p ../artifacts
+          tar -czf "$ARCHIVE_PATH" -C .. VSCode-linux-x64
+
+      - name: Build CLI (Linux)
+        run: |
+          source "$HOME/.cargo/env"
+          cd cli
+          if [ "${{ steps.cache-cli.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ CLI cache hit - using cached CLI binary"
+            # Verify the binary exists and is executable
+            if [ -f "./target/release/code" ]; then
+              echo "Cached CLI binary found and ready to use"
+            else
+              echo "⚠️ Cache hit but binary missing - rebuilding"
+              cargo build --release --bin=code
+            fi
+          else
+            echo "❌ CLI cache miss - compiling CLI"
+            cargo build --release --bin=code
+          fi
+
+      - name: Mix in built CLI into client (Linux)
+        run: |
+          set -e
+          CLI_BIN=./cli/target/release/code
+          if [ ! -f "$CLI_BIN" ]; then
+            echo "CLI binary not found at $CLI_BIN" >&2
+            find ./cli/target -type f -name code 2>/dev/null || true
+            exit 1
+          fi
+          CLI_APP_NAME=$(node -p "require('../VSCode-linux-x64/resources/app/product.json').tunnelApplicationName")
+          mkdir -p ../VSCode-linux-x64/bin
+          cp "$CLI_BIN" "../VSCode-linux-x64/bin/$CLI_APP_NAME"
+          chmod +x "../VSCode-linux-x64/bin/$CLI_APP_NAME"
+
+      - name: Build Linux packages - deb
+        env:
+          VSCODE_ARCH: x64
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # DEB build
+          npm run gulp "vscode-linux-$VSCODE_ARCH-prepare-deb"
+          npm run gulp "vscode-linux-$VSCODE_ARCH-build-deb"
+
+          # Copy outputs
+          cp .build/linux/deb/*/deb/*.deb ../artifacts/ || true
+
+      - name: Build Linux packages - rpm
+        env:
+          VSCODE_ARCH: x64
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TRIPLE=""
+          if [ "$VSCODE_ARCH" == "x64" ]; then
+            TRIPLE="x86_64-linux-gnu"
+          elif [ "$VSCODE_ARCH" == "arm64" ]; then
+            TRIPLE="aarch64-linux-gnu"
+          elif [ "$VSCODE_ARCH" == "armhf" ]; then
+            TRIPLE="arm-rpi-linux-gnueabihf"
+          fi
+          export VSCODE_SYSROOT_DIR=.build/sysroots/glibc-2.28-gcc-10.5.0
+          export STRIP="$VSCODE_SYSROOT_DIR/$TRIPLE/$TRIPLE/bin/strip"
+          npm run gulp "vscode-linux-$VSCODE_ARCH-prepare-rpm"
+          npm run gulp "vscode-linux-$VSCODE_ARCH-build-rpm"
+
+          # Copy outputs
+          cp .build/linux/rpm/*/*.rpm ../artifacts/ || true
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-linux
+          path: |
+            lib/artifacts/*
+          if-no-files-found: error
+
+      - name: Upload compilation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compilation
+          path: lib/compilation.tar.gz
+          if-no-files-found: error
