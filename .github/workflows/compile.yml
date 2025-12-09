@@ -147,11 +147,13 @@ jobs:
           if [ "${{ steps.cache-typescript.outputs.cache-hit }}" = "true" ]; then
             echo "✅ TypeScript cache hit - using cached compilation"
             echo "Skipping core compilation, running validation only"
-            npm exec -- npm-run-all -lp extensions-ci eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            npm exec -- npm-run-all -lp extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           else
             echo "❌ TypeScript cache miss - full compilation required"
             echo "Running complete compilation pipeline"
-            npm exec -- npm-run-all -lp core-ci extensions-ci eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            npm run extensions-ci
+            npm run core-ci-pr
+            npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           fi
 
       - name: Compress compilation artifact
