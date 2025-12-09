@@ -27,10 +27,13 @@ on:
         default: true
         type: boolean
 
+env:
+  awsRunnerId: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}  
+
 jobs:
   compile:
     name: Compile
-    runs-on: ${{ github.event.inputs.runner == 'codebuild' && 'codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}' || 'ubuntu-latest' }}
+    runs-on: ${{ github.event.inputs.runner == 'codebuild' && env.awsRunnerId || 'ubuntu-latest' }}
     defaults:
       run:
         working-directory: lib/vscode
