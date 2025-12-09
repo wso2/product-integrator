@@ -33,7 +33,7 @@ env:
 jobs:
   compile:
     name: Compile
-    runs-on: ${{ github.event.inputs.runner == 'codebuild' && env.awsRunnerId || 'ubuntu-latest' }}
+    runs-on: ${{ github.event.inputs.runner == 'codebuild' && github.env.awsRunnerId || 'ubuntu-latest' }}
     defaults:
       run:
         working-directory: lib/vscode
