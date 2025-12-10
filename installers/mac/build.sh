@@ -104,8 +104,8 @@ sed -i '' "s/version=\"$VERSION\"/version=\"__VERSION__\"/g" "$WORK_DIR/Distribu
 
 # Check if the build was successful
 if [ -f "wso2-integrator-$VERSION-$ARCH.pkg" ]; then
-    print_info "Successfully created: WSO2-Integrator-$VERSION.pkg"
-    print_info "Package size: $(du -h "WSO2-Integrator-$VERSION.pkg" | cut -f1)"
+    print_info "Successfully created: wso2-integrator-$VERSION-$ARCH.pkg"
+    print_info "Package size: $(du -h "wso2-integrator-$VERSION-$ARCH.pkg" | cut -f1)"
 else
     print_error "Failed to create pkg package"
     exit 1

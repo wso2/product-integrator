@@ -29,11 +29,26 @@ if "%~4"=="" (
 set "TEMP_BAL_DIR=C:\temp_ballerina_%RANDOM%_%TIME:~6,2%"
 if exist "%TEMP_BAL_DIR%" rmdir /s /q "%TEMP_BAL_DIR%"
 mkdir "%TEMP_BAL_DIR%"
+if errorlevel 1 (
+    echo Failed to create temporary directory "%TEMP_BAL_DIR%"
+    exit /b 1
+)
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', '%TEMP_BAL_DIR%'); }"
 mkdir ".\WixPackage\payload\Ballerina"
+if errorlevel 1 (
+    echo Failed to create payload directory
+    exit /b 1
+)
 REM Move the ballerina-* directory from temp to payload
 REM Move all contents from ballerina-xxxx to payload
-for /d %%D in ("%TEMP_BAL_DIR%\ballerina-*") do xcopy "%%D\*" ".\WixPackage\payload\Ballerina" /E /H /Y
+for /d %%D in ("%TEMP_BAL_DIR%\ballerina-*") do (
+    xcopy "%%D\*" ".\WixPackage\payload\Ballerina" /E /H /Y
+    if errorlevel 1 (
+        echo Failed to copy Ballerina files from %%D
+        exit /b 1
+    )
+)
+
 if exist "%TEMP_BAL_DIR%" rmdir /s /q "%TEMP_BAL_DIR%"
 if errorlevel 1 (
     echo Ballerina extraction failed

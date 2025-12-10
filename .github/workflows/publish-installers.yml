@@ -1,4 +1,6 @@
-name: Build and Release Installers
+# Need to modify later to publish installers to github releases/ proper server
+
+name: Build and Release Artifacts
 
 on:
   workflow_dispatch:
@@ -26,6 +28,11 @@ on:
         required: false
         default: true
         type: boolean
+      build_all_in_all_pack:
+        description: 'Build all in all package'
+        required: true
+        default: true
+        type: boolean
       ballerina_version:
         description: 'Specify Ballerina version to use'
         required: true
@@ -38,16 +45,21 @@ on:
         description: 'Specify Integrator version to use'
         required: true
         type: string
-      commit_id:
-        description: 'Commit SHA to checkout'
-        required: false
-        type: string
 
 permissions:
   id-token: write
   contents: write        
         
 jobs:
+  validate-inputs:
+    name: Validate Inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if required inputs are missing 
+        if: ${{ github.event.inputs.build_all_in_all_pack == true && (github.event.inputs.ballerina_version == '' || github.event.inputs.icp_version == '' || github.event.inputs.integrator_version == '') }}
+        run: |
+          echo "Error: ballerina_version, icp_version, and integrator_version are required to build full pack"
+          exit 1
   compile:
     name: Compile
     runs-on: ${{ github.event.inputs.runner == 'codebuild' && 'codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}' || 'ubuntu-latest' }}
@@ -58,9 +70,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref }}
+          fetch-depth: 1
           submodules: recursive
-          ref: ${{ github.event.inputs.commit_id != '' && github.event.inputs.commit_id || github.sha }}
+
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -707,7 +721,7 @@ jobs:
             npm run download-builtin-extensions
           fi
 
-      - name: Download exlporer Dll
+      - name: Download explorer Dll
         shell: pwsh
         run: node build/win32/explorer-dll-fetcher .build/win32/appx
 
