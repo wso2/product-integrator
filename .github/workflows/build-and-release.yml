@@ -60,7 +60,7 @@ jobs:
       ballerina_version: ${{ github.event.inputs.ballerina_version }}
       icp_version: ${{ github.event.inputs.icp_version }}
       integrator_version: ${{ github.event.inputs.integrator_version }}
-      build_packed_installers: true
+      build_packed_installers: ${{ github.event.inputs.build_packed_installers }}
 
   build-macos:
     if: ${{ github.event.inputs.build_macos == 'true' }}
@@ -276,7 +276,7 @@ jobs:
           fi
 
       - name: Upload macOS artifacts
-        if: ${{ github.event.inputs.build_packed_installers == false }}
+        if: ${{ github.event.inputs.build_packed_installers == 'false' }}
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-darwin-${{ matrix.arch }}
@@ -285,14 +285,14 @@ jobs:
           if-no-files-found: error
       
       - name: Zip the artifacts and copy artifacts
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           APP_DIR=$(find "../VSCode-darwin-${{ matrix.arch }}" -name "*.app" -type d | head -1)
           mkdir -p ../artifacts
           (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
           cp ../artifacts/VSCode-darwin-${{ matrix.arch }}.zip ../../installers/mac/
       - name: Build macOS installer packages
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
           ROOT_DIR=$(pwd)
@@ -314,7 +314,7 @@ jobs:
           cd ${ROOT_DIR}
 
       - name: Upload macOS artifacts
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: Product-Integrator-Darwin-${{ matrix.arch }}
@@ -324,28 +324,28 @@ jobs:
       
       
       - name: cosign-installer
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: sigstore/cosign-installer@v3.5.0
       - name: Sign the pkg installer
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
           cosign sign-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --output-certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --output-signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --yes
 
       - name: Verify signature of the pkg installer
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
           cosign verify-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           
       - name: Generate Hashes for pkg installer
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
           openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sha256 installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg
 
       - name: Upload Signatures and Hashes for pkg installer
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: Signatures-and-Hashes-PKG
@@ -560,7 +560,7 @@ jobs:
           Compress-Archive -Path ../VSCode-win32-x64/* -DestinationPath $archivePath -Force
 
       - name: Upload Windows artifacts
-        if: ${{ github.event.inputs.build_packed_installers == false }}
+        if: ${{ github.event.inputs.build_packed_installers == 'false' }}
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-win32
@@ -569,11 +569,11 @@ jobs:
           if-no-files-found: error
       
       - name: Copy Integrator artifact to build directory
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
       - name: Build Windows installer packages
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         shell: pwsh
         run: |
           cd ..\..
@@ -590,7 +590,7 @@ jobs:
           .\build.bat .\ballerina.zip .\VSCode-win32-x64.zip .\icp.zip $INTEGRATOR_VERSION
 
       - name: Upload Windows artifacts
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: Product-Integrator-Windows
@@ -599,28 +599,28 @@ jobs:
           if-no-files-found: error
       
       - name: cosign-installer
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: sigstore/cosign-installer@v3.5.0
       - name: Sign the msi installer
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
           cosign sign-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --output-certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --output-signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --yes
       - name: Verify signature of the msi installer
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
           cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 
           
       - name: Generate Hashes for msi installer
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
           openssl dgst -sha256 -out installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sha256 installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi 
 
       - name: Upload Signatures and Hashes for msi installer
-        if: ${{ github.event.inputs.build_packed_installers == true }}
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: Signatures-and-Hashes-MSI
@@ -634,7 +634,7 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     needs: [compile, build-macos, build-windows]
-    if: always() && (needs.compile.result == 'success') && (github.event.inputs.build_packed_installers == false)
+    if: always() && (needs.compile.result == 'success') && (github.event.inputs.build_packed_installers == 'false')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
