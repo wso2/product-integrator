@@ -60,7 +60,7 @@ jobs:
       ballerina_version: ${{ github.event.inputs.ballerina_version }}
       icp_version: ${{ github.event.inputs.icp_version }}
       integrator_version: ${{ github.event.inputs.integrator_version }}
-      build_packed_installers: ${{ github.event.inputs.build_packed_installers }}
+      build_packed_installers: ${{ github.event.inputs.build_packed_installers == 'true' }}
 
   build-macos:
     if: ${{ github.event.inputs.build_macos == 'true' }}
