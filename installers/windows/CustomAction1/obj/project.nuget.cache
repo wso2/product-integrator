@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "dgSpecHash": "0PtYu+lsx2w=",
+  "success": true,
+  "projectFilePath": "/Users/luheerathan/luhee/Ballerina-Project-Files/product-integrator/installers copy/windows/CustomAction1/CustomAction1.csproj",
+  "expectedPackageFiles": [
+    "/Users/luheerathan/.nuget/packages/microsoft.bcl.cryptography/9.0.10/microsoft.bcl.cryptography.9.0.10.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/microsoft.netframework.referenceassemblies/1.0.3/microsoft.netframework.referenceassemblies.1.0.3.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/microsoft.netframework.referenceassemblies.net472/1.0.3/microsoft.netframework.referenceassemblies.net472.1.0.3.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/system.buffers/4.5.1/system.buffers.4.5.1.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/system.codedom/9.0.10/system.codedom.9.0.10.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/system.directoryservices.accountmanagement/9.0.10/system.directoryservices.accountmanagement.9.0.10.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/system.formats.asn1/9.0.10/system.formats.asn1.9.0.10.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/system.management/9.0.10/system.management.9.0.10.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/system.memory/4.5.5/system.memory.4.5.5.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/system.numerics.vectors/4.5.0/system.numerics.vectors.4.5.0.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/system.runtime.compilerservices.unsafe/6.0.0/system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/system.security.principal.windows/5.0.0/system.security.principal.windows.5.0.0.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/system.valuetuple/4.5.0/system.valuetuple.4.5.0.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/wixtoolset.dtf.customaction/5.0.2/wixtoolset.dtf.customaction.5.0.2.nupkg.sha512",
+    "/Users/luheerathan/.nuget/packages/wixtoolset.dtf.windowsinstaller/5.0.2/wixtoolset.dtf.windowsinstaller.5.0.2.nupkg.sha512"
+  ],
+  "logs": []
+}

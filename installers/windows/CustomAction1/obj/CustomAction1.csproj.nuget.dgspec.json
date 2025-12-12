@@ -1,0 +1,75 @@
+{
+  "format": 1,
+  "restore": {
+    "/Users/luheerathan/luhee/Ballerina-Project-Files/product-integrator/installers copy/windows/CustomAction1/CustomAction1.csproj": {}
+  },
+  "projects": {
+    "/Users/luheerathan/luhee/Ballerina-Project-Files/product-integrator/installers copy/windows/CustomAction1/CustomAction1.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/Users/luheerathan/luhee/Ballerina-Project-Files/product-integrator/installers copy/windows/CustomAction1/CustomAction1.csproj",
+        "projectName": "CustomAction1",
+        "projectPath": "/Users/luheerathan/luhee/Ballerina-Project-Files/product-integrator/installers copy/windows/CustomAction1/CustomAction1.csproj",
+        "packagesPath": "/Users/luheerathan/.nuget/packages/",
+        "outputPath": "/Users/luheerathan/luhee/Ballerina-Project-Files/product-integrator/installers copy/windows/CustomAction1/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/Users/luheerathan/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net472"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net472": {
+            "targetAlias": "net472",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "net472": {
+          "targetAlias": "net472",
+          "dependencies": {
+            "Microsoft.NETFramework.ReferenceAssemblies": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.0.3, )",
+              "autoReferenced": true
+            },
+            "System.DirectoryServices.AccountManagement": {
+              "target": "Package",
+              "version": "[9.0.10, )"
+            },
+            "System.Management": {
+              "target": "Package",
+              "version": "[9.0.10, )"
+            },
+            "WixToolset.Dtf.CustomAction": {
+              "target": "Package",
+              "version": "[5.0.2, )"
+            },
+            "WixToolset.Dtf.WindowsInstaller": {
+              "target": "Package",
+              "version": "[5.0.2, )"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/9.0.305/RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

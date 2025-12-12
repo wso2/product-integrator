@@ -1,0 +1,8 @@
+is_global = true
+build_property.RootNamespace = CustomAction1
+build_property.ProjectDir = /Users/luheerathan/luhee/Ballerina-Project-Files/product-integrator/installers copy/windows/CustomAction1/
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.CsWinRTUseWindowsUIXamlProjections = false
+build_property.EffectiveAnalysisLevelStyle = 
+build_property.EnableCodeStyleSeverity = 
