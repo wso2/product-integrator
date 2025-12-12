@@ -66,18 +66,6 @@ jobs:
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
-      - name: Cache TypeScript compilation
-        id: cache-typescript
-        uses: actions/cache@v4
-        with:
-          path: |
-            lib/vscode/out
-            lib/vscode/out-*
-            lib/vscode/.build/node_modules_cache
-          key: typescript-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
-          restore-keys: |
-            typescript-${{ runner.os }}-
-
       - name: Cache built-in extensions
         id: cache-extensions
         uses: actions/cache@v4
