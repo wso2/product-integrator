@@ -178,8 +178,8 @@ jobs:
 
       - name: Mixin distro modules
         run: |
-          node build/azure-pipelines/distro/mixin-npm || true
-          node build/azure-pipelines/distro/mixin-quality || true
+          node build/azure-pipelines/distro/mixin-npm.ts || true
+          node build/azure-pipelines/distro/mixin-quality.ts || true
 
       - name: Install builtin extensions
         env:
@@ -476,8 +476,8 @@ jobs:
 
       - name: Mixin distro modules
         run: |
-          node build/azure-pipelines/distro/mixin-npm || true
-          node build/azure-pipelines/distro/mixin-quality || true
+          node build/azure-pipelines/distro/mixin-npm.ts || true
+          node build/azure-pipelines/distro/mixin-quality.ts || true
 
       - name: Install builtin extensions
         shell: bash
@@ -493,7 +493,7 @@ jobs:
 
       - name: Download exlporer Dll
         shell: pwsh
-        run: node build/win32/explorer-dll-fetcher .build/win32/appx
+        run: node build/win32/explorer-dll-fetcher.ts .build/win32/appx
 
       - name: Build client (Windows)
         shell: pwsh

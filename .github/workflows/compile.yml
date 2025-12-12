@@ -148,8 +148,8 @@ jobs:
 
       - name: Mixin distro modules
         run: |
-          node build/azure-pipelines/distro/mixin-npm || true
-          node build/azure-pipelines/distro/mixin-quality || true
+          node build/azure-pipelines/distro/mixin-npm.ts || true
+          node build/azure-pipelines/distro/mixin-quality.ts || true
 
       - name: Install builtin extensions
         env:
