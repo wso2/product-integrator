@@ -44,7 +44,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
-@@ -0,0 +1,653 @@
+@@ -0,0 +1,681 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -140,6 +140,34 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +				overflow-y: auto;
 +				pointer-events: all;
 +				background: var(--vscode-sideBar-background);
++			}
++
++			/* Hide classic scrollbar and use VS Code scrollbar */
++			.wso2-editor-watermark::-webkit-scrollbar {
++				width: 10px;
++			}
++
++			.wso2-editor-watermark::-webkit-scrollbar-track {
++				background: transparent;
++			}
++
++			.wso2-editor-watermark::-webkit-scrollbar-thumb {
++				background: var(--vscode-scrollbarSlider-background);
++				border-radius: 10px;
++			}
++
++			.wso2-editor-watermark::-webkit-scrollbar-thumb:hover {
++				background: var(--vscode-scrollbarSlider-hoverBackground);
++			}
++
++			.wso2-editor-watermark::-webkit-scrollbar-thumb:active {
++				background: var(--vscode-scrollbarSlider-activeBackground);
++			}
++
++			/* For Firefox */
++			.wso2-editor-watermark {
++				scrollbar-width: thin;
++				scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
 +			}
 +
 +			.wso2-editor-watermark .wrapper {
