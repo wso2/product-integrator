@@ -49,7 +49,7 @@ interface MachineContext {
  * Get the default integrator mode from configuration
  */
 function getDefaultIntegratorMode(): ProjectType {
-    const configValue = vscode.workspace.getConfiguration("wso2-integrator").get<string>("integrator.defaultIntegrator");
+    const configValue = vscode.workspace.getConfiguration("wso2-integrator").get<string>("integrator.defaultRuntime");
     
     // Map string config values to ProjectType enum
     switch (configValue) {
@@ -244,9 +244,9 @@ export const StateMachine = {
         
         // Listen for configuration changes
         const configChangeDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
-            if (event.affectsConfiguration('wso2-integrator.integrator.defaultIntegrator')) {
+            if (event.affectsConfiguration('wso2-integrator.integrator.defaultRuntime')) {
                 const newMode = getDefaultIntegratorMode();
-                ext.log(`Configuration changed: defaultIntegrator = ${newMode}`);
+                ext.log(`Configuration changed: defaultRuntime = ${newMode}`);
                 
                 // Update the state machine context
                 stateService.send({

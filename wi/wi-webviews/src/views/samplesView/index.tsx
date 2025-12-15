@@ -68,12 +68,12 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
         { label: "WSO2: MI", value: "WSO2: MI" }
     ];
 
-    // Load default integrator from VS Code configuration
+    // Load default runtime from VS Code configuration
     useEffect(() => {
-        const loadDefaultIntegrator = async () => {
+        const loadDefaultRuntime = async () => {
             try {
                 const configResponse = await rpcClient.getMainRpcClient().getConfiguration({
-                    section: "integrator.defaultIntegrator"
+                    section: "integrator.defaultRuntime"
                 });
 
                 if (configResponse?.value) {
@@ -87,7 +87,7 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
             }
         };
 
-        loadDefaultIntegrator();
+        loadDefaultRuntime();
     }, []);
 
     const gotToWelcome = () => {
