@@ -44,7 +44,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
-@@ -0,0 +1,681 @@
+@@ -0,0 +1,697 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -94,7 +94,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		this.addStyles();
 +
 +		this.registerListeners();
-+		
++
 +		this.render();
 +		this.checkLoginState();
 +	}
@@ -236,7 +236,16 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +			cursor: pointer;
 +		}
 +
-+		.wso2-editor-watermark .configure-btn:hover,
++		.wso2-editor-watermark .configure-btn {
++			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
++			color: white;
++		}
++
++		.wso2-editor-watermark .configure-btn:hover {
++			background: linear-gradient(135deg, #7a8ff0 0%, #8859b0 100%);
++			transform: translateY(-1px);
++		}
++
 +		.wso2-editor-watermark .sign-in-btn:hover,
 +		.wso2-editor-watermark .logout-btn:hover {
 +			background: var(--vscode-button-hoverBackground);
@@ -252,7 +261,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +			background: rgba(255, 255, 255, 0.25);
 +		}			.wso2-editor-watermark .get-started-badge {
 +				display: inline-block;
-+				background: rgba(255, 255, 255, 0.2);
 +				backdrop-filter: blur(10px);
 +				border: 1px solid rgba(255, 255, 255, 0.3);
 +				border-radius: 20px;
@@ -288,7 +296,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +
 +			.wso2-editor-watermark .cards-grid {
 +				display: grid;
-+				grid-template-columns: repeat(3, 1fr);
++				grid-template-columns: repeat(4, 1fr);
 +				gap: 24px;
 +			}
 +
@@ -312,7 +320,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +				flex-direction: column;
 +				transition: all 0.3s ease;
 +				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.05);
-+				min-height: 280px;
++				min-height: 220px;
 +			}
 +
 +			.wso2-editor-watermark .action-card:hover {
@@ -350,7 +358,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +				background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
 +			}
 +
-+			.wso2-editor-watermark .card-title {
++		.wso2-editor-watermark .gradient-green {
++			background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
++		}			.wso2-editor-watermark .card-title {
 +				font-size: 20px;
 +				font-weight: 600;
 +				margin: 0 0 12px 0;
@@ -539,21 +549,33 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		headline.textContent = 'WSO2 Integrator';
 +
 +		const caption = append(topSection, $('p.caption'));
-+		caption.textContent = 'A comprehensive integration solution that simplifies your digital transformation journey. Streamlines connectivity among applications, services, data, and cloud using a user-friendly low-code graphical designing experience.';
++		caption.textContent = 'Connect any system across your business, build AI agents, and orchestrate AI-enabled workflows with the 100% open source and AI-native WSO2 Integrator.';
 +
 +		// Cards section
 +		const cardsContainer = append(wrapper, $('.cards-container'));
 +		const cardsGrid = append(cardsContainer, $('.cards-grid'));
++
++		// Open Project Card
++		this.createActionCard(
++			cardsGrid,
++			'↗',
++			'gradient-green',
++			'Open Project',
++			'Open an existing integration project and continue building your solution.',
++			'Open',
++			'primary',
++			'workbench.action.files.openFolder'
++		);
 +
 +		// Create New Project Card
 +		this.createActionCard(
 +			cardsGrid,
 +			'＋',
 +			'gradient-purple',
-+			'Create New Project',
++			'Create a New Project',
 +			'Ready to build? Start a new integration project using our intuitive graphical designer.',
 +			'Create',
-+			'primary',
++			'secondary',
 +			WI_CREATE_PROJECT_COMMAND_ID
 +		);
 +
@@ -574,7 +596,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +			cardsGrid,
 +			'⇄',
 +			'gradient-pink',
-+			'Import External Integration',
++			'Import an External Integration',
 +			'Have an integration from another platform? Import your MuleSoft or TIBCO integration project and continue building.',
 +			'Import',
 +			'secondary',
@@ -583,12 +605,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +
 +		// Bottom section
 +		const bottomSection = append(wrapper, $('.bottom-section'));
-+
-+		const alreadyHaveText = append(bottomSection, $('.already-have-text'));
-+		alreadyHaveText.textContent = 'Already have a project? ';
-+		const openLink = append(alreadyHaveText, $('a'));
-+		openLink.textContent = 'Open';
-+		this.transientDisposables.add(this.addClickHandler(openLink, 'workbench.action.files.openFolder'));
 +
 +		// Recent projects section
 +		await this.renderRecentProjects(bottomSection);
@@ -682,7 +698,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +			const loginStatus = await checkWSO2LoginStatus(this.authenticationService);
 +			const wasLoggedIn = this.isLoggedIn;
 +			const previousEmail = this.userEmail;
-+			
++
 +			this.isLoggedIn = loginStatus.isLoggedIn;
 +			this.userEmail = loginStatus.email;
 +
@@ -692,7 +708,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +			} else {
 +				this.storageService.remove(WI_LOGIN_COMPLETED_KEY, StorageScope.APPLICATION);
 +			}
-+			
++
 +			// Only re-render if login state actually changed
 +			if (wasLoggedIn !== this.isLoggedIn || previousEmail !== this.userEmail) {
 +				this.render();
@@ -1256,7 +1272,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		headline.textContent = 'Welcome to WSO2 Integrator';
 +
 +		const caption = append(leftSection, $('p.login-caption'));
-+		caption.textContent = 'A comprehensive integration solution that simplifies your digital transformation journey.';
++		caption.textContent = 'Connect any system across your business, build AI agents, and orchestrate AI-enabled workflows with the 100% open source and AI-native WSO2 Integrator.';
 +
 +		// Right section with login form
 +		const rightSection = append(wrapper, $('.login-right-section'));
