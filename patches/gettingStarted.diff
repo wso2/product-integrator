@@ -21,7 +21,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2C
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
 + *--------------------------------------------------------------------------------------------*/
 +
-+export const WI_MODE_SETTING_ID = 'integrator.defaultIntegrator';
++export const WI_MODE_SETTING_ID = 'integrator.defaultRuntime';
 +export const WI_CREATE_PROJECT_COMMAND_ID = 'wso2.integrator.createProject';
 +export const WI_EXPLORE_SAMPLES_COMMAND_ID = 'wso2.integrator.exploreSamples';
 +export const WI_IMPORT_PROJECT_COMMAND_ID = 'wso2.integrator.importProject';
