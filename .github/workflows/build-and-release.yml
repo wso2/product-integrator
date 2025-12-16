@@ -26,6 +26,27 @@ on:
         required: false
         default: true
         type: boolean
+      build_packed_installers:
+        description: 'Whether to build a Balleirna, ICP, and Integrator packed installers'
+        default: true
+        required:  true
+        type: boolean
+      ballerina_version:
+        description: 'Specify Ballerina version to use'
+        required: false
+        type: string
+      icp_version:
+        description: 'Specify ICP version to use'
+        required: false
+        type: string
+      integrator_version:
+        description: 'Specify Integrator version to use'
+        required: false
+        type: string  
+
+permissions:
+  id-token: write
+  contents: write     
 
 env:
   awsRunnerId: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}  
@@ -36,6 +57,10 @@ jobs:
     secrets: inherit  
     with:
       runOnAWS: ${{ github.event.inputs.runner == 'codebuild' }}
+      ballerina_version: ${{ github.event.inputs.ballerina_version }}
+      icp_version: ${{ github.event.inputs.icp_version }}
+      integrator_version: ${{ github.event.inputs.integrator_version }}
+      build_packed_installers: ${{ github.event.inputs.build_packed_installers == 'true' }}
 
   build-macos:
     if: ${{ github.event.inputs.build_macos == 'true' }}
@@ -153,8 +178,8 @@ jobs:
 
       - name: Mixin distro modules
         run: |
-          node build/azure-pipelines/distro/mixin-npm || true
-          node build/azure-pipelines/distro/mixin-quality || true
+          node build/azure-pipelines/distro/mixin-npm.ts || true
+          node build/azure-pipelines/distro/mixin-quality.ts || true
 
       - name: Install builtin extensions
         env:
@@ -251,11 +276,83 @@ jobs:
           fi
 
       - name: Upload macOS artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'false' }}
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-darwin-${{ matrix.arch }}
           path: |
             lib/artifacts/*
+          if-no-files-found: error
+      
+      - name: Zip the artifacts and copy artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          APP_DIR=$(find "../VSCode-darwin-${{ matrix.arch }}" -name "*.app" -type d | head -1)
+          mkdir -p ../artifacts
+          (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
+          cp ../artifacts/VSCode-darwin-${{ matrix.arch }}.zip ../../installers/mac/
+      - name: Build macOS installer packages
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          ROOT_DIR=$(pwd)
+          echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+          BALLERINA_ARCH="macos-arm"
+          else
+          BALLERINA_ARCH="macos"
+          fi
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-${BALLERINA_ARCH}.zip"
+          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          cd ./installers/mac
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip VSCode-darwin-${{ matrix.arch }}.zip icp.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
+          cd ${ROOT_DIR}
+
+      - name: Upload macOS artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-Darwin-${{ matrix.arch }}
+          path: |
+            installers/mac/*.pkg
+          if-no-files-found: error
+      
+      
+      - name: cosign-installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: sigstore/cosign-installer@v3.5.0
+      - name: Sign the pkg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          cosign sign-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --output-certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --output-signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --yes
+
+      - name: Verify signature of the pkg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          cosign verify-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          
+      - name: Generate Hashes for pkg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sha256 installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg
+
+      - name: Upload Signatures and Hashes for pkg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Signatures-and-Hashes-PKG
+          path: |
+            installers/mac/*.pem
+            installers/mac/*.sig
+            installers/mac/*.sha256
           if-no-files-found: error
 
   build-windows:
@@ -379,8 +476,8 @@ jobs:
 
       - name: Mixin distro modules
         run: |
-          node build/azure-pipelines/distro/mixin-npm || true
-          node build/azure-pipelines/distro/mixin-quality || true
+          node build/azure-pipelines/distro/mixin-npm.ts || true
+          node build/azure-pipelines/distro/mixin-quality.ts || true
 
       - name: Install builtin extensions
         shell: bash
@@ -396,7 +493,7 @@ jobs:
 
       - name: Download exlporer Dll
         shell: pwsh
-        run: node build/win32/explorer-dll-fetcher .build/win32/appx
+        run: node build/win32/explorer-dll-fetcher.ts .build/win32/appx
 
       - name: Build client (Windows)
         shell: pwsh
@@ -463,18 +560,81 @@ jobs:
           Compress-Archive -Path ../VSCode-win32-x64/* -DestinationPath $archivePath -Force
 
       - name: Upload Windows artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'false' }}
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-win32
           path: |
             lib/artifacts/*
           if-no-files-found: error
+      
+      - name: Copy Integrator artifact to build directory
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
+      - name: Build Windows installer packages
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        shell: pwsh
+        run: |
+          cd ..\..
+          $ROOT_DIR = Get-Location
+          Write-Host "Root dir: $ROOT_DIR"
+          set BALLERINA_VERSION "${{ github.event.inputs.ballerina_version }}"
+          set BALLERINA_URL "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-windows.zip"
+          set ICP_VERSION "${{ github.event.inputs.icp_version }}"
+          set ICP_URL "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          set INTEGRATOR_VERSION "${{ github.event.inputs.integrator_version }}"
+          cd .\installers\windows
+          Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
+          Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
+          .\build.bat .\ballerina.zip .\VSCode-win32-x64.zip .\icp.zip $INTEGRATOR_VERSION
+
+      - name: Upload Windows artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-Windows
+          path: |
+            installers\windows\WixPackage\bin\x64\Release\en-US\*.msi
+          if-no-files-found: error
+      
+      - name: cosign-installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: sigstore/cosign-installer@v3.5.0
+      - name: Sign the msi installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          cosign sign-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --output-certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --output-signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --yes
+      - name: Verify signature of the msi installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+
+          
+      - name: Generate Hashes for msi installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          openssl dgst -sha256 -out installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sha256 installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi 
+
+      - name: Upload Signatures and Hashes for msi installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Signatures-and-Hashes-MSI
+          path: |
+            installers\windows\*.pem
+            installers\windows\*.sig
+            installers\windows\*.sha256
+          if-no-files-found: error
 
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
     needs: [compile, build-macos, build-windows]
-    if: always() && (needs.compile.result == 'success')
+    if: always() && (needs.compile.result == 'success') && (github.event.inputs.build_packed_installers == 'false')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
