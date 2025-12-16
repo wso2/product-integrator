@@ -114,13 +114,15 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +			}
 +		}));
 +
-+		// Listen for authentication session changes
-+		this._register(this.authenticationService.onDidChangeSessions(e => {
-+			// Check if the change is for our provider
-+			if (e.providerId === WSO2_PLATFORM_PROVIDER_ID) {
-+				this.checkLoginState();
-+			}
-+		}));
++		// Listen for authentication session changes (only if auth service is available)
++		if (this.authenticationService) {
++			this._register(this.authenticationService.onDidChangeSessions(e => {
++				// Check if the change is for our provider
++				if (e.providerId === WSO2_PLATFORM_PROVIDER_ID) {
++					this.checkLoginState();
++				}
++			}));
++		}
 +	}
 +
 +	private addStyles(): void {
@@ -1015,6 +1017,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 +	}
 +
 +	private registerAuthenticationProvider(): void {
++		// Skip registration if auth service is not available (e.g., in test environments)
++		if (!this.authService) {
++			return;
++		}
++
 +		// Register WSO2 authentication provider
 +		const provider = this._register(this.instantiationService.createInstance(WSO2AuthenticationProvider));
 +		this.authService.registerAuthenticationProvider(WI_LOGIN_PROVIDER_ID, provider);
