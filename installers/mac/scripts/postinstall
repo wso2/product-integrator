@@ -22,6 +22,8 @@ if [ -d "/Library/Ballerina" ]; then
     chmod o-w .
     rm -f /Library/Ballerina/bin/ballerina
     rm -f /etc/paths.d/ballerina
+    echo "/Library/Ballerina/bin" > /etc/paths.d/bal
+    chmod -R 644 /etc/paths.d/bal
     echo "Set permissions for Ballerina directory"
 fi
 
