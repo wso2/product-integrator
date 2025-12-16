@@ -31,7 +31,9 @@ echo '{
     "tipsAndTricksUrl": "https://go.microsoft.com/fwlink/?linkid=852118",
     "newsletterSignupUrl": "https://www.research.net/r/vsc-newsletter",
     "linkProtectionTrustedDomains": [
-      "https://open-vsx.org"
+      "https://open-vsx.org",
+      "https://devant.dev",
+      "https://console.devant.dev"
     ],
     "trustedExtensionAuthAccess": [
       "vscode.git", "vscode.github",
