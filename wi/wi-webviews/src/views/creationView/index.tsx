@@ -74,10 +74,10 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
 
     // Load default integrator from VS Code configuration
     useEffect(() => {
-        const loadDefaultIntegrator = async () => {
+        const loadDefaultRuntime = async () => {
             try {
                 const configResponse = await rpcClient.getMainRpcClient().getConfiguration({
-                    section: "integrator.defaultIntegrator"
+                    section: "integrator.defaultRuntime"
                 });
 
                 if (configResponse?.value) {
@@ -91,7 +91,7 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
             }
         };
 
-        loadDefaultIntegrator();
+        loadDefaultRuntime();
     }, []);
 
     const gotToWelcome = () => {

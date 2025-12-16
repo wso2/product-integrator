@@ -58,7 +58,7 @@ export function BIProjectForm() {
     };
 
     return (
-        <div>
+        <div style={{ width: '100%' }}>
             <ProjectFormFields
                 formData={formData}
                 onFormDataChange={handleFormDataChange}

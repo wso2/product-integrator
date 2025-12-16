@@ -24,11 +24,11 @@
       "type": "object",
       "title": "WSO2 Integrator",
       "properties": {
-        "integrator.defaultIntegrator": {
+        "integrator.defaultRuntime": {
           "type": "string",
           "default": "WSO2: BI",
           "scope": "resource",
-          "description": "Choose the default integrator for the lowcode experience.",
+          "description": "Choose the default runtime for the lowcode experience.",
           "enum": [
             "WSO2: BI",
             "WSO2: MI"

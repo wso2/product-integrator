@@ -134,5 +134,8 @@ rm -rf "${INTEGRATOR_TARGET:?}"
 rm -rf "${BALLERINA_TARGET:?}"
 rm -rf "${ICP_TARGET:?}"
 
+# Revert version in control file back to @VERSION@
+sed -i "s/^Version: $VERSION$/Version: @VERSION@/" "$WORK_DIR/package/DEBIAN/control"
+
 print_info "DEB package build completed successfully!"
 print_info "You can install the package using: sudo dpkg -i $OUTPUT_DEB"
