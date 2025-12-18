@@ -73,6 +73,7 @@ export class MainRpcManager implements WIVisualizerAPI {
                 pathSeparator: path.sep,
                 env: {
                     MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
+                    BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || ''
                 }
             });
         });
