@@ -17,7 +17,7 @@
  * 
  * THIS FILE INCLUDES AUTO GENERATED CODE
  */
-import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, DownloadProgress, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, MigrationToolStateData, MigrationToolLogData, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext } from "../../types/rpc.types";
+import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, DownloadProgress, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, MigrationToolStateData, MigrationToolLogData, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest } from "../../types/rpc.types";
 import { NotificationType, RequestType } from "vscode-messenger-common";
 
 const _preFix = "main";
@@ -35,7 +35,7 @@ export const getSupportedMIVersionsHigherThan: RequestType<string, GetSupportedM
 export const getSubFolderNames: RequestType<GetSubFoldersRequest, GetSubFoldersResponse> = { method: `${_preFix}/getSubFolderNames` };
 export const askProjectDirPath: RequestType<void, ProjectDirResponse> = { method: `${_preFix}/askProjectDirPath` };
 export const createMiProject: RequestType<CreateMiProjectRequest, CreateMiProjectResponse> = { method: `${_preFix}/createMiProject` };
-export const fetchSamplesFromGithub: RequestType<void, GettingStartedData> = { method: `${_preFix}/fetchSamplesFromGithub` };
+export const fetchSamplesFromGithub: RequestType<FetchSamplesRequest, GettingStartedData> = { method: `${_preFix}/fetchSamplesFromGithub` };
 export const downloadSelectedSampleFromGithub: NotificationType<SampleDownloadRequest> = { method: `${_preFix}/downloadSelectedSampleFromGithub` };
 export const createBIProject: RequestType<BIProjectRequest, void> = { method: `${_preFix}/createBIProject` };
 export const onDownloadProgress: NotificationType<DownloadProgress> = { method: `${_preFix}/onDownloadProgress` };

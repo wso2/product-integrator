@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext } from "../../types/rpc.types";
+import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest } from "../../types/rpc.types";
 
 export * from "./rpc-type";
 export * from "../../types/rpc.types";
@@ -35,7 +35,7 @@ export interface WIVisualizerAPI {
     getSubFolderNames: (params: GetSubFoldersRequest) => Promise<GetSubFoldersResponse>;
     askProjectDirPath: () => Promise<ProjectDirResponse>;
     createMiProject: (params: CreateMiProjectRequest) => Promise<CreateMiProjectResponse>;
-    fetchSamplesFromGithub: () => Promise<GettingStartedData>;
+    fetchSamplesFromGithub: (params: FetchSamplesRequest) => Promise<GettingStartedData>;
     downloadSelectedSampleFromGithub: (params: SampleDownloadRequest) => void;
     createBIProject: (params: BIProjectRequest) => Promise<void>;
     getMigrationTools: () => Promise<GetMigrationToolsResponse>;

@@ -26,7 +26,7 @@ import {
 import styled from "@emotion/styled";
 // import { BIProjectForm } from "./biForm";
 import { useVisualizerContext } from "../../contexts/RpcContext";
-import { MiSamplesView } from "./miSamples";
+import { SamplesContainer } from "./SamplesContainer";
 import { IntegrationTypeSelector } from "../../components/IntegrationTypeSelector";
 
 const FormContainer = styled.div`
@@ -57,9 +57,11 @@ const DropdownContainer = styled.div`
     margin-bottom: 20px;
 `;
 
+export type ProjectType = "WSO2: BI" | "WSO2: MI";
+
 export function SamplesView({ onBack }: { onBack?: () => void }) {
-    const [defaultType, setDefaultType] = useState<string>("WSO2: BI");
-    const [projectType, setProjectType] = useState<string>(defaultType);
+    const [defaultType, setDefaultType] = useState<ProjectType>("WSO2: BI");
+    const [projectType, setProjectType] = useState<ProjectType>(defaultType);
     const [isLoading, setIsLoading] = useState(true);
     const { rpcClient } = useVisualizerContext();
 
@@ -118,11 +120,10 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
                     <IntegrationTypeSelector
                         value={projectType}
                         options={projectTypeOptions}
-                        onChange={setProjectType}
+                        onChange={(value) => setProjectType(value as ProjectType)}
                     />
                 )}
-                {projectType === "WSO2: BI" && <h2>Coming Soon!</h2>}
-                {projectType === "WSO2: MI" && <MiSamplesView />}
+                <SamplesContainer projectType={projectType} />
             </FormContainer>
         </div>
     );

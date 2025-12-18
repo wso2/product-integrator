@@ -53,7 +53,8 @@ import {
     ImportIntegrationRPCRequest,
     ShowErrorMessageRequest,
     OpenMigrationReportRequest,
-    SaveMigrationReportRequest
+    SaveMigrationReportRequest,
+    FetchSamplesRequest
 } from "@wso2/wi-core";
 import { Messenger } from "vscode-messenger";
 import { MainRpcManager } from "./rpc-manager";
@@ -73,7 +74,7 @@ export function registerMainRpcHandlers(messenger: Messenger) {
     messenger.onRequest(getSubFolderNames, (args: GetSubFoldersRequest) => rpcManger.getSubFolderNames(args));
     messenger.onRequest(askProjectDirPath, () => rpcManger.askProjectDirPath());
     messenger.onRequest(createMiProject, (args: CreateMiProjectRequest) => rpcManger.createMiProject(args));
-    messenger.onRequest(fetchSamplesFromGithub, () => rpcManger.fetchSamplesFromGithub());
+    messenger.onRequest(fetchSamplesFromGithub, (args: FetchSamplesRequest) => rpcManger.fetchSamplesFromGithub(args));
     messenger.onNotification(downloadSelectedSampleFromGithub, (args: SampleDownloadRequest) => rpcManger.downloadSelectedSampleFromGithub(args));
     messenger.onRequest(createBIProject, (args: BIProjectRequest) => rpcManger.createBIProject(args));
     messenger.onRequest(getMigrationTools, () => rpcManger.getMigrationTools());

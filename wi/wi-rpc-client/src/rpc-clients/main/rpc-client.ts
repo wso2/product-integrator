@@ -66,7 +66,8 @@ import {
     OpenMigrationReportRequest,
     SaveMigrationReportRequest,
     WebviewContext,
-    getWebviewContext
+    getWebviewContext,
+    FetchSamplesRequest
 } from "@wso2/wi-core";
 import { HOST_EXTENSION } from "vscode-messenger-common";
 import { Messenger } from "vscode-messenger-webview";
@@ -130,8 +131,8 @@ export class MainRpcClient implements WIVisualizerAPI {
         return this._messenger.sendRequest(createMiProject, HOST_EXTENSION, params);
     }
 
-    fetchSamplesFromGithub(): Promise<GettingStartedData> {
-        return this._messenger.sendRequest(fetchSamplesFromGithub, HOST_EXTENSION);
+    fetchSamplesFromGithub(params: FetchSamplesRequest): Promise<GettingStartedData> {
+        return this._messenger.sendRequest(fetchSamplesFromGithub, HOST_EXTENSION, params);
     }
 
     downloadSelectedSampleFromGithub(params: SampleDownloadRequest): void {
