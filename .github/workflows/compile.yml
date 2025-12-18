@@ -32,6 +32,11 @@ jobs:
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
+      - name: Setup Rush
+        uses: gigara/setup-rush@v1.2.0
+        with:
+          pnpm: 10.11.0
+
       - name: Cache TypeScript compilation
         id: cache-typescript
         uses: actions/cache@v4
@@ -116,6 +121,16 @@ jobs:
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh
 
+      - name: Install WI dependencies
+        working-directory: .
+        run: |
+          rush install  
+
+      - name: Build WI
+        working-directory: .
+        run: |
+          rush build    
+
       - name: Install dependencies
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
@@ -139,6 +154,11 @@ jobs:
             echo "⬇️ Downloading built-in extensions"
             npm run download-builtin-extensions
           fi
+
+      - name: Link WI
+        working-directory: .
+        run: |
+          npm run link-wi-extension
 
       - name: Compile (with cache optimization)
         env:
