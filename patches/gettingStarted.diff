@@ -11,6 +11,21 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
  			'description': localize('workbench.startupEditor', "Controls which editor is shown at startup, if none are restored from the previous session.")
  		},
  		'workbench.welcomePage.preferReducedMotion': {
+@@ -324,6 +324,14 @@ configurationRegistry.registerConfigurat
+ 			default: false,
+ 			deprecationMessage: localize('deprecationMessage', "Deprecated, use the global `workbench.reduceMotion`."),
+ 			description: localize('workbench.welcomePage.preferReducedMotion', "When enabled, reduce motion in welcome page.")
++		},
++		'integrator.defaultIntegrator': {
++			'scope': ConfigurationScope.APPLICATION,
++			'type': 'string',
++			'enum': ['WI'],
++			'default': 'WI',
++			'restricted': true,
++			"disallowSyncIgnore": true,
+ 		}
+ 	}
+ });
 Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
 ===================================================================
 --- /dev/null
