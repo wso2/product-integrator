@@ -9,8 +9,42 @@ on:
       awsRunnerId:
         default: 'codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}'
         type: string
+      build_packed_installers:
+        description: 'Whether to build a Balleirna, ICP, and Integrator packed installers'
+        default: true
+        required:  true
+        type: boolean
+      ballerina_version:
+        description: 'Specify Ballerina version to use'
+        required: false
+        type: string
+      icp_version:
+        description: 'Specify ICP version to use'
+        required: false
+        type: string
+      integrator_version:
+        description: 'Specify Integrator version to use'
+        required: false
+        type: string  
+
+permissions:
+  id-token: write
+  contents: write     
 
 jobs:
+  validate-Inputs:
+    if: ${{ inputs.build_packed_installers == true }}
+    name: Validate Inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required inputs
+        run: |
+          if [ -z "${{ inputs.ballerina_version }}" ] || [ -z "${{ inputs.icp_version }}" ] || [ -z "${{ inputs.integrator_version }}" ]; then
+            echo "Error: ballerina_version, icp_version, and integrator_version must not be empty."
+            exit 1
+          else
+            echo "All required version inputs are provided."
+          fi
   compile:
     name: Build repo
     timeout-minutes: 45
@@ -37,17 +71,18 @@ jobs:
         with:
           pnpm: 10.11.0
 
-      - name: Cache TypeScript compilation
-        id: cache-typescript
-        uses: actions/cache@v4
-        with:
-          path: |
-            lib/vscode/out
-            lib/vscode/out-*
-            lib/vscode/.build/node_modules_cache
-          key: typescript-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
-          restore-keys: |
-            typescript-${{ runner.os }}-
+      # TODO:  Enable TypeScript cache when the build failure is resolved
+      # - name: Cache TypeScript compilation
+      #   id: cache-typescript
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: |
+      #       lib/vscode/out
+      #       lib/vscode/out-*
+      #       lib/vscode/.build/node_modules_cache
+      #     key: typescript-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+      #     restore-keys: |
+      #       typescript-${{ runner.os }}-
 
       - name: Cache built-in extensions
         id: cache-extensions
@@ -141,8 +176,8 @@ jobs:
 
       - name: Mixin distro modules
         run: |
-          node build/azure-pipelines/distro/mixin-npm || true
-          node build/azure-pipelines/distro/mixin-quality || true
+          node build/azure-pipelines/distro/mixin-npm.ts || true
+          node build/azure-pipelines/distro/mixin-quality.ts || true
 
       - name: Install builtin extensions
         env:
@@ -188,8 +223,113 @@ jobs:
           ARCHIVE_PATH=../artifacts/vscode-linux-x64.tar.gz
           mkdir -p ../artifacts
           tar -czf "$ARCHIVE_PATH" -C .. VSCode-linux-x64
+      
+      - name: Copy Integrator artifact to build directories
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-deb/
+          cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-rpm/
+
+      - name: Build Linux packages - deb
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          ROOT_DIR=$(pwd)
+          echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-linux.zip"
+          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          cd ./installers/linux-deb
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          cd ${ROOT_DIR}
+
+      - name: Upload Deb artifacts
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-DEB
+          path: |
+            installers/linux-deb/*.deb
+          if-no-files-found: error
+
+        
+      - name: Build Linux packages - rpm
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          ROOT_DIR=$(pwd)
+          echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-linux.zip"
+          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          cd ./installers/linux-rpm
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          cd ${ROOT_DIR}
+      - name: Upload RPM artifacts
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-RPM
+          path: |
+            installers/linux-rpm/*.rpm
+          if-no-files-found: error
+        
+      - name: cosign-installer
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: sigstore/cosign-installer@v3.5.0
+      - name: Sign the deb, rpm installers
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          cosign sign-blob installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb --output-certificate installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.pem --output-signature installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sig --yes
+          cosign sign-blob installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm --output-certificate installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.pem --output-signature installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sig --yes
+      - name: Verify signature of the deb, rpm installers
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          cosign verify-blob installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb --certificate installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.pem --signature installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm --certificate installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.pem --signature installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          
+      - name: Generate Hashes for deb, rpm installers
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          openssl dgst -sha256 -out installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sha256 installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb
+          openssl dgst -sha256 -out installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sha256 installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm
+
+      - name: Upload Signatures and Hashes for deb installer
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Signatures-and-Hashes-DEB
+          path: |
+            installers/linux-deb/*.pem
+            installers/linux-deb/*.sig
+            installers/linux-deb/*.sha256
+          if-no-files-found: error
+        
+      - name: Upload Signatures and Hashes for rpm installer
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/upload-artifact@v4  
+        with:
+          name: Signatures-and-Hashes-RPM
+          path: |
+            installers/linux-rpm/*.pem
+            installers/linux-rpm/*.sig
+            installers/linux-rpm/*.sha256
+          if-no-files-found: error
+
 
       - name: Build CLI (Linux)
+        if: ${{ inputs.build_packed_installers == false}}
         run: |
           source "$HOME/.cargo/env"
           cd cli
@@ -208,6 +348,7 @@ jobs:
           fi
 
       - name: Mix in built CLI into client (Linux)
+        if: ${{ inputs.build_packed_installers == false}}
         run: |
           set -e
           CLI_BIN=./cli/target/release/code
@@ -221,7 +362,8 @@ jobs:
           cp "$CLI_BIN" "../VSCode-linux-x64/bin/$CLI_APP_NAME"
           chmod +x "../VSCode-linux-x64/bin/$CLI_APP_NAME"
 
-      - name: Build Linux packages - deb
+      - name: Build Linux packages - deb (only Integrator)
+        if: ${{ inputs.build_packed_installers == false}}
         env:
           VSCODE_ARCH: x64
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -233,7 +375,8 @@ jobs:
           # Copy outputs
           cp .build/linux/deb/*/deb/*.deb ../artifacts/ || true
 
-      - name: Build Linux packages - rpm
+      - name: Build Linux packages - rpm (only Integrator)
+        if: ${{ inputs.build_packed_installers == false}}
         env:
           VSCODE_ARCH: x64
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -255,7 +398,8 @@ jobs:
           # Copy outputs
           cp .build/linux/rpm/*/*.rpm ../artifacts/ || true
 
-      - name: Upload Linux artifacts
+      - name: Upload Linux artifacts (only Integrator)
+        if: ${{ inputs.build_packed_installers == false}}
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-linux
