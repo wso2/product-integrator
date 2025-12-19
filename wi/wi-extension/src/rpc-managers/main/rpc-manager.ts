@@ -45,7 +45,9 @@ import {
     ShowErrorMessageRequest,
     COMMANDS,
     WebviewContext,
-    Platform
+    Platform,
+    BISampleItem,
+    FetchSamplesRequest
 } from "@wso2/wi-core";
 import { commands, window, workspace, MarkdownString, extensions } from "vscode";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, openInVSCode, sanitizeName } from "./utils";
@@ -71,6 +73,7 @@ export class MainRpcManager implements WIVisualizerAPI {
                 pathSeparator: path.sep,
                 env: {
                     MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
+                    BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || ''
                 }
             });
         });
@@ -217,11 +220,15 @@ export class MainRpcManager implements WIVisualizerAPI {
         });
     }
 
-    async fetchSamplesFromGithub(): Promise<GettingStartedData> {
+    async fetchSamplesFromGithub(params: FetchSamplesRequest): Promise<GettingStartedData> {
         return new Promise(async (resolve) => {
-            const url = 'https://mi-connectors.wso2.com/samples/info.json';
+            const url = params.runtime === "WSO2: MI" ?
+                'https://mi-connectors.wso2.com/samples/info.json' :
+                'https://devant-cdn.wso2.com/bi-samples/v1/info.json';
             try {
                 const { data } = await axios.get(url);
+                console.log('Fetched samples data:', data);
+
                 const samples = data.Samples;
                 const categories = data.categories;
 
@@ -263,7 +270,10 @@ export class MainRpcManager implements WIVisualizerAPI {
     }
 
     downloadSelectedSampleFromGithub(params: SampleDownloadRequest): void {
-        const url = 'https://mi-connectors.wso2.com/samples/samples/';
+        let url = 'https://devant-cdn.wso2.com/bi-samples/v1';
+        if (params.runtime === "WSO2: MI") {
+            url = `https://mi-connectors.wso2.com/samples/samples/${params.zipFileName}`;
+        }
         const workspaceFolders = workspace.workspaceFolders;
         const projectUri = this.projectUri ?? (workspaceFolders ? workspaceFolders[0].uri.fsPath : "");
         handleOpenFile(projectUri, params.zipFileName, url);

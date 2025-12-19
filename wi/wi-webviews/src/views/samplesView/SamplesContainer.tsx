@@ -22,8 +22,8 @@ import { ComponentCard, Dropdown, SearchBox } from "@wso2/ui-toolkit";
 import { Button } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react";
-import { useVisualizerContext } from "../../../contexts/RpcContext";
-import { View, ViewContent, ViewHeader } from "../../../components/View";
+import { useVisualizerContext } from "../../contexts/RpcContext";
+import { View, ViewContent, ViewHeader } from "../../components/View";
 import { GettingStartedCategory, GettingStartedSample, SampleDownloadRequest } from "@wso2/wi-core";
 
 
@@ -57,7 +57,11 @@ gap: 20px;
 justify-content: center;
 `;
 
-export function MiSamplesView() {
+export interface SamplesContainerProps {
+    projectType: "WSO2: BI" | "WSO2: MI";
+}
+
+export function SamplesContainer(props: SamplesContainerProps) {
     const { rpcClient, webviewContext } = useVisualizerContext();
     const [filteredSampleData, setFilteredSamples] = React.useState<GettingStartedSample[]>(null);
     const [filteredSampleDataCopy, setFilteredSampleDataCopy] = React.useState<GettingStartedSample[]>(null);
@@ -68,20 +72,20 @@ export function MiSamplesView() {
     const [filterText, setFilterText] = React.useState<string>("");
 
     useEffect(() => {
-        rpcClient.getMainRpcClient().fetchSamplesFromGithub().then((samples) => {
+        rpcClient.getMainRpcClient().fetchSamplesFromGithub({runtime: props.projectType}).then((samples) => {
             setSampleData(samples.samples);
             setFilteredSamples(samples.samples);
             setFilteredSampleDataCopy(samples.samples);
             samples.categories.unshift({ id: 0, title: "All", icon: "" });
             setCategories(samples.categories);
             let urls = [];
-            const sampleIconUrl = webviewContext?.env?.MI_SAMPLE_ICONS_GITHUB_URL || '';
+            const sampleIconUrl = props.projectType === "WSO2: MI" ? webviewContext?.env?.MI_SAMPLE_ICONS_GITHUB_URL : webviewContext?.env?.BI_SAMPLE_ICONS_GITHUB_URL || '';
             for (let i = 0; i < samples.categories.length; i++) {
                 urls.push(sampleIconUrl + samples.categories[i].icon);
             }
             setImages(urls);
         });
-    }, [webviewContext]);
+    }, [webviewContext, props.projectType]);
 
     const handleChange = (value: string) => {
         if (value === "All") {
@@ -110,7 +114,8 @@ export function MiSamplesView() {
 
     function downloadSample(sampleName: string) {
         let request: SampleDownloadRequest = {
-            zipFileName: sampleName
+            zipFileName: sampleName,
+            runtime: props.projectType
         }
         rpcClient.getMainRpcClient().downloadSelectedSampleFromGithub(request);
     }
@@ -156,7 +161,7 @@ export function MiSamplesView() {
                                     sx={{ alignItems: "flex-start", width: "220px", marginBottom: "20px", cursor: "default" }}>
                                     <SampleContainer key={sample.title}>
                                         <h2 className="card-title" style={{ margin: '0', fontSize: '16px' }}>{sample.title}</h2>
-                                        <img src={images[sample.category]} className="card-image" style={{ width: '50%', minHeight: 94 }} />
+                                        <img src={images[sample.category]} className="card-image" style={{ width: '50%', minHeight: 94 }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                         <p className="card-content" style={{ marginTop: '16px', textAlign: 'justify' }}>{sample.description}</p>
                                         {sample.isAvailable ?
                                             <Button appearance="secondary" onClick={() => downloadSample(sample.zipFileName)}>Download</Button>

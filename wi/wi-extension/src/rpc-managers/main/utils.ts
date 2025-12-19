@@ -66,7 +66,7 @@ export async function askFileOrFolderPath() {
 }
 
 export async function handleOpenFile(projectUri: string, sampleName: string, repoUrl: string) {
-    const rawFileLink = repoUrl + sampleName + '/' + sampleName + '.zip';
+    const rawFileLink = repoUrl + '/' + sampleName + '.zip';
     const defaultDownloadsPath = path.join(os.homedir(), 'Downloads'); // Construct the default downloads path
     const pathFromDialog = await selectFileDownloadPath();
     if (pathFromDialog === "") {
@@ -93,6 +93,7 @@ export async function handleOpenFile(projectUri: string, sampleName: string, rep
 
             try {
                 await handleDownloadFile(projectUri, rawFileLink, filePath, progress, cancelled);
+                console.log('Download completed');
                 isSuccess = true;
                 return;
             } catch (error) {
@@ -172,8 +173,10 @@ async function downloadFile(projectUri: string, url: string, filePath: string, p
         const response = await axios.get(url, {
             responseType: 'stream',
             headers: {
-                "User-Agent": "Mozilla/5.0"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             },
+            maxRedirects: 5,
+            timeout: 30000,
             onDownloadProgress: (progressEvent) => {
                 totalBytes = progressEvent.total!;
                 const formatSize = (sizeInBytes: number) => {
