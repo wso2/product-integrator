@@ -41,6 +41,7 @@ const LoaderWrapper = styled.div`
     align-items: center;
     height: 30vh;
     width: 100vw;
+    padding: 20px;
 `;
 
 const ProgressRing = styled(VSCodeProgressRing)`
@@ -51,10 +52,13 @@ const ProgressRing = styled(VSCodeProgressRing)`
 `;
 
 const SampleGrid = styled.div`
-display: flex;
-flex-wrap: wrap;
-gap: 20px;
-justify-content: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 20px;
+    height: calc(100vh - 270px);
+    overflow-y: auto;
 `;
 
 export interface SamplesContainerProps {

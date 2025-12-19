@@ -23,7 +23,7 @@ import styled from "@emotion/styled";
 const ViewWrapper = styled.div({
     display: 'flex',
     flexDirection: 'column',
-    height: '100vh',
+    height: '100%',
 });
 
 const View: React.FC<{ children: ReactNode }> = ({ children }) => {
