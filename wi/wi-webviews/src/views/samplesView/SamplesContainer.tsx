@@ -160,7 +160,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
                                     disbaleHoverEffect={true}
                                     sx={{ alignItems: "flex-start", width: "220px", marginBottom: "20px", cursor: "default" }}>
                                     <SampleContainer key={sample.title}>
-                                        <h2 className="card-title" style={{ margin: '0', fontSize: '16px' }}>{sample.title}</h2>
+                                        <h2 className="card-title" style={{ margin: '0', fontSize: '16px', minHeight: '35px' }}>{sample.title}</h2>
                                         <img src={images[sample.category]} className="card-image" style={{ width: '50%', minHeight: 94 }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                         <p className="card-content" style={{ marginTop: '16px', textAlign: 'justify' }}>{sample.description}</p>
                                         {sample.isAvailable ?
