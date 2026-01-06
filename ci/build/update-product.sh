@@ -35,9 +35,9 @@ echo '{
       "https://devant.dev",
       "https://console.devant.dev"
     ],
-    "trustedExtensionProtocolHandlers": {
+    "trustedExtensionProtocolHandlers": [
       "wso2.wso2-platform"
-    },
+    ],
     "trustedExtensionAuthAccess": [
       "vscode.git", "vscode.github",
       "github.vscode-pull-request-github",
