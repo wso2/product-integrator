@@ -93,8 +93,7 @@ echo '{
       {
         "name": "wso2.wso2-integrator",
         "vsix": "../../wi/wi-extension/wso2-integrator-1.0.0.vsix",
-        "version": "latest",
-        "sha256": "624bc9f53292fb52ee43ae5ce999bf341c462a172c95cd8ede3b02552063c017"
+        "version": "latest"
       }
 	  ]
 }
