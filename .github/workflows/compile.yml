@@ -159,7 +159,7 @@ jobs:
       - name: Setup WI build
         uses: gigara/setup-rush@v1.2.0
         with:
-          rush-build: true
+          build-rush: true
 
       - name: Install dependencies
         env:
