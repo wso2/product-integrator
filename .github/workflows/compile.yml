@@ -185,11 +185,6 @@ jobs:
             npm run download-builtin-extensions
           fi
 
-      - name: Link WI
-        working-directory: .
-        run: |
-          npm run link-wi-extension
-
       - name: Compile (with cache optimization)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
