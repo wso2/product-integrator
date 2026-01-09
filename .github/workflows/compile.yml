@@ -146,9 +146,6 @@ jobs:
         with:
           path: lib/vscode-reh-web-*
           key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
-
-      - name: Apply patches
-        run: quilt push -a
   
       - name: Update product.json and branding
         working-directory: .
