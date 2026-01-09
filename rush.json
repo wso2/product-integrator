@@ -56,7 +56,7 @@
             "npm run update-product"
         ],
         "postRushBuild": [
-            "npm run symlink-extension"
+            "npm run link-wi-extension"
         ]
     },
     "gitPolicy": {},
