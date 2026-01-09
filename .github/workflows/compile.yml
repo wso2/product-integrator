@@ -156,10 +156,8 @@ jobs:
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh
 
-      - name: Install WI dependencies
-        working-directory: .
-        run: |
-          rush install  
+      - name: Setup Rush
+        uses: gigara/setup-rush@v1.2.0
 
       - name: Build WI
         working-directory: .
