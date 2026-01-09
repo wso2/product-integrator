@@ -153,10 +153,13 @@ jobs:
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh
 
-      - name: Setup WI build
+      - name: Setup WI
         uses: gigara/setup-rush@v1.2.0
-        with:
-          build-rush: true
+
+      - name: Build WI extension
+        working-directory: .
+        run: |
+          node common/scripts/install-run-rush.js build --verbose
 
       - name: Install dependencies
         env:
