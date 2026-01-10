@@ -403,3 +403,10 @@ jobs:
           name: compilation
           path: lib/compilation.tar.gz
           if-no-files-found: error
+
+      - name: Upload WI extension VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: wi-extension-vsix
+          path: wi/wi-extension/wso2-integrator-*.vsix
+          if-no-files-found: error
