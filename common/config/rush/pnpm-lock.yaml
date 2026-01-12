@@ -182,6 +182,9 @@ importers:
       '@wso2/wi-core':
         specifier: workspace:*
         version: link:../wi-core
+      '@wso2/wi-webviews':
+        specifier: workspace:*
+        version: link:../wi-webviews
       axios:
         specifier: ~1.13.2
         version: 1.13.2
