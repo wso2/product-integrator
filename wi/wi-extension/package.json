@@ -182,7 +182,7 @@
     "lint:fix": "biome check --write .",
     "vscode:prepublish": "npm run copyJSLibs",
     "build": "webpack --mode production && npm run package",
-    "copyJSLibs": "copyfiles -f ../wi-webviews/build/main.js resources/jslibs",
+    "copyJSLibs": "copyfiles -E -f ../wi-webviews/build/main.js resources/jslibs",
     "watch": "tsc -p . -w",
     "compile": "tsc -p ./",
     "compile-tests": "tsc -p . --outDir out",

@@ -9,8 +9,8 @@
     "lint:fix": "biome check --write --unsafe .",
     "start": "webpack-dev-server --mode=development --progress",
     "build": "tsc --pretty && webpack --mode production && npm run copy:assets && npm run postbuild",
-    "copy:assets": "copyfiles -u 1 \"src/**/*.css\" \"src/**/*.svg\" \"src/**/*.png\" lib/",
-    "postbuild": "copyfiles -u 1 \"build/**/*\" ../wi-extension/resources/jslibs"
+    "copy:assets": "copyfiles -E -u 1 \"src/**/*.css\" \"src/**/*.svg\" \"src/**/*.png\" lib/",
+    "postbuild": "copyfiles -E -u 1 \"build/**/*\" ../wi-extension/resources/jslibs"
   },
   "keywords": [],
   "author": "WSO2",
