@@ -1,0 +1,13 @@
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/workspace/browser/workspace.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/workspace/browser/workspace.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/workspace/browser/workspace.contribution.ts
+@@ -750,7 +750,7 @@ Registry.as<IConfigurationRegistry>(Conf
+ 			},
+ 			[WORKSPACE_TRUST_BANNER]: {
+ 				type: 'string',
+-				default: 'untilDismissed',
++				default: 'never',
+ 				description: localize('workspace.trust.banner.description', "Controls when the restricted mode banner is shown."),
+ 				tags: [WORKSPACE_TRUST_SETTING_TAG],
+ 				scope: ConfigurationScope.APPLICATION,
