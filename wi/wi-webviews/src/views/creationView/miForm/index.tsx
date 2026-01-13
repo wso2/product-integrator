@@ -69,12 +69,12 @@ export function MiProjectWizard() {
 
     const loweCasedDirContent = dirContent.map((folder: string) => folder.toLowerCase());
     const schema = yup.object({
-        name: yup.string().required("Project Name is required").matches(/^[a-zA-Z0-9_-]([a-zA-Z0-9_-]*\.?[a-zA-Z0-9_-])*$/i, "Project name cannot contain spaces or special characters")
+        name: yup.string().required("Integration Name is required").matches(/^[a-zA-Z0-9_-]([a-zA-Z0-9_-]*\.?[a-zA-Z0-9_-])*$/i, "Integration name cannot contain spaces or special characters")
             .test('validateFolderName',
                 'A subfolder with same name already exists', value => {
                     return !loweCasedDirContent.includes(value.toLowerCase())
                 }),
-        directory: yup.string().required("Project Directory is required"),
+        directory: yup.string().required("Integration Path is required"),
         groupID: yup.string().notRequired().default("com.microintegrator.projects").matches(/^[a-zA-Z0-9_-]([a-zA-Z0-9_-]*\.?[a-zA-Z0-9_-])*$/, "Group id cannot contain spaces or special characters"),
         artifactID: yup.string().notRequired().matches(/^[a-zA-Z0-9_-]?([a-zA-Z0-9_-]*\.?[a-zA-Z0-9_-])*$/, "Artifact id cannot contain spaces or special characters"),
         version: yup.string().notRequired().default("1.0.0").matches(/^[a-zA-Z0-9.]*$/, "Version cannot contain spaces or special characters"),
@@ -147,7 +147,7 @@ export function MiProjectWizard() {
             <FieldGroup>
                 <TextField
                     id='name'
-                    label="Project Name"
+                    label="Integration Name"
                     required
                     errorMsg={errors.name?.message.toString()}
                     {...register("name")}
@@ -166,10 +166,11 @@ export function MiProjectWizard() {
             </FieldGroup>
             <FieldGroup>
                 <LocationSelector
-                    label="Project Directory"
+                    label="Select Integration Path"
                     selectedFile={watch("directory")}
                     required
                     onSelect={handleProjecDirSelection}
+                    btnText="Select Path"
                     {...register("directory")}
                 />
             </FieldGroup>
@@ -207,7 +208,7 @@ export function MiProjectWizard() {
                 <Button
                     appearance="primary"
                     onClick={handleSubmit(handleCreateProject)}
-                    disabled={(!isDirty) || Object.keys(errors).length > 0 || formSaved}
+                    disabled={(!isDirty) || Object.keys(errors).length > 0 || formSaved || !watch("directory")}
                 >
                     {formSaved ? (
                         <>
