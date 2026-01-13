@@ -89,6 +89,11 @@ echo '{
       {
         "name": "wso2.micro-integrator",
         "version": "latest"
+      },
+      {
+        "name": "wso2.wso2-integrator",
+        "vsix": "../../wi/wi-extension/wso2-integrator-1.0.0.vsix",
+        "version": "latest"
       }
 	  ]
 }

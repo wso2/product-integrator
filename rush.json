@@ -56,7 +56,6 @@
             "npm run update-product"
         ],
         "postRushBuild": [
-            "npm run symlink-extension"
         ]
     },
     "gitPolicy": {},

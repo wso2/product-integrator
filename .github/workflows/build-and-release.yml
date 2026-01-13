@@ -139,6 +139,12 @@ jobs:
       - name: Extract compilation output
         run: tar -xzf compilation.tar.gz
 
+      - name: Download WI extension VSIX
+        uses: actions/download-artifact@v4
+        with:
+          name: wi-extension-vsix
+          path: wi/wi-extension
+
       - name: Install quilt (macOS)
         run: |
           brew install quilt
@@ -427,6 +433,12 @@ jobs:
       - name: Extract compilation output
         shell: pwsh
         run: tar -xzf compilation.tar.gz
+
+      - name: Download WI extension VSIX
+        uses: actions/download-artifact@v4
+        with:
+          name: wi-extension-vsix
+          path: wi/wi-extension
 
       - name: Install Rsync (Windows)
         shell: pwsh

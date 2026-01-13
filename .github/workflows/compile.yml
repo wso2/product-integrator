@@ -146,9 +146,6 @@ jobs:
         with:
           path: lib/vscode-reh-web-*
           key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
-
-      - name: Apply patches
-        run: quilt push -a
   
       - name: Update product.json and branding
         working-directory: .
@@ -156,15 +153,13 @@ jobs:
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh
 
-      - name: Install WI dependencies
-        working-directory: .
-        run: |
-          rush install  
+      - name: Setup WI
+        uses: gigara/setup-rush@v1.2.0
 
-      - name: Build WI
+      - name: Build WI extension
         working-directory: .
         run: |
-          rush build    
+          node common/scripts/install-run-rush.js build --verbose
 
       - name: Install dependencies
         env:
@@ -189,11 +184,6 @@ jobs:
             echo "⬇️ Downloading built-in extensions"
             npm run download-builtin-extensions
           fi
-
-      - name: Link WI
-        working-directory: .
-        run: |
-          npm run link-wi-extension
 
       - name: Compile (with cache optimization)
         env:
@@ -412,4 +402,11 @@ jobs:
         with:
           name: compilation
           path: lib/compilation.tar.gz
+          if-no-files-found: error
+
+      - name: Upload WI extension VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: wi-extension-vsix
+          path: wi/wi-extension/wso2-integrator-*.vsix
           if-no-files-found: error

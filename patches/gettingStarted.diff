@@ -22,7 +22,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
 +			'enum': ['WI'],
 +			'default': 'WI',
 +			'restricted': true,
-+			"disallowSyncIgnore": true,
++			'disallowSyncIgnore': true,
  		}
  	}
  });

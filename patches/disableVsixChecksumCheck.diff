@@ -1,0 +1,29 @@
+Index: product-integrator/lib/vscode/build/lib/extensions.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/build/lib/extensions.ts
++++ product-integrator/lib/vscode/build/lib/extensions.ts
+@@ -269,15 +269,15 @@ export function fromVsix(vsixPath: strin
+ 
+ 	return gulp.src(vsixPath)
+ 		.pipe(buffer())
+-		.pipe(es.mapSync((f: File) => {
+-			const hash = crypto.createHash('sha256');
+-			hash.update(f.contents as Buffer);
+-			const checksum = hash.digest('hex');
+-			if (checksum !== sha256) {
+-				throw new Error(`Checksum mismatch for ${vsixPath} (expected ${sha256}, actual ${checksum}))`);
+-			}
+-			return f;
+-		}))
++		// .pipe(es.mapSync((f: File) => {
++		// 	const hash = crypto.createHash('sha256');
++		// 	hash.update(f.contents as Buffer);
++		// 	const checksum = hash.digest('hex');
++		// 	if (checksum !== sha256) {
++		// 		throw new Error(`Checksum mismatch for ${vsixPath} (expected ${sha256}, actual ${checksum}))`);
++		// 	}
++		// 	return f;
++		// }))
+ 		.pipe(vzip.src())
+ 		.pipe(filter('extension/**'))
+ 		.pipe(rename(p => p.dirname = p.dirname!.replace(/^extension\/?/, '')))

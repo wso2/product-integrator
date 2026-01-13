@@ -182,7 +182,7 @@
     "lint:fix": "biome check --write .",
     "vscode:prepublish": "npm run copyJSLibs",
     "build": "webpack --mode production && npm run package",
-    "copyJSLibs": "copyfiles -f ../wi-webviews/build/main.js resources/jslibs",
+    "copyJSLibs": "copyfiles -E -f ../wi-webviews/build/main.js resources/jslibs",
     "watch": "tsc -p . -w",
     "compile": "tsc -p ./",
     "compile-tests": "tsc -p . --outDir out",
@@ -208,7 +208,8 @@
     "webpack": "^5.102.1",
     "webpack-cli": "^6.0.1",
     "webpack-permissions-plugin": "^1.0.9",
-    "@playwright/test": "~1.55.1"
+    "@playwright/test": "~1.55.1",
+    "@wso2/wi-webviews": "workspace:*"
   },
   "dependencies": {
     "@wso2/wi-core": "workspace:*",
