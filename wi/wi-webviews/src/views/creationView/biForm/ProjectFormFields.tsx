@@ -146,6 +146,7 @@ export function ProjectFormFields({ formData, onFormDataChange, onValidationChan
                     selectedFile={formData.path}
                     btnText="Select Path"
                     onSelect={handleProjectDirSelection}
+                    required
                 />
 
                 <CheckboxContainer>
