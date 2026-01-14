@@ -319,6 +319,19 @@ jobs:
           ./build.sh ballerina.zip VSCode-darwin-${{ matrix.arch }}.zip icp.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
 
+      - name: Login to AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Upload macOS artifacts to S3
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
+          aws s3 cp installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg "${S3_PATH}" --recursive
+      
       - name: Upload macOS artifacts
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
@@ -327,8 +340,7 @@ jobs:
           path: |
             installers/mac/*.pkg
           if-no-files-found: error
-      
-      
+
       - name: cosign-installer
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: sigstore/cosign-installer@v3.5.0
@@ -611,6 +623,19 @@ jobs:
           Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
           Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
           .\build.bat .\ballerina.zip .\VSCode-win32-x64.zip .\icp.zip $INTEGRATOR_VERSION
+
+      - name: Login to AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Upload Windows artifacts to S3
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
+          aws s3 cp installers/windows/wso2-integrator-${{ github.event.inputs.integrator_version }}.msi "${S3_PATH}" --recursive
 
       - name: Upload Windows artifacts
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
