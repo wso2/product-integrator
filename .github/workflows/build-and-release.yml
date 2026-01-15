@@ -328,6 +328,7 @@ jobs:
       
       - name: Upload macOS artifacts to S3
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        working-directory: .
         run: |
           S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
           aws s3 cp installers/mac/*.pkg "${S3_PATH}" --recursive
