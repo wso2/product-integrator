@@ -459,6 +459,7 @@ jobs:
 
       - name: Apply patches (Windows)
         shell: bash
+        working-directory: .
         run: |
           # Apply patches using git apply since Windows doesn't have quilt
           while IFS= read -r patch || [ -n "$patch" ]; do
