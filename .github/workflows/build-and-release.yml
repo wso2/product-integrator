@@ -462,12 +462,16 @@ jobs:
         shell: bash
         working-directory: .
         run: |
-          # Apply patches using git apply since Windows doesn't have quilt
+          # Apply patches using git apply with lenient options
           while IFS= read -r patch || [ -n "$patch" ]; do
+            # Trim whitespace from patch filename
+            patch=$(echo "$patch" | xargs)
             # Skip empty lines and comments
             [[ -z "$patch" || "$patch" =~ ^[[:space:]]*# ]] && continue
             echo "Applying patch: $patch"
-            git apply "patches/$patch"
+            git apply --whitespace=fix --ignore-whitespace "patches/$patch" || \
+            git apply --reject --whitespace=fix "patches/$patch" || \
+            (echo "Warning: Failed to apply patch $patch" && exit 1)
           done < patches/series
 
       - name: Update product.json and branding
