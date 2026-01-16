@@ -331,7 +331,7 @@ jobs:
         working-directory: .
         run: |
           S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
-          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --include "*.pkg"
+          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.pkg"
       
       - name: Upload macOS artifacts
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
@@ -640,8 +640,8 @@ jobs:
       - name: Upload Windows artifacts to S3
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
-          S3_PATH="s3://${{ vars.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
-          aws s3 cp installers/windows/WixPackage/bin/x64/Release/en-US/wso2-integrator-${{ github.event.inputs.integrator_version }}.msi "${S3_PATH}"
+          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
+          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.pkg"
 
       - name: Upload Windows artifacts
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
