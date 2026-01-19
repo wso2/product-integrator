@@ -17,7 +17,7 @@
  * 
  * THIS FILE INCLUDES AUTO GENERATED CODE
  */
-import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, DownloadProgress, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, MigrationToolStateData, MigrationToolLogData, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest } from "../../types/rpc.types";
+import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, DownloadProgress, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, MigrationToolStateData, MigrationToolLogData, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest, SemanticVersion } from "../../types/rpc.types";
 import { NotificationType, RequestType } from "vscode-messenger-common";
 
 const _preFix = "main";
@@ -42,6 +42,7 @@ export const onDownloadProgress: NotificationType<DownloadProgress> = { method: 
 export const onMigrationToolStateChanged: NotificationType<MigrationToolStateData> = { method: `${_preFix}/onMigrationToolStateChanged` };
 export const onMigrationToolLogs: NotificationType<MigrationToolLogData> = { method: `${_preFix}/onMigrationToolLogs` };
 export const getMigrationTools: RequestType<void, GetMigrationToolsResponse> = { method: `${_preFix}/getMigrationTools` };
+export const isSupportedSLVersion: RequestType<SemanticVersion, boolean> = { method: `${_preFix}/isSupportedSLVersion` };
 export const migrateProject: RequestType<MigrateRequest, void> = { method: `${_preFix}/migrateProject` };
 export const pullMigrationTool: RequestType<PullMigrationToolRequest, void> = { method: `${_preFix}/pullMigrationTool` };
 export const importIntegration: RequestType<ImportIntegrationRPCRequest, ImportIntegrationResponse> = { method: `${_preFix}/importIntegration` };

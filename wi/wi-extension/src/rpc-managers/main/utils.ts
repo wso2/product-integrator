@@ -16,18 +16,24 @@
  * under the License.
  */
 
-import { commands, debug, env, Progress, ProgressLocation, Uri, window, workspace } from "vscode";
+import { commands, debug, env, Progress, ProgressLocation, RelativePattern, Uri, window, workspace } from "vscode";
 import * as os from 'os';
 import path from "path";
 import * as fs from 'fs';
 import * as unzipper from 'unzipper';
 import axios from "axios";
-import { DownloadProgress, onDownloadProgress, Platform } from "@wso2/wi-core";
+import { DownloadProgress, onDownloadProgress, Platform, SemanticVersion } from "@wso2/wi-core";
 import { RPCLayer } from "../../RPCLayer";
 
 interface ProgressMessage {
     message: string;
     increment?: number;
+}
+
+export enum VERSION {
+    BETA = 'beta',
+    ALPHA = 'alpha',
+    PREVIEW = 'preview'
 }
 
 export const BALLERINA_INTEGRATOR_ISSUES_URL = "https://github.com/wso2/product-ballerina-integrator/issues";
@@ -254,4 +260,71 @@ export function getPlatform(): any {
 
 export function openInVSCode(projectRoot: string) {
     commands.executeCommand('vscode.openFolder', Uri.file(path.resolve(projectRoot)));
+}
+
+/**
+ * Compares the current Ballerina version against a minimum required version.
+ * Only returns true for GA (non-preview/alpha/beta) versions that meet or exceed the minimum.
+ * 
+ * @param ballerinaExtInstance The Ballerina extension instance
+ * @param minSupportedVersion Minimum version (use createVersionNumber helper to generate)
+ * @returns true if current version is GA and meets minimum requirement
+ * 
+ * @example
+ * // Check if version is at least 2201.1.30
+ * isSupportedSLVersion(ext, createVersionNumber(2201, 1, 30))
+ */
+export function isSupportedSLVersionUtil(
+    ballerinaExtInstance: any,
+    minSupportedVersion: SemanticVersion
+) {
+    const ballerinaVersion: string = ballerinaExtInstance.ballerinaVersion.toLocaleLowerCase();
+    console.log(`Current Ballerina version: ${ballerinaVersion}`);
+    const isGA: boolean = !ballerinaVersion.includes(VERSION.ALPHA) && !ballerinaVersion.includes(VERSION.BETA) && !ballerinaVersion.includes(VERSION.PREVIEW);
+
+    if (!isGA) {
+        return false;
+    }
+
+    // Parse current version
+    const regex = /(\d+)\.(\d+)\.(\d+)/;
+    const match = ballerinaVersion.match(regex);
+    if (!match) {
+        return false;
+    }
+
+    const currentVersion = {
+        major: Number(match[1]),
+        minor: Number(match[2]),
+        patch: Number(match[3])
+    };
+
+    // Compare versions component by component
+    return compareVersions(currentVersion, minSupportedVersion);
+}
+
+/**
+ * Compares two versions using semantic versioning rules.
+ * Returns true if current version >= minimum version.
+ * 
+ * @param current Current version components
+ * @param minimum Minimum required version components
+ * @returns true if current >= minimum
+ */
+function compareVersions(
+    current: SemanticVersion,
+    minimum: SemanticVersion
+): boolean {
+    // Compare major version first
+    if (current.major !== minimum.major) {
+        return current.major > minimum.major;
+    }
+
+    // Major versions are equal, compare minor
+    if (current.minor !== minimum.minor) {
+        return current.minor > minimum.minor;
+    }
+
+    // Major and minor are equal, compare patch
+    return current.patch >= minimum.patch;
 }

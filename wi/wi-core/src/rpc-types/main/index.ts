@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest } from "../../types/rpc.types";
+import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest, SemanticVersion } from "../../types/rpc.types";
 
 export * from "./rpc-type";
 export * from "../../types/rpc.types";
@@ -39,6 +39,7 @@ export interface WIVisualizerAPI {
     downloadSelectedSampleFromGithub: (params: SampleDownloadRequest) => void;
     createBIProject: (params: BIProjectRequest) => Promise<void>;
     getMigrationTools: () => Promise<GetMigrationToolsResponse>;
+    isSupportedSLVersion: (params: SemanticVersion) => Promise<boolean>;
     migrateProject: (params: MigrateRequest) => Promise<void>;
     pullMigrationTool: (params: PullMigrationToolRequest) => Promise<void>;
     importIntegration: (params: ImportIntegrationRPCRequest) => Promise<ImportIntegrationResponse>;

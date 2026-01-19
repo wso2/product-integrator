@@ -31,6 +31,14 @@ const ButtonWrapper = styled.div`
     justify-content: flex-end;
 `;
 
+const ScrollableContent = styled.div`
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 8px;
+    min-height: 0;
+    max-height: calc(100vh - 380px);
+`;
+
 export function BIProjectForm() {
     const { rpcClient } = useVisualizerContext();
     const [formData, setFormData] = useState<ProjectFormData>({
@@ -46,12 +54,18 @@ export function BIProjectForm() {
         setFormData(prev => ({ ...prev, ...data }));
     };
 
-    const handleCreateProject = () => {
+    const handleCreateProject = async () => {
+        console.log("Creating BI Project with data:", formData);
+        // Add 10 sec delay for debugging
+        await new Promise(resolve => setTimeout(resolve, 20000));
+
         rpcClient.getMainRpcClient().createBIProject({
             projectName: formData.integrationName,
             packageName: formData.packageName,
             projectPath: formData.path,
             createDirectory: formData.createDirectory,
+            createAsWorkspace: formData.createAsWorkspace,
+            workspaceName: formData.workspaceName,
             orgName: formData.orgName || undefined,
             version: formData.version || undefined,
         });
@@ -59,18 +73,19 @@ export function BIProjectForm() {
 
     return (
         <div style={{ width: '100%' }}>
-            <ProjectFormFields
-                formData={formData}
-                onFormDataChange={handleFormDataChange}
-            />
-
+            <ScrollableContent>
+                <ProjectFormFields
+                    formData={formData}
+                    onFormDataChange={handleFormDataChange}
+                />
+            </ScrollableContent>
             <ButtonWrapper>
                 <Button
                     disabled={!isFormValid(formData)}
                     onClick={handleCreateProject}
                     appearance="primary"
                 >
-                    Create Integration
+                    {formData.createAsWorkspace ? "Create Workspace" : "Create Integration"}
                 </Button>
             </ButtonWrapper>
         </div>
