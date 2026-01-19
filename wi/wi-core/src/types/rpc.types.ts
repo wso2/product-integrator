@@ -119,8 +119,16 @@ export interface BIProjectRequest {
     packageName: string;
     projectPath: string;
     createDirectory: boolean;
+    createAsWorkspace?: boolean;
+    workspaceName?: string;
     orgName?: string;
     version?: string;
+}
+
+export interface SemanticVersion {
+    major: number;
+    minor: number;
+    patch: number;
 }
 
 export interface MigrationTool {

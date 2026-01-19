@@ -40,6 +40,7 @@ import {
     downloadSelectedSampleFromGithub,
     createBIProject,
     getMigrationTools,
+    isSupportedSLVersion,
     migrateProject,
     pullMigrationTool,
     importIntegration,
@@ -67,7 +68,8 @@ import {
     SaveMigrationReportRequest,
     WebviewContext,
     getWebviewContext,
-    FetchSamplesRequest
+    FetchSamplesRequest,
+    SemanticVersion
 } from "@wso2/wi-core";
 import { HOST_EXTENSION } from "vscode-messenger-common";
 import { Messenger } from "vscode-messenger-webview";
@@ -145,6 +147,10 @@ export class MainRpcClient implements WIVisualizerAPI {
 
     getMigrationTools(): Promise<GetMigrationToolsResponse> {
         return this._messenger.sendRequest(getMigrationTools, HOST_EXTENSION);
+    }
+
+    isSupportedSLVersion(params: SemanticVersion): Promise<boolean> {
+        return this._messenger.sendRequest(isSupportedSLVersion, HOST_EXTENSION, params);
     }
 
     migrateProject(params: MigrateRequest): Promise<void> {
