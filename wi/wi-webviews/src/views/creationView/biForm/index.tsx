@@ -19,6 +19,7 @@
 import { useState } from "react";
 import {
     Button,
+    ProgressRing,
 } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { ProjectFormFields, ProjectFormData } from "./ProjectFormFields";
@@ -49,12 +50,14 @@ export function BIProjectForm() {
         orgName: "",
         version: "",
     });
+    const [formSaved, setFormSaved] = useState(false);
 
     const handleFormDataChange = (data: Partial<ProjectFormData>) => {
         setFormData(prev => ({ ...prev, ...data }));
     };
 
     const handleCreateProject = async () => {
+        setFormSaved(true);
         rpcClient.getMainRpcClient().createBIProject({
             projectName: formData.integrationName,
             packageName: formData.packageName,
@@ -77,11 +80,16 @@ export function BIProjectForm() {
             </ScrollableContent>
             <ButtonWrapper>
                 <Button
-                    disabled={!isFormValid(formData)}
+                    disabled={!isFormValid(formData) || formSaved}
                     onClick={handleCreateProject}
                     appearance="primary"
                 >
-                    {formData.createAsWorkspace ? "Create Workspace" : "Create Integration"}
+                    {formSaved ? (
+                        <>
+                            <ProgressRing sx={{ height: 16, marginLeft: -5, marginRight: 2 }} color="white" />
+                            Creating
+                        </>
+                    ) : formData.createAsWorkspace ? "Create Workspace" : "Create Integration"}
                 </Button>
             </ButtonWrapper>
         </div>
