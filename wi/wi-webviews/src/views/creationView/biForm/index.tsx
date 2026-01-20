@@ -55,10 +55,6 @@ export function BIProjectForm() {
     };
 
     const handleCreateProject = async () => {
-        console.log("Creating BI Project with data:", formData);
-        // Add 10 sec delay for debugging
-        await new Promise(resolve => setTimeout(resolve, 20000));
-
         rpcClient.getMainRpcClient().createBIProject({
             projectName: formData.integrationName,
             packageName: formData.packageName,
