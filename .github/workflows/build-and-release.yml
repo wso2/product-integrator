@@ -639,9 +639,11 @@ jobs:
 
       - name: Upload Windows artifacts to S3
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        shell: bash
+        working-directory: .
         run: |
           S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
-          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.pkg"
+          aws s3 cp installers/windows/WixPackage/bin/x64/Release/en-US/ "${S3_PATH}" --recursive --exclude "*" --include "*.msi"
 
       - name: Upload Windows artifacts
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
