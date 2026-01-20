@@ -47,10 +47,11 @@ import {
     WebviewContext,
     Platform,
     BISampleItem,
-    FetchSamplesRequest
+    FetchSamplesRequest,
+    SemanticVersion
 } from "@wso2/wi-core";
 import { commands, window, workspace, MarkdownString, extensions } from "vscode";
-import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, openInVSCode, sanitizeName } from "./utils";
+import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName } from "./utils";
 import * as fs from "fs";
 import * as path from "path";
 import axios from "axios";
@@ -289,6 +290,14 @@ export class MainRpcManager implements WIVisualizerAPI {
         }
         const langClient = ballerinaExt.exports.ballerinaExtInstance.langClient;
         return langClient as any;
+    }
+
+    async isSupportedSLVersion(params: SemanticVersion): Promise<boolean> {
+        const ballerinaExt = extensions.getExtension('wso2.ballerina');
+        if (!ballerinaExt) {
+            throw new Error('Ballerina extension is not installed');
+        }
+        return isSupportedSLVersionUtil(ballerinaExt.exports.ballerinaExtInstance, params);
     }
 
     async getMigrationTools(): Promise<GetMigrationToolsResponse> {
