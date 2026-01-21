@@ -127,4 +127,28 @@ export function registerCommands(
 			}
 		}),
 	);
+
+	// Refresh explorer command
+	// Calls the BI and MI extensions' refresh commands to update their tree views
+	ext.log(`Registering command: ${COMMANDS.REFRESH_EXPLORER}`);
+	context.subscriptions.push(
+		vscode.commands.registerCommand(COMMANDS.REFRESH_EXPLORER, () => {
+			ext.log("Refresh explorer command triggered");
+			// Trigger refresh for BI extension if available
+			if (extensionAPIs.isBIAvailable()) {
+				vscode.commands.executeCommand("BI.project-explorer.refresh").then(
+					() => ext.log("BI refresh completed"),
+					(error) => ext.logError("BI refresh failed", error)
+				);
+			}
+			// Trigger refresh for MI extension if available
+			if (extensionAPIs.isMIAvailable()) {
+				vscode.commands.executeCommand("MI.project-explorer.refresh").then(
+					() => ext.log("MI refresh completed"),
+					(error) => ext.logError("MI refresh failed", error)
+				);
+			}
+		}),
+	);
+	ext.log("All commands registered successfully");
 }
