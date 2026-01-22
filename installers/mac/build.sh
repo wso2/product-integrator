@@ -33,7 +33,8 @@ BALLERINA_ZIP="$1"
 WSO2_ZIP="$2"
 ICP_ZIP="$3"
 VERSION="$4"
-ARCH="$5"
+BALLERINA_VERSION="$5"
+ARCH="$6"
 
 OUTPUT_PKG="WSO2_Integrator.pkg"
 BUNDLE_IDENTIFIER="com.wso2.integrator"
@@ -80,6 +81,14 @@ if [ -f "$WORK_DIR/scripts/postinstall" ]; then
 fi
 if [ -f "$WORK_DIR/scripts/preinstall" ]; then
     chmod 755 "$WORK_DIR/scripts/preinstall"
+fi
+
+# Extract Ballerina version from the distribution folder
+if [ -z "$BALLERINA_VERSION" ]; then
+    print_warning "Could not determine Ballerina version"
+else
+    # Create a version file for postinstall to read
+    echo "$BALLERINA_VERSION" > "$WORK_DIR/scripts/ballerina_version"
 fi
 
 # Build the component package
