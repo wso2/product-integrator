@@ -153,6 +153,15 @@ jobs:
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh
 
+      - name: Copy .env.example to .env
+        shell: bash
+        working-directory: .
+        run: |
+          find . -type f -name ".env.example" | while read example; do
+            envfile="$(dirname "$example")/.env"
+            cp "$example" "$envfile"
+          done
+
       - name: Setup WI
         uses: gigara/setup-rush@v1.2.0
 
