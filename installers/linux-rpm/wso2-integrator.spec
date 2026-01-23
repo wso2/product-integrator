@@ -91,6 +91,7 @@ fi
 set_curr_bal_active() {
     local user_home=$1
     local username=$2
+    local ballerina_version=$3
     local user_ballerina_dir="$user_home/.ballerina"
     
     if [ ! -d "$user_home" ] || [ "$user_home" = "/" ]; then
@@ -102,19 +103,30 @@ set_curr_bal_active() {
     fi
 
     user_bal_version_file="$user_ballerina_dir/ballerina-version"
-    rm -f "$user_bal_version_file"
-    echo "Removed ballerina-version file for user: $username"
+    
+    if [ -n "$ballerina_version" ]; then
+        echo "$ballerina_version" > "$user_bal_version_file"
+        chown "$username":"$username" "$user_bal_version_file" 2>/dev/null || true
+        echo "Set ballerina-version to $ballerina_version for user: $username"
+    fi
 }
+
+# Read Ballerina version from the version file
+BALLERINA_VERSION=""
+if [ -f "/usr/lib64/ballerina/ballerina_version" ]; then
+    BALLERINA_VERSION=$(cat "/usr/lib64/ballerina/ballerina_version")
+    echo "Read Ballerina version: $BALLERINA_VERSION"
+fi
 
 while IFS=: read -r username _ uid _ _ home _; do
     if [ "$uid" -ge 1000 ] && [ "$username" != "nobody" ]; then
-        set_curr_bal_active "$home" "$username"
+        set_curr_bal_active "$home" "$username" "$BALLERINA_VERSION"
     fi
 done < /etc/passwd 2>/dev/null || true
 
 # Set up for root user
 if [ -d "/root" ]; then
-    set_curr_bal_active "/root" "root"
+    set_curr_bal_active "/root" "root" "$BALLERINA_VERSION"
 fi
 
 %preun

@@ -49,10 +49,13 @@ for USER_HOME in $USER_HOMES; do
     if [ -f "$SCRIPT_DIR/ballerina_version" ]; then
         BALLERINA_VERSION=$(cat "$SCRIPT_DIR/ballerina_version")
         USER_BAL_VERSION_FILE="$USER_HOME/.ballerina/ballerina-version"
-        rm -f "$USER_BAL_VERSION_FILE"
-        echo "Removed ballerina-version file for user: $USERNAME"
-
-        mv "$SCRIPT_DIR/ballerina_version" "$USER_BAL_VERSION_FILE"
+        
+        # Create .ballerina directory if it doesn't exist
+        mkdir -p "$USER_HOME/.ballerina"
+        
+        # Write version to file
+        echo "$BALLERINA_VERSION" > "$USER_BAL_VERSION_FILE"
+        echo "Set ballerina-version to $BALLERINA_VERSION for user: $USERNAME"
     fi
 done
 

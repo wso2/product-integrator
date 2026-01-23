@@ -29,11 +29,12 @@ if hash update-mime-database 2>/dev/null; then
 	update-mime-database /usr/share/mime
 fi
 
-# Remove ballerina-version files to set current Ballerina as active
+# Set the integrator version as active ballerina version for all users
 set_curr_bal_active() {
     local user_home=$1
     local username=$2
     local user_ballerina_dir="$user_home/.ballerina"
+    local ballerina_version=$3
     
     if [ ! -d "$user_home" ] || [ "$user_home" = "/" ]; then
         return
@@ -44,18 +45,29 @@ set_curr_bal_active() {
     fi
 
     user_bal_version_file="$user_ballerina_dir/ballerina-version"
-    rm -f "$user_bal_version_file"
-    echo "Removed ballerina-version file for user: $username"
+    
+    if [ -n "$ballerina_version" ]; then
+        echo "$ballerina_version" > "$user_bal_version_file"
+        chown "$username":"$username" "$user_bal_version_file" 2>/dev/null || true
+        echo "Set ballerina-version to $ballerina_version for user: $username"
+    fi
 }
+
+# Read Ballerina version from the version file
+BALLERINA_VERSION=""
+if [ -f "/usr/lib/ballerina/ballerina_version" ]; then
+    BALLERINA_VERSION=$(cat "/usr/lib/ballerina/ballerina_version")
+    echo "Read Ballerina version: $BALLERINA_VERSION"
+fi
 
 # Process all regular users (UID >= 1000)
 while IFS=: read -r username _ uid _ _ home _; do
     if [ "$uid" -ge 1000 ] && [ "$username" != "nobody" ]; then
-        set_curr_bal_active "$home" "$username"
+        set_curr_bal_active "$home" "$username" "$BALLERINA_VERSION"
     fi
 done < /etc/passwd 2>/dev/null || true
 
 # Set up for root user
 if [ -d "/root" ]; then
-    set_curr_bal_active "/root" "root"
+    set_curr_bal_active "/root" "root" "$BALLERINA_VERSION"
 fi

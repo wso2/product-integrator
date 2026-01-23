@@ -84,6 +84,23 @@ namespace CustomAction1
 
             try
             {
+                // Read Ballerina version from the version file
+                string ballerinaInstallPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    "Ballerina");
+                string ballerinaVersion = null;
+                string versionFilePath = System.IO.Path.Combine(ballerinaInstallPath, "ballerina_version");
+                
+                if (System.IO.File.Exists(versionFilePath))
+                {
+                    ballerinaVersion = System.IO.File.ReadAllText(versionFilePath).Trim();
+                    session.Log($"Read Ballerina version from file: {ballerinaVersion}");
+                }
+                else
+                {
+                    session.Log($"Ballerina version file not found: {versionFilePath}");
+                }
+
                 var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_UserProfile WHERE Special = False");
 
                 using (PrincipalContext context = new PrincipalContext(ContextType.Machine))
@@ -113,14 +130,15 @@ namespace CustomAction1
                         {
                             session.Log($"Ballerina user home directory found: {ballerinaUserHome}");
                             string ballerinaVersionFile = System.IO.Path.Combine(ballerinaUserHome, "ballerina-version");
-                            if (System.IO.File.Exists(ballerinaVersionFile))
+                            
+                            if (!string.IsNullOrEmpty(ballerinaVersion))
                             {
-                                System.IO.File.Delete(ballerinaVersionFile);
-                                session.Log($"Deleted ballerina-version file: {ballerinaVersionFile}");
+                                System.IO.File.WriteAllText(ballerinaVersionFile, ballerinaVersion);
+                                session.Log($"Set ballerina-version to {ballerinaVersion} for user: {username}");
                             }
                             else
                             {
-                                session.Log($"ballerina-version file not found: {ballerinaVersionFile}");
+                                session.Log($"No Ballerina version found, skipping version file update for user: {username}");
                             }
                         }
                     }
@@ -128,7 +146,7 @@ namespace CustomAction1
             }
             catch (Exception ex)
             {
-                session.Log($"Error clearing Ballerina version: {ex}");
+                session.Log($"Error setting Ballerina version: {ex}");
                 return ActionResult.Failure;
             }
 

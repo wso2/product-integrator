@@ -72,6 +72,11 @@ unzip -q -o "$BALLERINA_ZIP" -d "$BALLERINA_TARGET"
 # Move contents from the extracted folder to BALLERINA_TARGET
 bal_extracted_dir=$(find "$BALLERINA_TARGET" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 if [ -n "$bal_extracted_dir" ]; then
+    # Extract Ballerina version from directory name
+    BALLERINA_VERSION=$(basename "$bal_extracted_dir" | sed 's/^ballerina-//')
+    print_info "Detected Ballerina version: $BALLERINA_VERSION"
+    # Save version to file for postinst to read
+    echo "$BALLERINA_VERSION" > "$WORK_DIR/package/DEBIAN/ballerina_version"
     mv "$bal_extracted_dir"/* "$BALLERINA_TARGET"/
     rmdir "$bal_extracted_dir"
 fi

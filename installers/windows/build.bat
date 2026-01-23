@@ -40,8 +40,17 @@ if errorlevel 1 (
     exit /b 1
 )
 REM Move the ballerina-* directory from temp to payload
-REM Move all contents from ballerina-xxxx to payload
+REM Move all contents from ballerina-xxxx to payload and extract version
+set "BALLERINA_VERSION="
 for /d %%D in ("%TEMP_BAL_DIR%\ballerina-*") do (
+    REM Extract version from directory name
+    set "DIR_NAME=%%~nxD"
+    setlocal EnableDelayedExpansion
+    set "BALLERINA_VERSION=!DIR_NAME:ballerina-=!"
+    echo Detected Ballerina version: !BALLERINA_VERSION!
+    REM Save version to file
+    echo !BALLERINA_VERSION! > ".\WixPackage\payload\Ballerina\ballerina_version"
+    endlocal
     xcopy "%%D\*" ".\WixPackage\payload\Ballerina" /E /H /Y
     if errorlevel 1 (
         echo Failed to copy Ballerina files from %%D
