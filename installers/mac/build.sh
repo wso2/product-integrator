@@ -23,9 +23,9 @@ print_warning() {
 
 WORK_DIR=$(pwd)
 
-# Usage: ./build.sh <ballerina_zip> <wso2_zip> <icp_zip> <version> <arch>
-if [ "$#" -ne 5 ]; then
-    echo "Usage: $0 <ballerina_zip> <wso2_zip> <icp_zip> <version> <arch>"
+# Usage: ./build.sh <ballerina_zip> <ballerina_version> <wso2_zip> <icp_zip> <version> <arch>
+if [ "$#" -ne 6 ]; then
+    echo "Usage: $0 <ballerina_zip> <ballerina_version> <wso2_zip> <icp_zip> <version> <arch>"
     exit 1
 fi
 
