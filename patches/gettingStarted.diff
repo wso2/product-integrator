@@ -683,18 +683,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		const cardsContainer = append(wrapper, $('.cards-container'));
 +		const cardsGrid = append(cardsContainer, $('.cards-grid'));
 +
-+		// Open Project Card
-+		this.createActionCard(
-+			cardsGrid,
-+			'↗',
-+			'gradient-green',
-+			'Open Project',
-+			'Open an existing integration project and continue building your solution.',
-+			'Open',
-+			'primary',
-+			'workbench.action.files.openFolder'
-+		);
-+
 +		// Create New Project Card
 +		this.createActionCard(
 +			cardsGrid,
@@ -703,8 +691,20 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +			'Create a New Project',
 +			'Ready to build? Start a new integration project using our intuitive graphical designer.',
 +			'Create',
-+			'secondary',
++			'primary',
 +			WI_CREATE_PROJECT_COMMAND_ID
++		);
++
++		// Open Project Card
++		this.createActionCard(
++			cardsGrid,
++			'↗',
++			'gradient-green',
++			'Open Project',
++			'Open an existing integration project and continue building your solution.',
++			'Open',
++			'secondary',
++			'workbench.action.files.openFolder'
 +		);
 +
 +		// Explore Samples Card
