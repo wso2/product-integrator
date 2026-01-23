@@ -1343,7 +1343,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
-@@ -0,0 +1,453 @@
+@@ -0,0 +1,460 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -1484,6 +1484,13 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		};
 +
 +		cancelButton.addEventListener('click', cancelHandler);
++
++		// Update message after sign-in page opens
++		setTimeout(() => {
++			if (!cancelled) {
++				loaderText.textContent = 'Waiting for authentication...';
++			}
++		}, 1000);
 +
 +		// Trigger sign-in immediately without waiting
 +		signInWSO2(this.authenticationService, this.commandService).then(async () => {
