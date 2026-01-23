@@ -30,9 +30,10 @@ if [ "$#" -lt 3 ]; then
 fi
 
 BALLERINA_ZIP="$1"
-INTEGRATOR_TAR_GZ="$2"
-ICP_ZIP="$3"
-VERSION="${4:-1.0.0}"
+BALLERINA_VERSION="$2"
+INTEGRATOR_TAR_GZ="$3"
+ICP_ZIP="$4"
+VERSION="${5:-1.0.0}"
 
 # Check if input files exist
 if [ ! -f "$BALLERINA_ZIP" ]; then
@@ -81,9 +82,6 @@ unzip -q -o "$BALLERINA_ZIP" -d "$BALLERINA_TARGET"
 # Move contents from the extracted folder to BALLERINA_TARGET
 bal_extracted_dir=$(find "$BALLERINA_TARGET" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 if [ -n "$bal_extracted_dir" ]; then
-    # Extract Ballerina version from directory name
-    BALLERINA_VERSION=$(basename "$bal_extracted_dir" | sed 's/^ballerina-//')
-    print_info "Detected Ballerina version: $BALLERINA_VERSION"
     # Save version to a temporary file that will be included in the RPM
     echo "$BALLERINA_VERSION" > "$BALLERINA_TARGET/ballerina_version"
     mv "$bal_extracted_dir"/* "$BALLERINA_TARGET"/

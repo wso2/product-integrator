@@ -30,10 +30,10 @@ if [ "$#" -ne 5 ]; then
 fi
 
 BALLERINA_ZIP="$1"
-WSO2_ZIP="$2"
-ICP_ZIP="$3"
-VERSION="$4"
-BALLERINA_VERSION="$5"
+BALLERINA_VERSION="$2"
+WSO2_ZIP="$3"
+ICP_ZIP="$4"
+VERSION="$5"
 ARCH="$6"
 
 OUTPUT_PKG="WSO2_Integrator.pkg"
