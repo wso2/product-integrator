@@ -65,10 +65,11 @@ chmod +x "$ICP_TARGET/bin"/*
 # Extract wso2 zip
 WSO2_TARGET="$WORK_DIR/payload/Applications"
 rm -rf "$WSO2_TARGET"
+mkdir -p "$WSO2_TARGET"
 unzip -o "$WSO2_ZIP" -d "$EXTRACTION_TARGET"
 WSO2_UNZIPPED_FOLDER=$(unzip -Z1 "$WSO2_ZIP" | head -1 | cut -d/ -f1)
 WSO2_UNZIPPED_PATH="$EXTRACTION_TARGET/$WSO2_UNZIPPED_FOLDER"
-mv "$WSO2_UNZIPPED_PATH" "$WSO2_TARGET"
+mv "$WSO2_UNZIPPED_PATH"/* "$WSO2_TARGET"
 rm -rf "$WSO2_UNZIPPED_PATH"
 chmod +x "$WSO2_TARGET/WSO2 Integrator.app/Contents/MacOS"/* 2>/dev/null || true
 xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
