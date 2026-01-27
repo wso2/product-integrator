@@ -419,3 +419,19 @@ jobs:
           name: wi-extension-vsix
           path: wi/wi-extension/wso2-integrator-*.vsix
           if-no-files-found: error
+
+      
+      - name: Login to AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Upload linux artifacts to S3
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        working-directory: .
+        run: |
+          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
+          aws s3 cp installers/linux-deb/ "${S3_PATH}" --recursive --exclude "*" --include "*.deb"
+          aws s3 cp installers/linux-rpm/ "${S3_PATH}" --recursive --exclude "*" --include "*.rpm"
