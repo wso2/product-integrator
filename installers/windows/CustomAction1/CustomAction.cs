@@ -130,51 +130,62 @@ namespace CustomAction1
                         {
                             session.Log($"Ballerina user home directory found: {ballerinaUserHome}");
                             
-                            // Delete all ballerina-version files recursively
+                            // Delete ballerina-home directory
                             try
                             {
-                                var versionFiles = System.IO.Directory.GetFiles(ballerinaUserHome, "ballerina-version", System.IO.SearchOption.AllDirectories);
-                                foreach (var file in versionFiles)
+                                string ballerinaHomeDir = System.IO.Path.Combine(ballerinaUserHome, "ballerina-home");
+                                if (System.IO.Directory.Exists(ballerinaHomeDir))
                                 {
-                                    System.IO.File.Delete(file);
-                                    session.Log($"Deleted ballerina-version file: {file}");
+                                    System.IO.Directory.Delete(ballerinaHomeDir, true);
+                                    session.Log($"Deleted ballerina-home directory: {ballerinaHomeDir}");
                                 }
-                                session.Log($"Deleted ballerina-version files for user: {username}");
                             }
                             catch (Exception deleteEx)
                             {
-                                session.Log($"Error deleting ballerina-version files for {username}: {deleteEx.Message}");
+                                session.Log($"Error deleting ballerina-home for {username}: {deleteEx.Message}");
                             }
                         }
                     }
                 }
                 
-                // Set the integrator version as active ballerina version in system-wide location
+                // Update ballerina-version file in each user's home directory
                 if (!string.IsNullOrEmpty(ballerinaVersion))
                 {
-                    string systemBalVersionFile = System.IO.Path.Combine(ballerinaInstallPath, "distributions", "ballerina-version");
-                    string distributionsDir = System.IO.Path.Combine(ballerinaInstallPath, "distributions");
-                    
-                    // Create distributions directory if it doesn't exist
-                    if (!System.IO.Directory.Exists(distributionsDir))
+                    using (PrincipalContext context = new PrincipalContext(ContextType.Machine))
                     {
-                        System.IO.Directory.CreateDirectory(distributionsDir);
+                        foreach (ManagementObject profile in searcher.Get())
+                        {
+                            string localPath = (string)profile["LocalPath"];
+                            if (string.IsNullOrEmpty(localPath)) continue;
+
+                            int lastBackslash = localPath.LastIndexOf('\\');
+                            if (lastBackslash == -1) continue;
+                            
+                            string username = localPath.Substring(lastBackslash + 1);
+                            var user = UserPrincipal.FindByIdentity(context, username);
+
+                            if (user == null || user.Enabled == false) continue;
+
+                            string ballerinaUserHome = System.IO.Path.Combine(localPath, ".ballerina");
+                            
+                            // Create .ballerina directory if it doesn't exist
+                            if (!System.IO.Directory.Exists(ballerinaUserHome))
+                            {
+                                System.IO.Directory.CreateDirectory(ballerinaUserHome);
+                            }
+                            
+                            string ballerinaVersionFile = System.IO.Path.Combine(ballerinaUserHome, "ballerina-version");
+                            
+                            // Remove existing ballerina-version file if it exists
+                            if (System.IO.File.Exists(ballerinaVersionFile))
+                            {
+                                System.IO.File.Delete(ballerinaVersionFile);
+                            }
+                            
+                            System.IO.File.WriteAllText(ballerinaVersionFile, $"ballerina-{ballerinaVersion}");
+                            session.Log($"Set ballerina-version to ballerina-{ballerinaVersion} for user: {username}");
+                        }
                     }
-                    
-                    // Remove existing ballerina-version file if it exists
-                    if (System.IO.File.Exists(systemBalVersionFile))
-                    {
-                        System.IO.File.Delete(systemBalVersionFile);
-                        session.Log("Removed existing system-wide ballerina-version file");
-                    }
-                    
-                    // Write version to system-wide location
-                    System.IO.File.WriteAllText(systemBalVersionFile, ballerinaVersion);
-                    session.Log($"Set system-wide ballerina-version to {ballerinaVersion}");
-                }
-                else
-                {
-                    session.Log("No Ballerina version found, skipping system-wide version file update");
                 }
             }
             catch (Exception ex)

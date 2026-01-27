@@ -29,44 +29,45 @@ fi
 
 USER_HOMES=$(dscl . list /Users NFSHomeDirectory | awk '$2 ~ /^\/Users\// {print $2}')
 
-# Delete all ballerina-version files from user homes
-for USER_HOME in $USER_HOMES; do
-    if [ ! -d "$USER_HOME" ]; then
-        echo "Skipping non-existent home: $USER_HOME"
-        continue
-    fi
-    
-    USERNAME=$(basename "$USER_HOME")
-    
-    if [ "$USERNAME" = "Shared" ] || [ "$USERNAME" = "Guest" ]; then
-        echo "Skipping system user: $USERNAME"
-        continue
-    fi
-
-    # Delete all ballerina-version files recursively inside .ballerina directory
-    if [ -d "$USER_HOME/.ballerina" ]; then
-        find "$USER_HOME/.ballerina" -type f -name "ballerina-version" -delete
-        echo "Deleted ballerina-version files for user: $USERNAME"
-    fi
-done
-
-# Set the integrator version as active ballerina version in system-wide location
+# Read Ballerina version from the version file
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BALLERINA_VERSION=""
 if [ -f "$SCRIPT_DIR/ballerina_version" ]; then
     BALLERINA_VERSION=$(cat "$SCRIPT_DIR/ballerina_version")
-    SYSTEM_BAL_VERSION_FILE="/Library/Ballerina/distributions/ballerina-version"
     
-    # Remove existing ballerina-version file if it exists
-    if [ -f "$SYSTEM_BAL_VERSION_FILE" ]; then
-        rm -f "$SYSTEM_BAL_VERSION_FILE"
-        echo "Removed existing system-wide ballerina-version file"
-    fi
-    
-    # Write version to system-wide location
-    echo "$BALLERINA_VERSION" > "$SYSTEM_BAL_VERSION_FILE"
-    chmod 644 "$SYSTEM_BAL_VERSION_FILE"
-    echo "Set system-wide ballerina-version to $BALLERINA_VERSION"
+    # Delete ballerina-home and update ballerina-version for all users
+    for USER_HOME in $USER_HOMES; do
+        if [ ! -d "$USER_HOME" ]; then
+            echo "Skipping non-existent home: $USER_HOME"
+            continue
+        fi
+        
+        USERNAME=$(basename "$USER_HOME")
+        
+        if [ "$USERNAME" = "Shared" ] || [ "$USERNAME" = "Guest" ]; then
+            echo "Skipping system user: $USERNAME"
+            continue
+        fi
+
+        # Delete ballerina-home directory
+        if [ -d "$USER_HOME/.ballerina" ]; then
+            rm -rf "$USER_HOME/.ballerina/ballerina-home" 2>/dev/null || true
+            echo "Deleted ballerina-home for user: $USERNAME"
+        fi
+        
+        # Create .ballerina directory if it doesn't exist
+        mkdir -p "$USER_HOME/.ballerina"
+        
+        USER_BAL_VERSION_FILE="$USER_HOME/.ballerina/ballerina-version"
+        
+        # Remove existing ballerina-version file if it exists
+        if [ -f "$USER_BAL_VERSION_FILE" ]; then
+            rm -f "$USER_BAL_VERSION_FILE"
+        fi
+        
+        echo "ballerina-$BALLERINA_VERSION" > "$USER_BAL_VERSION_FILE"
+        echo "Set ballerina-version to ballerina-$BALLERINA_VERSION for user: $USERNAME"
+    done
 fi
 
 # Set permissions for the .app in /Applications
