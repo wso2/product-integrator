@@ -32,11 +32,7 @@ if "%~5"=="" (
 
 @REM Copy ballerina.zip to resources directory (will be extracted conditionally during installation)
 echo Copying Ballerina zip to resources directory
-mkdir ".\WixPackage\Resources"
-if errorlevel 1 (
-    echo Failed to create resources directory
-    exit /b 1
-)
+if not exist ".\WixPackage\Resources" mkdir ".\WixPackage\Resources"
 copy "%~1" ".\WixPackage\Resources\ballerina.zip"
 if errorlevel 1 (
     echo Failed to copy Ballerina zip
