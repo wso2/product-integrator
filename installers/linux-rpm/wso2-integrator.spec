@@ -88,45 +88,52 @@ if command -v update-mime-database >/dev/null 2>&1; then
 fi
 
 
-set_curr_bal_active() {
+# Delete all ballerina-version files from user homes
+delete_user_bal_version() {
     local user_home=$1
     local username=$2
-    local ballerina_version=$3
     local user_ballerina_dir="$user_home/.ballerina"
     
     if [ ! -d "$user_home" ] || [ "$user_home" = "/" ]; then
         return
     fi
     
-    if [ ! -d "$user_ballerina_dir" ]; then
-       return
-    fi
-
-    user_bal_version_file="$user_ballerina_dir/ballerina-version"
-    
-    if [ -n "$ballerina_version" ]; then
-        echo "$ballerina_version" > "$user_bal_version_file"
-        chown "$username":"$username" "$user_bal_version_file" 2>/dev/null || true
-        echo "Set ballerina-version to $ballerina_version for user: $username"
+    if [ -d "$user_ballerina_dir" ]; then
+        find "$user_ballerina_dir" -type f -name "ballerina-version" -delete 2>/dev/null || true
+        echo "Deleted ballerina-version files for user: $username"
     fi
 }
 
-# Read Ballerina version from the version file
-BALLERINA_VERSION=""
-if [ -f "/usr/lib64/ballerina/ballerina_version" ]; then
-    BALLERINA_VERSION=$(cat "/usr/lib64/ballerina/ballerina_version")
-    echo "Read Ballerina version: $BALLERINA_VERSION"
-fi
-
 while IFS=: read -r username _ uid _ _ home _; do
     if [ "$uid" -ge 1000 ] && [ "$username" != "nobody" ]; then
-        set_curr_bal_active "$home" "$username" "$BALLERINA_VERSION"
+        delete_user_bal_version "$home" "$username"
     fi
 done < /etc/passwd 2>/dev/null || true
 
-# Set up for root user
+# Delete for root user
 if [ -d "/root" ]; then
-    set_curr_bal_active "/root" "root" "$BALLERINA_VERSION"
+    delete_user_bal_version "/root" "root"
+fi
+
+# Set the integrator version as active ballerina version in system-wide location
+BALLERINA_VERSION=""
+if [ -f "/usr/lib64/ballerina/ballerina_version" ]; then
+    BALLERINA_VERSION=$(cat "/usr/lib64/ballerina/ballerina_version")
+    SYSTEM_BAL_VERSION_FILE="/usr/lib64/ballerina/distributions/ballerina-version"
+    
+    # Create distributions directory if it doesn't exist
+    mkdir -p "/usr/lib64/ballerina/distributions"
+    
+    # Remove existing ballerina-version file if it exists
+    if [ -f "$SYSTEM_BAL_VERSION_FILE" ]; then
+        rm -f "$SYSTEM_BAL_VERSION_FILE"
+        echo "Removed existing system-wide ballerina-version file"
+    fi
+    
+    # Write version to system-wide location
+    echo "$BALLERINA_VERSION" > "$SYSTEM_BAL_VERSION_FILE"
+    chmod 644 "$SYSTEM_BAL_VERSION_FILE"
+    echo "Set system-wide ballerina-version to $BALLERINA_VERSION"
 fi
 
 %preun

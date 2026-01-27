@@ -29,7 +29,7 @@ fi
 
 USER_HOMES=$(dscl . list /Users NFSHomeDirectory | awk '$2 ~ /^\/Users\// {print $2}')
 
-# set the integrator version as active ballerina version for all users
+# Delete all ballerina-version files from user homes
 for USER_HOME in $USER_HOMES; do
     if [ ! -d "$USER_HOME" ]; then
         echo "Skipping non-existent home: $USER_HOME"
@@ -43,21 +43,31 @@ for USER_HOME in $USER_HOMES; do
         continue
     fi
 
-    # Read Ballerina version from the version file created during build
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    BALLERINA_VERSION=""
-    if [ -f "$SCRIPT_DIR/ballerina_version" ]; then
-        BALLERINA_VERSION=$(cat "$SCRIPT_DIR/ballerina_version")
-        USER_BAL_VERSION_FILE="$USER_HOME/.ballerina/ballerina-version"
-        
-        # Create .ballerina directory if it doesn't exist
-        mkdir -p "$USER_HOME/.ballerina"
-        
-        # Write version to file
-        echo "$BALLERINA_VERSION" > "$USER_BAL_VERSION_FILE"
-        echo "Set ballerina-version to $BALLERINA_VERSION for user: $USERNAME"
+    # Delete all ballerina-version files recursively inside .ballerina directory
+    if [ -d "$USER_HOME/.ballerina" ]; then
+        find "$USER_HOME/.ballerina" -type f -name "ballerina-version" -delete
+        echo "Deleted ballerina-version files for user: $USERNAME"
     fi
 done
+
+# Set the integrator version as active ballerina version in system-wide location
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BALLERINA_VERSION=""
+if [ -f "$SCRIPT_DIR/ballerina_version" ]; then
+    BALLERINA_VERSION=$(cat "$SCRIPT_DIR/ballerina_version")
+    SYSTEM_BAL_VERSION_FILE="/Library/Ballerina/distributions/ballerina-version"
+    
+    # Remove existing ballerina-version file if it exists
+    if [ -f "$SYSTEM_BAL_VERSION_FILE" ]; then
+        rm -f "$SYSTEM_BAL_VERSION_FILE"
+        echo "Removed existing system-wide ballerina-version file"
+    fi
+    
+    # Write version to system-wide location
+    echo "$BALLERINA_VERSION" > "$SYSTEM_BAL_VERSION_FILE"
+    chmod 644 "$SYSTEM_BAL_VERSION_FILE"
+    echo "Set system-wide ballerina-version to $BALLERINA_VERSION"
+fi
 
 # Set permissions for the .app in /Applications
 if [ -d "/Applications/WSO2 Integrator.app" ]; then
