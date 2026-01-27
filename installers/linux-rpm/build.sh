@@ -76,17 +76,13 @@ mkdir -p "$INTEGRATOR_TARGET"
 mkdir -p "$BALLERINA_TARGET"
 mkdir -p "$ICP_TARGET"
 
-# Extract ballerina zip
-print_info "Extracting Ballerina runtime..."
-unzip -q -o "$BALLERINA_ZIP" -d "$BALLERINA_TARGET"
-# Move contents from the extracted folder to BALLERINA_TARGET
-bal_extracted_dir=$(find "$BALLERINA_TARGET" -mindepth 1 -maxdepth 1 -type d | head -n 1)
-if [ -n "$bal_extracted_dir" ]; then
-    # Save version to a temporary file that will be included in the RPM
-    echo "$BALLERINA_VERSION" > "$BALLERINA_TARGET/ballerina_version"
-    mv "$bal_extracted_dir"/* "$BALLERINA_TARGET"/
-    rmdir "$bal_extracted_dir"
-fi
+# Copy Ballerina zip to a resources directory (will be extracted during installation)
+print_info "Copying Ballerina zip to package resources..."
+mkdir -p "$WORK_DIR/package/usr/lib64/ballerina"
+cp "$BALLERINA_ZIP" "$WORK_DIR/package/usr/lib64/ballerina/ballerina.zip"
+echo "$BALLERINA_VERSION" > "$WORK_DIR/package/usr/lib64/ballerina/ballerina_version"
+
+# No longer extract Ballerina to payload - it will be done conditionally in %post
 
 # Extract integrator archive
 print_info "Extracting WSO2 Integrator..."
@@ -129,8 +125,8 @@ rpmbuild --define "_topdir $BUILD_DIR" \
          -ba "$SPECS_DIR/wso2-integrator.spec"
 
 rm -rf "${INTEGRATOR_TARGET:?}"
-rm -rf "${BALLERINA_TARGET:?}"
 rm -rf "${ICP_TARGET:?}"
+rm -rf "$WORK_DIR/package/usr/lib64/ballerina"
 
 # Copy built RPM to current directory
 print_info "Copying RPM package to current directory..."

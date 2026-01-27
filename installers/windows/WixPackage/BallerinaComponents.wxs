@@ -1,10 +1,6 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
   xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Fragment>
-    <ComponentGroup Id="BallerinaComponents" Directory="BALLERINAFOLDER">
-      <Files Include=".\payload\Ballerina\**" />
-    </ComponentGroup>
-
     <Component Id="BallerinaEnvironmentComponent" Directory="INSTALLFOLDER"
       Guid="{c08d564b-80dd-42e8-b72d-38fe086dd2cf}">
       <Environment

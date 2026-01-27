@@ -9,10 +9,22 @@
     Compressed="yes"
   >
     <Property Id="BALLERINA_INSTALLATION_WARNING" Value="0" />
+    
+    <!-- Binary resources for Ballerina conditional installation -->
+    <Binary Id="BallerinaZip" SourceFile="Resources\ballerina.zip" />
+    <Binary Id="BallerinaVersion" SourceFile="Resources\ballerina_version.txt" />
+    
     <Binary Id="ExtActionsDll" SourceFile="..\CustomAction1\bin\$(Configuration)\net472\CustomAction1.CA.dll" />
+    
+    <!-- Custom action for conditional Ballerina extraction -->
+    <CustomAction Id="extractBallerinaConditionallyCA" BinaryRef="ExtActionsDll"
+      DllEntry="extractBallerinaConditionally" Execute="deferred" Impersonate="no"
+      Return="check" />
+      
     <CustomAction Id="clearCurrentActiveBallerinaVersionCA" BinaryRef="ExtActionsDll"
       DllEntry="clearCurrentActiveBallerinaVersion" Execute="deferred" Impersonate="no"
       Return="check" />
+      
     <CustomAction Id="checkBallerinaInstallationCA" BinaryRef="ExtActionsDll"
       DllEntry="checkBallerinaInstallation" Execute="immediate" Impersonate="no"
       Return="check" />
@@ -22,7 +34,9 @@
     </InstallUISequence>
 
     <InstallExecuteSequence>
-      <Custom Action="clearCurrentActiveBallerinaVersionCA" After="InstallFiles" />
+      <!-- Extract Ballerina conditionally before setting user versions -->
+      <Custom Action="extractBallerinaConditionallyCA" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="clearCurrentActiveBallerinaVersionCA" After="extractBallerinaConditionallyCA" />
     </InstallExecuteSequence>
 
     <MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" />
@@ -36,7 +50,6 @@
 
     <Feature Id="Main">
       <ComponentGroupRef Id="IntegratorComponents" />
-      <ComponentGroupRef Id="BallerinaComponents" />
       <ComponentGroupRef Id="ICPComponents" />
       <ComponentRef Id="IntegratorShortcutComponent" />
       <ComponentRef Id="BallerinaEnvironmentComponent" />

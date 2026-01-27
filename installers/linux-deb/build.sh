@@ -67,17 +67,12 @@ mkdir -p "$INTEGRATOR_TARGET"
 mkdir -p "$BALLERINA_TARGET"
 mkdir -p "$ICP_TARGET"
 
-# Extract ballerina zip
-print_info "Extracting Ballerina runtime..."
-unzip -q -o "$BALLERINA_ZIP" -d "$BALLERINA_TARGET"
-# Move contents from the extracted folder to BALLERINA_TARGET
-bal_extracted_dir=$(find "$BALLERINA_TARGET" -mindepth 1 -maxdepth 1 -type d | head -n 1)
-if [ -n "$bal_extracted_dir" ]; then
-    # Save version to file for postinst to read
-    echo "$BALLERINA_VERSION" > "$WORK_DIR/package/DEBIAN/ballerina_version"
-    mv "$bal_extracted_dir"/* "$BALLERINA_TARGET"/
-    rmdir "$bal_extracted_dir"
-fi
+# Copy Ballerina zip to DEBIAN directory (will be extracted during installation)
+print_info "Copying Ballerina zip to package..."
+cp "$BALLERINA_ZIP" "$WORK_DIR/package/DEBIAN/ballerina.zip"
+echo "$BALLERINA_VERSION" > "$WORK_DIR/package/DEBIAN/ballerina_version"
+
+# No longer extract Ballerina to payload - it will be done conditionally in postinst
 
 # Extract integrator archive
 print_info "Extracting WSO2 Integrator..."
@@ -132,10 +127,10 @@ else
     exit 1
 fi
 
-# Cleanup extracted files (commented out to match RPM behavior)
+# Cleanup extracted files
 rm -rf "${INTEGRATOR_TARGET:?}"
-rm -rf "${BALLERINA_TARGET:?}"
 rm -rf "${ICP_TARGET:?}"
+rm -f "$WORK_DIR/package/DEBIAN/ballerina.zip"
 
 # Revert version in control file back to @VERSION@
 sed -i "s/^Version: $VERSION$/Version: @VERSION@/" "$WORK_DIR/package/DEBIAN/control"

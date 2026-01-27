@@ -2,6 +2,49 @@
 #
 # Copyright (c) WSO2. All rights reserved.
 
+# Read Ballerina version from the version file
+BALLERINA_VERSION=""
+if [ -f "/var/lib/dpkg/info/wso2-integrator.list" ]; then
+    # Find the postinst script directory
+    SCRIPT_DIR="/var/lib/dpkg/info"
+    if [ -f "$SCRIPT_DIR/ballerina_version" ]; then
+        BALLERINA_VERSION=$(cat "$SCRIPT_DIR/ballerina_version")
+    fi
+fi
+
+# Check if Ballerina needs to be installed
+if [ -n "$BALLERINA_VERSION" ] && [ -d "/usr/lib/ballerina/distributions/ballerina-$BALLERINA_VERSION" ]; then
+    echo "Ballerina version $BALLERINA_VERSION already exists - skipping extraction"
+else
+    echo "Installing Ballerina version $BALLERINA_VERSION"
+    
+    # Extract Ballerina from the bundled zip
+    BALLERINA_ZIP="$SCRIPT_DIR/ballerina.zip"
+    if [ -f "$BALLERINA_ZIP" ]; then
+        TEMP_EXTRACT="/tmp/wso2_ballerina_extract_$$"
+        mkdir -p "$TEMP_EXTRACT"
+        
+        echo "Extracting Ballerina zip..."
+        unzip -q "$BALLERINA_ZIP" -d "$TEMP_EXTRACT"
+        
+        # Get the extracted folder name
+        BALLERINA_FOLDER=$(ls -1 "$TEMP_EXTRACT" | head -1)
+        
+        # Create target directory
+        mkdir -p /usr/lib/ballerina
+        
+        # Move extracted contents to /usr/lib/ballerina
+        echo "Installing Ballerina to /usr/lib/ballerina..."
+        cp -R "$TEMP_EXTRACT/$BALLERINA_FOLDER"/* /usr/lib/ballerina/
+        
+        # Cleanup
+        rm -rf "$TEMP_EXTRACT"
+        echo "Ballerina installation completed"
+    else
+        echo "Warning: Ballerina zip not found at $BALLERINA_ZIP"
+    fi
+fi
+
 # Change ownership and permissions for integrator files
 chown -R root:root /usr/share/wso2-integrator
 chmod 4755 /usr/share/wso2-integrator/chrome-sandbox 2>/dev/null || true

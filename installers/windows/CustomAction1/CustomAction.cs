@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.DirectoryServices.AccountManagement;
+using System.IO.Compression;
 using System.Linq;
 using System.Management;
 using WixToolset.Dtf.WindowsInstaller;
@@ -9,6 +10,146 @@ namespace CustomAction1
 {
     public class CustomActions
     {
+        [CustomAction]
+        public static ActionResult extractBallerinaConditionally(Session session)
+        {
+            session.Log("Begin extractBallerinaConditionally");
+
+            try
+            {
+                // Read Ballerina version from the bundled resource
+                string installDir = session["INSTALLFOLDER"];
+                string ballerinaInstallPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    "Ballerina");
+                
+                // The zip and version file are embedded as Binary resources in WiX
+                // We'll extract them to temp first
+                string tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "wso2_ballerina_install_" + Guid.NewGuid().ToString());
+                System.IO.Directory.CreateDirectory(tempDir);
+                
+                try
+                {
+                    // Extract Binary resources from the MSI
+                    string ballerinaZipPath = System.IO.Path.Combine(tempDir, "ballerina.zip");
+                    string versionFilePath = System.IO.Path.Combine(tempDir, "ballerina_version.txt");
+                    
+                    // Extract the Binary resources
+                    using (var view = session.Database.OpenView("SELECT `Name`, `Data` FROM `Binary` WHERE `Name` = 'BallerinaZip' OR `Name` = 'BallerinaVersion'"))
+                    {
+                        view.Execute();
+                        Record record;
+                        while ((record = view.Fetch()) != null)
+                        {
+                            string name = record.GetString(1);
+                            var stream = record.GetStream(2);
+                            
+                            string targetPath = name == "BallerinaZip" ? ballerinaZipPath : versionFilePath;
+                            using (var fileStream = System.IO.File.Create(targetPath))
+                            {
+                                stream.CopyTo(fileStream);
+                            }
+                        }
+                    }
+                    
+                    if (!System.IO.File.Exists(versionFilePath))
+                    {
+                        session.Log("Ballerina version file not found in resources");
+                        return ActionResult.Success; // Don't fail the installation
+                    }
+                    
+                    string ballerinaVersion = System.IO.File.ReadAllText(versionFilePath).Trim();
+                    session.Log($"Ballerina version from package: {ballerinaVersion}");
+                    
+                    // Check if this version already exists
+                    string versionPath = System.IO.Path.Combine(ballerinaInstallPath, "distributions", $"ballerina-{ballerinaVersion}");
+                    
+                    if (System.IO.Directory.Exists(versionPath))
+                    {
+                        session.Log($"Ballerina version {ballerinaVersion} already exists at {versionPath} - skipping extraction");
+                        return ActionResult.Success;
+                    }
+                    
+                    session.Log($"Installing Ballerina version {ballerinaVersion}");
+                    
+                    if (!System.IO.File.Exists(ballerinaZipPath))
+                    {
+                        session.Log($"Ballerina zip not found at {ballerinaZipPath}");
+                        return ActionResult.Failure;
+                    }
+                    
+                    // Extract Ballerina zip
+                    string extractPath = System.IO.Path.Combine(tempDir, "extract");
+                    System.IO.Directory.CreateDirectory(extractPath);
+                    
+                    session.Log($"Extracting Ballerina zip to {extractPath}");
+                    System.IO.Compression.ZipFile.ExtractToDirectory(ballerinaZipPath, extractPath);
+                    
+                    // Find the extracted ballerina folder
+                    string[] dirs = System.IO.Directory.GetDirectories(extractPath, "ballerina-*");
+                    if (dirs.Length == 0)
+                    {
+                        session.Log("No ballerina-* directory found in extracted contents");
+                        return ActionResult.Failure;
+                    }
+                    
+                    string extractedBallerinaDir = dirs[0];
+                    session.Log($"Found extracted Ballerina directory: {extractedBallerinaDir}");
+                    
+                    // Create target directory
+                    System.IO.Directory.CreateDirectory(ballerinaInstallPath);
+                    
+                    // Copy all contents from extracted directory to Ballerina install path
+                    session.Log($"Copying Ballerina files to {ballerinaInstallPath}");
+                    CopyDirectory(extractedBallerinaDir, ballerinaInstallPath, session);
+                    
+                    session.Log("Ballerina installation completed successfully");
+                }
+                finally
+                {
+                    // Cleanup temp directory
+                    if (System.IO.Directory.Exists(tempDir))
+                    {
+                        try
+                        {
+                            System.IO.Directory.Delete(tempDir, true);
+                        }
+                        catch (Exception cleanupEx)
+                        {
+                            session.Log($"Warning: Failed to cleanup temp directory: {cleanupEx.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                session.Log($"Error extracting Ballerina: {ex}");
+                return ActionResult.Failure;
+            }
+
+            return ActionResult.Success;
+        }
+        
+        private static void CopyDirectory(string sourceDir, string destDir, Session session)
+        {
+            // Create destination directory
+            System.IO.Directory.CreateDirectory(destDir);
+            
+            // Copy all files
+            foreach (string file in System.IO.Directory.GetFiles(sourceDir))
+            {
+                string destFile = System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(file));
+                System.IO.File.Copy(file, destFile, true);
+            }
+            
+            // Recursively copy subdirectories
+            foreach (string dir in System.IO.Directory.GetDirectories(sourceDir))
+            {
+                string destSubDir = System.IO.Path.Combine(destDir, System.IO.Path.GetFileName(dir));
+                CopyDirectory(dir, destSubDir, session);
+            }
+        }
+
         [CustomAction]
         public static ActionResult copySettingsFileToUserhome(Session session)
         {

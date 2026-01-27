@@ -40,16 +40,12 @@ OUTPUT_PKG="WSO2_Integrator.pkg"
 BUNDLE_IDENTIFIER="com.wso2.integrator"
 EXTRACTION_TARGET="$WORK_DIR/payload"
 
-# Extract ballerina zip
-BALLERINA_TARGET="$WORK_DIR/payload/Library/Ballerina"
-rm -rf "$BALLERINA_TARGET"
-mkdir -p "$BALLERINA_TARGET"
-unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
-BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$BALLERINA_ZIP" | head -1 | cut -d/ -f1)
-BALLERINA_UNZIPPED_PATH="$EXTRACTION_TARGET/$BALLERINA_UNZIPPED_FOLDER"
-mv "$BALLERINA_UNZIPPED_PATH"/* "$BALLERINA_TARGET"
-rm -rf "$BALLERINA_UNZIPPED_PATH"
-chmod +x "$BALLERINA_TARGET/bin"/*
+# Copy Ballerina zip to scripts directory (will be extracted during installation)
+print_info "Copying Ballerina zip to package resources"
+cp "$BALLERINA_ZIP" "$WORK_DIR/scripts/ballerina.zip"
+
+# No longer extract Ballerina to payload - it will be done conditionally in postinstall
+# BALLERINA_TARGET is not needed in payload anymore
 
 # Extract icp zip
 ICP_TARGET="$WORK_DIR/payload/Library/WSO2/ICP"
@@ -121,9 +117,9 @@ else
     exit 1
 fi
 
-rm -rf "${BALLERINA_TARGET:?}"/*
 rm -rf "${WSO2_TARGET:?}"/*
 rm -rf "${ICP_TARGET:?}"/*
 rm -rf "$WORK_DIR/WSO2 Integrator.pkg"
+rm -f "$WORK_DIR/scripts/ballerina.zip"
 
 print_info "Done!"

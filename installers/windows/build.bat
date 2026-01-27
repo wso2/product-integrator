@@ -30,40 +30,21 @@ if "%~5"=="" (
 )
 
 
-@REM REM Extract ballerina.zip
-set "TEMP_BAL_DIR=C:\temp_ballerina_%RANDOM%_%TIME:~6,2%"
-if exist "%TEMP_BAL_DIR%" rmdir /s /q "%TEMP_BAL_DIR%"
-mkdir "%TEMP_BAL_DIR%"
+@REM Copy ballerina.zip to resources directory (will be extracted conditionally during installation)
+echo Copying Ballerina zip to resources directory
+mkdir ".\WixPackage\Resources"
 if errorlevel 1 (
-    echo Failed to create temporary directory "%TEMP_BAL_DIR%"
+    echo Failed to create resources directory
     exit /b 1
 )
-powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', '%TEMP_BAL_DIR%'); }"
-mkdir ".\WixPackage\payload\Ballerina"
+copy "%~1" ".\WixPackage\Resources\ballerina.zip"
 if errorlevel 1 (
-    echo Failed to create payload directory
+    echo Failed to copy Ballerina zip
     exit /b 1
 )
-REM Move the ballerina-* directory from temp to payload
-REM Move all contents from ballerina-xxxx to payload and extract version
-set "BALLERINA_VERSION="
-for /d %%D in ("%TEMP_BAL_DIR%\ballerina-*") do (
-    setlocal EnableDelayedExpansion
-    REM Save version to file
-    echo %~2 > ".\WixPackage\payload\Ballerina\ballerina_version"
-    endlocal
-    xcopy "%%D\*" ".\WixPackage\payload\Ballerina" /E /H /Y
-    if errorlevel 1 (
-        echo Failed to copy Ballerina files from %%D
-        exit /b 1
-    )
-)
-
-if exist "%TEMP_BAL_DIR%" rmdir /s /q "%TEMP_BAL_DIR%"
-if errorlevel 1 (
-    echo Ballerina extraction failed
-    exit /b 1
-)
+REM Save version to file
+echo %~2 > ".\WixPackage\Resources\ballerina_version.txt"
+echo Ballerina zip copied to resources, will be extracted conditionally during installation
 
 @REM REM Extract integrator.zip
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~3', '.\WixPackage\payload\Integrator'); }"
@@ -108,6 +89,7 @@ if exist "%MSI_ORIG%" (
 
 REM Revert version placeholder in Package.wxs
 powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%~5', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
-REM Remove payload directory after build
+REM Remove payload and resources directories after build
 if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
+if exist ".\WixPackage\Resources" rmdir /s /q ".\WixPackage\Resources"
 endlocal

@@ -9,6 +9,45 @@ echo "Starting WSO2 Integrator post-installation..."
 
 echo "Post-install script started"
 
+# Read Ballerina version
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BALLERINA_VERSION=""
+if [ -f "$SCRIPT_DIR/ballerina_version" ]; then
+    BALLERINA_VERSION=$(cat "$SCRIPT_DIR/ballerina_version")
+fi
+
+# Check if Ballerina needs to be installed
+if [ -n "$BALLERINA_VERSION" ] && [ -d "/Library/Ballerina/distributions/ballerina-$BALLERINA_VERSION" ]; then
+    echo "Ballerina version $BALLERINA_VERSION already exists - skipping extraction"
+else
+    echo "Installing Ballerina version $BALLERINA_VERSION"
+    
+    # Extract Ballerina from the bundled zip
+    if [ -f "$SCRIPT_DIR/ballerina.zip" ]; then
+        TEMP_EXTRACT="/tmp/wso2_ballerina_extract_$$"
+        mkdir -p "$TEMP_EXTRACT"
+        
+        echo "Extracting Ballerina zip..."
+        unzip -q "$SCRIPT_DIR/ballerina.zip" -d "$TEMP_EXTRACT"
+        
+        # Get the extracted folder name
+        BALLERINA_FOLDER=$(ls -1 "$TEMP_EXTRACT" | head -1)
+        
+        # Create target directory
+        mkdir -p /Library/Ballerina
+        
+        # Move extracted contents to /Library/Ballerina
+        echo "Installing Ballerina to /Library/Ballerina..."
+        cp -R "$TEMP_EXTRACT/$BALLERINA_FOLDER"/* /Library/Ballerina/
+        
+        # Cleanup
+        rm -rf "$TEMP_EXTRACT"
+        echo "Ballerina installation completed"
+    else
+        echo "Warning: Ballerina zip not found at $SCRIPT_DIR/ballerina.zip"
+    fi
+fi
+
 echo "Setting system-wide permissions"
 
 # Set permissions for /Library/Ballerina

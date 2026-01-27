@@ -87,6 +87,45 @@ if command -v update-mime-database >/dev/null 2>&1; then
     update-mime-database /usr/share/mime 2>/dev/null || true
 fi
 
+# Read Ballerina version from the version file
+BALLERINA_VERSION=""
+if [ -f "/usr/lib64/ballerina/ballerina_version" ]; then
+    BALLERINA_VERSION=$(cat "/usr/lib64/ballerina/ballerina_version")
+fi
+
+# Check if Ballerina needs to be installed
+if [ -n "$BALLERINA_VERSION" ] && [ -d "/usr/lib64/ballerina/distributions/ballerina-$BALLERINA_VERSION" ]; then
+    echo "Ballerina version $BALLERINA_VERSION already exists - skipping extraction"
+else
+    echo "Installing Ballerina version $BALLERINA_VERSION"
+    
+    # Extract Ballerina from the bundled zip
+    BALLERINA_ZIP="/usr/lib64/ballerina/ballerina.zip"
+    if [ -f "$BALLERINA_ZIP" ]; then
+        TEMP_EXTRACT="/tmp/wso2_ballerina_extract_$$"
+        mkdir -p "$TEMP_EXTRACT"
+        
+        echo "Extracting Ballerina zip..."
+        unzip -q "$BALLERINA_ZIP" -d "$TEMP_EXTRACT"
+        
+        # Get the extracted folder name
+        BALLERINA_FOLDER=$(ls -1 "$TEMP_EXTRACT" | head -1)
+        
+        # Move extracted contents to /usr/lib64/ballerina
+        echo "Installing Ballerina to /usr/lib64/ballerina..."
+        cp -R "$TEMP_EXTRACT/$BALLERINA_FOLDER"/* /usr/lib64/ballerina/
+        
+        # Cleanup
+        rm -rf "$TEMP_EXTRACT"
+        rm -f "$BALLERINA_ZIP"
+        echo "Ballerina installation completed"
+    else
+        echo "Warning: Ballerina zip not found at $BALLERINA_ZIP"
+    fi
+fi
+
+# Clean up the version and zip files after use
+rm -f /usr/lib64/ballerina/ballerina_version
 
 # Delete ballerina-home from user homes
 delete_user_bal_home() {
