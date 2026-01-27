@@ -35,6 +35,7 @@ mkdir -p %{buildroot}/usr/bin
 
 # Copy application files
 cp -r usr/share/wso2-integrator/* %{buildroot}/usr/share/wso2-integrator/
+# Copy Ballerina zip and version file (will be extracted during %post)
 cp -r usr/lib64/ballerina/* %{buildroot}/usr/lib64/ballerina/
 cp -r usr/lib64/wso2/icp/* %{buildroot}/usr/lib64/wso2/icp/
 
@@ -58,7 +59,6 @@ fi
 # Ensure executable permissions
 chmod +x %{buildroot}/usr/share/wso2-integrator/bin/wso2-integrator
 chmod +x %{buildroot}/usr/share/wso2-integrator/wso2-integrator
-chmod +x %{buildroot}/usr/lib64/ballerina/bin/bal
 chmod +x %{buildroot}/usr/lib64/wso2/icp/bin/ciphertool.sh
 chmod +x %{buildroot}/usr/lib64/wso2/icp/bin/dashboard.sh
 chmod +x %{buildroot}/usr/lib64/wso2/icp/bin/update_tool_setup.sh
@@ -70,9 +70,6 @@ rm -rf %{buildroot}
 # Create symlink to /usr/bin
 rm -f /usr/bin/wso2-integrator
 ln -s /usr/share/wso2-integrator/bin/wso2-integrator /usr/bin/wso2-integrator
-ln -s /usr/lib64/ballerina/bin/bal /usr/bin/bal
-echo 'export BALLERINA_HOME=/usr/lib64/ballerina' >> /etc/profile.d/wso2.sh
-chmod 0755 /etc/profile.d/wso2.sh
 
 # Register in alternatives system
 /usr/sbin/update-alternatives --install /usr/bin/editor editor /usr/bin/wso2-integrator 0 2>/dev/null || true
@@ -122,6 +119,13 @@ else
     else
         echo "Warning: Ballerina zip not found at $BALLERINA_ZIP"
     fi
+fi
+
+# Set up Ballerina symlink and environment
+if [ -f "/usr/lib64/ballerina/bin/bal" ]; then
+    ln -sf /usr/lib64/ballerina/bin/bal /usr/bin/bal
+    echo 'export BALLERINA_HOME=/usr/lib64/ballerina' >> /etc/profile.d/wso2.sh
+    chmod 0755 /etc/profile.d/wso2.sh
 fi
 
 # Clean up the version and zip files after use
