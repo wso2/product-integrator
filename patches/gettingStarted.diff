@@ -1049,22 +1049,72 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  			mark('code/willRestoreViewlet');
  
  			await this.openViewContainer(ViewContainerLocation.Sidebar, this.state.initialization.views.containerToRestore.sideBar);
-@@ -1626,6 +1670,14 @@ export abstract class Layout extends Dis
+@@ -1626,6 +1670,16 @@ export abstract class Layout extends Dis
  			// Auxiliary Bar State
  			this.stateModel.setInitializationValue(LayoutStateKeys.AUXILIARYBAR_EMPTY, this.paneCompositeService.getPaneCompositeIds(ViewContainerLocation.AuxiliaryBar).length === 0);
  		}));
 +
-+		// Ensure sidebar, statusbar, and activitybar are hidden for empty workspaces
-+		// Keep titlebar visible for window controls (close, minimize, maximize)
++		// Ensure sidebar, statusbar, activitybar, panel, and auxiliary bar are hidden for empty workspaces
++		// Keep only titlebar and editor visible (titlebar for window controls, editor for watermark)
 +		if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
 +			this.workbenchGrid.setViewVisible(this.sideBarPartView, false);
 +			this.workbenchGrid.setViewVisible(this.statusBarPartView, false);
 +			this.workbenchGrid.setViewVisible(this.activityBarPartView, false);
++			this.workbenchGrid.setViewVisible(this.panelPartView, false);
++			this.workbenchGrid.setViewVisible(this.auxiliaryBarPartView, false);
 +		}
  	}
  
  	layout(): void {
-@@ -2848,9 +2900,9 @@ class LayoutStateModel extends Disposabl
+@@ -1768,6 +1822,11 @@ export abstract class Layout extends Dis
+ 	}
+ 
+ 	private setActivityBarHidden(hidden: boolean): void {
++		// Prevent showing activity bar in empty workspace
++		if (!hidden && this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++			return;
++		}
++
+ 		this.stateModel.setRuntimeValue(LayoutStateKeys.ACTIVITYBAR_HIDDEN, hidden);
+ 		this.workbenchGrid.setViewVisible(this.activityBarPartView, !hidden);
+ 	}
+@@ -1816,6 +1875,11 @@ export abstract class Layout extends Dis
+ 			return; // return: leaving maximised auxiliary bar made this part visible
+ 		}
+ 
++		// Prevent showing sidebar in empty workspace
++		if (!hidden && this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++			return;
++		}
++
+ 		this.stateModel.setRuntimeValue(LayoutStateKeys.SIDEBAR_HIDDEN, hidden);
+ 
+ 		// Adjust CSS
+@@ -1951,6 +2015,11 @@ export abstract class Layout extends Dis
+ 			return; // return: leaving maximised auxiliary bar made this part visible
+ 		}
+ 
++		// Prevent showing panel in empty workspace
++		if (!hidden && this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++			return;
++		}
++
+ 		const wasHidden = !this.isVisible(Parts.PANEL_PART);
+ 
+ 		this.stateModel.setRuntimeValue(LayoutStateKeys.PANEL_HIDDEN, hidden);
+@@ -2149,6 +2218,11 @@ export abstract class Layout extends Dis
+ 			return; // return: leaving maximised auxiliary bar made this part hidden
+ 		}
+ 
++		// Prevent showing auxiliary bar in empty workspace
++		if (!hidden && this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++			return;
++		}
++
+ 		this.stateModel.setRuntimeValue(LayoutStateKeys.AUXILIARYBAR_HIDDEN, hidden);
+ 
+ 		// Adjust CSS
+@@ -2848,9 +2922,9 @@ class LayoutStateModel extends Disposabl
  		}
  
  		// Apply legacy settings
