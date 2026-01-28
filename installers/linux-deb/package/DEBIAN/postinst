@@ -4,12 +4,8 @@
 
 # Read Ballerina version from the version file
 BALLERINA_VERSION=""
-if [ -f "/var/lib/dpkg/info/wso2-integrator.list" ]; then
-    # Find the postinst script directory
-    SCRIPT_DIR="/var/lib/dpkg/info"
-    if [ -f "$SCRIPT_DIR/ballerina_version" ]; then
-        BALLERINA_VERSION=$(cat "$SCRIPT_DIR/ballerina_version")
-    fi
+if [ -f "/usr/lib/ballerina/ballerina_version" ]; then
+    BALLERINA_VERSION=$(cat "/usr/lib/ballerina/ballerina_version")
 fi
 
 # Check if Ballerina needs to be installed
@@ -19,7 +15,7 @@ else
     echo "Installing Ballerina version $BALLERINA_VERSION"
     
     # Extract Ballerina from the bundled zip
-    BALLERINA_ZIP="$SCRIPT_DIR/ballerina.zip"
+    BALLERINA_ZIP="/usr/lib/ballerina/ballerina.zip"
     if [ -f "$BALLERINA_ZIP" ]; then
         TEMP_EXTRACT="/tmp/wso2_ballerina_extract_$$"
         mkdir -p "$TEMP_EXTRACT"
@@ -39,11 +35,15 @@ else
         
         # Cleanup
         rm -rf "$TEMP_EXTRACT"
+        rm -f "$BALLERINA_ZIP"
         echo "Ballerina installation completed"
     else
         echo "Warning: Ballerina zip not found at $BALLERINA_ZIP"
     fi
 fi
+
+# Clean up the version file after use
+rm -f /usr/lib/ballerina/ballerina_version
 
 # Change ownership and permissions for integrator files
 chown -R root:root /usr/share/wso2-integrator
@@ -52,11 +52,14 @@ chmod 4755 /usr/share/wso2-integrator/chrome-sandbox 2>/dev/null || true
 # Create symlinks to /usr/bin
 rm -f /usr/bin/wso2-integrator
 ln -s /usr/share/wso2-integrator/bin/wso2-integrator /usr/bin/wso2-integrator
-ln -s /usr/lib/ballerina/bin/bal /usr/bin/bal
 
-# Set BALLERINA_HOME environment variable
-echo 'export BALLERINA_HOME=/usr/lib/ballerina' > /etc/profile.d/wso2.sh
-chmod 0755 /etc/profile.d/wso2.sh
+# Create Ballerina symlink only if bal binary exists
+if [ -f "/usr/lib/ballerina/bin/bal" ]; then
+    ln -sf /usr/lib/ballerina/bin/bal /usr/bin/bal
+    # Set BALLERINA_HOME environment variable
+    echo 'export BALLERINA_HOME=/usr/lib/ballerina' > /etc/profile.d/wso2.sh
+    chmod 0755 /etc/profile.d/wso2.sh
+fi
 
 # Register in the alternatives system
 # Priority of 0 should never make wso2-integrator the default editor in auto mode

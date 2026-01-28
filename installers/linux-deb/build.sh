@@ -67,10 +67,10 @@ mkdir -p "$INTEGRATOR_TARGET"
 mkdir -p "$BALLERINA_TARGET"
 mkdir -p "$ICP_TARGET"
 
-# Copy Ballerina zip to DEBIAN directory (will be extracted during installation)
+# Copy Ballerina zip to package (will be extracted during installation)
 print_info "Copying Ballerina zip to package..."
-cp "$BALLERINA_ZIP" "$WORK_DIR/package/DEBIAN/ballerina.zip"
-echo "$BALLERINA_VERSION" > "$WORK_DIR/package/DEBIAN/ballerina_version"
+cp "$BALLERINA_ZIP" "$BALLERINA_TARGET/ballerina.zip"
+echo "$BALLERINA_VERSION" > "$BALLERINA_TARGET/ballerina_version"
 
 # No longer extract Ballerina to payload - it will be done conditionally in postinst
 
