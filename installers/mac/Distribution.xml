@@ -29,12 +29,12 @@
     </script>
     <choices-outline>
         <line choice="default">
-            <line choice="com.wso2.wso2integrator" />
+            <line choice="com.wso2.integrator" />
         </line>
     </choices-outline>
     <choice id="default" />
-    <choice id="com.wso2.wso2integrator" visible="false">
-        <pkg-ref id="com.wso2.wso2integrator" />
+    <choice id="com.wso2.integrator" visible="false">
+        <pkg-ref id="com.wso2.integrator" />
     </choice>
-    <pkg-ref id="com.wso2.wso2integrator" version="__VERSION__" onConclusion="none">WSO2 Integrator.pkg</pkg-ref>
+    <pkg-ref id="com.wso2.integrator" version="__VERSION__" onConclusion="none">WSO2 Integrator.pkg</pkg-ref>
 </installer-gui-script>

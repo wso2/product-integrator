@@ -5,6 +5,10 @@
 
 set -e
 
+# Redirect all output to a log file and also to system log
+LOGFILE="/tmp/wso2-integrator-install.log"
+exec > >(tee -a "$LOGFILE") 2>&1
+
 echo "Starting WSO2 Integrator post-installation..."
 
 echo "Post-install script started"
