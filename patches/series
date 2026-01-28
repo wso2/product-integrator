@@ -10,3 +10,4 @@ increaseHeap.diff
 skip-extension-outdated-test.diff
 disableVsixChecksumCheck.diff
 disableWorkspaceTrust.diff
+disableThirdPartyExtNotifications.diff
