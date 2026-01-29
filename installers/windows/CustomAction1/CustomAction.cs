@@ -19,7 +19,7 @@ namespace CustomAction1
             try
             {
                 // Create temp directory for Ballerina files
-                string tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "wso2_ballerina_install_" + Guid.NewGuid().ToString());
+                string tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "wso2bal_" + Guid.NewGuid().ToString("N").Substring(0, 8));
                 System.IO.Directory.CreateDirectory(tempDir);
                 session.Log($"Created temp directory: {tempDir}");
 
