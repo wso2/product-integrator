@@ -59,7 +59,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
-@@ -0,0 +1,815 @@
+@@ -0,0 +1,840 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -78,6 +78,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +import { checkWSO2LoginStatus } from './wso2AuthUtils.js';
 +import { URI } from '../../../../base/common/uri.js';
 +import { mainWindow } from '../../../../base/browser/window.js';
++import { IEditorGroupsService, GroupsOrder } from '../../../services/editor/common/editorGroupsService.js';
 +
 +export class WSO2EditorGroupWatermark extends Disposable {
 +
@@ -97,7 +98,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		@ICommandService private readonly commandService: ICommandService,
 +		@IConfigurationService private readonly configurationService: IConfigurationService,
 +		@IStorageService private readonly storageService: IStorageService,
-+		@IAuthenticationService private readonly authenticationService: IAuthenticationService
++		@IAuthenticationService private readonly authenticationService: IAuthenticationService,
++		@IEditorGroupsService private readonly editorGroupsService: IEditorGroupsService
 +	) {
 +		super();
 +
@@ -111,6 +113,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +
 +		this.registerListeners();
 +
++		// Close all editors if in empty workspace
++		if (this.workbenchState === WorkbenchState.EMPTY) {
++			void this.closeAllEditors();
++		}
++
 +		this.render();
 +		this.checkLoginState();
 +	}
@@ -119,6 +126,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		this._register(this.contextService.onDidChangeWorkbenchState(workbenchState => {
 +			if (this.workbenchState !== workbenchState) {
 +				this.workbenchState = workbenchState;
++				// Close all editors when switching to empty workspace
++				if (workbenchState === WorkbenchState.EMPTY) {
++					void this.closeAllEditors();
++				}
 +				this.render();
 +			}
 +		}));
@@ -850,6 +861,20 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +			this.isCheckingAuth = false;
 +			// Render to show the error state (sign in button)
 +			this.render();
++		}
++	}
++
++	private async closeAllEditors(): Promise<void> {
++		// Close all editors in all groups without saving
++		try {
++			// Get all groups and close all editors in each
++			await Promise.all(
++				this.editorGroupsService.getGroups(GroupsOrder.MOST_RECENTLY_ACTIVE).map(group =>
++					group.closeAllEditors({ excludeSticky: false })
++				)
++			);
++		} catch (error) {
++			console.error('Failed to close editors:', error);
 +		}
 +	}
 +
