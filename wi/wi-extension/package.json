@@ -159,11 +159,6 @@
           "group": "navigation@2"
         },
         {
-          "command": "BI.project-explorer.switch-project",
-          "when": "view == wso2-integrator.explorer && BI.isMultiRoot == true",
-          "group": "navigation"
-        },
-        {
           "command": "BI.project-explorer.add",
           "when": "view == wso2-integrator.explorer && BI.project == true",
           "group": "navigation"
