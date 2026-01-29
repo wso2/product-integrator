@@ -21,7 +21,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2/browser/wso2T
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2/browser/wso2ThirdPartyNotificationFilter.ts
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,73 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -44,6 +44,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2/browser/wso2T
 +	// List of WSO2 extension IDs that should NOT be filtered
 +	private static readonly ALLOWED_EXT_ORGS = [
 +		'wso2',
++		'vscode'
 +	];
 +
 +	constructor(
@@ -65,9 +66,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2/browser/wso2T
 +			
 +			for (const extension of extensions) {
 +				const extensionId = extension.identifier.value;
-+				
 +				// Skip built-in extensions and WSO2 extensions
-+				if (extension.isBuiltin || this.isWSO2Extension(extensionId)) {
++				if (this.isAllowedExtension(extensionId)) {
++					this.notificationService.removeFilter(extensionId);
 +					continue;
 +				}
 +
@@ -88,7 +89,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2/browser/wso2T
 +		}
 +	}
 +
-+	private isWSO2Extension(extensionId: string): boolean {
++	private isAllowedExtension(extensionId: string): boolean {
 +		return WSO2ThirdPartyNotificationFilter.ALLOWED_EXT_ORGS.some(id => 
 +			extensionId.toLowerCase().startsWith(`${id.toLowerCase()}.`)
 +		);
