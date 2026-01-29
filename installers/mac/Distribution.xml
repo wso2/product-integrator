@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
     <title>WSO2 Integrator</title>
-    <organization>com.wso2.wso2integrator</organization>
+    <organization>com.wso2.integrator</organization>
     <domains enable_localSystem="true" />
     <options customize="never" require-scripts="true" rootVolumeOnly="true" />
     <welcome file="welcome.html" />
