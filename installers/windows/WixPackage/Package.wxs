@@ -17,6 +17,16 @@
     <Binary Id="ExtActionsDll" SourceFile="..\CustomAction1\bin\$(Configuration)\net472\CustomAction1.CA.dll" />
     
     <!-- Custom action for conditional Ballerina extraction -->
+    <!-- Immediate action to extract Binary resources and set CustomActionData -->
+    <CustomAction Id="PrepareBallerinaBinariesCA" BinaryRef="ExtActionsDll"
+      DllEntry="PrepareBallerinaBinaries" Execute="immediate" Impersonate="no"
+      Return="check" />
+    
+    <!-- Immediate action to set CustomActionData -->
+    <SetProperty Id="extractBallerinaConditionallyCA" Value="[PrepareBallerinaData]"
+      Before="extractBallerinaConditionallyCA" Sequence="execute" />
+    
+    <!-- Deferred action that actually extracts Ballerina -->
     <CustomAction Id="extractBallerinaConditionallyCA" BinaryRef="ExtActionsDll"
       DllEntry="extractBallerinaConditionally" Execute="deferred" Impersonate="no"
       Return="check" />
@@ -27,16 +37,19 @@
       
     <CustomAction Id="checkBallerinaInstallationCA" BinaryRef="ExtActionsDll"
       DllEntry="checkBallerinaInstallation" Execute="immediate" Impersonate="no"
-      Return="check" />
+      Return="ignore" />
 
     <InstallUISequence>
       <Custom Action="checkBallerinaInstallationCA" After="CostFinalize" />
     </InstallUISequence>
 
     <InstallExecuteSequence>
+      <!-- Prepare Ballerina binaries (extract from MSI) in immediate context -->
+      <Custom Action="PrepareBallerinaBinariesCA" After="InstallFiles" Condition="NOT Installed" />
+      
       <!-- Extract Ballerina conditionally before setting user versions -->
-      <Custom Action="extractBallerinaConditionallyCA" After="InstallFiles" Condition="NOT Installed" />
-      <Custom Action="clearCurrentActiveBallerinaVersionCA" After="extractBallerinaConditionallyCA" />
+      <Custom Action="extractBallerinaConditionallyCA" After="PrepareBallerinaBinariesCA" Condition="NOT Installed" />
+      <Custom Action="clearCurrentActiveBallerinaVersionCA" After="extractBallerinaConditionallyCA" Condition="NOT Installed" />
     </InstallExecuteSequence>
 
     <MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" />

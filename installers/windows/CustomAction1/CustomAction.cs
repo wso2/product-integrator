@@ -4,6 +4,7 @@ using System.DirectoryServices.AccountManagement;
 using System.IO.Compression;
 using System.Linq;
 using System.Management;
+using System.Text;
 using WixToolset.Dtf.WindowsInstaller;
 
 namespace CustomAction1
@@ -11,51 +12,98 @@ namespace CustomAction1
     public class CustomActions
     {
         [CustomAction]
+        public static ActionResult PrepareBallerinaBinaries(Session session)
+        {
+            session.Log("Begin PrepareBallerinaBinaries (immediate action)");
+
+            try
+            {
+                // Create temp directory for Ballerina files
+                string tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "wso2_ballerina_install_" + Guid.NewGuid().ToString());
+                System.IO.Directory.CreateDirectory(tempDir);
+                session.Log($"Created temp directory: {tempDir}");
+
+                string ballerinaZipPath = System.IO.Path.Combine(tempDir, "ballerina.zip");
+                string versionFilePath = System.IO.Path.Combine(tempDir, "ballerina_version.txt");
+
+                // Extract the Binary resources (only possible in immediate context)
+                using (var view = session.Database.OpenView("SELECT `Name`, `Data` FROM `Binary` WHERE `Name` = 'BallerinaZip' OR `Name` = 'BallerinaVersion'"))
+                {
+                    view.Execute();
+                    Record record;
+                    while ((record = view.Fetch()) != null)
+                    {
+                        string name = record.GetString(1);
+                        var stream = record.GetStream(2);
+
+                        string targetPath = name == "BallerinaZip" ? ballerinaZipPath : versionFilePath;
+                        using (var fileStream = System.IO.File.Create(targetPath))
+                        {
+                            stream.CopyTo(fileStream);
+                        }
+                        session.Log($"Extracted Binary resource: {name} to {targetPath}");
+                    }
+                }
+
+                // Prepare CustomActionData for the deferred action
+                // Format: KEY=VALUE;KEY=VALUE
+                var customData = new StringBuilder();
+                customData.Append("BALLERINA_HOME=").Append(session["BALLERINA_HOME"]).Append(";");
+                customData.Append("INSTALLFOLDER=").Append(session["INSTALLFOLDER"]).Append(";");
+                customData.Append("TEMP_DIR=").Append(tempDir).Append(";");
+                customData.Append("ZIP_PATH=").Append(ballerinaZipPath).Append(";");
+                customData.Append("VERSION_PATH=").Append(versionFilePath);
+
+                // Set the property that will be passed to the deferred action
+                session["PrepareBallerinaData"] = customData.ToString();
+                session.Log($"Set PrepareBallerinaData: {customData}");
+
+                return ActionResult.Success;
+            }
+            catch (Exception ex)
+            {
+                session.Log($"Error in PrepareBallerinaBinaries: {ex.Message}");
+                session.Log($"Stack trace: {ex.StackTrace}");
+                session.Log("Ballerina preparation failed - installation will be rolled back");
+                return ActionResult.Failure;
+            }
+        }
+
+        [CustomAction]
         public static ActionResult extractBallerinaConditionally(Session session)
         {
             session.Log("Begin extractBallerinaConditionally");
 
             try
             {
-                // Read Ballerina version from the bundled resource
-                string installDir = session["INSTALLFOLDER"];
+                // In deferred custom actions, we must read from CustomActionData instead of Session properties
+                // The CustomActionData is set by the immediate custom action in WiX
+                CustomActionData customData = session.CustomActionData;
+                string ballerinaHomeEnv = customData["BALLERINA_HOME"];
+                string installDir = customData["INSTALLFOLDER"];
+                string tempDir = customData["TEMP_DIR"];
+                string ballerinaZipPath = customData["ZIP_PATH"];
+                string versionFilePath = customData["VERSION_PATH"];
+
+                session.Log($"BALLERINA_HOME from CustomActionData: {ballerinaHomeEnv}");
+                session.Log($"INSTALLFOLDER from CustomActionData: {installDir}");
+                session.Log($"TEMP_DIR from CustomActionData: {tempDir}");
+                session.Log($"ZIP_PATH from CustomActionData: {ballerinaZipPath}");
+
+                // Ballerina will be installed to ProgramFiles
                 string ballerinaInstallPath = System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                     "Ballerina");
                 
-                // The zip and version file are embedded as Binary resources in WiX
-                // We'll extract them to temp first
-                string tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "wso2_ballerina_install_" + Guid.NewGuid().ToString());
-                System.IO.Directory.CreateDirectory(tempDir);
-                
                 try
                 {
-                    // Extract Binary resources from the MSI
-                    string ballerinaZipPath = System.IO.Path.Combine(tempDir, "ballerina.zip");
-                    string versionFilePath = System.IO.Path.Combine(tempDir, "ballerina_version.txt");
-                    
-                    // Extract the Binary resources
-                    using (var view = session.Database.OpenView("SELECT `Name`, `Data` FROM `Binary` WHERE `Name` = 'BallerinaZip' OR `Name` = 'BallerinaVersion'"))
-                    {
-                        view.Execute();
-                        Record record;
-                        while ((record = view.Fetch()) != null)
-                        {
-                            string name = record.GetString(1);
-                            var stream = record.GetStream(2);
-                            
-                            string targetPath = name == "BallerinaZip" ? ballerinaZipPath : versionFilePath;
-                            using (var fileStream = System.IO.File.Create(targetPath))
-                            {
-                                stream.CopyTo(fileStream);
-                            }
-                        }
-                    }
+                    // The Binary resources were already extracted in the immediate action
+                    // Now we just use them
                     
                     if (!System.IO.File.Exists(versionFilePath))
                     {
-                        session.Log("Ballerina version file not found in resources");
-                        return ActionResult.Success; // Don't fail the installation
+                        session.Log("Error: Ballerina version file not found in temp directory");
+                        return ActionResult.Failure;
                     }
                     
                     string ballerinaVersion = System.IO.File.ReadAllText(versionFilePath).Trim();
@@ -74,7 +122,7 @@ namespace CustomAction1
                     
                     if (!System.IO.File.Exists(ballerinaZipPath))
                     {
-                        session.Log($"Ballerina zip not found at {ballerinaZipPath}");
+                        session.Log($"Error: Ballerina zip not found at {ballerinaZipPath}");
                         return ActionResult.Failure;
                     }
                     
@@ -89,7 +137,7 @@ namespace CustomAction1
                     string[] dirs = System.IO.Directory.GetDirectories(extractPath, "ballerina-*");
                     if (dirs.Length == 0)
                     {
-                        session.Log("No ballerina-* directory found in extracted contents");
+                        session.Log("Error: No ballerina-* directory found in extracted contents");
                         return ActionResult.Failure;
                     }
                     
@@ -124,6 +172,7 @@ namespace CustomAction1
             catch (Exception ex)
             {
                 session.Log($"Error extracting Ballerina: {ex}");
+                session.Log($"Stack trace: {ex.StackTrace}");
                 return ActionResult.Failure;
             }
 
@@ -212,6 +261,8 @@ namespace CustomAction1
             catch (Exception ex)
             {
                 session.Log($"Error copying settings.json: {ex}");
+                session.Log($"Stack trace: {ex.StackTrace}");
+                session.Log("Settings file copy failed - installation will be rolled back");
                 return ActionResult.Failure;
             }
 
@@ -332,6 +383,8 @@ namespace CustomAction1
             catch (Exception ex)
             {
                 session.Log($"Error setting Ballerina version: {ex}");
+                session.Log($"Stack trace: {ex.StackTrace}");
+                session.Log("Ballerina version configuration failed - installation will be rolled back");
                 return ActionResult.Failure;
             }
 
