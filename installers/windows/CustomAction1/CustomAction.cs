@@ -99,10 +99,10 @@ namespace CustomAction1
                 session.Log($"TEMP_DIR from CustomActionData: {tempDir}");
                 session.Log($"ZIP_PATH from CustomActionData: {ballerinaZipPath}");
 
-                // Ballerina will be installed to ProgramFiles (matches WiX BALLERINAFOLDER)
-                string ballerinaInstallPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                    "Ballerina");
+                // Ballerina will be installed to 64-bit Program Files (matches WiX BALLERINAFOLDER)
+                string programFiles64 = Environment.GetEnvironmentVariable("ProgramW6432") 
+                    ?? Environment.GetEnvironmentVariable("ProgramFiles");
+                string ballerinaInstallPath = System.IO.Path.Combine(programFiles64, "Ballerina");
                 
                 try
                 {
