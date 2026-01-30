@@ -99,10 +99,9 @@ namespace CustomAction1
                 session.Log($"TEMP_DIR from CustomActionData: {tempDir}");
                 session.Log($"ZIP_PATH from CustomActionData: {ballerinaZipPath}");
 
-                // Ballerina will be installed to ProgramFilesX86 (matches WiX BALLERINAFOLDER)
-                // On 64-bit systems, ProgramFiles6432Folder resolves to "C:\Program Files (x86)"
+                // Ballerina will be installed to ProgramFiles (matches WiX BALLERINAFOLDER)
                 string ballerinaInstallPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                     "Ballerina");
                 
                 try
