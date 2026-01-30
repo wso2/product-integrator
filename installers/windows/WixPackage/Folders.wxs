@@ -1,6 +1,6 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
 	<Fragment>
-		<StandardDirectory Id="ProgramFilesFolder">
+		<StandardDirectory Id="ProgramFiles64Folder">
 			<Directory Id="INSTALLFOLDER" Name="WSO2">
 				<Directory Id="INTEGRATORFOLDER" Name="Integrator" />
 				<Directory Id="ICPFOLDER" Name="ICP" />
