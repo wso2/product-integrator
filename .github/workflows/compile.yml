@@ -71,18 +71,19 @@ jobs:
         with:
           pnpm: 10.11.0
 
-      - name: Cache TypeScript compilation
-        id: cache-typescript
-        uses: actions/cache@v4
-        with:
-          path: |
-            lib/vscode/out
-            lib/vscode/out-*
-            lib/vscode/.build/extensions
-            lib/vscode/.build/builtInExtensions
-          key: typescript-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json', 'lib/vscode/package-lock.json') }}
-          restore-keys: |
-            typescript-${{ runner.os }}-
+      # TODO: Enable TypeScript cache when stable    
+      # - name: Cache TypeScript compilation
+      #   id: cache-typescript
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: |
+      #       lib/vscode/out
+      #       lib/vscode/out-*
+      #       lib/vscode/.build/extensions
+      #       lib/vscode/.build/builtInExtensions
+      #     key: typescript-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json', 'lib/vscode/package-lock.json') }}
+      #     restore-keys: |
+      #       typescript-${{ runner.os }}-
 
       - name: Cache built-in extensions
         id: cache-extensions
