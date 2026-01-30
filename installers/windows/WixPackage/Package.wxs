@@ -26,6 +26,10 @@
     <SetProperty Id="extractBallerinaConditionallyCA" Value="[PrepareBallerinaData]"
       Before="extractBallerinaConditionallyCA" Sequence="execute" />
     
+    <!-- Immediate action to set CustomActionData for clearCurrentActiveBallerinaVersion -->
+    <SetProperty Id="clearCurrentActiveBallerinaVersionCA" Value="[ClearBallerinaData]"
+      Before="clearCurrentActiveBallerinaVersionCA" Sequence="execute" />
+    
     <!-- Deferred action that actually extracts Ballerina -->
     <CustomAction Id="extractBallerinaConditionallyCA" BinaryRef="ExtActionsDll"
       DllEntry="extractBallerinaConditionally" Execute="deferred" Impersonate="no"
@@ -47,7 +51,7 @@
       <!-- Prepare Ballerina binaries (extract from MSI) in immediate context -->
       <Custom Action="PrepareBallerinaBinariesCA" After="InstallFiles" Condition="NOT Installed" />
       
-      <!-- Extract Ballerina conditionally before setting user versions -->
+      <!-- Extract Ballerina and update user configurations -->
       <Custom Action="extractBallerinaConditionallyCA" After="PrepareBallerinaBinariesCA" Condition="NOT Installed" />
       <Custom Action="clearCurrentActiveBallerinaVersionCA" After="extractBallerinaConditionallyCA" Condition="NOT Installed" />
     </InstallExecuteSequence>

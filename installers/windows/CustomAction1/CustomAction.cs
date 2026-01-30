@@ -45,18 +45,27 @@ namespace CustomAction1
                     }
                 }
 
-                // Prepare CustomActionData for the deferred action
+                // Read the Ballerina version from the extracted file
+                string ballerinaVersion = System.IO.File.ReadAllText(versionFilePath).Trim();
+                session.Log($"Read Ballerina version: {ballerinaVersion}");
+
+                // Prepare CustomActionData for the deferred actions
                 // Format: KEY=VALUE;KEY=VALUE
                 var customData = new StringBuilder();
                 customData.Append("BALLERINA_HOME=").Append(session["BALLERINA_HOME"]).Append(";");
                 customData.Append("INSTALLFOLDER=").Append(session["INSTALLFOLDER"]).Append(";");
                 customData.Append("TEMP_DIR=").Append(tempDir).Append(";");
                 customData.Append("ZIP_PATH=").Append(ballerinaZipPath).Append(";");
-                customData.Append("VERSION_PATH=").Append(versionFilePath);
+                customData.Append("VERSION_PATH=").Append(versionFilePath).Append(";");
+                customData.Append("BALLERINA_VERSION=").Append(ballerinaVersion);
 
-                // Set the property that will be passed to the deferred action
+                // Set the property that will be passed to the extractBallerinaConditionally deferred action
                 session["PrepareBallerinaData"] = customData.ToString();
                 session.Log($"Set PrepareBallerinaData: {customData}");
+                
+                // Set CustomActionData for clearCurrentActiveBallerinaVersion (only needs version)
+                session["ClearBallerinaData"] = $"BALLERINA_VERSION={ballerinaVersion}";
+                session.Log($"Set ClearBallerinaData: BALLERINA_VERSION={ballerinaVersion}");
 
                 return ActionResult.Success;
             }
@@ -90,9 +99,10 @@ namespace CustomAction1
                 session.Log($"TEMP_DIR from CustomActionData: {tempDir}");
                 session.Log($"ZIP_PATH from CustomActionData: {ballerinaZipPath}");
 
-                // Ballerina will be installed to ProgramFiles
+                // Ballerina will be installed to ProgramFilesX86 (matches WiX BALLERINAFOLDER)
+                // On 64-bit systems, ProgramFiles6432Folder resolves to "C:\Program Files (x86)"
                 string ballerinaInstallPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
                     "Ballerina");
                 
                 try
@@ -276,22 +286,9 @@ namespace CustomAction1
 
             try
             {
-                // Read Ballerina version from the version file
-                string ballerinaInstallPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                    "Ballerina");
-                string ballerinaVersion = null;
-                string versionFilePath = System.IO.Path.Combine(ballerinaInstallPath, "ballerina_version");
-                
-                if (System.IO.File.Exists(versionFilePath))
-                {
-                    ballerinaVersion = System.IO.File.ReadAllText(versionFilePath).Trim();
-                    session.Log($"Read Ballerina version from file: {ballerinaVersion}");
-                }
-                else
-                {
-                    session.Log($"Ballerina version file not found: {versionFilePath}");
-                }
+                CustomActionData customData = session.CustomActionData;
+                string ballerinaVersion = customData["BALLERINA_VERSION"];
+                session.Log($"Ballerina version from CustomActionData: {ballerinaVersion}");
 
                 var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_UserProfile WHERE Special = False");
 
@@ -318,65 +315,53 @@ namespace CustomAction1
 
                         session.Log($"User directory: {localPath}");
                         string ballerinaUserHome = System.IO.Path.Combine(localPath, ".ballerina");
-                        if (System.IO.Directory.Exists(ballerinaUserHome))
+                        
+                        // Delete ballerina-home directory if exists
+                        try
                         {
-                            session.Log($"Ballerina user home directory found: {ballerinaUserHome}");
-                            
-                            // Delete ballerina-home directory
-                            try
+                            string ballerinaHomeDir = System.IO.Path.Combine(ballerinaUserHome, "ballerina-home");
+                            if (System.IO.Directory.Exists(ballerinaHomeDir))
                             {
-                                string ballerinaHomeDir = System.IO.Path.Combine(ballerinaUserHome, "ballerina-home");
-                                if (System.IO.Directory.Exists(ballerinaHomeDir))
-                                {
-                                    System.IO.Directory.Delete(ballerinaHomeDir, true);
-                                    session.Log($"Deleted ballerina-home directory: {ballerinaHomeDir}");
-                                }
+                                System.IO.Directory.Delete(ballerinaHomeDir, true);
+                                session.Log($"Deleted ballerina-home directory for user: {username}");
                             }
-                            catch (Exception deleteEx)
-                            {
-                                session.Log($"Error deleting ballerina-home for {username}: {deleteEx.Message}");
-                            }
+                        }
+                        catch (Exception deleteEx)
+                        {
+                            session.Log($"Warning: Could not delete ballerina-home for {username}: {deleteEx.Message}");
                         }
                     }
                 }
                 
                 // Update ballerina-version file in each user's home directory
-                if (!string.IsNullOrEmpty(ballerinaVersion))
+                using (PrincipalContext context = new PrincipalContext(ContextType.Machine))
                 {
-                    using (PrincipalContext context = new PrincipalContext(ContextType.Machine))
+                    foreach (ManagementObject profile in searcher.Get())
                     {
-                        foreach (ManagementObject profile in searcher.Get())
+                        string localPath = (string)profile["LocalPath"];
+                        if (string.IsNullOrEmpty(localPath)) continue;
+
+                        int lastBackslash = localPath.LastIndexOf('\\');
+                        if (lastBackslash == -1) continue;
+                        
+                        string username = localPath.Substring(lastBackslash + 1);
+                        var user = UserPrincipal.FindByIdentity(context, username);
+
+                        if (user == null || user.Enabled == false) continue;
+
+                        string ballerinaUserHome = System.IO.Path.Combine(localPath, ".ballerina");
+                        
+                        // Create .ballerina directory if it doesn't exist
+                        if (!System.IO.Directory.Exists(ballerinaUserHome))
                         {
-                            string localPath = (string)profile["LocalPath"];
-                            if (string.IsNullOrEmpty(localPath)) continue;
-
-                            int lastBackslash = localPath.LastIndexOf('\\');
-                            if (lastBackslash == -1) continue;
-                            
-                            string username = localPath.Substring(lastBackslash + 1);
-                            var user = UserPrincipal.FindByIdentity(context, username);
-
-                            if (user == null || user.Enabled == false) continue;
-
-                            string ballerinaUserHome = System.IO.Path.Combine(localPath, ".ballerina");
-                            
-                            // Create .ballerina directory if it doesn't exist
-                            if (!System.IO.Directory.Exists(ballerinaUserHome))
-                            {
-                                System.IO.Directory.CreateDirectory(ballerinaUserHome);
-                            }
-                            
-                            string ballerinaVersionFile = System.IO.Path.Combine(ballerinaUserHome, "ballerina-version");
-                            
-                            // Remove existing ballerina-version file if it exists
-                            if (System.IO.File.Exists(ballerinaVersionFile))
-                            {
-                                System.IO.File.Delete(ballerinaVersionFile);
-                            }
-                            
-                            System.IO.File.WriteAllText(ballerinaVersionFile, $"ballerina-{ballerinaVersion}");
-                            session.Log($"Set ballerina-version to ballerina-{ballerinaVersion} for user: {username}");
+                            System.IO.Directory.CreateDirectory(ballerinaUserHome);
                         }
+                        
+                        string ballerinaVersionFile = System.IO.Path.Combine(ballerinaUserHome, "ballerina-version");
+                        
+                        // Write ballerina-version file (overwrites existing)
+                        System.IO.File.WriteAllText(ballerinaVersionFile, $"ballerina-{ballerinaVersion}");
+                        session.Log($"Set ballerina-version to ballerina-{ballerinaVersion} for user: {username}");
                     }
                 }
             }
