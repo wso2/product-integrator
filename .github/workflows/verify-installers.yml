@@ -1,0 +1,181 @@
+name: Verify Installers
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  BALLERINA_VERSION: "2201.8.6"
+  ICP_VERSION: "4.2.0"
+  INTEGRATOR_VERSION: "1.0.0-SNAPSHOT"
+
+jobs:
+  compile:
+    name: Compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+      - run: npm ci
+        working-directory: lib/vscode
+      - run: |
+         chmod +x ./ci/build/update-product.sh
+         ./ci/build/update-product.sh
+      - name: Compile
+        working-directory: lib/vscode
+        run: |
+          npm exec -- npm-run-all -lp core-ci-pr extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+          npm run compile
+      - name: Compress compilation artifact
+        run: |
+          tar -cz --exclude='lib/vscode/.build/node_modules_cache' --exclude='lib/vscode/.build/node_modules_list.txt' --exclude='lib/vscode/.build/distro' -f compilation.tar.gz $(ls -d lib/vscode/.build lib/vscode/out-* lib/vscode/test/integration/browser/out lib/vscode/test/smoke/out lib/vscode/test/automation/out 2>/dev/null)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Compilation
+          path: compilation.tar.gz
+
+  verify-linux:
+    name: Verify Linux (DEB)
+    runs-on: ubuntu-latest
+    needs: compile
+    env:
+      VSCODE_ARCH: x64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+      - uses: actions/download-artifact@v4
+        with:
+          name: Compilation
+          path: .
+      - run: tar -xzf compilation.tar.gz
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config xvfb libgtk-3-0 libxkbfile-dev libkrb5-dev libgbm1 rpm
+      - working-directory: lib/vscode
+        run: npm ci
+      - working-directory: lib/vscode
+        run: npm run gulp vscode-linux-x64-min-ci
+      - name: Package VS Code
+        run: |
+          tar -czf vscode-linux-x64.tar.gz -C lib/vscode/.. VSCode-linux-x64
+          cp vscode-linux-x64.tar.gz installers/linux-deb/
+
+      - name: Build DEB
+        working-directory: installers/linux-deb
+        run: |
+          wget -O ballerina.zip "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${{ env.BALLERINA_VERSION }}/ballerina-${{ env.BALLERINA_VERSION }}-swan-lake-linux.zip"
+          wget -O icp.zip "https://github.com/wso2/integration-control-plane/releases/download/v${{ env.ICP_VERSION }}/wso2-integration-control-plane-${{ env.ICP_VERSION }}.zip"
+          ./build.sh ballerina.zip vscode-linux-x64.tar.gz icp.zip ${{ env.INTEGRATOR_VERSION }}
+
+      - name: Install DEB
+        run: sudo dpkg -i installers/linux-deb/*.deb
+
+      - name: Verify Installation (bal -v)
+        run: /opt/wso2/integrator/ballerina/bin/bal -v
+
+  verify-mac:
+    name: Verify Mac
+    runs-on: macos-latest
+    needs: compile
+    env:
+      VSCODE_ARCH: x64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+      - uses: actions/download-artifact@v4
+        with:
+          name: Compilation
+          path: .
+      - run: tar -xzf compilation.tar.gz
+      - working-directory: lib/vscode
+        run: |
+            python3 -m pip install setuptools
+            npm ci
+      - working-directory: lib/vscode
+        run: npm run gulp vscode-darwin-x64-min-ci
+      - name: Package VS Code
+        run: |
+          (cd lib/vscode/.. && zip -qry "VSCode-darwin-x64.zip" VSCode-darwin-x64)
+          mv lib/vscode/../VSCode-darwin-x64.zip installers/mac/
+
+      - name: Build PKG
+        working-directory: installers/mac
+        run: |
+          wget -O ballerina.zip "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${{ env.BALLERINA_VERSION }}/ballerina-${{ env.BALLERINA_VERSION }}-swan-lake-macos.zip"
+          wget -O icp.zip "https://github.com/wso2/integration-control-plane/releases/download/v${{ env.ICP_VERSION }}/wso2-integration-control-plane-${{ env.ICP_VERSION }}.zip"
+          ./build.sh ballerina.zip VSCode-darwin-x64.zip icp.zip ${{ env.INTEGRATOR_VERSION }}
+
+      - name: Install PKG
+        run: sudo installer -pkg installers/mac/*.pkg -target /
+
+      - name: Verify Installation (bal -v)
+        run: "/Library/Application Support/WSO2Integrator/Ballerina/bin/bal" -v
+
+  verify-windows:
+    name: Verify Windows
+    runs-on: windows-latest
+    needs: compile
+    env:
+      VSCODE_ARCH: x64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+      - uses: actions/download-artifact@v4
+        with:
+          name: Compilation
+          path: .
+      - shell: pwsh
+        run: tar -xzf compilation.tar.gz
+      - working-directory: lib/vscode
+        run: npm ci
+      
+      # Minimal build for client
+      - working-directory: lib/vscode
+        run: npm run gulp vscode-win32-x64-min-ci
+      
+      - name: Package VS Code
+        shell: pwsh
+        run: |
+          Compress-Archive -Path lib/vscode/../VSCode-win32-x64/* -DestinationPath installers/windows/VSCode-win32-x64.zip -Force
+
+      - name: Build MSI
+        working-directory: installers/windows
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${{ env.BALLERINA_VERSION }}/ballerina-${{ env.BALLERINA_VERSION }}-swan-lake-windows.zip" -OutFile "ballerina.zip"
+          Invoke-WebRequest -Uri "https://github.com/wso2/integration-control-plane/releases/download/v${{ env.ICP_VERSION }}/wso2-integration-control-plane-${{ env.ICP_VERSION }}.zip" -OutFile "icp.zip"
+          .\build.bat .\ballerina.zip .\VSCode-win32-x64.zip .\icp.zip ${{ env.INTEGRATOR_VERSION }}
+
+      - name: Install MSI
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem "installers\windows\WixPackage\bin\x64\Release\en-US\*.msi" | Select-Object -ExpandProperty FullName
+          Write-Host "Installing $msi..."
+          Start-Process msiexec.exe -ArgumentList "/i", """$msi""", "/quiet", "/norestart" -Wait
+
+      - name: Verify Installation (bal -v)
+        shell: pwsh
+        run: |
+          & "$env:LOCALAPPDATA\WSO2\Integrator\Ballerina\bin\bal.exe" -v
