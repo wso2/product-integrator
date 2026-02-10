@@ -1,11 +1,12 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
 	<Fragment>
-		<StandardDirectory Id="ProgramFiles6432Folder">
+		<StandardDirectory Id="LocalAppDataFolder">
 			<Directory Id="INSTALLFOLDER" Name="WSO2">
-				<Directory Id="INTEGRATORFOLDER" Name="Integrator" />
-				<Directory Id="ICPFOLDER" Name="ICP" />
+				<Directory Id="INTEGRATORFOLDER" Name="Integrator">
+					<Directory Id="ICPFOLDER" Name="ICP" />
+					<Directory Id="BALLERINAFOLDER" Name="Ballerina" />
+				</Directory>
 			</Directory>
-			<Directory Id="BALLERINAFOLDER" Name="Ballerina" />
 		</StandardDirectory>
 
 		<StandardDirectory Id="ProgramMenuFolder" />

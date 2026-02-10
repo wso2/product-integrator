@@ -51,9 +51,9 @@ if [ ! -f "$ICP_ZIP" ]; then
 fi
 
 # Define paths
-INTEGRATOR_TARGET="$WORK_DIR/package/usr/share/wso2-integrator"
-BALLERINA_TARGET="$WORK_DIR/package/usr/lib/ballerina"
-ICP_TARGET="$WORK_DIR/package/usr/lib/wso2/icp"
+INTEGRATOR_TARGET="$WORK_DIR/package/opt/wso2/integrator"
+BALLERINA_TARGET="$WORK_DIR/package/opt/wso2/integrator/ballerina"
+ICP_TARGET="$WORK_DIR/package/opt/wso2/integrator/icp"
 
 print_info "Starting DEB package build process..."
 
