@@ -14,7 +14,7 @@ echo "Setting system-wide permissions"
 # Set permissions for /Library/Application Support/WSO2Integrator/Ballerina
 if [ -d "/Library/Application Support/WSO2Integrator/Ballerina" ]; then
     cd "/Library/Application Support/WSO2Integrator/Ballerina"
-    chown -R root:wheel "/Library/Application Support/WSO2Integrator/Ballerina"
+    # chown -R root:wheel "/Library/Application Support/WSO2Integrator/Ballerina"
     chmod -R ugo+r "/Library/Application Support/WSO2Integrator/Ballerina/distributions/ballerina-*"
     chmod -R ugo+rx "/Library/Application Support/WSO2Integrator/Ballerina/bin"
     find dependencies -type d -exec chmod ugo+rx {} \;
@@ -49,7 +49,7 @@ done
 # Set permissions for the .app in /Library/Application Support/WSO2Integrator
 if [ -d "/Library/Application Support/WSO2Integrator/WSO2 Integrator.app" ]; then
     chmod -R 755 "/Library/Application Support/WSO2Integrator/WSO2 Integrator.app"
-    chown -R root:wheel "/Library/Application Support/WSO2Integrator/WSO2 Integrator.app"
+    # chown -R root:wheel "/Library/Application Support/WSO2Integrator/WSO2 Integrator.app"
     echo "Set permissions for application"
 fi
 

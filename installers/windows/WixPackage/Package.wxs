@@ -7,6 +7,7 @@
     UpgradeCode="344b046a-fa6a-4452-be40-2794f59fe7b0"
     InstallerVersion="500"
     Compressed="yes"
+    InstallScope="perUser"
   >
     <Property Id="BALLERINA_INSTALLATION_WARNING" Value="0" />
     <Binary Id="ExtActionsDll" SourceFile="..\CustomAction1\bin\$(Configuration)\net472\CustomAction1.CA.dll" />
