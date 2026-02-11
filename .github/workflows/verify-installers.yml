@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
 
 env:
-  BALLERINA_VERSION: "2201.8.6"
-  ICP_VERSION: "4.2.0"
-  INTEGRATOR_VERSION: "1.0.0-SNAPSHOT"
+  BALLERINA_VERSION: "2201.13.1"
+  ICP_VERSION: "1.2.0"
+  INTEGRATOR_VERSION: "5.0.0-SNAPSHOT"
 
 jobs:
   compile:
@@ -25,14 +25,11 @@ jobs:
           node-version-file: lib/vscode/.nvmrc
       - run: npm ci
         working-directory: lib/vscode
+      - name: Install quilt
+        run: sudo apt-get install -y quilt
       - run: |
-         chmod +x ./ci/build/update-product.sh
-         ./ci/build/update-product.sh
-      - name: Compile
-        working-directory: lib/vscode
-        run: |
-          npm exec -- npm-run-all -lp core-ci-pr extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
-          npm run compile
+          chmod +x build.sh
+          ./build.sh --compile-only
       - name: Compress compilation artifact
         run: |
           tar -cz --exclude='lib/vscode/.build/node_modules_cache' --exclude='lib/vscode/.build/node_modules_list.txt' --exclude='lib/vscode/.build/distro' -f compilation.tar.gz $(ls -d lib/vscode/.build lib/vscode/out-* lib/vscode/test/integration/browser/out lib/vscode/test/smoke/out lib/vscode/test/automation/out 2>/dev/null)
@@ -65,8 +62,10 @@ jobs:
           sudo apt-get install -y pkg-config xvfb libgtk-3-0 libxkbfile-dev libkrb5-dev libgbm1 rpm
       - working-directory: lib/vscode
         run: npm ci
-      - working-directory: lib/vscode
-        run: npm run gulp vscode-linux-x64-min-ci
+      - name: Install dependencies and build
+        run: |
+          chmod +x build.sh
+          ./build.sh --package-only
       - name: Package VS Code
         run: |
           tar -czf vscode-linux-x64.tar.gz -C lib/vscode/.. VSCode-linux-x64
@@ -108,8 +107,11 @@ jobs:
         run: |
             python3 -m pip install setuptools
             npm ci
-      - working-directory: lib/vscode
-        run: npm run gulp vscode-darwin-x64-min-ci
+      - name: Install quilt and build
+        run: |
+          brew install quilt
+          chmod +x build.sh
+          ./build.sh --package-only
       - name: Package VS Code
         run: |
           (cd lib/vscode/.. && zip -qry "VSCode-darwin-x64.zip" VSCode-darwin-x64)
