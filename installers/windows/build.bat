@@ -25,14 +25,30 @@ if "%~4"=="" (
 )
 
 
-@REM REM Extract ballerina.zip
+@REM REM Extract ballerina.zip to temp directory, then copy only required parts
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', '.\temp_ballerina'); }"
-move ".\temp_ballerina\ballerina-*" ".\WixPackage\payload\Ballerina"
-if exist ".\temp_ballerina" rmdir /s /q ".\temp_ballerina"
 if errorlevel 1 (
     echo Ballerina extraction failed
     exit /b 1
 )
+
+@REM Create Ballerina target directory
+if not exist ".\WixPackage\payload\Ballerina" mkdir ".\WixPackage\payload\Ballerina"
+
+@REM Copy only distributions/ballerina-*/bin and dependencies
+for /d %%D in (".\temp_ballerina\ballerina-*\distributions\ballerina-*") do (
+    if exist "%%D\bin" (
+        xcopy "%%D\bin" ".\WixPackage\payload\Ballerina\bin\" /E /I /Y
+    )
+)
+for /d %%D in (".\temp_ballerina\ballerina-*\dependencies") do (
+    if exist "%%D" (
+        xcopy "%%D" ".\WixPackage\payload\Ballerina\dependencies\" /E /I /Y
+    )
+)
+
+@REM Clean up temp directory
+if exist ".\temp_ballerina" rmdir /s /q ".\temp_ballerina"
 
 @REM REM Extract integrator.zip
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~2', '.\WixPackage\payload\Integrator'); }"

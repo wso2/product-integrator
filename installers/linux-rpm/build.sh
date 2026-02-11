@@ -81,8 +81,15 @@ unzip -q -o "$BALLERINA_ZIP" -d "$BALLERINA_TARGET"
 # Move contents from the extracted folder to BALLERINA_TARGET
 bal_extracted_dir=$(find "$BALLERINA_TARGET" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 if [ -n "$bal_extracted_dir" ]; then
-    mv "$bal_extracted_dir"/* "$BALLERINA_TARGET"/
-    rmdir "$bal_extracted_dir"
+    # Extract only distributions/ballerina-*/bin and dependencies
+    bal_dist_dir=$(find "$bal_extracted_dir/distributions" -mindepth 1 -maxdepth 1 -type d -name "ballerina-*" | head -n 1)
+    if [ -n "$bal_dist_dir" ] && [ -d "$bal_dist_dir/bin" ]; then
+        cp -R "$bal_dist_dir/bin" "$BALLERINA_TARGET/"
+    fi
+    if [ -d "$bal_extracted_dir/dependencies" ]; then
+        cp -R "$bal_extracted_dir/dependencies" "$BALLERINA_TARGET/"
+    fi
+    rmdir "$bal_extracted_dir" 2>/dev/null || rm -rf "$bal_extracted_dir"
 fi
 
 # Extract integrator archive

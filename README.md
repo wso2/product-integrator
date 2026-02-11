@@ -11,6 +11,8 @@ Open source integration platform offering a powerful low-code development experi
 | **Linux (RedHat/CentOS)** | `.rpm` | Standard package. Requires `sudo` to install (System-wide). |
 | **Linux (General)** | `.tar.gz` | Portable archive. Can be extracted and run anywhere **without root privileges**. |
 
+📦 **[See detailed installation instructions and directory structures →](docs/INSTALLATION.md)**
+
 ## Build from Source
 
 ### Prerequisites

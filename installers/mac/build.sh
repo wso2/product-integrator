@@ -49,9 +49,19 @@ mkdir -p "$BALLERINA_TARGET"
 unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
 BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$BALLERINA_ZIP" | head -1 | cut -d/ -f1)
 BALLERINA_UNZIPPED_PATH="$EXTRACTION_TARGET/$BALLERINA_UNZIPPED_FOLDER"
-mv "$BALLERINA_UNZIPPED_PATH"/* "$BALLERINA_TARGET"
+
+# Extract only distributions/ballerina-*/bin and dependencies
+BALLERINA_DIST_DIR=$(find "$BALLERINA_UNZIPPED_PATH/distributions" -maxdepth 1 -type d -name "ballerina-*" | head -1)
+if [ -n "$BALLERINA_DIST_DIR" ]; then
+    cp -R "$BALLERINA_DIST_DIR/bin" "$BALLERINA_TARGET/"
+fi
+if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
+    cp -R "$BALLERINA_UNZIPPED_PATH/dependencies" "$BALLERINA_TARGET/"
+fi
+
 rm -rf "$BALLERINA_UNZIPPED_PATH"
-chmod +x "$BALLERINA_TARGET/bin"/*
+chmod +x "$BALLERINA_TARGET/bin"/* 2>/dev/null || true
+find "$BALLERINA_TARGET/dependencies" -type f -name "java" -o -name "javac" | xargs chmod +x 2>/dev/null || true
 
 # Extract icp zip
 ICP_TARGET="$BASE_TARGET/ICP"
