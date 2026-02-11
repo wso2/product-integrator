@@ -7,7 +7,7 @@
 
     <Component Id="BallerinaEnvironmentComponent" Directory="INSTALLFOLDER"
       Guid="{c08d564b-80dd-42e8-b72d-38fe086dd2cf}">
-      <Environment
+      <!-- <Environment
         Id="BallerinaHome"
         Action="set"
         Part="all"
@@ -22,7 +22,7 @@
         Name="PATH"
         Permanent="no"
         System="yes"
-        Value="[BALLERINAFOLDER]bin" />
+        Value="[BALLERINAFOLDER]bin" /> -->
     </Component>
   </Fragment>
 </Wix>

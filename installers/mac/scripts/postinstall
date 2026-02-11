@@ -21,7 +21,7 @@ if [ -d "/Library/Application Support/WSO2Integrator/Ballerina" ]; then
     chmod -R ugo+r "/Library/Application Support/WSO2Integrator/Ballerina/lib"
     chmod o-w .
     rm -f "/Library/Application Support/WSO2Integrator/Ballerina/bin/ballerina"
-    rm -f /etc/paths.d/ballerina
+    # rm -f /etc/paths.d/ballerina
     echo "Set permissions for Ballerina directory"
 fi
 
