@@ -2,7 +2,7 @@
 <installer-gui-script minSpecVersion="1">
     <title>WSO2 Integrator</title>
     <organization>com.wso2.wso2integrator</organization>
-    <domains enable_localSystem="false" enable_currentUser="true" />
+    <domains enable_localSystem="true" enable_currentUser="true" />
     <options customize="never" require-scripts="false" rootVolumeOnly="false" auth="none" />
     <welcome file="welcome.html" />
     <license file="license.txt" />

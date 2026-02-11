@@ -9,18 +9,25 @@ echo "Starting WSO2 Integrator post-installation..."
 
 echo "Post-install script started"
 
-echo "Setting system-wide permissions"
+echo "Setting permissions"
 
-# Set permissions for /Library/Application Support/WSO2Integrator/Ballerina
-if [ -d "/Library/Application Support/WSO2Integrator/Ballerina" ]; then
-    cd "/Library/Application Support/WSO2Integrator/Ballerina"
-    # chown -R root:wheel "/Library/Application Support/WSO2Integrator/Ballerina"
-    chmod -R ugo+r "/Library/Application Support/WSO2Integrator/Ballerina/distributions/ballerina-*"
-    chmod -R ugo+rx "/Library/Application Support/WSO2Integrator/Ballerina/bin"
+# Determine target directory
+INSTALL_ROOT="${2:-$HOME}"
+TARGET_ROOT="${INSTALL_ROOT}/Library/Application Support/WSO2Integrator"
+BALLERINA_HOME="${TARGET_ROOT}/Ballerina"
+
+echo "Target Root: ${TARGET_ROOT}"
+
+# Set permissions for Ballerina
+if [ -d "$BALLERINA_HOME" ]; then
+    cd "$BALLERINA_HOME"
+    # chown -R root:wheel "$BALLERINA_HOME"
+    chmod -R ugo+r "$BALLERINA_HOME/distributions/ballerina-*"
+    chmod -R ugo+rx "$BALLERINA_HOME/bin"
     find dependencies -type d -exec chmod ugo+rx {} \;
-    chmod -R ugo+r "/Library/Application Support/WSO2Integrator/Ballerina/lib"
+    chmod -R ugo+r "$BALLERINA_HOME/lib"
     chmod o-w .
-    rm -f "/Library/Application Support/WSO2Integrator/Ballerina/bin/ballerina"
+    rm -f "$BALLERINA_HOME/bin/ballerina"
     # rm -f /etc/paths.d/ballerina
     echo "Set permissions for Ballerina directory"
 fi
@@ -46,10 +53,10 @@ for USER_HOME in $USER_HOMES; do
     echo "Removed ballerina-version file for user: $USERNAME"
 done
 
-# Set permissions for the .app in /Library/Application Support/WSO2Integrator
-if [ -d "/Library/Application Support/WSO2Integrator/WSO2 Integrator.app" ]; then
-    chmod -R 755 "/Library/Application Support/WSO2Integrator/WSO2 Integrator.app"
-    # chown -R root:wheel "/Library/Application Support/WSO2Integrator/WSO2 Integrator.app"
+# Set permissions for the .app
+if [ -d "${TARGET_ROOT}/WSO2 Integrator.app" ]; then
+    chmod -R 755 "${TARGET_ROOT}/WSO2 Integrator.app"
+    # chown -R root:wheel "${TARGET_ROOT}/WSO2 Integrator.app"
     echo "Set permissions for application"
 fi
 
