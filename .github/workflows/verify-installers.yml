@@ -95,7 +95,7 @@ jobs:
 
   verify-mac:
     name: Verify Mac
-    runs-on: macos-latest
+    runs-on: macos-13
     needs: compile
     env:
       VSCODE_ARCH: x64

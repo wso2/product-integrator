@@ -74,7 +74,7 @@ unzip -q -o "$BALLERINA_ZIP" -d "$BALLERINA_TARGET"
 # Move contents from the extracted folder to BALLERINA_TARGET
 bal_extracted_dir=$(find "$BALLERINA_TARGET" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 if [ -n "$bal_extracted_dir" ]; then
-    mv "$bal_extracted_dir"/* "$BALLERINA_TARGET"/
+    find "$bal_extracted_dir" -mindepth 1 -maxdepth 1 -exec mv {} "$BALLERINA_TARGET"/ \;
     rmdir "$bal_extracted_dir"
 fi
 
@@ -85,7 +85,7 @@ unzip -q -o "$ICP_ZIP" -d "$ICP_TARGET"
 # Move contents from the extracted folder to ICP_TARGET
 icp_extracted_dir=$(find "$ICP_TARGET" -mindepth 1 -maxdepth 1 -type d | head -n 1)
 if [ -n "$icp_extracted_dir" ]; then
-    mv "$icp_extracted_dir"/* "$ICP_TARGET"/
+    find "$icp_extracted_dir" -mindepth 1 -maxdepth 1 -exec mv {} "$ICP_TARGET"/ \;
     rmdir "$icp_extracted_dir"
 fi
 
