@@ -39,3 +39,6 @@ installers/windows/WixPackage/bin/
 installers/windows/WixPackage/payload/ICP/
 installers/linux-deb/package/usr/lib/
 installers/linux-deb/package/usr/share/wso2-integrator
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md

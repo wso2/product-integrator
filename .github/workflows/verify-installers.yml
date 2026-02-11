@@ -70,12 +70,21 @@ jobs:
         run: |
           tar -czf vscode-linux-x64.tar.gz -C lib/vscode/.. VSCode-linux-x64
           cp vscode-linux-x64.tar.gz installers/linux-deb/
+          cp vscode-linux-x64.tar.gz installers/linux-tar/
 
       - name: Build DEB
         working-directory: installers/linux-deb
         run: |
           wget -O ballerina.zip "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${{ env.BALLERINA_VERSION }}/ballerina-${{ env.BALLERINA_VERSION }}-swan-lake-linux.zip"
           wget -O icp.zip "https://github.com/wso2/integration-control-plane/releases/download/v${{ env.ICP_VERSION }}/wso2-integration-control-plane-${{ env.ICP_VERSION }}.zip"
+          ./build.sh ballerina.zip vscode-linux-x64.tar.gz icp.zip ${{ env.INTEGRATOR_VERSION }}
+
+      - name: Build Tarball
+        working-directory: installers/linux-tar
+        run: |
+          wget -O ballerina.zip "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${{ env.BALLERINA_VERSION }}/ballerina-${{ env.BALLERINA_VERSION }}-swan-lake-linux.zip"
+          wget -O icp.zip "https://github.com/wso2/integration-control-plane/releases/download/v${{ env.ICP_VERSION }}/wso2-integration-control-plane-${{ env.ICP_VERSION }}.zip"
+          chmod +x build.sh
           ./build.sh ballerina.zip vscode-linux-x64.tar.gz icp.zip ${{ env.INTEGRATOR_VERSION }}
 
       - name: Install DEB
