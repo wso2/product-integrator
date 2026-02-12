@@ -1,0 +1,301 @@
+name: Release Build Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (e.g., v1.2.3)
+        required: true
+        type: string
+      build_linux:
+        description: Build Linux artifacts
+        required: false
+        default: true
+        type: boolean
+      build_macos:
+        description: Build macOS artifacts
+        required: false
+        default: true
+        type: boolean
+      build_windows:
+        description: Build Windows installer
+        required: false
+        default: true
+        type: boolean
+      ballerina_version:
+        description: Ballerina version (required for Windows installer)
+        required: false
+        default: ""
+        type: string
+      icp_version:
+        description: ICP version (required for Windows installer)
+        required: false
+        default: ""
+        type: string
+      integrator_version:
+        description: Integrator version (required for Windows installer)
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    if: ${{ inputs.build_linux == true || inputs.build_linux == 'true' }}
+    name: Build Linux (build.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Use Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y quilt
+
+      - name: Run build shell
+        run: |
+          chmod +x ./build.sh
+          ./build.sh
+
+      - name: Archive artifacts
+        run: |
+          mkdir -p release-artifacts
+          for dir in VSCode-linux-*; do
+            if [ -d "$dir" ]; then
+              tar -czf "release-artifacts/${dir}.tar.gz" "$dir"
+            fi
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: release-artifacts/*
+
+  build-macos:
+    if: ${{ inputs.build_macos == true || inputs.build_macos == 'true' }}
+    name: Build macOS (build.sh)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Use Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+
+      - name: Install system dependencies
+        run: |
+          brew install quilt
+
+      - name: Run build shell
+        run: |
+          chmod +x ./build.sh
+          ./build.sh
+
+      - name: Archive artifacts
+        run: |
+          mkdir -p release-artifacts
+          for dir in VSCode-darwin-*; do
+            if [ -d "$dir" ]; then
+              zip -Xry "release-artifacts/${dir}.zip" "$dir"
+            fi
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: release-artifacts/*
+
+  build-windows:
+    if: ${{ inputs.build_windows == true || inputs.build_windows == 'true' }}
+    name: Build Windows installer
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: lib/vscode
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Validate installer inputs
+        shell: pwsh
+        run: |
+          if (-not "${{ inputs.ballerina_version }}" -or -not "${{ inputs.icp_version }}" -or -not "${{ inputs.integrator_version }}") {
+            Write-Error "ballerina_version, icp_version, and integrator_version are required to build the Windows installer."
+            exit 1
+          }
+
+      - name: Use Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+          cache: npm
+          cache-dependency-path: lib/vscode/package-lock.json
+
+      - name: Install Rsync (Windows)
+        shell: pwsh
+        run: |
+          choco install -y rsync
+
+      - name: Update product.json and branding
+        shell: bash
+        working-directory: .
+        run: |
+          chmod +x ./ci/build/update-product.sh
+          ./ci/build/update-product.sh
+
+      - name: Install Rust toolchain (Windows)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"
+          ./rustup-init.exe -y --default-toolchain stable
+          $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+
+      - name: Install OpenSSL (Windows)
+        shell: pwsh
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+          cd C:\vcpkg
+          .\bootstrap-vcpkg.bat
+          .\vcpkg.exe install openssl:x64-windows-static
+          $env:VCPKG_ROOT = "C:\vcpkg"
+          $env:OPENSSL_DIR = "C:\vcpkg\installed\x64-windows-static"
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+          echo "OPENSSL_DIR=C:\vcpkg\installed\x64-windows-static" >> $env:GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=C:\vcpkg\installed\x64-windows-static\lib" >> $env:GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=C:\vcpkg\installed\x64-windows-static\include" >> $env:GITHUB_ENV
+
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci
+
+      - name: Compile
+        run: |
+          npm run compile
+
+      - name: Mixin distro modules
+        run: |
+          node build/azure-pipelines/distro/mixin-npm || true
+          node build/azure-pipelines/distro/mixin-quality || true
+
+      - name: Install builtin extensions
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run download-builtin-extensions
+
+      - name: Download explorer Dll
+        shell: pwsh
+        run: node build/win32/explorer-dll-fetcher .build/win32/appx
+
+      - name: Build client (Windows)
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp "vscode-win32-x64-min-ci"
+
+      - name: Build CLI (Windows)
+        shell: pwsh
+        env:
+          VCPKG_ROOT: C:\vcpkg
+          OPENSSL_DIR: C:\vcpkg\installed\x64-windows-static
+          OPENSSL_LIB_DIR: C:\vcpkg\installed\x64-windows-static\lib
+          OPENSSL_INCLUDE_DIR: C:\vcpkg\installed\x64-windows-static\include
+          OPENSSL_STATIC: 1
+        run: |
+          $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+          cd cli
+          cargo build --release --bin=code
+          if (-not (Test-Path "./target/release/code.exe")) {
+            Write-Host "CLI binary not found at ./target/release/code.exe" -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Mix in built CLI into client (Windows)
+        shell: pwsh
+        run: |
+          cd cli
+          $cliBin = "./target/release/code.exe"
+          $productJson = Get-Content "../product.json" | ConvertFrom-Json
+          $cliAppName = $productJson.tunnelApplicationName + ".exe"
+          $binDir = "../VSCode-win32-x64/bin"
+          New-Item -ItemType Directory -Path $binDir -Force
+          Copy-Item $cliBin "$binDir/$cliAppName"
+
+      - name: Re-package with CLI (Windows)
+        shell: pwsh
+        run: |
+          mkdir -p ../artifacts
+          $archivePath = "../artifacts/VSCode-win32-x64.zip"
+          Remove-Item $archivePath -ErrorAction SilentlyContinue
+          Compress-Archive -Path ../VSCode-win32-x64/* -DestinationPath $archivePath -Force
+
+      - name: Copy Integrator artifact to build directory
+        run: |
+          cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
+
+      - name: Build Windows installer packages
+        shell: pwsh
+        run: |
+          cd ..\..
+          $ROOT_DIR = Get-Location
+          Write-Host "Root dir: $ROOT_DIR"
+          set BALLERINA_VERSION "${{ inputs.ballerina_version }}"
+          set BALLERINA_URL "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-windows.zip"
+          set ICP_VERSION "${{ inputs.icp_version }}"
+          set ICP_URL "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          set INTEGRATOR_VERSION "${{ inputs.integrator_version }}"
+          cd .\installers\windows
+          Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
+          Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
+          .\build.bat .\ballerina.zip .\VSCode-win32-x64.zip .\icp.zip $INTEGRATOR_VERSION
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            installers\windows\WixPackage\bin\x64\Release\en-US\*.msi
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-macos, build-windows]
+    if: ${{ !cancelled() && (needs.build-linux.result == 'success' || needs.build-linux.result == 'skipped') && (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') && (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') }}
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.tag }}
+          generate_release_notes: true
+          files: release-artifacts/**/*
