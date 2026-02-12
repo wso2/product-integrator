@@ -12,10 +12,20 @@ on:
         required: false
         default: true
         type: boolean
+      build_linux_installers:
+        description: Build Linux installers (deb/rpm/tar)
+        required: false
+        default: false
+        type: boolean
       build_macos:
         description: Build macOS artifacts
         required: false
         default: true
+        type: boolean
+      build_macos_installers:
+        description: Build macOS installer (pkg)
+        required: false
+        default: false
         type: boolean
       build_windows:
         description: Build Windows installer
@@ -23,17 +33,17 @@ on:
         default: true
         type: boolean
       ballerina_version:
-        description: Ballerina version (required for Windows installer)
+        description: Ballerina version (required for installers)
         required: false
         default: ""
         type: string
       icp_version:
-        description: ICP version (required for Windows installer)
+        description: ICP version (required for installers)
         required: false
         default: ""
         type: string
       integrator_version:
-        description: Integrator version (required for Windows installer)
+        description: Integrator version (required for installers)
         required: false
         default: ""
         type: string
@@ -67,6 +77,46 @@ jobs:
           chmod +x ./build.sh
           ./build.sh
 
+      - name: Validate installer inputs (Linux)
+        if: ${{ inputs.build_linux_installers == true || inputs.build_linux_installers == 'true' }}
+        run: |
+          if [ -z "${{ inputs.ballerina_version }}" ] || [ -z "${{ inputs.icp_version }}" ] || [ -z "${{ inputs.integrator_version }}" ]; then
+            echo "ballerina_version, icp_version, and integrator_version are required to build Linux installers."
+            exit 1
+          fi
+
+      - name: Build Linux installers (deb/rpm/tar)
+        if: ${{ inputs.build_linux_installers == true || inputs.build_linux_installers == 'true' }}
+        run: |
+          sudo apt-get install -y rpm unzip
+          mkdir -p installers/linux-deb installers/linux-rpm installers/linux-tar
+          if [ -d "VSCode-linux-x64" ]; then
+            tar -czf vscode-linux-x64.tar.gz VSCode-linux-x64
+          fi
+          cp vscode-linux-x64.tar.gz installers/linux-deb/
+          cp vscode-linux-x64.tar.gz installers/linux-rpm/
+          cp vscode-linux-x64.tar.gz installers/linux-tar/
+
+          BALLERINA_VERSION="${{ inputs.ballerina_version }}"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-linux.zip"
+          ICP_VERSION="${{ inputs.icp_version }}"
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
+
+          cd installers/linux-deb
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip vscode-linux-x64.tar.gz icp.zip "$INTEGRATOR_VERSION"
+          cd ../linux-rpm
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip vscode-linux-x64.tar.gz icp.zip "$INTEGRATOR_VERSION"
+          cd ../linux-tar
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip vscode-linux-x64.tar.gz icp.zip "$INTEGRATOR_VERSION"
+          cd ../..
+
       - name: Archive artifacts
         run: |
           mkdir -p release-artifacts
@@ -81,6 +131,17 @@ jobs:
         with:
           name: linux-artifacts
           path: release-artifacts/*
+
+      - name: Upload Linux installer artifacts
+        if: ${{ inputs.build_linux_installers == true || inputs.build_linux_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-installers
+          path: |
+            installers/linux-deb/*.deb
+            installers/linux-rpm/*.rpm
+            installers/linux-tar/*.tar.gz
+          if-no-files-found: error
 
   build-macos:
     if: ${{ inputs.build_macos == true || inputs.build_macos == 'true' }}
@@ -106,6 +167,44 @@ jobs:
           chmod +x ./build.sh
           ./build.sh
 
+      - name: Validate installer inputs (macOS)
+        if: ${{ inputs.build_macos_installers == true || inputs.build_macos_installers == 'true' }}
+        run: |
+          if [ -z "${{ inputs.ballerina_version }}" ] || [ -z "${{ inputs.icp_version }}" ] || [ -z "${{ inputs.integrator_version }}" ]; then
+            echo "ballerina_version, icp_version, and integrator_version are required to build macOS installers."
+            exit 1
+          fi
+
+      - name: Build macOS installer
+        if: ${{ inputs.build_macos_installers == true || inputs.build_macos_installers == 'true' }}
+        run: |
+          mkdir -p installers/mac
+          ARCH=$(uname -m)
+          if [ "$ARCH" = "arm64" ]; then
+            BALLERINA_ARCH="macos-arm"
+          else
+            BALLERINA_ARCH="macos"
+          fi
+          BALLERINA_VERSION="${{ inputs.ballerina_version }}"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-${BALLERINA_ARCH}.zip"
+          ICP_VERSION="${{ inputs.icp_version }}"
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
+
+          APP_DIR=$(find "VSCode-darwin-${ARCH}" -name "*.app" -type d | head -1)
+          if [ -z "$APP_DIR" ]; then
+            echo "No .app found under VSCode-darwin-${ARCH}" >&2
+            exit 1
+          fi
+          zip -qry "VSCode-darwin-${ARCH}.zip" "VSCode-darwin-${ARCH}"
+          cp "VSCode-darwin-${ARCH}.zip" installers/mac/
+
+          cd installers/mac
+          curl -L "$BALLERINA_URL" -o ballerina.zip
+          curl -L "$ICP_URL" -o icp.zip
+          ./build.sh ballerina.zip "VSCode-darwin-${ARCH}.zip" icp.zip "$INTEGRATOR_VERSION"
+          cd ../..
+
       - name: Archive artifacts
         run: |
           mkdir -p release-artifacts
@@ -121,13 +220,19 @@ jobs:
           name: macos-artifacts
           path: release-artifacts/*
 
+      - name: Upload macOS installer artifacts
+        if: ${{ inputs.build_macos_installers == true || inputs.build_macos_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installers
+          path: |
+            installers/mac/*.pkg
+          if-no-files-found: error
+
   build-windows:
     if: ${{ inputs.build_windows == true || inputs.build_windows == 'true' }}
     name: Build Windows installer
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: lib/vscode
     steps:
       - uses: actions/checkout@v4
         with:
@@ -154,13 +259,6 @@ jobs:
         run: |
           choco install -y rsync
 
-      - name: Update product.json and branding
-        shell: bash
-        working-directory: .
-        run: |
-          chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh
-
       - name: Install Rust toolchain (Windows)
         shell: pwsh
         run: |
@@ -182,43 +280,19 @@ jobs:
           echo "OPENSSL_LIB_DIR=C:\vcpkg\installed\x64-windows-static\lib" >> $env:GITHUB_ENV
           echo "OPENSSL_INCLUDE_DIR=C:\vcpkg\installed\x64-windows-static\include" >> $env:GITHUB_ENV
 
-      - name: Install dependencies
+      - name: Run Windows build script
+        shell: pwsh
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VSCODE_ARCH: x64
         run: |
-          npm ci
-
-      - name: Compile
-        run: |
-          npm run compile
-
-      - name: Mixin distro modules
-        run: |
-          node build/azure-pipelines/distro/mixin-npm || true
-          node build/azure-pipelines/distro/mixin-quality || true
-
-      - name: Install builtin extensions
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npm run download-builtin-extensions
-
-      - name: Download explorer Dll
-        shell: pwsh
-        run: node build/win32/explorer-dll-fetcher .build/win32/appx
-
-      - name: Build client (Windows)
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npm run gulp "vscode-win32-x64-min-ci"
+          .\build.bat
 
       - name: Build CLI (Windows)
         shell: pwsh
+        working-directory: lib/vscode
         env:
           VCPKG_ROOT: C:\vcpkg
           OPENSSL_DIR: C:\vcpkg\installed\x64-windows-static
@@ -236,6 +310,7 @@ jobs:
 
       - name: Mix in built CLI into client (Windows)
         shell: pwsh
+        working-directory: lib/vscode
         run: |
           cd cli
           $cliBin = "./target/release/code.exe"
@@ -247,6 +322,7 @@ jobs:
 
       - name: Re-package with CLI (Windows)
         shell: pwsh
+        working-directory: lib/vscode
         run: |
           mkdir -p ../artifacts
           $archivePath = "../artifacts/VSCode-win32-x64.zip"
@@ -254,11 +330,13 @@ jobs:
           Compress-Archive -Path ../VSCode-win32-x64/* -DestinationPath $archivePath -Force
 
       - name: Copy Integrator artifact to build directory
+        working-directory: lib/vscode
         run: |
           cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
 
       - name: Build Windows installer packages
         shell: pwsh
+        working-directory: lib/vscode
         run: |
           cd ..\..
           $ROOT_DIR = Get-Location
@@ -293,7 +371,7 @@ jobs:
           path: release-artifacts
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
         with:
           tag_name: ${{ inputs.tag }}
           name: ${{ inputs.tag }}
