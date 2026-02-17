@@ -2,6 +2,7 @@
 <PropertyGroup>
 <Platform>x64</Platform>
 <OutputName>WSO2-Integrator</OutputName>
+<SuppressIces>ICE64</SuppressIces>
 </PropertyGroup>
 
   <ItemGroup>
