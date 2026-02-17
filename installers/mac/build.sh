@@ -47,17 +47,6 @@ cp "$BALLERINA_ZIP" "$WORK_DIR/scripts/ballerina.zip"
 # No longer extract Ballerina to payload - it will be done conditionally in postinstall
 # BALLERINA_TARGET is not needed in payload anymore
 
-# Extract icp zip
-ICP_TARGET="$WORK_DIR/payload/Library/WSO2/ICP"
-rm -rf "$ICP_TARGET"
-mkdir -p "$ICP_TARGET"
-unzip -o "$ICP_ZIP" -d "$EXTRACTION_TARGET"
-ICP_UNZIPPED_FOLDER=$(unzip -Z1 "$ICP_ZIP" | head -1 | cut -d/ -f1)
-ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
-mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
-rm -rf "$ICP_UNZIPPED_PATH"
-chmod +x "$ICP_TARGET/bin"/*
-
 # Extract wso2 zip
 WSO2_TARGET="$WORK_DIR/payload/Applications"
 rm -rf "$WSO2_TARGET"
@@ -69,6 +58,17 @@ mv "$WSO2_UNZIPPED_PATH"/* "$WSO2_TARGET"
 rm -rf "$WSO2_UNZIPPED_PATH"
 chmod +x "$WSO2_TARGET/WSO2 Integrator.app/Contents/MacOS"/* 2>/dev/null || true
 xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
+
+# Extract icp zip into app bundle resources
+ICP_TARGET="$WORK_DIR/payload/Applications/WSO2 Integrator.app/Contents/Resources/components/icp"
+rm -rf "$ICP_TARGET"
+mkdir -p "$ICP_TARGET"
+unzip -o "$ICP_ZIP" -d "$EXTRACTION_TARGET"
+ICP_UNZIPPED_FOLDER=$(unzip -Z1 "$ICP_ZIP" | head -1 | cut -d/ -f1)
+ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
+if [ -n "$ICP_UNZIPPED_FOLDER" ] && [ -d "$ICP_UNZIPPED_PATH" ]; then
+    mv "$ICP_UNZIPPED_PATH" "$ICP_TARGET"/
+fi
 
 rm -rf "$EXTRACTION_TARGET/__MACOSX"
 
