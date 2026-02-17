@@ -20,30 +20,58 @@ if [ -f "$SCRIPT_DIR/ballerina_version" ]; then
     BALLERINA_VERSION=$(cat "$SCRIPT_DIR/ballerina_version")
 fi
 
-# Check if Ballerina needs to be installed
-if [ -n "$BALLERINA_VERSION" ] && [ -d "/Library/Ballerina/distributions/ballerina-$BALLERINA_VERSION" ]; then
-    echo "Ballerina version $BALLERINA_VERSION already exists - skipping extraction"
+# Resolve target user and move app bundle to the user's Applications folder
+CONSOLE_USER=$(stat -f%Su /dev/console)
+USER_HOME=""
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+    USER_HOME=$(dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+fi
+if [ -z "$USER_HOME" ] && [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+    USER_HOME="/Users/$CONSOLE_USER"
+fi
+
+APP_SRC="/Applications/WSO2 Integrator.app"
+APP_DEST="${USER_HOME}/Applications/WSO2 Integrator.app"
+if [ -n "$USER_HOME" ] && [ -d "$APP_SRC" ]; then
+    mkdir -p "${USER_HOME}/Applications"
+    rm -rf "$APP_DEST"
+    mv "$APP_SRC" "$APP_DEST"
+fi
+
+APP_ROOT="$APP_DEST"
+if [ ! -d "$APP_ROOT" ]; then
+    APP_ROOT="$APP_SRC"
+fi
+
+# Check if Ballerina needs to be installed into the app bundle
+APP_BALLERINA_ROOT="$APP_ROOT/Contents/Resources/components/ballerina"
+TARGET_BALLERINA_DIR="${APP_BALLERINA_ROOT}/ballerina-${BALLERINA_VERSION}"
+if [ -n "$BALLERINA_VERSION" ] && [ -d "$TARGET_BALLERINA_DIR" ]; then
+    echo "Ballerina version $BALLERINA_VERSION already exists in app bundle - skipping extraction"
 else
-    echo "Installing Ballerina version $BALLERINA_VERSION"
-    
+    echo "Installing Ballerina version $BALLERINA_VERSION into app bundle"
+
     # Extract Ballerina from the bundled zip
     if [ -f "$SCRIPT_DIR/ballerina.zip" ]; then
         TEMP_EXTRACT="/tmp/wso2_ballerina_extract_$$"
         mkdir -p "$TEMP_EXTRACT"
-        
+
         echo "Extracting Ballerina zip..."
         unzip -q "$SCRIPT_DIR/ballerina.zip" -d "$TEMP_EXTRACT"
-        
+
         # Get the extracted folder name
         BALLERINA_FOLDER=$(ls -1 "$TEMP_EXTRACT" | head -1)
-        
+
         # Create target directory
-        mkdir -p /Library/Ballerina
-        
-        # Move extracted contents to /Library/Ballerina
-        echo "Installing Ballerina to /Library/Ballerina..."
-        cp -R "$TEMP_EXTRACT/$BALLERINA_FOLDER"/* /Library/Ballerina/
-        
+        mkdir -p "$APP_BALLERINA_ROOT"
+
+        # Move extracted folder into app bundle
+        echo "Installing Ballerina to $APP_BALLERINA_ROOT..."
+        if [ -n "$BALLERINA_FOLDER" ] && [ -d "$TEMP_EXTRACT/$BALLERINA_FOLDER" ]; then
+            rm -rf "$TARGET_BALLERINA_DIR"
+            mv "$TEMP_EXTRACT/$BALLERINA_FOLDER" "$TARGET_BALLERINA_DIR"
+        fi
+
         # Cleanup
         rm -rf "$TEMP_EXTRACT"
         echo "Ballerina installation completed"
@@ -52,71 +80,11 @@ else
     fi
 fi
 
-echo "Setting system-wide permissions"
-
-# Set permissions for /Library/Ballerina
-if [ -d "/Library/Ballerina" ]; then
-    cd /Library/Ballerina
-    chown -R root:wheel "/Library/Ballerina"
-    chmod -R ugo+r /Library/Ballerina/distributions/ballerina-*
-    chmod -R ugo+rx /Library/Ballerina/bin
-    find dependencies -type d -exec chmod ugo+rx {} \;
-    chmod -R ugo+r /Library/Ballerina/lib
-    chmod o-w .
-    rm -f /Library/Ballerina/bin/ballerina
-    rm -f /etc/paths.d/ballerina
-    echo "/Library/Ballerina/bin" > /etc/paths.d/bal
-    chmod -R 644 /etc/paths.d/bal
-    echo "Set permissions for Ballerina directory"
-fi
-
-USER_HOMES=$(dscl . list /Users NFSHomeDirectory | awk '$2 ~ /^\/Users\// {print $2}')
-
-# Read Ballerina version from the version file
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BALLERINA_VERSION=""
-if [ -f "$SCRIPT_DIR/ballerina_version" ]; then
-    BALLERINA_VERSION=$(cat "$SCRIPT_DIR/ballerina_version")
-    
-    # Delete ballerina-home and update ballerina-version for all users
-    for USER_HOME in $USER_HOMES; do
-        if [ ! -d "$USER_HOME" ]; then
-            echo "Skipping non-existent home: $USER_HOME"
-            continue
-        fi
-        
-        USERNAME=$(basename "$USER_HOME")
-        
-        if [ "$USERNAME" = "Shared" ] || [ "$USERNAME" = "Guest" ]; then
-            echo "Skipping system user: $USERNAME"
-            continue
-        fi
-
-        # Delete ballerina-home directory
-        if [ -d "$USER_HOME/.ballerina" ]; then
-            rm -rf "$USER_HOME/.ballerina/ballerina-home" 2>/dev/null || true
-            echo "Deleted ballerina-home for user: $USERNAME"
-        fi
-        
-        # Create .ballerina directory if it doesn't exist
-        mkdir -p "$USER_HOME/.ballerina"
-        
-        USER_BAL_VERSION_FILE="$USER_HOME/.ballerina/ballerina-version"
-        
-        # Remove existing ballerina-version file if it exists
-        if [ -f "$USER_BAL_VERSION_FILE" ]; then
-            rm -f "$USER_BAL_VERSION_FILE"
-        fi
-        
-        echo "ballerina-$BALLERINA_VERSION" > "$USER_BAL_VERSION_FILE"
-        echo "Set ballerina-version to ballerina-$BALLERINA_VERSION for user: $USERNAME"
-    done
-fi
-
-# Set permissions for the .app in /Applications
-if [ -d "/Applications/WSO2 Integrator.app" ]; then
-    chmod -R 755 "/Applications/WSO2 Integrator.app"
-    chown -R root:wheel "/Applications/WSO2 Integrator.app"
+# Set permissions for the .app in the user home folder
+if [ -d "$APP_ROOT" ] && [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ]; then
+    CONSOLE_GROUP=$(id -gn "$CONSOLE_USER" 2>/dev/null || echo "staff")
+    chmod -R 755 "$APP_ROOT"
+    chown -R "$CONSOLE_USER":"$CONSOLE_GROUP" "$APP_ROOT"
     echo "Set permissions for application"
 fi
 
