@@ -5,6 +5,10 @@
       <Files Include=".\payload\Integrator\**">
         <Exclude Files=".\payload\Integrator\WSO2 Integrator.exe" />
       </Files>
+      <Component Id="CleanupIntegratorDirs" Directory="INTEGRATORFOLDER" Guid="{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}">
+        <RemoveFolder Id="RemoveIntegratorFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\WSO2\Integrator" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
     </ComponentGroup>
 
     <Component Id="IntegratorShortcutComponent" Bitness="always64" Directory="INTEGRATORFOLDER" Guid="{4ab08ec1-a630-40d2-bf90-db740135b414}">
