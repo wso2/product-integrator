@@ -4,5 +4,10 @@
     <ComponentGroup Id="ICPComponents" Directory="ICPFOLDER">
       <Files Include=".\payload\ICP\**"/>
     </ComponentGroup>
+
+    <Component Id="ICPCleanupComponent" Bitness="always64" Directory="ICPFOLDER" Guid="{A1B2C3D4-E5F6-7890-A1B2-C3D4E5F67890}">
+      <RemoveFolder Id="RemoveICPFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\WSO2\ICP" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
   </Fragment>
 </Wix>

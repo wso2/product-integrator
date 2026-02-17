@@ -39,6 +39,8 @@
       <ComponentGroupRef Id="BallerinaComponents" />
       <ComponentGroupRef Id="ICPComponents" />
       <ComponentRef Id="IntegratorShortcutComponent" />
+      <ComponentRef Id="IntegratorCleanupComponent" />
+      <ComponentRef Id="ICPCleanupComponent" />
       <ComponentRef Id="BallerinaEnvironmentComponent" />
       <!-- <ComponentGroupRef Id="SettingsComponents" /> -->
     </Feature>
