@@ -5,11 +5,8 @@
 				<Directory Id="INTEGRATORFOLDER" Name="Integrator">
 					<Directory Id="ICPFOLDER" Name="ICP" />
 				</Directory>
+				<Directory Id="BALLERINAFOLDER" Name="Ballerina" />
 			</Directory>
-		</StandardDirectory>
-
-		<StandardDirectory Id="ProgramFiles64Folder">
-			<Directory Id="BALLERINAFOLDER" Name="Ballerina" />
 		</StandardDirectory>
 
 		<StandardDirectory Id="ProgramMenuFolder" />
