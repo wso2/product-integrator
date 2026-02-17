@@ -4,7 +4,7 @@
     <ComponentGroup Id="ICPComponents" Directory="ICPFOLDER">
       <Files Include=".\payload\ICP\**"/>
       <Component Id="CleanupICPDirs" Directory="ICPFOLDER" Guid="{B2C3D4E5-F6A7-8901-BCDE-F12345678901}">
-        <RemoveFolder Id="RemoveICPFolder" On="uninstall" />
+        <util:RemoveFolderEx Id="RemoveICPFolder" On="uninstall" Property="ICPFOLDER" />
         <RegistryValue Root="HKCU" Key="Software\WSO2\ICP" Name="installed" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </ComponentGroup>
