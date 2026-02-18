@@ -338,14 +338,20 @@ jobs:
           aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.dmg"
           echo "✅ Uploaded to ${S3_PATH}"
       
-      - name: Upload macOS artifacts
+      - name: Upload macOS PKG artifact
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: Product-Integrator-Darwin-${{ matrix.arch }}
-          path: |
-            installers/mac/*.pkg
-            installers/mac/*.dmg
+          name: Product-Integrator-Darwin-PKG-${{ matrix.arch }}
+          path: installers/mac/*.pkg
+          if-no-files-found: error
+
+      - name: Upload macOS DMG artifact
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-Darwin-DMG-${{ matrix.arch }}
+          path: installers/mac/*.dmg
           if-no-files-found: error
 
       - name: cosign-installer
