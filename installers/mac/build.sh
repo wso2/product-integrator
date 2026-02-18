@@ -40,9 +40,23 @@ OUTPUT_PKG="WSO2_Integrator.pkg"
 BUNDLE_IDENTIFIER="com.wso2.integrator"
 EXTRACTION_TARGET="$WORK_DIR/payload"
 
+# Extract wso2 zip
+WSO2_TARGET="$WORK_DIR/payload/Applications"
+rm -rf "$WSO2_TARGET"
+mkdir -p "$WSO2_TARGET"
+unzip -o "$WSO2_ZIP" -d "$EXTRACTION_TARGET"
+WSO2_UNZIPPED_FOLDER=$(unzip -Z1 "$WSO2_ZIP" | head -1 | cut -d/ -f1)
+WSO2_UNZIPPED_PATH="$EXTRACTION_TARGET/$WSO2_UNZIPPED_FOLDER"
+mv "$WSO2_UNZIPPED_PATH"/* "$WSO2_TARGET"
+rm -rf "$WSO2_UNZIPPED_PATH"
+chmod +x "$WSO2_TARGET/WSO2 Integrator.app/Contents/MacOS"/* 2>/dev/null || true
+xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
+
+rm -rf "$EXTRACTION_TARGET/__MACOSX"
+
 # Extract Ballerina zip
 print_info "Extracting Ballerina to package resources"
-BALLERINA_TARGET="$WORK_DIR/payload/Library/Application Support/WSO2 Integrator/Ballerina"
+BALLERINA_TARGET="$WORK_DIR/payload/Applications/WSO2 Integrator.app/Contents/Resources/components/ballerina-$BALLERINA_VERSION"
 rm -rf "$BALLERINA_TARGET"
 mkdir -p "$BALLERINA_TARGET"
 unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
@@ -86,14 +100,9 @@ cp "$WORK_DIR/balForWI/bal" "$BALLERINA_TARGET/bin/bal"
 
 chmod +x "$BALLERINA_TARGET/bin"/*
 
-# Make postinstall script executable
-if [ -f "$WORK_DIR/scripts/postinstall" ]; then
-    chmod 755 "$WORK_DIR/scripts/postinstall"
-    print_info "Postinstall script enabled"
-fi
 
 # Extract icp zip
-ICP_TARGET="$WORK_DIR/payload/Library/Application Support/WSO2 Integrator/ICP"
+ICP_TARGET="$WORK_DIR/payload/Applications/WSO2 Integrator.app/Contents/Resources/components/icp"
 rm -rf "$ICP_TARGET"
 mkdir -p "$ICP_TARGET"
 unzip -o "$ICP_ZIP" -d "$EXTRACTION_TARGET"
@@ -103,23 +112,9 @@ mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
 
-# Extract wso2 zip
-WSO2_TARGET="$WORK_DIR/payload/Applications"
-rm -rf "$WSO2_TARGET"
-mkdir -p "$WSO2_TARGET"
-unzip -o "$WSO2_ZIP" -d "$EXTRACTION_TARGET"
-WSO2_UNZIPPED_FOLDER=$(unzip -Z1 "$WSO2_ZIP" | head -1 | cut -d/ -f1)
-WSO2_UNZIPPED_PATH="$EXTRACTION_TARGET/$WSO2_UNZIPPED_FOLDER"
-mv "$WSO2_UNZIPPED_PATH"/* "$WSO2_TARGET"
-rm -rf "$WSO2_UNZIPPED_PATH"
-chmod +x "$WSO2_TARGET/WSO2 Integrator.app/Contents/MacOS"/* 2>/dev/null || true
-xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
-
-rm -rf "$EXTRACTION_TARGET/__MACOSX"
 
 # Build the component package
 pkgbuild --root "$EXTRACTION_TARGET" \
-         --scripts "$WORK_DIR/scripts" \
          --identifier "$BUNDLE_IDENTIFIER" \
          --version "$VERSION" \
          --install-location "/" \
