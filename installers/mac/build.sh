@@ -40,15 +40,20 @@ OUTPUT_PKG="WSO2_Integrator.pkg"
 BUNDLE_IDENTIFIER="com.wso2.integrator"
 EXTRACTION_TARGET="$WORK_DIR/payload"
 
-# Copy Ballerina zip to scripts directory (will be extracted during installation)
-print_info "Copying Ballerina zip to package resources"
-cp "$BALLERINA_ZIP" "$WORK_DIR/scripts/ballerina.zip"
-
-# No longer extract Ballerina to payload - it will be done conditionally in postinstall
-# BALLERINA_TARGET is not needed in payload anymore
+# Extract Ballerina zip
+print_info "Extracting Ballerina to package resources"
+BALLERINA_TARGET="$WORK_DIR/payload/Library/Application Support/WSO2 Integrator/Ballerina"
+rm -rf "$BALLERINA_TARGET"
+mkdir -p "$BALLERINA_TARGET"
+unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
+BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$BALLERINA_ZIP" | head -1 | cut -d/ -f1)
+BALLERINA_UNZIPPED_PATH="$EXTRACTION_TARGET/$BALLERINA_UNZIPPED_FOLDER"
+mv "$BALLERINA_UNZIPPED_PATH"/* "$BALLERINA_TARGET"
+rm -rf "$BALLERINA_UNZIPPED_PATH"
+chmod +x "$BALLERINA_TARGET/bin"/*
 
 # Extract icp zip
-ICP_TARGET="$WORK_DIR/payload/Library/WSO2/ICP"
+ICP_TARGET="$WORK_DIR/payload/Library/Application Support/WSO2 Integrator/ICP"
 rm -rf "$ICP_TARGET"
 mkdir -p "$ICP_TARGET"
 unzip -o "$ICP_ZIP" -d "$EXTRACTION_TARGET"
@@ -72,28 +77,12 @@ xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
 
 rm -rf "$EXTRACTION_TARGET/__MACOSX"
 
-# Make postinstall and preinstall executable if they exist
-if [ -f "$WORK_DIR/scripts/postinstall" ]; then
-    chmod 755 "$WORK_DIR/scripts/postinstall"
-fi
-if [ -f "$WORK_DIR/scripts/preinstall" ]; then
-    chmod 755 "$WORK_DIR/scripts/preinstall"
-fi
-
-# Extract Ballerina version from the distribution folder
-if [ -z "$BALLERINA_VERSION" ]; then
-    print_warning "Could not determine Ballerina version"
-else
-    # Create a version file for postinstall to read
-    echo "$BALLERINA_VERSION" > "$WORK_DIR/scripts/ballerina_version"
-fi
-
 # Build the component package
 pkgbuild --root "$EXTRACTION_TARGET" \
-         --scripts "$WORK_DIR/scripts" \
          --identifier "$BUNDLE_IDENTIFIER" \
          --version "$VERSION" \
          --install-location "/" \
+         --ownership preserve \
          "$WORK_DIR/WSO2 Integrator.pkg"
 
 sed -i '' "s/version=\"__VERSION__\"/version=\"$VERSION\"/g" "$WORK_DIR/Distribution.xml"
@@ -117,9 +106,12 @@ else
     exit 1
 fi
 
-rm -rf "${WSO2_TARGET:?}"/*
-rm -rf "${ICP_TARGET:?}"/*
-rm -rf "$WORK_DIR/WSO2 Integrator.pkg"
-rm -f "$WORK_DIR/scripts/ballerina.zip"
+# # Cleanup
+# rm -rf "${WSO2_TARGET:?}"/*
+# rm -rf "${ICP_TARGET:?}"/*
+# rm -rf "${BALLERINA_TARGET:?}"/*
+# rm -rf "$EXTRACTION_TARGET/Library"
+# rm -rf "$EXTRACTION_TARGET/Applications"
+# rm -rf "$WORK_DIR/WSO2 Integrator.pkg"
 
 print_info "Done!"
