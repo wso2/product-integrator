@@ -1,0 +1,62 @@
+Index: product-integrator/lib/vscode/src/vs/platform/environment/node/environmentService.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/platform/environment/node/environmentService.ts
++++ product-integrator/lib/vscode/src/vs/platform/environment/node/environmentService.ts
+@@ -2,11 +2,42 @@
+  *  Copyright (c) Microsoft Corporation. All rights reserved.
+  *  Licensed under the MIT License. See License.txt in the project root for license information.
+  *--------------------------------------------------------------------------------------------*/
+ 
+ import { homedir, tmpdir } from 'os';
++import { existsSync, readdirSync } from 'fs';
++import { join } from 'path';
+ import { NativeParsedArgs } from '../common/argv.js';
+ import { IDebugParams } from '../common/environment.js';
+ import { AbstractNativeEnvironmentService, parseDebugParams } from '../common/environmentService.js';
+ import { getUserDataPath } from './userDataPath.js';
+ import { IProductService } from '../../product/common/productService.js';
+ 
++function detectBundledBallerinaEnv(): NodeJS.ProcessEnv {
++	const env: NodeJS.ProcessEnv = {};
++	
++	try {
++		if (process.platform === 'darwin') {
++			// macOS: ~/Applications/WSO2 Integrator.app/Contents/Resources/components/ballerina
++			const ballerinaDir = join(homedir(), 'Applications', 'WSO2 Integrator.app', 'Contents', 'Resources', 'components', 'ballerina');
++			if (existsSync(ballerinaDir)) {
++				const versions = readdirSync(ballerinaDir).filter(f => f.startsWith('ballerina-')).sort().reverse();
++				if (versions.length > 0) {
++					const ballerinaPath = join(ballerinaDir, versions[0], 'bin');
++					env['BALLERINA_HOME'] = join(ballerinaDir, versions[0]);
++					env['PATH'] = `${ballerinaPath}:${process.env.PATH || ''}`;
++				}
++			}
++		} else if (process.platform === 'win32') {
++			// Windows: %LOCALAPPDATA%\WSO2\Ballerina
++			const localAppData = process.env['LOCALAPPDATA'];
++			if (localAppData) {
++				const ballerinaPath = join(localAppData, 'WSO2', 'Ballerina');
++				if (existsSync(ballerinaPath)) {
++					env['BALLERINA_HOME'] = ballerinaPath;
++					env['PATH'] = `${join(ballerinaPath, 'bin')};${process.env.PATH || ''}`;
++				}
++			}
++		}
++	} catch (err) {
++		// Silently ignore - bundled Ballerina detection is optional
++	}
++	
++	return env;
++}
++
+ export class NativeEnvironmentService extends AbstractNativeEnvironmentService {
+ 
+ 	constructor(args: NativeParsedArgs, productService: IProductService) {
++		// Detect and apply bundled Ballerina environment
++		const bundledBallerinaEnv = detectBundledBallerinaEnv();
++		Object.assign(process.env, bundledBallerinaEnv);
++		
+ 		super(args, {
+ 			homeDir: homedir(),
+ 			tmpDir: tmpdir(),
+
