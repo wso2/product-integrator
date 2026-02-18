@@ -316,7 +316,9 @@ jobs:
           cd ./installers/mac
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
+          echo "Building PKG and DMG installers..."
+          ./build-dmg.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
+          echo "✅ Both PKG and DMG installers created successfully"
           cd ${ROOT_DIR}
 
       - name: Login to AWS
@@ -331,7 +333,10 @@ jobs:
         working-directory: .
         run: |
           S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
+          echo "Uploading PKG and DMG files to S3..."
           aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.pkg"
+          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.dmg"
+          echo "✅ Uploaded to ${S3_PATH}"
       
       - name: Upload macOS artifacts
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
@@ -340,6 +345,7 @@ jobs:
           name: Product-Integrator-Darwin-${{ matrix.arch }}
           path: |
             installers/mac/*.pkg
+            installers/mac/*.dmg
           if-no-files-found: error
 
       - name: cosign-installer
@@ -363,11 +369,29 @@ jobs:
           cd ../..
           openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sha256 installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg
 
-      - name: Upload Signatures and Hashes for pkg installer
+      - name: Sign the dmg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../.. 
+          cosign sign-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg --output-certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --output-signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --yes
+
+      - name: Verify signature of the dmg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../.. 
+          cosign verify-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg --certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+
+      - name: Generate Hashes for dmg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../.. 
+          openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg.sha256 installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg
+
+      - name: Upload Signatures and Hashes for pkg and dmg installers
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: Signatures-and-Hashes-PKG
+          name: Signatures-and-Hashes-macOS-${{ matrix.arch }}
           path: |
             installers/mac/*.pem
             installers/mac/*.sig
