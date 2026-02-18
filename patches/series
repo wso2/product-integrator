@@ -1,6 +1,7 @@
 skipCompilationChecks.diff
 activities.diff
 productNameChange.diff
+bundled-ballerina-terminal-env.diff
 removeExtensionsActivity.diff
 disable-builtin-ext-update.diff
 gettingStarted.diff
