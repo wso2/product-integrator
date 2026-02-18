@@ -48,9 +48,49 @@ mkdir -p "$BALLERINA_TARGET"
 unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
 BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$BALLERINA_ZIP" | head -1 | cut -d/ -f1)
 BALLERINA_UNZIPPED_PATH="$EXTRACTION_TARGET/$BALLERINA_UNZIPPED_FOLDER"
-mv "$BALLERINA_UNZIPPED_PATH"/* "$BALLERINA_TARGET"
+
+# Create a temp directory for consolidation
+BALLERINA_TEMP="$WORK_DIR/ballerina_temp"
+rm -rf "$BALLERINA_TEMP"
+mkdir -p "$BALLERINA_TEMP"
+
+# Move distributions contents to temp
+print_info "Consolidating Ballerina distributions"
+if [ -d "$BALLERINA_UNZIPPED_PATH/distributions" ]; then
+    DIST_FOLDER=$(ls "$BALLERINA_UNZIPPED_PATH/distributions" | head -1)
+    if [ -n "$DIST_FOLDER" ]; then
+        cp -r "$BALLERINA_UNZIPPED_PATH/distributions/$DIST_FOLDER"/* "$BALLERINA_TEMP/"
+    fi
+fi
+
+# Move JDK to temp
+print_info "Consolidating JDK"
+JDK_FOLDER=""
+if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
+    for jdk_folder in "$BALLERINA_UNZIPPED_PATH/dependencies"/*; do
+        if [ -d "$jdk_folder" ]; then
+            JDK_FOLDER=$(basename "$jdk_folder")
+            cp -r "$jdk_folder" "$BALLERINA_TEMP/"
+        fi
+    done
+fi
+
+# Move consolidated contents to target
+mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
 rm -rf "$BALLERINA_UNZIPPED_PATH"
+rm -rf "$BALLERINA_TEMP"
+
+# Replace bal script with the one from balForWI
+print_info "Replacing bal script with updated version from balForWI"
+cp "$WORK_DIR/balForWI/bal" "$BALLERINA_TARGET/bin/bal"
+
 chmod +x "$BALLERINA_TARGET/bin"/*
+
+# Make postinstall script executable
+if [ -f "$WORK_DIR/scripts/postinstall" ]; then
+    chmod 755 "$WORK_DIR/scripts/postinstall"
+    print_info "Postinstall script enabled"
+fi
 
 # Extract icp zip
 ICP_TARGET="$WORK_DIR/payload/Library/Application Support/WSO2 Integrator/ICP"
@@ -79,6 +119,7 @@ rm -rf "$EXTRACTION_TARGET/__MACOSX"
 
 # Build the component package
 pkgbuild --root "$EXTRACTION_TARGET" \
+         --scripts "$WORK_DIR/scripts" \
          --identifier "$BUNDLE_IDENTIFIER" \
          --version "$VERSION" \
          --install-location "/" \
@@ -106,12 +147,12 @@ else
     exit 1
 fi
 
-# # Cleanup
-# rm -rf "${WSO2_TARGET:?}"/*
-# rm -rf "${ICP_TARGET:?}"/*
-# rm -rf "${BALLERINA_TARGET:?}"/*
-# rm -rf "$EXTRACTION_TARGET/Library"
-# rm -rf "$EXTRACTION_TARGET/Applications"
-# rm -rf "$WORK_DIR/WSO2 Integrator.pkg"
+# Cleanup
+rm -rf "${WSO2_TARGET:?}"/*
+rm -rf "${ICP_TARGET:?}"/*
+rm -rf "${BALLERINA_TARGET:?}"/*
+rm -rf "$EXTRACTION_TARGET/Library"
+rm -rf "$EXTRACTION_TARGET/Applications"
+rm -rf "$WORK_DIR/WSO2 Integrator.pkg"
 
 print_info "Done!"

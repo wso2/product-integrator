@@ -1,127 +1,14 @@
 #!/bin/bash
 
-# postinstall script for WSO2 Integrator
-# This script runs after the package installation
+# Get the current logged-in user
+CURRENT_USER=$(/usr/bin/stat -f%Su /dev/console)
 
-set -e
+# Path to settings.json
+SETTINGS_FILE="$HOME/Library/Application Support/WSO2 Integrator/User/settings.json"
 
-# Redirect all output to a log file and also to system log
-LOGFILE="/tmp/wso2-integrator-install.log"
-exec > >(tee -a "$LOGFILE") 2>&1
-
-echo "Starting WSO2 Integrator post-installation..."
-
-echo "Post-install script started"
-
-# Read Ballerina version
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BALLERINA_VERSION=""
-if [ -f "$SCRIPT_DIR/ballerina_version" ]; then
-    BALLERINA_VERSION=$(cat "$SCRIPT_DIR/ballerina_version")
+# Replace <username> with the actual username
+if [ -f "$SETTINGS_FILE" ]; then
+    /usr/bin/sed -i '' "s/<username>/$CURRENT_USER/g" "$SETTINGS_FILE"
 fi
-
-# Check if Ballerina needs to be installed
-if [ -n "$BALLERINA_VERSION" ] && [ -d "/Library/Ballerina/distributions/ballerina-$BALLERINA_VERSION" ]; then
-    echo "Ballerina version $BALLERINA_VERSION already exists - skipping extraction"
-else
-    echo "Installing Ballerina version $BALLERINA_VERSION"
-    
-    # Extract Ballerina from the bundled zip
-    if [ -f "$SCRIPT_DIR/ballerina.zip" ]; then
-        TEMP_EXTRACT="/tmp/wso2_ballerina_extract_$$"
-        mkdir -p "$TEMP_EXTRACT"
-        
-        echo "Extracting Ballerina zip..."
-        unzip -q "$SCRIPT_DIR/ballerina.zip" -d "$TEMP_EXTRACT"
-        
-        # Get the extracted folder name
-        BALLERINA_FOLDER=$(ls -1 "$TEMP_EXTRACT" | head -1)
-        
-        # Create target directory
-        mkdir -p /Library/Ballerina
-        
-        # Move extracted contents to /Library/Ballerina
-        echo "Installing Ballerina to /Library/Ballerina..."
-        cp -R "$TEMP_EXTRACT/$BALLERINA_FOLDER"/* /Library/Ballerina/
-        
-        # Cleanup
-        rm -rf "$TEMP_EXTRACT"
-        echo "Ballerina installation completed"
-    else
-        echo "Warning: Ballerina zip not found at $SCRIPT_DIR/ballerina.zip"
-    fi
-fi
-
-echo "Setting system-wide permissions"
-
-# Set permissions for /Library/Ballerina
-if [ -d "/Library/Ballerina" ]; then
-    cd /Library/Ballerina
-    chown -R root:wheel "/Library/Ballerina"
-    chmod -R ugo+r /Library/Ballerina/distributions/ballerina-*
-    chmod -R ugo+rx /Library/Ballerina/bin
-    find dependencies -type d -exec chmod ugo+rx {} \;
-    chmod -R ugo+r /Library/Ballerina/lib
-    chmod o-w .
-    rm -f /Library/Ballerina/bin/ballerina
-    rm -f /etc/paths.d/ballerina
-    echo "/Library/Ballerina/bin" > /etc/paths.d/bal
-    chmod -R 644 /etc/paths.d/bal
-    echo "Set permissions for Ballerina directory"
-fi
-
-USER_HOMES=$(dscl . list /Users NFSHomeDirectory | awk '$2 ~ /^\/Users\// {print $2}')
-
-# Read Ballerina version from the version file
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BALLERINA_VERSION=""
-if [ -f "$SCRIPT_DIR/ballerina_version" ]; then
-    BALLERINA_VERSION=$(cat "$SCRIPT_DIR/ballerina_version")
-    
-    # Delete ballerina-home and update ballerina-version for all users
-    for USER_HOME in $USER_HOMES; do
-        if [ ! -d "$USER_HOME" ]; then
-            echo "Skipping non-existent home: $USER_HOME"
-            continue
-        fi
-        
-        USERNAME=$(basename "$USER_HOME")
-        
-        if [ "$USERNAME" = "Shared" ] || [ "$USERNAME" = "Guest" ]; then
-            echo "Skipping system user: $USERNAME"
-            continue
-        fi
-
-        # Delete ballerina-home directory
-        if [ -d "$USER_HOME/.ballerina" ]; then
-            rm -rf "$USER_HOME/.ballerina/ballerina-home" 2>/dev/null || true
-            echo "Deleted ballerina-home for user: $USERNAME"
-        fi
-        
-        # Create .ballerina directory if it doesn't exist
-        mkdir -p "$USER_HOME/.ballerina"
-        
-        USER_BAL_VERSION_FILE="$USER_HOME/.ballerina/ballerina-version"
-        
-        # Remove existing ballerina-version file if it exists
-        if [ -f "$USER_BAL_VERSION_FILE" ]; then
-            rm -f "$USER_BAL_VERSION_FILE"
-        fi
-        
-        echo "ballerina-$BALLERINA_VERSION" > "$USER_BAL_VERSION_FILE"
-        echo "Set ballerina-version to ballerina-$BALLERINA_VERSION for user: $USERNAME"
-    done
-fi
-
-# Set permissions for the .app in /Applications
-if [ -d "/Applications/WSO2 Integrator.app" ]; then
-    chmod -R 755 "/Applications/WSO2 Integrator.app"
-    chown -R root:wheel "/Applications/WSO2 Integrator.app"
-    echo "Set permissions for application"
-fi
-
-echo "Post-install script completed successfully"
-
-echo "WSO2 Integrator installation completed successfully!"
 
 exit 0
