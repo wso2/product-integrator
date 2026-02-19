@@ -56,7 +56,8 @@ rm -rf "$EXTRACTION_TARGET/__MACOSX"
 
 # Extract Ballerina zip
 print_info "Extracting Ballerina to package resources"
-BALLERINA_TARGET="$WORK_DIR/payload/Applications/WSO2 Integrator.app/Contents/Resources/components/ballerina-$BALLERINA_VERSION"
+COMPONENTS_DIR="$WORK_DIR/payload/Applications/WSO2 Integrator.app/Contents/components"
+BALLERINA_TARGET="$COMPONENTS_DIR/ballerina"
 rm -rf "$BALLERINA_TARGET"
 mkdir -p "$BALLERINA_TARGET"
 unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
@@ -77,20 +78,23 @@ if [ -d "$BALLERINA_UNZIPPED_PATH/distributions" ]; then
     fi
 fi
 
-# Move JDK to temp
-print_info "Consolidating JDK"
-JDK_FOLDER=""
+# Move distributions contents to target (without JDK)
+mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
+
+# Move JDK to shared dependencies directory
+print_info "Moving JDK to shared dependencies directory"
+DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
+rm -rf "$DEPENDENCIES_DIR"
+mkdir -p "$DEPENDENCIES_DIR"
 if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
     for jdk_folder in "$BALLERINA_UNZIPPED_PATH/dependencies"/*; do
         if [ -d "$jdk_folder" ]; then
             JDK_FOLDER=$(basename "$jdk_folder")
-            cp -r "$jdk_folder" "$BALLERINA_TEMP/"
+            cp -r "$jdk_folder" "$DEPENDENCIES_DIR/"
         fi
     done
 fi
 
-# Move consolidated contents to target
-mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
 rm -rf "$BALLERINA_UNZIPPED_PATH"
 rm -rf "$BALLERINA_TEMP"
 
@@ -102,7 +106,7 @@ chmod +x "$BALLERINA_TARGET/bin"/*
 
 
 # Extract icp zip
-ICP_TARGET="$WORK_DIR/payload/Applications/WSO2 Integrator.app/Contents/Resources/components/icp"
+ICP_TARGET="$COMPONENTS_DIR/icp"
 rm -rf "$ICP_TARGET"
 mkdir -p "$ICP_TARGET"
 unzip -o "$ICP_ZIP" -d "$EXTRACTION_TARGET"
@@ -111,6 +115,28 @@ ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
 mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
+
+# Update dashboard.sh to set JAVA_HOME to point to shared JDK
+print_info "Updating dashboard.sh to point to shared JDK"
+DASHBOARD_SCRIPT="$ICP_TARGET/bin/dashboard.sh"
+cat > "$DASHBOARD_SCRIPT.tmp" << 'DASHBOARD_EOF'
+# Set JAVA_HOME for installers
+SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
+# Find JDK folder dynamically in the shared dependencies directory
+for jdk in "$SCRIPT_DIR"/../../dependencies/jdk-*; do
+    if [ -d "$jdk" ]; then
+        export JAVA_HOME="$jdk"
+        break
+    fi
+done
+DASHBOARD_EOF
+# Insert the Java home setup after the PRG and PRGDIR definitions (line 18-19)
+head -n 19 "$DASHBOARD_SCRIPT" > "$DASHBOARD_SCRIPT.new"
+cat "$DASHBOARD_SCRIPT.tmp" >> "$DASHBOARD_SCRIPT.new"
+tail -n +20 "$DASHBOARD_SCRIPT" >> "$DASHBOARD_SCRIPT.new"
+mv "$DASHBOARD_SCRIPT.new" "$DASHBOARD_SCRIPT"
+rm "$DASHBOARD_SCRIPT.tmp"
+chmod +x "$DASHBOARD_SCRIPT"
 
 
 # Build the component package

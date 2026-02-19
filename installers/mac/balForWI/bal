@@ -33,8 +33,8 @@
 
 # Set JAVA_HOME for installers
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-# Find JDK folder dynamically
-for jdk in "$SCRIPT_DIR"/../jdk-*; do
+# Find JDK folder dynamically in the shared dependencies directory
+for jdk in "$SCRIPT_DIR"/../../dependencies/jdk-*; do
     if [ -d "$jdk" ]; then
         JAVA_PATH="$jdk"
         break
