@@ -40,24 +40,6 @@ OUTPUT_PKG="WSO2_Integrator.pkg"
 BUNDLE_IDENTIFIER="com.wso2.integrator"
 EXTRACTION_TARGET="$WORK_DIR/payload"
 
-# Copy Ballerina zip to scripts directory (will be extracted during installation)
-print_info "Copying Ballerina zip to package resources"
-cp "$BALLERINA_ZIP" "$WORK_DIR/scripts/ballerina.zip"
-
-# No longer extract Ballerina to payload - it will be done conditionally in postinstall
-# BALLERINA_TARGET is not needed in payload anymore
-
-# Extract icp zip
-ICP_TARGET="$WORK_DIR/payload/Library/WSO2/ICP"
-rm -rf "$ICP_TARGET"
-mkdir -p "$ICP_TARGET"
-unzip -o "$ICP_ZIP" -d "$EXTRACTION_TARGET"
-ICP_UNZIPPED_FOLDER=$(unzip -Z1 "$ICP_ZIP" | head -1 | cut -d/ -f1)
-ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
-mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
-rm -rf "$ICP_UNZIPPED_PATH"
-chmod +x "$ICP_TARGET/bin"/*
-
 # Extract wso2 zip
 WSO2_TARGET="$WORK_DIR/payload/Applications"
 rm -rf "$WSO2_TARGET"
@@ -72,28 +54,97 @@ xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
 
 rm -rf "$EXTRACTION_TARGET/__MACOSX"
 
-# Make postinstall and preinstall executable if they exist
-if [ -f "$WORK_DIR/scripts/postinstall" ]; then
-    chmod 755 "$WORK_DIR/scripts/postinstall"
-fi
-if [ -f "$WORK_DIR/scripts/preinstall" ]; then
-    chmod 755 "$WORK_DIR/scripts/preinstall"
+# Extract Ballerina zip
+print_info "Extracting Ballerina to package resources"
+COMPONENTS_DIR="$WORK_DIR/payload/Applications/WSO2 Integrator.app/Contents/components"
+BALLERINA_TARGET="$COMPONENTS_DIR/ballerina"
+rm -rf "$BALLERINA_TARGET"
+mkdir -p "$BALLERINA_TARGET"
+unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
+BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$BALLERINA_ZIP" | head -1 | cut -d/ -f1)
+BALLERINA_UNZIPPED_PATH="$EXTRACTION_TARGET/$BALLERINA_UNZIPPED_FOLDER"
+
+# Create a temp directory for consolidation
+BALLERINA_TEMP="$WORK_DIR/ballerina_temp"
+rm -rf "$BALLERINA_TEMP"
+mkdir -p "$BALLERINA_TEMP"
+
+# Move distributions contents to temp
+print_info "Consolidating Ballerina distributions"
+if [ -d "$BALLERINA_UNZIPPED_PATH/distributions" ]; then
+    DIST_FOLDER=$(ls "$BALLERINA_UNZIPPED_PATH/distributions" | head -1)
+    if [ -n "$DIST_FOLDER" ]; then
+        cp -r "$BALLERINA_UNZIPPED_PATH/distributions/$DIST_FOLDER"/* "$BALLERINA_TEMP/"
+    fi
 fi
 
-# Extract Ballerina version from the distribution folder
-if [ -z "$BALLERINA_VERSION" ]; then
-    print_warning "Could not determine Ballerina version"
-else
-    # Create a version file for postinstall to read
-    echo "$BALLERINA_VERSION" > "$WORK_DIR/scripts/ballerina_version"
+# Move distributions contents to target (without JDK)
+mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
+
+# Move JDK to shared dependencies directory
+print_info "Moving JDK to shared dependencies directory"
+DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
+rm -rf "$DEPENDENCIES_DIR"
+mkdir -p "$DEPENDENCIES_DIR"
+if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
+    for jdk_folder in "$BALLERINA_UNZIPPED_PATH/dependencies"/*; do
+        if [ -d "$jdk_folder" ]; then
+            JDK_FOLDER=$(basename "$jdk_folder")
+            cp -r "$jdk_folder" "$DEPENDENCIES_DIR/"
+        fi
+    done
 fi
+
+rm -rf "$BALLERINA_UNZIPPED_PATH"
+rm -rf "$BALLERINA_TEMP"
+
+# Replace bal script with the one from balForWI
+print_info "Replacing bal script with updated version from balForWI"
+cp "$WORK_DIR/balForWI/bal" "$BALLERINA_TARGET/bin/bal"
+
+chmod +x "$BALLERINA_TARGET/bin"/*
+
+
+# Extract icp zip
+ICP_TARGET="$COMPONENTS_DIR/icp"
+rm -rf "$ICP_TARGET"
+mkdir -p "$ICP_TARGET"
+unzip -o "$ICP_ZIP" -d "$EXTRACTION_TARGET"
+ICP_UNZIPPED_FOLDER=$(unzip -Z1 "$ICP_ZIP" | head -1 | cut -d/ -f1)
+ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
+mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
+rm -rf "$ICP_UNZIPPED_PATH"
+chmod +x "$ICP_TARGET/bin"/*
+
+# Update dashboard.sh to set JAVA_HOME to point to shared JDK
+print_info "Updating dashboard.sh to point to shared JDK"
+DASHBOARD_SCRIPT="$ICP_TARGET/bin/dashboard.sh"
+cat > "$DASHBOARD_SCRIPT.tmp" << 'DASHBOARD_EOF'
+# Set JAVA_HOME for installers
+SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
+# Find JDK folder dynamically in the shared dependencies directory
+for jdk in "$SCRIPT_DIR"/../../dependencies/jdk-*; do
+    if [ -d "$jdk" ]; then
+        export JAVA_HOME="$jdk"
+        break
+    fi
+done
+DASHBOARD_EOF
+# Insert the Java home setup after the PRG and PRGDIR definitions (line 18-19)
+head -n 19 "$DASHBOARD_SCRIPT" > "$DASHBOARD_SCRIPT.new"
+cat "$DASHBOARD_SCRIPT.tmp" >> "$DASHBOARD_SCRIPT.new"
+tail -n +20 "$DASHBOARD_SCRIPT" >> "$DASHBOARD_SCRIPT.new"
+mv "$DASHBOARD_SCRIPT.new" "$DASHBOARD_SCRIPT"
+rm "$DASHBOARD_SCRIPT.tmp"
+chmod +x "$DASHBOARD_SCRIPT"
+
 
 # Build the component package
 pkgbuild --root "$EXTRACTION_TARGET" \
-         --scripts "$WORK_DIR/scripts" \
          --identifier "$BUNDLE_IDENTIFIER" \
          --version "$VERSION" \
          --install-location "/" \
+         --ownership preserve \
          "$WORK_DIR/WSO2 Integrator.pkg"
 
 sed -i '' "s/version=\"__VERSION__\"/version=\"$VERSION\"/g" "$WORK_DIR/Distribution.xml"
@@ -117,9 +168,12 @@ else
     exit 1
 fi
 
+# Cleanup
 rm -rf "${WSO2_TARGET:?}"/*
 rm -rf "${ICP_TARGET:?}"/*
+rm -rf "${BALLERINA_TARGET:?}"/*
+rm -rf "$EXTRACTION_TARGET/Library"
+rm -rf "$EXTRACTION_TARGET/Applications"
 rm -rf "$WORK_DIR/WSO2 Integrator.pkg"
-rm -f "$WORK_DIR/scripts/ballerina.zip"
 
 print_info "Done!"
