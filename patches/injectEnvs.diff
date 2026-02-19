@@ -2,7 +2,7 @@ Index: product-integrator/lib/vscode/src/main.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/main.ts
 +++ product-integrator/lib/vscode/src/main.ts
-@@ -201,6 +201,92 @@ async function onReady() {
+@@ -201,6 +201,102 @@ async function onReady() {
   * Main startup routine
   */
  async function startup(codeCachePath: string | undefined, nlsConfig: INLSConfiguration): Promise<void> {
@@ -10,7 +10,17 @@ Index: product-integrator/lib/vscode/src/main.ts
 +	// available in the main process, child processes (extension host) and
 +	// inherited by shells launched from the integrated terminal.
 +	try {
-+		const runtimeEnv = (product as any).runtimeEnv;
++		interface IProductMeta {
++			runtimeEnv?: Record<string, unknown>;
++			win32DirName?: string;
++			applicationName?: string;
++			nameShort?: string;
++			nameLong?: string;
++			dataFolderName?: string;
++		}
++
++		const productMeta = product as unknown as IProductMeta;
++		const runtimeEnv = productMeta.runtimeEnv;
 +		// Resolve the installed application directory across platforms. On macOS
 +		// packaged apps live inside a `.app` bundle; on Linux/Windows the
 +		// resources are under `<install-dir>/resources/app`. Prefer Electron's
@@ -31,11 +41,11 @@ Index: product-integrator/lib/vscode/src/main.ts
 +
 +					// Try to find a product-named directory inside execPath (Windows/Linux installers)
 +					const productCandidates = new Set<string>();
-+					if ((product as any).win32DirName) productCandidates.add(((product as any).win32DirName as string).toLowerCase());
-+					if ((product as any).applicationName) productCandidates.add(((product as any).applicationName as string).toLowerCase());
-+					if ((product as any).nameShort) productCandidates.add(((product as any).nameShort as string).toLowerCase());
-+					if ((product as any).nameLong) productCandidates.add(((product as any).nameLong as string).toLowerCase());
-+					if ((product as any).dataFolderName) productCandidates.add(((product as any).dataFolderName as string).toLowerCase());
++					if (productMeta.win32DirName) { productCandidates.add(productMeta.win32DirName.toLowerCase()); }
++					if (productMeta.applicationName) { productCandidates.add(productMeta.applicationName.toLowerCase()); }
++					if (productMeta.nameShort) { productCandidates.add(productMeta.nameShort.toLowerCase()); }
++					if (productMeta.nameLong) { productCandidates.add(productMeta.nameLong.toLowerCase()); }
++					if (productMeta.dataFolderName) { productCandidates.add(productMeta.dataFolderName.toLowerCase()); }
 +
 +					for (let i = parts.length - 1; i >= 0; i--) {
 +						const partLower = parts[i].toLowerCase();
