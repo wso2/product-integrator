@@ -2,59 +2,13 @@
   xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
   xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package Name="WSO2 Integrator"
-    Version="@VERSION@"
+    Version="2.0.0"
     Manufacturer="WSO2"
     UpgradeCode="344b046a-fa6a-4452-be40-2794f59fe7b0"
     InstallerVersion="500"
     Compressed="yes"
+    Scope="perUser"
   >
-    <Property Id="BALLERINA_INSTALLATION_WARNING" Value="0" />
-    
-    <!-- Binary resources for Ballerina conditional installation -->
-    <Binary Id="BallerinaZip" SourceFile="Resources\ballerina.zip" />
-    <Binary Id="BallerinaVersion" SourceFile="Resources\ballerina_version.txt" />
-    
-    <Binary Id="ExtActionsDll" SourceFile="..\CustomAction1\bin\$(Configuration)\net472\CustomAction1.CA.dll" />
-    
-    <!-- Custom action for conditional Ballerina extraction -->
-    <!-- Immediate action to extract Binary resources and set CustomActionData -->
-    <CustomAction Id="PrepareBallerinaBinariesCA" BinaryRef="ExtActionsDll"
-      DllEntry="PrepareBallerinaBinaries" Execute="immediate" Impersonate="no"
-      Return="check" />
-    
-    <!-- Immediate action to set CustomActionData -->
-    <SetProperty Id="extractBallerinaConditionallyCA" Value="[PrepareBallerinaData]"
-      Before="extractBallerinaConditionallyCA" Sequence="execute" />
-    
-    <!-- Immediate action to set CustomActionData for clearCurrentActiveBallerinaVersion -->
-    <SetProperty Id="clearCurrentActiveBallerinaVersionCA" Value="[ClearBallerinaData]"
-      Before="clearCurrentActiveBallerinaVersionCA" Sequence="execute" />
-    
-    <!-- Deferred action that actually extracts Ballerina -->
-    <CustomAction Id="extractBallerinaConditionallyCA" BinaryRef="ExtActionsDll"
-      DllEntry="extractBallerinaConditionally" Execute="deferred" Impersonate="no"
-      Return="check" />
-      
-    <CustomAction Id="clearCurrentActiveBallerinaVersionCA" BinaryRef="ExtActionsDll"
-      DllEntry="clearCurrentActiveBallerinaVersion" Execute="deferred" Impersonate="no"
-      Return="check" />
-      
-    <CustomAction Id="checkBallerinaInstallationCA" BinaryRef="ExtActionsDll"
-      DllEntry="checkBallerinaInstallation" Execute="immediate" Impersonate="no"
-      Return="ignore" />
-
-    <InstallUISequence>
-      <Custom Action="checkBallerinaInstallationCA" After="CostFinalize" />
-    </InstallUISequence>
-
-    <InstallExecuteSequence>
-      <!-- Prepare Ballerina binaries (extract from MSI) in immediate context -->
-      <Custom Action="PrepareBallerinaBinariesCA" After="InstallFiles" Condition="NOT Installed" />
-      
-      <!-- Extract Ballerina and update user configurations -->
-      <Custom Action="extractBallerinaConditionallyCA" After="PrepareBallerinaBinariesCA" Condition="NOT Installed" />
-      <Custom Action="clearCurrentActiveBallerinaVersionCA" After="extractBallerinaConditionallyCA" Condition="NOT Installed" />
-    </InstallExecuteSequence>
 
     <MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" />
     <MediaTemplate EmbedCab="yes" />
@@ -67,9 +21,8 @@
 
     <Feature Id="Main">
       <ComponentGroupRef Id="IntegratorComponents" />
-      <ComponentGroupRef Id="ICPComponents" />
       <ComponentRef Id="IntegratorShortcutComponent" />
-      <ComponentRef Id="BallerinaEnvironmentComponent" />
+      <ComponentRef Id="CleanupFoldersComponent" />
       <!-- <ComponentGroupRef Id="SettingsComponents" /> -->
     </Feature>
 
