@@ -30,18 +30,6 @@ if "%~5"=="" (
 )
 
 
-@REM Copy ballerina.zip to resources directory (will be extracted conditionally during installation)
-echo Copying Ballerina zip to resources directory
-if not exist ".\WixPackage\Resources" mkdir ".\WixPackage\Resources"
-copy "%~1" ".\WixPackage\Resources\ballerina.zip"
-if errorlevel 1 (
-    echo Failed to copy Ballerina zip
-    exit /b 1
-)
-REM Save version to file
-echo %~2 > ".\WixPackage\Resources\ballerina_version.txt"
-echo Ballerina zip copied to resources, will be extracted conditionally during installation
-
 @REM REM Extract integrator.zip
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~3', '.\WixPackage\payload\Integrator'); }"
 if errorlevel 1 (
@@ -50,11 +38,33 @@ if errorlevel 1 (
 )
 
 @REM REM Extract ICP.zip
-powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~4', '.\temp_icp'); Move-Item -Path '.\temp_icp\*' -Destination '.\WixPackage\payload\ICP' -Force; Remove-Item -Recurse -Force '.\temp_icp' }"
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~4', '.\temp_icp'); $icpTarget = '.\WixPackage\payload\Integrator\components\icp'; New-Item -ItemType Directory -Force -Path $icpTarget | Out-Null; Move-Item -Path '.\temp_icp\*' -Destination $icpTarget -Force; Remove-Item -Recurse -Force '.\temp_icp' }"
 if errorlevel 1 (
     echo ICP extraction failed
     exit /b 1
 )
+
+
+@REM REM Extract ballerina.zip
+echo Extracting Ballerina to payload
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $extractDir = 'C:\tmp_bal'; $consolidatedDir = 'C:\tmp_bal_consolidated'; Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force $consolidatedDir -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path $extractDir | Out-Null; New-Item -ItemType Directory -Force -Path $consolidatedDir | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', $extractDir); $unzippedFolder = (Get-ChildItem $extractDir -Directory | Select-Object -First 1).FullName; $distDir = Join-Path $unzippedFolder 'distributions'; if (Test-Path $distDir) { $distFolder = (Get-ChildItem $distDir -Directory | Select-Object -First 1).FullName; if ($distFolder) { Copy-Item -Path \"$distFolder\*\" -Destination $consolidatedDir -Recurse -Force } }; $depsDir = Join-Path $unzippedFolder 'dependencies'; if (Test-Path $depsDir) { Get-ChildItem $depsDir -Directory | ForEach-Object { Copy-Item -Path $_.FullName -Destination $consolidatedDir -Recurse -Force } }; $ballerinaTarget = '.\WixPackage\payload\Integrator\components\ballerina-%~2'; New-Item -ItemType Directory -Force -Path $ballerinaTarget | Out-Null; Move-Item -Path \"$consolidatedDir\*\" -Destination $ballerinaTarget -Force; Remove-Item -Recurse -Force $extractDir; Remove-Item -Recurse -Force $consolidatedDir }"
+if errorlevel 1 (
+    echo Ballerina extraction failed
+    exit /b 1
+)
+
+REM Copy balForWI/bal to ballerina bin directory
+set "BAL_SRC=%~dp0WixPackage\balForWI\bal.bat"
+set "BAL_TARGET=.\WixPackage\payload\Integrator\components\ballerina-%~2\bin\bal.bat"
+if exist "%BAL_SRC%" (
+    if not exist ".\WixPackage\payload\Integrator\components\ballerina-%~2\bin" mkdir ".\WixPackage\payload\Integrator\components\ballerina-%~2\bin"
+    copy /Y "%BAL_SRC%" "%BAL_TARGET%"
+    echo Copied bal.bat to ballerina bin directory
+) else (
+    echo bal.bat not found at %BAL_SRC%
+)
+
+
 
 REM Update version in Package.wxs
 powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%~5' | Set-Content '.\WixPackage\Package.wxs'"
