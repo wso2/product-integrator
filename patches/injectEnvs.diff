@@ -1,0 +1,97 @@
+Index: product-integrator/lib/vscode/src/main.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/main.ts
++++ product-integrator/lib/vscode/src/main.ts
+@@ -201,6 +201,92 @@ async function onReady() {
+  * Main startup routine
+  */
+ async function startup(codeCachePath: string | undefined, nlsConfig: INLSConfiguration): Promise<void> {
++	// Inject product-defined runtime environment variables so they are
++	// available in the main process, child processes (extension host) and
++	// inherited by shells launched from the integrated terminal.
++	try {
++		const runtimeEnv = (product as any).runtimeEnv;
++		// Resolve the installed application directory across platforms. On macOS
++		// packaged apps live inside a `.app` bundle; on Linux/Windows the
++		// resources are under `<install-dir>/resources/app`. Prefer Electron's
++		// `app.getAppPath()` when available and fall back to `process.execPath`.
++		const resolveInstalledDir = (): string => {
++			try {
++				const execPath = process.execPath || '';
++				const appPath = (typeof app.getAppPath === 'function') ? app.getAppPath() : execPath;
++
++				// 1) If execPath contains a .app bundle, return that bundle root (macOS)
++				if (execPath) {
++					const parts = execPath.split(path.sep);
++					for (let i = parts.length - 1; i >= 0; i--) {
++						if (parts[i].endsWith('.app')) {
++							return parts.slice(0, i + 1).join(path.sep);
++						}
++					}
++
++					// Try to find a product-named directory inside execPath (Windows/Linux installers)
++					const productCandidates = new Set<string>();
++					if ((product as any).win32DirName) productCandidates.add(((product as any).win32DirName as string).toLowerCase());
++					if ((product as any).applicationName) productCandidates.add(((product as any).applicationName as string).toLowerCase());
++					if ((product as any).nameShort) productCandidates.add(((product as any).nameShort as string).toLowerCase());
++					if ((product as any).nameLong) productCandidates.add(((product as any).nameLong as string).toLowerCase());
++					if ((product as any).dataFolderName) productCandidates.add(((product as any).dataFolderName as string).toLowerCase());
++
++					for (let i = parts.length - 1; i >= 0; i--) {
++						const partLower = parts[i].toLowerCase();
++						if (productCandidates.has(partLower)) {
++							return parts.slice(0, i + 1).join(path.sep);
++						}
++					}
++				}
++
++				// 2) If appPath looks like <install>/resources/app, return the install dir
++				const resourcesApp = path.join('resources', 'app');
++				if (appPath && appPath.includes(resourcesApp)) {
++					return path.normalize(path.resolve(appPath, '..', '..'));
++				}
++
++				// 3) If appPath ends with '/app' (dev/unpacked), go up two levels
++				if (appPath && appPath.endsWith(`${path.sep}app`)) {
++					return path.normalize(path.resolve(appPath, '..', '..'));
++				}
++
++				// 4) Fallback to directory of execPath or appPath
++				return path.dirname(execPath || appPath || '');
++			} catch (err) {
++				return path.dirname(process.execPath || '');
++			}
++		};
++
++		const appRoot = resolveInstalledDir();
++
++		if (runtimeEnv && typeof runtimeEnv === 'object') {
++			for (const [key, value] of Object.entries(runtimeEnv)) {
++				if (typeof value === 'string') {
++					const currentPath = process.env.PATH || process.env.Path || '';
++
++					// Replace tokens: $PATH / ${PATH}
++					let replaced = value.replace(/\$\{?PATH}?/g, currentPath);
++
++					// Replace app root tokens: ${APP_ROOT}, ${APP_DIR}, ${APP}
++					// Put longer alternatives first to avoid partial matches (e.g. APP matching APP_ROOT)
++					replaced = replaced.replace(/\$\{?(?:APP_ROOT|APP_DIR|APP)\}?/g, appRoot);
++
++					// If the value is a relative path (./ or ../), resolve it from the app root
++					if (replaced.startsWith('./') || replaced.startsWith('../')) {
++						replaced = path.normalize(path.join(appRoot, replaced));
++					}
++
++					process.env[key] = replaced;
++				} else {
++					process.env[key] = JSON.stringify(value);
++				}
++			}
++		}
++	} catch (e) {
++		console.warn('Failed to inject product runtimeEnv:', e);
++	}
++
+ 	process.env['VSCODE_NLS_CONFIG'] = JSON.stringify(nlsConfig);
+ 	process.env['VSCODE_CODE_CACHE_PATH'] = codeCachePath || '';
+ 

@@ -95,7 +95,11 @@ echo '{
         "vsix": "../../wi/wi-extension/wso2-integrator-1.0.0.vsix",
         "version": "latest"
       }
-	  ]
+	  ],
+    "runtimeEnv": {
+      "WSO2_INTEGRATOR_RUNTIME": "1",
+      "BALLERINA_HOME": "${APP_ROOT}/components/ballerina/bin"
+    }
 }
 ' > lib/vscode/product.json
 
