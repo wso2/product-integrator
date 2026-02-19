@@ -45,27 +45,40 @@ DMG_FOLDER="./dmg_folder"
 
 print_info "=== Building DMG for WSO2 Integrator ==="
 
-# Step 1: Build the PKG file first
-print_info "Building PKG installer..."
-"$SCRIPT_DIR/build.sh" "$BALLERINA_ZIP" "$BALLERINA_VERSION" "$WSO2_ZIP" "$ICP_ZIP" "$VERSION" "$ARCH"
+# Step 1: Extract the WSO2 Integrator app from the zip
+print_info "Extracting WSO2 Integrator.app from $WSO2_ZIP..."
+TEMP_EXTRACT="./temp_extract"
+rm -rf "$TEMP_EXTRACT"
+mkdir -p "$TEMP_EXTRACT"
 
-if [ ! -f "$PKG_NAME" ]; then
-    print_error "Failed to create PKG file"
+unzip -q "$WSO2_ZIP" -d "$TEMP_EXTRACT"
+WSO2_UNZIPPED_FOLDER=$(unzip -Z1 "$WSO2_ZIP" | head -1 | cut -d/ -f1)
+WSO2_APP_PATH="$TEMP_EXTRACT/$WSO2_UNZIPPED_FOLDER/WSO2 Integrator.app"
+
+if [ ! -d "$WSO2_APP_PATH" ]; then
+    print_error "Could not find WSO2 Integrator.app in extracted files"
+    rm -rf "$TEMP_EXTRACT"
     exit 1
 fi
 
-print_info "PKG file created successfully: $PKG_NAME"
+print_info "Found WSO2 Integrator.app"
 
 # Step 2: Create temporary DMG folder structure
 print_info "Creating DMG folder structure..."
 rm -rf "$DMG_FOLDER"
 mkdir -p "$DMG_FOLDER"
 
-# Copy PKG file to DMG folder
-cp "$PKG_NAME" "$DMG_FOLDER/"
+# Copy the app to DMG folder
+print_info "Copying WSO2 Integrator.app to DMG..."
+cp -R "$WSO2_APP_PATH" "$DMG_FOLDER/"
+chmod -R +x "$DMG_FOLDER/WSO2 Integrator.app/Contents/MacOS"/* 2>/dev/null || true
+xattr -cr "$DMG_FOLDER/WSO2 Integrator.app"
 
 # Create Applications symlink
 ln -s /Applications "$DMG_FOLDER/Applications"
+
+# Clean up extraction
+rm -rf "$TEMP_EXTRACT"
 
 # Copy background image if it exists
 if [ -f "$SCRIPT_DIR/dmg-background.png" ]; then
@@ -124,7 +137,7 @@ tell application "Finder"
         set viewOptions to the icon view options of container window
         set arrangement of viewOptions to not arranged
         set icon size of viewOptions to 96
-        set position of item "${PKG_NAME}" of container window to {90, 100}
+        set position of item "WSO2 Integrator.app" of container window to {90, 100}
         set position of item "Applications" of container window to {450, 100}
         if file ".background/background.png" exists then
             set background picture of viewOptions to file ".background/background.png"
@@ -174,7 +187,6 @@ rm -rf "$DMG_FOLDER"
 # Display final information
 print_info "=== Build Complete ==="
 DMG_SIZE=$(du -h "$DMG_NAME" | cut -f1)
-PKG_SIZE=$(du -h "$PKG_NAME" | cut -f1)
-print_info "PKG file: $PKG_NAME (${PKG_SIZE})"
 print_info "DMG file: $DMG_NAME (${DMG_SIZE})"
-print_info "Both installers are ready for distribution!"
+print_info "DMG contains WSO2 Integrator.app - ready for drag-to-install!"
+print_info "Users can drag the app to Applications folder to install"
