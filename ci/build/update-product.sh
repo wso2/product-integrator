@@ -98,7 +98,8 @@ echo '{
 	  ],
     "runtimeEnv": {
       "WSO2_INTEGRATOR_RUNTIME": "1",
-      "BALLERINA_HOME": "${APP_ROOT}/components/ballerina/bin"
+      "BALLERINA_HOME": "${APP_ROOT}/Contents/components/ballerina",
+      "PATH": "${APP_ROOT}/Contents/components/ballerina/bin:$PATH"
     }
 }
 ' > lib/vscode/product.json
