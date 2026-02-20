@@ -1,6 +1,6 @@
 Name:           wso2-integrator
 Version:        @VERSION@
-Release:        1
+Release:        @RELEASE@
 Summary:        WSO2 Integrator - Low Code Integration
 License:        MIT
 URL:            https://wso2.com/integration/

@@ -146,9 +146,21 @@ print_info "Creating source tarball for version $VERSION..."
 cd "$WORK_DIR"
 tar -czf "$SOURCES_DIR/wso2-integrator-$VERSION.tar.gz" -C package .
 
-# Prepare spec file with version
-print_info "Preparing spec file with version $VERSION..."
-sed "s/@VERSION@/$VERSION/g" "$WORK_DIR/wso2-integrator.spec" > "$SPECS_DIR/wso2-integrator.spec"
+# Prepare spec file with version and release
+# RPM Version field doesn't allow hyphens, so split version and pre-release
+# e.g., 1.0.0-m1 becomes Version: 1.0.0, Release: 0-m1
+# This produces RPM filename: wso2-integrator-1.0.0-0-m1.x86_64.rpm
+if [[ "$VERSION" == *"-"* ]]; then
+    RPM_VERSION=$(echo "$VERSION" | cut -d'-' -f1)
+    PRE_RELEASE=$(echo "$VERSION" | cut -d'-' -f2-)
+    RPM_RELEASE="0-$PRE_RELEASE"
+    print_info "Preparing spec file with version $RPM_VERSION and release $RPM_RELEASE (from $VERSION)..."
+else
+    RPM_VERSION="$VERSION"
+    RPM_RELEASE="1"
+    print_info "Preparing spec file with version $RPM_VERSION and release $RPM_RELEASE..."
+fi
+sed -e "s/@VERSION@/$RPM_VERSION/g" -e "s/@RELEASE@/$RPM_RELEASE/g" "$WORK_DIR/wso2-integrator.spec" > "$SPECS_DIR/wso2-integrator.spec"
 
 # Build RPM package
 print_info "Building RPM package..."
