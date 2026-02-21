@@ -63,8 +63,8 @@ if exist ".\WixPackage\payload\Integrator\components\icp\bin\dashboard.bat" (
 )
 
 
-REM Copy balForWI/bal to ballerina bin directory and replace version placeholder
-set "BAL_SRC=%~dp0WixPackage\balForWI\bal.bat"
+REM Copy balscript/bal to ballerina bin directory and replace version placeholder
+set "BAL_SRC=%~dp0WixPackage\balscript\bal.bat"
 set "BAL_TARGET=.\WixPackage\payload\Integrator\components\ballerina\bin\bal.bat"
 if exist "%BAL_SRC%" (
     if not exist ".\WixPackage\payload\Integrator\components\ballerina\bin" mkdir ".\WixPackage\payload\Integrator\components\ballerina\bin"
