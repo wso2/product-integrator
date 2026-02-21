@@ -1,65 +1,15 @@
 #!/usr/bin/env bash
 #
 # Copyright (c) WSO2. All rights reserved.
-
-# Read Ballerina version from the version file
-BALLERINA_VERSION=""
-if [ -f "/usr/lib/ballerina/ballerina_version" ]; then
-    BALLERINA_VERSION=$(cat "/usr/lib/ballerina/ballerina_version")
-fi
-
-# Check if Ballerina needs to be installed
-if [ -n "$BALLERINA_VERSION" ] && [ -d "/usr/lib/ballerina/distributions/ballerina-$BALLERINA_VERSION" ]; then
-    echo "Ballerina version $BALLERINA_VERSION already exists - skipping extraction"
-else
-    echo "Installing Ballerina version $BALLERINA_VERSION"
-    
-    # Extract Ballerina from the bundled zip
-    BALLERINA_ZIP="/usr/lib/ballerina/ballerina.zip"
-    if [ -f "$BALLERINA_ZIP" ]; then
-        TEMP_EXTRACT="/tmp/wso2_ballerina_extract_$$"
-        mkdir -p "$TEMP_EXTRACT"
-        
-        echo "Extracting Ballerina zip..."
-        unzip -q "$BALLERINA_ZIP" -d "$TEMP_EXTRACT"
-        
-        # Get the extracted folder name
-        BALLERINA_FOLDER=$(ls -1 "$TEMP_EXTRACT" | head -1)
-        
-        # Create target directory
-        mkdir -p /usr/lib/ballerina
-        
-        # Move extracted contents to /usr/lib/ballerina
-        echo "Installing Ballerina to /usr/lib/ballerina..."
-        cp -R "$TEMP_EXTRACT/$BALLERINA_FOLDER"/* /usr/lib/ballerina/
-        
-        # Cleanup
-        rm -rf "$TEMP_EXTRACT"
-        rm -f "$BALLERINA_ZIP"
-        echo "Ballerina installation completed"
-    else
-        echo "Warning: Ballerina zip not found at $BALLERINA_ZIP"
-    fi
-fi
-
-# Clean up the version file after use
-rm -f /usr/lib/ballerina/ballerina_version
-
 # Change ownership and permissions for integrator files
 chown -R root:root /usr/share/wso2-integrator
+chmod -R o+w /usr/share/wso2-integrator/components/icp/bin/database/
+chmod -R o+rwx /usr/share/wso2-integrator/components/icp/www/public/
 chmod 4755 /usr/share/wso2-integrator/chrome-sandbox 2>/dev/null || true
 
 # Create symlinks to /usr/bin
 rm -f /usr/bin/wso2-integrator
 ln -s /usr/share/wso2-integrator/bin/wso2-integrator /usr/bin/wso2-integrator
-
-# Create Ballerina symlink only if bal binary exists
-if [ -f "/usr/lib/ballerina/bin/bal" ]; then
-    ln -sf /usr/lib/ballerina/bin/bal /usr/bin/bal
-    # Set BALLERINA_HOME environment variable
-    echo 'export BALLERINA_HOME=/usr/lib/ballerina' > /etc/profile.d/wso2.sh
-    chmod 0755 /etc/profile.d/wso2.sh
-fi
 
 # Register in the alternatives system
 # Priority of 0 should never make wso2-integrator the default editor in auto mode
@@ -73,75 +23,4 @@ fi
 # Update mimetype database to pickup workspace mimetype
 if hash update-mime-database 2>/dev/null; then
 	update-mime-database /usr/share/mime
-fi
-
-# Delete ballerina-home from user homes
-delete_user_bal_home() {
-    local user_home=$1
-    local username=$2
-    local user_ballerina_dir="$user_home/.ballerina"
-    
-    if [ ! -d "$user_home" ] || [ "$user_home" = "/" ]; then
-        return
-    fi
-    
-    if [ -d "$user_ballerina_dir" ]; then
-        rm -rf "$user_ballerina_dir/ballerina-home" 2>/dev/null || true
-        echo "Deleted ballerina-home for user: $username"
-    fi
-}
-
-# Process all regular users (UID >= 1000)
-while IFS=: read -r username _ uid _ _ home _; do
-    if [ "$uid" -ge 1000 ] && [ "$username" != "nobody" ]; then
-        delete_user_bal_home "$home" "$username"
-    fi
-done < /etc/passwd 2>/dev/null || true
-
-# Delete for root user
-if [ -d "/root" ]; then
-    delete_user_bal_home "/root" "root"
-fi
-
-# Read Ballerina version from the version file
-BALLERINA_VERSION=""
-if [ -f "/usr/lib/ballerina/ballerina_version" ]; then
-    BALLERINA_VERSION=$(cat "/usr/lib/ballerina/ballerina_version")
-    
-    # Update ballerina-version file in each user's home directory
-    set_user_bal_version() {
-        local user_home=$1
-        local username=$2
-        local user_ballerina_dir="$user_home/.ballerina"
-        
-        if [ ! -d "$user_home" ] || [ "$user_home" = "/" ]; then
-            return
-        fi
-        
-        # Create .ballerina directory if it doesn't exist
-        mkdir -p "$user_ballerina_dir"
-        
-        local user_bal_version_file="$user_ballerina_dir/ballerina-version"
-        
-        # Remove existing ballerina-version file if it exists
-        if [ -f "$user_bal_version_file" ]; then
-            rm -f "$user_bal_version_file"
-        fi
-        
-        echo "ballerina-$BALLERINA_VERSION" > "$user_bal_version_file"
-        chown "$username":"$username" "$user_bal_version_file" 2>/dev/null || true
-        echo "Set ballerina-version to ballerina-$BALLERINA_VERSION for user: $username"
-    }
-    
-    # Process all regular users
-    while IFS=: read -r username _ uid _ _ home _; do
-        if [ "$uid" -ge 1000 ] && [ "$username" != "nobody" ]; then
-            set_user_bal_version "$home" "$username"
-        fi
-    done < /etc/passwd 2>/dev/null || true
-    
-    # Set for root user
-    if [ -d "/root" ]; then
-        set_user_bal_version "/root" "root"
-    fi
 fi

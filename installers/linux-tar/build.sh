@@ -23,9 +23,9 @@ print_warning() {
 
 WORK_DIR=$(pwd)
 
-# Usage: ./build.sh <ballerina_zip> <integrator_tar_gz> <icp_zip> [version]
-if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 <ballerina_zip> <integrator_tar_gz> <icp_zip> [version]"
+# Usage: ./build.sh <ballerina_zip> <ballerina_version> <integrator_tar_gz> <icp_zip> [version]
+if [ "$#" -lt 4 ]; then
+    echo "Usage: $0 <ballerina_zip> <ballerina_version> <integrator_tar_gz> <icp_zip> [version]"
     exit 1
 fi
 
@@ -52,18 +52,19 @@ if [ ! -f "$ICP_ZIP" ]; then
 fi
 
 # Define paths
-INTEGRATOR_TARGET="$WORK_DIR/package/usr/share/wso2-integrator"
+STAGE_DIR="$WORK_DIR/staging"
+INTEGRATOR_TARGET="$STAGE_DIR/wso2-integrator"
 COMPONENTS_DIR="$INTEGRATOR_TARGET/components"
 BALLERINA_TARGET="$COMPONENTS_DIR/ballerina"
 DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
 ICP_TARGET="$COMPONENTS_DIR/icp"
 EXTRACTION_TARGET="$WORK_DIR/extraction_temp"
 
-print_info "Starting DEB package build process..."
+print_info "Starting TAR.GZ package build process..."
 
-# Clean and recreate package directories
+# Clean and recreate staging directories
 print_info "Preparing package structure..."
-rm -rf "$INTEGRATOR_TARGET"
+rm -rf "$STAGE_DIR"
 rm -rf "$EXTRACTION_TARGET"
 mkdir -p "$INTEGRATOR_TARGET"
 mkdir -p "$EXTRACTION_TARGET"
@@ -85,7 +86,7 @@ rm -rf "$BALLERINA_TEMP"
 mkdir -p "$BALLERINA_TEMP"
 
 # Move distributions contents to temp
-print_info "Consolidating Ballerina distributions"
+print_info "Consolidating Ballerina distributions..."
 if [ -d "$BALLERINA_UNZIPPED_PATH/distributions" ]; then
     DIST_FOLDER=$(ls "$BALLERINA_UNZIPPED_PATH/distributions" | head -1)
     if [ -n "$DIST_FOLDER" ]; then
@@ -98,13 +99,12 @@ mkdir -p "$BALLERINA_TARGET"
 mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
 
 # Move JDK to shared dependencies directory
-print_info "Moving JDK to shared dependencies directory"
+print_info "Moving JDK to shared dependencies directory..."
 rm -rf "$DEPENDENCIES_DIR"
 mkdir -p "$DEPENDENCIES_DIR"
 if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
     for jdk_folder in "$BALLERINA_UNZIPPED_PATH/dependencies"/*; do
         if [ -d "$jdk_folder" ]; then
-            JDK_FOLDER=$(basename "$jdk_folder")
             cp -r "$jdk_folder" "$DEPENDENCIES_DIR/"
         fi
     done
@@ -114,7 +114,7 @@ rm -rf "$BALLERINA_UNZIPPED_PATH"
 rm -rf "$BALLERINA_TEMP"
 
 # Replace bal script with the one from balForWI
-print_info "Replacing bal script with updated version from balForWI"
+print_info "Replacing bal script with updated version from balForWI..."
 cp "$WORK_DIR/balForWI/bal" "$BALLERINA_TARGET/bin/bal"
 chmod +x "$BALLERINA_TARGET/bin"/*
 
@@ -128,73 +128,29 @@ mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
 
-# # Update dashboard.sh to set JAVA_HOME to point to shared JDK
-# print_info "Updating dashboard.sh to point to shared JDK"
-# DASHBOARD_SCRIPT="$ICP_TARGET/bin/dashboard.sh"
-# if [ -f "$DASHBOARD_SCRIPT" ]; then
-#     cat > "$DASHBOARD_SCRIPT.tmp" << 'DASHBOARD_EOF'
-# # Set JAVA_HOME for installers
-# SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
-# # Find JDK folder dynamically in the shared dependencies directory
-# for jdk in "$SCRIPT_DIR"/../../dependencies/jdk-*; do
-#     if [ -d "$jdk" ]; then
-#         export JAVA_HOME="$jdk"
-#         break
-#     fi
-# done
-# DASHBOARD_EOF
-#     # Insert the Java home setup after the PRG and PRGDIR definitions (line 18-19)
-#     head -n 19 "$DASHBOARD_SCRIPT" > "$DASHBOARD_SCRIPT.new"
-#     cat "$DASHBOARD_SCRIPT.tmp" >> "$DASHBOARD_SCRIPT.new"
-#     tail -n +20 "$DASHBOARD_SCRIPT" >> "$DASHBOARD_SCRIPT.new"
-#     mv "$DASHBOARD_SCRIPT.new" "$DASHBOARD_SCRIPT"
-#     rm "$DASHBOARD_SCRIPT.tmp"
-#     chmod +x "$DASHBOARD_SCRIPT"
-# fi
-
 # Set executable permissions
 print_info "Setting executable permissions..."
 find "$INTEGRATOR_TARGET/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
 chmod +x "$INTEGRATOR_TARGET/wso2-integrator" 2>/dev/null || true
 
-# Make DEBIAN scripts executable
-chmod 755 "$WORK_DIR/package/DEBIAN/postinst"
-chmod 755 "$WORK_DIR/package/DEBIAN/postrm"
-chmod 755 "$WORK_DIR/package/DEBIAN/prerm"
+# Pack into tar.gz
+OUTPUT_TAR="$WORK_DIR/wso2-integrator-${VERSION}-linux-x64.tar.gz"
+print_info "Creating TAR.GZ archive: $OUTPUT_TAR"
+tar -czf "$OUTPUT_TAR" -C "$STAGE_DIR" wso2-integrator
 
-# Update version in control file
-print_info "Updating version in control file to $VERSION..."
-sed -i "s/@VERSION@/$VERSION/" "$WORK_DIR/package/DEBIAN/control"
-
-# Get the installed size
-INSTALLED_SIZE=$(du -sk "$WORK_DIR/package" | cut -f1)
-
-# Update or add Installed-Size field
-if grep -q "^Installed-Size:" "$WORK_DIR/package/DEBIAN/control"; then
-    sed -i "s/^Installed-Size:.*/Installed-Size: $INSTALLED_SIZE/" "$WORK_DIR/package/DEBIAN/control"
+# Verify output
+if [ -f "$OUTPUT_TAR" ]; then
+    print_info "Successfully created: $OUTPUT_TAR"
+    print_info "Package size: $(du -h "$OUTPUT_TAR" | cut -f1)"
 else
-    echo "Installed-Size: $INSTALLED_SIZE" >> "$WORK_DIR/package/DEBIAN/control"
-fi
-
-# Build DEB package
-OUTPUT_DEB="$WORK_DIR/wso2-integrator_${VERSION}_amd64.deb"
-print_info "Building DEB package..."
-dpkg-deb -b "$WORK_DIR/package" "$OUTPUT_DEB"
-
-# Check if the build was successful
-if [ -f "$OUTPUT_DEB" ]; then
-    print_info "Successfully created: $OUTPUT_DEB"
-    print_info "Package size: $(du -h "$OUTPUT_DEB" | cut -f1)"
-else
-    print_error "Failed to create deb package"
+    print_error "Failed to create TAR.GZ package"
     exit 1
 fi
 
-# Cleanup extracted files
+# Cleanup
+print_info "Cleaning up staging directories..."
+rm -rf "$STAGE_DIR"
 rm -rf "$EXTRACTION_TARGET"
 
-# Revert version in control file back to @VERSION@
-sed -i "s/^Version: $VERSION$/Version: @VERSION@/" "$WORK_DIR/package/DEBIAN/control"
-
-print_info "DEB package build completed successfully!"
-print_info "You can install the package using: sudo dpkg -i $OUTPUT_DEB"
+print_info "TAR.GZ package build completed successfully!"
+print_info "You can extract the package using: tar -xzf $OUTPUT_TAR"
