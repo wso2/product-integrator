@@ -282,6 +282,31 @@ jobs:
             installers/linux-rpm/*.rpm
           if-no-files-found: error
         
+      - name: Build Linux packages - tar
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          ROOT_DIR=$(pwd)
+          echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-linux.zip"
+          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          cd ./installers/linux-tar
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          cd ${ROOT_DIR}
+      - name: Upload TAR artifacts
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-TAR
+          path: |
+            installers/linux-tar/*.tar.gz
+          if-no-files-found: error
+        
       - name: cosign-installer
         if: ${{ inputs.build_packed_installers == true}}
         uses: sigstore/cosign-installer@v3.5.0

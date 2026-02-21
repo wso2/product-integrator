@@ -1,10 +1,12 @@
 ﻿<Project Sdk="WixToolset.Sdk/5.0.2">
 <PropertyGroup>
-<Platform>x64</Platform>
-<OutputName>WSO2-Integrator</OutputName>
+  <Platform>x64</Platform>
+  <OutputName>WSO2-Integrator</OutputName>
+  <SuppressIces>ICE38;ICE64;ICE91</SuppressIces>
 </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="WixToolset.UI.wixext" Version="5.0.2" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" />
   </ItemGroup>
 </Project>

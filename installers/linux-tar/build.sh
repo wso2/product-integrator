@@ -23,9 +23,9 @@ print_warning() {
 
 WORK_DIR=$(pwd)
 
-# Usage: ./build.sh <ballerina_zip> <integrator_tar_gz> <icp_zip> [version]
-if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 <ballerina_zip> <integrator_tar_gz> <icp_zip> [version]"
+# Usage: ./build.sh <ballerina_zip> <ballerina_version> <integrator_tar_gz> <icp_zip> [version]
+if [ "$#" -lt 4 ]; then
+    echo "Usage: $0 <ballerina_zip> <ballerina_version> <integrator_tar_gz> <icp_zip> [version]"
     exit 1
 fi
 
@@ -52,27 +52,19 @@ if [ ! -f "$ICP_ZIP" ]; then
 fi
 
 # Define paths
-INTEGRATOR_TARGET="$WORK_DIR/package/usr/share/wso2-integrator"
+STAGE_DIR="$WORK_DIR/staging"
+INTEGRATOR_TARGET="$STAGE_DIR/wso2-integrator"
 COMPONENTS_DIR="$INTEGRATOR_TARGET/components"
 BALLERINA_TARGET="$COMPONENTS_DIR/ballerina"
 DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
 ICP_TARGET="$COMPONENTS_DIR/icp"
 EXTRACTION_TARGET="$WORK_DIR/extraction_temp"
-BUILD_DIR="$WORK_DIR/rpm-build"
-SOURCES_DIR="$BUILD_DIR/SOURCES"
-SPECS_DIR="$BUILD_DIR/SPECS"
-RPMS_DIR="$BUILD_DIR/RPMS"
 
-print_info "Starting RPM package build process..."
+print_info "Starting TAR.GZ package build process..."
 
-# Create RPM build directory structure
-print_info "Setting up RPM build environment..."
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
-
-# Clean and recreate package directories
+# Clean and recreate staging directories
 print_info "Preparing package structure..."
-rm -rf "$INTEGRATOR_TARGET"
+rm -rf "$STAGE_DIR"
 rm -rf "$EXTRACTION_TARGET"
 mkdir -p "$INTEGRATOR_TARGET"
 mkdir -p "$EXTRACTION_TARGET"
@@ -94,7 +86,7 @@ rm -rf "$BALLERINA_TEMP"
 mkdir -p "$BALLERINA_TEMP"
 
 # Move distributions contents to temp
-print_info "Consolidating Ballerina distributions"
+print_info "Consolidating Ballerina distributions..."
 if [ -d "$BALLERINA_UNZIPPED_PATH/distributions" ]; then
     DIST_FOLDER=$(ls "$BALLERINA_UNZIPPED_PATH/distributions" | head -1)
     if [ -n "$DIST_FOLDER" ]; then
@@ -107,7 +99,7 @@ mkdir -p "$BALLERINA_TARGET"
 mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
 
 # Move JDK to shared dependencies directory
-print_info "Moving JDK to shared dependencies directory"
+print_info "Moving JDK to shared dependencies directory..."
 rm -rf "$DEPENDENCIES_DIR"
 mkdir -p "$DEPENDENCIES_DIR"
 if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
@@ -122,7 +114,7 @@ rm -rf "$BALLERINA_UNZIPPED_PATH"
 rm -rf "$BALLERINA_TEMP"
 
 # Replace bal script with the one from balscript
-print_info "Replacing bal script with updated version from balscript"
+print_info "Replacing bal script with updated version from balscript..."
 cp "$WORK_DIR/balscript/bal" "$BALLERINA_TARGET/bin/bal"
 sed -i "s/@BALLERINA_VERSION@/$BALLERINA_VERSION/g" "$BALLERINA_TARGET/bin/bal"
 chmod +x "$BALLERINA_TARGET/bin"/*
@@ -142,49 +134,24 @@ print_info "Setting executable permissions..."
 find "$INTEGRATOR_TARGET/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
 chmod +x "$INTEGRATOR_TARGET/wso2-integrator" 2>/dev/null || true
 
-# Create source tarball
-print_info "Creating source tarball for version $VERSION..."
-cd "$WORK_DIR"
-tar -czf "$SOURCES_DIR/wso2-integrator-$VERSION.tar.gz" -C package .
+# Pack into tar.gz
+OUTPUT_TAR="$WORK_DIR/wso2-integrator-${VERSION}-linux-x64.tar.gz"
+print_info "Creating TAR.GZ archive: $OUTPUT_TAR"
+tar -czf "$OUTPUT_TAR" -C "$STAGE_DIR" wso2-integrator
 
-# Prepare spec file with version and release
-# RPM Version field doesn't allow hyphens, so split version and pre-release
-# e.g., 1.0.0-m1 becomes Version: 1.0.0, Release: 0-m1
-# This produces RPM filename: wso2-integrator-1.0.0-0-m1.x86_64.rpm
-if [[ "$VERSION" == *"-"* ]]; then
-    RPM_VERSION=$(echo "$VERSION" | cut -d'-' -f1)
-    PRE_RELEASE=$(echo "$VERSION" | cut -d'-' -f2-)
-    RPM_RELEASE="0-$PRE_RELEASE"
-    print_info "Preparing spec file with version $RPM_VERSION and release $RPM_RELEASE (from $VERSION)..."
+# Verify output
+if [ -f "$OUTPUT_TAR" ]; then
+    print_info "Successfully created: $OUTPUT_TAR"
+    print_info "Package size: $(du -h "$OUTPUT_TAR" | cut -f1)"
 else
-    RPM_VERSION="$VERSION"
-    RPM_RELEASE="1"
-    print_info "Preparing spec file with version $RPM_VERSION and release $RPM_RELEASE..."
+    print_error "Failed to create TAR.GZ package"
+    exit 1
 fi
-sed -e "s/@VERSION@/$RPM_VERSION/g" -e "s/@RELEASE@/$RPM_RELEASE/g" "$WORK_DIR/wso2-integrator.spec" > "$SPECS_DIR/wso2-integrator.spec"
 
-# Build RPM package
-print_info "Building RPM package..."
-rpmbuild --define "_topdir $BUILD_DIR" \
-         --define "_rpmdir $RPMS_DIR" \
-         --define "_builddir $BUILD_DIR/BUILD" \
-         --define "_sourcedir $SOURCES_DIR" \
-         --define "_specdir $SPECS_DIR" \
-         --define "_srcrpmdir $BUILD_DIR/SRPMS" \
-         --define "_buildrootdir $BUILD_DIR/BUILDROOT" \
-         -ba "$SPECS_DIR/wso2-integrator.spec"
-
-# Cleanup package staging directory
-rm -rf "${INTEGRATOR_TARGET:?}"
+# Cleanup
+print_info "Cleaning up staging directories..."
+rm -rf "$STAGE_DIR"
 rm -rf "$EXTRACTION_TARGET"
 
-# Copy built RPM to current directory
-print_info "Copying RPM package to current directory..."
-find "$RPMS_DIR" -name "*.rpm" -exec cp {} "$WORK_DIR/" \;
-
-# List built packages
-print_info "Built RPM packages:"
-ls -la "$WORK_DIR"/*.rpm 2>/dev/null || print_warning "No RPM files found in current directory"
-
-print_info "RPM package build completed successfully!"
-print_info "You can install the package using: sudo rpm -ivh wso2-integrator-*.rpm"
+print_info "TAR.GZ package build completed successfully!"
+print_info "You can extract the package using: tar -xzf $OUTPUT_TAR"
