@@ -63,13 +63,13 @@ if exist ".\WixPackage\payload\Integrator\components\icp\bin\dashboard.bat" (
 )
 
 
-REM Copy balForWI/bal to ballerina bin directory
+REM Copy balForWI/bal to ballerina bin directory and replace version placeholder
 set "BAL_SRC=%~dp0WixPackage\balForWI\bal.bat"
 set "BAL_TARGET=.\WixPackage\payload\Integrator\components\ballerina\bin\bal.bat"
 if exist "%BAL_SRC%" (
     if not exist ".\WixPackage\payload\Integrator\components\ballerina\bin" mkdir ".\WixPackage\payload\Integrator\components\ballerina\bin"
-    copy /Y "%BAL_SRC%" "%BAL_TARGET%"
-    echo Copied bal.bat to ballerina bin directory
+    powershell -nologo -noprofile -command "& { (Get-Content '%BAL_SRC%') -replace '@BALLERINA_VERSION@', '%~2' | Set-Content '%BAL_TARGET%' }"
+    echo Copied bal.bat to ballerina bin directory with version %~2
 ) else (
     echo bal.bat not found at %BAL_SRC%
 )
