@@ -262,7 +262,7 @@ elif [[ $1 == "run" && $2 == *.jar ]]; then
         $JAVA_OPTS \
         -classpath "$BALLERINA_CLASSPATH" \
         -Dballerina.home="$BALLERINA_HOME" \
-        -Dballerina.version=2201.13.0 \
+        -Dballerina.version=@BALLERINA_VERSION@ \
         -Denable.nonblocking=false \
         -Djava.security.egd=file:/dev/./urandom \
         -Dfile.encoding=UTF8 \
@@ -283,7 +283,7 @@ elif [[ $1 == "run" && $2 == --debug=* && $3 == *.jar ]]; then
             $JAVA_OPTS \
             -classpath "$BALLERINA_CLASSPATH" \
             -Dballerina.home="$BALLERINA_HOME" \
-            -Dballerina.version=2201.13.0 \
+            -Dballerina.version=@BALLERINA_VERSION@ \
             -Denable.nonblocking=false \
             -Djava.security.egd=file:/dev/./urandom \
             -Dfile.encoding=UTF8 \
@@ -307,7 +307,7 @@ elif [[ $1 == "run" && $2 == "--debug" && $4 == *.jar ]]; then
             $JAVA_OPTS \
             -classpath "$BALLERINA_CLASSPATH" \
             -Dballerina.home="$BALLERINA_HOME" \
-            -Dballerina.version=2201.13.0 \
+            -Dballerina.version=@BALLERINA_VERSION@ \
             -Denable.nonblocking=false \
             -Djava.security.egd=file:/dev/./urandom \
             -Dfile.encoding=UTF8 \
@@ -328,7 +328,7 @@ else
       $JAVA_OPTS \
       -classpath "$BALLERINA_CLASSPATH" \
       -Dballerina.home="$BALLERINA_HOME" \
-      -Dballerina.version=2201.13.0 \
+      -Dballerina.version=@BALLERINA_VERSION@ \
       -Denable.nonblocking=false \
       -Djava.security.egd=file:/dev/./urandom \
       -Dfile.encoding=UTF8 \

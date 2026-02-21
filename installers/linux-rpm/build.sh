@@ -124,6 +124,7 @@ rm -rf "$BALLERINA_TEMP"
 # Replace bal script with the one from balForWI
 print_info "Replacing bal script with updated version from balForWI"
 cp "$WORK_DIR/balForWI/bal" "$BALLERINA_TARGET/bin/bal"
+sed -i "s/@BALLERINA_VERSION@/$BALLERINA_VERSION/g" "$BALLERINA_TARGET/bin/bal"
 chmod +x "$BALLERINA_TARGET/bin"/*
 
 # Extract ICP zip
