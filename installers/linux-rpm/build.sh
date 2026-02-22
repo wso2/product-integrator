@@ -121,10 +121,9 @@ fi
 rm -rf "$BALLERINA_UNZIPPED_PATH"
 rm -rf "$BALLERINA_TEMP"
 
-# Replace bal script with the one from balscript
-print_info "Replacing bal script with updated version from balscript"
-cp "$WORK_DIR/balscript/bal" "$BALLERINA_TARGET/bin/bal"
-sed -i "s/@BALLERINA_VERSION@/$BALLERINA_VERSION/g" "$BALLERINA_TARGET/bin/bal"
+# Replace bal script with the one from balForWI
+print_info "Replacing bal script with updated version from balForWI"
+cp "$WORK_DIR/balForWI/bal" "$BALLERINA_TARGET/bin/bal"
 chmod +x "$BALLERINA_TARGET/bin"/*
 
 # Extract ICP zip
@@ -149,19 +148,18 @@ tar -czf "$SOURCES_DIR/wso2-integrator-$VERSION.tar.gz" -C package .
 
 # Prepare spec file with version and release
 # RPM Version field doesn't allow hyphens, so split version and pre-release
-# e.g., 1.0.0-m1 becomes Version: 1.0.0, Release: 0-m1
-# This produces RPM filename: wso2-integrator-1.0.0-0-m1.x86_64.rpm
+# e.g., 1.0.0-m1 becomes Version: 1.0.0, Release: m1
+# This produces RPM filename: wso2-integrator-1.0.0-m1.x86_64.rpm
 if [[ "$VERSION" == *"-"* ]]; then
     RPM_VERSION=$(echo "$VERSION" | cut -d'-' -f1)
-    PRE_RELEASE=$(echo "$VERSION" | cut -d'-' -f2-)
-    RPM_RELEASE="0-$PRE_RELEASE"
+    RPM_RELEASE=$(echo "$VERSION" | cut -d'-' -f2-)
     print_info "Preparing spec file with version $RPM_VERSION and release $RPM_RELEASE (from $VERSION)..."
 else
     RPM_VERSION="$VERSION"
     RPM_RELEASE="1"
     print_info "Preparing spec file with version $RPM_VERSION and release $RPM_RELEASE..."
 fi
-sed -e "s/@VERSION@/$RPM_VERSION/g" -e "s/@RELEASE@/$RPM_RELEASE/g" "$WORK_DIR/wso2-integrator.spec" > "$SPECS_DIR/wso2-integrator.spec"
+sed -e "s/@VERSION@/$RPM_VERSION/g" -e "s/@RELEASE@/$RPM_RELEASE/g" -e "s/@FULLVERSION@/$VERSION/g" "$WORK_DIR/wso2-integrator.spec" > "$SPECS_DIR/wso2-integrator.spec"
 
 # Build RPM package
 print_info "Building RPM package..."

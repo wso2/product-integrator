@@ -4,7 +4,7 @@ Release:        @RELEASE@
 Summary:        WSO2 Integrator - Low Code Integration
 License:        MIT
 URL:            https://wso2.com/integration/
-Source0:        %{name}-%{version}.tar.gz
+Source0:        %{name}-@FULLVERSION@.tar.gz
 
 AutoReqProv: no
 

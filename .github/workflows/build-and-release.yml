@@ -304,12 +304,13 @@ jobs:
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           if [ "${{ matrix.arch }}" = "arm64" ]; then
           BALLERINA_ARCH="macos-arm"
           else
           BALLERINA_ARCH="macos"
           fi
-          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-${BALLERINA_ARCH}.zip"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-${BALLERINA_ARCH}.zip"
           ICP_VERSION="${{ github.event.inputs.icp_version }}"
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
@@ -620,11 +621,12 @@ jobs:
           cd ..\..
           $ROOT_DIR = Get-Location
           Write-Host "Root dir: $ROOT_DIR"
-          set BALLERINA_VERSION "${{ github.event.inputs.ballerina_version }}"
-          set BALLERINA_URL "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-windows.zip"
-          set ICP_VERSION "${{ github.event.inputs.icp_version }}"
-          set ICP_URL "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          set INTEGRATOR_VERSION "${{ github.event.inputs.integrator_version }}"
+          $BALLERINA_VERSION = "${{ github.event.inputs.ballerina_version }}"
+          $BALLERINA_VERSION_FILENAME = $BALLERINA_VERSION -replace '-.*$', ''
+          $BALLERINA_URL = "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-windows.zip"
+          $ICP_VERSION = "${{ github.event.inputs.icp_version }}"
+          $ICP_URL = "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          $INTEGRATOR_VERSION = "${{ github.event.inputs.integrator_version }}"
           cd .\installers\windows
           Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
           Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
