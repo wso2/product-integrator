@@ -76,20 +76,23 @@ if exist "%BAL_SRC%" (
 
 
 
+REM Extract numeric-only version for WiX ProductVersion (strip pre-release suffix like -m1, -beta1)
+for /f "delims=" %%v in ('powershell -nologo -noprofile -command "('%~5' -split '-')[0]"') do set "WIX_VERSION=%%v"
+
 REM Update version in Package.wxs
-powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%~5' | Set-Content '.\WixPackage\Package.wxs'"
+powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%WIX_VERSION%' | Set-Content '.\WixPackage\Package.wxs'"
 
 
 dotnet build .\CustomAction1\CustomAction1.csproj -c Release
 if errorlevel 1 (
     echo CustomAction1 build failed
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%~5', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
 dotnet build .\WixPackage\WixPackage.wixproj -p:Platform=x64 -p:Configuration=Release
 if errorlevel 1 (
     echo WixPackage build failed
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%~5', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
 
@@ -104,7 +107,7 @@ if exist "%MSI_ORIG%" (
 )
 
 REM Revert version placeholder in Package.wxs
-powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%~5', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
+powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
 REM Remove payload and resources directories after build
 if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
 endlocal
