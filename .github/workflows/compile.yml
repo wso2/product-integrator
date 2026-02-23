@@ -229,6 +229,7 @@ jobs:
         run: |
           cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-deb/
           cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-rpm/
+          cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-tar/
 
       - name: Build Linux packages - deb
         if: ${{ inputs.build_packed_installers == true}}
@@ -237,9 +238,14 @@ jobs:
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
-          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-linux.zip"
+          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
           ICP_VERSION="${{ github.event.inputs.icp_version }}"
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
+          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
+            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
+          fi
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION_FILENAME}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
           cd ./installers/linux-deb
           wget -O ballerina.zip "$BALLERINA_URL"
@@ -264,9 +270,14 @@ jobs:
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
-          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-linux.zip"
+          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
           ICP_VERSION="${{ github.event.inputs.icp_version }}"
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
+          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
+            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
+          fi
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION_FILENAME}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
           cd ./installers/linux-rpm
           wget -O ballerina.zip "$BALLERINA_URL"
@@ -282,6 +293,36 @@ jobs:
             installers/linux-rpm/*.rpm
           if-no-files-found: error
         
+      - name: Build Linux packages - tar
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          ROOT_DIR=$(pwd)
+          echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
+          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
+          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
+            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
+          fi
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION_FILENAME}.zip"
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          cd ./installers/linux-tar
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          cd ${ROOT_DIR}
+      - name: Upload TAR artifacts
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-TAR
+          path: |
+            installers/linux-tar/*.tar.gz
+          if-no-files-found: error
+        
       - name: cosign-installer
         if: ${{ inputs.build_packed_installers == true}}
         uses: sigstore/cosign-installer@v3.5.0
@@ -289,21 +330,45 @@ jobs:
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          cosign sign-blob installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb --output-certificate installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.pem --output-signature installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sig --yes
-          cosign sign-blob installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm --output-certificate installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.pem --output-signature installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sig --yes
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
+            RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
+            RPM_VERSION="${INTEGRATOR_VERSION%-*}"
+          else
+            RPM_RELEASE="1"
+            RPM_VERSION="$INTEGRATOR_VERSION"
+          fi
+          cosign sign-blob installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb --output-certificate installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.pem --output-signature installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.sig --yes
+          cosign sign-blob installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm --output-certificate installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.pem --output-signature installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.sig --yes
       - name: Verify signature of the deb, rpm installers
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          cosign verify-blob installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb --certificate installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.pem --signature installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-          cosign verify-blob installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm --certificate installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.pem --signature installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
+            RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
+            RPM_VERSION="${INTEGRATOR_VERSION%-*}"
+          else
+            RPM_RELEASE="1"
+            RPM_VERSION="$INTEGRATOR_VERSION"
+          fi
+          cosign verify-blob installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb --certificate installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.pem --signature installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm --certificate installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.pem --signature installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           
       - name: Generate Hashes for deb, rpm installers
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          openssl dgst -sha256 -out installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sha256 installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb
-          openssl dgst -sha256 -out installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sha256 installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
+            RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
+            RPM_VERSION="${INTEGRATOR_VERSION%-*}"
+          else
+            RPM_RELEASE="1"
+            RPM_VERSION="$INTEGRATOR_VERSION"
+          fi
+          openssl dgst -sha256 -out installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.sha256 installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb
+          openssl dgst -sha256 -out installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.sha256 installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm
 
       - name: Upload Signatures and Hashes for deb installer
         if: ${{ inputs.build_packed_installers == true}}

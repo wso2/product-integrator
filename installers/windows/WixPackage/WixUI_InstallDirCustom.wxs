@@ -23,7 +23,6 @@
             <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
 
             <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
-            <!-- <Property Id="BALLERINA_INSTALLATION_WARNING" Value="1" /> -->
 
             <DialogRef Id="BrowseDlg" />
             <DialogRef Id="DiskCostDlg" />
@@ -35,7 +34,6 @@
             <DialogRef Id="ProgressDlg" />
             <DialogRef Id="ResumeDlg" />
             <DialogRef Id="UserExit" />
-            <DialogRef Id="WarningDlg" />
             <Publish Dialog="BrowseDlg" Control="OK" Event="SpawnDialog" Value="InvalidDirDlg"
                 Order="4"
                 Condition="NOT WIXUI_DONTVALIDATEPATH AND WIXUI_INSTALLDIR_VALID&lt;&gt;&quot;1&quot;" />
@@ -60,11 +58,9 @@
             <Publish Dialog="InstallDirDlg" Control="Next" Event="SpawnDialog" Value="InvalidDirDlg"
                 Order="3"
                 Condition="NOT WIXUI_DONTVALIDATEPATH AND WIXUI_INSTALLDIR_VALID&lt;&gt;&quot;1&quot;" />
-            <Publish Dialog="InstallDirDlg" Control="Next" Event="SpawnDialog" Value="WarningDlg"
-                Order="4" Condition="BALLERINA_INSTALLATION_WARNING = &quot;1&quot;" />
             <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg"
-                Order="5"
-                Condition="(WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;) AND BALLERINA_INSTALLATION_WARNING = &quot;0&quot;" />
+                Order="4"
+                Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
 
             <Publish Dialog="InstallDirDlg" Control="ChangeFolder" Property="_BrowseProperty"
                 Value="[WIXUI_INSTALLDIR]" Order="1" />

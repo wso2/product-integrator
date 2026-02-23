@@ -30,18 +30,6 @@ if "%~5"=="" (
 )
 
 
-@REM Copy ballerina.zip to resources directory (will be extracted conditionally during installation)
-echo Copying Ballerina zip to resources directory
-if not exist ".\WixPackage\Resources" mkdir ".\WixPackage\Resources"
-copy "%~1" ".\WixPackage\Resources\ballerina.zip"
-if errorlevel 1 (
-    echo Failed to copy Ballerina zip
-    exit /b 1
-)
-REM Save version to file
-echo %~2 > ".\WixPackage\Resources\ballerina_version.txt"
-echo Ballerina zip copied to resources, will be extracted conditionally during installation
-
 @REM REM Extract integrator.zip
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~3', '.\WixPackage\payload\Integrator'); }"
 if errorlevel 1 (
@@ -49,12 +37,44 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Extract ballerina.zip
+echo Extracting Ballerina to payload
+REM Extract distributions directory (actual Ballerina runtime) to components\ballerina
+REM and move dependencies (JDK) to shared components\dependencies directory
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $extractDir = 'C:\tmp_bal'; Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path $extractDir | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', $extractDir); $unzippedFolder = (Get-ChildItem $extractDir -Directory | Select-Object -First 1).FullName; $ballerinaTarget = '.\WixPackage\payload\Integrator\components\ballerina'; New-Item -ItemType Directory -Force -Path $ballerinaTarget | Out-Null; $distDir = Join-Path $unzippedFolder 'distributions'; if (Test-Path $distDir) { $distFolder = (Get-ChildItem $distDir -Directory | Select-Object -First 1).FullName; if ($distFolder) { Copy-Item -Path \"$distFolder\*\" -Destination $ballerinaTarget -Recurse -Force } }; $dependenciesTarget = '.\WixPackage\payload\Integrator\components\dependencies'; New-Item -ItemType Directory -Force -Path $dependenciesTarget | Out-Null; $depsDir = Join-Path $unzippedFolder 'dependencies'; if (Test-Path $depsDir) { Get-ChildItem $depsDir -Directory | ForEach-Object { Copy-Item -Path $_.FullName -Destination $dependenciesTarget -Recurse -Force } }; Remove-Item -Recurse -Force $extractDir }"
+if errorlevel 1 (
+    echo Ballerina extraction failed
+    exit /b 1
+)
+
 @REM REM Extract ICP.zip
-powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~4', '.\temp_icp'); Move-Item -Path '.\temp_icp\*' -Destination '.\WixPackage\payload\ICP' -Force; Remove-Item -Recurse -Force '.\temp_icp' }"
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~4', '.\temp_icp'); $icpDir = (Get-ChildItem '.\temp_icp' -Directory | Select-Object -First 1).FullName; $icpTarget = '.\WixPackage\payload\Integrator\components\icp'; New-Item -ItemType Directory -Force -Path $icpTarget | Out-Null; Copy-Item -Path \"$icpDir\*\" -Destination $icpTarget -Recurse -Force; Remove-Item -Recurse -Force '.\temp_icp' }"
 if errorlevel 1 (
     echo ICP extraction failed
     exit /b 1
 )
+
+REM Update dashboard.bat to set JAVA_HOME to point to shared JDK (if it exists)
+echo Updating dashboard.bat to point to shared JDK
+if exist ".\WixPackage\payload\Integrator\components\icp\bin\dashboard.bat" (
+    powershell -nologo -noprofile -command "& { $dashboardScript = '.\WixPackage\payload\Integrator\components\icp\bin\dashboard.bat'; $content = Get-Content $dashboardScript -Raw; if ($content -notlike '*Set JAVA_HOME for installers*') { $jdkDir = (Get-ChildItem '.\WixPackage\payload\Integrator\components\dependencies' -Directory -Filter 'jdk-*' -ErrorAction SilentlyContinue | Select-Object -First 1).Name; if ($jdkDir) { $javaHomeCode = \"REM Set JAVA_HOME for installers`r`nset JAVA_HOME=%%~dp0..\\..\\dependencies\\$jdkDir`r`n`r`n\"; $newContent = $content -replace '(:checkJava\r?\n)', ($javaHomeCode + '$1'); Set-Content -Path $dashboardScript -Value $newContent } } }"
+) else (
+    echo Warning: dashboard.bat not found in ICP bin directory
+)
+
+
+REM Copy balscript/bal to ballerina bin directory and replace version placeholder
+set "BAL_SRC=%~dp0WixPackage\balscript\bal.bat"
+set "BAL_TARGET=.\WixPackage\payload\Integrator\components\ballerina\bin\bal.bat"
+if exist "%BAL_SRC%" (
+    if not exist ".\WixPackage\payload\Integrator\components\ballerina\bin" mkdir ".\WixPackage\payload\Integrator\components\ballerina\bin"
+    powershell -nologo -noprofile -command "& { (Get-Content '%BAL_SRC%') -replace '@BALLERINA_VERSION@', '%~2' | Set-Content '%BAL_TARGET%' }"
+    echo Copied bal.bat to ballerina bin directory with version %~2
+) else (
+    echo bal.bat not found at %BAL_SRC%
+)
+
+
 
 REM Update version in Package.wxs
 powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%~5' | Set-Content '.\WixPackage\Package.wxs'"
@@ -87,5 +107,4 @@ REM Revert version placeholder in Package.wxs
 powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%~5', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
 REM Remove payload and resources directories after build
 if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
-if exist ".\WixPackage\Resources" rmdir /s /q ".\WixPackage\Resources"
 endlocal

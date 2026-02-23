@@ -8,31 +8,41 @@
     </ComponentGroup>
 
     <Component Id="IntegratorShortcutComponent" Bitness="always64" Directory="INTEGRATORFOLDER" Guid="{4ab08ec1-a630-40d2-bf90-db740135b414}">
+      <!-- HKCU registry KeyPath satisfies ICE38 for per-user installs -->
+      <RegistryValue Root="HKCU" Key="Software\WSO2\Integrator" Name="ShortcutInstalled"
+        Type="integer" Value="1" KeyPath="yes" />
+
       <File Id="IntegratorExe"
-        Source=".\payload\Integrator\WSO2 Integrator.exe" 
-        KeyPath="yes">
+        Source=".\payload\Integrator\WSO2 Integrator.exe" />
 
-        <!-- Desktop Shortcut -->
-        <Shortcut Id="DesktopShortcut"
-          Directory="DesktopFolder"
-          Name="WSO2 Integrator"
-          Description="Launch WSO2 Integrator"
-          WorkingDirectory="INTEGRATORFOLDER"
-          Icon="Integrator.exe"
-          IconIndex="0"
-          Advertise="yes" />
+      <!-- Desktop Shortcut -->
+      <Shortcut Id="DesktopShortcut"
+        Directory="DesktopFolder"
+        Name="WSO2 Integrator"
+        Description="Launch WSO2 Integrator"
+        Target="[INTEGRATORFOLDER]WSO2 Integrator.exe"
+        WorkingDirectory="INTEGRATORFOLDER"
+        Icon="Integrator.exe"
+        IconIndex="0" />
 
-        <!-- Start Menu Shortcut -->
-        <Shortcut Id="StartMenuShortcut"
-          Directory="ProgramMenuFolder"
-          Name="WSO2 Integrator"
-          Description="Launch WSO2 Integrator"
-          WorkingDirectory="INTEGRATORFOLDER"
-          Icon="Integrator.exe"
-          IconIndex="0"
-          Advertise="yes" />
-      </File>
+      <!-- Start Menu Shortcut -->
+      <Shortcut Id="StartMenuShortcut"
+        Directory="ProgramMenuFolder"
+        Name="WSO2 Integrator"
+        Description="Launch WSO2 Integrator"
+        Target="[INTEGRATORFOLDER]WSO2 Integrator.exe"
+        WorkingDirectory="INTEGRATORFOLDER"
+        Icon="Integrator.exe"
+        IconIndex="0" />
     </Component>
+    <!-- Per-user install cleanup: removes all subdirectories under INTEGRATORFOLDER on uninstall (required by ICE64) -->
+    <Component Id="CleanupFoldersComponent" Directory="INTEGRATORFOLDER"
+      Guid="{e5f2a1b3-9c4d-4e8f-b6a2-7d3c1e0f8a45}">
+      <RegistryValue Root="HKCU" Key="Software\WSO2\Integrator" Name="Installed"
+        Type="integer" Value="1" KeyPath="yes" />
+      <util:RemoveFolderEx Id="RemoveIntegratorFolder" Property="INTEGRATORFOLDER" On="uninstall" />
+    </Component>
+
     <Icon Id="Integrator.exe" SourceFile=".\resources\wso2.ico" />
     <Property Id="ARPPRODUCTICON" Value="Integrator.exe" />
   </Fragment>
