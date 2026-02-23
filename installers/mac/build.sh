@@ -117,27 +117,6 @@ mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
 
-# Update dashboard.sh to set JAVA_HOME to point to shared JDK
-print_info "Updating dashboard.sh to point to shared JDK"
-DASHBOARD_SCRIPT="$ICP_TARGET/bin/dashboard.sh"
-cat > "$DASHBOARD_SCRIPT.tmp" << 'DASHBOARD_EOF'
-# Set JAVA_HOME for installers
-SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
-# Find JDK folder dynamically in the shared dependencies directory
-for jdk in "$SCRIPT_DIR"/../../dependencies/jdk-*; do
-    if [ -d "$jdk" ]; then
-        export JAVA_HOME="$jdk"
-        break
-    fi
-done
-DASHBOARD_EOF
-# Insert the Java home setup after the PRG and PRGDIR definitions (line 18-19)
-head -n 19 "$DASHBOARD_SCRIPT" > "$DASHBOARD_SCRIPT.new"
-cat "$DASHBOARD_SCRIPT.tmp" >> "$DASHBOARD_SCRIPT.new"
-tail -n +20 "$DASHBOARD_SCRIPT" >> "$DASHBOARD_SCRIPT.new"
-mv "$DASHBOARD_SCRIPT.new" "$DASHBOARD_SCRIPT"
-rm "$DASHBOARD_SCRIPT.tmp"
-chmod +x "$DASHBOARD_SCRIPT"
 
 
 # Build the component package
