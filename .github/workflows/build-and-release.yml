@@ -42,7 +42,15 @@ on:
       integrator_version:
         description: 'Specify Integrator version to use'
         required: false
-        type: string  
+        type: string
+      delivery_mode:
+        description: 'Select delivery mode: archive artifacts as workflow artifacts or publish as a GitHub Release'
+        required: true
+        default: 'archive'
+        type: choice
+        options:
+          - archive
+          - github-release
 
 permissions:
   id-token: write
@@ -700,7 +708,7 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     needs: [compile, build-macos, build-windows]
-    if: always() && (needs.compile.result == 'success') && (github.event.inputs.build_packed_installers == 'false')
+    if: always() && (needs.compile.result == 'success') && (github.event.inputs.build_packed_installers == 'false') && (github.event.inputs.delivery_mode == 'archive')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -739,3 +747,92 @@ jobs:
           name: wso2-integrator-release
           path: release-artifacts/*
           if-no-files-found: warn
+
+  publish-github-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [compile, build-macos, build-windows]
+    if: |
+      always() &&
+      (needs.compile.result == 'success') &&
+      (github.event.inputs.delivery_mode == 'github-release') &&
+      (github.event.inputs.build_packed_installers == 'true')
+    steps:
+      - name: Download Linux DEB artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-DEB
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Signatures and Hashes (DEB)
+        uses: actions/download-artifact@v4
+        with:
+          name: Signatures-and-Hashes-DEB
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Linux RPM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-RPM
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Signatures and Hashes (RPM)
+        uses: actions/download-artifact@v4
+        with:
+          name: Signatures-and-Hashes-RPM
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Linux TAR artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-TAR
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download macOS PKG artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-Darwin-arm64
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Signatures and Hashes (PKG)
+        uses: actions/download-artifact@v4
+        with:
+          name: Signatures-and-Hashes-PKG
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Windows MSI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-Windows
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Signatures and Hashes (MSI)
+        uses: actions/download-artifact@v4
+        with:
+          name: Signatures-and-Hashes-MSI
+          path: release-files/
+        continue-on-error: true
+
+      - name: List release files
+        run: |
+          echo "Files to be released under tag v${{ github.event.inputs.integrator_version }}:"
+          ls -la release-files/ || echo "No release files found"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.integrator_version }}
+          name: WSO2 Integrator v${{ github.event.inputs.integrator_version }}
+          draft: false
+          prerelease: false
+          files: release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
