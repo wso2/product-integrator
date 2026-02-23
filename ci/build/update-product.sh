@@ -97,9 +97,21 @@ echo '{
       }
 	  ],
     "runtimeEnv": {
-      "WSO2_INTEGRATOR_RUNTIME": "1",
-      "BALLERINA_HOME": "${APP_ROOT}/Contents/components/ballerina",
-      "PATH": "${APP_ROOT}/Contents/components/ballerina/bin:$PATH"
+      "common": {
+        "WSO2_INTEGRATOR_RUNTIME": "1"
+      },
+      "darwin": {
+        "BALLERINA_HOME": "${APP_ROOT}/Contents/components/ballerina",
+        "PATH": "${APP_ROOT}/Contents/components/ballerina/bin:$PATH"
+      },
+      "linux": {
+        "BALLERINA_HOME": "${APP_ROOT}/components/ballerina",
+        "PATH": "${APP_ROOT}/components/ballerina/bin:$PATH"
+      },
+      "win32": {
+        "BALLERINA_HOME": "${APP_ROOT}\\\\components\\\\ballerina",
+        "PATH": "${APP_ROOT}\\\\components\\\\ballerina\\\\bin;%PATH%"
+      }  
     }
 }
 ' > lib/vscode/product.json

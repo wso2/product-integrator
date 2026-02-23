@@ -2,7 +2,7 @@ Index: product-integrator/lib/vscode/src/main.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/main.ts
 +++ product-integrator/lib/vscode/src/main.ts
-@@ -201,6 +201,150 @@ async function onReady() {
+@@ -201,6 +201,165 @@ async function onReady() {
   * Main startup routine
   */
  async function startup(codeCachePath: string | undefined, nlsConfig: INLSConfiguration): Promise<void> {
@@ -23,6 +23,21 @@ Index: product-integrator/lib/vscode/src/main.ts
 +
 +		const productMeta = product as unknown as IProductMeta;
 +		const runtimeEnv = productMeta.runtimeEnv;
++		// Support OS-specific runtimeEnv shape. runtimeEnv can be either a flat
++		// map of env vars (legacy) or an object containing a `common`/per-OS
++		// maps. Merge `common` with the current platform's map when present.
++		let resolvedRuntimeEnv: Record<string, unknown> | undefined = undefined;
++		if (runtimeEnv && typeof runtimeEnv === 'object') {
++			const osKeys = new Set(['darwin', 'linux', 'win32', 'common', 'default']);
++			const containsOsKeys = Object.keys(runtimeEnv).some(k => osKeys.has(k));
++			if (containsOsKeys) {
++				const common = (runtimeEnv['common'] && typeof runtimeEnv['common'] === 'object') ? runtimeEnv['common'] as Record<string, unknown> : {};
++				const platformMap = (runtimeEnv[process.platform] && typeof runtimeEnv[process.platform] === 'object') ? runtimeEnv[process.platform] as Record<string, unknown> : {};
++				resolvedRuntimeEnv = { ...(common as Record<string, unknown>), ...(platformMap as Record<string, unknown>) };
++			} else {
++				resolvedRuntimeEnv = runtimeEnv as Record<string, unknown>;
++			}
++		}
 +		// Resolve the installed application directory across platforms. On macOS
 +		// packaged apps live inside a `.app` bundle; on Linux/Windows the
 +		// resources are under `<install-dir>/resources/app`. Prefer Electron's
@@ -77,7 +92,7 @@ Index: product-integrator/lib/vscode/src/main.ts
 +
 +		const appRoot = resolveInstalledDir();
 +
-+		if (runtimeEnv && typeof runtimeEnv === 'object') {
++		if (resolvedRuntimeEnv && typeof resolvedRuntimeEnv === 'object') {
 +			// remove existing envs which contains "ballerina" in the key to avoid conflict with the new envs from product.json
 +			for (const key of Object.keys(process.env)) {
 +				if (key.toLowerCase().includes('ballerina')) {
@@ -92,7 +107,7 @@ Index: product-integrator/lib/vscode/src/main.ts
 +				process.env[pathKey] = newPath;
 +			}
 +
-+			for (const [key, value] of Object.entries(runtimeEnv)) {
++			for (const [key, value] of Object.entries(resolvedRuntimeEnv)) {
 +				if (typeof value === 'string') {
 +					if ((key === 'PATH' || key === 'Path') && !runtimePathPrefix) {
 +						const pathTokenRegex = /\$\{?PATH}?/i;
