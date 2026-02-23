@@ -330,21 +330,45 @@ jobs:
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          cosign sign-blob installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb --output-certificate installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.pem --output-signature installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sig --yes
-          cosign sign-blob installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm --output-certificate installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.pem --output-signature installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sig --yes
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
+            RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
+            RPM_VERSION="${INTEGRATOR_VERSION%-*}"
+          else
+            RPM_RELEASE="1"
+            RPM_VERSION="$INTEGRATOR_VERSION"
+          fi
+          cosign sign-blob installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb --output-certificate installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.pem --output-signature installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.sig --yes
+          cosign sign-blob installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm --output-certificate installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.pem --output-signature installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.sig --yes
       - name: Verify signature of the deb, rpm installers
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          cosign verify-blob installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb --certificate installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.pem --signature installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-          cosign verify-blob installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm --certificate installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.pem --signature installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
+            RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
+            RPM_VERSION="${INTEGRATOR_VERSION%-*}"
+          else
+            RPM_RELEASE="1"
+            RPM_VERSION="$INTEGRATOR_VERSION"
+          fi
+          cosign verify-blob installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb --certificate installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.pem --signature installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm --certificate installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.pem --signature installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           
       - name: Generate Hashes for deb, rpm installers
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          openssl dgst -sha256 -out installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sha256 installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb
-          openssl dgst -sha256 -out installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sha256 installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
+            RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
+            RPM_VERSION="${INTEGRATOR_VERSION%-*}"
+          else
+            RPM_RELEASE="1"
+            RPM_VERSION="$INTEGRATOR_VERSION"
+          fi
+          openssl dgst -sha256 -out installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.sha256 installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb
+          openssl dgst -sha256 -out installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.sha256 installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm
 
       - name: Upload Signatures and Hashes for deb installer
         if: ${{ inputs.build_packed_installers == true}}
