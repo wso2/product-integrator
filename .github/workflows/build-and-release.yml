@@ -312,7 +312,11 @@ jobs:
           fi
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-${BALLERINA_ARCH}.zip"
           ICP_VERSION="${{ github.event.inputs.icp_version }}"
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
+          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
+            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
+          fi
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION_FILENAME}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
           cd ./installers/mac
           wget -O ballerina.zip "$BALLERINA_URL"
@@ -625,7 +629,11 @@ jobs:
           $BALLERINA_VERSION_FILENAME = $BALLERINA_VERSION -replace '-.*$', ''
           $BALLERINA_URL = "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-windows.zip"
           $ICP_VERSION = "${{ github.event.inputs.icp_version }}"
-          $ICP_URL = "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          $ICP_VERSION_FILENAME = $ICP_VERSION -replace '-.*$', ''
+          if ($ICP_VERSION -ne $ICP_VERSION_FILENAME) {
+            $ICP_VERSION_FILENAME = "${ICP_VERSION_FILENAME}-SNAPSHOT"
+          }
+          $ICP_URL = "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION_FILENAME}.zip"
           $INTEGRATOR_VERSION = "${{ github.event.inputs.integrator_version }}"
           cd .\installers\windows
           Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
