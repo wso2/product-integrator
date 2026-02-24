@@ -69,4 +69,4 @@ The survey is available at: [WSO2 Open Source Software Communication Survey
 ](https://forms.gle/h5q4M3K7vyXba3bK6)
 
 --------------------------------------------------------------------------------
-(c) Copyright 2012 - 2025 WSO2 Inc.
+(c) Copyright 2012 - 2025 WSO2 LLC.
