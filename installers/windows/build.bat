@@ -54,22 +54,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Modify icp.sh to use the JDK from shared dependencies directory
-echo Modifying icp.sh to use JDK from dependencies
-if exist ".\WixPackage\payload\Integrator\components\icp\bin\icp.sh" (
-    powershell -nologo -noprofile -command "& { $icpScript = '.\WixPackage\payload\Integrator\components\icp\bin\icp.sh'; $jdkDir = (Get-ChildItem '.\WixPackage\payload\Integrator\components\dependencies' -Directory -ErrorAction SilentlyContinue | Select-Object -First 1).Name; if ($jdkDir) { $content = Get-Content $icpScript -Raw; $newContent = $content -replace '\bjava\b', \"`\"`\$SCRIPT_DIR`\"/../../dependencies/$jdkDir/bin/java\"; Set-Content -Path $icpScript -Value $newContent -NoNewline; Write-Host \"Updated icp.sh to use JDK: $jdkDir\" } else { Write-Host 'Warning: JDK folder not found in dependencies' } }"
+REM Modify icp.bat to use the JDK from shared dependencies directory
+echo Modifying icp.bat to use JDK from dependencies
+if exist ".\WixPackage\payload\Integrator\components\icp\bin\icp.bat" (
+    powershell -nologo -noprofile -command "& { $icpScript = '.\WixPackage\payload\Integrator\components\icp\bin\icp.bat'; $jdkDir = (Get-ChildItem '.\WixPackage\payload\Integrator\components\dependencies' -Directory -ErrorAction SilentlyContinue | Select-Object -First 1).Name; if ($jdkDir) { $content = Get-Content $icpScript -Raw; $javaReplacement = '!SCRIPT_DIR!../../dependencies/' + $jdkDir + '/bin/java'; $newContent = $content -replace '\bjava\b', $javaReplacement; Set-Content -Path $icpScript -Value $newContent -NoNewline; Write-Host \"Updated icp.bat to use JDK: $jdkDir\" } else { Write-Host 'Warning: JDK folder not found in dependencies' } }"
 ) else (
-    echo Warning: icp.sh not found in ICP bin directory
+    echo Warning: icp.bat not found in ICP bin directory
 )
-
-REM Update dashboard.bat to set JAVA_HOME to point to shared JDK (if it exists)
-echo Updating dashboard.bat to point to shared JDK
-if exist ".\WixPackage\payload\Integrator\components\icp\bin\dashboard.bat" (
-    powershell -nologo -noprofile -command "& { $dashboardScript = '.\WixPackage\payload\Integrator\components\icp\bin\dashboard.bat'; $content = Get-Content $dashboardScript -Raw; if ($content -notlike '*Set JAVA_HOME for installers*') { $jdkDir = (Get-ChildItem '.\WixPackage\payload\Integrator\components\dependencies' -Directory -Filter 'jdk-*' -ErrorAction SilentlyContinue | Select-Object -First 1).Name; if ($jdkDir) { $javaHomeCode = \"REM Set JAVA_HOME for installers`r`nset JAVA_HOME=%%~dp0..\\..\\dependencies\\$jdkDir`r`n`r`n\"; $newContent = $content -replace '(:checkJava\r?\n)', ($javaHomeCode + '$1'); Set-Content -Path $dashboardScript -Value $newContent } } }"
-) else (
-    echo Warning: dashboard.bat not found in ICP bin directory
-)
-
 
 REM Copy balscript/bal to ballerina bin directory and replace version placeholder
 set "BAL_SRC=%~dp0WixPackage\balscript\bal.bat"
