@@ -18,6 +18,7 @@
 
 import { assign, createMachine, interpret } from 'xstate';
 import * as vscode from 'vscode';
+import { findBallerinaExtension } from './utils/ballerinaExtension';
 import { CONTEXT_KEYS, ViewType } from '@wso2/wi-core';
 import { ext } from './extensionVariables';
 import { fetchProjectInfo, ProjectInfo } from './bi/utils';
@@ -217,7 +218,7 @@ async function detectProjectType(): Promise<{
 
     // Check for BI/Ballerina project
     const projectInfo: ProjectInfo = fetchProjectInfo();
-    const ballerinaExt = vscode.extensions.getExtension('wso2.ballerina');
+    const ballerinaExt = findBallerinaExtension();
 
     if (projectInfo.isBallerina && ballerinaExt) {
         ext.log('Detected BI/Ballerina project');

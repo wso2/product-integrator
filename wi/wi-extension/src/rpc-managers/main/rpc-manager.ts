@@ -45,12 +45,11 @@ import {
     ShowErrorMessageRequest,
     COMMANDS,
     WebviewContext,
-    Platform,
-    BISampleItem,
     FetchSamplesRequest,
     SemanticVersion
 } from "@wso2/wi-core";
-import { commands, window, workspace, MarkdownString, extensions } from "vscode";
+import { commands, window, workspace, MarkdownString } from "vscode";
+import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName } from "./utils";
 import * as fs from "fs";
 import * as path from "path";
@@ -280,28 +279,20 @@ export class MainRpcManager implements WIVisualizerAPI {
         handleOpenFile(projectUri, params.zipFileName, url);
     }
 
-    private getLangClient() {
-        const ballerinaExt = extensions.getExtension('wso2.ballerina');
-        if (!ballerinaExt) {
-            throw new Error('Ballerina extension is not installed');
-        }
-        if (!ballerinaExt.isActive) {
-            throw new Error('Ballerina extension is not activated yet');
-        }
+    private async getLangClient() {
+        const ballerinaExt = await getActiveBallerinaExtension();
         const langClient = ballerinaExt.exports.ballerinaExtInstance.langClient;
         return langClient as any;
     }
 
     async isSupportedSLVersion(params: SemanticVersion): Promise<boolean> {
-        const ballerinaExt = extensions.getExtension('wso2.ballerina');
-        if (!ballerinaExt) {
-            throw new Error('Ballerina extension is not installed');
-        }
+        const ballerinaExt = await getActiveBallerinaExtension();
         return isSupportedSLVersionUtil(ballerinaExt.exports.ballerinaExtInstance, params);
     }
 
     async getMigrationTools(): Promise<GetMigrationToolsResponse> {
-        return this.getLangClient().getMigrationTools();
+        const langClient = await this.getLangClient();
+        return langClient.getMigrationTools();
     }
 
     async createBIProject(params: BIProjectRequest): Promise<void> {
@@ -350,7 +341,7 @@ export class MainRpcManager implements WIVisualizerAPI {
             sourcePath: params.sourcePath,
             parameters: params.parameters,
         };
-        const langClient = this.getLangClient();
+        const langClient = await this.getLangClient();
         langClient.registerMigrationToolCallbacks();
         switch (params.commandName) {
             case "migrate-tibco":

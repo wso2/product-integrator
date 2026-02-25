@@ -21,6 +21,7 @@ import { exec } from "child_process";
 import { debug } from "./ballerinaLogger";
 import { RPCLayer } from "../../RPCLayer";
 import * as vscode from "vscode";
+import { getBallerinaExtension } from "../../utils/ballerinaExtension";
 
 const PROGRESS_COMPLETE = 100;
 
@@ -52,10 +53,11 @@ export async function pullMigrationTool(migrationToolName: string, version: stri
     }
 
     // Get Ballerina extension instance
-    const ballerinaExt = vscode.extensions.getExtension('wso2.ballerina');
-    if (!ballerinaExt) {
-        const errorMessage = "Ballerina extension not found";
-        return Promise.reject(new Error(errorMessage));
+    let ballerinaExt: any;
+    try {
+        ballerinaExt = getBallerinaExtension();
+    } catch (err) {
+        return Promise.reject(err instanceof Error ? err : new Error(String(err)));
     }
 
     const ballerinaCmd = ballerinaExt.exports.ballerinaExtInstance.getBallerinaCmd();
