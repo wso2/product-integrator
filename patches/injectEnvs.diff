@@ -2,7 +2,7 @@ Index: product-integrator/lib/vscode/src/main.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/main.ts
 +++ product-integrator/lib/vscode/src/main.ts
-@@ -201,6 +201,165 @@ async function onReady() {
+@@ -201,6 +201,176 @@ async function onReady() {
   * Main startup routine
   */
  async function startup(codeCachePath: string | undefined, nlsConfig: INLSConfiguration): Promise<void> {
@@ -56,6 +56,16 @@ Index: product-integrator/lib/vscode/src/main.ts
 +						}
 +					}
 +
++					// Linux/Windows packaged installs usually place the executable at
++					// <install-dir>/bin/<app>. In that case APP_ROOT should be
++					// <install-dir> (not appPath-derived paths).
++					if (process.platform === 'linux' || process.platform === 'win32') {
++						const execDir = path.dirname(execPath);
++						if (path.basename(execDir).toLowerCase() === 'bin') {
++							return path.normalize(path.resolve(execDir, '..'));
++						}
++					}
++
 +					// Try to find a product-named directory inside execPath (Windows/Linux installers)
 +					const productCandidates = new Set<string>();
 +					if (productMeta.win32DirName) { productCandidates.add(productMeta.win32DirName.toLowerCase()); }
@@ -64,7 +74,8 @@ Index: product-integrator/lib/vscode/src/main.ts
 +					if (productMeta.nameLong) { productCandidates.add(productMeta.nameLong.toLowerCase()); }
 +					if (productMeta.dataFolderName) { productCandidates.add(productMeta.dataFolderName.toLowerCase()); }
 +
-+					for (let i = parts.length - 1; i >= 0; i--) {
++					// Skip the executable filename segment to avoid returning a file path.
++					for (let i = parts.length - 2; i >= 0; i--) {
 +						const partLower = parts[i].toLowerCase();
 +						if (productCandidates.has(partLower)) {
 +							return parts.slice(0, i + 1).join(path.sep);
