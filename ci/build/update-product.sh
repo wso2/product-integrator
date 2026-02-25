@@ -110,7 +110,7 @@ echo '{
       },
       "win32": {
         "BALLERINA_HOME": "${APP_ROOT}\\\\components\\\\ballerina",
-        "PATH": "${APP_ROOT}\\\\components\\\\ballerina\\\\bin;%PATH%"
+        "PATH": "${APP_ROOT}\\\\components\\\\ballerina\\\\bin;$PATH"
       }  
     }
 }
