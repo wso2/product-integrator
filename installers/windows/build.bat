@@ -54,6 +54,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Modify icp.sh to use the JDK from shared dependencies directory
+echo Modifying icp.sh to use JDK from dependencies
+if exist ".\WixPackage\payload\Integrator\components\icp\bin\icp.sh" (
+    powershell -nologo -noprofile -command "& { $icpScript = '.\WixPackage\payload\Integrator\components\icp\bin\icp.sh'; $jdkDir = (Get-ChildItem '.\WixPackage\payload\Integrator\components\dependencies' -Directory -ErrorAction SilentlyContinue | Select-Object -First 1).Name; if ($jdkDir) { $content = Get-Content $icpScript -Raw; $newContent = $content -replace '\bjava\b', \"`\"`\$SCRIPT_DIR`\"/../../dependencies/$jdkDir/bin/java\"; Set-Content -Path $icpScript -Value $newContent -NoNewline; Write-Host \"Updated icp.sh to use JDK: $jdkDir\" } else { Write-Host 'Warning: JDK folder not found in dependencies' } }"
+) else (
+    echo Warning: icp.sh not found in ICP bin directory
+)
+
 REM Update dashboard.bat to set JAVA_HOME to point to shared JDK (if it exists)
 echo Updating dashboard.bat to point to shared JDK
 if exist ".\WixPackage\payload\Integrator\components\icp\bin\dashboard.bat" (
@@ -76,20 +84,23 @@ if exist "%BAL_SRC%" (
 
 
 
+REM Extract numeric-only version for WiX ProductVersion (strip pre-release suffix like -m1, -beta1)
+for /f "delims=" %%v in ('powershell -nologo -noprofile -command "('%~5' -split '-')[0]"') do set "WIX_VERSION=%%v"
+
 REM Update version in Package.wxs
-powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%~5' | Set-Content '.\WixPackage\Package.wxs'"
+powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%WIX_VERSION%' | Set-Content '.\WixPackage\Package.wxs'"
 
 
 dotnet build .\CustomAction1\CustomAction1.csproj -c Release
 if errorlevel 1 (
     echo CustomAction1 build failed
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%~5', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
 dotnet build .\WixPackage\WixPackage.wixproj -p:Platform=x64 -p:Configuration=Release
 if errorlevel 1 (
     echo WixPackage build failed
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%~5', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
 
@@ -104,7 +115,7 @@ if exist "%MSI_ORIG%" (
 )
 
 REM Revert version placeholder in Package.wxs
-powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%~5', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
+powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
 REM Remove payload and resources directories after build
 if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
 endlocal

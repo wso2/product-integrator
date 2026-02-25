@@ -105,6 +105,7 @@ mkdir -p "$DEPENDENCIES_DIR"
 if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
     for jdk_folder in "$BALLERINA_UNZIPPED_PATH/dependencies"/*; do
         if [ -d "$jdk_folder" ]; then
+            JDK_FOLDER=$(basename "$jdk_folder")
             cp -r "$jdk_folder" "$DEPENDENCIES_DIR/"
         fi
     done
@@ -128,6 +129,13 @@ ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
 mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
+
+# Modify icp.sh to use the JDK from shared dependencies directory
+ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
+if [ -f "$ICP_SCRIPT" ]; then
+    print_info "Modifying icp.sh to use JDK from dependencies ($JDK_FOLDER)"
+    sed -i "s|java|\"\$SCRIPT_DIR\"/../../dependencies/$JDK_FOLDER/bin/java|g" "$ICP_SCRIPT"
+fi
 
 # Set executable permissions
 print_info "Setting executable permissions..."

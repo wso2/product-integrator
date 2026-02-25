@@ -245,7 +245,7 @@ jobs:
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION_FILENAME}.zip"
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
           cd ./installers/linux-deb
           wget -O ballerina.zip "$BALLERINA_URL"
@@ -277,7 +277,7 @@ jobs:
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION_FILENAME}.zip"
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
           cd ./installers/linux-rpm
           wget -O ballerina.zip "$BALLERINA_URL"
@@ -307,7 +307,7 @@ jobs:
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION_FILENAME}.zip"
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
           cd ./installers/linux-tar
           wget -O ballerina.zip "$BALLERINA_URL"
