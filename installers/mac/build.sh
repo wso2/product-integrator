@@ -95,6 +95,7 @@ if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
     done
 fi
 
+
 rm -rf "$BALLERINA_UNZIPPED_PATH"
 rm -rf "$BALLERINA_TEMP"
 
@@ -116,6 +117,15 @@ ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
 mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
+
+# Modify icp.sh to use the JDK from shared dependencies directory
+ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
+if [ -f "$ICP_SCRIPT" ]; then
+    print_info "Modifying icp.sh to use JDK from dependencies ($JDK_FOLDER)"
+    # Replace all java instances with the full path to the JDK java
+    sed -i '' "s|java|\"\$SCRIPT_DIR\"/../../dependencies/$JDK_FOLDER/bin/java|g" "$ICP_SCRIPT"
+fi
+
 
 
 
