@@ -1,8 +1,55 @@
 <!DOCTYPE html>
-<html>
-<head><title>Welcome</title></head>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Welcome</title>
+	<style>
+		body {
+			font-family: 'Segoe UI', Arial, sans-serif;
+			background: #2d3436;
+			color: #ecf0f1;
+			margin: 0;
+			padding: 0;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			min-height: 100vh;
+		}
+		.container {
+			background: #34495e;
+			border-radius: 12px;
+			box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+			padding: 40px 32px 32px 32px;
+			max-width: 420px;
+			text-align: center;
+		}
+		h1 {
+			color: #3498db;
+			margin-bottom: 16px;
+			font-size: 2.2em;
+		}
+		p {
+			font-size: 1.1em;
+			margin-bottom: 0;
+			color: #ecf0f1;
+		}
+		.logo {
+			width: 64px;
+			height: 64px;
+			margin-bottom: 18px;
+		}
+	</style>
+</head>
 <body>
-<h1>Welcome to WSO2 Integrator</h1>
-<p>This installer will install WSO2 Integrator to your Applications folder.</p>
+	<div class="container">
+		<!-- Optional: Add a logo image here -->
+		<!-- <img src="logo.png" alt="WSO2 Logo" class="logo"> -->
+		<h1>Welcome to WSO2 Integrator</h1>
+		<p>Thank you for choosing WSO2 Integrator.<br>
+		This installer will guide you through the installation process and set up WSO2 Integrator in your <b>Applications</b> folder.<br><br>
+		Click <b>Continue</b> to proceed.</p>
+	</div>
 </body>
 </html>
