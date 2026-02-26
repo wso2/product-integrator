@@ -51,7 +51,7 @@ interface MachineContext {
  */
 function getDefaultIntegratorMode(): ProjectType {
     const configValue = vscode.workspace.getConfiguration("wso2-integrator").get<string>("integrator.defaultRuntime");
-    
+
     // Map string config values to ProjectType enum
     switch (configValue) {
         case 'WSO2: BI':
@@ -97,6 +97,7 @@ const stateMachine = createMachine<MachineContext>({
             }
         },
         activateExtensions: {
+            entry: "focusIntegratorViewIfWorkspaceOpen",
             invoke: {
                 src: activateExtensionsBasedOnProjectType,
                 onDone: {
@@ -163,6 +164,17 @@ const stateMachine = createMachine<MachineContext>({
                 vscode.commands.executeCommand('setContext', 'WI.projectType', 'mi');
             }
         },
+        focusIntegratorViewIfWorkspaceOpen: () => {
+            if (!vscode.workspace.workspaceFolders?.length) {
+                ext.log('Skipping Integrator explorer focus: no workspace/folder open');
+                return;
+            }
+
+            void vscode.commands.executeCommand('wso2-integrator.explorer.focus').then(
+                () => ext.log('Focused WSO2 Integrator explorer view before extension activation'),
+                (error) => ext.logError('Failed to focus WSO2 Integrator explorer view before extension activation', error)
+            );
+        },
         showWelcomeScreen: (context, event) => {
             if (context.webviewManager) {
                 context.webviewManager.showWelcome();
@@ -183,6 +195,21 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
         // Activate only MI extension for MI projects
         ext.log('Initializing MI extension for MI project');
         await context.extensionAPIs.initialize();
+    } else {
+        // if a folder/workspace is open but we couldn't detect the project type, we should show an popup warning the user that the extension couldn't detect the project type
+        if (vscode.workspace.workspaceFolders?.length) {
+            ext.log('Workspace is open but project type is unknown');
+            vscode.window.showWarningMessage('We couldn\'t detect the project type. Please ensure you have a valid WSO2 Ballerina or Micro Integrator project open.', { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
+                if (selection === 'Go to Welcome Screen') {
+                    // close workspace
+                    vscode.commands.executeCommand('workbench.action.closeFolder');
+                } else if (selection === 'Open another folder') {
+                    vscode.commands.executeCommand('workbench.action.files.openFolder');
+                }
+            });
+        } else {
+            ext.log('No workspace open');
+        }
     }
 
     // Set context keys for available extensions
@@ -242,13 +269,13 @@ export const StateMachine = {
     initialize: () => {
         ext.log('Starting state machine');
         stateService.start();
-        
+
         // Listen for configuration changes
         const configChangeDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
             if (event.affectsConfiguration('wso2-integrator.integrator.defaultRuntime')) {
                 const newMode = getDefaultIntegratorMode();
                 ext.log(`Configuration changed: defaultRuntime = ${newMode}`);
-                
+
                 // Update the state machine context
                 stateService.send({
                     type: 'UPDATE_MODE',
@@ -256,20 +283,20 @@ export const StateMachine = {
                 });
             }
         });
-        
+
         // Register disposable
         ext.context.subscriptions.push(configChangeDisposable);
     },
     getContext: () => stateService.getSnapshot().context,
     openWebview: (view: ViewType) => {
         ext.log(`Opening webview with view: ${view}`);
-        
+
         // Update the current view in state machine
         stateService.send({
             type: 'UPDATE_VIEW',
             view: view
         });
-        
+
         // Get the webview manager from context and show the view
         const context = stateService.getSnapshot().context;
         if (context.webviewManager) {
