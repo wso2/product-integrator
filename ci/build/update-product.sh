@@ -64,7 +64,7 @@ echo '{
 	  "builtInExtensions": [
       {
         "name": "wso2.wso2-platform",
-        "version": "latest"
+        "version": "1.0.22"
       },
       {
         "name": "redhat.vscode-yaml",
@@ -80,7 +80,7 @@ echo '{
       },
       {
         "name": "wso2.ballerina",
-        "version": "5.9.26022015"
+        "version": "5.9.26022514"
       },
       {
         "name": "wso2.ballerina-integrator",
