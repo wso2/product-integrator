@@ -320,7 +320,7 @@ jobs:
         with:
           name: Product-Integrator-TAR
           path: |
-            installers/linux-tar/*.tar.gz
+            installers/linux-tar/wso2-integrator-*.tar.gz
           if-no-files-found: error
         
       - name: cosign-installer
