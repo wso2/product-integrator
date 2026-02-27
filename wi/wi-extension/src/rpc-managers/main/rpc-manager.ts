@@ -203,7 +203,8 @@ export class MainRpcManager implements WIVisualizerAPI {
                     name: params.name,
                     path: path.join(params.directory, params.name),
                     scope: "user",
-                    open: params.open
+                    open: params.open,
+                    miVersion: params.miVersion
                 };
 
                 const result = await commands.executeCommand("MI.project-explorer.create-project", miCommandParams);
