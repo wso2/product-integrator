@@ -148,9 +148,7 @@ export class MainRpcManager implements WIVisualizerAPI {
 
     async getSupportedMIVersionsHigherThan(version: string): Promise<GetSupportedMIVersionsResponse> {
         return new Promise(async (resolve) => {
-            // TODO: Implement the actual function from ballerina-core
-            // For now, return a placeholder
-            const versions = ["4.2.0", "4.1.0", "4.0.0"];
+            const versions = ["4.6.0", "4.5.0", "4.4.0", "4.3.0", "4.2.0", "4.1.0", "4.0.0"];
             resolve({ versions });
         });
     }
