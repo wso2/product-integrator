@@ -5,7 +5,7 @@ set -euo pipefail
 VERSION=${1:-"1.0.0"}
 
 echo '{
-    "version": "'$VERSION'",
+    "commit": "'$VERSION'",
     "quality": "stable",
     "nameShort": "WSO2 Integrator",
     "nameLong": "WSO2 Integrator",
