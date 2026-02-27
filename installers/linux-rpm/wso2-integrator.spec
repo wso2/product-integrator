@@ -1,10 +1,10 @@
 Name:           wso2-integrator
 Version:        @VERSION@
-Release:        1
+Release:        @RELEASE@
 Summary:        WSO2 Integrator - Low Code Integration
 License:        MIT
 URL:            https://wso2.com/integration/
-Source0:        %{name}-%{version}.tar.gz
+Source0:        %{name}-@FULLVERSION@.tar.gz
 
 AutoReqProv: no
 
@@ -24,20 +24,15 @@ rm -rf %{buildroot}
 
 # Create directory structure
 mkdir -p %{buildroot}/usr/share/wso2-integrator
-mkdir -p %{buildroot}/usr/lib64/ballerina
-mkdir -p %{buildroot}/usr/lib64/wso2/icp
 mkdir -p %{buildroot}/usr/share/applications
 mkdir -p %{buildroot}/usr/share/appdata
 mkdir -p %{buildroot}/usr/share/bash-completion/completions
-mkdir -p %{buildroot}/usr/share/zsh/vendor-completions
 mkdir -p %{buildroot}/usr/share/mime/packages
 mkdir -p %{buildroot}/usr/share/pixmaps
 mkdir -p %{buildroot}/usr/bin
 
-# Copy application files
+# Copy application files (includes components/ballerina, components/dependencies, components/icp)
 cp -r usr/share/wso2-integrator/* %{buildroot}/usr/share/wso2-integrator/
-cp -r usr/lib64/ballerina/* %{buildroot}/usr/lib64/ballerina/
-cp -r usr/lib64/wso2/icp/* %{buildroot}/usr/lib64/wso2/icp/
 
 # Copy desktop and system integration files (if they exist)
 if [ -d usr/share/applications ]; then
@@ -55,28 +50,28 @@ fi
 if [ -d usr/share/bash-completion/completions ]; then
     cp usr/share/bash-completion/completions/* %{buildroot}/usr/share/bash-completion/completions/ 2>/dev/null || true
 fi
-if [ -d usr/share/zsh/vendor-completions ]; then
-    cp usr/share/zsh/vendor-completions/* %{buildroot}/usr/share/zsh/vendor-completions/ 2>/dev/null || true
-fi
 
 # Ensure executable permissions
 chmod +x %{buildroot}/usr/share/wso2-integrator/bin/wso2-integrator
 chmod +x %{buildroot}/usr/share/wso2-integrator/wso2-integrator
-chmod +x %{buildroot}/usr/lib64/ballerina/bin/bal
-chmod +x %{buildroot}/usr/lib64/wso2/icp/bin/ciphertool.sh
-chmod +x %{buildroot}/usr/lib64/wso2/icp/bin/dashboard.sh
-chmod +x %{buildroot}/usr/lib64/wso2/icp/bin/update_tool_setup.sh
+find %{buildroot}/usr/share/wso2-integrator/components/ballerina/bin -type f -exec chmod +x {} \; 2>/dev/null || true
+chmod +x %{buildroot}/usr/share/wso2-integrator/components/icp/bin/ciphertool.sh 2>/dev/null || true
+chmod +x %{buildroot}/usr/share/wso2-integrator/components/icp/bin/dashboard.sh 2>/dev/null || true
+chmod +x %{buildroot}/usr/share/wso2-integrator/components/icp/bin/update_tool_setup.sh 2>/dev/null || true
 
 %clean
 rm -rf %{buildroot}
 
 %post
+# Change ownership and permissions for integrator files
+chown -R root:root /usr/share/wso2-integrator
+chmod -R o+w /usr/share/wso2-integrator/components/icp/bin/database/ 2>/dev/null || true
+chmod -R o+rwx /usr/share/wso2-integrator/components/icp/www/public/ 2>/dev/null || true
+chmod 4755 /usr/share/wso2-integrator/chrome-sandbox 2>/dev/null || true
+
 # Create symlink to /usr/bin
 rm -f /usr/bin/wso2-integrator
 ln -s /usr/share/wso2-integrator/bin/wso2-integrator /usr/bin/wso2-integrator
-ln -s /usr/lib64/ballerina/bin/bal /usr/bin/bal
-echo 'export BALLERINA_HOME=/usr/lib64/ballerina' >> /etc/profile.d/wso2.sh
-chmod 0755 /etc/profile.d/wso2.sh
 
 # Register in alternatives system
 /usr/sbin/update-alternatives --install /usr/bin/editor editor /usr/bin/wso2-integrator 0 2>/dev/null || true
@@ -91,46 +86,18 @@ if command -v update-mime-database >/dev/null 2>&1; then
     update-mime-database /usr/share/mime 2>/dev/null || true
 fi
 
-
-set_curr_bal_active() {
-    local user_home=$1
-    local username=$2
-    local user_ballerina_dir="$user_home/.ballerina"
-    
-    if [ ! -d "$user_home" ] || [ "$user_home" = "/" ]; then
-        return
-    fi
-    
-    if [ ! -d "$user_ballerina_dir" ]; then
-       return
-    fi
-
-    user_bal_version_file="$user_ballerina_dir/ballerina-version"
-    rm -f "$user_bal_version_file"
-    echo "Removed ballerina-version file for user: $username"
-}
-
-while IFS=: read -r username _ uid _ _ home _; do
-    if [ "$uid" -ge 1000 ] && [ "$username" != "nobody" ]; then
-        set_curr_bal_active "$home" "$username"
-    fi
-done < /etc/passwd 2>/dev/null || true
-
-# Set up for root user
-if [ -d "/root" ]; then
-    set_curr_bal_active "/root" "root"
-fi
-
 %preun
 # Remove from alternatives system
-if update-alternatives --display editor >/dev/null 2>&1; then
-	update-alternatives --remove editor /usr/bin/wso2-integrator || true
+if /usr/sbin/update-alternatives --display editor >/dev/null 2>&1; then
+    /usr/sbin/update-alternatives --remove editor /usr/bin/wso2-integrator || true
 fi
 
 %postun
-# Remove symlink
+# Remove symlinks
 rm -f /usr/bin/wso2-integrator
 
+# Remove environment variable file
+rm -f /etc/profile.d/wso2.sh
 
 # Update desktop database
 if command -v update-desktop-database >/dev/null 2>&1; then
@@ -147,8 +114,5 @@ fi
 /usr/share/applications/*
 /usr/share/appdata/*
 /usr/share/bash-completion/completions/*
-/usr/share/zsh/vendor-completions/*
 /usr/share/mime/packages/*
 /usr/share/pixmaps/*
-/usr/lib64/ballerina/*
-/usr/lib64/wso2/icp/*

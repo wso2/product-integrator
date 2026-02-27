@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
 #
 # Copyright (c) WSO2. All rights reserved.
-
 # Change ownership and permissions for integrator files
 chown -R root:root /usr/share/wso2-integrator
+chmod -R o+w /usr/share/wso2-integrator/components/icp/bin/database/
+chmod -R o+rwx /usr/share/wso2-integrator/components/icp/www/public/
 chmod 4755 /usr/share/wso2-integrator/chrome-sandbox 2>/dev/null || true
 
 # Create symlinks to /usr/bin
 rm -f /usr/bin/wso2-integrator
 ln -s /usr/share/wso2-integrator/bin/wso2-integrator /usr/bin/wso2-integrator
-ln -s /usr/lib/ballerina/bin/bal /usr/bin/bal
-
-# Set BALLERINA_HOME environment variable
-echo 'export BALLERINA_HOME=/usr/lib/ballerina' > /etc/profile.d/wso2.sh
-chmod 0755 /etc/profile.d/wso2.sh
 
 # Register in the alternatives system
 # Priority of 0 should never make wso2-integrator the default editor in auto mode
@@ -27,35 +23,4 @@ fi
 # Update mimetype database to pickup workspace mimetype
 if hash update-mime-database 2>/dev/null; then
 	update-mime-database /usr/share/mime
-fi
-
-# Remove ballerina-version files to set current Ballerina as active
-set_curr_bal_active() {
-    local user_home=$1
-    local username=$2
-    local user_ballerina_dir="$user_home/.ballerina"
-    
-    if [ ! -d "$user_home" ] || [ "$user_home" = "/" ]; then
-        return
-    fi
-    
-    if [ ! -d "$user_ballerina_dir" ]; then
-       return
-    fi
-
-    user_bal_version_file="$user_ballerina_dir/ballerina-version"
-    rm -f "$user_bal_version_file"
-    echo "Removed ballerina-version file for user: $username"
-}
-
-# Process all regular users (UID >= 1000)
-while IFS=: read -r username _ uid _ _ home _; do
-    if [ "$uid" -ge 1000 ] && [ "$username" != "nobody" ]; then
-        set_curr_bal_active "$home" "$username"
-    fi
-done < /etc/passwd 2>/dev/null || true
-
-# Set up for root user
-if [ -d "/root" ]; then
-    set_curr_bal_active "/root" "root"
 fi

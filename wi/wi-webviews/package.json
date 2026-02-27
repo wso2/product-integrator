@@ -1,0 +1,52 @@
+{
+  "name": "@wso2/wi-webviews",
+  "version": "1.0.0",
+  "description": "Webview components for WSO2 Integrator Extension",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check --write --unsafe .",
+    "start": "webpack-dev-server --mode=development --progress",
+    "build": "tsc --pretty && webpack --mode production && npm run copy:assets && npm run postbuild",
+    "copy:assets": "copyfiles -E -u 1 \"src/**/*.css\" \"src/**/*.svg\" \"src/**/*.png\" lib/",
+    "postbuild": "copyfiles -E -u 1 \"build/**/*\" ../wi-extension/resources/jslibs"
+  },
+  "keywords": [],
+  "author": "WSO2",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@vscode/webview-ui-toolkit": "^1.4.0",
+    "@wso2/wi-core": "workspace:*",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "vscode-messenger-common": "^0.5.1",
+    "vscode-messenger-webview": "^0.5.1",
+    "classnames": "~2.5.1",
+    "@pmmmwh/react-refresh-webpack-plugin": "~0.6.1",
+    "@wso2/wi-rpc-client": "workspace:*",
+    "@emotion/styled": "~11.14.1",
+    "@wso2/ui-toolkit": "workspace:*",
+    "yup": "~1.7.1",
+    "react-hook-form": "~7.66.0",
+    "@hookform/resolvers": "^5.2.2",
+    "react-refresh": "~0.18.0",
+    "@ts-morph/common": "~0.28.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.15.21",
+    "@types/react": "18.2.0",
+    "@types/react-dom": "18.2.0",
+    "copyfiles": "^2.4.1",
+    "css-loader": "^7.1.2",
+    "style-loader": "^4.0.0",
+    "typescript": "5.8.3",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.2",
+    "ts-loader": "^9.5.2",
+    "react-hot-loader": "~4.13.1",
+    "source-map-loader": "~5.0.0"
+  }
+}

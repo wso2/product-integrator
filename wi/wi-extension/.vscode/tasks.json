@@ -1,0 +1,36 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "watch",
+			"path": "workspaces/wi/wi-extension",
+			"isBackground": true,
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": [
+				"$ts-webpack-watch"
+			]
+		},
+		{
+			"type": "npm",
+			"script": "compile",
+			"path": "workspaces/wi/wi-extension",
+			"group": "build",
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"type": "npm",
+			"script": "compile-tests",
+			"path": "workspaces/wi/wi-extension",
+			"group": "build",
+			"problemMatcher": [
+				"$tsc"
+			]
+		}
+	]
+}

@@ -1,0 +1,375 @@
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/actions/chatActions.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/chat/browser/actions/chatActions.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/actions/chatActions.ts
+@@ -42,8 +42,7 @@ import { IOpenerService } from '../../..
+ import product from '../../../../../platform/product/common/product.js';
+ import { IQuickInputButton, IQuickInputService, IQuickPickItem, IQuickPickSeparator } from '../../../../../platform/quickinput/common/quickInput.js';
+ import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
+-import { ToggleTitleBarConfigAction } from '../../../../browser/parts/titlebar/titlebarActions.js';
+-import { ActiveEditorContext, IsCompactTitleBarContext } from '../../../../common/contextkeys.js';
++import { ActiveEditorContext } from '../../../../common/contextkeys.js';
+ import { IWorkbenchContribution } from '../../../../common/contributions.js';
+ import { IViewDescriptorService, ViewContainerLocation } from '../../../../common/views.js';
+ import { ChatEntitlement, IChatEntitlementService } from '../../../../services/chat/common/chatEntitlementService.js';
+@@ -1602,56 +1601,56 @@ const defaultChat = {
+ };
+ 
+ // Add next to the command center if command center is disabled
+-MenuRegistry.appendMenuItem(MenuId.CommandCenter, {
+-	submenu: MenuId.ChatTitleBarMenu,
+-	title: localize('title4', "Chat"),
+-	icon: Codicon.chatSparkle,
+-	when: ContextKeyExpr.and(
+-		ChatContextKeys.supported,
+-		ContextKeyExpr.and(
+-			ChatContextKeys.Setup.hidden.negate(),
+-			ChatContextKeys.Setup.disabled.negate()
+-		),
+-		ContextKeyExpr.has('config.chat.commandCenter.enabled')
+-	),
+-	order: 10001 // to the right of command center
+-});
++// MenuRegistry.appendMenuItem(MenuId.CommandCenter, {
++// 	submenu: MenuId.ChatTitleBarMenu,
++// 	title: localize('title4', "Chat"),
++// 	icon: Codicon.chatSparkle,
++// 	when: ContextKeyExpr.and(
++// 		ChatContextKeys.supported,
++// 		ContextKeyExpr.and(
++// 			ChatContextKeys.Setup.hidden.negate(),
++// 			ChatContextKeys.Setup.disabled.negate()
++// 		),
++// 		ContextKeyExpr.has('config.chat.commandCenter.enabled')
++// 	),
++// 	order: 10001 // to the right of command center
++// });
+ 
+ // Add to the global title bar if command center is disabled
+-MenuRegistry.appendMenuItem(MenuId.TitleBar, {
+-	submenu: MenuId.ChatTitleBarMenu,
+-	title: localize('title4', "Chat"),
+-	group: 'navigation',
+-	icon: Codicon.chatSparkle,
+-	when: ContextKeyExpr.and(
+-		ChatContextKeys.supported,
+-		ContextKeyExpr.and(
+-			ChatContextKeys.Setup.hidden.negate(),
+-			ChatContextKeys.Setup.disabled.negate()
+-		),
+-		ContextKeyExpr.has('config.chat.commandCenter.enabled'),
+-		ContextKeyExpr.has('config.window.commandCenter').negate(),
+-	),
+-	order: 1
+-});
+-
+-registerAction2(class ToggleCopilotControl extends ToggleTitleBarConfigAction {
+-	constructor() {
+-		super(
+-			'chat.commandCenter.enabled',
+-			localize('toggle.chatControl', 'Chat Controls'),
+-			localize('toggle.chatControlsDescription', "Toggle visibility of the Chat Controls in title bar"), 5,
+-			ContextKeyExpr.and(
+-				ContextKeyExpr.and(
+-					ChatContextKeys.Setup.hidden.negate(),
+-					ChatContextKeys.Setup.disabled.negate()
+-				),
+-				IsCompactTitleBarContext.negate(),
+-				ChatContextKeys.supported
+-			)
+-		);
+-	}
+-});
++// MenuRegistry.appendMenuItem(MenuId.TitleBar, {
++// 	submenu: MenuId.ChatTitleBarMenu,
++// 	title: localize('title4', "Chat"),
++// 	group: 'navigation',
++// 	icon: Codicon.chatSparkle,
++// 	when: ContextKeyExpr.and(
++// 		ChatContextKeys.supported,
++// 		ContextKeyExpr.and(
++// 			ChatContextKeys.Setup.hidden.negate(),
++// 			ChatContextKeys.Setup.disabled.negate()
++// 		),
++// 		ContextKeyExpr.has('config.chat.commandCenter.enabled'),
++// 		ContextKeyExpr.has('config.window.commandCenter').negate(),
++// 	),
++// 	order: 1
++// });
++
++// registerAction2(class ToggleCopilotControl extends ToggleTitleBarConfigAction {
++// 	constructor() {
++// 		super(
++// 			'chat.commandCenter.enabled',
++// 			localize('toggle.chatControl', 'Chat Controls'),
++// 			localize('toggle.chatControlsDescription', "Toggle visibility of the Chat Controls in title bar"), 5,
++// 			ContextKeyExpr.and(
++// 				ContextKeyExpr.and(
++// 					ChatContextKeys.Setup.hidden.negate(),
++// 					ChatContextKeys.Setup.disabled.negate()
++// 				),
++// 				IsCompactTitleBarContext.negate(),
++// 				ChatContextKeys.supported
++// 			)
++// 		);
++// 	}
++// });
+ 
+ export class CopilotTitleBarMenuRendering extends Disposable implements IWorkbenchContribution {
+ 
+@@ -1791,32 +1790,32 @@ MenuRegistry.appendMenuItem(MenuId.Edito
+ 
+ // --- Chat Default Visibility
+ 
+-registerAction2(class ToggleDefaultVisibilityAction extends Action2 {
+-	constructor() {
+-		super({
+-			id: 'workbench.action.chat.toggleDefaultVisibility',
+-			title: localize2('chat.toggleDefaultVisibility.label', "Show View by Default"),
+-			toggled: ContextKeyExpr.equals('config.workbench.secondarySideBar.defaultVisibility', 'hidden').negate(),
+-			f1: false,
+-			menu: {
+-				id: MenuId.ViewTitle,
+-				when: ContextKeyExpr.and(
+-					ContextKeyExpr.equals('view', ChatViewId),
+-					ChatContextKeys.panelLocation.isEqualTo(ViewContainerLocation.AuxiliaryBar),
+-				),
+-				order: 0,
+-				group: '5_configure'
+-			},
+-		});
+-	}
+-
+-	async run(accessor: ServicesAccessor) {
+-		const configurationService = accessor.get(IConfigurationService);
+-
+-		const currentValue = configurationService.getValue<'hidden' | unknown>('workbench.secondarySideBar.defaultVisibility');
+-		configurationService.updateValue('workbench.secondarySideBar.defaultVisibility', currentValue !== 'hidden' ? 'hidden' : 'visible');
+-	}
+-});
++// registerAction2(class ToggleDefaultVisibilityAction extends Action2 {
++// 	constructor() {
++// 		super({
++// 			id: 'workbench.action.chat.toggleDefaultVisibility',
++// 			title: localize2('chat.toggleDefaultVisibility.label', "Show View by Default"),
++// 			toggled: ContextKeyExpr.equals('config.workbench.secondarySideBar.defaultVisibility', 'hidden').negate(),
++// 			f1: false,
++// 			menu: {
++// 				id: MenuId.ViewTitle,
++// 				when: ContextKeyExpr.and(
++// 					ContextKeyExpr.equals('view', ChatViewId),
++// 					ChatContextKeys.panelLocation.isEqualTo(ViewContainerLocation.AuxiliaryBar),
++// 				),
++// 				order: 0,
++// 				group: '5_configure'
++// 			},
++// 		});
++// 	}
++
++// 	async run(accessor: ServicesAccessor) {
++// 		const configurationService = accessor.get(IConfigurationService);
++
++// 		const currentValue = configurationService.getValue<'hidden' | unknown>('workbench.secondarySideBar.defaultVisibility');
++// 		configurationService.updateValue('workbench.secondarySideBar.defaultVisibility', currentValue !== 'hidden' ? 'hidden' : 'visible');
++// 	}
++// });
+ 
+ registerAction2(class EditToolApproval extends Action2 {
+ 	constructor() {
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/chat.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/chat/browser/chat.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/chat.contribution.ts
+@@ -36,7 +36,7 @@ import { CodeMapperService, ICodeMapperS
+ import '../common/chatColors.js';
+ import { IChatEditingService } from '../common/chatEditingService.js';
+ import { IChatLayoutService } from '../common/chatLayoutService.js';
+-import { ChatModeService, IChatMode, IChatModeService } from '../common/chatModes.js';
++import { ChatModeService, IChatModeService } from '../common/chatModes.js';
+ import { ChatResponseResourceFileSystemProvider } from '../common/chatResponseResourceFileSystemProvider.js';
+ import { IChatService } from '../common/chatService.js';
+ import { ChatService } from '../common/chatServiceImpl.js';
+@@ -64,7 +64,7 @@ import { BuiltinToolsContribution } from
+ import { IVoiceChatService, VoiceChatService } from '../common/voiceChatService.js';
+ import { registerChatAccessibilityActions } from './actions/chatAccessibilityActions.js';
+ import { AgentChatAccessibilityHelp, EditsChatAccessibilityHelp, PanelChatAccessibilityHelp, QuickChatAccessibilityHelp } from './actions/chatAccessibilityHelp.js';
+-import { ACTION_ID_NEW_CHAT, CopilotTitleBarMenuRendering, ModeOpenChatGlobalAction, registerChatActions } from './actions/chatActions.js';
++import { ACTION_ID_NEW_CHAT } from './actions/chatActions.js';
+ import { CodeBlockActionRendering, registerChatCodeBlockActions, registerChatCodeCompareBlockActions } from './actions/chatCodeblockActions.js';
+ import { ChatContextContributions } from './actions/chatContext.js';
+ import { registerChatContextActions } from './actions/chatContextActions.js';
+@@ -79,7 +79,7 @@ import { registerLanguageModelActions }
+ import { registerMoveActions } from './actions/chatMoveActions.js';
+ import { registerNewChatActions } from './actions/chatNewActions.js';
+ import { registerChatPromptNavigationActions } from './actions/chatPromptNavigationActions.js';
+-import { registerQuickChatActions } from './actions/chatQuickInputActions.js';
++// import { registerQuickChatActions } from './actions/chatQuickInputActions.js';
+ import { ChatSessionsGettingStartedAction, DeleteChatSessionAction, OpenChatSessionInNewEditorGroupAction, OpenChatSessionInNewWindowAction, OpenChatSessionInSidebarAction, RenameChatSessionAction, ToggleAgentSessionsViewLocationAction, ToggleChatSessionsDescriptionDisplayAction } from './actions/chatSessionActions.js';
+ import { registerChatTitleActions } from './actions/chatTitleActions.js';
+ import { registerChatElicitationActions } from './actions/chatElicitationActions.js';
+@@ -106,13 +106,13 @@ import { ChatLayoutService } from './cha
+ import './chatManagement/chatManagement.contribution.js';
+ import { agentSlashCommandToMarkdown, agentToMarkdown } from './chatMarkdownDecorationsRenderer.js';
+ import { ChatOutputRendererService, IChatOutputRendererService } from './chatOutputItemRenderer.js';
+-import { ChatCompatibilityNotifier, ChatExtensionPointHandler } from './chatParticipant.contribution.js';
++// import { ChatCompatibilityNotifier, ChatExtensionPointHandler } from './chatParticipant.contribution.js';
+ import { ChatPasteProvidersFeature } from './chatPasteProviders.js';
+ import { QuickChatService } from './chatQuick.js';
+ import { ChatResponseAccessibleView } from './chatResponseAccessibleView.js';
+ import { ChatTerminalOutputAccessibleView } from './chatTerminalOutputAccessibleView.js';
+ import { LocalAgentsSessionsProvider } from './agentSessions/localAgentSessionsProvider.js';
+-import { ChatSessionsView, ChatSessionsViewContrib } from './chatSessions/view/chatSessionsView.js';
++import { ChatSessionsViewContrib } from './chatSessions/view/chatSessionsView.js';
+ import { ChatSetupContribution, ChatTeardownContribution } from './chatSetup/chatSetupContributions.js';
+ import { ChatStatusBarEntry } from './chatStatus/chatStatusEntry.js';
+ import { ChatVariablesService } from './chatVariables.js';
+@@ -940,55 +940,55 @@ class ChatAgentSettingContribution exten
+ /**
+  * Workbench contribution to register actions for custom chat modes via events
+  */
+-class ChatAgentActionsContribution extends Disposable implements IWorkbenchContribution {
++// class ChatAgentActionsContribution extends Disposable implements IWorkbenchContribution {
+ 
+-	static readonly ID = 'workbench.contrib.chatAgentActions';
++// 	static readonly ID = 'workbench.contrib.chatAgentActions';
+ 
+-	private readonly _modeActionDisposables = new DisposableMap<string>();
++// 	private readonly _modeActionDisposables = new DisposableMap<string>();
+ 
+-	constructor(
+-		@IChatModeService private readonly chatModeService: IChatModeService,
+-	) {
+-		super();
+-		this._store.add(this._modeActionDisposables);
+-
+-		// Register actions for existing custom modes
+-		const { custom } = this.chatModeService.getModes();
+-		for (const mode of custom) {
+-			this._registerModeAction(mode);
+-		}
+-
+-		// Listen for custom mode changes by tracking snapshots
+-		this._register(this.chatModeService.onDidChangeChatModes(() => {
+-			const { custom } = this.chatModeService.getModes();
+-			const currentModeIds = new Set<string>();
+-
+-			// Register new modes
+-			for (const mode of custom) {
+-				currentModeIds.add(mode.id);
+-				if (!this._modeActionDisposables.has(mode.id)) {
+-					this._registerModeAction(mode);
+-				}
+-			}
+-
+-			// Remove modes that no longer exist
+-			for (const modeId of this._modeActionDisposables.keys()) {
+-				if (!currentModeIds.has(modeId)) {
+-					this._modeActionDisposables.deleteAndDispose(modeId);
+-				}
+-			}
+-		}));
+-	}
+-
+-	private _registerModeAction(mode: IChatMode): void {
+-		const actionClass = class extends ModeOpenChatGlobalAction {
+-			constructor() {
+-				super(mode);
+-			}
+-		};
+-		this._modeActionDisposables.set(mode.id, registerAction2(actionClass));
+-	}
+-}
++// 	constructor(
++// 		@IChatModeService private readonly chatModeService: IChatModeService,
++// 	) {
++// 		super();
++// 		this._store.add(this._modeActionDisposables);
++
++// 		// Register actions for existing custom modes
++// 		const { custom } = this.chatModeService.getModes();
++// 		for (const mode of custom) {
++// 			this._registerModeAction(mode);
++// 		}
++
++// 		// Listen for custom mode changes by tracking snapshots
++// 		this._register(this.chatModeService.onDidChangeChatModes(() => {
++// 			const { custom } = this.chatModeService.getModes();
++// 			const currentModeIds = new Set<string>();
++
++// 			// Register new modes
++// 			for (const mode of custom) {
++// 				currentModeIds.add(mode.id);
++// 				if (!this._modeActionDisposables.has(mode.id)) {
++// 					this._registerModeAction(mode);
++// 				}
++// 			}
++
++// 			// Remove modes that no longer exist
++// 			for (const modeId of this._modeActionDisposables.keys()) {
++// 				if (!currentModeIds.has(modeId)) {
++// 					this._modeActionDisposables.deleteAndDispose(modeId);
++// 				}
++// 			}
++// 		}));
++// 	}
++
++// 	private _registerModeAction(mode: IChatMode): void {
++// 		const actionClass = class extends ModeOpenChatGlobalAction {
++// 			constructor() {
++// 				super(mode);
++// 			}
++// 		};
++// 		this._modeActionDisposables.set(mode.id, registerAction2(actionClass));
++// 	}
++// }
+ 
+ class ToolReferenceNamesContribution extends Disposable implements IWorkbenchContribution {
+ 
+@@ -1116,11 +1116,11 @@ Registry.as<IEditorFactoryRegistry>(Edit
+ 
+ registerWorkbenchContribution2(ChatResolverContribution.ID, ChatResolverContribution, WorkbenchPhase.BlockStartup);
+ registerWorkbenchContribution2(ChatSlashStaticSlashCommandsContribution.ID, ChatSlashStaticSlashCommandsContribution, WorkbenchPhase.Eventually);
+-registerWorkbenchContribution2(ChatExtensionPointHandler.ID, ChatExtensionPointHandler, WorkbenchPhase.BlockStartup);
++// registerWorkbenchContribution2(ChatExtensionPointHandler.ID, ChatExtensionPointHandler, WorkbenchPhase.BlockStartup);
+ registerWorkbenchContribution2(LanguageModelToolsExtensionPointHandler.ID, LanguageModelToolsExtensionPointHandler, WorkbenchPhase.BlockRestore);
+ registerWorkbenchContribution2(ChatPromptFilesExtensionPointHandler.ID, ChatPromptFilesExtensionPointHandler, WorkbenchPhase.BlockRestore);
+-registerWorkbenchContribution2(ChatCompatibilityNotifier.ID, ChatCompatibilityNotifier, WorkbenchPhase.Eventually);
+-registerWorkbenchContribution2(CopilotTitleBarMenuRendering.ID, CopilotTitleBarMenuRendering, WorkbenchPhase.BlockRestore);
++// registerWorkbenchContribution2(ChatCompatibilityNotifier.ID, ChatCompatibilityNotifier, WorkbenchPhase.Eventually);
++// registerWorkbenchContribution2(CopilotTitleBarMenuRendering.ID, CopilotTitleBarMenuRendering, WorkbenchPhase.BlockRestore);
+ registerWorkbenchContribution2(CodeBlockActionRendering.ID, CodeBlockActionRendering, WorkbenchPhase.BlockRestore);
+ registerWorkbenchContribution2(ContinueChatInSessionActionRendering.ID, ContinueChatInSessionActionRendering, WorkbenchPhase.BlockRestore);
+ registerWorkbenchContribution2(ChatImplicitContextContribution.ID, ChatImplicitContextContribution, WorkbenchPhase.Eventually);
+@@ -1132,7 +1132,7 @@ registerWorkbenchContribution2(ChatTeard
+ registerWorkbenchContribution2(ChatStatusBarEntry.ID, ChatStatusBarEntry, WorkbenchPhase.BlockRestore);
+ registerWorkbenchContribution2(BuiltinToolsContribution.ID, BuiltinToolsContribution, WorkbenchPhase.Eventually);
+ registerWorkbenchContribution2(ChatAgentSettingContribution.ID, ChatAgentSettingContribution, WorkbenchPhase.AfterRestored);
+-registerWorkbenchContribution2(ChatAgentActionsContribution.ID, ChatAgentActionsContribution, WorkbenchPhase.Eventually);
++// registerWorkbenchContribution2(ChatAgentActionsContribution.ID, ChatAgentActionsContribution, WorkbenchPhase.Eventually);
+ registerWorkbenchContribution2(ToolReferenceNamesContribution.ID, ToolReferenceNamesContribution, WorkbenchPhase.AfterRestored);
+ registerWorkbenchContribution2(ChatEditingEditorAccessibility.ID, ChatEditingEditorAccessibility, WorkbenchPhase.AfterRestored);
+ registerWorkbenchContribution2(ChatEditingEditorOverlay.ID, ChatEditingEditorOverlay, WorkbenchPhase.AfterRestored);
+@@ -1144,12 +1144,12 @@ registerWorkbenchContribution2(ChatRespo
+ registerWorkbenchContribution2(PromptUrlHandler.ID, PromptUrlHandler, WorkbenchPhase.BlockRestore);
+ registerWorkbenchContribution2(LocalAgentsSessionsProvider.ID, LocalAgentsSessionsProvider, WorkbenchPhase.AfterRestored);
+ registerWorkbenchContribution2(ChatSessionsViewContrib.ID, ChatSessionsViewContrib, WorkbenchPhase.AfterRestored);
+-registerWorkbenchContribution2(ChatSessionsView.ID, ChatSessionsView, WorkbenchPhase.BlockRestore);
++// registerWorkbenchContribution2(ChatSessionsView.ID, ChatSessionsView, WorkbenchPhase.BlockRestore);
+ registerWorkbenchContribution2(ChatEditingNotebookFileSystemProviderContrib.ID, ChatEditingNotebookFileSystemProviderContrib, WorkbenchPhase.BlockStartup);
+ registerWorkbenchContribution2(UserToolSetsContributions.ID, UserToolSetsContributions, WorkbenchPhase.Eventually);
+ registerWorkbenchContribution2(PromptLanguageFeaturesProvider.ID, PromptLanguageFeaturesProvider, WorkbenchPhase.Eventually);
+ 
+-registerChatActions();
++// registerChatActions();
+ registerChatAccessibilityActions();
+ registerChatCopyActions();
+ registerChatCodeBlockActions();
+@@ -1158,7 +1158,7 @@ registerChatFileTreeActions();
+ registerChatPromptNavigationActions();
+ registerChatTitleActions();
+ registerChatExecuteActions();
+-registerQuickChatActions();
++// registerQuickChatActions();
+ registerChatExportActions();
+ registerMoveActions();
+ registerNewChatActions();

@@ -1,3 +1,6 @@
 [submodule "lib/vscode"]
 	path = lib/vscode
 	url = https://github.com/microsoft/vscode.git
+[submodule "external/wso2-vscode-extensions"]
+	path = external/wso2-vscode-extensions
+	url = https://github.com/wso2/vscode-extensions.git

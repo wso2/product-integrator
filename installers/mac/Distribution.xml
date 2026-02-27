@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
     <title>WSO2 Integrator</title>
-    <organization>com.wso2.wso2integrator</organization>
-    <domains enable_localSystem="true" />
-    <options customize="never" require-scripts="true" rootVolumeOnly="true" />
+    <organization>com.wso2.integrator</organization>
+    <domains enable_localSystem="false" enable_currentUserOnly="true" enable_currentUserHome="true" />
+    <options customize="never" require-scripts="false" rootVolumeOnly="false" />
     <welcome file="welcome.html" />
     <license file="license.txt" />
     <conclusion file="conclusion.html" />
@@ -17,24 +17,18 @@
                 my.result.type = 'Fatal';
                 return false;
             }
-            if(system.files.fileExistsAtPath('/Library/Ballerina/bin')) {
-                my.result.title = 'Previous Installation Detected';
-                my.result.message = 'A previous installation of Ballerina exists at /Library/Ballerina. This installer may switch the active version to the one being installed.';
-                my.result.type = 'Warning';
-                return false;
-            }
             return true;
         }
     ]]>
     </script>
     <choices-outline>
         <line choice="default">
-            <line choice="com.wso2.wso2integrator" />
+            <line choice="com.wso2.integrator" />
         </line>
     </choices-outline>
     <choice id="default" />
-    <choice id="com.wso2.wso2integrator" visible="false">
-        <pkg-ref id="com.wso2.wso2integrator" />
+    <choice id="com.wso2.integrator" visible="false">
+        <pkg-ref id="com.wso2.integrator" />
     </choice>
-    <pkg-ref id="com.wso2.wso2integrator" version="__VERSION__" onConclusion="none">WSO2 Integrator.pkg</pkg-ref>
+    <pkg-ref id="com.wso2.integrator" version="__VERSION__" onConclusion="none" auth="none">WSO2 Integrator.pkg</pkg-ref>
 </installer-gui-script>

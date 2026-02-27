@@ -1,0 +1,24 @@
+{
+  "name": "product-integrator",
+  "version": "1.0.0",
+  "description": "Open source integration platform offering a powerful low-code development experience with enhanced capabilities.",
+  "scripts": {
+    "init-submodules": "git submodule update --init --recursive",
+    "apply-patches": "quilt push -a",
+    "unapply-patches": "quilt pop -a",
+    "link-wi-extension": "ln -sfn $PWD/wi/wi-extension lib/vscode/extensions/wso2.integrator",
+    "link-bal-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/ballerina/ballerina-extension lib/vscode/extensions/wso2.ballerina",
+    "link-bi-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/bi/bi-extension lib/vscode/extensions/wso2.ballerina-integrator",
+    "link-mi-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/mi/mi-extension lib/vscode/extensions/wso2.micro-integrator",
+    "link-platform-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/wso2-platform/wso2-platform-extension lib/vscode/extensions/wso2.wso2-platform",
+    "install": "rush install",
+    "update-product": "bash ci/build/update-product.sh",
+    "link-extensions": "npm run link-wi-extension && npm run link-bal-extension && npm run link-bi-extension && npm run link-mi-extension && npm run link-platform-extension",
+    "clean": "rush purge && git clean -dfX"
+  },
+  "devDependencies": {
+    "@microsoft/rush": "^5.138.4"
+  },
+  "author": "WSO2",
+  "license": "Apache-2.0"
+}

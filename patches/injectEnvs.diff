@@ -1,0 +1,283 @@
+Index: product-integrator/lib/vscode/src/main.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/main.ts
++++ product-integrator/lib/vscode/src/main.ts
+@@ -201,6 +201,176 @@ async function onReady() {
+  * Main startup routine
+  */
+ async function startup(codeCachePath: string | undefined, nlsConfig: INLSConfiguration): Promise<void> {
++	// Inject product-defined runtime environment variables so they are
++	// available in the main process, child processes (extension host) and
++	// inherited by shells launched from the integrated terminal.
++	let runtimePathPrefix: string | undefined = undefined;
++	let runtimeBallerinaBin: string | undefined = undefined;
++	try {
++		interface IProductMeta {
++			runtimeEnv?: Record<string, unknown>;
++			win32DirName?: string;
++			applicationName?: string;
++			nameShort?: string;
++			nameLong?: string;
++			dataFolderName?: string;
++		}
++
++		const productMeta = product as unknown as IProductMeta;
++		const runtimeEnv = productMeta.runtimeEnv;
++		// Support OS-specific runtimeEnv shape. runtimeEnv can be either a flat
++		// map of env vars (legacy) or an object containing a `common`/per-OS
++		// maps. Merge `common` with the current platform's map when present.
++		let resolvedRuntimeEnv: Record<string, unknown> | undefined = undefined;
++		if (runtimeEnv && typeof runtimeEnv === 'object') {
++			const osKeys = new Set(['darwin', 'linux', 'win32', 'common', 'default']);
++			const containsOsKeys = Object.keys(runtimeEnv).some(k => osKeys.has(k));
++			if (containsOsKeys) {
++				const common = (runtimeEnv['common'] && typeof runtimeEnv['common'] === 'object') ? runtimeEnv['common'] as Record<string, unknown> : {};
++				const platformMap = (runtimeEnv[process.platform] && typeof runtimeEnv[process.platform] === 'object') ? runtimeEnv[process.platform] as Record<string, unknown> : {};
++				resolvedRuntimeEnv = { ...(common as Record<string, unknown>), ...(platformMap as Record<string, unknown>) };
++			} else {
++				resolvedRuntimeEnv = runtimeEnv as Record<string, unknown>;
++			}
++		}
++		// Resolve the installed application directory across platforms. On macOS
++		// packaged apps live inside a `.app` bundle; on Linux/Windows the
++		// resources are under `<install-dir>/resources/app`. Prefer Electron's
++		// `app.getAppPath()` when available and fall back to `process.execPath`.
++		const resolveInstalledDir = (): string => {
++			try {
++				const execPath = process.execPath || '';
++				const appPath = (typeof app.getAppPath === 'function') ? app.getAppPath() : execPath;
++
++				// 1) If execPath contains a .app bundle, return that bundle root (macOS)
++				if (execPath) {
++					const parts = execPath.split(path.sep);
++					for (let i = parts.length - 1; i >= 0; i--) {
++						if (parts[i].endsWith('.app')) {
++							return parts.slice(0, i + 1).join(path.sep);
++						}
++					}
++
++					// Linux/Windows packaged installs usually place the executable at
++					// <install-dir>/bin/<app>. In that case APP_ROOT should be
++					// <install-dir> (not appPath-derived paths).
++					if (process.platform === 'linux' || process.platform === 'win32') {
++						const execDir = path.dirname(execPath);
++						if (path.basename(execDir).toLowerCase() === 'bin') {
++							return path.normalize(path.resolve(execDir, '..'));
++						}
++					}
++
++					// Try to find a product-named directory inside execPath (Windows/Linux installers)
++					const productCandidates = new Set<string>();
++					if (productMeta.win32DirName) { productCandidates.add(productMeta.win32DirName.toLowerCase()); }
++					if (productMeta.applicationName) { productCandidates.add(productMeta.applicationName.toLowerCase()); }
++					if (productMeta.nameShort) { productCandidates.add(productMeta.nameShort.toLowerCase()); }
++					if (productMeta.nameLong) { productCandidates.add(productMeta.nameLong.toLowerCase()); }
++					if (productMeta.dataFolderName) { productCandidates.add(productMeta.dataFolderName.toLowerCase()); }
++
++					// Skip the executable filename segment to avoid returning a file path.
++					for (let i = parts.length - 2; i >= 0; i--) {
++						const partLower = parts[i].toLowerCase();
++						if (productCandidates.has(partLower)) {
++							return parts.slice(0, i + 1).join(path.sep);
++						}
++					}
++				}
++
++				// 2) If appPath looks like <install>/resources/app, return the install dir
++				const resourcesApp = path.join('resources', 'app');
++				if (appPath && appPath.includes(resourcesApp)) {
++					return path.normalize(path.resolve(appPath, '..', '..'));
++				}
++
++				// 3) If appPath ends with '/app' (dev/unpacked), go up two levels
++				if (appPath && appPath.endsWith(`${path.sep}app`)) {
++					return path.normalize(path.resolve(appPath, '..', '..'));
++				}
++
++				// 4) Fallback to directory of execPath or appPath
++				return path.dirname(execPath || appPath || '');
++			} catch (err) {
++				return path.dirname(process.execPath || '');
++			}
++		};
++
++		const appRoot = resolveInstalledDir();
++
++		if (resolvedRuntimeEnv && typeof resolvedRuntimeEnv === 'object') {
++			// remove existing envs which contains "ballerina" in the key to avoid conflict with the new envs from product.json
++			for (const key of Object.keys(process.env)) {
++				if (key.toLowerCase().includes('ballerina')) {
++					delete process.env[key];
++				}
++			}
++			// remove existing values in path env which contains "ballerina" to avoid conflict with the new path value from product.json
++			const pathKey = Object.keys(process.env).find(key => key.toLowerCase() === 'path');
++			if (pathKey) {
++				const currentPath = process.env[pathKey] || '';
++				const newPath = currentPath.split(path.delimiter).filter(p => !p.toLowerCase().includes('ballerina')).join(path.delimiter);
++				process.env[pathKey] = newPath;
++			}
++
++			for (const [key, value] of Object.entries(resolvedRuntimeEnv)) {
++				if (typeof value === 'string') {
++					if ((key === 'PATH' || key === 'Path') && !runtimePathPrefix) {
++						const pathTokenRegex = /\$\{?PATH}?/i;
++						const pathTokenMatch = pathTokenRegex.exec(value);
++						if (pathTokenMatch && pathTokenMatch.index > 0) {
++							let explicitPrefix = value.slice(0, pathTokenMatch.index);
++							explicitPrefix = explicitPrefix.replace(/\$\{?(?:APP_ROOT|APP_DIR|APP)\}?/g, appRoot);
++							if (explicitPrefix.startsWith('./') || explicitPrefix.startsWith('../')) {
++								explicitPrefix = path.normalize(path.join(appRoot, explicitPrefix));
++							}
++							runtimePathPrefix = explicitPrefix;
++
++							const explicitPrefixEntries = explicitPrefix
++								.split(path.delimiter)
++								.map(entry => entry.trim())
++								.filter(entry => entry.length > 0);
++							for (const entry of explicitPrefixEntries) {
++								if (entry.toLowerCase().includes('ballerina')) {
++									runtimeBallerinaBin = entry;
++									break;
++								}
++							}
++						}
++					}
++
++					const currentPath = process.env.PATH || process.env.Path || '';
++
++					// Replace tokens: $PATH / ${PATH}
++					let replaced = value.replace(/\$\{?PATH}?/g, currentPath);
++
++					// Replace app root tokens: ${APP_ROOT}, ${APP_DIR}, ${APP}
++					// Put longer alternatives first to avoid partial matches (e.g. APP matching APP_ROOT)
++					replaced = replaced.replace(/\$\{?(?:APP_ROOT|APP_DIR|APP)\}?/g, appRoot);
++
++					// If the value is a relative path (./ or ../), resolve it from the app root
++					if (replaced.startsWith('./') || replaced.startsWith('../')) {
++						replaced = path.normalize(path.join(appRoot, replaced));
++					}
++
++					process.env[key] = replaced;
++				} else {
++					process.env[key] = JSON.stringify(value);
++				}
++			}
++		}
++	} catch (e) {
++		console.warn('Failed to inject product runtimeEnv:', e);
++	}
++
++	if (runtimePathPrefix) {
++		process.env['VSCODE_PRODUCT_RUNTIME_PATH_PREFIX'] = runtimePathPrefix;
++	}
++
++	if (runtimeBallerinaBin) {
++		process.env['VSCODE_PRODUCT_BALLERINA_BIN'] = runtimeBallerinaBin;
++	}
++
+ 	process.env['VSCODE_NLS_CONFIG'] = JSON.stringify(nlsConfig);
+ 	process.env['VSCODE_CODE_CACHE_PATH'] = codeCachePath || '';
+ 
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
+@@ -91,6 +91,29 @@ if [ -n "${VSCODE_ENV_APPEND:-}" ]; then
+ 	builtin unset VSCODE_ENV_APPEND
+ fi
+ 
++# Keep only the configured ballerina bin path in PATH and drop all other
++# ballerina-related entries that may be added by shell startup scripts.
++if [ -n "${VSCODE_PRODUCT_BALLERINA_BIN:-}" ]; then
++	IFS=':' read -ra __vsc_path_entries <<< "$PATH"
++	__vsc_new_path=""
++	for __vsc_entry in "${__vsc_path_entries[@]}"; do
++		__vsc_entry_lower="$(echo "$__vsc_entry" | tr '[:upper:]' '[:lower:]')"
++		if [[ "$__vsc_entry_lower" == *ballerina* ]] && [[ "$__vsc_entry" != "$VSCODE_PRODUCT_BALLERINA_BIN" ]]; then
++			continue
++		fi
++		if [ -z "$__vsc_new_path" ]; then
++			__vsc_new_path="$__vsc_entry"
++		else
++			__vsc_new_path="$__vsc_new_path:$__vsc_entry"
++		fi
++	done
++	case ":$__vsc_new_path:" in
++		*":$VSCODE_PRODUCT_BALLERINA_BIN:"*) ;;
++		*) __vsc_new_path="$VSCODE_PRODUCT_BALLERINA_BIN${__vsc_new_path:+:$__vsc_new_path}" ;;
++	esac
++	export PATH="$__vsc_new_path"
++fi
++
+ # Register Python shell activate hooks
+ # Prevent multiple activation with guard
+ if [ -z "${VSCODE_PYTHON_AUTOACTIVATE_GUARD:-}" ]; then
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
+@@ -68,6 +68,25 @@ if [ -n "${VSCODE_ENV_APPEND:-}" ]; then
+ 	unset VSCODE_ENV_APPEND
+ fi
+ 
++# Keep only the configured ballerina bin path in PATH and drop all other
++# ballerina-related entries that may be added by shell startup scripts.
++if [ -n "${VSCODE_PRODUCT_BALLERINA_BIN:-}" ]; then
++	typeset -a __vsc_path_entries
++	typeset -a __vsc_clean_path_entries
++	IFS=':' read -rA __vsc_path_entries <<< "$PATH"
++	for __vsc_entry in "${__vsc_path_entries[@]}"; do
++		if [[ "${__vsc_entry:l}" == *ballerina* ]] && [[ "$__vsc_entry" != "$VSCODE_PRODUCT_BALLERINA_BIN" ]]; then
++			continue
++		fi
++		__vsc_clean_path_entries+=("$__vsc_entry")
++	done
++	PATH="${(j/:/)__vsc_clean_path_entries}"
++	if [[ ":$PATH:" != *":$VSCODE_PRODUCT_BALLERINA_BIN:"* ]]; then
++		PATH="$VSCODE_PRODUCT_BALLERINA_BIN:$PATH"
++	fi
++	export PATH
++fi
++
+ # Register Python shell activate hooks
+ # Prevent multiple activation with guard
+ if [ -z "${VSCODE_PYTHON_AUTOACTIVATE_GUARD:-}" ]; then
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
+@@ -258,6 +258,11 @@ export async function createTerminalEnvi
+ 		// Merge process env with the env from config and from shellLaunchConfig
+ 		mergeNonNullKeys(env, baseEnv);
+ 
++		// Preserve runtime PATH prefix marker from startup before sanitize step
++		// removes internal VSCODE_* variables.
++		const runtimePathPrefix = env['VSCODE_PRODUCT_RUNTIME_PATH_PREFIX'];
++		const runtimeBallerinaBin = env['VSCODE_PRODUCT_BALLERINA_BIN'];
++
+ 		const allowedEnvFromConfig = { ...envFromConfig };
+ 
+ 		// Resolve env vars from config and shell
+@@ -298,6 +303,21 @@ export async function createTerminalEnvi
+ 		mergeEnvironments(env, allowedEnvFromConfig);
+ 		mergeEnvironments(env, shellLaunchConfig.env);
+ 
++		// Re-apply runtime PATH prefix for terminal process creation and shell
++		// integration scripts (zsh/bash/fish) which use VSCODE_PATH_PREFIX.
++		if (typeof runtimePathPrefix === 'string' && runtimePathPrefix.length > 0) {
++			env['VSCODE_PATH_PREFIX'] = runtimePathPrefix;
++
++			const existingPath = env['PATH'];
++			if (typeof existingPath === 'string' && !existingPath.startsWith(runtimePathPrefix)) {
++				env['PATH'] = `${runtimePathPrefix}${existingPath}`;
++			}
++		}
++
++		if (typeof runtimeBallerinaBin === 'string' && runtimeBallerinaBin.length > 0) {
++			env['VSCODE_PRODUCT_BALLERINA_BIN'] = runtimeBallerinaBin;
++		}
++
+ 		// Adding other env keys necessary to create the process
+ 		addTerminalEnvironmentKeys(env, version, language, detectLocale);
+ 	}

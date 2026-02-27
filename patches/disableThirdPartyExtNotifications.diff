@@ -1,0 +1,125 @@
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2/browser/wso2.contribution.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2/browser/wso2.contribution.ts
+@@ -0,0 +1,14 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
++import { WSO2ThirdPartyNotificationFilter } from './wso2ThirdPartyNotificationFilter.js';
++
++// Register the notification filter to run after workbench is restored
++registerWorkbenchContribution2(
++	WSO2ThirdPartyNotificationFilter.ID,
++	WSO2ThirdPartyNotificationFilter,
++	WorkbenchPhase.AfterRestored
++);
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2/browser/wso2ThirdPartyNotificationFilter.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2/browser/wso2ThirdPartyNotificationFilter.ts
+@@ -0,0 +1,73 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import { Disposable } from '../../../../base/common/lifecycle.js';
++import { IWorkbenchContribution } from '../../../common/contributions.js';
++import { INotificationService, NotificationsFilter } from '../../../../platform/notification/common/notification.js';
++import { IExtensionService } from '../../../services/extensions/common/extensions.js';
++import { ILogService } from '../../../../platform/log/common/log.js';
++
++/**
++ * This contribution filters notifications from third-party extensions
++ * to reduce notification noise from non-WSO2 extensions.
++ */
++export class WSO2ThirdPartyNotificationFilter extends Disposable implements IWorkbenchContribution {
++
++	static readonly ID = 'workbench.contrib.wso2ThirdPartyNotificationFilter';
++
++	// List of WSO2 extension IDs that should NOT be filtered
++	private static readonly ALLOWED_EXT_ORGS = [
++		'wso2',
++		'vscode'
++	];
++
++	constructor(
++		@INotificationService private readonly notificationService: INotificationService,
++		@IExtensionService private readonly extensionService: IExtensionService,
++		@ILogService private readonly logService: ILogService,
++	) {
++		super();
++
++		// Wait for extensions to be registered before applying filters
++		this.extensionService.whenInstalledExtensionsRegistered().then(() => {
++			this.applyNotificationFilters();
++		});
++	}
++
++	private applyNotificationFilters(): void {
++		try {
++			const extensions = this.extensionService.extensions;
++			
++			for (const extension of extensions) {
++				const extensionId = extension.identifier.value;
++				// Skip built-in extensions and WSO2 extensions
++				if (this.isAllowedExtension(extensionId)) {
++					this.notificationService.removeFilter(extensionId);
++					continue;
++				}
++
++				// Filter notifications from third-party extensions
++				// Set filter to ERROR to only show error notifications
++				this.notificationService.setFilter({
++					id: extensionId,
++					label: extension.displayName || extension.name,
++					filter: NotificationsFilter.ERROR
++				});
++
++				this.logService.trace(`[WSO2] Filtered notifications for extension: ${extensionId}`);
++			}
++
++			this.logService.info('[WSO2] Third-party extension notification filters applied successfully.');
++		} catch (error) {
++			this.logService.error('[WSO2] Failed to apply notification filters:', error);
++		}
++	}
++
++	private isAllowedExtension(extensionId: string): boolean {
++		return WSO2ThirdPartyNotificationFilter.ALLOWED_EXT_ORGS.some(id => 
++			extensionId.toLowerCase().startsWith(`${id.toLowerCase()}.`)
++		);
++	}
++}
+Index: product-integrator/lib/vscode/src/vs/workbench/workbench.desktop.main.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/workbench.desktop.main.ts
++++ product-integrator/lib/vscode/src/vs/workbench/workbench.desktop.main.ts
+@@ -185,6 +185,9 @@ import './contrib/mcp/electron-browser/m
+ // Policy Export
+ import './contrib/policyExport/electron-browser/policyExport.contribution.js';
+ 
++// WSO2
++import './contrib/wso2/browser/wso2.contribution.js';
++
+ //#endregion
+ 
+ 
+Index: product-integrator/lib/vscode/src/vs/workbench/workbench.web.main.internal.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/workbench.web.main.internal.ts
++++ product-integrator/lib/vscode/src/vs/workbench/workbench.web.main.internal.ts
+@@ -170,6 +170,9 @@ import './contrib/remote/browser/remoteS
+ // Process Explorer
+ import './contrib/processExplorer/browser/processExplorer.web.contribution.js';
+ 
++// WSO2
++import './contrib/wso2/browser/wso2.contribution.js';
++
+ //#endregion
+ 
+ 
