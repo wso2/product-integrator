@@ -56,7 +56,10 @@ import {
     OpenMigrationReportRequest,
     SaveMigrationReportRequest,
     FetchSamplesRequest,
-    SemanticVersion
+    SemanticVersion,
+    storeSubProjectReports,
+    ValidateProjectFormRequest,
+    validateProjectPath
 } from "@wso2/wi-core";
 import { Messenger } from "vscode-messenger";
 import { MainRpcManager } from "./rpc-manager";
@@ -87,4 +90,6 @@ export function registerMainRpcHandlers(messenger: Messenger) {
     messenger.onRequest(showErrorMessage, (args: ShowErrorMessageRequest) => rpcManger.showErrorMessage(args));
     messenger.onRequest(openMigrationReport, (args: OpenMigrationReportRequest) => rpcManger.openMigrationReport(args));
     messenger.onRequest(saveMigrationReport, (args: SaveMigrationReportRequest) => rpcManger.saveMigrationReport(args));
+    messenger.onRequest(storeSubProjectReports, (args) => rpcManger.storeSubProjectReports(args));
+    messenger.onRequest(validateProjectPath, (args: ValidateProjectFormRequest) => rpcManger.validateProjectPath(args));
 }

@@ -73,6 +73,7 @@ export interface MigrateRequest {
     textEdits: {
         [key: string]: string;
     };
+    projects?: ProjectMigrationResult[];
 }
 
 export interface ProjectRequest {
@@ -91,4 +92,25 @@ export interface DownloadProgress {
     success: boolean;
     message: string;
     step?: number;
+}
+
+export interface ProjectMigrationResult {
+    projectName: string;
+    textEdits: {
+        [key: string]: string;
+    };
+    report: string;
+}
+
+export interface ImportIntegrationResponse {
+    error: string;
+    textEdits: {
+        [key: string]: string;
+    };
+    report: string;
+    jsonReport: string;
+}
+
+export interface StoreSubProjectReportsRequest {
+    reports: { [projectName: string]: string };
 }

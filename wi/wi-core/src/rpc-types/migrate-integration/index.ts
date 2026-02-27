@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { GetMigrationToolsResponse, ImportIntegrationResponse, ImportIntegrationRPCRequest, MigrateRequest, MigrationToolPullRequest, OpenMigrationReportRequest, SaveMigrationReportRequest } from "./interfaces";
+import { GetMigrationToolsResponse, ImportIntegrationResponse, ImportIntegrationRPCRequest, MigrateRequest, MigrationToolPullRequest, OpenMigrationReportRequest, SaveMigrationReportRequest, StoreSubProjectReportsRequest } from "./interfaces";
 
 export * from "./interfaces";
 export * from "./rpc-type";
@@ -28,4 +28,5 @@ export interface MigrateIntegrationAPI {
     openMigrationReport: (params: OpenMigrationReportRequest) => void;
     saveMigrationReport: (params: SaveMigrationReportRequest) => void;
     migrateProject: (params: MigrateRequest) => void;
+    storeSubProjectReports: (params: StoreSubProjectReportsRequest) => void;
 }

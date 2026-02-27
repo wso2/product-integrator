@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { DownloadProgress, ImportIntegrationResponse, MigrationTool, BIProjectRequest } from "@wso2/wi-core";
+import { DownloadProgress, MigrationTool, BIProjectRequest } from "@wso2/wi-core";
 
 export interface FinalIntegrationParams {
     importSourcePath: string;
@@ -31,6 +31,7 @@ export enum CoverageLevel {
 }
 
 export interface CoverageOverview {
+    projects?: number;
     unitName: string;
     coveragePercentage: number;
     coverageLevel: CoverageLevel;
@@ -38,7 +39,6 @@ export interface CoverageOverview {
     migratableElements: number;
     nonMigratableElements: number;
 }
-
 
 export interface MigrationReportJSON {
     coverageOverview: CoverageOverview;
@@ -66,12 +66,27 @@ export interface MigrationProgressProps {
     migrationCompleted: boolean;
     migrationSuccessful: boolean;
     migrationResponse: ImportIntegrationResponse | null;
+    projects: ProjectMigrationResult[];
+    isMultiProject: boolean;
     onNext: () => void;
     onBack: () => void;
 }
 
+export interface ProjectRequest {
+    projectName: string;
+    packageName: string;
+    projectPath: string;
+    createDirectory: boolean;
+    createAsWorkspace?: boolean;
+    workspaceName?: string;
+    orgName?: string;
+    version?: string;
+    isLibrary?: boolean;
+}
+
 export interface ConfigureProjectFormProps {
-    onNext: (project: BIProjectRequest) => void;
+    isMultiProject: boolean;
+    onNext: (project: ProjectRequest) => void;
     onBack: () => void;
 }
 
@@ -82,4 +97,25 @@ export interface MigrationDisplayState {
     hasReportData: boolean;
     showButtonsInStep: boolean;
     showButtonsAfterLogs: boolean;
+}
+
+export interface ProjectMigrationResult {
+    projectName: string;
+    textEdits: {
+        [key: string]: string;
+    };
+    report: string;
+}
+
+export interface ImportIntegrationResponse {
+    error: string;
+    textEdits: {
+        [key: string]: string;
+    };
+    report: string;
+    jsonReport: string;
+}
+
+export interface StoreSubProjectReportsRequest {
+    reports: { [projectName: string]: string };
 }
