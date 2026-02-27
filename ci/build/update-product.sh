@@ -1,4 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Accept version as first arg, default to 1.0.0
+VERSION=${1:-"1.0.0"}
+
 echo '{
+    "version": "'$VERSION'",
     "quality": "stable",
     "nameShort": "WSO2 Integrator",
     "nameLong": "WSO2 Integrator",

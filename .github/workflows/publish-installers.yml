@@ -147,7 +147,7 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh
+          ./ci/build/update-product.sh "${{ github.event.inputs.integrator_version }}"
       - name: Install dependencies
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
@@ -382,7 +382,7 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh
+          ./ci/build/update-product.sh "${{ github.event.inputs.integrator_version }}"
 
       - name: Validate Xcode tools (macOS)
         run: |
@@ -654,7 +654,7 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh
+          ./ci/build/update-product.sh "${{ github.event.inputs.integrator_version }}"
 
       - name: Install Rust toolchain (Windows)
         shell: pwsh
