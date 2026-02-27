@@ -46,11 +46,13 @@ import {
     COMMANDS,
     WebviewContext,
     FetchSamplesRequest,
-    SemanticVersion
+    SemanticVersion,
+    ValidateProjectFormRequest,
+    ValidateProjectFormResponse
 } from "@wso2/wi-core";
 import { commands, window, workspace, MarkdownString } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
-import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName } from "./utils";
+import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import * as fs from "fs";
 import * as path from "path";
 import axios from "axios";
@@ -58,9 +60,11 @@ import { pullMigrationTool } from "./migrate-integration";
 import { MigrationReportWebview } from "../../migration-report/webview";
 import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi-core";
 import { StateMachine } from "../../stateMachine";
+import { StoreSubProjectReportsRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration/interfaces";
 const platform = getPlatform();
 
 export class MainRpcManager implements WIVisualizerAPI {
+    private subProjectReports: Map<string, string> = new Map();
     constructor(private projectUri?: string) { }
 
     async getWebviewContext(): Promise<WebviewContext> {
@@ -308,6 +312,10 @@ export class MainRpcManager implements WIVisualizerAPI {
         });
     }
 
+    async validateProjectPath(params: ValidateProjectFormRequest): Promise<ValidateProjectFormResponse> {
+        return validateProjectPath(params.projectPath, params.projectName, params.createDirectory);
+    }
+
     async migrateProject(params: MigrateRequest): Promise<void> {
         return new Promise(async (resolve, reject) => {
             try {
@@ -319,6 +327,13 @@ export class MainRpcManager implements WIVisualizerAPI {
                 window.showErrorMessage(`Failed to create BI project: ${errorMessage}`);
                 reject(error);
             }
+        });
+    }
+
+    async storeSubProjectReports(params: StoreSubProjectReportsRequest): Promise<void> {
+        this.subProjectReports.clear();
+        Object.entries(params.reports).forEach(([projectName, reportContent]) => {
+            this.subProjectReports.set(projectName, reportContent);
         });
     }
 

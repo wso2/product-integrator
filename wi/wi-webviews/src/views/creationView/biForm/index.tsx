@@ -47,10 +47,17 @@ export function BIProjectForm() {
         packageName: "",
         path: "",
         createDirectory: true,
+        createAsWorkspace: false,
+        workspaceName: "",
         orgName: "",
         version: "",
+        isLibrary: false,
     });
     const [formSaved, setFormSaved] = useState(false);
+    const [isValidating, setIsValidating] = useState(false);
+    const [integrationNameError, setIntegrationNameError] = useState<string | null>(null);
+    const [pathError, setPathError] = useState<string | null>(null);
+    const [packageNameValidationError, setPackageNameValidationError] = useState<string | null>(null);
 
     const handleFormDataChange = (data: Partial<ProjectFormData>) => {
         setFormData(prev => ({ ...prev, ...data }));
@@ -76,20 +83,22 @@ export function BIProjectForm() {
                 <ProjectFormFields
                     formData={formData}
                     onFormDataChange={handleFormDataChange}
+                    integrationNameError={integrationNameError || undefined}
+                    pathError={pathError || undefined}
+                    packageNameValidationError={packageNameValidationError || undefined}
                 />
             </ScrollableContent>
             <ButtonWrapper>
                 <Button
-                    disabled={!isFormValid(formData) || formSaved}
+                    disabled={isValidating}
                     onClick={handleCreateProject}
                     appearance="primary"
                 >
-                    {formSaved ? (
-                        <>
-                            <ProgressRing sx={{ height: 16, marginLeft: -5, marginRight: 2 }} color="white" />
-                            Creating
-                        </>
-                    ) : formData.createAsWorkspace ? "Create Workspace" : "Create Integration"}
+                    {isValidating
+                        ? "Validating..."
+                        : formData.createAsWorkspace
+                            ? "Create Workspace"
+                            : "Create Integration"}
                 </Button>
             </ButtonWrapper>
         </div>

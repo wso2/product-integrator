@@ -216,6 +216,9 @@ export interface OpenMigrationReportRequest {
 export interface SaveMigrationReportRequest {
     reportContent: string;
     defaultFileName: string;
+    projectReports?: {
+        [projectName: string]: string;
+    };
 }
 
 export interface FetchSamplesRequest {
@@ -229,4 +232,20 @@ export interface BISampleItem {
     description: string;
     icon: string;
     isEnabled: boolean;
+}
+export interface ValidateProjectFormRequest {
+    projectPath: string;
+    projectName: string;
+    createDirectory: boolean;
+}
+
+export interface ValidateProjectFormResponse {
+    isValid: boolean;
+    errorMessage?: string;
+    errorField?: ValidateProjectFormErrorField;
+}
+
+export enum ValidateProjectFormErrorField {
+    PATH = 'path',
+    NAME = 'name'
 }

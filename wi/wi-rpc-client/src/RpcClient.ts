@@ -21,7 +21,8 @@
 import { Messenger } from "vscode-messenger-webview";
 import { vscode } from "./vscode";
 import { MainRpcClient } from "./rpc-clients/main/rpc-client";
-import { onDownloadProgress, onMigrationToolStateChanged, onMigrationToolLogs, onStateChanged, DownloadProgress, MigrationToolStateData, MigrationToolLogData, WebviewContext } from "@wso2/wi-core";
+import { onDownloadProgress, onMigrationToolStateChanged, onMigrationToolLogs, onStateChanged, DownloadProgress, MigrationToolStateData, MigrationToolLogData, WebviewContext, onMigratedProject } from "@wso2/wi-core";
+import { ProjectMigrationResult } from "@wso2/wi-core/lib/rpc-types/migrate-integration";
 
 export class RpcClient {
 
@@ -55,6 +56,12 @@ export class RpcClient {
     public onMigrationToolLogs(callback: (log: string) => void) {
         this.messenger.onNotification(onMigrationToolLogs, (data: MigrationToolLogData) => {
             callback(data.log);
+        });
+    }
+
+    public onMigratedProject(callback: (result: ProjectMigrationResult) => void) {
+        this.messenger.onNotification(onMigratedProject, (data: ProjectMigrationResult) => {
+            callback(data);
         });
     }
 

@@ -69,8 +69,13 @@ import {
     WebviewContext,
     getWebviewContext,
     FetchSamplesRequest,
-    SemanticVersion
+    SemanticVersion,
+    storeSubProjectReports,
+    ValidateProjectFormRequest,
+    ValidateProjectFormResponse,
+    validateProjectPath
 } from "@wso2/wi-core";
+import { StoreSubProjectReportsRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration";
 import { HOST_EXTENSION } from "vscode-messenger-common";
 import { Messenger } from "vscode-messenger-webview";
 
@@ -145,6 +150,10 @@ export class MainRpcClient implements WIVisualizerAPI {
         return this._messenger.sendRequest(createBIProject, HOST_EXTENSION, params);
     }
 
+    validateProjectPath(params: ValidateProjectFormRequest): Promise<ValidateProjectFormResponse> {
+        return this._messenger.sendRequest(validateProjectPath, HOST_EXTENSION, params);
+    }
+
     getMigrationTools(): Promise<GetMigrationToolsResponse> {
         return this._messenger.sendRequest(getMigrationTools, HOST_EXTENSION);
     }
@@ -155,6 +164,10 @@ export class MainRpcClient implements WIVisualizerAPI {
 
     migrateProject(params: MigrateRequest): Promise<void> {
         return this._messenger.sendRequest(migrateProject, HOST_EXTENSION, params);
+    }
+
+    storeSubProjectReports(params: StoreSubProjectReportsRequest): Promise<void> {
+        return this._messenger.sendRequest(storeSubProjectReports, HOST_EXTENSION, params);
     }
 
     pullMigrationTool(params: PullMigrationToolRequest): Promise<void> {

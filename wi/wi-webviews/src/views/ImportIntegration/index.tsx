@@ -16,14 +16,6 @@
  * under the License.
  */
 
-import {
-    BIProjectRequest,
-    DownloadProgress,
-    ImportIntegrationResponse,
-    ImportIntegrationRPCRequest,
-    MigrateRequest,
-    MigrationTool
-} from "@wso2/wi-core";
 import { Icon, Typography } from "@wso2/ui-toolkit";
 import { Stepper, StepperContainer } from "@wso2/ui-toolkit/lib/components/Stepper/Stepper";
 import { useEffect, useState } from "react";
@@ -31,8 +23,10 @@ import { ConfigureProjectForm } from "./ConfigureProjectForm";
 import { ImportIntegrationForm } from "./ImportIntegrationForm";
 import { MigrationProgressView } from "./MigrationProgressView";
 import { FormContainer, TitleContainer, IconButton } from "./styles";
-import { FinalIntegrationParams } from "./types";
+import { FinalIntegrationParams, ProjectMigrationResult, ProjectRequest } from "./types";
 import { useVisualizerContext } from "../../contexts";
+import { DownloadProgress, ImportIntegrationResponse, ImportIntegrationRPCRequest, MigrationTool } from "@wso2/wi-core";
+import { MigrateRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration";
 
 export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const { rpcClient } = useVisualizerContext();
@@ -42,6 +36,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const [toolPullProgress, setToolPullProgress] = useState<DownloadProgress | null>(null);
     const [migrationToolState, setMigrationToolState] = useState<string | null>(null);
     const [migrationToolLogs, setMigrationToolLogs] = useState<string[]>([]);
+    const [migratedProjects, setMigratedProjects] = useState<ProjectMigrationResult[]>([]);
     const [pullingTool, setPullingTool] = useState(false);
     const [selectedIntegration, setSelectedIntegration] = useState<MigrationTool | null>(null);
     const [migrationTools, setMigrationTools] = useState<MigrationTool[]>([]);
@@ -51,6 +46,8 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const [migrationResponse, setMigrationResponse] = useState<ImportIntegrationResponse | null>(null);
 
     const defaultSteps = ["Select Source Project", "Migration Status", "Create and Open Project"];
+
+    const isMultiProject = migratedProjects.length! > 0;
 
     const pullIntegrationTool = (commandName: string, version: string) => {
         setPullingTool(true);
@@ -88,17 +85,18 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                     setMigrationSuccessful(true);
                 }
             })
-            .catch((error: any) => {
+            .catch((error) => {
                 console.error("Error during TIBCO import:", error);
             });
     };
 
-    const handleCreateIntegrationFiles = (project: BIProjectRequest) => {
+    const handleCreateIntegrationFiles = (project: ProjectRequest) => {
         console.log("Creating integration files with params:", importParams);
         if (migrationResponse) {
             const params: MigrateRequest = {
                 project: project,
                 textEdits: migrationResponse.textEdits,
+                projects: migratedProjects,
             };
             rpcClient.getMainRpcClient().migrateProject(params);
         }
@@ -111,6 +109,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
             setMigrationCompleted(false);
             setMigrationSuccessful(false);
             setMigrationResponse(null);
+            setMigratedProjects([]);
         }
 
         setStep(step - 1);
@@ -148,6 +147,10 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
         rpcClient.onMigrationToolLogs((log) => {
             setMigrationToolLogs((prevLogs) => [...prevLogs, log]);
         });
+
+        rpcClient.onMigratedProject((project) => {
+            setMigratedProjects((prevProjects) => [...prevProjects, project]);
+        });
     }, [rpcClient]);
 
     useEffect(() => {
@@ -157,44 +160,44 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     }, [toolPullProgress, importParams, selectedIntegration]);
 
     return (
-        <div style={{ position: 'absolute', background: 'var(--vscode-editor-background)', height: '100vh', width: '100%', overflow: 'hidden' }} >
-            <FormContainer>
-                <TitleContainer>
-                    <IconButton onClick={onBack}>
-                        <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
-                    </IconButton>
-                    <Typography variant="h3">Migrate External Integration</Typography>
-                </TitleContainer>
+        <FormContainer>
+            <TitleContainer>
+                <IconButton onClick={onBack}>
+                    <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
+                </IconButton>
+                <Typography variant="h3">Migrate External Integration</Typography>
+            </TitleContainer>
 
-                <StepperContainer style={{ marginBottom: "4%" }}>
-                    <Stepper alignment="flex-start" steps={defaultSteps} currentStep={step} />
-                </StepperContainer>
-                {step === 0 && (
-                    <ImportIntegrationForm
-                        selectedIntegration={selectedIntegration}
-                        migrationTools={migrationTools}
-                        setImportParams={setImportParams}
-                        pullIntegrationTool={pullIntegrationTool}
-                        pullingTool={pullingTool}
-                        toolPullProgress={toolPullProgress}
-                        onSelectIntegration={setSelectedIntegration}
-                        handleStartImport={handleStartImport}
-                        onBack={onBack}
-                    />
-                )}
-                {step === 1 && (
-                    <MigrationProgressView
-                        migrationState={migrationToolState}
-                        migrationLogs={migrationToolLogs}
-                        migrationCompleted={migrationCompleted}
-                        migrationSuccessful={migrationSuccessful}
-                        migrationResponse={migrationResponse}
-                        onNext={() => setStep(2)}
-                        onBack={handleStepBack}
-                    />
-                )}
-                {step === 2 && <ConfigureProjectForm onNext={handleCreateIntegrationFiles} onBack={handleStepBack} />}
-            </FormContainer>
-        </div>
+            <StepperContainer style={{ marginBottom: "4%" }}>
+                <Stepper alignment="flex-start" steps={defaultSteps} currentStep={step} />
+            </StepperContainer>
+            {step === 0 && (
+                <ImportIntegrationForm
+                    selectedIntegration={selectedIntegration}
+                    migrationTools={migrationTools}
+                    setImportParams={setImportParams}
+                    pullIntegrationTool={pullIntegrationTool}
+                    pullingTool={pullingTool}
+                    toolPullProgress={toolPullProgress}
+                    onSelectIntegration={setSelectedIntegration}
+                    handleStartImport={handleStartImport}
+                    onBack={onBack}
+                />
+            )}
+            {step === 1 && (
+                <MigrationProgressView
+                    migrationState={migrationToolState}
+                    migrationLogs={migrationToolLogs}
+                    migrationCompleted={migrationCompleted}
+                    migrationSuccessful={migrationSuccessful}
+                    migrationResponse={migrationResponse}
+                    projects={migratedProjects}
+                    isMultiProject={isMultiProject}
+                    onNext={() => setStep(2)}
+                    onBack={handleStepBack}
+                />
+            )}
+            {step === 2 && <ConfigureProjectForm isMultiProject={isMultiProject} onNext={handleCreateIntegrationFiles} onBack={handleStepBack} />}
+        </FormContainer>
     );
 }

@@ -16,7 +16,8 @@
  * under the License.
  */
 
-import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest, SemanticVersion } from "../../types/rpc.types";
+import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest, SemanticVersion, ValidateProjectFormRequest, ValidateProjectFormResponse } from "../../types/rpc.types";
+import { StoreSubProjectReportsRequest } from "../migrate-integration";
 
 export * from "./rpc-type";
 export * from "../../types/rpc.types";
@@ -46,4 +47,6 @@ export interface WIVisualizerAPI {
     showErrorMessage: (params: ShowErrorMessageRequest) => Promise<void>;
     openMigrationReport: (params: OpenMigrationReportRequest) => Promise<void>;
     saveMigrationReport: (params: SaveMigrationReportRequest) => Promise<void>;
+    storeSubProjectReports: (params: StoreSubProjectReportsRequest) => Promise<void>;
+    validateProjectPath: (params: ValidateProjectFormRequest) => Promise<ValidateProjectFormResponse>;
 }
