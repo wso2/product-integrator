@@ -1,570 +1,838 @@
 name: Build and Release Artifacts
+
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: 'Select runner type'
+        required: true
+        default: 'codebuild'
+        type: choice
+        options:
+          - codebuild
+          - ubuntu-latest
       build_linux:
-        description: Build Linux artifacts
+        description: 'Build for Linux'
         required: false
         default: true
         type: boolean
       build_macos:
-        description: Build macOS artifacts
+        description: 'Build for macOS (Apple Silicon)'
         required: false
         default: true
         type: boolean
       build_windows:
-        description: Build Windows artifacts
+        description: 'Build for Windows'
         required: false
         default: true
         type: boolean
-      linux_arches:
-        description: JSON array of Linux ARCHes ["x64","arm64"]
+      build_packed_installers:
+        description: 'Whether to build a Balleirna, ICP, and Integrator packed installers'
+        default: true
+        required:  true
+        type: boolean
+      ballerina_version:
+        description: 'Specify Ballerina version to use'
         required: false
-        default: '["x64","arm64"]'
         type: string
-      macos_arches:
-        description: JSON array of macOS ARCHes ["x64","arm64"]
+      icp_version:
+        description: 'Specify ICP version to use'
         required: false
-        default: '["x64","arm64"]'
         type: string
-      windows_arches:
-        description: JSON array of Windows ARCHes ["x64","arm64"]
+      integrator_version:
+        description: 'Specify Integrator version to use'
         required: false
-        default: '["x64","arm64"]'
         type: string
+      delivery_mode:
+        description: 'Select delivery mode: archive artifacts as workflow artifacts or publish as a GitHub Release'
+        required: true
+        default: 'archive'
+        type: choice
+        options:
+          - archive
+          - github-release
+
+permissions:
+  id-token: write
+  contents: write     
+
+env:
+  awsRunnerId: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}  
 
 jobs:
   compile:
-    name: Compile (cacheable)
-    runs-on: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}
-    outputs:
-      cache-key: ${{ steps.cache-key.outputs.key }}
+    uses: ./.github/workflows/compile.yml
+    secrets: inherit  
+    with:
+      runOnAWS: ${{ github.event.inputs.runner == 'codebuild' }}
+      ballerina_version: ${{ github.event.inputs.ballerina_version }}
+      icp_version: ${{ github.event.inputs.icp_version }}
+      integrator_version: ${{ github.event.inputs.integrator_version }}
+      build_packed_installers: ${{ github.event.inputs.build_packed_installers == 'true' }}
+
+  build-macos:
+    if: ${{ github.event.inputs.build_macos == 'true' }}
+    name: Build (macOS)
+    runs-on: macos-latest
+    needs: compile
+    defaults:
+      run:
+        working-directory: lib/vscode
+    strategy:
+      matrix:
+        arch: [arm64]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Use Node from .nvmrc
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version-file: lib/vscode/.nvmrc
+          cache: npm
+          cache-dependency-path: lib/vscode/package-lock.json
 
-      - name: Compute node_modules cache key
-        id: cache-key
+      - name: Cache Rust toolchain (macOS)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-toolchain-macos-${{ matrix.arch }}-${{ hashFiles('lib/vscode/cli/Cargo.lock') }}
+          restore-keys: |
+            cargo-toolchain-macos-${{ matrix.arch }}-
+            cargo-toolchain-macos-
+
+      - name: Cache CLI compilation (macOS)
+        id: cache-cli-macos
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/cli/target/
+          key: cli-macos-${{ matrix.arch }}-${{ hashFiles('patches/*.diff', 'lib/vscode/cli/Cargo.lock', 'lib/vscode/cli/src/**/*.rs', 'lib/vscode/cli/Cargo.toml') }}
+          restore-keys: |
+            cli-macos-${{ matrix.arch }}-
+
+      - name: Cache native modules (macOS)
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            lib/vscode/.build/node_modules_cache
+          key: native-modules-macos-${{ matrix.arch }}-${{ hashFiles('lib/vscode/package-lock.json', 'patches/*.diff') }}
+          restore-keys: |
+            native-modules-macos-${{ matrix.arch }}-
+            native-modules-macos-
+
+      - name: Cache built-in extensions
+        id: cache-extensions-macos
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/.build/builtInExtensions
+            lib/vscode/.build/extensions
+          key: extensions-shared-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+
+      - name: Download compilation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: compilation
+          path: lib/vscode
+
+      - name: Extract compilation output
+        run: tar -xzf compilation.tar.gz
+
+      - name: Download WI extension VSIX
+        uses: actions/download-artifact@v4
+        with:
+          name: wi-extension-vsix
+          path: wi/wi-extension
+
+      - name: Install quilt (macOS)
         run: |
-          cd lib/vscode
-          mkdir -p .build
-          node build/azure-pipelines/common/computeNodeModulesCacheKey.js compile $(node -p process.arch) > .build/packagelockhash
-          echo "key=$(cat .build/packagelockhash)" >> $GITHUB_OUTPUT
+          brew install quilt
 
-      - name: Restore node_modules cache
-        uses: actions/cache@v4
-        with:
-          path: lib/vscode/.build/node_modules_cache
-          key: node_modules-${{ steps.cache-key.outputs.key }}
-
-      - name: Extract node_modules cache
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') != '' }}
-        run: |
-          tar -xzf lib/vscode/.build/node_modules_cache/cache.tgz || true
-
-      - name: Get latest lib/vscode rev
-        id: vscode-rev
-        run: echo "rev=$(git rev-parse HEAD:./lib/vscode)" >> $GITHUB_OUTPUT
-
-      - name: Fetch prebuilt Code package from cache
-        id: cache-vscode
-        uses: actions/cache@v4
-        with:
-          path: lib/vscode-reh-web-*
-          key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh') }}
-
-      - name: Fetch extensions from cache
-        uses: actions/cache@v4
-        with:
-          path: lib/vscode/.build/extensions
-          key: vscode-reh-extensions-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh') }}
-
-      - name: Cache apt packages
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: quilt
-          version: 1.0
-
-      - name: Apply patches
+      - name: Apply patches (macOS)
         run: quilt push -a
 
       - name: Update product.json and branding
+        working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh
 
-      - name: Install system deps
+      - name: Validate Xcode tools (macOS)
         run: |
-          sudo apt update 
-          sudo apt-get install build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3  
+          xcode-select -p
+          python3 -m pip install --user setuptools || true
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+          # Add ARM64 target for cross-compilation
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            rustup target add aarch64-apple-darwin
+          else
+            rustup target add x86_64-apple-darwin
+          fi
 
       - name: Install dependencies
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') == '' }}
-        working-directory: lib/vscode
         env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
-          for i in 1 2 3 4 5; do
-            npm ci && break
-            echo "npm ci failed $i, retrying..."
-          done
+          npm ci
 
-      - name: Create node_modules archive
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') == '' }}
-        working-directory: lib/vscode
+      - name: Mixin distro modules
         run: |
-          set -e
-          node build/azure-pipelines/common/listNodeModules.js .build/node_modules_list.txt
-          mkdir -p .build/node_modules_cache
-          tar -czf .build/node_modules_cache/cache.tgz --files-from .build/node_modules_list.txt
+          node build/azure-pipelines/distro/mixin-npm.ts || true
+          node build/azure-pipelines/distro/mixin-quality.ts || true
 
-      - name: Compile & Hygiene
-        working-directory: lib/vscode
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
-        run: |
-          npm exec -- npm-run-all -lp core-ci extensions-ci hygiene eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
-          npm run compile
-
-      - name: Compress compilation artifact
-        run: |
-          tar -cz --exclude='lib/vscode/.build/node_modules_cache' --exclude='lib/vscode/.build/node_modules_list.txt' --exclude='lib/vscode/.build/distro' -f compilation.tar.gz $(ls -d .build lib/vscode/out-* lib/vscode/test/integration/browser/out lib/vscode/test/smoke/out lib/vscode/test/automation/out 2>/dev/null)
-
-      - name: Upload compilation artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Compilation
-          path: compilation.tar.gz
-
-  build-linux:
-    name: Build Linux ${{ matrix.arch }}
-    runs-on: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}
-    needs: compile
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_linux == true }}
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.linux_arches) || fromJSON('["x64","arm64"]') }}
-    env:
-      VSCODE_ARCH: ${{ matrix.arch }}
-      NPM_ARCH: ${{ matrix.arch == 'x64' && 'x64' || 'arm64' }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: recursive
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: lib/vscode/.nvmrc
-
-      - name: Download compilation artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Compilation
-          path: .
-
-      - name: Extract compilation artifact
-        run: tar -xzf compilation.tar.gz
-
-      - name: Install system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config xvfb libgtk-3-0 libxkbfile-dev libkrb5-dev libgbm1 rpm
-
-      - name: Prepare node_modules cache key
-        run: |
-          cd lib/vscode
-          mkdir -p .build
-          node build/azure-pipelines/common/computeNodeModulesCacheKey.js linux $VSCODE_ARCH $(node -p process.arch) > .build/packagelockhash
-
-      - name: Restore node_modules cache
-        uses: actions/cache@v4
-        with:
-          path: .build/node_modules_cache
-          key: node_modules-${{ hashFiles('lib/vscode/.build/packagelockhash') }}
-
-      - name: Extract node_modules cache
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') != '' }}
-        run: tar -xzf lib/vscode/.build/node_modules_cache/cache.tgz || true
-
-      - name: Install dependencies
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') == '' }}
-        working-directory: lib/vscode
-        env:
-          npm_config_arch: ${{ env.NPM_ARCH }}
-          VSCODE_ARCH: ${{ env.VSCODE_ARCH }}
-          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
-        run: |
-          set -e
-          for i in 1 2 3 4 5; do
-            npm ci && break
-            echo "npm ci failed $i, retrying..."
-          done
-
-      - name: Create node_modules archive
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') == '' }}
-        working-directory: lib/vscode
-        run: |
-          set -e
-          node build/azure-pipelines/common/listNodeModules.js .build/node_modules_list.txt
-          mkdir -p .build/node_modules_cache
-          tar -czf .build/node_modules_cache/cache.tgz --files-from .build/node_modules_list.txt
-
-      - name: Update product.json and branding
-        run: |
-          chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh
-
-      - name: Build client
-        working-directory: lib/vscode
+      - name: Install builtin extensions
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run gulp vscode-linux-${VSCODE_ARCH}-min-ci
-          ARCHIVE_PATH=.build/linux/client/code-${VSCODE_ARCH}-$(date +%s).tar.gz
-          mkdir -p $(dirname $ARCHIVE_PATH)
-          echo "CLIENT_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
+          if [ "${{ steps.cache-extensions-macos.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ Extensions cache hit - using shared cached extensions"
+          else
+            echo "⬇️ Downloading built-in extensions"
+            npm run download-builtin-extensions
+          fi
 
-      - name: Archive client
-        run: |
-          tar -czf "$CLIENT_PATH" -C lib/vscode/.. VSCode-linux-${{ env.VSCODE_ARCH }}
-
-      - name: Build server
-        working-directory: lib/vscode
+      - name: Build client (macOS ${{ matrix.arch }})
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run gulp vscode-reh-linux-${VSCODE_ARCH}-min-ci
-          mv ../vscode-reh-linux-${VSCODE_ARCH} ../vscode-server-linux-${VSCODE_ARCH}
-          ARCHIVE_PATH=.build/linux/server/vscode-server-linux-${VSCODE_ARCH}.tar.gz
-          mkdir -p $(dirname $ARCHIVE_PATH)
-          tar --owner=0 --group=0 -czf "$ARCHIVE_PATH" -C .. vscode-server-linux-${VSCODE_ARCH}
-          echo "SERVER_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
+          npm run gulp vscode-darwin-${{ matrix.arch }}-min-ci
 
-      - name: Build server (web)
-        working-directory: lib/vscode
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build CLI (macOS ${{ matrix.arch }})
         run: |
-          npm run gulp vscode-reh-web-linux-${VSCODE_ARCH}-min-ci
-          mv ../vscode-reh-web-linux-${VSCODE_ARCH} ../vscode-server-linux-${VSCODE_ARCH}-web
-          ARCHIVE_PATH=.build/linux/web/vscode-server-linux-${VSCODE_ARCH}-web.tar.gz
-          mkdir -p $(dirname $ARCHIVE_PATH)
-          tar --owner=0 --group=0 -czf "$ARCHIVE_PATH" -C .. vscode-server-linux-${VSCODE_ARCH}-web
-          echo "WEB_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
+          source "$HOME/.cargo/env"
+          cd cli
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            TARGET_DIR="./target/aarch64-apple-darwin/release"
+            TARGET_TRIPLE="aarch64-apple-darwin"
+          else
+            TARGET_DIR="./target/x86_64-apple-darwin/release"
+            TARGET_TRIPLE="x86_64-apple-darwin"
+          fi
+          
+          if [ "${{ steps.cache-cli-macos.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ CLI cache hit - checking for cached CLI binary"
+            if [ -f "$TARGET_DIR/code" ]; then
+              echo "Cached CLI binary found and ready to use"
+            else
+              echo "⚠️ Cache hit but binary missing - rebuilding"
+              cargo build --release --bin=code --target=$TARGET_TRIPLE
+            fi
+          else
+            echo "❌ CLI cache miss - compiling CLI"
+            cargo build --release --bin=code --target=$TARGET_TRIPLE
+          fi
+          
+          # Set CLI_BIN path relative to parent directory (after cd ..)
+          CLI_BIN="./cli/$TARGET_DIR/code"
+          cd ..
 
-      - name: Prepare DEB
-        working-directory: lib/vscode
-        run: npm run gulp vscode-linux-${VSCODE_ARCH}-prepare-deb
+          # Verify CLI binary was built
+          if [ ! -f "$CLI_BIN" ]; then
+            echo "CLI binary not found at $CLI_BIN" >&2
+            find ./cli/target -type f -name code 2>/dev/null || true
+            exit 1
+          fi
+          
+          # Get CLI app name from the source product.json
+          CLI_APP_NAME=$(node -p "require('./product.json').tunnelApplicationName")
+          
+          # Find the .app directory inside VSCode-darwin-arm64
+          APP_DIR=$(find "../VSCode-darwin-${{ matrix.arch }}" -name "*.app" -type d | head -1)
+          if [ -z "$APP_DIR" ]; then
+            echo "Error: Could not find .app directory in VSCode-darwin-${{ matrix.arch }}" >&2
+            ls -la "../VSCode-darwin-${{ matrix.arch }}/"
+            exit 1
+          fi
+          
+          # Copy CLI to build output
+          mkdir -p "$APP_DIR/Contents/Resources/app/bin"
+          cp "$CLI_BIN" "$APP_DIR/Contents/Resources/app/bin/$CLI_APP_NAME"
+          chmod +x "$APP_DIR/Contents/Resources/app/bin/$CLI_APP_NAME"
 
-      - name: Build DEB
-        working-directory: lib/vscode
+      - name: Re-package with CLI (macOS ${{ matrix.arch }})
         run: |
-          npm run gulp vscode-linux-${VSCODE_ARCH}-build-deb
-          echo "DEB_PATH=$(ls .build/linux/deb/*/deb/*.deb)" >> $GITHUB_ENV
+          # Re-create the zip with the CLI included
+          mkdir -p ../artifacts
+          (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
 
-      - name: Prepare RPM
-        working-directory: lib/vscode
-        env:
-          VSCODE_ARCH: ${{ env.VSCODE_ARCH }}
-        run: npm run gulp vscode-linux-${VSCODE_ARCH}-prepare-rpm
-
-      - name: Build RPM
-        working-directory: lib/vscode
+      - name: Sign macOS application
         run: |
-          npm run gulp vscode-linux-${VSCODE_ARCH}-build-rpm
-          echo "RPM_PATH=$(ls .build/linux/rpm/*/*.rpm)" >> $GITHUB_ENV
-
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-${{ matrix.arch }}-artifacts
-          path: |
-            ${{ env.CLIENT_PATH }}
-            ${{ env.SERVER_PATH }}
-            ${{ env.WEB_PATH }}
-            ${{ env.DEB_PATH }}
-            ${{ env.RPM_PATH }}
-
-  build-macos:
-    name: Build macOS ${{ matrix.arch }}
-    runs-on: macos-latest
-    needs: compile
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_macos == true }}
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.macos_arches) || fromJSON('["x64","arm64"]') }}
-    env:
-      VSCODE_ARCH: ${{ matrix.arch }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: recursive
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: lib/vscode/.nvmrc
-
-      - name: Download compilation artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Compilation
-          path: .
-
-      - name: Extract compilation artifact
-        run: tar -xzf compilation.tar.gz
-
-      - name: Prepare node_modules cache key
-        run: |
-          mkdir -p .build
-          node lib/vscode/build/azure-pipelines/common/computeNodeModulesCacheKey.js darwin $VSCODE_ARCH $(node -p process.arch) > .build/packagelockhash
-
-      - name: Restore node_modules cache
-        uses: actions/cache@v4
-        with:
-          path: .build/node_modules_cache
-          key: node_modules-${{ hashFiles('lib/vscode/.build/packagelockhash') }}
-
-      - name: Extract node_modules cache
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') != '' }}
-        run: tar -xzf .build/node_modules_cache/cache.tgz || true
-
-      - name: Install dependencies
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') == '' }}
-        working-directory: lib/vscode
-        env:
-          npm_config_arch: ${{ env.VSCODE_ARCH }}
-          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
-          GYP_DEFINES: kerberos_use_rtld=false
-        run: |
-          set -e
-          python3 -m pip install setuptools
-          for i in 1 2 3 4 5; do
-            npm ci && break
-            echo "npm ci failed $i, retrying..."
-          done
-
-      - name: Create node_modules archive
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.tgz') == '' }}
-        working-directory: lib/vscode
-        run: |
-          set -e
-          node build/azure-pipelines/common/listNodeModules.js .build/node_modules_list.txt
-          mkdir -p .build/node_modules_cache
-          tar -czf .build/node_modules_cache/cache.tgz --files-from .build/node_modules_list.txt
-
-      - name: Update product.json and branding
-        run: |
-          chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh
-
-      - name: Build client
-        working-directory: lib/vscode
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npm run gulp vscode-darwin-${VSCODE_ARCH}-min-ci
-          echo "BUILT_CLIENT=true" >> $GITHUB_ENV
-
-      - name: Build server
-        working-directory: lib/vscode
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npm run gulp vscode-reh-darwin-${VSCODE_ARCH}-min-ci
-          mv ../vscode-reh-darwin-${VSCODE_ARCH} ../vscode-server-darwin-${VSCODE_ARCH}
-          ARCHIVE_PATH=.build/darwin/server/vscode-server-darwin-${VSCODE_ARCH}.zip
-          mkdir -p $(dirname $ARCHIVE_PATH)
-          (cd .. && zip -Xry $(pwd)/$ARCHIVE_PATH vscode-server-darwin-${VSCODE_ARCH})
-          echo "SERVER_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
-
-      - name: Build server (web)
-        working-directory: lib/vscode
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npm run gulp vscode-reh-web-darwin-${VSCODE_ARCH}-min-ci
-          mv ../vscode-reh-web-darwin-${VSCODE_ARCH} ../vscode-server-darwin-${VSCODE_ARCH}-web
-          ARCHIVE_PATH=.build/darwin/server/vscode-server-darwin-${VSCODE_ARCH}-web.zip
-          mkdir -p $(dirname $ARCHIVE_PATH)
-          (cd .. && zip -Xry $(pwd)/$ARCHIVE_PATH vscode-server-darwin-${VSCODE_ARCH}-web)
-          echo "WEB_PATH=$ARCHIVE_PATH" >> $GITHUB_ENV
-
-      - name: Package client (unsigned)
-        if: ${{ env.BUILT_CLIENT == 'true' }}
-        run: |
-          APP_ROOT="$GITHUB_WORKSPACE/lib/vscode/../VSCode-darwin-${VSCODE_ARCH}"
-          APP_NAME="$(ls $APP_ROOT | head -n 1)"
-          (cd "$APP_ROOT" && zip -Xry "$GITHUB_WORKSPACE/VSCode-darwin-${VSCODE_ARCH}.zip" "$APP_NAME")
+          # Find the app directory
+          APP_DIR=$(find "../VSCode-darwin-${{ matrix.arch }}" -name "*.app" -type d | head -1)
+          
+          if [ -n "$APP_DIR" ]; then
+            echo "Signing application: $APP_DIR"
+            
+            # Ad-hoc signing (for local development/testing)
+            codesign --force --deep --sign - "$APP_DIR"
+            
+            # Verify the signature
+            codesign --verify --verbose "$APP_DIR"
+            
+            echo "Application signed successfully"
+          else
+            echo "No .app directory found to sign"
+          fi
 
       - name: Upload macOS artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'false' }}
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}-artifacts
+          name: artifacts-darwin-${{ matrix.arch }}
           path: |
-            VSCode-darwin-${{ matrix.arch }}.zip
-            ${{ env.SERVER_PATH }}
-            ${{ env.WEB_PATH }}
+            lib/artifacts/*
+          if-no-files-found: error
+      
+      - name: Zip the artifacts and copy artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          APP_DIR=$(find "../VSCode-darwin-${{ matrix.arch }}" -name "*.app" -type d | head -1)
+          mkdir -p ../artifacts
+          (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
+          cp ../artifacts/VSCode-darwin-${{ matrix.arch }}.zip ../../installers/mac/
+      - name: Build macOS installer packages
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          ROOT_DIR=$(pwd)
+          echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+          BALLERINA_ARCH="macos-arm"
+          else
+          BALLERINA_ARCH="macos"
+          fi
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-${BALLERINA_ARCH}.zip"
+          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
+          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
+            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
+          fi
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          cd ./installers/mac
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
+          cd ${ROOT_DIR}
+
+      - name: Login to AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Upload macOS artifacts to S3
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        working-directory: .
+        run: |
+          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
+          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.pkg"
+      
+      - name: Upload macOS artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-Darwin-${{ matrix.arch }}
+          path: |
+            installers/mac/*.pkg
+          if-no-files-found: error
+
+      - name: cosign-installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: sigstore/cosign-installer@v3.5.0
+      - name: Sign the pkg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          cosign sign-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --output-certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --output-signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --yes
+
+      - name: Verify signature of the pkg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          cosign verify-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          
+      - name: Generate Hashes for pkg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sha256 installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg
+
+      - name: Upload Signatures and Hashes for pkg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Signatures-and-Hashes-PKG
+          path: |
+            installers/mac/*.pem
+            installers/mac/*.sig
+            installers/mac/*.sha256
+          if-no-files-found: error
 
   build-windows:
-    name: Build Windows ${{ matrix.arch }}
+    if: ${{ github.event.inputs.build_windows == 'true' }}
+    name: Build (Windows)
     runs-on: windows-latest
     needs: compile
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_windows == true }}
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.windows_arches) || fromJSON('["x64","arm64"]') }}
-    env:
-      VSCODE_ARCH: ${{ matrix.arch }}
+    defaults:
+      run:
+        working-directory: lib/vscode
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version-file: lib/vscode/.nvmrc
+          cache: npm
+          cache-dependency-path: lib/vscode/package-lock.json
+
+      - name: Cache native modules (Windows)
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/node_modules
+            lib/vscode/.build/node_modules_cache
+          key: native-modules-windows-${{ hashFiles('lib/vscode/package-lock.json') }}
+          restore-keys: |
+            native-modules-windows-
+
+      - name: Cache Rust toolchain (Windows)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-toolchain-windows-${{ hashFiles('lib/vscode/cli/Cargo.lock') }}
+          restore-keys: |
+            cargo-toolchain-windows-
+
+      - name: Cache CLI compilation (Windows)
+        id: cache-cli-windows
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/cli/target/
+          key: cli-windows-${{ hashFiles('patches/*.diff', 'lib/vscode/cli/Cargo.lock', 'lib/vscode/cli/src/**/*.rs', 'lib/vscode/cli/Cargo.toml') }}
+          restore-keys: |
+            cli-windows-
+
+      - name: Cache built-in extensions
+        id: cache-extensions-windows
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/.build/builtInExtensions
+            lib/vscode/.build/extensions
+          key: extensions-shared-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
         with:
-          name: Compilation
-          path: .
+          name: compilation
+          path: lib/vscode
 
-      - name: Extract compilation artifact
-        shell: bash
+      - name: Extract compilation output
+        shell: pwsh
         run: tar -xzf compilation.tar.gz
 
-      - name: Prepare node_modules cache key
-        shell: pwsh
-        run: |
-          mkdir .build -ea 0
-          node lib/vscode/build/azure-pipelines/common/computeNodeModulesCacheKey.js win32 $env:VSCODE_ARCH $(node -p process.arch) > .build/packagelockhash
-
-      - name: Restore node_modules cache
-        uses: actions/cache@v4
+      - name: Download WI extension VSIX
+        uses: actions/download-artifact@v4
         with:
-          path: .build/node_modules_cache
-          key: node_modules-${{ hashFiles('lib/vscode/.build/packagelockhash') }}
+          name: wi-extension-vsix
+          path: wi/wi-extension
 
-      - name: Extract node_modules cache
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.7z') != '' }}
+      - name: Install Rsync (Windows)
         shell: pwsh
-        run: 7z.exe x .build/node_modules_cache/cache.7z -aoa
-
-      - name: Install dependencies
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.7z') == '' }}
-        shell: pwsh
-        working-directory: lib/vscode
-        env:
-          npm_config_arch: ${{ env.VSCODE_ARCH }}
-          npm_config_foreground_scripts: "true"
-          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
         run: |
-          $ErrorActionPreference = "Stop"
-          for ($i = 1; $i -le 5; $i++) {
-            try { npm ci; break } catch { echo "npm ci failed $i, retrying..." }
-          }
+          choco install -y rsync  
 
-      - name: Create node_modules archive
-        if: ${{ hashFiles('lib/vscode/.build/node_modules_cache/cache.7z') == '' }}
-        shell: pwsh
-        working-directory: lib/vscode
+      - name: Apply patches (Windows)
+        shell: bash
+        working-directory: .
         run: |
-          node build/azure-pipelines/common/listNodeModules.js .build/node_modules_list.txt
-          mkdir -Force .build/node_modules_cache
-          7z.exe a .build/node_modules_cache/cache.7z -mx3 @.build/node_modules_list.txt
+          # Apply patches using git apply with lenient options
+          while IFS= read -r patch || [ -n "$patch" ]; do
+            # Trim whitespace from patch filename
+            patch=$(echo "$patch" | xargs)
+            # Skip empty lines and comments
+            [[ -z "$patch" || "$patch" =~ ^[[:space:]]*# ]] && continue
+            echo "Applying patch: $patch"
+            git apply --whitespace=fix --ignore-whitespace "patches/$patch" || \
+            git apply --reject --whitespace=fix "patches/$patch" || \
+            (echo "Warning: Failed to apply patch $patch" && exit 1)
+          done < patches/series
 
       - name: Update product.json and branding
+        shell: bash
+        working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh
 
-      - name: Build client
+      - name: Install Rust toolchain (Windows)
         shell: pwsh
-        working-directory: lib/vscode
+        run: |
+          # Download and install Rust
+          Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"
+          ./rustup-init.exe -y --default-toolchain stable
+          # Add Rust to PATH for this session
+          $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+
+      - name: Install OpenSSL (Windows)
+        shell: pwsh
+        run: |
+          # Install vcpkg and OpenSSL
+          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+          cd C:\vcpkg
+          .\bootstrap-vcpkg.bat
+          .\vcpkg.exe install openssl:x64-windows-static
+          # Set environment variables for OpenSSL
+          $env:VCPKG_ROOT = "C:\vcpkg"
+          $env:OPENSSL_DIR = "C:\vcpkg\installed\x64-windows-static"
+          # Make environment variables persistent for subsequent steps
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+          echo "OPENSSL_DIR=C:\vcpkg\installed\x64-windows-static" >> $env:GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=C:\vcpkg\installed\x64-windows-static\lib" >> $env:GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=C:\vcpkg\installed\x64-windows-static\include" >> $env:GITHUB_ENV
+
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci
+
+      - name: Mixin distro modules
+        run: |
+          node build/azure-pipelines/distro/mixin-npm.ts || true
+          node build/azure-pipelines/distro/mixin-quality.ts || true
+
+      - name: Install builtin extensions
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run gulp "vscode-win32-$env:VSCODE_ARCH-min-ci"
-          npm run gulp "vscode-win32-$env:VSCODE_ARCH-inno-updater"
-          echo "BUILT_CLIENT=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+          if [ "${{ steps.cache-extensions-windows.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ Extensions cache hit - using shared cached extensions"
+          else
+            echo "⬇️ Downloading built-in extensions"
+            npm run download-builtin-extensions
+          fi
 
-      - name: Build server
+      - name: Download exlporer Dll
         shell: pwsh
-        working-directory: lib/vscode
+        run: node build/win32/explorer-dll-fetcher.ts .build/win32/appx
+
+      - name: Build client (Windows)
+        shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run gulp "vscode-reh-win32-$env:VSCODE_ARCH-min-ci"
-          Move-Item ..\vscode-reh-win32-$env:VSCODE_ARCH ..\vscode-server-win32-$env:VSCODE_ARCH
-          echo "SERVER_ROOT=$pwd/../vscode-server-win32-$env:VSCODE_ARCH" | Out-File -FilePath $env:GITHUB_ENV -Append
+          npm run gulp "vscode-win32-x64-min-ci"
 
-      - name: Build server (web)
+      - name: Build CLI (Windows)
         shell: pwsh
-        working-directory: lib/vscode
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VCPKG_ROOT: C:\vcpkg
+          OPENSSL_DIR: C:\vcpkg\installed\x64-windows-static
+          OPENSSL_LIB_DIR: C:\vcpkg\installed\x64-windows-static\lib
+          OPENSSL_INCLUDE_DIR: C:\vcpkg\installed\x64-windows-static\include
+          OPENSSL_STATIC: 1
         run: |
-          npm run gulp "vscode-reh-web-win32-$env:VSCODE_ARCH-min-ci"
-          Move-Item ..\vscode-reh-web-win32-$env:VSCODE_ARCH ..\vscode-server-win32-$env:VSCODE_ARCH-web
-          echo "SERVER_WEB_ROOT=$pwd/../vscode-server-win32-$env:VSCODE_ARCH-web" | Out-File -FilePath $env:GITHUB_ENV -Append
+          # Add Rust to PATH
+          $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+          cd cli
+          
+          if ("${{ steps.cache-cli-windows.outputs.cache-hit }}" -eq "true") {
+            Write-Host "✅ CLI cache hit - checking for cached CLI binary"
+            if (Test-Path "./target/release/code.exe") {
+              Write-Host "Cached CLI binary found and ready to use"
+            } else {
+              Write-Host "⚠️ Cache hit but binary missing - rebuilding"
+              cargo build --release --bin=code
+            }
+          } else {
+            Write-Host "❌ CLI cache miss - compiling CLI"
+            cargo build --release --bin=code
+          }
+          
+          # Verify CLI binary was built
+          if (-not (Test-Path "./target/release/code.exe")) {
+            Write-Host "CLI binary not found at ./target/release/code.exe" -ForegroundColor Red
+            Get-ChildItem -Path ./target -Recurse -Name "code.exe" -ErrorAction SilentlyContinue
+            exit 1
+          }
 
-      - name: Zip artifacts
+      - name: Mix in built CLI into client (Windows)
         shell: pwsh
         run: |
-          $PackageJson = Get-Content -Raw -Path lib/vscode/../VSCode-win32-$env:VSCODE_ARCH\resources\app\package.json | ConvertFrom-Json
-          $Version = $PackageJson.version
-          $ClientArchivePath = ".build\win32-$env:VSCODE_ARCH\VSCode-win32-$env:VSCODE_ARCH-$Version.zip"
-          $ServerArchivePath = ".build\win32-$env:VSCODE_ARCH\vscode-server-win32-$env:VSCODE_ARCH.zip"
-          $WebArchivePath = ".build\win32-$env:VSCODE_ARCH\vscode-server-win32-$env:VSCODE_ARCH-web.zip"
-          mkdir -Force (Split-Path $ClientArchivePath)
-          Compress-Archive -Path lib/vscode/../VSCode-win32-$env:VSCODE_ARCH\* -DestinationPath $ClientArchivePath
-          Compress-Archive -Path $env:SERVER_ROOT\* -DestinationPath $ServerArchivePath
-          Compress-Archive -Path $env:SERVER_WEB_ROOT\* -DestinationPath $WebArchivePath
-          echo "CLIENT_PATH=$ClientArchivePath" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "SERVER_PATH=$ServerArchivePath" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "WEB_PATH=$WebArchivePath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          cd cli
+          $cliBin = "./target/release/code.exe"
+          
+          # Get CLI app name from source product.json (not from app bundle)
+          $productJson = Get-Content "../product.json" | ConvertFrom-Json
+          $cliAppName = $productJson.tunnelApplicationName + ".exe"
+          
+          # Create bin directory and copy CLI
+          $binDir = "../VSCode-win32-x64/bin"
+          New-Item -ItemType Directory -Path $binDir -Force
+          Copy-Item $cliBin "$binDir/$cliAppName"
 
-      - name: Build installers (system/user)
+      - name: Re-package with CLI (Windows)
         shell: pwsh
         run: |
-          $PackageJson = Get-Content -Raw -Path lib/vscode/../VSCode-win32-$env:VSCODE_ARCH\resources\app\package.json | ConvertFrom-Json
-          $Version = $PackageJson.version
-          $SystemSetupPath = ".build\win32-$env:VSCODE_ARCH\system-setup\VSCodeSetup-$env:VSCODE_ARCH-$Version.exe"
-          $UserSetupPath = ".build\win32-$env:VSCODE_ARCH\user-setup\VSCodeUserSetup-$env:VSCODE_ARCH-$Version.exe"
-          mkdir -Force (Split-Path $SystemSetupPath)
-          mkdir -Force (Split-Path $UserSetupPath)
-          Move-Item .build\win32-$env:VSCODE_ARCH\system-setup\VSCodeSetup.exe $SystemSetupPath
-          Move-Item .build\win32-$env:VSCODE_ARCH\user-setup\VSCodeSetup.exe $UserSetupPath
-          echo "SYSTEM_SETUP_PATH=$SystemSetupPath" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "USER_SETUP_PATH=$UserSetupPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          # Re-create the zip with the CLI included
+          mkdir -p ../artifacts
+          $archivePath = "../artifacts/VSCode-win32-x64.zip"
+          Remove-Item $archivePath -ErrorAction SilentlyContinue
+          Compress-Archive -Path ../VSCode-win32-x64/* -DestinationPath $archivePath -Force
 
       - name: Upload Windows artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'false' }}
         uses: actions/upload-artifact@v4
         with:
-          name: windows-${{ matrix.arch }}-artifacts
+          name: artifacts-win32
           path: |
-            ${{ env.CLIENT_PATH }}
-            ${{ env.SERVER_PATH }}
-            ${{ env.WEB_PATH }}
-            ${{ env.SYSTEM_SETUP_PATH }}
-            ${{ env.USER_SETUP_PATH }}
+            lib/artifacts/*
+          if-no-files-found: error
+      
+      - name: Copy Integrator artifact to build directory
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
+      - name: Build Windows installer packages
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        shell: pwsh
+        run: |
+          cd ..\..
+          $ROOT_DIR = Get-Location
+          Write-Host "Root dir: $ROOT_DIR"
+          $BALLERINA_VERSION = "${{ github.event.inputs.ballerina_version }}"
+          $BALLERINA_VERSION_FILENAME = $BALLERINA_VERSION -replace '-.*$', ''
+          $BALLERINA_URL = "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-windows.zip"
+          $ICP_VERSION = "${{ github.event.inputs.icp_version }}"
+          $ICP_VERSION_FILENAME = $ICP_VERSION -replace '-.*$', ''
+          if ($ICP_VERSION -ne $ICP_VERSION_FILENAME) {
+            $ICP_VERSION_FILENAME = "${ICP_VERSION_FILENAME}-SNAPSHOT"
+          }
+          $ICP_URL = "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
+          $INTEGRATOR_VERSION = "${{ github.event.inputs.integrator_version }}"
+          cd .\installers\windows
+          Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
+          Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
+          .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip $INTEGRATOR_VERSION
+
+      - name: Login to AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Upload Windows artifacts to S3
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        shell: bash
+        working-directory: .
+        run: |
+          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
+          aws s3 cp installers/windows/WixPackage/bin/x64/Release/en-US/ "${S3_PATH}" --recursive --exclude "*" --include "*.msi"
+
+      - name: Upload Windows artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-Windows
+          path: |
+            installers\windows\WixPackage\bin\x64\Release\en-US\*.msi
+          if-no-files-found: error
+      
+      - name: cosign-installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: sigstore/cosign-installer@v3.5.0
+      - name: Sign the msi installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          cosign sign-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --output-certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --output-signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --yes
+      - name: Verify signature of the msi installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+
+          
+      - name: Generate Hashes for msi installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          openssl dgst -sha256 -out installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sha256 installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi 
+
+      - name: Upload Signatures and Hashes for msi installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Signatures-and-Hashes-MSI
+          path: |
+            installers\windows\*.pem
+            installers\windows\*.sig
+            installers\windows\*.sha256
+          if-no-files-found: error
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [compile, build-macos, build-windows]
+    if: always() && (needs.compile.result == 'success') && (github.event.inputs.build_packed_installers == 'false') && (github.event.inputs.delivery_mode == 'archive')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+
+      - name: Create unified release artifact
+        run: |
+          mkdir -p release-artifacts
+          
+          # Copy Linux artifacts if available
+          if [ -d "all-artifacts/artifacts-linux" ]; then
+            cp all-artifacts/artifacts-linux/* release-artifacts/ || true
+          fi
+          
+          # Copy macOS artifacts if available
+          if [ -d "all-artifacts/artifacts-darwin-x64" ]; then
+            cp all-artifacts/artifacts-darwin-x64/* release-artifacts/ || true
+          fi
+          if [ -d "all-artifacts/artifacts-darwin-arm64" ]; then
+            cp all-artifacts/artifacts-darwin-arm64/* release-artifacts/ || true
+          fi
+          
+          # Copy Windows artifacts if available
+          if [ -d "all-artifacts/artifacts-win32" ]; then
+            cp all-artifacts/artifacts-win32/* release-artifacts/ || true
+          fi
+          
+          # List all created artifacts
+          echo "Created release artifacts:"
+          ls -la release-artifacts/
+
+      - name: Upload unified release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wso2-integrator-release
+          path: release-artifacts/*
+          if-no-files-found: warn
+
+  publish-github-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [compile, build-macos, build-windows]
+    if: |
+      always() &&
+      (needs.compile.result == 'success') &&
+      (github.event.inputs.delivery_mode == 'github-release') &&
+      (github.event.inputs.build_packed_installers == 'true')
+    steps:
+      - name: Download Linux DEB artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-DEB
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Signatures and Hashes (DEB)
+        uses: actions/download-artifact@v4
+        with:
+          name: Signatures-and-Hashes-DEB
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Linux RPM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-RPM
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Signatures and Hashes (RPM)
+        uses: actions/download-artifact@v4
+        with:
+          name: Signatures-and-Hashes-RPM
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Linux TAR artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-TAR
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download macOS PKG artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-Darwin-arm64
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Signatures and Hashes (PKG)
+        uses: actions/download-artifact@v4
+        with:
+          name: Signatures-and-Hashes-PKG
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Windows MSI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-Windows
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Signatures and Hashes (MSI)
+        uses: actions/download-artifact@v4
+        with:
+          name: Signatures-and-Hashes-MSI
+          path: release-files/
+        continue-on-error: true
+
+      - name: List release files
+        run: |
+          echo "Files to be released under tag v${{ github.event.inputs.integrator_version }}:"
+          ls -la release-files/ || echo "No release files found"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.integrator_version }}
+          name: WSO2 Integrator v${{ github.event.inputs.integrator_version }}
+          draft: false
+          prerelease: false
+          files: release-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

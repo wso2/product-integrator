@@ -1,0 +1,503 @@
+name: Compile
+
+on: 
+  workflow_call:
+    inputs: 
+      runOnAWS:
+        default: false
+        type: boolean
+      awsRunnerId:
+        default: 'codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}'
+        type: string
+      build_packed_installers:
+        description: 'Whether to build a Balleirna, ICP, and Integrator packed installers'
+        default: true
+        required:  true
+        type: boolean
+      ballerina_version:
+        description: 'Specify Ballerina version to use'
+        required: false
+        type: string
+      icp_version:
+        description: 'Specify ICP version to use'
+        required: false
+        type: string
+      integrator_version:
+        description: 'Specify Integrator version to use'
+        required: false
+        type: string  
+
+permissions:
+  id-token: write
+  contents: write     
+
+jobs:
+  validate-Inputs:
+    if: ${{ inputs.build_packed_installers == true }}
+    name: Validate Inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required inputs
+        run: |
+          if [ -z "${{ inputs.ballerina_version }}" ] || [ -z "${{ inputs.icp_version }}" ] || [ -z "${{ inputs.integrator_version }}" ]; then
+            echo "Error: ballerina_version, icp_version, and integrator_version must not be empty."
+            exit 1
+          else
+            echo "All required version inputs are provided."
+          fi
+  compile:
+    name: Build repo
+    timeout-minutes: 45
+    runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
+    defaults:
+      run:
+        working-directory: lib/vscode
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+          cache: npm
+          cache-dependency-path: lib/vscode/package-lock.json
+
+      - name: Setup Rush
+        uses: gigara/setup-rush@v1.2.0
+        with:
+          pnpm: 10.11.0
+
+      # TODO: Enable TypeScript cache when stable    
+      # - name: Cache TypeScript compilation
+      #   id: cache-typescript
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: |
+      #       lib/vscode/out
+      #       lib/vscode/out-*
+      #       lib/vscode/.build/extensions
+      #       lib/vscode/.build/builtInExtensions
+      #     key: typescript-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json', 'lib/vscode/package-lock.json') }}
+      #     restore-keys: |
+      #       typescript-${{ runner.os }}-
+
+      - name: Cache built-in extensions
+        id: cache-extensions
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/.build/builtInExtensions
+            lib/vscode/.build/extensions
+          key: extensions-shared-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+
+      - name: Cache Rust toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-toolchain-${{ runner.os }}-${{ hashFiles('lib/vscode/cli/Cargo.lock') }}
+          restore-keys: |
+            cargo-toolchain-${{ runner.os }}-
+
+      - name: Cache CLI compilation
+        id: cache-cli
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/cli/target/
+          key: cli-${{ runner.os }}-${{ hashFiles('patches/*.diff', 'lib/vscode/cli/Cargo.lock', 'lib/vscode/cli/src/**/*.rs', 'lib/vscode/cli/Cargo.toml') }}
+          restore-keys: |
+            cli-${{ runner.os }}-
+
+      - name: Cache Linux sysroots
+        uses: actions/cache@v4
+        with:
+          path: |
+            lib/vscode/.build/sysroots
+          key: sysroots-${{ runner.os }}-glibc-2.28-gcc
+          restore-keys: |
+            sysroots-${{ runner.os }}-
+
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3 quilt
+          version: 1.0
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+          rustup target add x86_64-unknown-linux-gnu
+  
+      - name: Get latest lib/vscode rev
+        id: vscode-rev
+        run: echo "rev=$(git rev-parse HEAD:./lib/vscode)" >> $GITHUB_OUTPUT
+  
+      - name: Fetch prebuilt Code package from cache
+        id: cache-vscode
+        uses: actions/cache@v4
+        with:
+          path: lib/vscode-reh-web-*
+          key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+  
+      - name: Update product.json and branding
+        working-directory: .
+        run: |
+          chmod +x ./ci/build/update-product.sh
+          ./ci/build/update-product.sh
+
+      - name: Copy .env.example to .env
+        shell: bash
+        working-directory: .
+        run: |
+          find . -type f -name ".env.example" | while read example; do
+            envfile="$(dirname "$example")/.env"
+            cp "$example" "$envfile"
+          done
+
+      - name: Setup WI
+        uses: gigara/setup-rush@v1.2.0
+
+      - name: Build WI extension
+        working-directory: .
+        run: |
+          node common/scripts/install-run-rush.js build --verbose
+
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm ci
+
+      - name: Mixin distro modules
+        run: |
+          node build/azure-pipelines/distro/mixin-npm.ts || true
+          node build/azure-pipelines/distro/mixin-quality.ts || true
+
+      - name: Install builtin extensions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ steps.cache-extensions.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ Extensions cache hit - using cached extensions"
+          else
+            echo "⬇️ Downloading built-in extensions"
+            npm run download-builtin-extensions
+          fi
+
+      - name: Compile (with cache optimization)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ steps.cache-typescript.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ TypeScript cache hit - using cached compilation"
+            echo "Skipping core compilation, running validation only"
+            npm exec -- npm-run-all -lp extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+          else
+            echo "❌ TypeScript cache miss - full compilation required"
+            echo "Running complete compilation pipeline"
+            npm run extensions-ci
+            npm run core-ci-pr
+            npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+          fi
+
+      - name: Compress compilation artifact
+        run: |
+          tar -cz --exclude='.build/node_modules_cache' --exclude='.build/node_modules_list.txt' --exclude='.build/distro' -f ../compilation.tar.gz $(ls -d .build out-* test/integration/browser/out test/smoke/out test/automation/out 2>/dev/null)
+
+      - name: Build client (Linux)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run gulp vscode-linux-x64-min-ci
+          ARCHIVE_PATH=../artifacts/vscode-linux-x64.tar.gz
+          mkdir -p ../artifacts
+          tar -czf "$ARCHIVE_PATH" -C .. VSCode-linux-x64
+      
+      - name: Copy Integrator artifact to build directories
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-deb/
+          cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-rpm/
+          cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-tar/
+
+      - name: Build Linux packages - deb
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          ROOT_DIR=$(pwd)
+          echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
+          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
+          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
+            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
+          fi
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          cd ./installers/linux-deb
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          cd ${ROOT_DIR}
+
+      - name: Upload Deb artifacts
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-DEB
+          path: |
+            installers/linux-deb/*.deb
+          if-no-files-found: error
+
+        
+      - name: Build Linux packages - rpm
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          ROOT_DIR=$(pwd)
+          echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
+          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
+          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
+            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
+          fi
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          cd ./installers/linux-rpm
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          cd ${ROOT_DIR}
+      - name: Upload RPM artifacts
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-RPM
+          path: |
+            installers/linux-rpm/*.rpm
+          if-no-files-found: error
+        
+      - name: Build Linux packages - tar
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          ROOT_DIR=$(pwd)
+          echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
+          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
+          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
+          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
+            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
+          fi
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          cd ./installers/linux-tar
+          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O icp.zip "$ICP_URL"
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          cd ${ROOT_DIR}
+      - name: Upload TAR artifacts
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-TAR
+          path: |
+            installers/linux-tar/wso2-integrator-*.tar.gz
+          if-no-files-found: error
+        
+      - name: cosign-installer
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: sigstore/cosign-installer@v3.5.0
+      - name: Sign the deb, rpm installers
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
+            RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
+            RPM_VERSION="${INTEGRATOR_VERSION%-*}"
+          else
+            RPM_RELEASE="1"
+            RPM_VERSION="$INTEGRATOR_VERSION"
+          fi
+          cosign sign-blob installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb --output-certificate installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.pem --output-signature installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.sig --yes
+          cosign sign-blob installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm --output-certificate installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.pem --output-signature installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.sig --yes
+      - name: Verify signature of the deb, rpm installers
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
+            RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
+            RPM_VERSION="${INTEGRATOR_VERSION%-*}"
+          else
+            RPM_RELEASE="1"
+            RPM_VERSION="$INTEGRATOR_VERSION"
+          fi
+          cosign verify-blob installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb --certificate installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.pem --signature installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm --certificate installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.pem --signature installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/compile.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          
+      - name: Generate Hashes for deb, rpm installers
+        if: ${{ inputs.build_packed_installers == true}}
+        run: |
+          cd ../..
+          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
+            RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
+            RPM_VERSION="${INTEGRATOR_VERSION%-*}"
+          else
+            RPM_RELEASE="1"
+            RPM_VERSION="$INTEGRATOR_VERSION"
+          fi
+          openssl dgst -sha256 -out installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb.sha256 installers/linux-deb/wso2-integrator_${INTEGRATOR_VERSION}_amd64.deb
+          openssl dgst -sha256 -out installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm.sha256 installers/linux-rpm/wso2-integrator-${RPM_VERSION}-${RPM_RELEASE}.x86_64.rpm
+
+      - name: Upload Signatures and Hashes for deb installer
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Signatures-and-Hashes-DEB
+          path: |
+            installers/linux-deb/*.pem
+            installers/linux-deb/*.sig
+            installers/linux-deb/*.sha256
+          if-no-files-found: error
+        
+      - name: Upload Signatures and Hashes for rpm installer
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/upload-artifact@v4  
+        with:
+          name: Signatures-and-Hashes-RPM
+          path: |
+            installers/linux-rpm/*.pem
+            installers/linux-rpm/*.sig
+            installers/linux-rpm/*.sha256
+          if-no-files-found: error
+
+
+      - name: Build CLI (Linux)
+        if: ${{ inputs.build_packed_installers == false}}
+        run: |
+          source "$HOME/.cargo/env"
+          cd cli
+          if [ "${{ steps.cache-cli.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ CLI cache hit - using cached CLI binary"
+            # Verify the binary exists and is executable
+            if [ -f "./target/release/code" ]; then
+              echo "Cached CLI binary found and ready to use"
+            else
+              echo "⚠️ Cache hit but binary missing - rebuilding"
+              cargo build --release --bin=code
+            fi
+          else
+            echo "❌ CLI cache miss - compiling CLI"
+            cargo build --release --bin=code
+          fi
+
+      - name: Mix in built CLI into client (Linux)
+        if: ${{ inputs.build_packed_installers == false}}
+        run: |
+          set -e
+          CLI_BIN=./cli/target/release/code
+          if [ ! -f "$CLI_BIN" ]; then
+            echo "CLI binary not found at $CLI_BIN" >&2
+            find ./cli/target -type f -name code 2>/dev/null || true
+            exit 1
+          fi
+          CLI_APP_NAME=$(node -p "require('../VSCode-linux-x64/resources/app/product.json').tunnelApplicationName")
+          mkdir -p ../VSCode-linux-x64/bin
+          cp "$CLI_BIN" "../VSCode-linux-x64/bin/$CLI_APP_NAME"
+          chmod +x "../VSCode-linux-x64/bin/$CLI_APP_NAME"
+
+      - name: Build Linux packages - deb (only Integrator)
+        if: ${{ inputs.build_packed_installers == false}}
+        env:
+          VSCODE_ARCH: x64
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # DEB build
+          npm run gulp "vscode-linux-$VSCODE_ARCH-prepare-deb"
+          npm run gulp "vscode-linux-$VSCODE_ARCH-build-deb"
+
+          # Copy outputs
+          cp .build/linux/deb/*/deb/*.deb ../artifacts/ || true
+
+      - name: Build Linux packages - rpm (only Integrator)
+        if: ${{ inputs.build_packed_installers == false}}
+        env:
+          VSCODE_ARCH: x64
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TRIPLE=""
+          if [ "$VSCODE_ARCH" == "x64" ]; then
+            TRIPLE="x86_64-linux-gnu"
+          elif [ "$VSCODE_ARCH" == "arm64" ]; then
+            TRIPLE="aarch64-linux-gnu"
+          elif [ "$VSCODE_ARCH" == "armhf" ]; then
+            TRIPLE="arm-rpi-linux-gnueabihf"
+          fi
+          export VSCODE_SYSROOT_DIR=.build/sysroots/glibc-2.28-gcc-10.5.0
+          export STRIP="$VSCODE_SYSROOT_DIR/$TRIPLE/$TRIPLE/bin/strip"
+          npm run gulp "vscode-linux-$VSCODE_ARCH-prepare-rpm"
+          npm run gulp "vscode-linux-$VSCODE_ARCH-build-rpm"
+
+          # Copy outputs
+          cp .build/linux/rpm/*/*.rpm ../artifacts/ || true
+
+      - name: Upload Linux artifacts (only Integrator)
+        if: ${{ inputs.build_packed_installers == false}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-linux
+          path: |
+            lib/artifacts/*
+          if-no-files-found: error
+
+      - name: Upload compilation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compilation
+          path: lib/compilation.tar.gz
+          if-no-files-found: error
+
+      - name: Upload WI extension VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: wi-extension-vsix
+          path: wi/wi-extension/wso2-integrator-*.vsix
+          if-no-files-found: error
+
+      
+      - name: Login to AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Upload linux artifacts to S3
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        working-directory: .
+        run: |
+          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
+          aws s3 cp installers/linux-deb/ "${S3_PATH}" --recursive --exclude "*" --include "*.deb"
+          aws s3 cp installers/linux-rpm/ "${S3_PATH}" --recursive --exclude "*" --include "*.rpm"

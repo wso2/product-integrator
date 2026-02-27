@@ -30,9 +30,10 @@ if [ "$#" -lt 3 ]; then
 fi
 
 BALLERINA_ZIP="$1"
-INTEGRATOR_TAR_GZ="$2"
-ICP_ZIP="$3"
-VERSION="${4:-1.0.0}"
+BALLERINA_VERSION="$2"
+INTEGRATOR_TAR_GZ="$3"
+ICP_ZIP="$4"
+VERSION="${5:-1.0.0}"
 
 # Check if input files exist
 if [ ! -f "$BALLERINA_ZIP" ]; then
@@ -52,49 +53,117 @@ fi
 
 # Define paths
 INTEGRATOR_TARGET="$WORK_DIR/package/usr/share/wso2-integrator"
-BALLERINA_TARGET="$WORK_DIR/package/usr/lib/ballerina"
-ICP_TARGET="$WORK_DIR/package/usr/lib/wso2/icp"
+COMPONENTS_DIR="$INTEGRATOR_TARGET/components"
+BALLERINA_TARGET="$COMPONENTS_DIR/ballerina"
+DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
+ICP_TARGET="$COMPONENTS_DIR/icp"
+EXTRACTION_TARGET="$WORK_DIR/extraction_temp"
 
 print_info "Starting DEB package build process..."
 
 # Clean and recreate package directories
 print_info "Preparing package structure..."
 rm -rf "$INTEGRATOR_TARGET"
-rm -rf "$BALLERINA_TARGET"
-rm -rf "$ICP_TARGET"
+rm -rf "$EXTRACTION_TARGET"
 mkdir -p "$INTEGRATOR_TARGET"
-mkdir -p "$BALLERINA_TARGET"
-mkdir -p "$ICP_TARGET"
-
-# Extract ballerina zip
-print_info "Extracting Ballerina runtime..."
-unzip -q -o "$BALLERINA_ZIP" -d "$BALLERINA_TARGET"
-# Move contents from the extracted folder to BALLERINA_TARGET
-bal_extracted_dir=$(find "$BALLERINA_TARGET" -mindepth 1 -maxdepth 1 -type d | head -n 1)
-if [ -n "$bal_extracted_dir" ]; then
-    mv "$bal_extracted_dir"/* "$BALLERINA_TARGET"/
-    rmdir "$bal_extracted_dir"
-fi
+mkdir -p "$EXTRACTION_TARGET"
 
 # Extract integrator archive
 print_info "Extracting WSO2 Integrator..."
 tar -xzf "$INTEGRATOR_TAR_GZ" -C "$INTEGRATOR_TARGET" --strip-components=1
 
+# Extract Ballerina zip
+print_info "Extracting Ballerina to components..."
+mkdir -p "$COMPONENTS_DIR"
+unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
+BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$BALLERINA_ZIP" | head -1 | cut -d/ -f1)
+BALLERINA_UNZIPPED_PATH="$EXTRACTION_TARGET/$BALLERINA_UNZIPPED_FOLDER"
+
+# Create a temp directory for consolidation
+BALLERINA_TEMP="$WORK_DIR/ballerina_temp"
+rm -rf "$BALLERINA_TEMP"
+mkdir -p "$BALLERINA_TEMP"
+
+# Move distributions contents to temp
+print_info "Consolidating Ballerina distributions"
+if [ -d "$BALLERINA_UNZIPPED_PATH/distributions" ]; then
+    DIST_FOLDER=$(ls "$BALLERINA_UNZIPPED_PATH/distributions" | head -1)
+    if [ -n "$DIST_FOLDER" ]; then
+        cp -r "$BALLERINA_UNZIPPED_PATH/distributions/$DIST_FOLDER"/* "$BALLERINA_TEMP/"
+    fi
+fi
+
+# Move distributions contents to target (without JDK)
+mkdir -p "$BALLERINA_TARGET"
+mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
+
+# Move JDK to shared dependencies directory
+print_info "Moving JDK to shared dependencies directory"
+rm -rf "$DEPENDENCIES_DIR"
+mkdir -p "$DEPENDENCIES_DIR"
+if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
+    for jdk_folder in "$BALLERINA_UNZIPPED_PATH/dependencies"/*; do
+        if [ -d "$jdk_folder" ]; then
+            JDK_FOLDER=$(basename "$jdk_folder")
+            cp -r "$jdk_folder" "$DEPENDENCIES_DIR/"
+        fi
+    done
+fi
+
+rm -rf "$BALLERINA_UNZIPPED_PATH"
+rm -rf "$BALLERINA_TEMP"
+
+# Replace bal script with the one from balscript
+print_info "Replacing bal script with updated version from balscript"
+cp "$WORK_DIR/balscript/bal" "$BALLERINA_TARGET/bin/bal"
+sed -i "s/@BALLERINA_VERSION@/$BALLERINA_VERSION/g" "$BALLERINA_TARGET/bin/bal"
+chmod +x "$BALLERINA_TARGET/bin"/*
+
 # Extract ICP zip
 print_info "Extracting Integration Control Plane..."
-unzip -q -o "$ICP_ZIP" -d "$ICP_TARGET"
-# Move contents from the extracted folder to ICP_TARGET
-icp_extracted_dir=$(find "$ICP_TARGET" -mindepth 1 -maxdepth 1 -type d | head -n 1)
-if [ -n "$icp_extracted_dir" ]; then
-    mv "$icp_extracted_dir"/* "$ICP_TARGET"/
-    rmdir "$icp_extracted_dir"
+mkdir -p "$ICP_TARGET"
+unzip -o "$ICP_ZIP" -d "$EXTRACTION_TARGET"
+ICP_UNZIPPED_FOLDER=$(unzip -Z1 "$ICP_ZIP" | head -1 | cut -d/ -f1)
+ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
+mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
+rm -rf "$ICP_UNZIPPED_PATH"
+chmod +x "$ICP_TARGET/bin"/*
+
+# Modify icp.sh to use the JDK from shared dependencies directory
+ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
+if [ -f "$ICP_SCRIPT" ]; then
+    print_info "Modifying icp.sh to use JDK from dependencies ($JDK_FOLDER)"
+    sed -i "s|java|\"\$SCRIPT_DIR\"/../../dependencies/$JDK_FOLDER/bin/java|g" "$ICP_SCRIPT"
 fi
+
+# # Update dashboard.sh to set JAVA_HOME to point to shared JDK
+# print_info "Updating dashboard.sh to point to shared JDK"
+# DASHBOARD_SCRIPT="$ICP_TARGET/bin/dashboard.sh"
+# if [ -f "$DASHBOARD_SCRIPT" ]; then
+#     cat > "$DASHBOARD_SCRIPT.tmp" << 'DASHBOARD_EOF'
+# # Set JAVA_HOME for installers
+# SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
+# # Find JDK folder dynamically in the shared dependencies directory
+# for jdk in "$SCRIPT_DIR"/../../dependencies/jdk-*; do
+#     if [ -d "$jdk" ]; then
+#         export JAVA_HOME="$jdk"
+#         break
+#     fi
+# done
+# DASHBOARD_EOF
+#     # Insert the Java home setup after the PRG and PRGDIR definitions (line 18-19)
+#     head -n 19 "$DASHBOARD_SCRIPT" > "$DASHBOARD_SCRIPT.new"
+#     cat "$DASHBOARD_SCRIPT.tmp" >> "$DASHBOARD_SCRIPT.new"
+#     tail -n +20 "$DASHBOARD_SCRIPT" >> "$DASHBOARD_SCRIPT.new"
+#     mv "$DASHBOARD_SCRIPT.new" "$DASHBOARD_SCRIPT"
+#     rm "$DASHBOARD_SCRIPT.tmp"
+#     chmod +x "$DASHBOARD_SCRIPT"
+# fi
 
 # Set executable permissions
 print_info "Setting executable permissions..."
 find "$INTEGRATOR_TARGET/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
 chmod +x "$INTEGRATOR_TARGET/wso2-integrator" 2>/dev/null || true
-find "$BALLERINA_TARGET/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
 
 # Make DEBIAN scripts executable
 chmod 755 "$WORK_DIR/package/DEBIAN/postinst"
@@ -129,10 +198,11 @@ else
     exit 1
 fi
 
-# Cleanup extracted files (commented out to match RPM behavior)
-rm -rf "${INTEGRATOR_TARGET:?}"
-rm -rf "${BALLERINA_TARGET:?}"
-rm -rf "${ICP_TARGET:?}"
+# Cleanup extracted files
+rm -rf "$EXTRACTION_TARGET"
+
+# Revert version in control file back to @VERSION@
+sed -i "s/^Version: $VERSION$/Version: @VERSION@/" "$WORK_DIR/package/DEBIAN/control"
 
 print_info "DEB package build completed successfully!"
 print_info "You can install the package using: sudo dpkg -i $OUTPUT_DEB"

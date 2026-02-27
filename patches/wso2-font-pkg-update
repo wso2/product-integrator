@@ -1,0 +1,56 @@
+Index: product-integrator/external/wso2-vscode-extensions/workspaces/common-libs/font-wso2-vscode/src/plugin-icons/configurePlugins.js
+===================================================================
+--- product-integrator.orig/external/wso2-vscode-extensions/workspaces/common-libs/font-wso2-vscode/src/plugin-icons/configurePlugins.js
++++ product-integrator/external/wso2-vscode-extensions/workspaces/common-libs/font-wso2-vscode/src/plugin-icons/configurePlugins.js
+@@ -145,28 +145,35 @@ const copyDirectoryContent = (srcDir, de
+ const ballerinaIcons = config.ballerinaExtIcons || [];
+ const choreoIcons = config.choreoExtIcons || [];
+ const mIIcons = config.mIExtIcons || [];
++const wIIcons = config.wIExtIcons || [];
+ 
+ const ballerinaIconsContribution = generateFontIconsContribution(ballerinaIcons);
+ const choreoIconsContribution = generateFontIconsContribution(choreoIcons);
+ const mIIconsContribution = generateFontIconsContribution(mIIcons);
++const wIIconsContribution = generateFontIconsContribution(wIIcons);
+ 
+ // Merge the generated icons contribution into the existing package.json contributes
+-const choreoExtPackageJsonPath = path.join(__dirname, '..', '..', '..', '..', 'choreo', 'choreo-extension', 'package.json');
+-const ballerinaExtPackageJsonPath = path.join(__dirname, '..', '..', '..', '..', 'ballerina', 'ballerina-extension', 'package.json');
+-const mIExtPackageJsonPath = path.join(__dirname, '..', '..', '..', '..', 'mi', 'mi-extension', 'package.json');
++// const choreoExtPackageJsonPath = path.join(__dirname, '..', '..', '..', '..', 'choreo', 'choreo-extension', 'package.json');
++// const ballerinaExtPackageJsonPath = path.join(__dirname, '..', '..', '..', '..', 'ballerina', 'ballerina-extension', 'package.json');
++// const mIExtPackageJsonPath = path.join(__dirname, '..', '..', '..', '..', 'mi', 'mi-extension', 'package.json');
++const wIExtPackageJsonPath = path.join(__dirname, '..', '..', '..', '..', '..',  '..',  '..', 'wi', 'wi-extension', 'package.json');
+ 
+-const choreoExtPackageJson = require(choreoExtPackageJsonPath);
+-const ballerinaExtPackageJson = require(ballerinaExtPackageJsonPath);
+-const mIExtPackageJson = require(mIExtPackageJsonPath);
++// const choreoExtPackageJson = require(choreoExtPackageJsonPath);
++// const ballerinaExtPackageJson = require(ballerinaExtPackageJsonPath);
++// const mIExtPackageJson = require(mIExtPackageJsonPath);
++const wIExtPackageJson = require(wIExtPackageJsonPath);
+ 
+-choreoExtPackageJson.contributes.icons = { ...choreoExtPackageJson.contributes.icons, ...choreoIconsContribution };
+-ballerinaExtPackageJson.contributes.icons = { ...ballerinaExtPackageJson.contributes.icons, ...ballerinaIconsContribution };
+-mIExtPackageJson.contributes.icons = { ...mIExtPackageJson.contributes.icons, ...mIIconsContribution };
++  // choreoExtPackageJson.contributes.icons = { ...choreoExtPackageJson.contributes.icons, ...choreoIconsContribution };
++  // ballerinaExtPackageJson.contributes.icons = { ...ballerinaExtPackageJson.contributes.icons, ...ballerinaIconsContribution };
++  // mIExtPackageJson.contributes.icons = { ...mIExtPackageJson.contributes.icons, ...mIIconsContribution };
++wIExtPackageJson.contributes.icons = { ...wIExtPackageJson.contributes.icons, ...wIIconsContribution };
+ 
+ // Write the modified package.json files back to the file system
+-fs.writeFileSync(choreoExtPackageJsonPath, JSON.stringify(choreoExtPackageJson, null, 2), 'utf-8');
+-fs.appendFileSync(choreoExtPackageJsonPath, '\n');
+-fs.writeFileSync(ballerinaExtPackageJsonPath, JSON.stringify(ballerinaExtPackageJson, null, 4), 'utf-8');
+-fs.appendFileSync(ballerinaExtPackageJsonPath, '\n');
+-fs.writeFileSync(mIExtPackageJsonPath, JSON.stringify(mIExtPackageJson, null, 2), 'utf-8');
+-fs.appendFileSync(mIExtPackageJsonPath, '\n');
++// fs.writeFileSync(choreoExtPackageJsonPath, JSON.stringify(choreoExtPackageJson, null, 2), 'utf-8');
++// fs.appendFileSync(choreoExtPackageJsonPath, '\n');
++// fs.writeFileSync(ballerinaExtPackageJsonPath, JSON.stringify(ballerinaExtPackageJson, null, 4), 'utf-8');
++// fs.appendFileSync(ballerinaExtPackageJsonPath, '\n');
++// fs.writeFileSync(mIExtPackageJsonPath, JSON.stringify(mIExtPackageJson, null, 2), 'utf-8');
++// fs.appendFileSync(mIExtPackageJsonPath, '\n');
++fs.writeFileSync(wIExtPackageJsonPath, JSON.stringify(wIExtPackageJson, null, 2), 'utf-8');
++fs.appendFileSync(wIExtPackageJsonPath, '\n');
+\ No newline at end of file

@@ -1,3 +1,0 @@
-#!/bin/bash
-# Configure to provide any warning later during installation
-# osascript -e 'display dialog "Warning: WSO2 Integrator is currently running. Please quit the application before continuing." buttons {"OK"} default button 1 with icon caution'

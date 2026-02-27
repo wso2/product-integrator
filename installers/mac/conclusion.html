@@ -1,9 +1,57 @@
 <!DOCTYPE html>
-<html>
-<head><title>Installation Complete</title></head>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Installation Complete</title>
+	<style>
+		body {
+			font-family: 'Segoe UI', Arial, sans-serif;
+			margin: 0;
+			padding: 0;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			min-height: 100vh;
+		}
+		.container {
+			padding: 40px 32px 32px 32px;
+			max-width: 420px;
+			text-align: center;
+		}
+		h1 {
+			color: #3498db;
+			margin-bottom: 16px;
+			font-size: 2.2em;
+			text-shadow: none;
+		}
+		p {
+			font-size: 1.1em;
+			margin-bottom: 0;
+			color: #ecf0f1;
+			text-shadow: none;
+		}
+		.logo {
+			width: 64px;
+			height: 64px;
+			margin-bottom: 18px;
+		}
+		.success-icon {
+			font-size: 3em;
+			color: #2ecc71;
+			margin-bottom: 12px;
+			text-shadow: none;
+		}
+	</style>
+</head>
 <body>
-<h1>Installation Complete!</h1>
-<p>WSO2 Integrator has been installed to your Applications folder.</p>
-<p>You can find it at: /Applications/WSO2 Integrator.app</p>
+	<div class="container">
+		<div class="success-icon">&#10004;</div>
+		<h1>Installation Complete!</h1>
+		<p><b>WSO2 Integrator</b> has been successfully installed to your <b>Applications</b> folder.</p>
+		<p>You can find it at:<br><b>~/Applications/WSO2 Integrator.app</b></p>
+		<p>Thank you for choosing WSO2 Integrator.<br>We hope you enjoy your experience!</p>
+	</div>
 </body>
 </html>

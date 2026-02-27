@@ -1,0 +1,167 @@
+/**
+ * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+.welcome-container {
+	padding: 2rem;
+	max-width: 1200px;
+	margin: 0 auto;
+	font-family: var(--vscode-font-family);
+}
+
+.welcome-header {
+	text-align: center;
+	margin-bottom: 3rem;
+}
+
+.welcome-header h1 {
+	font-size: 2.5rem;
+	margin-bottom: 0.5rem;
+	color: var(--vscode-foreground);
+}
+
+.welcome-subtitle {
+	font-size: 1.1rem;
+	color: var(--vscode-descriptionForeground);
+}
+
+.integrations-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+	gap: 2rem;
+	margin-bottom: 3rem;
+}
+
+.integration-card {
+	background-color: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 8px;
+	padding: 2rem;
+	transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.integration-card:hover {
+	transform: translateY(-4px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.integration-card.unavailable {
+	opacity: 0.6;
+}
+
+.card-icon {
+	width: 64px;
+	height: 64px;
+	border-radius: 12px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 1rem;
+	font-size: 1.5rem;
+	font-weight: bold;
+	color: white;
+}
+
+.bi-icon {
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.mi-icon {
+	background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.integration-card h2 {
+	font-size: 1.5rem;
+	margin-bottom: 0.5rem;
+	color: var(--vscode-foreground);
+}
+
+.integration-card p {
+	color: var(--vscode-descriptionForeground);
+	line-height: 1.6;
+	margin-bottom: 1.5rem;
+}
+
+.primary-button {
+	background-color: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border: none;
+	padding: 0.75rem 1.5rem;
+	border-radius: 4px;
+	font-size: 1rem;
+	cursor: pointer;
+	transition: background-color 0.2s;
+}
+
+.primary-button:hover {
+	background-color: var(--vscode-button-hoverBackground);
+}
+
+.not-available {
+	padding: 1rem;
+	background-color: var(--vscode-inputValidation-warningBackground);
+	border: 1px solid var(--vscode-inputValidation-warningBorder);
+	border-radius: 4px;
+}
+
+.warning-text {
+	color: var(--vscode-inputValidation-warningForeground);
+	font-weight: bold;
+	margin-bottom: 0.5rem;
+}
+
+.help-text {
+	color: var(--vscode-descriptionForeground);
+	font-size: 0.9rem;
+}
+
+.quick-links {
+	margin-top: 3rem;
+}
+
+.quick-links h3 {
+	font-size: 1.5rem;
+	margin-bottom: 1rem;
+	color: var(--vscode-foreground);
+}
+
+.links-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 1rem;
+}
+
+.link-card {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 1rem;
+	background-color: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 4px;
+	text-decoration: none;
+	color: var(--vscode-textLink-foreground);
+	transition: background-color 0.2s;
+}
+
+.link-card:hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+.link-icon {
+	font-size: 1.5rem;
+}

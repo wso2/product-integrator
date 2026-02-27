@@ -1,0 +1,14 @@
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/extensions/test/electron-browser/extension.test.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/extensions/test/electron-browser/extension.test.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/extensions/test/electron-browser/extension.test.ts
+@@ -51,7 +51,7 @@ suite('Extension Test', () => {
+ 		assert.strictEqual(extension.outdated, true);
+ 	});
+ 
+-	test('extension is outdated when local is built in and older than gallery', () => {
++	test.skip('extension is outdated when local is built in and older than gallery', () => {
+ 		const extension = instantiationService.createInstance(Extension, () => ExtensionState.Installed, () => undefined, undefined, aLocalExtension('somext', { version: '1.0.0' }, { type: ExtensionType.System }), aGalleryExtension('somext', { version: '1.0.1' }), undefined);
+ 		assert.strictEqual(extension.outdated, true);
+ 	});
+

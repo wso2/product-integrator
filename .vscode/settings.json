@@ -1,0 +1,24 @@
+{
+    // --- Search ---
+    "search.exclude": {
+        "**/node_modules": true,
+        "cli/target/**": true,
+        ".build/**": true,
+        "out/**": true,
+        "out-build/**": true,
+        "out-vscode/**": true,
+        "i18n/**": true,
+        "extensions/**/dist/**": true,
+        "extensions/**/out/**": true,
+        "test/smoke/out/**": true,
+        "test/automation/out/**": true,
+        "test/integration/browser/out/**": true,
+        "src/vs/base/test/common/filters.perf.data.js": true,
+        "src/vs/base/test/node/uri.perf.data.txt": true,
+        "src/vs/workbench/api/test/browser/extHostDocumentData.test.perf-data.ts": true,
+        "src/vs/base/test/node/uri.test.data.txt": true,
+        "src/vs/editor/test/node/diffing/fixtures/**": true,
+        "build/loader.min": true,
+        "external/**": true
+    },
+}

@@ -1,0 +1,67 @@
+{
+    "$schema": "https://developer.microsoft.com/json-schemas/rush/v5/rush.schema.json",
+    "rushVersion": "5.155.1",
+    "pnpmVersion": "10.11.0",
+    "nodeSupportedVersionRange": ">=18.0.0 <23.0.0",
+    "suppressNodeLtsWarning": false,
+    "ensureConsistentVersions": false,
+    "projectFolderMinDepth": 2,
+    "projectFolderMaxDepth": 5,
+    "allowMostlyStandardPackageNames": true,
+    "projects": [
+        {
+            "packageName": "@wso2/font-wso2-vscode",
+            "projectFolder": "external/wso2-vscode-extensions/workspaces/common-libs/font-wso2-vscode",
+            "reviewCategory": "production",
+            "shouldPublish": false
+        },
+        {
+            "packageName": "@wso2/ui-toolkit",
+            "projectFolder": "external/wso2-vscode-extensions/workspaces/common-libs/ui-toolkit",
+            "reviewCategory": "production",
+            "shouldPublish": false
+        },
+        {
+            "packageName": "@wso2/wi-core",
+            "projectFolder": "wi/wi-core",
+            "reviewCategory": "production",
+            "shouldPublish": false
+        },
+        {
+            "packageName": "@wso2/wi-rpc-client",
+            "projectFolder": "wi/wi-rpc-client",
+            "reviewCategory": "production",
+            "shouldPublish": false
+        },
+        {
+            "packageName": "@wso2/wi-webviews",
+            "projectFolder": "wi/wi-webviews",
+            "reviewCategory": "production",
+            "shouldPublish": false
+        },
+        {
+            "packageName": "wso2-integrator",
+            "projectFolder": "wi/wi-extension",
+            "reviewCategory": "production",
+            "shouldPublish": false
+        }
+    ],
+    "eventHooks": {
+        "preRushInstall": [
+            "npm run init-submodules"
+        ],
+        "postRushInstall": [],
+        "preRushBuild": [
+            "npm run apply-patches",
+            "npm run update-product"
+        ],
+        "postRushBuild": [
+        ]
+    },
+    "gitPolicy": {},
+    "repository": {
+        "url": "https://github.com/wso2/product-integrator",
+        "defaultBranch": "main",
+        "defaultRemote": "origin"
+    }
+}
