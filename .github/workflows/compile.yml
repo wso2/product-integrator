@@ -169,7 +169,12 @@ jobs:
       - name: Build WI extension
         working-directory: .
         run: |
-          node common/scripts/install-run-rush.js build --verbose
+          set -eo pipefail
+          if ! node common/scripts/install-run-rush.js build --verbose; then
+            echo "Rush build failed. Attempting to refresh shrinkwrap and retry..."
+            node common/scripts/install-run-rush.js update
+            node common/scripts/install-run-rush.js build --verbose
+          fi
 
       - name: Install dependencies
         env:
