@@ -5,7 +5,7 @@ set -euo pipefail
 VERSION=${1:-"1.0.0"}
 
 echo '{
-    "version": "'$VERSION'",
+    "commit": "'$VERSION'",
     "quality": "stable",
     "nameShort": "WSO2 Integrator",
     "nameLong": "WSO2 Integrator",
@@ -71,7 +71,7 @@ echo '{
 	  "builtInExtensions": [
       {
         "name": "wso2.wso2-platform",
-        "version": "1.0.22"
+        "version": "1.0.23"
       },
       {
         "name": "redhat.vscode-yaml",
@@ -87,15 +87,15 @@ echo '{
       },
       {
         "name": "wso2.ballerina",
-        "version": "5.9.26022514"
+        "version": "5.9.26022711"
       },
       {
         "name": "wso2.ballerina-integrator",
-        "version": "1.8.26022015"
+        "version": "1.8.26022707"
       },
       {
         "name": "wso2.micro-integrator",
-        "version": "3.1.426022612"
+        "version": "3.1.426022718"
       },
       {
         "name": "wso2.wso2-integrator",
