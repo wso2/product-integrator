@@ -22,6 +22,8 @@ import { debug } from "./ballerinaLogger";
 import { RPCLayer } from "../../RPCLayer";
 import * as vscode from "vscode";
 import { getBallerinaExtension } from "../../utils/ballerinaExtension";
+import { StateMachine } from "../../stateMachine";
+import { WEB_VIEW_TYPE } from "../../webviewManager";
 
 const PROGRESS_COMPLETE = 100;
 
@@ -61,16 +63,18 @@ export async function pullMigrationTool(migrationToolName: string, version: stri
     }
 
     const ballerinaCmd = ballerinaExt.exports.ballerinaExtInstance.getBallerinaCmd();
-    const command = `${ballerinaCmd} tool pull ${migrationToolName}:${version}`;
+    const command = `"${ballerinaCmd}" tool pull ${migrationToolName}:${version}`;
     debug(`Executing migration tool pull command: ${command}`);
 
     // 2. This function now returns a promise that wraps the exec lifecycle
     return new Promise<void>((resolve, reject) => {
         // Helper to send notifications to the webview
         const sendProgress = (progress: DownloadProgress) => {
-            RPCLayer._messengers.get("wi-webview")?.sendNotification(
+            // forward progress to the webview messenger registered for the current projectUri
+            const projectUri = StateMachine.getContext().projectUri ?? 'global';
+            RPCLayer._messengers.get(projectUri)?.sendNotification(
                 onDownloadProgress,
-                { type: 'webview', webviewType: 'wso2IntegratorWelcome' },
+                { type: 'webview', webviewType: WEB_VIEW_TYPE },
                 progress
             );
         };
