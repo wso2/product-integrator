@@ -58,6 +58,7 @@ import * as path from "path";
 import axios from "axios";
 import { pullMigrationTool } from "./migrate-integration";
 import { MigrationReportWebview } from "../../migration-report/webview";
+import { RPCLayer } from "../../RPCLayer";
 import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi-core";
 import { StateMachine } from "../../stateMachine";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration/interfaces";
@@ -358,6 +359,17 @@ export class MainRpcManager implements WIVisualizerAPI {
         };
         const langClient = await this.getLangClient();
         langClient.registerMigrationToolCallbacks();
+
+        // the WI webview receives onMigratedProject notifications as each project is migrated.
+        const projectUri = StateMachine.getContext().projectUri ?? 'global';
+        langClient.onNotification('projectService/pushMigratedProject', (res: any) => {
+            try {
+                RPCLayer.notifyMigratedProject(res, projectUri);
+            } catch (error) {
+                console.error('[WI] Error forwarding migratedProject notification:', error);
+            }
+        });
+
         switch (params.commandName) {
             case "migrate-tibco":
                 return langClient.importTibcoToBI(langParams);
