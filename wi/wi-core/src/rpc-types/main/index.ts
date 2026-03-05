@@ -27,6 +27,7 @@ export interface WIVisualizerAPI {
     closeWebview: () => void;
     openBiExtension: () => void;
     openMiExtension: () => void;
+    openSettings: (settingKey: string) => void;
     runCommand: (params: RunCommandRequest) => Promise<RunCommandResponse>;
     selectFileOrDirPath: (params: FileOrDirRequest) => Promise<FileOrDirResponse>;
     selectFileOrFolderPath: () => Promise<FileOrDirResponse>;

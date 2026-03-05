@@ -27,6 +27,7 @@ export const onStateChanged: NotificationType<WebviewContext> = { method: `${_pr
 export const closeWebview: NotificationType<void> = { method: `${_preFix}/closeWebview` };
 export const openBiExtension: NotificationType<void> = { method: `${_preFix}/openBiExtension` };
 export const openMiExtension: NotificationType<void> = { method: `${_preFix}/openMiExtension` };
+export const openSettings: NotificationType<string> = { method: `${_preFix}/openSettings` };
 export const runCommand: RequestType<RunCommandRequest, RunCommandResponse> = { method: `${_preFix}/runCommand` };
 export const selectFileOrDirPath: RequestType<FileOrDirRequest, FileOrDirResponse> = { method: `${_preFix}/selectFileOrDirPath` };
 export const selectFileOrFolderPath: RequestType<void, FileOrDirResponse> = { method: `${_preFix}/selectFileOrFolderPath` };

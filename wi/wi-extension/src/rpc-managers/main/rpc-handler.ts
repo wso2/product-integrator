@@ -59,7 +59,8 @@ import {
     SemanticVersion,
     storeSubProjectReports,
     ValidateProjectFormRequest,
-    validateProjectPath
+    validateProjectPath,
+    openSettings
 } from "@wso2/wi-core";
 import { Messenger } from "vscode-messenger";
 import { MainRpcManager } from "./rpc-manager";
@@ -70,6 +71,7 @@ export function registerMainRpcHandlers(messenger: Messenger) {
     messenger.onNotification(closeWebview, () => rpcManger.closeWebview());
     messenger.onNotification(openBiExtension, () => rpcManger.openBiExtension());
     messenger.onNotification(openMiExtension, () => rpcManger.openMiExtension());
+    messenger.onNotification(openSettings, (settingKey: string) => rpcManger.openSettings(settingKey));
     messenger.onRequest(runCommand, (args: RunCommandRequest) => rpcManger.runCommand(args));
     messenger.onRequest(selectFileOrDirPath, (args: FileOrDirRequest) => rpcManger.selectFileOrDirPath(args));
     messenger.onRequest(selectFileOrFolderPath, () => rpcManger.selectFileOrFolderPath());

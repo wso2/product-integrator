@@ -27,6 +27,7 @@ import {
     closeWebview,
     openBiExtension,
     openMiExtension,
+    openSettings,
     runCommand,
     selectFileOrDirPath,
     selectFileOrFolderPath,
@@ -100,6 +101,10 @@ export class MainRpcClient implements WIVisualizerAPI {
 
     openMiExtension(): void {
         return this._messenger.sendNotification(openMiExtension, HOST_EXTENSION);
+    }
+
+    openSettings(settingKey: string): void {
+        return this._messenger.sendNotification(openSettings, HOST_EXTENSION, settingKey);
     }
 
     runCommand(params: RunCommandRequest): Promise<RunCommandResponse> {

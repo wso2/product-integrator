@@ -96,6 +96,10 @@ export class MainRpcManager implements WIVisualizerAPI {
         commands.executeCommand(COMMANDS.OPEN_MI_INTEGRATION);
     }
 
+    async openSettings(settingKey: string): Promise<void> {
+        commands.executeCommand('workbench.action.openSettings', settingKey);
+    }
+
     async runCommand(props: RunCommandRequest): Promise<RunCommandResponse> {
         return await commands.executeCommand("wso2.integrator.runCommand", props);
     }
