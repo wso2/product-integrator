@@ -54,3 +54,4 @@ export const openMigrationReport: RequestType<OpenMigrationReportRequest, void> 
 export const saveMigrationReport: RequestType<SaveMigrationReportRequest, void> = { method: `${_preFix}/saveMigrationReport` };
 export const storeSubProjectReports: RequestType<StoreSubProjectReportsRequest, void> = { method: `${_preFix}/storeSubProjectReports` };
 export const validateProjectPath: RequestType<ValidateProjectFormRequest, ValidateProjectFormResponse> = { method: `${_preFix}/validateProjectPath` };
+export const openFolder: NotificationType<string> = { method: `${_preFix}/openFolder` };

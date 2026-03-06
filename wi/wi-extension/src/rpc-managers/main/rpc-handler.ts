@@ -60,7 +60,8 @@ import {
     storeSubProjectReports,
     ValidateProjectFormRequest,
     validateProjectPath,
-    openSettings
+    openSettings,
+    openFolder
 } from "@wso2/wi-core";
 import { Messenger } from "vscode-messenger";
 import { MainRpcManager } from "./rpc-manager";
@@ -94,4 +95,5 @@ export function registerMainRpcHandlers(messenger: Messenger) {
     messenger.onRequest(saveMigrationReport, (args: SaveMigrationReportRequest) => rpcManger.saveMigrationReport(args));
     messenger.onRequest(storeSubProjectReports, (args) => rpcManger.storeSubProjectReports(args));
     messenger.onRequest(validateProjectPath, (args: ValidateProjectFormRequest) => rpcManger.validateProjectPath(args));
+    messenger.onNotification(openFolder, (folderPath: string) => rpcManger.openFolder(folderPath));
 }

@@ -74,6 +74,7 @@ const ConfigureBtn = styled.button`
     cursor: pointer;
 
     &:hover:not(:disabled) {
+        filter: brightness(1.2);
         transform: translateY(-1px);
     }
 
@@ -87,6 +88,10 @@ const ConfigureBtn = styled.button`
 
 const SigninBtn = styled(ConfigureBtn)`
     background: var(--vscode-button-background);
+    &:hover:not(:disabled) {
+        filter: brightness(1.2);
+        background: var(--vscode-button-background);
+    }
 `;
 
 const GetStartedBadge = styled.div`
@@ -161,7 +166,6 @@ const ActionCard = styled.div<ActionCardProps>`
         `
             transform: translateY(-4px);
             box-shadow: 0 8px 16px rgba(0,0,0,0.25);
-            background: var(--vscode-list-hoverBackground);
         `}
     }
 `;
@@ -225,6 +229,7 @@ const StyledButton = styled('button', {
     color: white;
     border: none;
     transition: all 0.2s ease;
+    cursor: pointer;
 
     &:hover:not(:disabled) {
         background: ${(props: { isPrimary?: boolean }) =>
@@ -349,13 +354,20 @@ export const WelcomeView: React.FC = () => {
     const goToImportExternal = () => {
         setCurrentView(ViewState.IMPORT_EXTERNAL);
     };
+    
+    const handleProjectDirSelection = async () => {
+        const response = await rpcClient.getMainRpcClient().selectFileOrDirPath({});
+        if (response?.path) {
+            rpcClient.getMainRpcClient().openFolder(response.path);
+        }
+    };
 
     const goBackToWelcome = () => {
         setCurrentView(ViewState.WELCOME);
     };
     
     const openConfigure = () => {
-        rpcClient.getMainRpcClient().openSettings('integrator.defaultRuntime');
+        rpcClient.getMainRpcClient().openSettings('integrator.enabledRuntimes');
     };
 
     const openProject = () => {
@@ -429,7 +441,7 @@ export const WelcomeView: React.FC = () => {
                         </CardContent>
                     </ActionCard>
 
-                    <ActionCard onClick={goToImportExternal}>
+                    <ActionCard onClick={handleProjectDirSelection}>
                         <CardIconContainer>
                             <CardIcon bgColor="linear-gradient(135deg, #fa709a 0%, #fee140 100%)">↗</CardIcon>
                         </CardIconContainer>
@@ -439,7 +451,7 @@ export const WelcomeView: React.FC = () => {
                                 Open an existing integration project and continue building your solution.
                             </CardDescription>
                                 <StyledButton
-                                    onClick={(e: any) => { e.stopPropagation(); goToImportExternal(); }}>
+                                    onClick={(e: any) => { e.stopPropagation(); handleProjectDirSelection(); }}>
                                     <ButtonContent>Open</ButtonContent>
                                 </StyledButton>
                         </CardContent>
