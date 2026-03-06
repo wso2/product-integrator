@@ -152,7 +152,7 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh
+          ./ci/build/update-product.sh "${{ inputs.integrator_version }}"
 
       - name: Copy .env.example to .env
         shell: bash
