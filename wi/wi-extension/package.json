@@ -24,15 +24,15 @@
       "type": "object",
       "title": "WSO2 Integrator",
       "properties": {
-        "integrator.defaultRuntime": {
-          "type": "string",
-          "default": "WSO2: BI",
-          "scope": "resource",
-          "description": "Choose the default runtime for the lowcode experience.",
-          "enum": [
-            "WSO2: BI",
-            "WSO2: MI"
-          ]
+        "integrator.enabledRuntimes.bi": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable WSO2 BI runtime."
+        },
+        "integrator.enabledRuntimes.mi": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable WSO2 MI runtime."
         }
       }
     },
@@ -57,7 +57,13 @@
     "viewsWelcome": [
       {
         "view": "wso2-integrator.explorer",
-        "contents": ""
+        "contents": "$(loading~spin) Loading WSO2 Integrator...",
+        "when": "WI.projectType != 'none'"
+      },
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": "Welcome to WSO2 Integrator.\n[Get Started](command:wso2.integrator.openWelcome)",
+        "when": "WI.projectType == 'none'"
       }
     ],
     "commands": [
