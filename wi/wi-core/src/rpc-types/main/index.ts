@@ -50,4 +50,5 @@ export interface WIVisualizerAPI {
     saveMigrationReport: (params: SaveMigrationReportRequest) => Promise<void>;
     storeSubProjectReports: (params: StoreSubProjectReportsRequest) => Promise<void>;
     validateProjectPath: (params: ValidateProjectFormRequest) => Promise<ValidateProjectFormResponse>;
+    openFolder: (folderPath: string) => void;
 }
