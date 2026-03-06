@@ -62,7 +62,7 @@ const SampleGrid = styled.div`
 `;
 
 export interface SamplesContainerProps {
-    projectType: "WSO2: BI" | "WSO2: MI";
+    projectType: "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 }
 
 export function SamplesContainer(props: SamplesContainerProps) {

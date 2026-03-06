@@ -61,29 +61,33 @@ const DropdownContainer = styled.div`
     margin-bottom: 20px;
 `;
 
+export type RuntimeType = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
+
 export function CreationView({ onBack }: { onBack?: () => void }) {
-    const [defaultType, setDefaultType] = useState<string>("WSO2: BI");
-    const [projectType, setProjectType] = useState<string>(defaultType);
+    const [enabledRuntimes, setEnabledRuntimes] = useState<RuntimeType[]>(["WSO2: BI"]);
+    const [projectType, setProjectType] = useState<RuntimeType>("WSO2: BI");
     const [isLoading, setIsLoading] = useState(true);
     const { rpcClient } = useVisualizerContext();
 
-    const projectTypeOptions = [
-        { label: "WSO2: BI", value: "WSO2: BI" },
-        { label: "WSO2: MI", value: "WSO2: MI" }
-    ];
-
-    // Load default integrator from VS Code configuration
+    // Load enabled runtimes from VS Code configuration (three individual boolean settings)
     useEffect(() => {
         const loadDefaultRuntime = async () => {
             try {
-                const configResponse = await rpcClient.getMainRpcClient().getConfiguration({
-                    section: "integrator.defaultRuntime"
-                });
+                const [biResp, miResp, siResp] = await Promise.all([
+                    rpcClient.getMainRpcClient().getConfiguration({ section: "integrator.enabledRuntimes.bi" }),
+                    rpcClient.getMainRpcClient().getConfiguration({ section: "integrator.enabledRuntimes.mi" }),
+                    rpcClient.getMainRpcClient().getConfiguration({ section: "integrator.enabledRuntimes.si" }),
+                ]);
 
-                if (configResponse?.value) {
-                    setDefaultType(configResponse.value);
-                    setProjectType(configResponse.value);
-                }
+                const runtimes: RuntimeType[] = [];
+                if (biResp?.value === true) { runtimes.push("WSO2: BI"); }
+                if (miResp?.value === true) { runtimes.push("WSO2: MI"); }
+                if (siResp?.value === true) { runtimes.push("WSO2: SI"); }
+
+                // Enforce at least one runtime (extension will have already corrected settings)
+                const resolved = runtimes.length > 0 ? runtimes : ["WSO2: BI" as RuntimeType];
+                setEnabledRuntimes(resolved);
+                setProjectType(resolved[0]);
             } catch (error) {
                 console.warn("Failed to load default integrator config, using fallback:", error);
             } finally {
@@ -119,16 +123,17 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
                         </IconButton>
                         <Typography variant="h2">Create Your Integration</Typography>
                     </TitleContainer>
-                    {defaultType === "WSO2: MI" && (
+                    {enabledRuntimes.length > 1 && (
                         <IntegrationTypeSelector
                             value={projectType}
-                            options={projectTypeOptions}
-                            onChange={setProjectType}
+                            options={enabledRuntimes.map((r) => ({ label: r, value: r }))}
+                            onChange={(value) => setProjectType(value as RuntimeType)}
                         />
                     )}
                 </div>
                 {projectType === "WSO2: BI" && <BIProjectForm />}
                 {projectType === "WSO2: MI" && <MiProjectWizard />}
+                {projectType === "WSO2: SI" && <MiProjectWizard />}
             </FormContainer>
         </div>
     );
