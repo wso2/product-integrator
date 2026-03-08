@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import type { ComponentViewDrawers, ExtensionName, WebviewState } from "@wso2/wso2-platform-core";
+import type { ComponentViewDrawers, ExtensionName, WebviewState, WSO2Terminologies } from "@wso2/wso2-platform-core";
 import { workspace } from "vscode";
 import { createStore } from "zustand";
 
@@ -29,6 +29,14 @@ interface WebviewStateStore {
 	setExtensionName: (name: ExtensionName) => void;
 }
 
+export const defaultTerminologies: WSO2Terminologies = {
+	cloudName: "WSO2 Cloud",
+	componentTerm: "component",
+	componentTermPlural: "components",
+	componentTermCapitalized: "Component",
+	articleComponentTerm: "a component",
+};
+
 export const webviewStateStore = createStore<WebviewStateStore>((set) => ({
 	state: {
 		extensionName: "WSO2",
@@ -40,7 +48,19 @@ export const webviewStateStore = createStore<WebviewStateStore>((set) => ({
 			workspace.getConfiguration().get<string>("WSO2.WSO2-Platform.Advanced.ChoreoEnvironment") ||
 			"prod",
 	},
-	setExtensionName: (extensionName) => set(({ state }) => ({ state: { ...state, extensionName } })),
+	setExtensionName: (extensionName) => {
+		let terminologies: WSO2Terminologies = defaultTerminologies;
+		if (extensionName === "Devant") {
+			terminologies = {
+				cloudName: "WSO2 Integration Platform",
+				componentTerm: "integration",
+				componentTermPlural: "integrations",
+				componentTermCapitalized: "Integration",
+				articleComponentTerm: "an integration",
+			};
+		}
+		set(({ state }) => ({ state: { ...state, extensionName, terminologies } }));
+	},
 	setOpenedComponentKey: (openedComponentKey) => set(({ state }) => ({ state: { ...state, openedComponentKey } })),
 	onCloseComponentView: (openedComponentKey) =>
 		set(({ state }) => ({

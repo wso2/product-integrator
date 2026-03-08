@@ -16,8 +16,9 @@
  * under the License.
  */
 
-import type { AuthState, IChoreoRPCClient } from "@wso2/wso2-platform-core";
+import type { AuthState, IChoreoRPCClient, WSO2Terminologies } from "@wso2/wso2-platform-core";
 import * as vscode from "vscode";
+import { defaultTerminologies, webviewStateStore } from "./stores/webview-state-store";
 
 /**
  * Minimal interface for the WSO2 auth provider.
@@ -52,6 +53,19 @@ class ExtensionVariables {
 
 	/** True when running inside the Devant cloud editor (CLOUD_STS_TOKEN is set). */
 	public isDevantCloudEditor: boolean = !!process.env.CLOUD_STS_TOKEN;
+
+	/** Extension config with console URLs — populated during activation (Stage 6). */
+	public config?: { billingConsoleUrl?: string; devantConsoleUrl?: string; choreoConsoleUrl?: string };
+
+	/** Active terminology set — updated reactively from webviewStateStore. */
+	public terminologies: WSO2Terminologies = defaultTerminologies;
+
+	public constructor() {
+		this.terminologies = webviewStateStore.getState().state?.terminologies || defaultTerminologies;
+		webviewStateStore.subscribe((state) => {
+			this.terminologies = state.state.terminologies || defaultTerminologies;
+		});
+	}
 
 	get context(): vscode.ExtensionContext {
 		if (!this._context) {
