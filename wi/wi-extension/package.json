@@ -189,6 +189,9 @@
     "@types/vscode": "^1.100.0",
     "@types/mocha": "^10.0.3",
     "@types/node": "^22.15.21",
+    "@types/byline": "^4.2.33",
+    "@types/js-yaml": "^4.0.9",
+    "@types/which": "^3.0.4",
     "@typescript-eslint/eslint-plugin": "^8.32.1",
     "@typescript-eslint/parser": "^8.32.1",
     "@vscode/test-electron": "^2.5.2",
@@ -208,13 +211,20 @@
   },
   "dependencies": {
     "@wso2/wi-core": "workspace:*",
+    "@wso2/wso2-platform-core": "workspace:*",
     "vscode-messenger": "~0.5.1",
+    "vscode-jsonrpc": "8.2.1",
     "xstate": "~4.38.3",
     "@emotion/styled": "~11.14.1",
     "@wso2/ui-toolkit": "workspace:*",
     "unzipper": "~0.12.3",
     "@types/unzipper": "~0.10.11",
     "axios": "~1.13.2",
-    "dotenv": "~17.2.3"
+    "dotenv": "~17.2.3",
+    "zustand": "5.0.5",
+    "byline": "5.0.0",
+    "which": "5.0.0",
+    "js-yaml": "4.1.1",
+    "yaml": "2.8.0"
   }
 }
