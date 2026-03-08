@@ -18,6 +18,7 @@
 
 import * as os from "os";
 import * as path from "path";
+import type { ExtensionContext } from "vscode";
 
 export const getNormalizedPath = (filePath: string): string => {
     if (os.platform() === "win32") {
@@ -69,4 +70,8 @@ export const parseJwt = (token: string): { iss: string } | null => {
     } catch (e) {
         return null;
     }
+};
+
+export const getExtVersion = (context: ExtensionContext): string => {
+    return context.extension.packageJSON.version as string;
 };
