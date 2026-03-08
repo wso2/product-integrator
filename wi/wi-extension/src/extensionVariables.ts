@@ -16,7 +16,21 @@
  * under the License.
  */
 
+import type { AuthState, IChoreoRPCClient } from "@wso2/wso2-platform-core";
 import * as vscode from "vscode";
+
+/**
+ * Minimal interface for the WSO2 auth provider.
+ * The full implementation (WSO2AuthenticationProvider) is wired in during extension activation.
+ */
+export interface IAuthProvider {
+	getState(): {
+		state: AuthState;
+		logout: (silent?: boolean, skipClearSessions?: boolean) => Promise<void>;
+		initAuth: () => Promise<void>;
+	};
+	subscribe(callback: (store: { state: AuthState }) => void): () => void;
+}
 
 /**
  * Extension context wrapper
@@ -24,6 +38,20 @@ import * as vscode from "vscode";
 class ExtensionVariables {
 	private _context: vscode.ExtensionContext | undefined;
 	private _outputChannel: vscode.OutputChannel | undefined;
+
+	// --- Platform feature properties ---
+
+	/** WSO2 auth provider — set during activation (Stage 5). */
+	public authProvider?: IAuthProvider;
+
+	/** Choreo RPC client — set during activation (Stage 4). */
+	public clients!: { rpcClient: IChoreoRPCClient };
+
+	/** Active Cloud environment name (e.g. "prod", "stage", "dev"). */
+	public cloudEnv: "prod" | "stage" | "dev" = "prod";
+
+	/** True when running inside the Devant cloud editor (CLOUD_STS_TOKEN is set). */
+	public isDevantCloudEditor: boolean = !!process.env.CLOUD_STS_TOKEN;
 
 	get context(): vscode.ExtensionContext {
 		if (!this._context) {
