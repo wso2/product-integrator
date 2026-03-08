@@ -23,11 +23,13 @@ import { WSO2AuthenticationProvider, WSO2_AUTH_PROVIDER_ID } from "./auth/wso2-a
 import { ChoreoRPCClient } from "./choreo-rpc";
 import { installRPCServer } from "./choreo-rpc/activate";
 import { getCliVersion } from "./choreo-rpc/cli-install";
+import { activateCmds } from "./cmds";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
 import { contextStore } from "./stores/context-store";
 import { dataCacheStore } from "./stores/data-cache-store";
 import { locationStore } from "./stores/location-store";
+import { activateURIHandlers } from "./uri-handlers";
 import { getExtVersion } from "./utils";
 
 /**
@@ -115,6 +117,12 @@ async function activateCloudFunctionality(context: vscode.ExtensionContext): Pro
 
 	// 11. Prompt restart when Advanced configuration keys change
 	registerPreInitHandlers();
+
+	// 12. Register VS Code commands
+	activateCmds(context);
+
+	// 13. Register URI handlers (sign-in callback, deep-link open)
+	activateURIHandlers();
 }
 
 function registerPreInitHandlers(): void {
