@@ -16,8 +16,9 @@
  * under the License.
  */
 
-import type { AuthState, IChoreoRPCClient, WSO2Terminologies } from "@wso2/wso2-platform-core";
+import type { AuthState, WSO2Terminologies } from "@wso2/wso2-platform-core";
 import * as vscode from "vscode";
+import type { ChoreoRPCClient } from "./choreo-rpc";
 import { defaultTerminologies, webviewStateStore } from "./stores/webview-state-store";
 
 /**
@@ -46,7 +47,7 @@ class ExtensionVariables {
 	public authProvider?: IAuthProvider;
 
 	/** Choreo RPC client — set during activation (Stage 4). */
-	public clients!: { rpcClient: IChoreoRPCClient };
+	public clients!: { rpcClient: ChoreoRPCClient };
 
 	/** Active Cloud environment name (e.g. "prod", "stage", "dev"). */
 	public cloudEnv: string = "prod";
