@@ -28,12 +28,18 @@ import {
 	type SecretStorage,
 	window,
 } from "vscode";
-import { ext } from "../extensionVariables";
+import type { ChoreoRPCClient } from "../choreo-rpc";
 import { contextStore } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 
-export const WSO2_AUTH_PROVIDER_ID = "wso2-wi";
+const WSO2_AUTH_PROVIDER_ID = "wso2-wi";
 const WSO2_SESSIONS_SECRET_KEY = `${WSO2_AUTH_PROVIDER_ID}.sessions`;
+
+interface AuthProviderDeps {
+	rpcClient: ChoreoRPCClient;
+	log: (msg: string) => void;
+	logError: (msg: string, err?: Error) => void;
+}
 
 interface SessionData {
 	id: string;
@@ -54,7 +60,10 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 	private _state: AuthState = { userInfo: null, region: "US" };
 	private _pendingSessionCreation: { resolve: (session: AuthenticationSession) => void; reject: (error: Error) => void; timeout: NodeJS.Timeout } | undefined;
 
-	constructor(private readonly secretStorage: SecretStorage) {
+	constructor(
+		private readonly secretStorage: SecretStorage,
+		private readonly deps: AuthProviderDeps,
+	) {
 		console.log("WSO2AuthenticationProvider initialized");
 		this._disposable = Disposable.from(
 			this._sessionChangeEmitter,
@@ -194,13 +203,13 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 	 * Handle logout - signs out from RPC and clears all state
 	 */
 	public async logout(silent = false, skipClearSessions = false) {
-		ext.log("Signing out from WSO2 Platform");
+		this.deps.log("Signing out from WSO2 Platform");
 
 		// Call RPC signOut first
 		try {
-			await ext.clients.rpcClient.signOut();
+			await this.deps.rpcClient.signOut();
 		} catch (error) {
-			ext.logError("Error during RPC signOut", error as Error);
+			this.deps.logError("Error during RPC signOut", error as Error);
 		}
 
 		// Clear VS Code session storage (unless already cleared by removeSession)
@@ -208,7 +217,7 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 			try {
 				await this.clearSessions();
 			} catch (error) {
-				ext.logError("Error clearing sessions", error as Error);
+				this.deps.logError("Error clearing sessions", error as Error);
 			}
 		}
 
@@ -225,20 +234,20 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 	 */
 	public async initAuth() {
 		try {
-			const userInfo = await ext.clients.rpcClient.getUserInfo();
+			const userInfo = await this.deps.rpcClient.getUserInfo();
 			if (userInfo) {
-				const region = await ext.clients.rpcClient.getCurrentRegion();
+				const region = await this.deps.rpcClient.getCurrentRegion();
 				await this.loginSuccess(userInfo, region);
 				const contextStoreState = contextStore.getState().state;
 				if (contextStoreState.selected?.org) {
-					ext?.clients?.rpcClient?.changeOrgContext(contextStoreState.selected?.org?.id?.toString());
+					this.deps.rpcClient.changeOrgContext(contextStoreState.selected?.org?.id?.toString());
 				}
 			} else {
 				this.resetState();
 				this.clearSessions();
 			}
 		} catch (err) {
-			ext.logError("Error during auth initialization", err as Error);
+			this.deps.logError("Error during auth initialization", err as Error);
 			this.resetState();
 			this.clearSessions();
 		}
@@ -369,7 +378,7 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 				scopes: data.scopes,
 			}));
 		} catch (e) {
-			ext.logError("Error reading sessions", e as Error);
+			this.deps.logError("Error reading sessions", e as Error);
 			return [];
 		}
 	}
@@ -399,7 +408,7 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 
 			await this.secretStorage.store(WSO2_SESSIONS_SECRET_KEY, JSON.stringify(updatedSessions));
 		} catch (e) {
-			ext.logError("Error storing sessions", e as Error);
+			this.deps.logError("Error storing sessions", e as Error);
 		}
 	}
 
@@ -415,7 +424,7 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 
 			return JSON.parse(sessionsJson);
 		} catch (e) {
-			ext.logError("Error reading session data", e as Error);
+			this.deps.logError("Error reading session data", e as Error);
 			return [];
 		}
 	}
@@ -427,16 +436,3 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 		return `wso2-${Date.now()}-${Math.random().toString(36).substring(2)}`;
 	}
 }
-
-/**
- * Helper function to wait for user login
- */
-export const waitForLogin = async (): Promise<UserInfo> => {
-	return new Promise((resolve) => {
-		ext.authProvider?.subscribe(({ state }) => {
-			if (state.userInfo) {
-				resolve(state.userInfo);
-			}
-		});
-	});
-};

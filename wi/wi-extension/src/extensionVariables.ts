@@ -16,23 +16,11 @@
  * under the License.
  */
 
-import type { AuthState, WSO2Terminologies } from "@wso2/wso2-platform-core";
+import type { WSO2Terminologies } from "@wso2/wso2-platform-core";
 import * as vscode from "vscode";
 import type { ChoreoRPCClient } from "./choreo-rpc";
 import { defaultTerminologies, webviewStateStore } from "./stores/webview-state-store";
-
-/**
- * Minimal interface for the WSO2 auth provider.
- * The full implementation (WSO2AuthenticationProvider) is wired in during extension activation.
- */
-export interface IAuthProvider {
-	getState(): {
-		state: AuthState;
-		logout: (silent?: boolean, skipClearSessions?: boolean) => Promise<void>;
-		initAuth: () => Promise<void>;
-	};
-	subscribe(callback: (store: { state: AuthState }) => void): () => void;
-}
+import type { WSO2AuthenticationProvider } from "./auth/wso2-auth-provider";
 
 /**
  * Extension context wrapper
@@ -43,8 +31,8 @@ class ExtensionVariables {
 
 	// --- Platform feature properties ---
 
-	/** WSO2 auth provider — set during activation (Stage 5). */
-	public authProvider?: IAuthProvider;
+	/** WSO2 auth provider — set during activation. */
+	public authProvider?: WSO2AuthenticationProvider;
 
 	/** Choreo RPC client — set during activation (Stage 4). */
 	public clients!: { rpcClient: ChoreoRPCClient };
