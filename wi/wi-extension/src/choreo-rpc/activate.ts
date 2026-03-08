@@ -16,49 +16,19 @@
  * under the License.
  */
 
-import { exec } from "child_process";
-import * as fs from "fs";
-import { ext } from "../extensionVariables";
-import { downloadCLI, getChoreoExecPath, getCliVersion } from "./cli-install";
 import { RPCClient } from "./client";
+import { installCLI } from "./cli-install";
+import { ext } from "../extensionVariables";
 
-function isChoreoCliInstalled(): Promise<boolean> {
-	return new Promise((resolve) => {
-		const rpcPath = getChoreoExecPath();
-		ext.log(`RPC path: ${rpcPath}`);
+export async function installRPCServer() {
+	try {
+		await installCLI();
 
-		if (!fs.existsSync(rpcPath)) {
-			return resolve(false);
-		}
-
-		const process = exec(`"${rpcPath}" --version`, (error) => {
-			if (error) {
-				console.error("error", error);
-				fs.rmSync(rpcPath);
-				resolve(false);
-			} else {
-				resolve(true);
-			}
-		});
-
-		const timeout = setTimeout(() => {
-			process.kill(); // Kill the process if it exceeds 5 seconds
-			ext.logError("Timeout: Process took too long");
-			fs.rmSync(rpcPath);
-			ext.logError(`Delete RPC path and try again ${rpcPath}`);
-			resolve(false);
-		}, 5000);
-
-		process.on("exit", () => clearTimeout(timeout));
-	});
-}
-
-export async function initRPCServer() {
-	const installed = await isChoreoCliInstalled();
-	if (!installed) {
-		ext.log(`WSO2 Platform RPC version ${getCliVersion()} not installed`);
-		await downloadCLI();
+		await RPCClient.getInstance();
+		ext.log("RPC server initialized successfully");
+	} catch (error) {
+		ext.logError(`Failed to initialize RPC server: ${error instanceof Error ? error.message : String(error)}`);
+		// Allow extension to continue without RPC functionality
+		// Important for test environments where CLI resources may not be available
 	}
-
-	await RPCClient.getInstance();
 }

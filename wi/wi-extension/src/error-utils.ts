@@ -69,7 +69,7 @@ export function handlerError(err: any) {
 				}
 				break;
 			case ErrorCode.ComponentNotFound:
-				w.showErrorMessage(`${extensionName === "Devant" ? "Integration" : "Component"} not found`);
+				w.showErrorMessage(`${ext.terminologies?.componentTermCapitalized} not found`);
 				break;
 			case ErrorCode.ProjectNotFound:
 				w.showErrorMessage("Project not found");
@@ -91,7 +91,7 @@ export function handlerError(err: any) {
 				break;
 			case ErrorCode.MaxComponentCountError:
 				w.showErrorMessage(
-					`Failed to create ${extensionName === "Devant" ? "integration" : "component"} due to reaching maximum number of ${extensionName === "Devant" ? "integrations" : "components"} allowed within the free tier.`,
+					`Failed to create ${ext.terminologies?.componentTerm} due to reaching maximum number of ${ext.terminologies?.componentTermPlural} allowed within the free tier.`,
 					"Upgrade",
 				).then((res) => {
 					if (res === "Upgrade") {
@@ -114,7 +114,7 @@ export function handlerError(err: any) {
 				break;
 			case ErrorCode.InvalidSubPath:
 				w.showErrorMessage(
-					`Failed to create ${extensionName === "Devant" ? "integration" : "component"}. Please try again after synching your local repo directory changes with your remote directory.`,
+					`Failed to create ${ext.terminologies?.componentTerm}. Please try again after synching your local repo directory changes with your remote directory.`,
 				);
 				break;
 			case ErrorCode.NoAccountAvailable:
