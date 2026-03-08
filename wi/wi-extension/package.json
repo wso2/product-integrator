@@ -183,13 +183,14 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "vscode:prepublish": "npm run copyJSLibs",
-    "build": "webpack --mode production && npm run package",
+    "build": "webpack --mode production && npm run download-choreo-cli && npm run package",
     "copyJSLibs": "copyfiles -E -f ../wi-webviews/build/main.js resources/jslibs",
     "watch": "tsc -p . -w",
     "compile": "tsc -p ./",
     "compile-tests": "tsc -p . --outDir out",
     "test": "node ./out/test/runTest.js",
-    "package": "node ../../external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js"
+    "package": "node ../../external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js",
+    "download-choreo-cli": "node scripts/download-choreo-cli.js"
   },
   "devDependencies": {
     "@vscode/vsce": "^3.4.0",
