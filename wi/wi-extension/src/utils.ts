@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -57,4 +57,16 @@ export const isSubpath = (parent: string, sub: string): boolean => {
 
     const relative = path.relative(normalizedParent, normalizedSub);
     return !!relative && !relative.startsWith("..") && !path.isAbsolute(relative);
+};
+
+export function withTimeout<T>(fn: () => Promise<T>, functionName: string, timeout: number): Promise<T> {
+    return Promise.race([fn(), new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Function ${functionName} timed out`)), timeout))]);
+}
+
+export const parseJwt = (token: string): { iss: string } | null => {
+    try {
+        return JSON.parse(atob(token.split(".")[1]));
+    } catch (e) {
+        return null;
+    }
 };

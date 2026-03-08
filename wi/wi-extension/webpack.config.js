@@ -1,6 +1,8 @@
 const path = require("path");
 const dotenv = require('dotenv');
 const webpack = require('webpack');
+const CopyPlugin = require("copy-webpack-plugin");
+const PermissionsOutputPlugin = require("webpack-permissions-plugin");
 const { createEnvDefinePlugin } = require("../../external/wso2-vscode-extensions/common/scripts/env-webpack-helper");
 
 const envPath = path.resolve(__dirname, '.env');
@@ -17,8 +19,11 @@ if (missingVars.length > 0) {
 
 /**@type {import('webpack').Configuration}*/
 const config = {
-	target: "node",
-	entry: "./src/extension.ts",
+    target: "node",
+	entry: {
+		extension: "./src/extension.ts",
+		"askpass-main": "./src/git/askpass-main.ts",
+    },
 	output: {
 		path: path.resolve(__dirname, "dist"),
 		filename: "extension.js",
@@ -43,11 +48,24 @@ const config = {
 					},
 				],
 			},
+			{
+				test: /\.m?js$/,
+				type: "javascript/auto",
+				resolve: {
+						fullySpecified: false,
+				},
+			},
 		],
 	},
 	plugins: [
         new webpack.DefinePlugin(envKeys),
 		new webpack.IgnorePlugin({ resourceRegExp: /^@aws-sdk\/client-s3$/ }),
+		new CopyPlugin({
+				patterns: [{ from: "src/git/*.sh", to: "[name][ext]" }],
+		}),
+		new PermissionsOutputPlugin({
+				buildFolders: [path.resolve(__dirname, "dist/")],
+		}),
     ],
 };
 

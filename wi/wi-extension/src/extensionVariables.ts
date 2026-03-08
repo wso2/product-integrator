@@ -48,7 +48,7 @@ class ExtensionVariables {
 	public clients!: { rpcClient: IChoreoRPCClient };
 
 	/** Active Cloud environment name (e.g. "prod", "stage", "dev"). */
-	public cloudEnv: "prod" | "stage" | "dev" = "prod";
+	public cloudEnv: string = "prod";
 
 	/** True when running inside the Devant cloud editor (CLOUD_STS_TOKEN is set). */
 	public isDevantCloudEditor: boolean = !!process.env.CLOUD_STS_TOKEN;
