@@ -16,9 +16,11 @@
  * under the License.
  */
 
+import { existsSync, mkdirSync } from "fs";
 import * as os from "os";
 import * as path from "path";
 import type { ExtensionContext } from "vscode";
+import { Uri, commands, window } from "vscode";
 
 export const getNormalizedPath = (filePath: string): string => {
     if (os.platform() === "win32") {
@@ -75,3 +77,44 @@ export const parseJwt = (token: string): { iss: string } | null => {
 export const getExtVersion = (context: ExtensionContext): string => {
     return context.extension.packageJSON.version as string;
 };
+
+export const convertFsPathToUriPath = (fsPath: string): string => {
+    if (os.platform() === "win32") {
+        let uriPath = fsPath.replace(/\\/g, "/");
+        if (/^[a-zA-Z]:/.test(uriPath)) {
+            uriPath = `/${uriPath}`;
+        }
+        return uriPath;
+    }
+    return fsPath;
+};
+
+export const createDirectory = (basePath: string, dirName: string): { dirName: string; dirPath: string } => {
+    let newDirName = dirName;
+    let counter = 1;
+    let dirPath = path.join(basePath, newDirName);
+    while (existsSync(dirPath)) {
+        newDirName = `${dirName}-${counter}`;
+        dirPath = path.join(basePath, newDirName);
+        counter++;
+    }
+    mkdirSync(dirPath);
+    return { dirName: newDirName, dirPath };
+};
+
+export async function openDirectory(openingPath: string, message: string, onSelect?: () => void): Promise<void> {
+    const openInCurrentWorkspace = await window.showInformationMessage(message, { modal: true }, "Current Window", "New Window");
+    if (openInCurrentWorkspace && onSelect) {
+        onSelect();
+    }
+    if (openInCurrentWorkspace === "Current Window") {
+        await commands.executeCommand("vscode.openFolder", Uri.file(openingPath), { forceNewWindow: false });
+        await commands.executeCommand("workbench.explorer.fileView.focus");
+    } else if (openInCurrentWorkspace === "New Window") {
+        await commands.executeCommand("vscode.openFolder", Uri.file(openingPath), { forceNewWindow: true });
+    }
+}
+
+export function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
