@@ -27,6 +27,7 @@ import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
 import { contextStore } from "./stores/context-store";
 import { dataCacheStore } from "./stores/data-cache-store";
+import { locationStore } from "./stores/location-store";
 import { getExtVersion } from "./utils";
 
 /**
@@ -76,6 +77,7 @@ async function activateCloudFunctionality(context: vscode.ExtensionContext): Pro
 	// 3. Rehydrate persistent stores
 	await contextStore.persist.rehydrate();
 	await dataCacheStore.persist.rehydrate();
+	await locationStore.persist.rehydrate();
 
 	// 4. Sync contextStore state to VS Code context keys
 	contextStore.subscribe(({ state }) => {

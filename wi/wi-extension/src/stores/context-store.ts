@@ -39,6 +39,7 @@ import { ext } from "../extensionVariables";
 import { getGitRemotes, getGitRoot } from "../git/util";
 import { isSamePath, isSubpath } from "../utils";
 import { dataCacheStore } from "./data-cache-store";
+import { locationStore } from "./location-store";
 import { getWorkspaceStateStore } from "./store-utils";
 
 interface ContextStore {
@@ -73,6 +74,7 @@ export const contextStore = createStore(
                         components = await getComponentsInfo(selected);
                         set(({ state }) => ({ state: { ...state, loading: false, items, selected, components } }));
                         if (selected) {
+                            locationStore.getState().setLocation(selected, components);
                             updateProjectEnvCache(selected);
                         }
                     }
