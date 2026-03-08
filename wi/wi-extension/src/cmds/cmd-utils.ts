@@ -19,9 +19,17 @@
 import { WICommandIds, type ComponentKind, type ExtensionName, type Organization, type Project, type UserInfo } from "@wso2/wso2-platform-core";
 import { ProgressLocation, type QuickPickItem, QuickPickItemKind, type WorkspaceFolder, commands, window, workspace } from "vscode";
 import { type ExtensionVariables, ext } from "../extensionVariables";
-import { waitForLogin } from "../auth/wso2-auth-provider";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { webviewStateStore } from "../stores/webview-state-store";
+
+const waitForLogin = (): Promise<UserInfo> =>
+	new Promise((resolve) => {
+		ext.authProvider?.subscribe(({ state }) => {
+			if (state.userInfo) {
+				resolve(state.userInfo);
+			}
+		});
+	});
 
 export const selectComponent = async (
 	org: Organization,

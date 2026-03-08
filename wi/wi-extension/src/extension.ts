@@ -87,8 +87,20 @@ async function activateCloudFunctionality(context: vscode.ExtensionContext): Pro
 		vscode.commands.executeCommand("setContext", "hasSelectedProject", !!state.selected);
 	});
 
-	// 5. Register authentication provider
-	const authProvider = new WSO2AuthenticationProvider(context.secrets);
+	// 5. Install and start the Choreo RPC server
+	await installRPCServer();
+
+	// 6. Create RPC client and wait for it to become active
+	const rpcClient = new ChoreoRPCClient();
+	await rpcClient.waitUntilActive();
+	ext.clients = { rpcClient };
+
+	// 7. Register authentication provider
+	const authProvider = new WSO2AuthenticationProvider(context.secrets, {
+		rpcClient,
+		log: ext.log.bind(ext),
+		logError: ext.logError.bind(ext),
+	});
 	ext.authProvider = authProvider;
 	context.subscriptions.push(
 		authentication.registerAuthenticationProvider(WSO2_AUTH_PROVIDER_ID, "WSO2 Platform", authProvider, {
@@ -96,18 +108,10 @@ async function activateCloudFunctionality(context: vscode.ExtensionContext): Pro
 		}),
 	);
 
-	// 6. Sync auth state to VS Code context key
+	// 8. Sync auth state to VS Code context key
 	authProvider.subscribe(({ state }) => {
 		vscode.commands.executeCommand("setContext", "isLoggedIn", !!state.userInfo);
 	});
-
-	// 7. Install and start the Choreo RPC server
-	await installRPCServer();
-
-	// 8. Create RPC client and wait for it to become active
-	const rpcClient = new ChoreoRPCClient();
-	await rpcClient.waitUntilActive();
-	ext.clients = { rpcClient };
 
 	// 9. Initialize authentication (restores session from CLI if already signed in)
 	await authProvider.getState().initAuth();
