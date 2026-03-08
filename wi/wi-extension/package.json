@@ -225,6 +225,9 @@
     "byline": "5.0.0",
     "which": "5.0.0",
     "js-yaml": "4.1.1",
-    "yaml": "2.8.0"
+    "yaml": "2.8.0",
+    "@vscode/iconv-lite-umd": "^0.7.0",
+    "file-type": "^18.2.1",
+    "jschardet": "^3.1.4"
   }
 }
