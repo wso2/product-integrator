@@ -18,7 +18,7 @@
 
 import { WICommandIds, type ContextItemEnriched, type IManageDirContextCmdParams, type IOpenInConsoleCmdParams } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, type QuickPickItem, QuickPickItemKind, commands, window } from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { getUserInfoForCmd, isRpcActive, setExtensionName } from "./cmd-utils";
 import { removeContext } from "./create-directory-context-cmd";

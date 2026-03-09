@@ -31,7 +31,7 @@ import {
 	window,
 	workspace,
 } from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import { Askpass } from "./askpass";
 import { Git, type IGit, findGit } from "./git";
 import { GithubCredentialProviderManager } from "./github/credentialProvider";

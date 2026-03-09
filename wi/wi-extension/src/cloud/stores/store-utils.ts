@@ -17,7 +17,7 @@
  */
 
 import { type PersistOptions, createJSONStorage } from "zustand/middleware";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 
 const version = "v4";
 

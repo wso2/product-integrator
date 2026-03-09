@@ -20,8 +20,8 @@ import { WICommandIds, type ICmdParamsBase } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, commands, window } from "vscode";
 import * as vscode from "vscode";
 import { ResponseError } from "vscode-jsonrpc";
-import { ErrorCode } from "../choreo-rpc/constants";
-import { ext } from "../extensionVariables";
+import { ErrorCode } from "../../choreo-rpc/constants";
+import { ext } from '../../extensionVariables';
 import { isRpcActive, setExtensionName } from "./cmd-utils";
 
 export function signInWithAuthCodeCommand(context: ExtensionContext) {

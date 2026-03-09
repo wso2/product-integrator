@@ -19,7 +19,7 @@
 import type { CommitHistory, ComponentKind, DataCacheState, Environment, Organization, Project } from "@wso2/wso2-platform-core";
 import { createStore } from "zustand";
 import { persist } from "zustand/middleware";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import { getGlobalStateStore } from "./store-utils";
 
 interface DataCacheStore {

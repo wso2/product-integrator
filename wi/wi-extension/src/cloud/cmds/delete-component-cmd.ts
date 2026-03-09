@@ -19,7 +19,7 @@
 import { basename } from "path";
 import { WICommandIds, type IDeleteComponentCmdParams } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, commands, window, workspace } from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import { contextStore } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { webviewStateStore } from "../stores/webview-state-store";

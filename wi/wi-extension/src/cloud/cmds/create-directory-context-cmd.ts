@@ -33,12 +33,12 @@ import {
 } from "@wso2/wso2-platform-core";
 import * as yaml from "js-yaml";
 import { type ExtensionContext, ProgressLocation, Uri, commands, window, workspace } from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import { getGitRemotes, getGitRoot } from "../git/util";
 import { initGit } from "../git/main";
 import { contextStore, getContextKey, waitForContextStoreToLoad } from "../stores/context-store";
 import { webviewStateStore } from "../stores/webview-state-store";
-import { convertFsPathToUriPath, isSubpath, openDirectory } from "../utils";
+import { convertFsPathToUriPath, isSubpath, openDirectory } from '../../utils';
 import { getUserInfoForCmd, isRpcActive, selectOrg, selectProjectWithCreateNew, setExtensionName } from "./cmd-utils";
 
 export function createDirectoryContextCommand(context: ExtensionContext) {

@@ -26,12 +26,12 @@ import {
 	parseGitURL,
 } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, type QuickPickItem, Uri, commands, env, window, workspace } from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import { initGit } from "../git/main";
 import { hasDirtyRepo } from "../git/util";
 import { contextStore } from "../stores/context-store";
 import { webviewStateStore } from "../stores/webview-state-store";
-import { delay, isSamePath } from "../utils";
+import { delay, isSamePath } from '../../utils';
 import { getUserInfoForCmd, isRpcActive, setExtensionName } from "./cmd-utils";
 
 export function commitAndPushToGitCommand(context: ExtensionContext) {

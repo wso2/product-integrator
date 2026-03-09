@@ -41,15 +41,15 @@ import {
 	parseGitURL,
 } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, type QuickPickItem, Uri, commands, window, workspace } from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import { initGit } from "../git/main";
 import { getGitRemotes, getGitRoot } from "../git/util";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { webviewStateStore } from "../stores/webview-state-store";
-import { convertFsPathToUriPath, isSamePath, isSubpath, openDirectory } from "../utils";
+import { convertFsPathToUriPath, isSamePath, isSubpath, openDirectory } from '../../utils';
 import { createNewProject, getUserInfoForCmd, isRpcActive, selectOrg, selectProjectWithCreateNew, setExtensionName } from "./cmd-utils";
-import { openCloudFormWebview } from "../rpc-managers/cloud/rpc-handler";
+import { openCloudFormWebview } from "../../rpc-managers/cloud/rpc-handler";
 import type { WICloudFormContext, WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import { updateContextFile } from "./create-directory-context-cmd";
 

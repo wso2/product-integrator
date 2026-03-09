@@ -22,7 +22,7 @@ const config = {
     target: "node",
 	entry: {
 		extension: "./src/extension.ts",
-		"askpass-main": "./src/git/askpass-main.ts",
+		"askpass-main": "./src/cloud/git/askpass-main.ts",
     },
 	output: {
 		path: path.resolve(__dirname, "dist"),
@@ -61,7 +61,7 @@ const config = {
         new webpack.DefinePlugin(envKeys),
 		new webpack.IgnorePlugin({ resourceRegExp: /^@aws-sdk\/client-s3$/ }),
 		new CopyPlugin({
-				patterns: [{ from: "src/git/*.sh", to: "[name][ext]" }],
+				patterns: [{ from: "src/cloud/git/*.sh", to: "[name][ext]" }],
 		}),
 		new PermissionsOutputPlugin({
 				buildFolders: [path.resolve(__dirname, "dist/")],

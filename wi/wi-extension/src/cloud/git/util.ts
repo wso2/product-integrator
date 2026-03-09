@@ -21,7 +21,7 @@ import { dirname, relative, sep } from "path";
 import type { Readable } from "stream";
 import byline from "byline";
 import { type Disposable, type Event, EventEmitter, type ExtensionContext } from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import type { Branch, Remote } from "./api/git";
 import { initGit } from "./main";
 

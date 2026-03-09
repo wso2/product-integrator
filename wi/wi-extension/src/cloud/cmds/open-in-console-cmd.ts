@@ -18,11 +18,11 @@
 
 import { WICommandIds, type ComponentKind, type ICreateComponentCmdParams, type IOpenInConsoleCmdParams } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, type QuickPickItem, QuickPickItemKind, Uri, commands, env, window } from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import { contextStore } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { webviewStateStore } from "../stores/webview-state-store";
-import { isSamePath } from "../utils";
+import { isSamePath } from '../../utils';
 import { getUserInfoForCmd, isRpcActive, quickPickWithLoader, selectOrg, selectProject, setExtensionName } from "./cmd-utils";
 
 export function openInConsoleCommand(context: ExtensionContext) {

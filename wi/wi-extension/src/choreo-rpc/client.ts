@@ -106,9 +106,9 @@ import type {
 	UserInfo,
 } from "@wso2/wso2-platform-core";
 import { type MessageConnection, Trace, type Tracer } from "vscode-jsonrpc";
-import { handlerError } from "../error-utils";
+import { handlerError } from "../cloud/error-utils";
 import { ext } from "../extensionVariables";
-import { withTimeout } from "../utils";
+import { withTimeout } from "../utils/commonUtils";
 import { StdioConnection } from "./connection";
 
 export class RPCClient {

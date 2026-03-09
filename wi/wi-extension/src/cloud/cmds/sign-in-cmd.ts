@@ -19,7 +19,7 @@
 import { WICommandIds, type ICmdParamsBase } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, commands, window } from "vscode";
 import * as vscode from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import { webviewStateStore } from "../stores/webview-state-store";
 import { isRpcActive, setExtensionName } from "./cmd-utils";
 
