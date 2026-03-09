@@ -20,12 +20,10 @@ import { useState, useEffect } from "react";
 import {
     Icon,
     Typography,
-    Dropdown,
     ProgressIndicator,
 } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
-// import { BIProjectForm } from "./biForm";
-import { useVisualizerContext } from "../../contexts/RpcContext";
+import { useVisualizerContext } from "../../contexts/WsContext";
 import { SamplesContainer } from "./SamplesContainer";
 import { IntegrationTypeSelector } from "../../components/IntegrationTypeSelector";
 
@@ -63,16 +61,16 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
     const [enabledRuntimes, setEnabledRuntimes] = useState<ProjectType[]>([]);
     const [projectType, setProjectType] = useState<ProjectType | "">("");
     const [isLoading, setIsLoading] = useState(true);
-    const { rpcClient } = useVisualizerContext();
+    const { wsClient } = useVisualizerContext();
 
     // Load enabled runtimes from VS Code configuration (three individual boolean settings)
     useEffect(() => {
         const loadDefaultRuntime = async () => {
             try {
                 const [biResp, miResp, siResp] = await Promise.all([
-                    rpcClient.getMainRpcClient().getConfiguration({ section: "integrator.enabledRuntimes.bi" }),
-                    rpcClient.getMainRpcClient().getConfiguration({ section: "integrator.enabledRuntimes.mi" }),
-                    rpcClient.getMainRpcClient().getConfiguration({ section: "integrator.enabledRuntimes.si" }),
+                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.bi" }),
+                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.mi" }),
+                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.si" }),
                 ]);
 
                 const runtimes: ProjectType[] = [];

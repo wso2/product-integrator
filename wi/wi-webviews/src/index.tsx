@@ -19,10 +19,18 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import IntegratorWebview from "./IntegratorWebview";
-import { WebviewContextProvider } from "./contexts/RpcContext";
+import { WebviewContextProvider } from "./contexts/WsContext";
 import "./style.css";
+import { injectVSCodeCssVariables } from "vscode-webview-network-bridge/webview";
+import { resolveBridgeBootstrap } from "./network-bridge/WsClient";
 
 export function renderWebview(target: HTMLElement) {
+	const mode = resolveBridgeBootstrap();
+
+	if (mode.mode === 'websocket') {
+		injectVSCodeCssVariables();
+	}
+
 	const reactRoot = ReactDOM.createRoot(target);
 	reactRoot.render(
 		<React.StrictMode>

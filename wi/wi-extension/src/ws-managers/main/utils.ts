@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -22,8 +22,8 @@ import path from "path";
 import * as fs from 'fs';
 import * as unzipper from 'unzipper';
 import axios from "axios";
-import { DownloadProgress, onDownloadProgress, Platform, SemanticVersion, ValidateProjectFormErrorField } from "@wso2/wi-core";
-import { RPCLayer } from "../../RPCLayer";
+import { DownloadProgress, Platform, SemanticVersion, ValidateProjectFormErrorField } from "@wso2/wi-core";
+import { BridgeLayer } from "../../BridgeLayer";
 
 interface ProgressMessage {
     message: string;
@@ -203,12 +203,7 @@ async function downloadFile(projectUri: string, url: string, filePath: string, p
                 if (progressCallback) {
                     progressCallback(progress);
                 }
-                // Notify the visualizer
-                RPCLayer._messengers.get("wi-webview")?.sendNotification(
-                    onDownloadProgress,
-                    { type: 'webview', webviewType: 'wso2IntegratorWelcome' },
-                    progress
-                );
+                BridgeLayer.notifyDownloadProgress(projectUri, progress);
             }
         });
         response.data.pipe(writer);
@@ -364,7 +359,7 @@ export function validateProjectPath(projectPath: string, projectName: string, cr
         } else {
             // If creating a new directory, check if it already exists
             if (fs.existsSync(finalPath)) {
-                return { isValid: false, errorMessage: `A directory with this name already exists at the selected location`, errorField: ValidateProjectFormErrorField.NAME};
+                return { isValid: false, errorMessage: `A directory with this name already exists at the selected location`, errorField: ValidateProjectFormErrorField.NAME };
             }
         }
 

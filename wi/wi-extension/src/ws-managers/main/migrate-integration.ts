@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -16,19 +16,17 @@
  * under the License.
  */
 
-import { DownloadProgress, onDownloadProgress } from "@wso2/wi-core";
+import { DownloadProgress } from "@wso2/wi-core";
 import { exec } from "child_process";
 import { debug } from "./ballerinaLogger";
-import { RPCLayer } from "../../RPCLayer";
-import * as vscode from "vscode";
+import { BridgeLayer } from "../../BridgeLayer";
 import { getBallerinaExtension } from "../../utils/ballerinaExtension";
 import { StateMachine } from "../../stateMachine";
-import { WEB_VIEW_TYPE } from "../../webviewManager";
 
 const PROGRESS_COMPLETE = 100;
 
 /**
- * Executes the `bal tool pull` command and sends progress notifications to the webview client via RPC.
+ * Executes the `bal tool pull` command and sends progress notifications to the webview client via the bridge.
  * Includes 5-minute timeout.
  *
  * @param migrationToolName The alias for the Ballerina tool to pull (e.g., "migrate-tibco", "migrate-mule").
@@ -70,13 +68,8 @@ export async function pullMigrationTool(migrationToolName: string, version: stri
     return new Promise<void>((resolve, reject) => {
         // Helper to send notifications to the webview
         const sendProgress = (progress: DownloadProgress) => {
-            // forward progress to the webview messenger registered for the current projectUri
             const projectUri = StateMachine.getContext().projectUri ?? 'global';
-            RPCLayer._messengers.get(projectUri)?.sendNotification(
-                onDownloadProgress,
-                { type: 'webview', webviewType: WEB_VIEW_TYPE },
-                progress
-            );
+            BridgeLayer.notifyDownloadProgress(projectUri, progress);
         };
 
         // Send initial progress update

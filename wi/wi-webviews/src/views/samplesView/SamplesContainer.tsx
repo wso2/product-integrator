@@ -22,7 +22,7 @@ import { ComponentCard, Dropdown, SearchBox } from "@wso2/ui-toolkit";
 import { Button } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react";
-import { useVisualizerContext } from "../../contexts/RpcContext";
+import { useVisualizerContext } from "../../contexts/WsContext";
 import { View, ViewContent, ViewHeader } from "../../components/View";
 import { GettingStartedCategory, GettingStartedSample, SampleDownloadRequest } from "@wso2/wi-core";
 
@@ -66,7 +66,7 @@ export interface SamplesContainerProps {
 }
 
 export function SamplesContainer(props: SamplesContainerProps) {
-    const { rpcClient, webviewContext } = useVisualizerContext();
+    const { wsClient, webviewContext } = useVisualizerContext();
     const [filteredSampleData, setFilteredSamples] = React.useState<GettingStartedSample[]>(null);
     const [filteredSampleDataCopy, setFilteredSampleDataCopy] = React.useState<GettingStartedSample[]>(null);
     const [SampleData, setSampleData] = React.useState<GettingStartedSample[]>(null);
@@ -76,7 +76,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
     const [filterText, setFilterText] = React.useState<string>("");
 
     useEffect(() => {
-        rpcClient.getMainRpcClient().fetchSamplesFromGithub({runtime: props.projectType}).then((samples) => {
+        wsClient.fetchSamplesFromGithub({runtime: props.projectType}).then((samples) => {
             setSampleData(samples.samples);
             setFilteredSamples(samples.samples);
             setFilteredSampleDataCopy(samples.samples);
@@ -121,7 +121,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
             zipFileName: sampleName,
             runtime: props.projectType
         }
-        rpcClient.getMainRpcClient().downloadSelectedSampleFromGithub(request);
+        wsClient.downloadSelectedSampleFromGithub(request);
     }
 
     function getSampleTitle() {

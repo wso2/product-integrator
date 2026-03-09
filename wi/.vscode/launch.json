@@ -1,0 +1,34 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Run Extension",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/wi-extension"
+			],
+			"outFiles": [
+				"${workspaceFolder}/wi-extension/dist/**/*.js"
+			],
+			"env":{
+				"WEB_VIEW_DEV_MODE": "true",
+				"MI_SAMPLE_ICONS_GITHUB_URL": "https://raw.githubusercontent.com/wso2/integration-studio/main/SamplesForVSCode/icons/"
+			},
+			"preLaunchTask": "${defaultBuildTask}"
+		},
+		{
+			"name": "Extension Tests",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/wi-extension",
+				"--extensionTestsPath=${workspaceFolder}/wi-extension/out/test/suite/index"
+			],
+			"outFiles": [
+				"${workspaceFolder}/wi-extension/out/test/**/*.js"
+			],
+			"preLaunchTask": "npm: compile-tests"
+		}
+	]
+}
