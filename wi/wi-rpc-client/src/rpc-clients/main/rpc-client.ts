@@ -75,7 +75,11 @@ import {
     ValidateProjectFormRequest,
     ValidateProjectFormResponse,
     validateProjectPath,
-    openFolder
+    openFolder,
+    type SetWebviewCacheParams,
+    setWebviewCache,
+    restoreWebviewCache,
+    clearWebviewCache,
 } from "@wso2/wi-core";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration";
 import { HOST_EXTENSION } from "vscode-messenger-common";
@@ -198,6 +202,18 @@ export class MainRpcClient implements WIVisualizerAPI {
 
     saveMigrationReport(params: SaveMigrationReportRequest): Promise<void> {
         return this._messenger.sendRequest(saveMigrationReport, HOST_EXTENSION, params);
+    }
+
+    setWebviewCache(params: SetWebviewCacheParams): Promise<void> {
+        return this._messenger.sendRequest(setWebviewCache, HOST_EXTENSION, params);
+    }
+
+    restoreWebviewCache(cacheKey: string): Promise<unknown> {
+        return this._messenger.sendRequest(restoreWebviewCache, HOST_EXTENSION, cacheKey);
+    }
+
+    clearWebviewCache(cacheKey: string): Promise<void> {
+        return this._messenger.sendRequest(clearWebviewCache, HOST_EXTENSION, cacheKey);
     }
 
     getMessenger(): Messenger {

@@ -18,6 +18,19 @@
 
 import type { NotificationType, RequestType } from "vscode-messenger-common";
 import type {
+	AuthState,
+	ContextStoreState,
+	GetLocalGitDataResp,
+	GetBranchesReq,
+	GetAuthorizedGitOrgsReq,
+	GetAuthorizedGitOrgsResp,
+	GetCredentialsReq,
+	CredentialItem,
+	GetCredentialDetailsReq,
+	GetGitMetadataReq,
+	GetGitMetadataResp,
+} from "@wso2/wso2-platform-core";
+import type {
 	WICloudFormContext,
 	WICloudSubmitComponentsReq,
 	WICloudSubmitComponentsResp,
@@ -35,4 +48,54 @@ export const submitComponents: RequestType<WICloudSubmitComponentsReq, WICloudSu
 
 export const closeCloudFormWebview: NotificationType<void> = {
 	method: `${_prefix}/closeCloudFormWebview`,
+};
+
+// Requests
+export const getAuthState: RequestType<void, AuthState> = {
+	method: `${_prefix}/getAuthState`,
+};
+
+export const getContextState: RequestType<void, ContextStoreState> = {
+	method: `${_prefix}/getContextState`,
+};
+
+export const getLocalGitData: RequestType<string, GetLocalGitDataResp | undefined> = {
+	method: `${_prefix}/getLocalGitData`,
+};
+
+export const triggerGithubAuthFlow: RequestType<string, void> = {
+	method: `${_prefix}/triggerGithubAuthFlow`,
+};
+
+export const triggerGithubInstallFlow: RequestType<string, void> = {
+	method: `${_prefix}/triggerGithubInstallFlow`,
+};
+
+export const getBranches: RequestType<GetBranchesReq, string[]> = {
+	method: `${_prefix}/getBranches`,
+};
+
+export const getAuthorizedGitOrgs: RequestType<GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp> = {
+	method: `${_prefix}/getAuthorizedGitOrgs`,
+};
+
+export const getCredentials: RequestType<GetCredentialsReq, CredentialItem[]> = {
+	method: `${_prefix}/getCredentials`,
+};
+
+export const getCredentialDetails: RequestType<GetCredentialDetailsReq, CredentialItem> = {
+	method: `${_prefix}/getCredentialDetails`,
+};
+
+export const getGitRepoMetadataBatch: RequestType<GetGitMetadataReq[], GetGitMetadataResp[]> = {
+	method: `${_prefix}/getGitRepoMetadataBatch`,
+};
+
+// Notifications
+export const onAuthStateChanged: NotificationType<AuthState> = {
+	method: `${_prefix}/onAuthStateChanged`,
+};
+
+export const onContextStateChanged: NotificationType<ContextStoreState> = {
+	method: `${_prefix}/onContextStateChanged`,
 };

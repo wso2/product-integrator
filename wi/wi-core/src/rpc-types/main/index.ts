@@ -51,4 +51,7 @@ export interface WIVisualizerAPI {
     storeSubProjectReports: (params: StoreSubProjectReportsRequest) => Promise<void>;
     validateProjectPath: (params: ValidateProjectFormRequest) => Promise<ValidateProjectFormResponse>;
     openFolder: (folderPath: string) => void;
+    setWebviewCache: (params: { cacheKey: string; data: unknown }) => Promise<void>;
+    restoreWebviewCache: (cacheKey: string) => Promise<unknown>;
+    clearWebviewCache: (cacheKey: string) => Promise<void>;
 }

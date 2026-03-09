@@ -61,7 +61,10 @@ import {
     ValidateProjectFormRequest,
     validateProjectPath,
     openSettings,
-    openFolder
+    openFolder,
+    setWebviewCache,
+    restoreWebviewCache,
+    clearWebviewCache,
 } from "@wso2/wi-core";
 import { Messenger } from "vscode-messenger";
 import { MainRpcManager } from "./rpc-manager";
@@ -96,4 +99,7 @@ export function registerMainRpcHandlers(messenger: Messenger) {
     messenger.onRequest(storeSubProjectReports, (args) => rpcManger.storeSubProjectReports(args));
     messenger.onRequest(validateProjectPath, (args: ValidateProjectFormRequest) => rpcManger.validateProjectPath(args));
     messenger.onNotification(openFolder, (folderPath: string) => rpcManger.openFolder(folderPath));
+    messenger.onRequest(setWebviewCache, (args) => rpcManger.setWebviewCache(args));
+    messenger.onRequest(restoreWebviewCache, (cacheKey: string) => rpcManger.restoreWebviewCache(cacheKey));
+    messenger.onRequest(clearWebviewCache, (cacheKey: string) => rpcManger.clearWebviewCache(cacheKey));
 }

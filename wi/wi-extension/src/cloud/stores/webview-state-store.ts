@@ -30,16 +30,16 @@ interface WebviewStateStore {
 }
 
 export const defaultTerminologies: WSO2Terminologies = {
-	cloudName: "WSO2 Cloud",
-	componentTerm: "component",
-	componentTermPlural: "components",
-	componentTermCapitalized: "Component",
-	articleComponentTerm: "a component",
+	cloudName: "WSO2 Integration Platform",
+	componentTerm: "integration",
+	componentTermPlural: "integrations",
+	componentTermCapitalized: "Integration",
+	articleComponentTerm: "an integration",
 };
 
 export const webviewStateStore = createStore<WebviewStateStore>((set) => ({
 	state: {
-		extensionName: "WSO2",
+		extensionName: "Devant",
 		openedComponentKey: "",
 		componentViews: {},
 		choreoEnv:

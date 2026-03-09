@@ -16,94 +16,153 @@
  * under the License.
  */
 
-import React, { useEffect, useState } from "react";
-import { CheckBox, ProgressIndicator, TextField, Typography } from "@wso2/ui-toolkit";
+import React, { useMemo, useState } from "react";
+import { CheckBox, Typography } from "@wso2/ui-toolkit";
 import { type WICloudComponentEntry, type WICloudFormContext } from "@wso2/wi-core";
-import { useVisualizerContext } from "../../contexts";
 import {
-	BuildpackLabel,
 	CancelButton,
-	ComponentRow,
-	ComponentRowHeader,
-	DirLabel,
+	CheckboxCell,
+	ComponentInfo,
+	ComponentListContainer,
+	ComponentListHeader,
+	ComponentListLabel,
+	ComponentListRow,
+	ComponentListSection,
+	DirPath,
 	ErrorBanner,
 	FooterRow,
+	NameButton,
+	NameError,
+	NameInput,
+	NameInputWrapper,
+	NameStatic,
 	PageContainer,
+	SelectionCount,
 	Subtitle,
+	SubtitleRow,
+	SubtitleSeparator,
 	SubmitButton,
 	TitleRow,
+	TypeBadge,
+	WarningBanner,
 } from "./styles";
+
+// ── Dummy data ────────────────────────────────────────────────────────────────
+
+const DUMMY_CONTEXT: WICloudFormContext = {
+	extensionName: "Devant",
+	orgName: "Kajendran",
+	projectName: "Default Project",
+	components: [
+		{
+			componentName: "order-service",
+			directoryName: "order-service",
+			directoryFsPath: "/workspace/my-project/order-service",
+			buildPackLang: "Ballerina",
+			componentType: "Service",
+			isService: true,
+		},
+		{
+			componentName: "inventory-api",
+			directoryName: "inventory-api",
+			directoryFsPath: "/workspace/my-project/inventory-api",
+			buildPackLang: "Java",
+			componentType: "Service",
+			isService: true,
+		},
+		{
+			componentName: "notification-worker",
+			directoryName: "notification-worker",
+			directoryFsPath: "/workspace/my-project/notification-worker",
+			buildPackLang: "NodeJS",
+			componentType: "Automation",
+			isService: false,
+		},
+		{
+			componentName: "auth-proxy",
+			directoryName: "auth-proxy",
+			directoryFsPath: "/workspace/my-project/auth-proxy",
+			buildPackLang: "Python",
+			componentType: "Service",
+			isService: true,
+		},
+	],
+};
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface EntryFormState {
 	displayName: string;
 	displayNameError?: string;
-	useDefaultEndpoints: boolean;
+	selected: boolean;
 }
 
 function initEntryState(entry: WICloudComponentEntry): EntryFormState {
 	return {
 		displayName: entry.componentName,
-		useDefaultEndpoints: true,
+		selected: true,
 	};
 }
 
-export function ComponentFormView() {
-	const { rpcClient } = useVisualizerContext();
-	const cloudClient = rpcClient.getCloudRpcClient();
+const validateName = (name: string): string | undefined => {
+	const trimmed = name.trim();
+	if (!trimmed) { return "Display name is required."; }
+	if (!/^[a-zA-Z0-9][a-zA-Z0-9 _-]*$/.test(trimmed)) {
+		return "Use letters, numbers, spaces, hyphens or underscores. Must start with a letter or number.";
+	}
+	return undefined;
+};
 
-	const [context, setContext] = useState<WICloudFormContext | null>(null);
-	const [formState, setFormState] = useState<EntryFormState[]>([]);
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export function ComponentFormView() {
+	const context = DUMMY_CONTEXT;
+
+	const [formState, setFormState] = useState<EntryFormState[]>(() =>
+		context.components.map(initEntryState),
+	);
+	const [editingIndex, setEditingIndex] = useState<number | null>(null);
 	const [submitting, setSubmitting] = useState(false);
 	const [submitError, setSubmitError] = useState<string | null>(null);
-
-	useEffect(() => {
-		cloudClient.getCloudFormContext().then((ctx) => {
-			setContext(ctx);
-			setFormState(ctx.components.map(initEntryState));
-		});
-	}, [cloudClient]);
 
 	const updateEntry = (index: number, patch: Partial<EntryFormState>) => {
 		setFormState((prev) => prev.map((e, i) => (i === index ? { ...e, ...patch } : e)));
 	};
 
+	const handleToggle = (index: number, checked: boolean) => {
+		if (!checked && editingIndex === index) { setEditingIndex(null); }
+		updateEntry(index, { selected: checked });
+	};
+
+	const handleNameChange = (index: number, value: string) => {
+		updateEntry(index, { displayName: value, displayNameError: validateName(value) });
+	};
+
+	const handleNameCommit = () => setEditingIndex(null);
+
+	const isBatch = context.components.length > 1;
+	const selectedCount = useMemo(() => formState.filter((e) => e.selected).length, [formState]);
+	const hasSelected = selectedCount > 0;
+
 	const validate = (): boolean => {
 		let valid = true;
 		const next = formState.map((entry) => {
-			const trimmed = entry.displayName.trim();
-			if (!trimmed) {
-				valid = false;
-				return { ...entry, displayNameError: "Display name is required." };
-			}
-			if (!/^[a-zA-Z0-9][a-zA-Z0-9 _-]*$/.test(trimmed)) {
-				valid = false;
-				return { ...entry, displayNameError: "Use letters, numbers, spaces, hyphens or underscores. Must start with a letter or number." };
-			}
-			return { ...entry, displayNameError: undefined };
+			if (!entry.selected) { return entry; }
+			const error = validateName(entry.displayName);
+			if (error) { valid = false; }
+			return { ...entry, displayNameError: error };
 		});
 		setFormState(next);
 		return valid;
 	};
 
 	const handleSubmit = async () => {
-		if (!validate()) { return; }
+		if (!hasSelected || !validate()) { return; }
 		setSubmitting(true);
 		setSubmitError(null);
 		try {
-			const resp = await cloudClient.submitComponents({
-				components: formState.map((e, i) => ({
-					index: i,
-					displayName: e.displayName.trim(),
-					useDefaultEndpoints: e.useDefaultEndpoints,
-				})),
-			});
-			if (resp.errors?.length) {
-				setSubmitError(
-					resp.errors.map((err) => `Component ${err.index + 1}: ${err.message}`).join("\n"),
-				);
-			} else {
-				cloudClient.closeCloudFormWebview();
-			}
+			// TODO: wire up real RPC call
+			// const resp = await cloudClient.submitComponents({ ... });
 		} catch (err: any) {
 			setSubmitError(err?.message ?? "An unexpected error occurred.");
 		} finally {
@@ -111,30 +170,14 @@ export function ComponentFormView() {
 		}
 	};
 
-	const handleCancel = () => {
-		cloudClient.closeCloudFormWebview();
-	};
-
-	if (!context) {
-		return (
-			<div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100px" }}>
-				<ProgressIndicator />
-			</div>
-		);
-	}
-
-	const isBatch = context.components.length > 1;
-	const title = isBatch ? "Create Components" : "Create Component";
-
 	return (
 		<PageContainer>
+			{/* Header */}
 			<TitleRow>
-				<Typography variant="h2">{title}</Typography>
+				<Typography variant="h1">Deploy {isBatch ? "Integrations" : "Integration"}</Typography>
 			</TitleRow>
-			<Subtitle variant="body2">
-				{context.extensionName} — {context.orgName} / {context.projectName}
-			</Subtitle>
 
+			{/* Submit error */}
 			{submitError && (
 				<ErrorBanner>
 					{submitError.split("\n").map((line, i) => (
@@ -143,41 +186,102 @@ export function ComponentFormView() {
 				</ErrorBanner>
 			)}
 
-			{context.components.map((entry, index) => (
-				<ComponentRow key={entry.directoryFsPath}>
-					<ComponentRowHeader>
-						<DirLabel>{entry.directoryName}</DirLabel>
-						<BuildpackLabel>{entry.buildPackLang}</BuildpackLabel>
-					</ComponentRowHeader>
+			{/* Component list */}
+			<ComponentListSection>
+				<ComponentListHeader>
+					<ComponentListLabel>{isBatch ? "Select Integrations to Deploy in the cloud" : "Deploy integration in the cloud"}</ComponentListLabel>
+					{isBatch && <SelectionCount>{selectedCount} of {context.components.length} selected</SelectionCount>}
+				</ComponentListHeader>
 
-					<TextField
-						label="Display Name"
-						required
-						value={formState[index]?.displayName ?? ""}
-						errorMsg={formState[index]?.displayNameError}
-						onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-							updateEntry(index, { displayName: e.target.value, displayNameError: undefined })
-						}
-					/>
+				<ComponentListContainer>
+					{context.components.map((entry, index) => {
+						const state = formState[index];
+						const isSelected = state?.selected ?? false;
+						const isEditing = editingIndex === index;
+						const currentName = state?.displayName ?? entry.componentName;
+						const nameError = state?.displayNameError;
+						const isLast = index === context.components.length - 1;
 
-					{entry.isService && (
-						<CheckBox
-							label="Use Default Endpoints"
-							checked={formState[index]?.useDefaultEndpoints ?? true}
-							onChange={(checked: boolean) =>
-								updateEntry(index, { useDefaultEndpoints: checked })
-							}
-						/>
-					)}
-				</ComponentRow>
-			))}
+						return (
+							<ComponentListRow
+								key={entry.directoryFsPath}
+								isSelected={isSelected}
+								isLast={isLast}
+							>
+								{/* Checkbox — only shown when multiple components */}
+								{isBatch && (
+									<CheckboxCell>
+										<CheckBox
+											label=""
+											checked={isSelected}
+											onChange={(checked: boolean) => handleToggle(index, checked)}
+										/>
+									</CheckboxCell>
+								)}
 
+								{/* Name + directory */}
+								<ComponentInfo>
+									{isEditing && isSelected ? (
+										<NameInputWrapper>
+											<NameInput
+												hasError={!!nameError}
+												value={currentName}
+												autoFocus
+												spellCheck={false}
+												onChange={(e) => handleNameChange(index, e.target.value)}
+												onBlur={handleNameCommit}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" || e.key === "Escape") {
+														handleNameCommit();
+													}
+												}}
+											/>
+											{nameError && <NameError>{nameError}</NameError>}
+										</NameInputWrapper>
+									) : isSelected ? (
+										<NameButton
+											type="button"
+											title={nameError ?? "Click to edit name"}
+											onClick={() => setEditingIndex(index)}
+										>
+											<span>{currentName}</span>
+											{nameError && <span style={{ color: "var(--vscode-errorForeground)", fontSize: 11 }}>⚠</span>}
+											<span className="edit-icon" aria-hidden>✎</span>
+										</NameButton>
+									) : (
+										<NameStatic>{currentName}</NameStatic>
+									)}
+
+									<DirPath title={entry.directoryFsPath}>
+										<span aria-hidden>⊞</span>
+										{entry.directoryFsPath}
+									</DirPath>
+								</ComponentInfo>
+
+								{/* Type badge */}
+								<TypeBadge isSelected={isSelected}>
+									{entry.buildPackLang}
+								</TypeBadge>
+							</ComponentListRow>
+						);
+					})}
+				</ComponentListContainer>
+
+				{isBatch && !hasSelected && (
+					<WarningBanner>
+						⚠ Please select at least one integration to proceed.
+					</WarningBanner>
+				)}
+			</ComponentListSection>
+
+			{/* Footer */}
 			<FooterRow>
-				<CancelButton appearance="secondary" onClick={handleCancel} disabled={submitting}>
-					Cancel
-				</CancelButton>
-				<SubmitButton appearance="primary" onClick={handleSubmit} disabled={submitting}>
-					{submitting ? "Creating..." : isBatch ? "Create All" : "Create"}
+				<SubmitButton
+					appearance="primary"
+					onClick={handleSubmit}
+					disabled={submitting || !hasSelected}
+				>
+					{submitting ? "Deploying..." : selectedCount > 1 ? "Deploy All" : "Deploy"}
 				</SubmitButton>
 			</FooterRow>
 		</PageContainer>

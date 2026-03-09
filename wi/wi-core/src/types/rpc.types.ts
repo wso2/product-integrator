@@ -249,3 +249,8 @@ export enum ValidateProjectFormErrorField {
     PATH = 'path',
     NAME = 'name'
 }
+
+export interface SetWebviewCacheParams {
+    cacheKey: string;
+    data: unknown;
+}
