@@ -18,9 +18,31 @@
 
 import { commands, window as w } from "vscode";
 import { ResponseError } from "vscode-jsonrpc";
-import { ErrorCode } from "../choreo-rpc/constants";
-import { ext } from "../extensionVariables";
-import { webviewStateStore } from "./stores/webview-state-store";
+import { ext } from "../../extensionVariables";
+import { webviewStateStore } from "../stores/webview-state-store";
+
+export enum ErrorCode {
+	ParseError = -32700,
+	InvalidRequest = -32600,
+	MethodNotFound = -32601,
+	InvalidParams = -32602,
+	InternalError = -32603,
+	UnauthorizedError = -32000,
+	TokenNotFoundError = -32001,
+	InvalidTokenError = -32002,
+	ForbiddenError = -32003,
+	RefreshTokenError = -32004,
+	ComponentNotFound = -32005,
+	ProjectNotFound = -32006,
+	MaxProjectCountError = -32007,
+	RepoAccessNeeded = -32008,
+	EpYamlNotFound = -32009,
+	UserNotFound = -32010,
+	MaxComponentCountError = -32011,
+	InvalidSubPath = -32012,
+	NoOrgsAvailable = -32013,
+	NoAccountAvailable = -32014,
+}
 
 export function handlerError(err: any) {
 	const extensionName = webviewStateStore.getState().state.extensionName;

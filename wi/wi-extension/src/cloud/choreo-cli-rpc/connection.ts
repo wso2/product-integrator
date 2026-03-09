@@ -18,8 +18,8 @@
 
 import { type ChildProcessWithoutNullStreams, spawn } from "child_process";
 import { type MessageConnection, StreamMessageReader, StreamMessageWriter, createMessageConnection } from "vscode-jsonrpc/node";
-import { ext } from "../extensionVariables";
-import { parseJwt } from "../utils/commonUtils";
+import { ext } from "../../extensionVariables";
+import { parseJwt } from "../../utils/commonUtils";
 import { getChoreoExecPath } from "./cli-install";
 
 export class StdioConnection {

@@ -28,7 +28,7 @@ import {
 	type SecretStorage,
 	window,
 } from "vscode";
-import type { ChoreoRPCClient } from "../../choreo-rpc";
+import type { ChoreoRPCClient } from "../choreo-cli-rpc";
 import { contextStore } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 

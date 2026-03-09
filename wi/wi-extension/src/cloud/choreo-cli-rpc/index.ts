@@ -16,19 +16,5 @@
  * under the License.
  */
 
-import { RPCClient } from "./client";
-import { installCLI } from "./cli-install";
-import { ext } from "../extensionVariables";
-
-export async function installRPCServer() {
-	try {
-		await installCLI();
-
-		await RPCClient.getInstance();
-		ext.log("RPC server initialized successfully");
-	} catch (error) {
-		ext.logError(`Failed to initialize RPC server: ${error instanceof Error ? error.message : String(error)}`);
-		// Allow extension to continue without RPC functionality
-		// Important for test environments where CLI resources may not be available
-	}
-}
+export { ChoreoRPCClient } from "./client";
+export { registerChoreoRpcResolver } from "./rpc-resolver";

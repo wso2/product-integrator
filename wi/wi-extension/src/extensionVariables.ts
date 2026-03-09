@@ -18,7 +18,7 @@
 
 import type { WSO2Terminologies } from "@wso2/wso2-platform-core";
 import * as vscode from "vscode";
-import type { ChoreoRPCClient } from "./choreo-rpc";
+import type { ChoreoRPCClient } from "./cloud/choreo-cli-rpc";
 import { defaultTerminologies, webviewStateStore } from "./cloud/stores/webview-state-store";
 import type { WSO2AuthenticationProvider } from "./cloud/auth/wso2-auth-provider";
 

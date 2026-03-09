@@ -94,7 +94,7 @@ import {
 } from "@wso2/wso2-platform-core";
 import { ProgressLocation, window } from "vscode";
 import type { Messenger } from "vscode-messenger";
-import { ext } from "../extensionVariables";
+import { ext } from "../../extensionVariables";
 
 export function registerChoreoRpcResolver(messenger: Messenger, rpcClient: IChoreoRPCClient) {
 	messenger.onRequest(ChoreoRpcGetProjectsRequest, (orgID: string) => rpcClient.getProjects(orgID));
