@@ -52,6 +52,7 @@ interface MachineContext {
     configChangeDisposable?: vscode.Disposable;
     mode: ProjectType[];
     currentView: ViewType;
+    isInWi: boolean;
 }
 
 /**
@@ -102,7 +103,8 @@ const stateMachine = createMachine<MachineContext>({
         projectType: ProjectType.NONE,
         extensionAPIs: new ExtensionAPIs(),
         mode: getDefaultIntegratorMode(),
-        currentView: ViewType.LOADING
+        currentView: ViewType.LOADING,
+        isInWi: process.env.WSO2_INTEGRATOR_RUNTIME === 'true'
     },
     states: {
         initialize: {
@@ -278,7 +280,7 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
         await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
     } else if (context.projectType === ProjectType.NONE) {
         // if a folder/workspace is open but we couldn't detect the project type, we should show an popup warning the user that the extension couldn't detect the project type
-        if (vscode.workspace.workspaceFolders?.length) {
+        if (vscode.workspace.workspaceFolders?.length && context.isInWi) {
             ext.log('Workspace is open but project type is unknown');
             vscode.window.showWarningMessage('We couldn\'t detect the project type. Please ensure you have a valid WSO2 Ballerina or Micro Integrator project open.', { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
                 if (selection === 'Go to Welcome Screen') {

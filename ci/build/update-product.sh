@@ -105,7 +105,7 @@ echo '{
 	  ],
     "runtimeEnv": {
       "common": {
-        "WSO2_INTEGRATOR_RUNTIME": "1"
+        "WSO2_INTEGRATOR_RUNTIME": "true"
       },
       "darwin": {
         "BALLERINA_HOME": "${APP_ROOT}/Contents/components/ballerina",
