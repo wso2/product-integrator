@@ -406,9 +406,10 @@ export const WelcomeView: React.FC = () => {
         <>
             <TopSection>
                 <TopBtnSection>
+                    {/* TODO: Enable sign in
                     <SigninBtn onClick={() => console.log("Sign in clicked")}>
                         <span>Sign In</span>
-                    </SigninBtn>
+                    </SigninBtn> */}
                     <ConfigureBtn onClick={openConfigure}>
                         <span style={{ fontSize: 25 }}>⚙</span>
                         <span>Configure</span>

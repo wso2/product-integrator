@@ -59,6 +59,16 @@ export function BIProjectForm() {
 
     const handleFormDataChange = (data: Partial<ProjectFormData>) => {
         setFormData(prev => ({ ...prev, ...data }));
+        // Clear validation errors when form data changes
+        if (integrationNameError) {
+            setIntegrationNameError(null);
+        }
+        if (pathError) {
+            setPathError(null);
+        }
+        if (packageNameValidationError) {
+            setPackageNameValidationError(null);
+        }
     };
 
     const handleCreateProject = async () => {
@@ -88,7 +98,7 @@ export function BIProjectForm() {
             </ScrollableContent>
             <ButtonWrapper>
                 <Button
-                    disabled={isValidating}
+                    disabled={isValidating || !formData.path || !formData.integrationName}
                     onClick={handleCreateProject}
                     appearance="primary"
                 >
