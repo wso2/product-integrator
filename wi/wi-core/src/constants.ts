@@ -49,7 +49,7 @@ export const VIEWS = {
  * Context keys
  */
 export const CONTEXT_KEYS = {
-	BI_AVAILABLE: "wso2-integrator.bi.available",
+	BALLERINA_AVAILABLE: "wso2-integrator.ballerina.available",
 	MI_AVAILABLE: "wso2-integrator.mi.available",
 };
 
@@ -57,6 +57,7 @@ export const CONTEXT_KEYS = {
  * Extension dependencies
  */
 export const EXTENSION_DEPENDENCIES = {
-	BI: "wso2.ballerina-integrator",
+	BALLERINA: "wso2.ballerina",
 	MI: "wso2.micro-integrator",
+	SI: "WSO2.streaming-integrator"
 };

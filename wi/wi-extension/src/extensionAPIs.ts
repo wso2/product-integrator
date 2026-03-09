@@ -27,16 +27,34 @@ import { ext } from "./extensionVariables";
 export class ExtensionAPIs {
 	private biExtension: vscode.Extension<BIExtensionAPI> | undefined;
 	private miExtension: vscode.Extension<MIExtensionAPI> | undefined;
+	private siExtension: vscode.Extension<unknown> | undefined;
 
 	/**
 	 * Initialize extension APIs
 	 */
-	public async initialize(): Promise<void> {
-		// Get BI extension
-		this.biExtension = vscode.extensions.getExtension<BIExtensionAPI>(EXTENSION_DEPENDENCIES.BI);
+	public async initialize(extension: string): Promise<void> {
+		// download extension if not present
+		if (!vscode.extensions.getExtension(extension)) {
+			try {
+				await vscode.commands.executeCommand("workbench.extensions.installExtension", extension);
+				ext.log(`Extension ${extension} installed successfully`);
+			} catch (error) {
+				ext.logError(`Failed to install extension ${extension}`, error as Error);
+				await vscode.window.showErrorMessage(`Failed to install required extension: ${extension}. Please install it manually from the Extensions view.`);
+				return;
+			}
+		}
+		if (extension === EXTENSION_DEPENDENCIES.BALLERINA) {
+			// Get Ballerina extension
+			this.biExtension = vscode.extensions.getExtension<BIExtensionAPI>(EXTENSION_DEPENDENCIES.BALLERINA);
 
-		// Get MI extension
-		this.miExtension = vscode.extensions.getExtension<MIExtensionAPI>(EXTENSION_DEPENDENCIES.MI);
+		} else if (extension === EXTENSION_DEPENDENCIES.MI) {
+			// Get MI extension
+			this.miExtension = vscode.extensions.getExtension<MIExtensionAPI>(EXTENSION_DEPENDENCIES.MI);
+		} else if (extension === EXTENSION_DEPENDENCIES.SI) {
+			// Get SI extension
+			this.siExtension = vscode.extensions.getExtension<unknown>(EXTENSION_DEPENDENCIES.SI);
+		}
 	}
 
 	public activateBIExtension(): void {
@@ -80,6 +98,13 @@ export class ExtensionAPIs {
 	}
 
 	/**
+	 * Check if SI extension is available
+	 */
+	public isSIAvailable(): boolean {
+		return this.siExtension !== undefined && this.siExtension.isActive;
+	}
+
+	/**
 	 * Get BI status
 	 */
 	public getBIStatus(): string {
@@ -107,6 +132,22 @@ export class ExtensionAPIs {
 			return this.miExtension.exports.getStatus();
 		} catch (error) {
 			ext.logError("Failed to get MI status", error as Error);
+			return "error";
+		}
+	}
+
+	/**
+	 * Get SI status
+	 */
+	public getSIStatus(): string {
+		if (!this.isSIAvailable() || !this.siExtension?.exports) {
+			return "unavailable";
+		}
+
+		try {
+			return (this.siExtension.exports as any).getStatus();
+		} catch (error) {
+			ext.logError("Failed to get SI status", error as Error);
 			return "error";
 		}
 	}

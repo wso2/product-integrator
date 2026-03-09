@@ -2,6 +2,18 @@
 	"version": "0.1.0",
 	"configurations": [
 		{
+			"name": "Run WI Extension",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/wi/wi-extension",
+			],
+			"outFiles": [
+				"${workspaceFolder}/wi/wi-extension/dist/**/*.js"
+			],
+			"preLaunchTask": "Watch WI extension"
+		},
+		{
 			"type": "node",
 			"request": "launch",
 			"name": "Gulp Build",
