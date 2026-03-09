@@ -21,6 +21,7 @@
 import { Messenger } from "vscode-messenger-webview";
 import { vscode } from "./vscode";
 import { MainRpcClient } from "./rpc-clients/main/rpc-client";
+import { CloudRpcClient } from "./rpc-clients/cloud/rpc-client";
 import { onDownloadProgress, onMigrationToolStateChanged, onMigrationToolLogs, onStateChanged, DownloadProgress, MigrationToolStateData, MigrationToolLogData, WebviewContext, onMigratedProject } from "@wso2/wi-core";
 import { ProjectMigrationResult } from "@wso2/wi-core/lib/rpc-types/migrate-integration";
 
@@ -28,15 +29,21 @@ export class RpcClient {
 
     private messenger: Messenger;
     private mainRpcClient: MainRpcClient;
+    private cloudRpcClient: CloudRpcClient;
 
     constructor() {
         this.messenger = new Messenger(vscode);
         this.messenger.start();
         this.mainRpcClient = new MainRpcClient(this.messenger);
+        this.cloudRpcClient = new CloudRpcClient(this.messenger);
     }
 
     public getMainRpcClient(): MainRpcClient {
         return this.mainRpcClient;
+    }
+
+    public getCloudRpcClient(): CloudRpcClient {
+        return this.cloudRpcClient;
     }
 
     public onStateChanged(callback: (context: WebviewContext) => void) {

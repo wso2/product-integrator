@@ -16,42 +16,23 @@
  * under the License.
  */
 
-/**
- * Integration type enumeration
- */
-export enum IntegrationType {
-	BI = "BI",
-	MI = "MI",
-}
+import type { NotificationType, RequestType } from "vscode-messenger-common";
+import type {
+	WICloudFormContext,
+	WICloudSubmitComponentsReq,
+	WICloudSubmitComponentsResp,
+} from "./interfaces";
 
-/**
- * View types for webviews
- */
-export enum ViewType {
-	LOADING = "loading",
-	WELCOME = "welcome",
-    CREATE_PROJECT = "create_project",
-    SAMPLES = "samples",
-    IMPORT_EXTERNAL = "import_external",
-    CREATE_COMPONENT = "create_component"
-}
+const _prefix = "cloud";
 
-/**
- * Extension status enumeration
- */
-export enum ExtensionStatus {
-	UNKNOWN_PROJECT = "unknownProject",
-	LOADING = "loading",
-	READY = "ready",
-	NO_LS = "noLS",
-	UPDATE_NEEDED = "updateNeed",
-}
+export const getCloudFormContext: RequestType<void, WICloudFormContext> = {
+	method: `${_prefix}/getCloudFormContext`,
+};
 
-/**
- * Platform enumeration
- */
-export enum Platform {
-	WINDOWS = 1,
-	MAC = 2,
-	LINUX = 3
-}
+export const submitComponents: RequestType<WICloudSubmitComponentsReq, WICloudSubmitComponentsResp> = {
+	method: `${_prefix}/submitComponents`,
+};
+
+export const closeCloudFormWebview: NotificationType<void> = {
+	method: `${_prefix}/closeCloudFormWebview`,
+};

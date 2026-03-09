@@ -89,6 +89,82 @@
         "command": "wso2.integrator.openMIIntegration",
         "title": "Open MI Integration",
         "category": "WSO2 Integrator"
+      },
+      {
+        "command": "wso2.integrator.cloud.auth.signIn",
+        "title": "Sign In",
+        "category": "WSO2 Integrator",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "wso2.integrator.cloud.auth.signInWithAuthCode",
+        "title": "Sign In with Auth Code",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "wso2.integrator.cloud.auth.signOut",
+        "title": "Sign Out",
+        "category": "WSO2 Integrator",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "wso2.integrator.cloud.auth.cancelSignIn",
+        "title": "Cancel Sign In",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "wso2.integrator.cloud.integration.create",
+        "title": "Create Component",
+        "category": "WSO2 Integrator",
+        "icon": "$(add)"
+      },
+      {
+        "command": "wso2.integrator.cloud.integration.createMultiple",
+        "title": "Create Multiple Components",
+        "category": "WSO2 Integrator",
+        "icon": "$(add)"
+      },
+      {
+        "command": "wso2.integrator.cloud.integration.delete",
+        "title": "Delete Component",
+        "category": "WSO2 Integrator",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "wso2.integrator.cloud.integration.openInConsole",
+        "title": "Open in Console",
+        "category": "WSO2 Integrator",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "wso2.integrator.cloud.project.clone",
+        "title": "Clone Repository",
+        "category": "WSO2 Integrator",
+        "icon": "$(repo-clone)"
+      },
+      {
+        "command": "wso2.integrator.cloud.project.createContext",
+        "title": "Select Project",
+        "category": "WSO2 Integrator",
+        "icon": "$(link)"
+      },
+      {
+        "command": "wso2.integrator.cloud.project.manageContext",
+        "title": "Manage Project",
+        "category": "WSO2 Integrator",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "wso2.integrator.cloud.project.refresh",
+        "title": "Refresh Workspace",
+        "category": "WSO2 Integrator",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "wso2.integrator.cloud.integration.push-to-git",
+        "title": "Commit & Push to Remote",
+        "category": "WSO2 Integrator",
+        "icon": "$(repo-push)"
       }
     ],
     "menus": {
@@ -185,8 +261,8 @@
     "vscode:prepublish": "npm run copyJSLibs",
     "build": "webpack --mode production && npm run download-choreo-cli && npm run package",
     "copyJSLibs": "copyfiles -E -f ../wi-webviews/build/main.js resources/jslibs",
-    "watch": "tsc -p . -w",
-    "compile": "tsc -p ./",
+    "watch": "webpack --mode development --watch",
+    "compile": "webpack --mode development",
     "compile-tests": "tsc -p . --outDir out",
     "test": "node ./out/test/runTest.js",
     "package": "node ../../external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js",

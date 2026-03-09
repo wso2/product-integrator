@@ -26,7 +26,7 @@ const config = {
     },
 	output: {
 		path: path.resolve(__dirname, "dist"),
-		filename: "extension.js",
+		filename: "[name].js",
 		libraryTarget: "commonjs2",
 		devtoolModuleFilenameTemplate: "../[resource-path]",
 	},

@@ -25,7 +25,7 @@ import type { WSO2AuthenticationProvider } from "./auth/wso2-auth-provider";
 /**
  * Extension context wrapper
  */
-class ExtensionVariables {
+export class ExtensionVariables {
 	private _context: vscode.ExtensionContext | undefined;
 	private _outputChannel: vscode.OutputChannel | undefined;
 
