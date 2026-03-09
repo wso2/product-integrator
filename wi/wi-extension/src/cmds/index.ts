@@ -23,7 +23,6 @@ import { createMultipleNewComponentsCommand, createNewComponentCommand } from ".
 import { createDirectoryContextCommand } from "./create-directory-context-cmd";
 import { deleteComponentCommand } from "./delete-component-cmd";
 import { manageProjectContextCommand } from "./manage-dir-context-cmd";
-import { openCompSrcCommand } from "./open-comp-src-cmd";
 import { openInConsoleCommand } from "./open-in-console-cmd";
 import { refreshContextCommand } from "./refresh-directory-context-cmd";
 import { signInCommand } from "./sign-in-cmd";
@@ -46,6 +45,5 @@ export function activateCmds(context: ExtensionContext) {
 	cloneRepoCommand(context);
 	manageProjectContextCommand(context);
 	createDirectoryContextCommand(context);
-	openCompSrcCommand(context);
 	commitAndPushToGitCommand(context);
 }

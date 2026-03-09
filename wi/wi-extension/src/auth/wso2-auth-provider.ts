@@ -32,7 +32,7 @@ import type { ChoreoRPCClient } from "../choreo-rpc";
 import { contextStore } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 
-const WSO2_AUTH_PROVIDER_ID = "wso2-wi";
+export const WSO2_AUTH_PROVIDER_ID = "wso2-wi";
 const WSO2_SESSIONS_SECRET_KEY = `${WSO2_AUTH_PROVIDER_ID}.sessions`;
 
 interface AuthProviderDeps {

@@ -16,42 +16,5 @@
  * under the License.
  */
 
-/**
- * Integration type enumeration
- */
-export enum IntegrationType {
-	BI = "BI",
-	MI = "MI",
-}
-
-/**
- * View types for webviews
- */
-export enum ViewType {
-	LOADING = "loading",
-	WELCOME = "welcome",
-    CREATE_PROJECT = "create_project",
-    SAMPLES = "samples",
-    IMPORT_EXTERNAL = "import_external",
-    CREATE_COMPONENT = "create_component"
-}
-
-/**
- * Extension status enumeration
- */
-export enum ExtensionStatus {
-	UNKNOWN_PROJECT = "unknownProject",
-	LOADING = "loading",
-	READY = "ready",
-	NO_LS = "noLS",
-	UPDATE_NEEDED = "updateNeed",
-}
-
-/**
- * Platform enumeration
- */
-export enum Platform {
-	WINDOWS = 1,
-	MAC = 2,
-	LINUX = 3
-}
+export * from "./interfaces";
+export * from "./rpc-type";
