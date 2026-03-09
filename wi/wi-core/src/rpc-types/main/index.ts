@@ -27,6 +27,7 @@ export interface WIVisualizerAPI {
     closeWebview: () => void;
     openBiExtension: () => void;
     openMiExtension: () => void;
+    openSettings: (settingKey: string) => void;
     runCommand: (params: RunCommandRequest) => Promise<RunCommandResponse>;
     selectFileOrDirPath: (params: FileOrDirRequest) => Promise<FileOrDirResponse>;
     selectFileOrFolderPath: () => Promise<FileOrDirResponse>;
@@ -49,4 +50,5 @@ export interface WIVisualizerAPI {
     saveMigrationReport: (params: SaveMigrationReportRequest) => Promise<void>;
     storeSubProjectReports: (params: StoreSubProjectReportsRequest) => Promise<void>;
     validateProjectPath: (params: ValidateProjectFormRequest) => Promise<ValidateProjectFormResponse>;
+    openFolder: (folderPath: string) => void;
 }

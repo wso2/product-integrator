@@ -27,6 +27,7 @@ import {
     closeWebview,
     openBiExtension,
     openMiExtension,
+    openSettings,
     runCommand,
     selectFileOrDirPath,
     selectFileOrFolderPath,
@@ -73,7 +74,8 @@ import {
     storeSubProjectReports,
     ValidateProjectFormRequest,
     ValidateProjectFormResponse,
-    validateProjectPath
+    validateProjectPath,
+    openFolder
 } from "@wso2/wi-core";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration";
 import { HOST_EXTENSION } from "vscode-messenger-common";
@@ -100,6 +102,10 @@ export class MainRpcClient implements WIVisualizerAPI {
 
     openMiExtension(): void {
         return this._messenger.sendNotification(openMiExtension, HOST_EXTENSION);
+    }
+
+    openSettings(settingKey: string): void {
+        return this._messenger.sendNotification(openSettings, HOST_EXTENSION, settingKey);
     }
 
     runCommand(params: RunCommandRequest): Promise<RunCommandResponse> {
@@ -168,6 +174,10 @@ export class MainRpcClient implements WIVisualizerAPI {
 
     storeSubProjectReports(params: StoreSubProjectReportsRequest): Promise<void> {
         return this._messenger.sendRequest(storeSubProjectReports, HOST_EXTENSION, params);
+    }
+
+    openFolder(folderPath: string): void {
+        return this._messenger.sendNotification(openFolder, HOST_EXTENSION, folderPath);
     }
 
     pullMigrationTool(params: PullMigrationToolRequest): Promise<void> {

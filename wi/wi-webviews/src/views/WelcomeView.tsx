@@ -19,10 +19,11 @@
 import React, { useState } from "react";
 import "./WelcomeView.css";
 import styled from "@emotion/styled";
-import { Button, Codicon, Icon } from "@wso2/ui-toolkit";
+import { Icon } from "@wso2/ui-toolkit";
 import { CreationView } from "./creationView";
 import { ImportIntegration } from "./ImportIntegration";
 import { SamplesView } from "./samplesView";
+import { useVisualizerContext } from "../contexts";
 
 enum ViewState {
     WELCOME = "welcome",
@@ -49,25 +50,31 @@ const TopSection = styled.div`
     flex-direction: column;
 `;
 
-const ConfigureButton = styled(Button)`
+const TopBtnSection = styled.div`
     position: absolute;
     top: 40px;
     right: 60px;
-    height: 33px !important;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+`;
+
+const ConfigureBtn = styled.button`
+    
+    height: 33px;
     font-size: 14px;
     font-weight: 500;
     border-radius: 8px;
     padding: 0 24px;
-    background: var(--button-secondary-background);
-    color: white;
     border: none;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    cursor: pointer;
 
     &:hover:not(:disabled) {
-        background: var(--button-secondary-hover-background);
+        filter: brightness(1.2);
         transform: translateY(-1px);
     }
 
@@ -75,11 +82,20 @@ const ConfigureButton = styled(Button)`
         opacity: 0.5;
         cursor: not-allowed;
     }
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+`;
+
+const SigninBtn = styled(ConfigureBtn)`
+    background: var(--vscode-button-background);
+    &:hover:not(:disabled) {
+        filter: brightness(1.2);
+        background: var(--vscode-button-background);
+    }
 `;
 
 const GetStartedBadge = styled.div`
     display: inline-block;
-    background: rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 20px;
@@ -97,7 +113,6 @@ const Headline = styled.h1`
     margin: 0;
     color: white;
     line-height: 1.2;
-    letter-spacing: -0.5px;
 `;
 
 const Caption = styled.p`
@@ -118,7 +133,7 @@ const CardsContainer = styled.div`
 
 const CardsGrid = styled.div`
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 24px;
 
     @media (max-width: 1200px) {
@@ -136,16 +151,13 @@ interface ActionCardProps {
 }
 
 const ActionCard = styled.div<ActionCardProps>`
-    background: var(--vscode-editor-background);
+    background: var(--vscode-editor-background, white);
     border-radius: 12px;
     padding: 32px 24px;
     display: flex;
     flex-direction: column;
     transition: all 0.3s ease;
-    cursor: ${(props: ActionCardProps) => (props.disabled ? "not-allowed" : "pointer")};
-    opacity: ${(props: ActionCardProps) => (props.disabled ? 0.6 : 1)};
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
     min-height: 280px;
 
     &:hover {
@@ -154,7 +166,6 @@ const ActionCard = styled.div<ActionCardProps>`
         `
             transform: translateY(-4px);
             box-shadow: 0 8px 16px rgba(0,0,0,0.25);
-            background: var(--vscode-list-hoverBackground);
         `}
     }
 `;
@@ -179,6 +190,7 @@ const CardIcon = styled.div<CardIconProps>`
     background: ${(props: CardIconProps) => props.bgColor || "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"};
     color: white;
     flex-shrink: 0;
+    font-size: 26px;
 `;
 
 const CardContent = styled.div`
@@ -202,7 +214,10 @@ const CardDescription = styled.p`
     flex: 1;
 `;
 
-const StyledButton = styled(Button) <{ isPrimary?: boolean }>`
+// Use a native button element. Filter custom props so they are not forwarded to the DOM.
+const StyledButton = styled('button', {
+    shouldForwardProp: (prop) => prop !== 'isPrimary'
+})<{ isPrimary?: boolean }>`
     height: 44px;
     font-size: 14px;
     font-weight: 500;
@@ -214,6 +229,7 @@ const StyledButton = styled(Button) <{ isPrimary?: boolean }>`
     color: white;
     border: none;
     transition: all 0.2s ease;
+    cursor: pointer;
 
     &:hover:not(:disabled) {
         background: ${(props: { isPrimary?: boolean }) =>
@@ -235,7 +251,7 @@ const ButtonContent = styled.div`
 `;
 
 const BottomSection = styled.div`
-    padding: 60px 60px 60px;
+    padding: 10px 60px 10px 60px;
     text-align: center;
 `;
 
@@ -324,6 +340,7 @@ const ProjectPath = styled.span`
 `;
 
 export const WelcomeView: React.FC = () => {
+    const { rpcClient } = useVisualizerContext();
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
 
     const goToCreateProject = () => {
@@ -337,24 +354,25 @@ export const WelcomeView: React.FC = () => {
     const goToImportExternal = () => {
         setCurrentView(ViewState.IMPORT_EXTERNAL);
     };
+    
+    const handleProjectDirSelection = async () => {
+        const response = await rpcClient.getMainRpcClient().selectFileOrDirPath({});
+        if (response?.path) {
+            rpcClient.getMainRpcClient().openFolder(response.path);
+        }
+    };
 
     const goBackToWelcome = () => {
         setCurrentView(ViewState.WELCOME);
     };
     
     const openConfigure = () => {
-        // Add configure action here
-        console.log("Configure clicked");
+        rpcClient.getMainRpcClient().openSettings('integrator.enabledRuntimes');
     };
 
     const openProject = () => {
         // Add open existing project action here
         console.log("Open existing project");
-    };
-
-    const viewAllProjects = () => {
-        // Add view all projects action here
-        console.log("View all projects");
     };
 
     // Sample recent projects data - replace with actual data
@@ -388,16 +406,19 @@ export const WelcomeView: React.FC = () => {
     const renderWelcomeContent = () => (
         <>
             <TopSection>
-                <ConfigureButton appearance="secondary" onClick={openConfigure}>
-                    <ButtonContent>
-                        <Codicon name="settings-gear" iconSx={{ fontSize: 16 }} />
-                        Configure
-                    </ButtonContent>
-                </ConfigureButton>
+                <TopBtnSection>
+                    <SigninBtn onClick={() => console.log("Sign in clicked")}>
+                        <span>Sign In</span>
+                    </SigninBtn>
+                    <ConfigureBtn onClick={openConfigure}>
+                        <span style={{ fontSize: 25 }}>⚙</span>
+                        <span>Configure</span>
+                    </ConfigureBtn>
+                </TopBtnSection>
                 <GetStartedBadge>Get Started</GetStartedBadge>
                 <Headline>WSO2 Integrator</Headline>
                 <Caption>
-                    A comprehensive integration solution that simplifies your digital transformation journey. Streamlines connectivity among applications, services, data, and cloud using a user-friendly low-code graphical designing experience.
+                    Connect any system across your business, build AI agents, and orchestrate AI-enabled workflows with the 100% open source and AI-native WSO2 Integrator.
                 </Caption>
             </TopSection>
 
@@ -405,85 +426,70 @@ export const WelcomeView: React.FC = () => {
                 <CardsGrid>
                     <ActionCard onClick={goToCreateProject}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
-                                <Icon name="bi-plus-fill" iconSx={{ fontSize: 24 }} />
-                            </CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">＋</CardIcon>
                         </CardIconContainer>
                         <CardContent>
                             <CardTitle>Create New Project</CardTitle>
                             <CardDescription>
                                 Ready to build? Start a new integration project using our intuitive graphical designer.
                             </CardDescription>
-                            <StyledButton
-                                isPrimary={true}
-                                appearance="primary"
-                                onClick={(e: any) => { e.stopPropagation(); goToCreateProject(); }}>
-                                <ButtonContent>Create</ButtonContent>
-                            </StyledButton>
+                                <StyledButton
+                                    isPrimary={true}
+                                    onClick={(e: any) => { e.stopPropagation(); goToCreateProject(); }}>
+                                    <ButtonContent>Create</ButtonContent>
+                                </StyledButton>
+                        </CardContent>
+                    </ActionCard>
+
+                    <ActionCard onClick={handleProjectDirSelection}>
+                        <CardIconContainer>
+                            <CardIcon bgColor="linear-gradient(135deg, #fa709a 0%, #fee140 100%)">↗</CardIcon>
+                        </CardIconContainer>
+                        <CardContent>
+                            <CardTitle>Open Project</CardTitle>
+                            <CardDescription>
+                                Open an existing integration project and continue building your solution.
+                            </CardDescription>
+                                <StyledButton
+                                    onClick={(e: any) => { e.stopPropagation(); handleProjectDirSelection(); }}>
+                                    <ButtonContent>Open</ButtonContent>
+                                </StyledButton>
                         </CardContent>
                     </ActionCard>
 
                     <ActionCard onClick={goToSamples}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)">
-                                <Icon name="bi-bookmark" iconSx={{ fontSize: 24 }} />
-                            </CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)">★</CardIcon>
                         </CardIconContainer>
                         <CardContent>
                             <CardTitle>Explore Samples</CardTitle>
                             <CardDescription>
                                 Need inspiration? Browse through sample projects to see how WSO2 Integrator works in real-world scenarios.
                             </CardDescription>
-                            <StyledButton
-                                appearance="secondary"
-                                onClick={(e: any) => { e.stopPropagation(); goToSamples(); }}>
-                                <ButtonContent>Explore</ButtonContent>
-                            </StyledButton>
+                                <StyledButton
+                                    onClick={(e: any) => { e.stopPropagation(); goToSamples(); }}>
+                                    <ButtonContent>Explore</ButtonContent>
+                                </StyledButton>
                         </CardContent>
                     </ActionCard>
 
                     <ActionCard onClick={goToImportExternal}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)">
-                                <Icon name="bi-convert" iconSx={{ fontSize: 24 }} />
-                            </CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)">⇄</CardIcon>
                         </CardIconContainer>
                         <CardContent>
                             <CardTitle>Import External Integration</CardTitle>
                             <CardDescription>
                                 Have an integration from another platform? Import your MuleSoft or TIBCO integration project and continue building.
                             </CardDescription>
-                            <StyledButton
-                                appearance="secondary"
-                                onClick={(e: any) => { e.stopPropagation(); goToImportExternal(); }}>
-                                <ButtonContent>Import</ButtonContent>
-                            </StyledButton>
+                                <StyledButton
+                                    onClick={(e: any) => { e.stopPropagation(); goToImportExternal(); }}>
+                                    <ButtonContent>Import</ButtonContent>
+                                </StyledButton>
                         </CardContent>
                     </ActionCard>
                 </CardsGrid>
             </CardsContainer>
-
-            <BottomSection>
-                <AlreadyHaveText>
-                    Already have a project?
-                    <a onClick={openProject}>Open</a>
-                </AlreadyHaveText>
-
-                <RecentProjectsSection>
-                    <RecentProjectsHeader>
-                        <RecentProjectsTitle>Recent projects</RecentProjectsTitle>
-                        <ViewAllLink onClick={viewAllProjects}>View all (11)</ViewAllLink>
-                    </RecentProjectsHeader>
-                    <ProjectsList>
-                        {recentProjects.map((project, index) => (
-                            <ProjectItem key={index} onClick={() => console.log(`Open project: ${project.name}`)}>
-                                <span>{project.name}</span>
-                                <ProjectPath>{project.path}</ProjectPath>
-                            </ProjectItem>
-                        ))}
-                    </ProjectsList>
-                </RecentProjectsSection>
-            </BottomSection>
         </>
     );
 

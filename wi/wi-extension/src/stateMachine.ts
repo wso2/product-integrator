@@ -30,6 +30,7 @@ import { registerCommands } from './commands';
 export enum ProjectType {
     BI_BALLERINA = 'WSO2: BI',
     MI = 'WSO2: MI',
+    SI = 'WSO2: SI',
     NONE = 'NONE'
 }
 
@@ -42,25 +43,46 @@ interface MachineContext {
     isMI?: boolean;
     extensionAPIs: ExtensionAPIs;
     webviewManager?: WebviewManager;
-    mode: ProjectType;
+    mode: ProjectType[];
     currentView: ViewType;
 }
 
 /**
- * Get the default integrator mode from configuration
+ * Get the enabled integrator runtimes from configuration.
  */
-function getDefaultIntegratorMode(): ProjectType {
-    const configValue = vscode.workspace.getConfiguration("wso2-integrator").get<string>("integrator.defaultRuntime");
+function getDefaultIntegratorMode(): ProjectType[] {
+    const config = vscode.workspace.getConfiguration("wso2-integrator");
+    const biEnabled = config.get<boolean>("integrator.enabledRuntimes.bi") ?? true;
+    const miEnabled = config.get<boolean>("integrator.enabledRuntimes.mi") ?? false;
+    const siEnabled = config.get<boolean>("integrator.enabledRuntimes.si") ?? false;
 
-    // Map string config values to ProjectType enum
-    switch (configValue) {
-        case 'WSO2: BI':
-            return ProjectType.BI_BALLERINA;
-        case 'WSO2: MI':
-            return ProjectType.MI;
-        default:
-            return ProjectType.NONE;
+    const enabled: ProjectType[] = [];
+    if (biEnabled) { enabled.push(ProjectType.BI_BALLERINA); }
+    if (miEnabled) { enabled.push(ProjectType.MI); }
+    if (siEnabled) { enabled.push(ProjectType.SI); }
+
+    if (enabled.length === 0) {
+        vscode.window.showWarningMessage(
+            'WSO2 Integrator: At least one runtime must be enabled. Re-enabling WSO2 BI.',
+            'Open Settings'
+        ).then((selection) => {
+            if (selection === 'Open Settings') {
+                vscode.commands.executeCommand(
+                    'workbench.action.openSettings',
+                    'integrator.enabledRuntimes'
+                );
+            }
+        });
+        // Restore BI in settings so the checkbox reflects reality
+        config.update(
+            'integrator.enabledRuntimes.bi',
+            true,
+            vscode.ConfigurationTarget.Global
+        );
+        return [ProjectType.BI_BALLERINA];
     }
+
+    return enabled;
 }
 
 const stateMachine = createMachine<MachineContext>({
@@ -162,6 +184,8 @@ const stateMachine = createMachine<MachineContext>({
             } else if (context.projectType === ProjectType.MI) {
                 ext.log('MI project detected - MI tree view would be activated here');
                 vscode.commands.executeCommand('setContext', 'WI.projectType', 'mi');
+            } else {
+                vscode.commands.executeCommand('setContext', 'WI.projectType', 'none');
             }
         },
         focusIntegratorViewIfWorkspaceOpen: () => {
@@ -176,9 +200,17 @@ const stateMachine = createMachine<MachineContext>({
             );
         },
         showWelcomeScreen: (context, event) => {
-            if (context.webviewManager) {
-                context.webviewManager.showWelcome();
+            // On the disabled path (no project), webviewManager hasn't been created yet
+            if (!context.webviewManager) {
+                context.webviewManager = new WebviewManager(context.projectUri);
+                ext.context.subscriptions.push({
+                    dispose: () => context.webviewManager?.dispose(),
+                });
+                registerCommands(ext.context, context.webviewManager, context.extensionAPIs);
             }
+            vscode.commands.executeCommand('setContext', 'WI.projectType', 'none');
+            context.webviewManager.showWelcome();
+            context.currentView = ViewType.WELCOME;
         }
     }
 });
@@ -209,6 +241,7 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
             });
         } else {
             ext.log('No workspace open');
+            throw new Error('No workspace open - cannot activate extensions without a project');
         }
     }
 
@@ -272,7 +305,12 @@ export const StateMachine = {
 
         // Listen for configuration changes
         const configChangeDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
-            if (event.affectsConfiguration('wso2-integrator.integrator.defaultRuntime')) {
+            const runtimeSettingChanged =
+                event.affectsConfiguration('wso2-integrator.integrator.enabledRuntimes.bi') ||
+                event.affectsConfiguration('wso2-integrator.integrator.enabledRuntimes.mi') ||
+                event.affectsConfiguration('wso2-integrator.integrator.enabledRuntimes.si');
+
+            if (runtimeSettingChanged) {
                 const newMode = getDefaultIntegratorMode();
                 ext.log(`Configuration changed: defaultRuntime = ${newMode}`);
 

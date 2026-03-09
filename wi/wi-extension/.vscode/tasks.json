@@ -4,20 +4,20 @@
 		{
 			"type": "npm",
 			"script": "watch",
-			"path": "workspaces/wi/wi-extension",
+			"path": "./",
 			"isBackground": true,
 			"group": {
 				"kind": "build",
 				"isDefault": true
 			},
 			"problemMatcher": [
-				"$ts-webpack-watch"
+				"$tsc-watch"
 			]
 		},
 		{
 			"type": "npm",
 			"script": "compile",
-			"path": "workspaces/wi/wi-extension",
+			"path": "./",
 			"group": "build",
 			"problemMatcher": [
 				"$tsc"
@@ -26,7 +26,7 @@
 		{
 			"type": "npm",
 			"script": "compile-tests",
-			"path": "workspaces/wi/wi-extension",
+			"path": "./",
 			"group": "build",
 			"problemMatcher": [
 				"$tsc"

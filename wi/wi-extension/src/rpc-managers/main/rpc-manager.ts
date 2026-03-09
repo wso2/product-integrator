@@ -50,7 +50,7 @@ import {
     ValidateProjectFormRequest,
     ValidateProjectFormResponse
 } from "@wso2/wi-core";
-import { commands, window, workspace, MarkdownString } from "vscode";
+import { commands, window, workspace, MarkdownString, Uri } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import * as fs from "fs";
@@ -58,6 +58,7 @@ import * as path from "path";
 import axios from "axios";
 import { pullMigrationTool } from "./migrate-integration";
 import { MigrationReportWebview } from "../../migration-report/webview";
+import { RPCLayer } from "../../RPCLayer";
 import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi-core";
 import { StateMachine } from "../../stateMachine";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration/interfaces";
@@ -93,6 +94,16 @@ export class MainRpcManager implements WIVisualizerAPI {
 
     async openMiExtension(): Promise<void> {
         commands.executeCommand(COMMANDS.OPEN_MI_INTEGRATION);
+    }
+
+    async openSettings(settingKey: string): Promise<void> {
+        commands.executeCommand('workbench.action.openSettings', settingKey);
+    }
+
+    async openFolder(folderPath: string): Promise<void> {
+        if (folderPath) {
+            await commands.executeCommand('vscode.openFolder', Uri.file(folderPath));
+        }
     }
 
     async runCommand(props: RunCommandRequest): Promise<RunCommandResponse> {
@@ -357,6 +368,17 @@ export class MainRpcManager implements WIVisualizerAPI {
         };
         const langClient = await this.getLangClient();
         langClient.registerMigrationToolCallbacks();
+
+        // the WI webview receives onMigratedProject notifications as each project is migrated.
+        const projectUri = StateMachine.getContext().projectUri ?? 'global';
+        langClient.onNotification('projectService/pushMigratedProject', (res: any) => {
+            try {
+                RPCLayer.notifyMigratedProject(res, projectUri);
+            } catch (error) {
+                console.error('[WI] Error forwarding migratedProject notification:', error);
+            }
+        });
+
         switch (params.commandName) {
             case "migrate-tibco":
                 return langClient.importTibcoToBI(langParams);

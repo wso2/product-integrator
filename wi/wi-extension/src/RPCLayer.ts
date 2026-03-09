@@ -20,7 +20,7 @@ import { WebviewPanel } from 'vscode';
 import { Messenger } from 'vscode-messenger';
 import { registerMainRpcHandlers } from './rpc-managers/main/rpc-handler';
 import { registerCloudRpcHandlers } from './rpc-managers/cloud/rpc-handler';
-import { onStateChanged, WebviewContext } from '@wso2/wi-core';
+import { onStateChanged, onMigratedProject, WebviewContext } from '@wso2/wi-core';
 import { WEB_VIEW_TYPE } from './webviewManager';
 
 export class RPCLayer {
@@ -44,6 +44,13 @@ export class RPCLayer {
         const messenger = this._messengers.get(projectUri);
         if (messenger) {
             messenger.sendNotification(onStateChanged, { type: 'webview', webviewType: WEB_VIEW_TYPE }, context);
+        }
+    }
+
+    static notifyMigratedProject(project: any, projectUri: string = 'global'): void {
+        const messenger = this._messengers.get(projectUri);
+        if (messenger) {
+            messenger.sendNotification(onMigratedProject, { type: 'webview', webviewType: WEB_VIEW_TYPE }, project);
         }
     }
 

@@ -111,7 +111,7 @@ export interface GettingStartedData {
 
 export interface SampleDownloadRequest {
     zipFileName: string;
-    runtime: "WSO2: BI" | "WSO2: MI";
+    runtime: "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 }
 
 export interface BIProjectRequest {
@@ -222,7 +222,7 @@ export interface SaveMigrationReportRequest {
 }
 
 export interface FetchSamplesRequest {
-    runtime?: "WSO2: BI" | "WSO2: MI";
+    runtime?: "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 }
 
 export interface BISampleItem {
