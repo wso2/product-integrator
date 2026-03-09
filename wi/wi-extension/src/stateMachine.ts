@@ -212,6 +212,10 @@ const stateMachine = createMachine<MachineContext>({
         },
         showWelcomeScreen: (context, event) => {
             // On the disabled path (no project), webviewManager hasn't been created yet
+            if (context.isInWi){
+                return;
+            }
+            
             if (!context.webviewManager) {
                 context.webviewManager = new WebviewManager(context.projectUri);
                 ext.context.subscriptions.push({
