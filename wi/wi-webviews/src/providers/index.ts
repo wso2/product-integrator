@@ -17,3 +17,4 @@
  */
 
 export { WIWebviewQueryClientProvider } from "./react-query-provider";
+export { CloudContextProvider, useCloudContext } from "./cloud-ctx-provider";
