@@ -316,9 +316,9 @@ export class MainRpcManager implements WIVisualizerAPI {
                 openInVSCode(projectRoot);
                 resolve();
             } catch (error) {
-                console.error("Error creating BI project:", error);
+                console.error("Error creating Ballerina project:", error);
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                window.showErrorMessage(`Failed to create BI project: ${errorMessage}`);
+                window.showErrorMessage(`Failed to create Ballerina project: ${errorMessage}`);
                 reject(error);
             }
         });
@@ -334,9 +334,9 @@ export class MainRpcManager implements WIVisualizerAPI {
                 const result = await commands.executeCommand('BI.project.createBIProjectMigration', params);
                 resolve();
             } catch (error) {
-                console.error("Error creating BI project:", error);
+                console.error("Error creating Ballerina project:", error);
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                window.showErrorMessage(`Failed to create BI project: ${errorMessage}`);
+                window.showErrorMessage(`Failed to create Ballerina project: ${errorMessage}`);
                 reject(error);
             }
         });
