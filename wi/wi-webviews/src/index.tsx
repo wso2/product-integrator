@@ -20,7 +20,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import IntegratorWebview from "./IntegratorWebview";
 import { WebviewContextProvider } from "./contexts/RpcContext";
-import { WIWebviewQueryClientProvider } from "./providers";
+import { CloudContextProvider, WIWebviewQueryClientProvider } from "./providers";
 import "./style.css";
 
 export function renderWebview(target: HTMLElement) {
@@ -29,7 +29,9 @@ export function renderWebview(target: HTMLElement) {
 		<React.StrictMode>
 			<WebviewContextProvider>
 				<WIWebviewQueryClientProvider>
-					<IntegratorWebview />
+					<CloudContextProvider>
+						<IntegratorWebview />
+					</CloudContextProvider>
 				</WIWebviewQueryClientProvider>
 			</WebviewContextProvider>
 		</React.StrictMode>,
