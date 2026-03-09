@@ -20,20 +20,22 @@ import { WebviewPanel } from 'vscode';
 import { Messenger } from 'vscode-messenger';
 import { registerMainRpcHandlers } from './rpc-managers/main/rpc-handler';
 import { registerCloudRpcHandlers } from './rpc-managers/cloud/rpc-handler';
-import { onStateChanged, onMigratedProject, WebviewContext } from '@wso2/wi-core';
+import { onStateChanged, onMigratedProject, onAuthStateChanged, onContextStateChanged, WebviewContext } from '@wso2/wi-core';
 import { WEB_VIEW_TYPE } from './webviewManager';
+
+const CLOUD_BROADCAST_METHODS = [onAuthStateChanged.method, onContextStateChanged.method];
 
 export class RPCLayer {
     static _messengers: Map<string, Messenger> = new Map();
 
     static create(webViewPanel: WebviewPanel, projectUri: string): void {
         if (this._messengers.has(projectUri)) {
-            this._messengers.get(projectUri)!.registerWebviewPanel(webViewPanel as WebviewPanel);
+            this._messengers.get(projectUri)!.registerWebviewPanel(webViewPanel as WebviewPanel, { broadcastMethods: CLOUD_BROADCAST_METHODS });
             return;
         }
         const messenger = new Messenger();
         this._messengers.set(projectUri, messenger);
-        messenger.registerWebviewPanel(webViewPanel as WebviewPanel);
+        messenger.registerWebviewPanel(webViewPanel as WebviewPanel, { broadcastMethods: CLOUD_BROADCAST_METHODS });
 
         // Register RPC handlers
         registerMainRpcHandlers(messenger);

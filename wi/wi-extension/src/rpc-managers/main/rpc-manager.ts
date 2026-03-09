@@ -62,6 +62,7 @@ import { RPCLayer } from "../../RPCLayer";
 import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi-core";
 import { StateMachine } from "../../stateMachine";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration/interfaces";
+import { ext } from "../../extensionVariables";
 const platform = getPlatform();
 
 export class MainRpcManager implements WIVisualizerAPI {
@@ -417,6 +418,18 @@ export class MainRpcManager implements WIVisualizerAPI {
             await vscode.workspace.fs.writeFile(saveUri, Buffer.from(params.reportContent, 'utf8'));
             vscode.window.showInformationMessage(`Migration report saved to ${saveUri.fsPath}`);
         }
+    }
+
+    async setWebviewCache(params: { cacheKey: string; data: unknown }): Promise<void> {
+        await ext.context.workspaceState.update(params.cacheKey, params.data);
+    }
+
+    async restoreWebviewCache(cacheKey: string): Promise<unknown> {
+        return ext.context.workspaceState.get(cacheKey);
+    }
+
+    async clearWebviewCache(cacheKey: string): Promise<void> {
+        await ext.context.workspaceState.update(cacheKey, undefined);
     }
 }
 

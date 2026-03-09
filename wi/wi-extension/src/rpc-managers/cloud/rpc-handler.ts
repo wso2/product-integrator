@@ -15,18 +15,36 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
+import { env, Uri, window, ProgressLocation } from "vscode";
 import { Messenger } from "vscode-messenger";
+import { BROADCAST } from "vscode-messenger-common";
 import {
+	type AuthState,
 	WICloudFormContext,
 	WICloudSubmitComponentsReq,
 	WICloudSubmitComponentsResp,
 	closeCloudFormWebview,
+	getAuthState,
 	getCloudFormContext,
+	getContextState,
+	getLocalGitData,
+	onAuthStateChanged,
+	onContextStateChanged,
 	submitComponents,
+	triggerGithubAuthFlow,
+	triggerGithubInstallFlow,
+	getBranches,
+	getAuthorizedGitOrgs,
+	getCredentials,
+	getCredentialDetails,
+	getGitRepoMetadataBatch,
+	ViewType,
 } from "@wso2/wi-core";
+import { ext } from "../../extensionVariables";
 import { StateMachine } from "../../stateMachine";
-import { ViewType } from "@wso2/wi-core";
+import { contextStore } from "../../cloud/stores/context-store";
+import { webviewStateStore } from "../../cloud/stores/webview-state-store";
+import { getGitHead, getGitRemotes, getGitRoot, removeCredentialsFromGitURL } from "../../cloud/git/util";
 
 /**
  * Pending cloud form context — set by create-component-cmd before opening the webview,
@@ -80,4 +98,90 @@ export function registerCloudRpcHandlers(messenger: Messenger): void {
 		_pendingSubmitHandler = null;
 		StateMachine.openWebview(ViewType.WELCOME);
 	});
+
+	// Auth state
+	messenger.onRequest(getAuthState, (): AuthState => ext.authProvider?.state ?? { userInfo: null, region: "US" });
+
+	// Context state
+	messenger.onRequest(getContextState, () => contextStore.getState().state);
+
+	// Local git data
+	messenger.onRequest(getLocalGitData, async (dirPath: string) => {
+		try {
+			const gitRoot = await getGitRoot(ext.context, dirPath);
+			const remotes = await getGitRemotes(ext.context, dirPath);
+			const head = await getGitHead(ext.context, dirPath);
+			let headRemoteUrl = "";
+			const remotesSet = new Set<string>();
+			remotes.forEach((remote) => {
+				if (remote.fetchUrl) {
+					const sanitized = removeCredentialsFromGitURL(remote.fetchUrl);
+					remotesSet.add(sanitized);
+					if (head?.upstream?.remote === remote.name) {
+						headRemoteUrl = sanitized;
+					}
+				}
+			});
+			return {
+				remotes: Array.from(remotesSet),
+				upstream: { name: head?.name, remote: head?.upstream?.remote, remoteUrl: headRemoteUrl },
+				gitRoot,
+			};
+		} catch {
+			return undefined;
+		}
+	});
+
+	// GitHub OAuth app flows
+	messenger.onRequest(triggerGithubAuthFlow, async (orgId: string) => {
+		const extName = webviewStateStore.getState().state?.extensionName;
+		const baseUrl = extName === "Devant" ? ext.config?.devantConsoleUrl : ext.config?.choreoConsoleUrl;
+		const callbackUrl = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
+		const state = Buffer.from(
+			JSON.stringify({ origin: "vscode.wi.ext", orgId, callbackUri: callbackUrl.toString(), extensionName: extName }),
+			"binary",
+		).toString("base64");
+		const ghURL = Uri.parse(
+			`${ext.config?.ghApp.authUrl}?redirect_uri=${baseUrl}/ghapp&client_id=${ext.config?.ghApp.clientId}&state=${state}`,
+		);
+		await env.openExternal(ghURL);
+	});
+
+	messenger.onRequest(triggerGithubInstallFlow, async (orgId: string) => {
+		const extName = webviewStateStore.getState().state?.extensionName;
+		const callbackUrl = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
+		const state = Buffer.from(
+			JSON.stringify({ origin: "vscode.wi.ext", orgId, callbackUri: callbackUrl.toString(), extensionName: extName }),
+			"binary",
+		).toString("base64");
+		const ghURL = Uri.parse(`${ext.config?.ghApp.installUrl}?state=${state}`);
+		await env.openExternal(ghURL);
+	});
+
+	// Push auth/context state changes to the webview as notifications
+	ext.authProvider?.subscribe(({ state }) => {
+		messenger.sendNotification(onAuthStateChanged, BROADCAST, state);
+	});
+	contextStore.subscribe(({ state }) => {
+		messenger.sendNotification(onContextStateChanged, BROADCAST, state);
+	});
+
+	// Repo RPC methods
+	messenger.onRequest(getBranches, (params) => ext.clients.rpcClient.getRepoBranches(params));
+
+	messenger.onRequest(getAuthorizedGitOrgs, (params) => ext.clients.rpcClient.getAuthorizedGitOrgs(params));
+
+	messenger.onRequest(getCredentials, async (params) => {
+		const result = await ext.clients.rpcClient.getCredentials(params);
+		return result ?? [];
+	});
+
+	messenger.onRequest(getCredentialDetails, (params) => ext.clients.rpcClient.getCredentialDetails(params));
+
+	messenger.onRequest(getGitRepoMetadataBatch, async (params) =>
+		window.withProgress(
+			{ title: "Fetching repo metadata...", location: ProgressLocation.Notification },
+			() => ext.clients.rpcClient.getGitRepoMetadataBatch(params),
+		),
+	);
 }

@@ -17,7 +17,7 @@
  * 
  * THIS FILE INCLUDES AUTO GENERATED CODE
  */
-import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, DownloadProgress, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, MigrationToolStateData, MigrationToolLogData, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest, SemanticVersion, ValidateProjectFormRequest, ValidateProjectFormResponse } from "../../types/rpc.types";
+import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, DownloadProgress, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, MigrationToolStateData, MigrationToolLogData, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest, SemanticVersion, ValidateProjectFormRequest, ValidateProjectFormResponse, SetWebviewCacheParams } from "../../types/rpc.types";
 import { NotificationType, RequestType } from "vscode-messenger-common";
 import { ProjectMigrationResult, StoreSubProjectReportsRequest } from "../migrate-integration";
 
@@ -55,3 +55,6 @@ export const saveMigrationReport: RequestType<SaveMigrationReportRequest, void> 
 export const storeSubProjectReports: RequestType<StoreSubProjectReportsRequest, void> = { method: `${_preFix}/storeSubProjectReports` };
 export const validateProjectPath: RequestType<ValidateProjectFormRequest, ValidateProjectFormResponse> = { method: `${_preFix}/validateProjectPath` };
 export const openFolder: NotificationType<string> = { method: `${_preFix}/openFolder` };
+export const setWebviewCache: RequestType<SetWebviewCacheParams, void> = { method: `${_preFix}/setWebviewCache` };
+export const restoreWebviewCache: RequestType<string, unknown> = { method: `${_preFix}/restoreWebviewCache` };
+export const clearWebviewCache: RequestType<string, void> = { method: `${_preFix}/clearWebviewCache` };

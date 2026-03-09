@@ -16,6 +16,9 @@
  * under the License.
  */
 
+export type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp } from "@wso2/wso2-platform-core";
+import type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp } from "@wso2/wso2-platform-core";
+
 /**
  * A single component entry for the component creation form.
  * Contains only the data the webview needs — platform-core types stay in wi-extension.
@@ -69,4 +72,21 @@ export interface WICloudAPI {
 	getCloudFormContext: () => Promise<WICloudFormContext>;
 	submitComponents: (params: WICloudSubmitComponentsReq) => Promise<WICloudSubmitComponentsResp>;
 	closeCloudFormWebview: () => void;
+	// Auth
+	getAuthState: () => Promise<AuthState>;
+	onAuthStateChanged: (callback: (state: AuthState) => void) => void;
+	// Context
+	getContextState: () => Promise<ContextStoreState>;
+	onContextStateChanged: (callback: (state: ContextStoreState) => void) => void;
+	// Git
+	getLocalGitData: (dirPath: string) => Promise<GetLocalGitDataResp | undefined>;
+	// GitHub flows
+	triggerGithubAuthFlow: (orgId: string) => Promise<void>;
+	triggerGithubInstallFlow: (orgId: string) => Promise<void>;
+	// Repo
+	getBranches: (params: GetBranchesReq) => Promise<string[]>;
+	getAuthorizedGitOrgs: (params: GetAuthorizedGitOrgsReq) => Promise<GetAuthorizedGitOrgsResp>;
+	getCredentials: (params: GetCredentialsReq) => Promise<CredentialItem[]>;
+	getCredentialDetails: (params: GetCredentialDetailsReq) => Promise<CredentialItem>;
+	getGitRepoMetadataBatch: (params: GetGitMetadataReq[]) => Promise<GetGitMetadataResp[]>;
 }

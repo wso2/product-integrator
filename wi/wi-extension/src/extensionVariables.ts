@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import type { WSO2Terminologies } from "@wso2/wso2-platform-core";
+import type { GetCliRpcResp, WSO2Terminologies } from "@wso2/wso2-platform-core";
 import * as vscode from "vscode";
 import type { ChoreoRPCClient } from "./cloud/choreo-cli-rpc";
 import { defaultTerminologies, webviewStateStore } from "./cloud/stores/webview-state-store";
@@ -43,8 +43,8 @@ export class ExtensionVariables {
 	/** True when running inside the Devant cloud editor (CLOUD_STS_TOKEN is set). */
 	public isDevantCloudEditor: boolean = !!process.env.CLOUD_STS_TOKEN;
 
-	/** Extension config with console URLs — populated during activation (Stage 6). */
-	public config?: { billingConsoleUrl?: string; devantConsoleUrl?: string; choreoConsoleUrl?: string };
+	/** Extension config with console URLs and GitHub app config — populated during activation. */
+	public config?: GetCliRpcResp;
 
 	/** Active terminology set — updated reactively from webviewStateStore. */
 	public terminologies: WSO2Terminologies = defaultTerminologies;

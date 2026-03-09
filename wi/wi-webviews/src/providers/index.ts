@@ -16,22 +16,4 @@
  * under the License.
  */
 
-import React from "react";
-import ReactDOM from "react-dom/client";
-import IntegratorWebview from "./IntegratorWebview";
-import { WebviewContextProvider } from "./contexts/RpcContext";
-import { WIWebviewQueryClientProvider } from "./providers";
-import "./style.css";
-
-export function renderWebview(target: HTMLElement) {
-	const reactRoot = ReactDOM.createRoot(target);
-	reactRoot.render(
-		<React.StrictMode>
-			<WebviewContextProvider>
-				<WIWebviewQueryClientProvider>
-					<IntegratorWebview />
-				</WIWebviewQueryClientProvider>
-			</WebviewContextProvider>
-		</React.StrictMode>,
-	);
-}
+export { WIWebviewQueryClientProvider } from "./react-query-provider";
