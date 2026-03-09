@@ -305,6 +305,20 @@
 			"problemMatcher": [
 				"$tsc"
 			]
-		}
+		},
+		{
+			"label": "Watch WI extension",
+			"type": "npm",
+			"script": "watch",
+			"path": "./wi/wi-extension",
+			"isBackground": true,
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": [
+				"$tsc-watch"
+			]
+		},
 	]
 }
