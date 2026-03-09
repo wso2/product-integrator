@@ -20,7 +20,20 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { workspace } from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from "../../extensionVariables";
+import { RPCClient } from "./client";
+
+export async function installRPCServer() {
+	try {
+		await choreoCliBinaryExists();
+		await RPCClient.getInstance();
+		ext.log("RPC server initialized successfully");
+	} catch (error) {
+		ext.logError(`Failed to initialize RPC server: ${error instanceof Error ? error.message : String(error)}`);
+		// Allow extension to continue without RPC functionality
+		// Important for test environments where CLI resources may not be available
+	}
+}
 
 export const getCliVersion = (): string => {
 	const packageJson = JSON.parse(fs.readFileSync(path.join(ext.context.extensionPath, "package.json"), "utf8"));
@@ -55,7 +68,7 @@ const getChoreoBinPath = () => {
 	return path.join(ext.context.extensionPath, "resources", "choreo-cli", getCliVersion(), OS, ARCH);
 };
 
-export const installCLI = async () => {
+const choreoCliBinaryExists = async () => {
 	const OS = os.platform();
 	const CHOREO_CLI_EXEC = getChoreoExecPath();
 
@@ -72,7 +85,7 @@ export const installCLI = async () => {
 		}
 	}
 
-	ext.log("WSO2 Platform RPC server is ready");
+	ext.log("CLI binary exists and is executable");
 };
 
 function getArchitecture() {
