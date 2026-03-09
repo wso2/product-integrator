@@ -108,7 +108,7 @@ export class MainRpcManager implements WIVisualizerAPI {
     }
 
     async runCommand(props: RunCommandRequest): Promise<RunCommandResponse> {
-        return await commands.executeCommand("wso2.integrator.runCommand", props);
+        return await commands.executeCommand(props.command, ...(props.args || []));
     }
 
     async selectFileOrDirPath(params: FileOrDirRequest): Promise<FileOrDirResponse> {

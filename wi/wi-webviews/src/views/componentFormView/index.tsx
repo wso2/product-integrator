@@ -19,6 +19,9 @@
 import React, { useMemo, useState } from "react";
 import { CheckBox, Typography } from "@wso2/ui-toolkit";
 import { type WICloudComponentEntry, type WICloudFormContext } from "@wso2/wi-core";
+import { WICommandIds } from "@wso2/wso2-platform-core";
+import { useVisualizerContext } from "../../contexts";
+import { useCloudContext } from "../../providers";
 import {
 	CancelButton,
 	CheckboxCell,
@@ -30,7 +33,13 @@ import {
 	ComponentListSection,
 	DirPath,
 	ErrorBanner,
+	FieldGroup,
+	FieldLabel,
+	FieldSelect,
 	FooterRow,
+	GitConfigGrid,
+	GitConfigLabel,
+	GitConfigSection,
 	NameButton,
 	NameError,
 	NameInput,
@@ -89,6 +98,12 @@ const DUMMY_CONTEXT: WICloudFormContext = {
 	],
 };
 
+// ── Dummy git options ─────────────────────────────────────────────────────────
+
+const DUMMY_GIT_PROVIDERS = ["GitHub", "GitLab", "Bitbucket", "Azure DevOps"];
+const DUMMY_REPOSITORIES = ["my-project", "order-service-repo", "integrations-mono", "platform-services"];
+const DUMMY_BRANCHES = ["main", "develop", "feature/deploy-setup", "release/1.0.0"];
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface EntryFormState {
@@ -116,7 +131,11 @@ const validateName = (name: string): string | undefined => {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ComponentFormView() {
+	const { rpcClient } = useVisualizerContext();
+	const { authState } = useCloudContext();
 	const context = DUMMY_CONTEXT;
+
+
 
 	const [formState, setFormState] = useState<EntryFormState[]>(() =>
 		context.components.map(initEntryState),
@@ -124,6 +143,9 @@ export function ComponentFormView() {
 	const [editingIndex, setEditingIndex] = useState<number | null>(null);
 	const [submitting, setSubmitting] = useState(false);
 	const [submitError, setSubmitError] = useState<string | null>(null);
+	const [gitProvider, setGitProvider] = useState(DUMMY_GIT_PROVIDERS[0]);
+	const [repository, setRepository] = useState(DUMMY_REPOSITORIES[0]);
+	const [branch, setBranch] = useState(DUMMY_BRANCHES[0]);
 
 	const updateEntry = (index: number, patch: Partial<EntryFormState>) => {
 		setFormState((prev) => prev.map((e, i) => (i === index ? { ...e, ...patch } : e)));
@@ -273,6 +295,57 @@ export function ComponentFormView() {
 					</WarningBanner>
 				)}
 			</ComponentListSection>
+
+			{/* Git configuration */}
+			<GitConfigSection>
+				<GitConfigLabel>Git Configuration</GitConfigLabel>
+				<GitConfigGrid>
+					<FieldGroup>
+						<FieldLabel htmlFor="git-provider">
+							Git Provider <span className="required">*</span>
+						</FieldLabel>
+						<FieldSelect
+							id="git-provider"
+							value={gitProvider}
+							onChange={(e) => setGitProvider(e.target.value)}
+						>
+							{DUMMY_GIT_PROVIDERS.map((p) => (
+								<option key={p} value={p}>{p}</option>
+							))}
+						</FieldSelect>
+					</FieldGroup>
+
+					<FieldGroup>
+						<FieldLabel htmlFor="repository">
+							Repository <span className="required">*</span>
+						</FieldLabel>
+						<FieldSelect
+							id="repository"
+							value={repository}
+							onChange={(e) => setRepository(e.target.value)}
+						>
+							{DUMMY_REPOSITORIES.map((r) => (
+								<option key={r} value={r}>{r}</option>
+							))}
+						</FieldSelect>
+					</FieldGroup>
+
+					<FieldGroup>
+						<FieldLabel htmlFor="branch">
+							Branch <span className="required">*</span>
+						</FieldLabel>
+						<FieldSelect
+							id="branch"
+							value={branch}
+							onChange={(e) => setBranch(e.target.value)}
+						>
+							{DUMMY_BRANCHES.map((b) => (
+								<option key={b} value={b}>{b}</option>
+							))}
+						</FieldSelect>
+					</FieldGroup>
+				</GitConfigGrid>
+			</GitConfigSection>
 
 			{/* Footer */}
 			<FooterRow>

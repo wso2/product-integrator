@@ -20,12 +20,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AuthState, ContextStoreState } from "@wso2/wi-core";
 import React, { type FC, type ReactNode, useContext, useEffect } from "react";
 import { useVisualizerContext } from "../contexts";
+import { CloudRpcClient } from "@wso2/wi-rpc-client/lib/rpc-clients/cloud/rpc-client";
 
 interface ICloudContext {
     authState: AuthState | undefined;
     contextState: ContextStoreState | undefined;
     authStateLoading: boolean;
     contextStateLoading: boolean;
+    cloudRpcClient?: CloudRpcClient;
 }
 
 const defaultCloudContext: ICloudContext = {
@@ -72,7 +74,7 @@ export const CloudContextProvider: FC<Props> = ({ children }) => {
     }, []);
 
     return (
-        <CloudContext.Provider value={{ authState, contextState, authStateLoading, contextStateLoading }}>
+        <CloudContext.Provider value={{ authState, contextState, authStateLoading, contextStateLoading, cloudRpcClient }}>
             {children}
         </CloudContext.Provider>
     );

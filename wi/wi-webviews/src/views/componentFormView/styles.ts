@@ -33,6 +33,7 @@ export const PageContainer = styled.div`
 export const TitleRow = styled.div`
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     margin-bottom: 8px;
 `;
@@ -221,6 +222,75 @@ export const TypeBadge = styled.div<TypeBadgeProps>`
         isSelected ? "var(--vscode-button-secondaryBackground)" : "var(--vscode-input-background)"};
     color: ${({ isSelected }: TypeBadgeProps) =>
         isSelected ? "var(--vscode-button-secondaryForeground)" : "var(--vscode-descriptionForeground)"};
+`;
+
+/* ── Git config ──────────────────────────────────────────────────────────── */
+
+export const GitConfigSection = styled.div`
+    margin-bottom: 20px;
+`;
+
+export const GitConfigLabel = styled.span`
+    display: block;
+    font-size: 13px;
+    color: var(--vscode-foreground);
+    opacity: 0.8;
+    margin-bottom: 12px;
+`;
+
+export const GitConfigGrid = styled.div`
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+
+    @media (max-width: 520px) {
+        grid-template-columns: 1fr;
+    }
+`;
+
+export const FieldGroup = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+`;
+
+export const FieldLabel = styled.label`
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--vscode-foreground);
+    opacity: 0.85;
+
+    span.required {
+        color: var(--vscode-errorForeground);
+        margin-left: 2px;
+    }
+`;
+
+export const FieldSelect = styled.select`
+    width: 100%;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, var(--vscode-widget-border));
+    border-radius: 3px;
+    padding: 5px 8px;
+    font-size: 13px;
+    font-family: var(--vscode-font-family);
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+
+    &:focus {
+        border-color: var(--vscode-focusBorder);
+    }
+
+    option {
+        background: var(--vscode-dropdown-background, var(--vscode-input-background));
+        color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
+    }
 `;
 
 /* ── Banners ─────────────────────────────────────────────────────────────── */

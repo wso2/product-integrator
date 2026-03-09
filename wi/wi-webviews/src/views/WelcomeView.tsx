@@ -24,6 +24,8 @@ import { CreationView } from "./creationView";
 import { ImportIntegration } from "./ImportIntegration";
 import { SamplesView } from "./samplesView";
 import { useVisualizerContext } from "../contexts";
+import { useCloudContext } from "../providers";
+import { WICommandIds } from "@wso2/wso2-platform-core";
 
 enum ViewState {
     WELCOME = "welcome",
@@ -93,6 +95,38 @@ const SigninBtn = styled(ConfigureBtn)`
         background: var(--vscode-button-background);
     }
 `;
+
+
+export const UserAvatar = styled.div`
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--vscode-button-background);
+    border: 1.5px solid color-mix(in srgb, var(--vscode-button-background) 60%, transparent);
+    cursor: default;
+    user-select: none;
+`;
+
+export const UserAvatarImg = styled.img`
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+`;
+
+export const UserInitial = styled.span`
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--vscode-button-foreground);
+    line-height: 1;
+    text-transform: uppercase;
+`;
+
 
 const GetStartedBadge = styled.div`
     display: inline-block;
@@ -342,6 +376,7 @@ const ProjectPath = styled.span`
 export const WelcomeView: React.FC = () => {
     const { rpcClient } = useVisualizerContext();
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
+    const { authState } = useCloudContext();
 
     const goToCreateProject = () => {
         setCurrentView(ViewState.CREATE_PROJECT);
@@ -403,13 +438,28 @@ export const WelcomeView: React.FC = () => {
         }
     };
 
+    const handleSignIn = () => {
+		rpcClient.getMainRpcClient().runCommand({ command: WICommandIds.SignIn, args:[] });
+	};
+
     const renderWelcomeContent = () => (
         <>
             <TopSection>
                 <TopBtnSection>
-                    <SigninBtn onClick={() => console.log("Sign in clicked")}>
-                        <span>Sign In</span>
-                    </SigninBtn>
+                    {authState?.userInfo ? (
+                        <UserAvatar title={authState.userInfo.displayName}>
+                            {authState.userInfo.userProfilePictureUrl ? (
+                                <UserAvatarImg
+                                    src={authState.userInfo.userProfilePictureUrl}
+                                    alt={authState.userInfo.displayName}
+                                />
+                            ) : (
+                                <UserInitial>{authState.userInfo.displayName.charAt(0)}</UserInitial>
+                            )}
+                        </UserAvatar>
+                    ) : (
+                        <SigninBtn type="button" onClick={handleSignIn}>Sign In</SigninBtn>
+                    )}
                     <ConfigureBtn onClick={openConfigure}>
                         <span style={{ fontSize: 25 }}>⚙</span>
                         <span>Configure</span>
