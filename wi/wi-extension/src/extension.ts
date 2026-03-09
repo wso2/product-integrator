@@ -103,7 +103,7 @@ async function activateCloudFunctionality(context: vscode.ExtensionContext): Pro
 	});
 	ext.authProvider = authProvider;
 	context.subscriptions.push(
-		authentication.registerAuthenticationProvider(WSO2_AUTH_PROVIDER_ID, "WSO2 Platform", authProvider, {
+		authentication.registerAuthenticationProvider(WSO2_AUTH_PROVIDER_ID, "WSO2 Integrator", authProvider, {
 			supportsMultipleAccounts: false,
 		}),
 	);
