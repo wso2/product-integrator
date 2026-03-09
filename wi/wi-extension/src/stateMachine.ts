@@ -21,11 +21,17 @@ import * as vscode from 'vscode';
 import { findBallerinaExtension } from './utils/ballerinaExtension';
 import { CONTEXT_KEYS, ViewType } from '@wso2/wi-core';
 import { ext } from './extensionVariables';
-import { fetchProjectInfo, ProjectInfo } from './bi/utils';
+import { fetchProjectInfo, fetchExtendedProjectInfo, ProjectInfo } from './bi/utils';
+import { ballerinaContext } from './bi/ballerinaContext';
+import { activateProjectExplorer } from './bi/project-explorer/activate';
+import { ProjectExplorerEntryProvider } from './bi/project-explorer/project-explorer-provider';
 import { checkIfMiProject } from './mi/utils';
 import { WebviewManager } from './webviewManager';
 import { ExtensionAPIs } from './extensionAPIs';
 import { registerCommands } from './commands';
+
+/** The data provider for the BI project explorer, kept for refresh access. */
+let biProjectExplorerProvider: ProjectExplorerEntryProvider | undefined;
 
 export enum ProjectType {
     BI_BALLERINA = 'WSO2: BI',
@@ -220,9 +226,10 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
 
     // Initialize extension APIs and activate appropriate extensions based on project type
     if (context.projectType === ProjectType.BI_BALLERINA) {
-        // Activate only BI extension for Ballerina projects
-        ext.log('Initializing BI extension for Ballerina project');
-        await context.extensionAPIs.initialize();
+        // WI always handles BI treeview and webview activation directly,
+        // regardless of whether the BI extension is installed.
+        ext.log('Activating BI project explorer within WI');
+        await activateBIWithinWI();
     } else if (context.projectType === ProjectType.MI) {
         // Activate only MI extension for MI projects
         ext.log('Initializing MI extension for MI project');
@@ -259,6 +266,37 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
     registerCommands(ext.context, context.webviewManager, context.extensionAPIs);
 
     ext.log('Extensions activated successfully');
+}
+
+/**
+ * Activate the BI project explorer directly within WI, without relying on the BI extension.
+ */
+async function activateBIWithinWI(): Promise<void> {
+    // Ensure Ballerina extension is active so we can read its exports
+    const ballerinaExt = vscode.extensions.getExtension('wso2.ballerina');
+    if (ballerinaExt) {
+        if (!ballerinaExt.isActive) {
+            await ballerinaExt.activate();
+        }
+        ballerinaContext.init(ballerinaExt.exports);
+        ext.log(`BallerinaContext: biSupported=${ballerinaContext.biSupported}, isNPSupported=${ballerinaContext.isNPSupported}`);
+    }
+
+    // Gather detailed project info (package vs workspace, empty workspace)
+    const extInfo = await fetchExtendedProjectInfo();
+    ext.log(`ExtendedProjectInfo: isBallerinaPackage=${extInfo.isBallerinaPackage}, isBallerinaWorkspace=${extInfo.isBallerinaWorkspace}, isEmptyWorkspace=${extInfo.isEmptyWorkspace}`);
+
+    biProjectExplorerProvider = activateProjectExplorer({
+        context: ext.context,
+        isBallerinaPackage: extInfo.isBallerinaPackage,
+        isBallerinaWorkspace: extInfo.isBallerinaWorkspace,
+        isEmptyWorkspace: extInfo.isEmptyWorkspace,
+    });
+}
+
+/** Expose the internal BI provider so commands can trigger a refresh on it. */
+export function getBIProjectExplorerProvider(): ProjectExplorerEntryProvider | undefined {
+    return biProjectExplorerProvider;
 }
 
 async function detectProjectType(): Promise<{
