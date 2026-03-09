@@ -32,7 +32,7 @@ export function signInCommand(context: ExtensionContext) {
 				// Cancel any pending session creation from accounts menu
 				ext.authProvider?.cancelPendingSessionCreation();
 				ext.log("Signing in to WSO2 Platform");
-				const callbackUrl = await vscode.env.asExternalUri(vscode.Uri.parse(`${vscode.env.uriScheme}://wso2.wi/signin`));
+				const callbackUrl = await vscode.env.asExternalUri(vscode.Uri.parse(`${vscode.env.uriScheme}://wso2.wso2-integrator/signin`));
 
 				console.log("Generating WSO2 Platform login URL for ", callbackUrl.toString());
 				const loginUrl = await window.withProgress({ title: "Generating Login URL...", location: ProgressLocation.Notification }, async () => {
