@@ -19,18 +19,18 @@
 import * as vscode from "vscode";
 import type { ConfigurationChangeEvent } from "vscode";
 import { authentication, commands, window, workspace } from "vscode";
-import { WSO2AuthenticationProvider, WSO2_AUTH_PROVIDER_ID } from "./auth/wso2-auth-provider";
+import { WSO2AuthenticationProvider, WSO2_AUTH_PROVIDER_ID } from "./cloud/auth/wso2-auth-provider";
 import { ChoreoRPCClient } from "./choreo-rpc";
 import { installRPCServer } from "./choreo-rpc/activate";
 import { getCliVersion } from "./choreo-rpc/cli-install";
-import { activateCmds } from "./cmds";
+import { activateCmds } from "./cloud/cmds";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
-import { contextStore } from "./stores/context-store";
-import { dataCacheStore } from "./stores/data-cache-store";
-import { locationStore } from "./stores/location-store";
+import { contextStore } from "./cloud/stores/context-store";
+import { dataCacheStore } from "./cloud/stores/data-cache-store";
+import { locationStore } from "./cloud/stores/location-store";
 import { activateURIHandlers } from "./uri-handlers";
-import { getExtVersion } from "./utils";
+import { getExtVersion } from "./utils/commonUtils";
 
 /**
  * Activate the extension

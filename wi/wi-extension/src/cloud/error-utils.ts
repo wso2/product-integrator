@@ -18,8 +18,8 @@
 
 import { commands, window as w } from "vscode";
 import { ResponseError } from "vscode-jsonrpc";
-import { ErrorCode } from "./choreo-rpc/constants";
-import { ext } from "./extensionVariables";
+import { ErrorCode } from "../choreo-rpc/constants";
+import { ext } from "../extensionVariables";
 import { webviewStateStore } from "./stores/webview-state-store";
 
 export function handlerError(err: any) {

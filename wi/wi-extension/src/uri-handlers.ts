@@ -31,15 +31,15 @@ import {
 import { ProgressLocation, type ProviderResult, type QuickPickItem, type Uri, commands, window, workspace } from "vscode";
 import { ResponseError } from "vscode-jsonrpc";
 import { ErrorCode } from "./choreo-rpc/constants";
-import { getUserInfoForCmd, isRpcActive } from "./cmds/cmd-utils";
-import { updateContextFile } from "./cmds/create-directory-context-cmd";
+import { getUserInfoForCmd, isRpcActive } from "./cloud/cmds/cmd-utils";
+import { updateContextFile } from "./cloud/cmds/create-directory-context-cmd";
 import { ext } from "./extensionVariables";
-import { getGitRemotes, getGitRoot } from "./git/util";
-import { contextStore, getContextKey, waitForContextStoreToLoad } from "./stores/context-store";
-import { dataCacheStore } from "./stores/data-cache-store";
-import { locationStore } from "./stores/location-store";
-import { webviewStateStore } from "./stores/webview-state-store";
-import { isSamePath, openDirectory } from "./utils";
+import { getGitRemotes, getGitRoot } from "./cloud/git/util";
+import { contextStore, getContextKey, waitForContextStoreToLoad } from "./cloud/stores/context-store";
+import { dataCacheStore } from "./cloud/stores/data-cache-store";
+import { locationStore } from "./cloud/stores/location-store";
+import { webviewStateStore } from "./cloud/stores/webview-state-store";
+import { isSamePath, openDirectory } from "./utils/pathUtils";
 
 export function activateURIHandlers() {
 	window.registerUriHandler({

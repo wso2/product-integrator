@@ -37,7 +37,7 @@ import {
 	workspace,
 } from "vscode";
 import which from "which";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import {
 	type Branch,
 	type Change,

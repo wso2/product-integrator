@@ -22,6 +22,7 @@ import * as path from "path";
 import type { ExtensionContext } from "vscode";
 import { Uri, commands, window } from "vscode";
 
+
 export const getNormalizedPath = (filePath: string): string => {
     if (os.platform() === "win32") {
         return filePath.replace(/^\//, "").replace(/\//g, "\\");
@@ -62,21 +63,6 @@ export const isSubpath = (parent: string, sub: string): boolean => {
     return !!relative && !relative.startsWith("..") && !path.isAbsolute(relative);
 };
 
-export function withTimeout<T>(fn: () => Promise<T>, functionName: string, timeout: number): Promise<T> {
-    return Promise.race([fn(), new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Function ${functionName} timed out`)), timeout))]);
-}
-
-export const parseJwt = (token: string): { iss: string } | null => {
-    try {
-        return JSON.parse(atob(token.split(".")[1]));
-    } catch (e) {
-        return null;
-    }
-};
-
-export const getExtVersion = (context: ExtensionContext): string => {
-    return context.extension.packageJSON.version as string;
-};
 
 export const convertFsPathToUriPath = (fsPath: string): string => {
     if (os.platform() === "win32") {
@@ -113,8 +99,4 @@ export async function openDirectory(openingPath: string, message: string, onSele
     } else if (openInCurrentWorkspace === "New Window") {
         await commands.executeCommand("vscode.openFolder", Uri.file(openingPath), { forceNewWindow: true });
     }
-}
-
-export function delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
 }

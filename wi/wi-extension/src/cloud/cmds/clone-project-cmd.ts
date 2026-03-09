@@ -29,11 +29,10 @@ import {
 	parseGitURL,
 } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, type QuickPickItem, QuickPickItemKind, Uri, commands, window } from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from "../../extensionVariables";
 import { initGit } from "../git/main";
 import { dataCacheStore } from "../stores/data-cache-store";
-import { webviewStateStore } from "../stores/webview-state-store";
-import { createDirectory, openDirectory } from "../utils";
+import { createDirectory, openDirectory } from "../../utils/pathUtils";
 import { getUserInfoForCmd, isRpcActive, selectOrg, selectProject, setExtensionName } from "./cmd-utils";
 import { updateContextFile } from "./create-directory-context-cmd";
 

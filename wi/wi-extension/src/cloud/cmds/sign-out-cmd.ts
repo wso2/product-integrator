@@ -18,7 +18,7 @@
 
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, commands, window } from "vscode";
-import { ext } from "../extensionVariables";
+import { ext } from '../../extensionVariables';
 import { isRpcActive } from "./cmd-utils";
 
 export function signOutCommand(context: ExtensionContext) {
