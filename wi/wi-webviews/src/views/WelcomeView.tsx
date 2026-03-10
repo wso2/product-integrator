@@ -96,7 +96,6 @@ const SigninBtn = styled(ConfigureBtn)`
     }
 `;
 
-
 export const UserAvatar = styled.div`
     width: 34px;
     height: 34px;

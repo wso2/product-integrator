@@ -50,6 +50,7 @@ export class ExtensionVariables {
 	public terminologies: WSO2Terminologies = defaultTerminologies;
 
 	public constructor() {
+		// todo: remove this as it's not needed
 		this.terminologies = webviewStateStore.getState().state?.terminologies || defaultTerminologies;
 		webviewStateStore.subscribe((state) => {
 			this.terminologies = state.state.terminologies || defaultTerminologies;

@@ -30,8 +30,6 @@ import {
 	type GetCredentialsReq,
 	type CredentialItem,
 	type GetCredentialDetailsReq,
-	type GetGitMetadataReq,
-	type GetGitMetadataResp,
 	closeCloudFormWebview,
 	getAuthState,
 	getCloudFormContext,
@@ -47,7 +45,6 @@ import {
 	getAuthorizedGitOrgs,
 	getCredentials,
 	getCredentialDetails,
-	getGitRepoMetadataBatch,
 	isRepoAuthorized,
 	IsRepoAuthorizedReq,
 	IsRepoAuthorizedResp,
@@ -127,10 +124,6 @@ export class CloudRpcClient implements WICloudAPI {
 
 	getCredentialDetails(params: GetCredentialDetailsReq): Promise<CredentialItem> {
 		return this._messenger.sendRequest(getCredentialDetails, HOST_EXTENSION, params);
-	}
-
-	getGitRepoMetadataBatch(params: GetGitMetadataReq[]): Promise<GetGitMetadataResp[]> {
-		return this._messenger.sendRequest(getGitRepoMetadataBatch, HOST_EXTENSION, params);
 	}
 
 	getConsoleUrl(): Promise<string> {

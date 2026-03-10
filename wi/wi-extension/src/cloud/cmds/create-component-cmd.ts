@@ -16,35 +16,22 @@
  * under the License.
  */
 
-import { existsSync, readFileSync } from "fs";
 import * as os from "os";
 import * as path from "path";
 import {
-	ChoreoComponentType,
 	WICommandIds,
-	type ComponentKind,
 	DevantScopes,
-	type ExtensionName,
-	type ICreateComponentCmdParams,
-	type SubmitComponentCreateReq,
-	type WorkspaceConfig,
 	getComponentKindRepoSource,
-	getComponentTypeText,
-	getIntegrationScopeText,
-	getTypeOfIntegrationType,
 	parseGitURL,
-	SubmitBatchComponentCreateResp,
 	GitProvider,
 } from "@wso2/wso2-platform-core";
-import { type ExtensionContext, ProgressLocation, type QuickPickItem, Uri, commands, window, workspace } from "vscode";
+import { type ExtensionContext, ProgressLocation, Uri, commands, window, workspace } from "vscode";
 import { ext } from "../../extensionVariables";
 import { initGit } from "../git/main";
 import { getGitRemotes, getGitRoot } from "../git/util";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
-import { webviewStateStore } from "../stores/webview-state-store";
-import { convertFsPathToUriPath, isSamePath, isSubpath, openDirectory } from "../../utils/pathUtils";
-// import { ComponentFormView, type IComponentCreateFormParams } from "../webviews/ComponentFormView";
+import { isSamePath, isSubpath } from "../../utils/pathUtils";
 import { getUserInfoForCmd, isRpcActive, selectOrg, selectProjectWithCreateNew, setExtensionName } from "./cmd-utils";
 import { updateContextFile } from "./create-directory-context-cmd";
 import { ICreateNewIntegrationCmdParams, WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";

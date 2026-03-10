@@ -17,7 +17,7 @@
  */
 
 export type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq } from "@wso2/wso2-platform-core";
-import type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp, Organization, Project, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq, ComponentKind, CreateComponentReq } from "@wso2/wso2-platform-core";
+import type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, Organization, Project, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq, ComponentKind, CreateComponentReq } from "@wso2/wso2-platform-core";
 
 
 /**
@@ -92,7 +92,6 @@ export interface WICloudAPI {
 	getAuthorizedGitOrgs: (params: GetAuthorizedGitOrgsReq) => Promise<GetAuthorizedGitOrgsResp>;
 	getCredentials: (params: GetCredentialsReq) => Promise<CredentialItem[]>;
 	getCredentialDetails: (params: GetCredentialDetailsReq) => Promise<CredentialItem>;
-	getGitRepoMetadataBatch: (params: GetGitMetadataReq[]) => Promise<GetGitMetadataResp[]>;
 	isRepoAuthorized: (params: IsRepoAuthorizedReq) => Promise<IsRepoAuthorizedResp>;
 	// Config
 	getConsoleUrl: () => Promise<string>;

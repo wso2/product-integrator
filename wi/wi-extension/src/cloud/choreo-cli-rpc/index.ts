@@ -17,4 +17,3 @@
  */
 
 export { ChoreoRPCClient } from "./client";
-export { registerChoreoRpcResolver } from "./rpc-resolver";

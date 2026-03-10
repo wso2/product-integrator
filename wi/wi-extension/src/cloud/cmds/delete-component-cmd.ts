@@ -87,8 +87,6 @@ export function deleteComponentCommand(context: ExtensionContext) {
 									componentName: selectedComponent.metadata.displayName,
 								});
 
-								// Note: closeComponentDetailsView not available in wi (webview deferred)
-
 								const compCache = dataCacheStore.getState().getComponents(selectedOrg.handle, selectedProject.handler);
 								dataCacheStore.getState().setComponents(
 									selectedOrg.handle,

@@ -27,8 +27,6 @@ import type {
 	GetCredentialsReq,
 	CredentialItem,
 	GetCredentialDetailsReq,
-	GetGitMetadataReq,
-	GetGitMetadataResp,
 	IsRepoAuthorizedReq,
 	IsRepoAuthorizedResp,
 	GetConfigFileDriftsReq,
@@ -96,10 +94,6 @@ export const getCredentials: RequestType<GetCredentialsReq, CredentialItem[]> = 
 
 export const getCredentialDetails: RequestType<GetCredentialDetailsReq, CredentialItem> = {
 	method: `${_prefix}/getCredentialDetails`,
-};
-
-export const getGitRepoMetadataBatch: RequestType<GetGitMetadataReq[], GetGitMetadataResp[]> = {
-	method: `${_prefix}/getGitRepoMetadataBatch`,
 };
 
 export const isRepoAuthorized: RequestType<IsRepoAuthorizedReq, IsRepoAuthorizedResp> = {

@@ -39,7 +39,6 @@ import {
 	getAuthorizedGitOrgs,
 	getCredentials,
 	getCredentialDetails,
-	getGitRepoMetadataBatch,
 	isRepoAuthorized,
 	ViewType,
 	getConsoleUrl,
@@ -234,13 +233,6 @@ export function registerCloudRpcHandlers(messenger: Messenger): void {
 	});
 
 	messenger.onRequest(getCredentialDetails, (params) => ext.clients.rpcClient.getCredentialDetails(params));
-
-	messenger.onRequest(getGitRepoMetadataBatch, async (params) =>
-		window.withProgress(
-			{ title: "Fetching repo metadata...", location: ProgressLocation.Notification },
-			() => ext.clients.rpcClient.getGitRepoMetadataBatch(params),
-		),
-	);
 
 	messenger.onRequest(isRepoAuthorized, (params) => ext.clients.rpcClient.isRepoAuthorized(params));
 
