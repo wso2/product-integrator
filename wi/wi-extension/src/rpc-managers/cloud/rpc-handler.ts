@@ -15,7 +15,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { env, Uri, window, ProgressLocation } from "vscode";
+import { env, Uri, window, ProgressLocation, commands } from "vscode";
 import { Messenger } from "vscode-messenger";
 import { BROADCAST } from "vscode-messenger-common";
 import {
@@ -28,6 +28,8 @@ import {
 	getCloudFormContext,
 	getContextState,
 	getLocalGitData,
+	hasDirtyRepo,
+	getConfigFileDrifts,
 	onAuthStateChanged,
 	onContextStateChanged,
 	submitComponents,
@@ -38,13 +40,22 @@ import {
 	getCredentials,
 	getCredentialDetails,
 	getGitRepoMetadataBatch,
+	isRepoAuthorized,
 	ViewType,
+	getConsoleUrl,
+	COMMANDS,
 } from "@wso2/wi-core";
 import { ext } from "../../extensionVariables";
 import { StateMachine } from "../../stateMachine";
 import { contextStore } from "../../cloud/stores/context-store";
 import { webviewStateStore } from "../../cloud/stores/webview-state-store";
-import { getGitHead, getGitRemotes, getGitRoot, removeCredentialsFromGitURL } from "../../cloud/git/util";
+import { getGitHead, getGitRemotes, getGitRoot, hasDirtyRepo as checkDirtyRepo, removeCredentialsFromGitURL } from "../../cloud/git/util";
+import { parseGitURL } from "@wso2/wso2-platform-core";
+import type { GetConfigFileDriftsReq } from "@wso2/wi-core";
+import { initGit } from "../../cloud/git/main";
+import path, { join } from "path";
+import { IFileStatus } from "../../cloud/git/git";
+import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-cmd";
 
 /**
  * Pending cloud form context — set by create-component-cmd before opening the webview,
@@ -53,23 +64,13 @@ import { getGitHead, getGitRemotes, getGitRoot, removeCredentialsFromGitURL } fr
 let _pendingContext: WICloudFormContext | null = null;
 
 /**
- * Pending submit handler — set by create-component-cmd so the webview result
- * gets routed back to the command that opened the form.
- */
-let _pendingSubmitHandler:
-	| ((req: WICloudSubmitComponentsReq) => Promise<WICloudSubmitComponentsResp>)
-	| null = null;
-
-/**
- * Store context and handler, then open the CREATE_COMPONENT webview.
+ * Store context and handler, then open the CREATE_CLOUD_INTEGRATION webview.
  */
 export function openCloudFormWebview(
 	context: WICloudFormContext,
-	submitHandler: (req: WICloudSubmitComponentsReq) => Promise<WICloudSubmitComponentsResp>,
 ): void {
 	_pendingContext = context;
-	_pendingSubmitHandler = submitHandler;
-	StateMachine.openWebview(ViewType.CREATE_COMPONENT);
+	StateMachine.openWebview(ViewType.CREATE_CLOUD_INTEGRATION);
 }
 
 export function registerCloudRpcHandlers(messenger: Messenger): void {
@@ -82,21 +83,12 @@ export function registerCloudRpcHandlers(messenger: Messenger): void {
 	});
 
 	messenger.onRequest(submitComponents, async (req: WICloudSubmitComponentsReq) => {
-		const handler = _pendingSubmitHandler;
-		if (!handler) {
-			throw new Error("No submit handler registered");
-		}
-		const resp = await handler(req);
-		// Clear state after submission
-		_pendingContext = null;
-		_pendingSubmitHandler = null;
-		return resp;
+		return submitCreateComponentHandler(req);
 	});
 
 	messenger.onNotification(closeCloudFormWebview, () => {
 		_pendingContext = null;
-		_pendingSubmitHandler = null;
-		StateMachine.openWebview(ViewType.WELCOME);
+		commands.executeCommand(COMMANDS.CLOSE_WEBVIEW);
 	});
 
 	// Auth state
@@ -129,6 +121,71 @@ export function registerCloudRpcHandlers(messenger: Messenger): void {
 			};
 		} catch {
 			return undefined;
+		}
+	});
+
+	messenger.onRequest(hasDirtyRepo, async (dirPath: string) => {
+		return checkDirtyRepo(dirPath, ext.context, ["context.yaml"]);
+	});
+
+	messenger.onRequest(getConfigFileDrifts, async (params: GetConfigFileDriftsReq) => {
+		const { branch, repoDir, repoUrl } = params;
+		try {
+			const fileNames = new Set<string>();
+			const git = await initGit(ext.context);
+			const repoRoot = await git?.getRepositoryRoot(repoDir);
+			if (repoRoot) {
+				const subPath = path.relative(repoRoot, repoDir);
+
+				if (git) {
+					const gitRepo = git.open(repoRoot, { path: repoRoot });
+					const status = await gitRepo.getStatus({ untrackedChanges: "separate", subDirectory: subPath });
+
+					status.status.forEach((item: IFileStatus) => {
+						if (item.path.endsWith("component.yaml")) {
+							fileNames.add("component.yaml");
+						}
+					});
+					if (fileNames.size) {
+						return Array.from(fileNames);
+					}
+
+					const remotes = await getGitRemotes(ext.context, repoRoot);
+					const matchingRemoteName = remotes.find((item) => {
+						const parsed1 = parseGitURL(item.fetchUrl);
+						const parsed2 = parseGitURL(repoUrl);
+						if (parsed1 && parsed2) {
+							const [org, repoName] = parsed1;
+							const [componentRepoOrg, componentRepoName] = parsed2;
+							return org === componentRepoOrg && repoName === componentRepoName;
+						}
+					})?.name;
+
+					if (matchingRemoteName) {
+						try {
+							await gitRepo.fetch({ silent: true, remote: matchingRemoteName });
+						} catch {
+							// ignore error
+						}
+						const changes = await gitRepo.diffWith(`${matchingRemoteName}/${branch}`);
+						const componentYamlPath = join(repoDir, ".choreo", "component.yaml");
+						const configPaths = [componentYamlPath];
+
+						changes.forEach((item) => {
+							if (configPaths.includes(item.uri.path)) {
+								fileNames.add(path.basename(item.uri.path));
+							}
+						});
+						if (fileNames.size) {
+							return Array.from(fileNames);
+						}
+					}
+				}
+			}
+			return Array.from(fileNames);
+		} catch (err) {
+			console.log(err);
+			return [];
 		}
 	});
 
@@ -184,4 +241,8 @@ export function registerCloudRpcHandlers(messenger: Messenger): void {
 			() => ext.clients.rpcClient.getGitRepoMetadataBatch(params),
 		),
 	);
+
+	messenger.onRequest(isRepoAuthorized, (params) => ext.clients.rpcClient.isRepoAuthorized(params));
+
+	messenger.onRequest(getConsoleUrl, (): string => ext.config?.devantConsoleUrl);
 }

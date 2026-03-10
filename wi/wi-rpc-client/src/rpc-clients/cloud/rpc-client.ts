@@ -37,6 +37,7 @@ import {
 	getCloudFormContext,
 	getContextState,
 	getLocalGitData,
+	hasDirtyRepo,
 	onAuthStateChanged,
 	onContextStateChanged,
 	submitComponents,
@@ -47,6 +48,12 @@ import {
 	getCredentials,
 	getCredentialDetails,
 	getGitRepoMetadataBatch,
+	isRepoAuthorized,
+	IsRepoAuthorizedReq,
+	IsRepoAuthorizedResp,
+	getConsoleUrl,
+	getConfigFileDrifts,
+	GetConfigFileDriftsReq,
 } from "@wso2/wi-core";
 import { HOST_EXTENSION } from "vscode-messenger-common";
 import { Messenger } from "vscode-messenger-webview";
@@ -86,6 +93,14 @@ export class CloudRpcClient implements WICloudAPI {
 		return this._messenger.sendRequest(getLocalGitData, HOST_EXTENSION, dirPath);
 	}
 
+	hasDirtyRepo(dirPath: string): Promise<boolean> {
+		return this._messenger.sendRequest(hasDirtyRepo, HOST_EXTENSION, dirPath);
+	}
+
+	getConfigFileDrifts(params: GetConfigFileDriftsReq): Promise<string[]> {
+		return this._messenger.sendRequest(getConfigFileDrifts, HOST_EXTENSION, params);
+	}
+
 	triggerGithubAuthFlow(orgId: string): Promise<void> {
 		return this._messenger.sendRequest(triggerGithubAuthFlow, HOST_EXTENSION, orgId);
 	}
@@ -102,6 +117,10 @@ export class CloudRpcClient implements WICloudAPI {
 		return this._messenger.sendRequest(getAuthorizedGitOrgs, HOST_EXTENSION, params);
 	}
 
+	isRepoAuthorized(params: IsRepoAuthorizedReq): Promise<IsRepoAuthorizedResp> {
+		return this._messenger.sendRequest(isRepoAuthorized, HOST_EXTENSION, params);
+	}
+
 	getCredentials(params: GetCredentialsReq): Promise<CredentialItem[]> {
 		return this._messenger.sendRequest(getCredentials, HOST_EXTENSION, params);
 	}
@@ -112,5 +131,9 @@ export class CloudRpcClient implements WICloudAPI {
 
 	getGitRepoMetadataBatch(params: GetGitMetadataReq[]): Promise<GetGitMetadataResp[]> {
 		return this._messenger.sendRequest(getGitRepoMetadataBatch, HOST_EXTENSION, params);
+	}
+
+	getConsoleUrl(): Promise<string> {
+		return this._messenger.sendRequest(getConsoleUrl, HOST_EXTENSION);
 	}
 }

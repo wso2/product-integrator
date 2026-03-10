@@ -28,6 +28,7 @@ interface ICloudContext {
     authStateLoading: boolean;
     contextStateLoading: boolean;
     cloudRpcClient?: CloudRpcClient;
+    consoleUrl?: string;
 }
 
 const defaultCloudContext: ICloudContext = {
@@ -35,6 +36,7 @@ const defaultCloudContext: ICloudContext = {
     contextState: undefined,
     authStateLoading: true,
     contextStateLoading: true,
+    consoleUrl: "",
 };
 
 const CloudContext = React.createContext<ICloudContext>(defaultCloudContext);
@@ -64,6 +66,11 @@ export const CloudContextProvider: FC<Props> = ({ children }) => {
         refetchOnWindowFocus: true,
     });
 
+    const { data: consoleUrl } = useQuery({
+        queryKey: ["console_url"],
+        queryFn: () => cloudRpcClient.getConsoleUrl(),
+    });
+
     useEffect(() => {
         cloudRpcClient.onAuthStateChanged((state) => {
             queryClient.setQueryData(["cloud_auth_state"], state);
@@ -74,7 +81,7 @@ export const CloudContextProvider: FC<Props> = ({ children }) => {
     }, []);
 
     return (
-        <CloudContext.Provider value={{ authState, contextState, authStateLoading, contextStateLoading, cloudRpcClient }}>
+        <CloudContext.Provider value={{ authState, contextState, authStateLoading, contextStateLoading, cloudRpcClient, consoleUrl }}>
             {children}
         </CloudContext.Provider>
     );

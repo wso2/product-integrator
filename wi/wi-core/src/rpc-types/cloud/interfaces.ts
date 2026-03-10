@@ -16,36 +16,36 @@
  * under the License.
  */
 
-export type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp } from "@wso2/wso2-platform-core";
-import type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp } from "@wso2/wso2-platform-core";
+export type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq } from "@wso2/wso2-platform-core";
+import type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp, Organization, Project, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq, ComponentKind, CreateComponentReq } from "@wso2/wso2-platform-core";
+
 
 /**
  * A single component entry for the component creation form.
  * Contains only the data the webview needs — platform-core types stay in wi-extension.
  */
-export interface WICloudComponentEntry {
-	directoryFsPath: string;
-	directoryName: string;
-	/** Pre-generated unique component name (used as default display name). */
-	componentName: string;
-	/** Component type, e.g. "Service", "Automation". */
-	componentType: string;
-	componentSubType?: string;
-	/** "Ballerina" or "MicroIntegrator". */
-	buildPackLang: string;
-	/** True when componentType is "Service" — controls "Use Default Endpoints" checkbox visibility. */
-	isService: boolean;
+export interface ICreateNewIntegrationCmdIntegrations {
+    fsPath: string;
+    name: string;
+    supportedIntegrationTypes?: string[];
+}
+
+export interface ICreateNewIntegrationCmdParams {
+    buildPackLang?: "ballerina" | "microintegrator";
+    workspaceDir?: string;
+    integrations?: ICreateNewIntegrationCmdIntegrations[];
 }
 
 /**
  * Context passed to the cloud component-form webview.
  */
 export interface WICloudFormContext {
-	orgName: string;
-	projectName: string;
-	/** "Choreo" or "Devant" */
-	extensionName: string;
-	components: WICloudComponentEntry[];
+	org: Organization;
+	project: Project;
+	workspaceFsPath: string;
+	isNewCodeServerComp: boolean;
+	buildPackLang: "ballerina" | "microintegrator";
+	integrations: ICreateNewIntegrationCmdIntegrations[];
 }
 
 /**
@@ -53,19 +53,21 @@ export interface WICloudFormContext {
  * Single creation is just a batch with one element.
  */
 export interface WICloudSubmitComponentsReq {
-	components: Array<{
-		/** Index into WICloudFormContext.components */
-		index: number;
-		displayName: string;
-		useDefaultEndpoints?: boolean;
-	}>;
+	org: Organization;
+	project: Project;
+	workspaceFsPath: string;
+	createParams: CreateComponentReq[];
 }
 
 export interface WICloudSubmitComponentsResp {
-	created: number;
-	failed: number;
-	total: number;
-	errors?: Array<{ index: number; message: string }>;
+	created: ComponentKind[];
+    /** Failed component names with error messages */
+    failed: Array<{
+        name: string;
+        error: string;
+    }>;
+    /** Total components attempted */
+    total: number;
 }
 
 export interface WICloudAPI {
@@ -80,6 +82,8 @@ export interface WICloudAPI {
 	onContextStateChanged: (callback: (state: ContextStoreState) => void) => void;
 	// Git
 	getLocalGitData: (dirPath: string) => Promise<GetLocalGitDataResp | undefined>;
+	hasDirtyRepo: (dirPath: string) => Promise<boolean>;
+	getConfigFileDrifts: (params: GetConfigFileDriftsReq) => Promise<string[]>;
 	// GitHub flows
 	triggerGithubAuthFlow: (orgId: string) => Promise<void>;
 	triggerGithubInstallFlow: (orgId: string) => Promise<void>;
@@ -89,4 +93,7 @@ export interface WICloudAPI {
 	getCredentials: (params: GetCredentialsReq) => Promise<CredentialItem[]>;
 	getCredentialDetails: (params: GetCredentialDetailsReq) => Promise<CredentialItem>;
 	getGitRepoMetadataBatch: (params: GetGitMetadataReq[]) => Promise<GetGitMetadataResp[]>;
+	isRepoAuthorized: (params: IsRepoAuthorizedReq) => Promise<IsRepoAuthorizedResp>;
+	// Config
+	getConsoleUrl: () => Promise<string>;
 }

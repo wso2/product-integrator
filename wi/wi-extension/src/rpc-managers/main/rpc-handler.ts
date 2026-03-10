@@ -62,6 +62,7 @@ import {
     validateProjectPath,
     openSettings,
     openFolder,
+    openExternal,
     setWebviewCache,
     restoreWebviewCache,
     clearWebviewCache,
@@ -99,6 +100,7 @@ export function registerMainRpcHandlers(messenger: Messenger) {
     messenger.onRequest(storeSubProjectReports, (args) => rpcManger.storeSubProjectReports(args));
     messenger.onRequest(validateProjectPath, (args: ValidateProjectFormRequest) => rpcManger.validateProjectPath(args));
     messenger.onNotification(openFolder, (folderPath: string) => rpcManger.openFolder(folderPath));
+    messenger.onNotification(openExternal, (url: string) => rpcManger.openExternal(url));
     messenger.onRequest(setWebviewCache, (args) => rpcManger.setWebviewCache(args));
     messenger.onRequest(restoreWebviewCache, (cacheKey: string) => rpcManger.restoreWebviewCache(cacheKey));
     messenger.onRequest(clearWebviewCache, (cacheKey: string) => rpcManger.clearWebviewCache(cacheKey));

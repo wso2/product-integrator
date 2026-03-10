@@ -97,11 +97,6 @@
         "icon": "$(sign-in)"
       },
       {
-        "command": "wso2.integrator.cloud.auth.signInWithAuthCode",
-        "title": "Sign In with Auth Code",
-        "category": "WSO2 Integrator"
-      },
-      {
         "command": "wso2.integrator.cloud.auth.signOut",
         "title": "Sign Out",
         "category": "WSO2 Integrator",
@@ -114,43 +109,37 @@
       },
       {
         "command": "wso2.integrator.cloud.integration.create",
-        "title": "Create Component",
-        "category": "WSO2 Integrator",
-        "icon": "$(add)"
-      },
-      {
-        "command": "wso2.integrator.cloud.integration.createMultiple",
-        "title": "Create Multiple Components",
+        "title": "Deploy Integration to Cloud",
         "category": "WSO2 Integrator",
         "icon": "$(add)"
       },
       {
         "command": "wso2.integrator.cloud.integration.delete",
-        "title": "Delete Component",
+        "title": "Delete Integration from Cloud",
         "category": "WSO2 Integrator",
         "icon": "$(trash)"
       },
       {
         "command": "wso2.integrator.cloud.integration.openInConsole",
-        "title": "Open in Console",
+        "title": "Open in Cloud Console",
         "category": "WSO2 Integrator",
         "icon": "$(link-external)"
       },
       {
         "command": "wso2.integrator.cloud.project.clone",
-        "title": "Clone Repository",
+        "title": "Clone Cloud Project Repository",
         "category": "WSO2 Integrator",
         "icon": "$(repo-clone)"
       },
       {
         "command": "wso2.integrator.cloud.project.createContext",
-        "title": "Select Project",
+        "title": "Associate Cloud Project",
         "category": "WSO2 Integrator",
         "icon": "$(link)"
       },
       {
         "command": "wso2.integrator.cloud.project.manageContext",
-        "title": "Manage Project",
+        "title": "Manage Cloud Project",
         "category": "WSO2 Integrator",
         "icon": "$(settings-gear)"
       },

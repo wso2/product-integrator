@@ -21,6 +21,7 @@ import ReactDOM from "react-dom/client";
 import IntegratorWebview from "./IntegratorWebview";
 import { WebviewContextProvider } from "./contexts/RpcContext";
 import { CloudContextProvider, WIWebviewQueryClientProvider } from "./providers";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./style.css";
 
 export function renderWebview(target: HTMLElement) {
@@ -30,7 +31,9 @@ export function renderWebview(target: HTMLElement) {
 			<WebviewContextProvider>
 				<WIWebviewQueryClientProvider>
 					<CloudContextProvider>
-						<IntegratorWebview />
+						<ErrorBoundary>
+							<IntegratorWebview />
+						</ErrorBoundary>
 					</CloudContextProvider>
 				</WIWebviewQueryClientProvider>
 			</WebviewContextProvider>

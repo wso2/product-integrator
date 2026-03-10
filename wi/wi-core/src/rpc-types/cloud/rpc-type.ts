@@ -29,6 +29,9 @@ import type {
 	GetCredentialDetailsReq,
 	GetGitMetadataReq,
 	GetGitMetadataResp,
+	IsRepoAuthorizedReq,
+	IsRepoAuthorizedResp,
+	GetConfigFileDriftsReq,
 } from "@wso2/wso2-platform-core";
 import type {
 	WICloudFormContext,
@@ -63,6 +66,14 @@ export const getLocalGitData: RequestType<string, GetLocalGitDataResp | undefine
 	method: `${_prefix}/getLocalGitData`,
 };
 
+export const hasDirtyRepo: RequestType<string, boolean> = {
+	method: `${_prefix}/hasDirtyRepo`,
+};
+
+export const getConfigFileDrifts: RequestType<GetConfigFileDriftsReq, string[]> = {
+	method: `${_prefix}/getConfigFileDrifts`,
+};
+
 export const triggerGithubAuthFlow: RequestType<string, void> = {
 	method: `${_prefix}/triggerGithubAuthFlow`,
 };
@@ -89,6 +100,14 @@ export const getCredentialDetails: RequestType<GetCredentialDetailsReq, Credenti
 
 export const getGitRepoMetadataBatch: RequestType<GetGitMetadataReq[], GetGitMetadataResp[]> = {
 	method: `${_prefix}/getGitRepoMetadataBatch`,
+};
+
+export const isRepoAuthorized: RequestType<IsRepoAuthorizedReq, IsRepoAuthorizedResp> = {
+	method: `${_prefix}/isRepoAuthorized`,
+};
+
+export const getConsoleUrl: RequestType<void, string> = {
+	method: `${_prefix}/getConsoleUrl`,
 };
 
 // Notifications

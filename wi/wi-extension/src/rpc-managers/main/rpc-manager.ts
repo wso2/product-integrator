@@ -50,7 +50,7 @@ import {
     ValidateProjectFormRequest,
     ValidateProjectFormResponse
 } from "@wso2/wi-core";
-import { commands, window, workspace, MarkdownString, Uri } from "vscode";
+import { commands, window, workspace, MarkdownString, Uri, env } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import * as fs from "fs";
@@ -109,6 +109,10 @@ export class MainRpcManager implements WIVisualizerAPI {
 
     async runCommand(props: RunCommandRequest): Promise<RunCommandResponse> {
         return await commands.executeCommand(props.command, ...(props.args || []));
+    }
+
+    async openExternal(url: string): Promise<void> {
+        await env.openExternal(Uri.parse(url));
     }
 
     async selectFileOrDirPath(params: FileOrDirRequest): Promise<FileOrDirResponse> {

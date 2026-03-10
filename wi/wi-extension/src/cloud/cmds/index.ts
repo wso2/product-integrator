@@ -19,14 +19,13 @@
 import type { ExtensionContext } from "vscode";
 import { cloneRepoCommand } from "./clone-project-cmd";
 import { commitAndPushToGitCommand } from "./commit-and-push-to-git-cmd";
-import { createMultipleNewComponentsCommand, createNewComponentCommand } from "./create-component-cmd";
+import { createNewComponentCommand } from "./create-component-cmd";
 import { createDirectoryContextCommand } from "./create-directory-context-cmd";
 import { deleteComponentCommand } from "./delete-component-cmd";
 import { manageProjectContextCommand } from "./manage-dir-context-cmd";
 import { openInConsoleCommand } from "./open-in-console-cmd";
 import { refreshContextCommand } from "./refresh-directory-context-cmd";
 import { signInCommand } from "./sign-in-cmd";
-import { signInWithAuthCodeCommand } from "./sign-in-with-code-cmd";
 import { signOutCommand } from "./sign-out-cmd";
 
 // Note: the following platform commands are intentionally excluded from wi:
@@ -35,11 +34,9 @@ import { signOutCommand } from "./sign-out-cmd";
 
 export function activateCmds(context: ExtensionContext) {
 	createNewComponentCommand(context);
-	createMultipleNewComponentsCommand(context);
 	refreshContextCommand(context);
 	deleteComponentCommand(context);
 	signInCommand(context);
-	signInWithAuthCodeCommand(context);
 	signOutCommand(context);
 	openInConsoleCommand(context);
 	cloneRepoCommand(context);

@@ -398,6 +398,9 @@ importers:
       '@wso2/wi-rpc-client':
         specifier: workspace:*
         version: link:../wi-rpc-client
+      '@wso2/wso2-platform-core':
+        specifier: workspace:*
+        version: link:../../external/wso2-vscode-extensions/workspaces/wso2-platform/wso2-platform-core
       classnames:
         specifier: ~2.5.1
         version: 2.5.1

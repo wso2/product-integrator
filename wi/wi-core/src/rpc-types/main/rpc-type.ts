@@ -55,6 +55,7 @@ export const saveMigrationReport: RequestType<SaveMigrationReportRequest, void> 
 export const storeSubProjectReports: RequestType<StoreSubProjectReportsRequest, void> = { method: `${_preFix}/storeSubProjectReports` };
 export const validateProjectPath: RequestType<ValidateProjectFormRequest, ValidateProjectFormResponse> = { method: `${_preFix}/validateProjectPath` };
 export const openFolder: NotificationType<string> = { method: `${_preFix}/openFolder` };
+export const openExternal: NotificationType<string> = { method: `${_preFix}/openExternal` };
 export const setWebviewCache: RequestType<SetWebviewCacheParams, void> = { method: `${_preFix}/setWebviewCache` };
 export const restoreWebviewCache: RequestType<string, unknown> = { method: `${_preFix}/restoreWebviewCache` };
 export const clearWebviewCache: RequestType<string, void> = { method: `${_preFix}/clearWebviewCache` };
