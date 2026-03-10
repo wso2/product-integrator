@@ -18,8 +18,8 @@
 
 import React, { ReactNode, useEffect, useMemo, useState } from "react";
 import { CheckBox, Typography, Dropdown, Alert, Button, ProgressIndicator, Codicon } from "@wso2/ui-toolkit";
-import { type WICloudFormContext, type ICreateNewIntegrationCmdIntegrations, WICloudSubmitComponentsReq } from "@wso2/wi-core";
-import { CreateComponentReq, getTypeOfIntegrationType, GitProvider, makeURLSafe, parseGitURL, toSentenceCase, WICommandIds } from "@wso2/wso2-platform-core";
+import { type WICloudFormContext, WICloudSubmitComponentsReq } from "@wso2/wi-core";
+import { CreateComponentReq, getTypeOfIntegrationType, GitProvider, ICreateNewIntegrationCmdIntegrations, makeURLSafe, parseGitURL, toSentenceCase } from "@wso2/wso2-platform-core";
 import { useVisualizerContext } from "../../contexts";
 import { useCloudContext } from "../../providers";
 import {
