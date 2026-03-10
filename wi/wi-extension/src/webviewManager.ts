@@ -130,7 +130,7 @@ export class WebviewManager {
 				return "Explore Samples";
 			case ViewType.IMPORT_EXTERNAL:
 				return "Import Project";
-			case ViewType.CREATE_COMPONENT:
+			case ViewType.CREATE_CLOUD_INTEGRATION:
 				return "Create Component";
 			case ViewType.WELCOME:
 			default:

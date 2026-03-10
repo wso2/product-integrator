@@ -21,6 +21,7 @@
     "@tanstack/react-query-persist-client": "5.77.1",
     "@vscode/webview-ui-toolkit": "^1.4.0",
     "@wso2/wi-core": "workspace:*",
+    "@wso2/wso2-platform-core": "workspace:*",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "vscode-messenger-common": "^0.5.1",

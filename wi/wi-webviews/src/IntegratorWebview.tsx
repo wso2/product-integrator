@@ -52,7 +52,7 @@ function IntegratorWebview() {
 			return (
 				<ImportIntegration onBack={goBackToWelcome} />
 			);
-		case ViewType.CREATE_COMPONENT:
+		case ViewType.CREATE_CLOUD_INTEGRATION:
 			return <ComponentFormView />;
 		default:
 			return (

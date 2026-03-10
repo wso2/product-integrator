@@ -21,12 +21,12 @@ import { Button, Typography } from "@wso2/ui-toolkit";
 
 export const PageContainer = styled.div`
     min-height: 100vh;
-    max-width: 900px;
+    max-width: 800px;
     margin: 0 auto;
     padding: 20px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    padding-top: 100px;
     gap: 4px;
 `;
 
@@ -199,9 +199,14 @@ export const DirPath = styled.div`
     font-family: var(--vscode-editor-font-family);
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-width: 0;
+
+    span.path-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+    }
 `;
 
 type TypeBadgeProps = { isSelected?: boolean };
@@ -239,13 +244,10 @@ export const GitConfigLabel = styled.span`
 `;
 
 export const GitConfigGrid = styled.div`
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
     gap: 16px;
-
-    @media (max-width: 520px) {
-        grid-template-columns: 1fr;
-    }
+    flex-direction: column;
+    position: relative;
 `;
 
 export const FieldGroup = styled.div`
@@ -294,6 +296,103 @@ export const FieldSelect = styled.select`
 `;
 
 /* ── Banners ─────────────────────────────────────────────────────────────── */
+
+type RepoBannerVariant = "error" | "warning" | "info" | "neutral";
+
+const BANNER_BG: Record<RepoBannerVariant, string> = {
+    error: "var(--vscode-inputValidation-errorBackground)",
+    warning: "var(--vscode-inputValidation-warningBackground)",
+    info: "var(--vscode-inputValidation-infoBackground)",
+    neutral: "transparent",
+};
+const BANNER_BORDER: Record<RepoBannerVariant, string> = {
+    error: "var(--vscode-inputValidation-errorBorder)",
+    warning: "var(--vscode-inputValidation-warningBorder)",
+    info: "var(--vscode-inputValidation-infoBorder)",
+    neutral: "var(--vscode-input-border, var(--vscode-widget-border))",
+};
+const BANNER_COLOR: Record<RepoBannerVariant, string> = {
+    error: "var(--vscode-errorForeground)",
+    warning: "var(--vscode-list-warningForeground, var(--vscode-foreground))",
+    info: "var(--vscode-foreground)",
+    neutral: "var(--vscode-descriptionForeground)",
+};
+
+type RepoBannerProps = { variant?: RepoBannerVariant };
+
+export const RepoBanner = styled.div<RepoBannerProps>`
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 4px;
+    border: 1px solid ${({ variant = "warning" }: RepoBannerProps) => BANNER_BORDER[variant]};
+    background: ${({ variant = "warning" }: RepoBannerProps) => BANNER_BG[variant]};
+    color: ${({ variant = "warning" }: RepoBannerProps) => BANNER_COLOR[variant]};
+    font-size: 12px;
+    line-height: 1.4;
+    margin-top: 4px;
+`;
+
+export const RepoBannerMessage = styled.div`
+    flex: 1;
+`;
+
+export const RepoBannerActions = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+`;
+
+export const RepoBannerButton = styled.button`
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 3px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-family: var(--vscode-font-family);
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: filter 0.1s ease;
+
+    &:hover {
+        filter: brightness(1.15);
+    }
+`;
+
+export const RepoBannerRefreshButton = styled.button`
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 15px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    opacity: 0.7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.1s ease, background 0.1s ease;
+
+    &:hover:not(:disabled) {
+        opacity: 1;
+        background: color-mix(in srgb, currentColor 10%, transparent);
+    }
+
+    &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        animation: repo-banner-spin 1s linear infinite;
+    }
+
+    @keyframes repo-banner-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+`;
 
 export const WarningBanner = styled.div`
     display: flex;

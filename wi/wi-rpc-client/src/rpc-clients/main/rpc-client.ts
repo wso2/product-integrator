@@ -76,10 +76,11 @@ import {
     ValidateProjectFormResponse,
     validateProjectPath,
     openFolder,
-    type SetWebviewCacheParams,
+    openExternal,
     setWebviewCache,
     restoreWebviewCache,
     clearWebviewCache,
+    SetWebviewCacheParams,
 } from "@wso2/wi-core";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration";
 import { HOST_EXTENSION } from "vscode-messenger-common";
@@ -182,6 +183,10 @@ export class MainRpcClient implements WIVisualizerAPI {
 
     openFolder(folderPath: string): void {
         return this._messenger.sendNotification(openFolder, HOST_EXTENSION, folderPath);
+    }
+
+    openExternal(url: string): void {
+        return this._messenger.sendNotification(openExternal, HOST_EXTENSION, url);
     }
 
     pullMigrationTool(params: PullMigrationToolRequest): Promise<void> {
