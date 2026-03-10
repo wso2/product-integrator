@@ -158,7 +158,7 @@ export class WebviewManager {
 	 */
 	private getWebviewContent(webview: vscode.Webview, type: ViewType): string {
 		const isDevMode = process.env.WEB_VIEW_DEV_MODE === "true";
-		const devHost = process.env.WEB_VIEW_DEV_HOST_WI || "http://localhost:3000/";
+		const devHost = process.env.WEB_VIEW_DEV_HOST || "http://localhost:3000/";
 		const bridgeBootstrap = BridgeLayer.getWebviewBootstrap(this.projectUri);
 		const serializedBridgeBootstrap = JSON.stringify(bridgeBootstrap).replace(/</g, "\\u003c");
 
