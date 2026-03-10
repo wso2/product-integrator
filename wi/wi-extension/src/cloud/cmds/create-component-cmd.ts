@@ -35,15 +35,15 @@ import { isSamePath, isSubpath } from "../../utils/pathUtils";
 import { getUserInfoForCmd, isRpcActive, selectOrg, selectProjectWithCreateNew, setExtensionName } from "./cmd-utils";
 import { updateContextFile } from "./create-directory-context-cmd";
 import { ICreateNewIntegrationCmdParams, WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
-import { openCloudFormWebview } from "../../rpc-managers/cloud/rpc-handler";
+import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 
 
 const allIntegrationTypes = [
-    DevantScopes.AUTOMATION,
-    DevantScopes.AI_AGENT,
-    DevantScopes.INTEGRATION_AS_API,
-    DevantScopes.EVENT_INTEGRATION,
-    DevantScopes.FILE_INTEGRATION,
+	DevantScopes.AUTOMATION,
+	DevantScopes.AI_AGENT,
+	DevantScopes.INTEGRATION_AS_API,
+	DevantScopes.EVENT_INTEGRATION,
+	DevantScopes.FILE_INTEGRATION,
 ];
 
 export function createNewComponentCommand(context: ExtensionContext) {
@@ -69,22 +69,22 @@ export function createNewComponentCommand(context: ExtensionContext) {
 						selectedProject = createdProjectRes.selectedProject;
 					}
 
-                    let integrations = params?.integrations || [];
-                    let workspaceDir = params?.workspaceDir;
-                    let buildPackLang = params?.buildPackLang;
-                    if(!buildPackLang) {
-                        const buildPackLangPick = await window.showQuickPick(
-                            [ { label: "ballerina" },{ label: "microintegrator" }],
-                            { placeHolder: "Select the build pack language for the integration" },
-                        );
-                        if (!buildPackLangPick) {
-                            throw new Error(`Build pack language selection is required`);
-                        }
-                        buildPackLang = buildPackLangPick.label as "ballerina" | "microintegrator";
-                    }
+					let integrations = params?.integrations || [];
+					let workspaceDir = params?.workspaceDir;
+					let buildPackLang = params?.buildPackLang;
+					if (!buildPackLang) {
+						const buildPackLangPick = await window.showQuickPick(
+							[{ label: "ballerina" }, { label: "microintegrator" }],
+							{ placeHolder: "Select the build pack language for the integration" },
+						);
+						if (!buildPackLangPick) {
+							throw new Error(`Build pack language selection is required`);
+						}
+						buildPackLang = buildPackLangPick.label as "ballerina" | "microintegrator";
+					}
 
-                    if(!params?.workspaceDir || integrations.length === 0) {
-                        let defaultUri: Uri;
+					if (!params?.workspaceDir || integrations.length === 0) {
+						let defaultUri: Uri;
 						if (workspace.workspaceFile && workspace.workspaceFile.scheme !== "untitled") {
 							defaultUri = workspace.workspaceFile;
 						} else if (workspace.workspaceFolders && workspace.workspaceFolders?.length > 0) {
@@ -99,20 +99,20 @@ export function createNewComponentCommand(context: ExtensionContext) {
 							title: `Select integration directory`,
 							defaultUri: defaultUri,
 						});
-                        if (!supPathUri || supPathUri.length === 0) {
+						if (!supPathUri || supPathUri.length === 0) {
 							throw new Error(`Integration directory selection is required`);
 						}
 
-						supPathUri.forEach(item=>{
+						supPathUri.forEach(item => {
 							integrations.push({
 								fsPath: item.fsPath,
 								name: path.basename(item.fsPath),
 								supportedIntegrationTypes: allIntegrationTypes,
 							})
 						})
-                        
-                        workspaceDir = workspace.workspaceFolders?.find((folder) => isSubpath(folder.uri.fsPath, supPathUri[0].fsPath))?.uri.fsPath;
-                    }
+
+						workspaceDir = workspace.workspaceFolders?.find((folder) => isSubpath(folder.uri.fsPath, supPathUri[0].fsPath))?.uri.fsPath;
+					}
 
 					const components = await window.withProgress(
 						{
@@ -182,20 +182,20 @@ export function createNewComponentCommand(context: ExtensionContext) {
 
 					const isWithinWorkspace = workspace.workspaceFolders?.some((item) => integrations.every(int => isSubpath(item.uri?.fsPath, int.fsPath)));
 
-                    for (const integration of integrations) {
-                        let compInitialName = integration?.name || path.basename(integration.fsPath);
-                        const existingNames = components.map((c) => c.metadata?.name?.toLowerCase?.());
-                        const baseIntName = compInitialName;
-                        let counter = 1;
-                        while (existingNames.includes(compInitialName.toLowerCase())) {
-                            compInitialName = `${baseIntName}-${counter}`;
-                            counter++;
-                        }
-                        integration.name = compInitialName;
-                    }
+					for (const integration of integrations) {
+						let compInitialName = integration?.name || path.basename(integration.fsPath);
+						const existingNames = components.map((c) => c.metadata?.name?.toLowerCase?.());
+						const baseIntName = compInitialName;
+						let counter = 1;
+						while (existingNames.includes(compInitialName.toLowerCase())) {
+							compInitialName = `${baseIntName}-${counter}`;
+							counter++;
+						}
+						integration.name = compInitialName;
+					}
 
 					if (isWithinWorkspace || workspace.workspaceFile) {
-                        openCloudFormWebview({
+						openCloudFormWebview({
 							org: selectedOrg,
 							project: selectedProject,
 							workspaceFsPath: workspaceDir!,
@@ -204,7 +204,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 							integrations: integrations,
 						})
 					} else {
-                        throw new Error(`Selected directory is outside of the workspace. Please select a directory within the workspace to create the integration.`);
+						throw new Error(`Selected directory is outside of the workspace. Please select a directory within the workspace to create the integration.`);
 					}
 				}
 			} catch (err: any) {
@@ -255,7 +255,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				}
 				const [repoOrg, repoName, repoProvider] = parsedGit;
 				const subPathDir = path.relative(gitRoot!, createParam.componentDir);
-				if(repoProvider === GitProvider.GITHUB){
+				if (repoProvider === GitProvider.GITHUB) {
 					const repoMetadata = await ext.clients.rpcClient?.getGitRepoMetadata({
 						branch: createParam.branch,
 						gitOrgName: repoOrg,
@@ -264,14 +264,14 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 						relativePath: subPathDir,
 						secretRef: createParam.gitCredRef,
 					})
-					if(subPathDir){
-						if(repoMetadata?.metadata?.isSubPathEmpty || !repoMetadata?.metadata?.isSubPathValid){
+					if (subPathDir) {
+						if (repoMetadata?.metadata?.isSubPathEmpty || !repoMetadata?.metadata?.isSubPathValid) {
 							throw new Error(`The selected directory ${subPathDir} appears to be empty or invalid. Please push your changes to remote repo and try again.`);
 						}
-					} else if(repoMetadata?.metadata?.isBareRepo){
+					} else if (repoMetadata?.metadata?.isBareRepo) {
 						throw new Error(`The selected repository appears to be empty. Please push your changes to remote repo and try again.`);
 					}
-					
+
 				}
 			}
 		},
@@ -313,21 +313,21 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 							const commit = await repo.getCommit(head.name);
 							try {
 								await window.withProgress(
-										{ title: "Updating cloud editor with newly created component...", location: ProgressLocation.Notification },
-										() =>
-											ext.clients.rpcClient.updateCodeServer({
-												componentId: createdComponent.metadata.id,
-												orgHandle: org.handle,
-												orgId: org.id.toString(),
-												orgUuid: org.uuid,
-												projectId: project.id,
-												sourceCommitHash: commit.hash,
-											}),
-									);
-								} catch (err) {
-									ext.logError("Failed to updated code server after creating the component", err as Error);
-								}
+									{ title: "Updating cloud editor with newly created component...", location: ProgressLocation.Notification },
+									() =>
+										ext.clients.rpcClient.updateCodeServer({
+											componentId: createdComponent.metadata.id,
+											orgHandle: org.handle,
+											orgId: org.id.toString(),
+											orgUuid: org.uuid,
+											projectId: project.id,
+											sourceCommitHash: commit.hash,
+										}),
+								);
+							} catch (err) {
+								ext.logError("Failed to updated code server after creating the component", err as Error);
 							}
+						}
 					} else {
 						result.failed.push({ name: componentName, error: "Creation returned null" });
 					}
@@ -340,8 +340,8 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		},
 	);
 
-	if(result.created.length > 0) {
-		if(ext.isDevantCloudEditor){
+	if (result.created.length > 0) {
+		if (ext.isDevantCloudEditor) {
 			// Clear code server local storage data data
 			try {
 				await commands.executeCommand("devantEditor.clearLocalStorage");
@@ -355,9 +355,9 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		contextStore.getState().refreshState();
 	}
 
-	if(result.failed?.length === 0 && result.created.length > 0) {
+	if (result.failed?.length === 0 && result.created.length > 0) {
 		let successMessage = "Successfully create integration in the cloud";
-		if(result.created.length > 1){
+		if (result.created.length > 1) {
 			successMessage = "Successfully created all integrations in the cloud";
 		}
 
@@ -382,10 +382,10 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 			window.showInformationMessage(successMessage, `View in console`).then(async (resp) => {
 				if (resp === `View in console`) {
 					let consoleProjectPath = `${ext.config?.devantConsoleUrl}/organizations/${org.handle}/projects/${project.id}`;
-					if(result.created.length === 1) {
+					if (result.created.length === 1) {
 						consoleProjectPath += `/components/${result.created[0]?.metadata.handler}/overview`;
 					}
-					commands.executeCommand("vscode.open",consoleProjectPath,);
+					commands.executeCommand("vscode.open", consoleProjectPath,);
 				}
 			});
 		} else {

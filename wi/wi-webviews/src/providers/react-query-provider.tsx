@@ -28,17 +28,17 @@ interface PersistedClient {
 }
 
 const webviewStatePersister = (queryBaseKey: string) => {
-    const { rpcClient } = useVisualizerContext();
+    const { wsClient } = useVisualizerContext();
     return {
         persistClient: async (client: PersistedClient) => {
-            await rpcClient.getMainRpcClient().setWebviewCache({ cacheKey: queryBaseKey, data: client });
+            await wsClient.setWebviewCache({ cacheKey: queryBaseKey, data: client });
         },
         restoreClient: async () => {
-            const cache = await rpcClient.getMainRpcClient().restoreWebviewCache(queryBaseKey);
+            const cache = await wsClient.restoreWebviewCache(queryBaseKey);
             return cache;
         },
         removeClient: async () => {
-            await rpcClient.getMainRpcClient().clearWebviewCache(queryBaseKey);
+            await wsClient.clearWebviewCache(queryBaseKey);
         },
     };
 };

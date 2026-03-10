@@ -17,4 +17,3 @@
  */
 
 export * from "./interfaces";
-export * from "./rpc-type";

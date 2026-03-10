@@ -437,8 +437,8 @@ export const WelcomeView: React.FC = () => {
     };
 
     const handleSignIn = () => {
-		rpcClient.getMainRpcClient().runCommand({ command: WICommandIds.SignIn, args:[] });
-	};
+        wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
+    };
 
     const renderWelcomeContent = () => (
         <>

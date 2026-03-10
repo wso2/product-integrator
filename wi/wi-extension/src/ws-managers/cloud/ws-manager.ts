@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -15,89 +15,79 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { env, Uri, window, ProgressLocation, commands } from "vscode";
-import { Messenger } from "vscode-messenger";
-import { BROADCAST } from "vscode-messenger-common";
+
+import { env, Uri, commands } from "vscode";
 import {
 	type AuthState,
-	WICloudFormContext,
-	WICloudSubmitComponentsReq,
-	WICloudSubmitComponentsResp,
-	closeCloudFormWebview,
-	getAuthState,
-	getCloudFormContext,
-	getContextState,
-	getLocalGitData,
-	hasDirtyRepo,
-	getConfigFileDrifts,
-	onAuthStateChanged,
-	onContextStateChanged,
-	submitComponents,
-	triggerGithubAuthFlow,
-	triggerGithubInstallFlow,
-	getBranches,
-	getAuthorizedGitOrgs,
-	getCredentials,
-	getCredentialDetails,
-	isRepoAuthorized,
+	type ContextStoreState,
+	type WICloudFormContext,
+	type WICloudSubmitComponentsReq,
+	type WICloudSubmitComponentsResp,
+	type GetLocalGitDataResp,
+	type GetBranchesReq,
+	type GetAuthorizedGitOrgsReq,
+	type GetAuthorizedGitOrgsResp,
+	type GetCredentialsReq,
+	type CredentialItem,
+	type GetCredentialDetailsReq,
+	type IsRepoAuthorizedReq,
+	type IsRepoAuthorizedResp,
+	type GetConfigFileDriftsReq,
 	ViewType,
-	getConsoleUrl,
 	COMMANDS,
 } from "@wso2/wi-core";
+import { parseGitURL } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
 import { StateMachine } from "../../stateMachine";
 import { contextStore } from "../../cloud/stores/context-store";
 import { webviewStateStore } from "../../cloud/stores/webview-state-store";
 import { getGitHead, getGitRemotes, getGitRoot, hasDirtyRepo as checkDirtyRepo, removeCredentialsFromGitURL } from "../../cloud/git/util";
-import { parseGitURL } from "@wso2/wso2-platform-core";
-import type { GetConfigFileDriftsReq } from "@wso2/wi-core";
 import { initGit } from "../../cloud/git/main";
 import path, { join } from "path";
-import { IFileStatus } from "../../cloud/git/git";
+import type { IFileStatus } from "../../cloud/git/git";
 import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-cmd";
 
 /**
- * Pending cloud form context — set by create-component-cmd before opening the webview,
- * consumed by the rpc-handler when the webview requests it.
+ * Pending cloud form context — set by openCloudFormWebview before the webview opens,
+ * consumed by getCloudFormContext when the webview requests it.
  */
 let _pendingContext: WICloudFormContext | null = null;
 
 /**
- * Store context and handler, then open the CREATE_CLOUD_INTEGRATION webview.
+ * Store context then open the CREATE_CLOUD_INTEGRATION webview.
  */
-export function openCloudFormWebview(
-	context: WICloudFormContext,
-): void {
+export function openCloudFormWebview(context: WICloudFormContext): void {
 	_pendingContext = context;
 	StateMachine.openWebview(ViewType.CREATE_CLOUD_INTEGRATION);
 }
 
-export function registerCloudRpcHandlers(messenger: Messenger): void {
-	messenger.onRequest(getCloudFormContext, () => {
+export class CloudWsManager {
+	async getCloudFormContext(): Promise<WICloudFormContext> {
 		const ctx = _pendingContext;
 		if (!ctx) {
 			throw new Error("No cloud form context available");
 		}
 		return ctx;
-	});
+	}
 
-	messenger.onRequest(submitComponents, async (req: WICloudSubmitComponentsReq) => {
+	async submitComponents(req: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> {
 		return submitCreateComponentHandler(req);
-	});
+	}
 
-	messenger.onNotification(closeCloudFormWebview, () => {
+	async closeCloudFormWebview(): Promise<void> {
 		_pendingContext = null;
 		commands.executeCommand(COMMANDS.CLOSE_WEBVIEW);
-	});
+	}
 
-	// Auth state
-	messenger.onRequest(getAuthState, (): AuthState => ext.authProvider?.state ?? { userInfo: null, region: "US" });
+	async getAuthState(): Promise<AuthState> {
+		return ext.authProvider?.state ?? { userInfo: null, region: "US" };
+	}
 
-	// Context state
-	messenger.onRequest(getContextState, () => contextStore.getState().state);
+	async getContextState(): Promise<ContextStoreState> {
+		return contextStore.getState().state;
+	}
 
-	// Local git data
-	messenger.onRequest(getLocalGitData, async (dirPath: string) => {
+	async getLocalGitData(dirPath: string): Promise<GetLocalGitDataResp | undefined> {
 		try {
 			const gitRoot = await getGitRoot(ext.context, dirPath);
 			const remotes = await getGitRemotes(ext.context, dirPath);
@@ -121,13 +111,13 @@ export function registerCloudRpcHandlers(messenger: Messenger): void {
 		} catch {
 			return undefined;
 		}
-	});
+	}
 
-	messenger.onRequest(hasDirtyRepo, async (dirPath: string) => {
+	async hasDirtyRepo(dirPath: string): Promise<boolean> {
 		return checkDirtyRepo(dirPath, ext.context, ["context.yaml"]);
-	});
+	}
 
-	messenger.onRequest(getConfigFileDrifts, async (params: GetConfigFileDriftsReq) => {
+	async getConfigFileDrifts(params: GetConfigFileDriftsReq): Promise<string[]> {
 		const { branch, repoDir, repoUrl } = params;
 		try {
 			const fileNames = new Set<string>();
@@ -186,10 +176,9 @@ export function registerCloudRpcHandlers(messenger: Messenger): void {
 			console.log(err);
 			return [];
 		}
-	});
+	}
 
-	// GitHub OAuth app flows
-	messenger.onRequest(triggerGithubAuthFlow, async (orgId: string) => {
+	async triggerGithubAuthFlow(orgId: string): Promise<void> {
 		const extName = webviewStateStore.getState().state?.extensionName;
 		const baseUrl = extName === "Devant" ? ext.config?.devantConsoleUrl : ext.config?.choreoConsoleUrl;
 		const callbackUrl = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
@@ -201,9 +190,9 @@ export function registerCloudRpcHandlers(messenger: Messenger): void {
 			`${ext.config?.ghApp.authUrl}?redirect_uri=${baseUrl}/ghapp&client_id=${ext.config?.ghApp.clientId}&state=${state}`,
 		);
 		await env.openExternal(ghURL);
-	});
+	}
 
-	messenger.onRequest(triggerGithubInstallFlow, async (orgId: string) => {
+	async triggerGithubInstallFlow(orgId: string): Promise<void> {
 		const extName = webviewStateStore.getState().state?.extensionName;
 		const callbackUrl = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
 		const state = Buffer.from(
@@ -212,29 +201,45 @@ export function registerCloudRpcHandlers(messenger: Messenger): void {
 		).toString("base64");
 		const ghURL = Uri.parse(`${ext.config?.ghApp.installUrl}?state=${state}`);
 		await env.openExternal(ghURL);
-	});
+	}
 
-	// Push auth/context state changes to the webview as notifications
-	ext.authProvider?.subscribe(({ state }) => {
-		messenger.sendNotification(onAuthStateChanged, BROADCAST, state);
-	});
-	contextStore.subscribe(({ state }) => {
-		messenger.sendNotification(onContextStateChanged, BROADCAST, state);
-	});
+	async getBranches(params: GetBranchesReq): Promise<string[]> {
+		return ext.clients.rpcClient.getRepoBranches(params);
+	}
 
-	// Repo RPC methods
-	messenger.onRequest(getBranches, (params) => ext.clients.rpcClient.getRepoBranches(params));
+	async getAuthorizedGitOrgs(params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
+		return ext.clients.rpcClient.getAuthorizedGitOrgs(params);
+	}
 
-	messenger.onRequest(getAuthorizedGitOrgs, (params) => ext.clients.rpcClient.getAuthorizedGitOrgs(params));
-
-	messenger.onRequest(getCredentials, async (params) => {
+	async getCredentials(params: GetCredentialsReq): Promise<CredentialItem[]> {
 		const result = await ext.clients.rpcClient.getCredentials(params);
 		return result ?? [];
-	});
+	}
 
-	messenger.onRequest(getCredentialDetails, (params) => ext.clients.rpcClient.getCredentialDetails(params));
+	async getCredentialDetails(params: GetCredentialDetailsReq): Promise<CredentialItem> {
+		return ext.clients.rpcClient.getCredentialDetails(params);
+	}
 
-	messenger.onRequest(isRepoAuthorized, (params) => ext.clients.rpcClient.isRepoAuthorized(params));
+	async isRepoAuthorized(params: IsRepoAuthorizedReq): Promise<IsRepoAuthorizedResp> {
+		return ext.clients.rpcClient.isRepoAuthorized(params);
+	}
 
-	messenger.onRequest(getConsoleUrl, (): string => ext.config?.devantConsoleUrl);
+	async getConsoleUrl(): Promise<string> {
+		return ext.config?.devantConsoleUrl;
+	}
+
+	/**
+	 * Subscribe to auth/context state changes and forward via the provided callbacks.
+	 */
+	setupSubscriptions(
+		publishAuthState: (state: AuthState) => void,
+		publishContextState: (state: ContextStoreState) => void,
+	): void {
+		ext.authProvider?.subscribe(({ state }) => {
+			publishAuthState(state);
+		});
+		contextStore.subscribe(({ state }) => {
+			publishContextState(state);
+		});
+	}
 }

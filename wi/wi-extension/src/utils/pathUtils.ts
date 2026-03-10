@@ -19,7 +19,6 @@
 import { existsSync, mkdirSync } from "fs";
 import * as os from "os";
 import * as path from "path";
-import type { ExtensionContext } from "vscode";
 import { Uri, commands, window } from "vscode";
 
 

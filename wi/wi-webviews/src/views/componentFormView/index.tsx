@@ -92,8 +92,8 @@ const validateName = (name: string): string | undefined => {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ComponentFormView() {
-	const { rpcClient } = useVisualizerContext();
-	const { cloudRpcClient, contextState, consoleUrl } = useCloudContext();
+	const { wsClient } = useVisualizerContext();
+	const { contextState, consoleUrl } = useCloudContext();
 	const [params, setParams] = useState<WICloudFormContext | null>(null);
 
 	const [formState, setFormState] = useState<EntryFormState[]>(() =>
@@ -143,7 +143,7 @@ export function ComponentFormView() {
 		return valid;
 	};
 
-	const { error: submitError, mutate: submit , isPending: isSubmitting } = useMutation({
+	const { error: submitError, mutate: submit, isPending: isSubmitting } = useMutation({
 		mutationFn: async () => {
 			if (!hasSelected || !validate()) { return; }
 			const req: WICloudSubmitComponentsReq = {
@@ -153,7 +153,7 @@ export function ComponentFormView() {
 				createParams: formState.filter((state) => state.selected).map((state, index) => {
 					// Map DevantScopes (e.g., "AUTOMATION") to ChoreoComponentType (e.g., "ScheduledTask")
 					const mappedType = getTypeOfIntegrationType(state.selectedIntegrationType);
-					
+
 					return {
 						branch,
 						buildPackLang: params!.buildPackLang,
@@ -175,26 +175,26 @@ export function ComponentFormView() {
 				})
 			}
 
-			const created = await cloudRpcClient.submitComponents(req);
-			if(created.created?.length === created.total){
-				cloudRpcClient.closeCloudFormWebview();
-			}else{
+			const created = await wsClient.submitComponents(req);
+			if (created.created?.length === created.total) {
+				wsClient.closeCloudFormWebview();
+			} else {
 				console.error("Some components failed to create", created);
 			}
 		},
-		onError: (error)=>{
+		onError: (error) => {
 			console.error("Failed to submit components", error);
 		}
 	})
 
-	useEffect(()=>{
-		if(cloudRpcClient){
-			cloudRpcClient.getCloudFormContext().then((ctx) => {
+	useEffect(() => {
+		if (wsClient) {
+			wsClient.getCloudFormContext().then((ctx) => {
 				setParams(ctx);
 				setFormState(ctx.integrations.map(initEntryState));
 			})
 		}
-	}, [cloudRpcClient])
+	}, [wsClient])
 
 	const {
 		data: gitData,
@@ -203,7 +203,7 @@ export function ComponentFormView() {
 	} = useQuery({
 		queryKey: ["git-data", { directoryFsPath: params?.workspaceFsPath }],
 		queryFn: async () => {
-			const gitData = await cloudRpcClient?.getLocalGitData(params?.workspaceFsPath ?? "");
+			const gitData = await wsClient.getLocalGitData(params?.workspaceFsPath ?? "");
 			return gitData ?? null;
 		},
 		enabled: !!params,
@@ -238,7 +238,7 @@ export function ComponentFormView() {
 	} = useQuery({
 		queryKey: ["git-creds", { gitProvider }],
 		queryFn: () =>
-			cloudRpcClient?.getCredentials({ orgId: contextState?.selected?.org?.id?.toString(), orgUuid: contextState?.selected?.org?.uuid }),
+			wsClient.getCredentials({ orgId: contextState?.selected?.org?.id?.toString(), orgUuid: contextState?.selected?.org?.uuid }),
 		select: (gitData) => gitData?.filter((item) => item.type === gitProvider),
 		refetchOnWindowFocus: true,
 		enabled: !!gitProvider && gitProvider !== GitProvider.GITHUB,
@@ -258,11 +258,11 @@ export function ComponentFormView() {
 	} = useQuery({
 		queryKey: ["git-repo-access", { repo: gitRemote, orgId: contextState?.selected?.org?.id, provider: gitProvider }],
 		queryFn: () =>
-			cloudRpcClient?.isRepoAuthorized({
-					repoUrl: gitRemote,
-					orgId: contextState?.selected?.org?.id?.toString(),
-					credRef: gitProvider !== GitProvider.GITHUB ? credential : "",
-				}),
+			wsClient.isRepoAuthorized({
+				repoUrl: gitRemote,
+				orgId: contextState?.selected?.org?.id?.toString(),
+				credRef: gitProvider !== GitProvider.GITHUB ? credential : "",
+			}),
 		enabled: !!gitRemote && !!gitProvider && (gitProvider !== GitProvider.GITHUB ? !!credential : true),
 		refetchOnWindowFocus: true,
 	});
@@ -275,11 +275,11 @@ export function ComponentFormView() {
 	} = useQuery({
 		queryKey: ["git-branches", { repo: gitRemote, orgId: contextState?.selected?.org?.id, provider: gitProvider }],
 		queryFn: () =>
-			cloudRpcClient?.getBranches({
-					repoUrl: gitRemote,
-					orgId: contextState?.selected?.org?.id?.toString(),
-					credRef: gitProvider !== GitProvider.GITHUB ? credential : "",
-				}),
+			wsClient.getBranches({
+				repoUrl: gitRemote,
+				orgId: contextState?.selected?.org?.id?.toString(),
+				credRef: gitProvider !== GitProvider.GITHUB ? credential : "",
+			}),
 		enabled: !!gitRemote && !!gitProvider && (gitProvider !== GitProvider.GITHUB ? !!credential : true),
 		refetchOnWindowFocus: true,
 	});
@@ -304,7 +304,7 @@ export function ComponentFormView() {
 		isFetching: isFetchingHasDirtyRepo,
 	} = useQuery({
 		queryKey: ["hasDirtyRepo", { gitProvider, workspaceFsPath: params?.workspaceFsPath, gitData }],
-		queryFn: () =>cloudRpcClient?.hasDirtyRepo(params?.workspaceFsPath ?? ""),
+		queryFn: () => wsClient.hasDirtyRepo(params?.workspaceFsPath ?? ""),
 		refetchOnWindowFocus: true,
 		enabled: !!gitData && !!params?.workspaceFsPath,
 	});
@@ -317,7 +317,7 @@ export function ComponentFormView() {
 	} = useQuery({
 		queryKey: ["get-config-drift", { directoryFsPath: params?.workspaceFsPath }],
 		queryFn: () =>
-			cloudRpcClient.getConfigFileDrifts({
+			wsClient.getConfigFileDrifts({
 				type: "",
 				repoDir: params?.workspaceFsPath,
 				branch: branch,
@@ -328,12 +328,12 @@ export function ComponentFormView() {
 	});
 
 	const { mutate: openSourceControl } = useMutation({
-		mutationFn: () => rpcClient.getMainRpcClient().runCommand({command:"workbench.scm.focus"}),
+		mutationFn: () => wsClient.runCommand({ command: "workbench.scm.focus" }),
 		onSuccess: () => refetchGitData(),
 	});
 
 	const { mutate: pushChanges } = useMutation({
-		mutationFn: () => rpcClient.getMainRpcClient().runCommand({command:"git.push"}),
+		mutationFn: () => wsClient.runCommand({ command: "git.push" }),
 		onSuccess: () => refetchGitData(),
 	});
 
@@ -362,7 +362,7 @@ export function ComponentFormView() {
 	}
 
 	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB && !isLoadingGitCred && gitCredentials?.length === 0) {
-		onInvalidRepoActionClick = () => rpcClient.getMainRpcClient().openExternal(`${consoleUrl}/organizations/${contextState?.selected?.org?.handle}/settings/credentials`);
+		onInvalidRepoActionClick = () => wsClient.openExternal(`${consoleUrl}/organizations/${contextState?.selected?.org?.handle}/settings/credentials`);
 		invalidRepoMsg = `${toSentenceCase(gitProvider)} credentials needs to be configured.`;
 		invalidRepoAction = "Configure Credentials";
 		onInvalidRepoRefreshClick = refetchGitCred;
@@ -375,15 +375,15 @@ export function ComponentFormView() {
 			if (isRepoAuthorizedResp?.retrievedRepos) {
 				invalidRepoMsg = <span>WSO2 lacks access to the selected repository.</span>;
 				invalidRepoAction = "Grant Access";
-				onInvalidRepoActionClick = () => cloudRpcClient?.triggerGithubInstallFlow(contextState?.selected?.org?.id?.toString());
+				onInvalidRepoActionClick = () => wsClient.triggerGithubInstallFlow(contextState?.selected?.org?.id?.toString());
 			} else {
 				invalidRepoMsg = `Please authorize WSO2 to access your GitHub repositories.`;
 				invalidRepoAction = "Authorize";
-				onInvalidRepoActionClick = () => cloudRpcClient?.triggerGithubAuthFlow(contextState?.selected?.org?.id?.toString());
+				onInvalidRepoActionClick = () => wsClient.triggerGithubAuthFlow(contextState?.selected?.org?.id?.toString());
 				invalidRepoBannerType = "info";
 			}
 		} else {
-			onInvalidRepoActionClick = () => rpcClient.getMainRpcClient().openExternal(`${consoleUrl}/organizations/${contextState?.selected?.org?.handle}/settings/credentials`);
+			onInvalidRepoActionClick = () => wsClient.openExternal(`${consoleUrl}/organizations/${contextState?.selected?.org?.handle}/settings/credentials`);
 			if (isRepoAuthorizedResp?.retrievedRepos) {
 				invalidRepoMsg = <span>Selected Credential does not have sufficient permissions to access the repository.</span>;
 				invalidRepoAction = "Manage Credentials";
@@ -398,7 +398,7 @@ export function ComponentFormView() {
 		blockCreation = true;
 	}
 
-	if(!invalidRepoMsg && !isLoadingBranches && branches?.length === 0){
+	if (!invalidRepoMsg && !isLoadingBranches && branches?.length === 0) {
 		invalidRepoMsg = "The selected remote repository has no branches. Please publish your local branch to the remote repository.";
 		invalidRepoAction = "Push Changes";
 		onInvalidRepoActionClick = pushChanges;
@@ -408,7 +408,7 @@ export function ComponentFormView() {
 		blockCreation = true;
 	}
 
-	if(!invalidRepoMsg && configDriftFiles?.length > 0){
+	if (!invalidRepoMsg && configDriftFiles?.length > 0) {
 		invalidRepoMsg = `Cloud deployment requires the metadata in the ${configDriftFiles.join(",")} ${configDriftFiles?.length > 1 ? "files" : "file"} to be committed and pushed to the selected remote repository for proper functionality.`;
 		onInvalidRepoRefreshClick = refetchConfigDrift;
 		onInvalidRepoRefreshing = isFetchingConfigDrift;
@@ -416,7 +416,7 @@ export function ComponentFormView() {
 		blockCreation = true;
 	}
 
-	if(!invalidRepoMsg && hasDirtyRepo){
+	if (!invalidRepoMsg && hasDirtyRepo) {
 		invalidRepoMsg = `WSO2 cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.`;
 		onInvalidRepoRefreshClick = refetchHasDirtyRepo;
 		onInvalidRepoRefreshing = isFetchingHasDirtyRepo;
@@ -554,14 +554,14 @@ export function ComponentFormView() {
 			<GitConfigSection>
 				<GitConfigLabel>Git Configuration</GitConfigLabel>
 				<GitConfigGrid>
-					<Dropdown 
+					<Dropdown
 						label="Repository"
-						items={gitData?.remotes?.map(remote=>({value: remote }))}
+						items={gitData?.remotes?.map(remote => ({ value: remote }))}
 						placeholder="Select Git Remote"
 						id="git-remote"
 						required
 						value={gitRemote ?? ""}
-						onChange={(e)=>setGitRemote(e.target.value)}
+						onChange={(e) => setGitRemote(e.target.value)}
 					/>
 					{gitRemote && ![GitProvider.GITHUB, GitProvider.BITBUCKET].includes(gitProvider as GitProvider) && (
 						<Dropdown
@@ -571,7 +571,7 @@ export function ComponentFormView() {
 							name="gitProvider"
 							items={[{ value: GitProvider.GITLAB_SERVER, content: "GitLab" }]}
 							value={gitProvider ?? ""}
-							onChange={(e)=>setGitProvider(e.target.value)}
+							onChange={(e) => setGitProvider(e.target.value)}
 						/>
 					)}
 					{gitProvider && gitProvider !== GitProvider.GITHUB && gitCredentials?.length > 0 && (
@@ -582,7 +582,7 @@ export function ComponentFormView() {
 							name="credential"
 							items={gitCredentials?.map((item) => ({ value: item.id, content: item.name }))}
 							value={credential ?? ""}
-							onChange={(e)=>setCredential(e.target.value)}
+							onChange={(e) => setCredential(e.target.value)}
 						/>
 					)}
 					<Dropdown
@@ -590,17 +590,17 @@ export function ComponentFormView() {
 						id="gen-details-branch"
 						required
 						name="branch"
-						items={branches?.map(item=>({value:item})) ?? []}
+						items={branches?.map(item => ({ value: item })) ?? []}
 						disabled={branches?.length === 0}
 						value={branch ?? ""}
-						onChange={(e)=>setBranch(e.target.value)}
+						onChange={(e) => setBranch(e.target.value)}
 					/>
 				</GitConfigGrid>
 			</GitConfigSection>
 
 			{(isLoadingGitData || isLoadingGitCred) && (
-				<div style={{position:"relative"}}>
-					<ProgressIndicator/>
+				<div style={{ position: "relative" }}>
+					<ProgressIndicator />
 				</div>
 			)}
 

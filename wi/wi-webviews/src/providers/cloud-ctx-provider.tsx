@@ -20,14 +20,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AuthState, ContextStoreState } from "@wso2/wi-core";
 import React, { type FC, type ReactNode, useContext, useEffect } from "react";
 import { useVisualizerContext } from "../contexts";
-import { CloudRpcClient } from "@wso2/wi-rpc-client/lib/rpc-clients/cloud/rpc-client";
 
 interface ICloudContext {
     authState: AuthState | undefined;
     contextState: ContextStoreState | undefined;
     authStateLoading: boolean;
     contextStateLoading: boolean;
-    cloudRpcClient?: CloudRpcClient;
     consoleUrl?: string;
 }
 
@@ -50,38 +48,37 @@ interface Props {
 }
 
 export const CloudContextProvider: FC<Props> = ({ children }) => {
-    const { rpcClient } = useVisualizerContext();
-    const cloudRpcClient = rpcClient.getCloudRpcClient();
+    const { wsClient } = useVisualizerContext();
     const queryClient = useQueryClient();
 
     const { data: authState, isLoading: authStateLoading } = useQuery({
         queryKey: ["cloud_auth_state"],
-        queryFn: () => cloudRpcClient.getAuthState(),
+        queryFn: () => wsClient.getAuthState(),
         refetchOnWindowFocus: true,
     });
 
     const { data: contextState, isLoading: contextStateLoading } = useQuery({
         queryKey: ["cloud_context_state"],
-        queryFn: () => cloudRpcClient.getContextState(),
+        queryFn: () => wsClient.getContextState(),
         refetchOnWindowFocus: true,
     });
 
     const { data: consoleUrl } = useQuery({
         queryKey: ["console_url"],
-        queryFn: () => cloudRpcClient.getConsoleUrl(),
+        queryFn: () => wsClient.getConsoleUrl(),
     });
 
     useEffect(() => {
-        cloudRpcClient.onAuthStateChanged((state) => {
+        wsClient.onAuthStateChanged((state) => {
             queryClient.setQueryData(["cloud_auth_state"], state);
         });
-        cloudRpcClient.onContextStateChanged((state) => {
+        wsClient.onContextStateChanged((state) => {
             queryClient.setQueryData(["cloud_context_state"], state);
         });
     }, []);
 
     return (
-        <CloudContext.Provider value={{ authState, contextState, authStateLoading, contextStateLoading, cloudRpcClient, consoleUrl }}>
+        <CloudContext.Provider value={{ authState, contextState, authStateLoading, contextStateLoading, consoleUrl }}>
             {children}
         </CloudContext.Provider>
     );
