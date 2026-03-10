@@ -21,6 +21,7 @@ import { createExtensionTransportManager, createRequestRouter } from "vscode-web
 import {
     BIProjectRequest,
     CreateMiProjectRequest,
+    CreateSiProjectRequest,
     DownloadProgress,
     FetchSamplesRequest,
     FileOrDirRequest,
@@ -197,6 +198,9 @@ export class BridgeLayer {
         registerRoute("askProjectDirPath", async () => wsManager.askProjectDirPath());
         registerRoute("createMiProject", async (request) =>
             wsManager.createMiProject(request.params as CreateMiProjectRequest)
+        );
+        registerRoute("createSiProject", async (request) =>
+            wsManager.createSiProject(request.params as CreateSiProjectRequest)
         );
         registerRoute("fetchSamplesFromGithub", async (request) =>
             wsManager.fetchSamplesFromGithub(request.params as FetchSamplesRequest)

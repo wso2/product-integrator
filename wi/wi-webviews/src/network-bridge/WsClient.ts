@@ -22,6 +22,8 @@ import {
     BIProjectRequest,
     CreateMiProjectRequest,
     CreateMiProjectResponse,
+    CreateSiProjectRequest,
+    CreateSiProjectResponse,
     DownloadProgress,
     FetchSamplesRequest,
     FileOrDirRequest,
@@ -163,6 +165,10 @@ export class WsClient {
 
     public createMiProject(params: CreateMiProjectRequest): Promise<CreateMiProjectResponse> {
         return this.request("createMiProject", params);
+    }
+
+    public createSiProject(params: CreateSiProjectRequest): Promise<CreateSiProjectResponse> {
+        return this.request("createSiProject", params);
     }
 
     public fetchSamplesFromGithub(params: FetchSamplesRequest): Promise<GettingStartedData> {

@@ -31,6 +31,11 @@
           "type": "boolean",
           "default": false,
           "description": "Enable WSO2 MI runtime."
+        },
+        "integrator.enabledRuntimes.si": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable WSO2 SI runtime."
         }
       }
     },
@@ -56,7 +61,12 @@
       {
         "view": "wso2-integrator.explorer",
         "contents": "$(loadingspin) Loading WSO2 Integrator...",
-        "when": "WI.projectType != 'none'"
+        "when": "WI.projectType == 'bi' || WI.projectType == 'mi'"
+      },
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": "$(info) SI project detected.\n\nSI tree view is not available yet. Use File Explorer to browse your project files.",
+        "when": "WI.projectType == 'si'"
       },
       {
         "view": "wso2-integrator.explorer",

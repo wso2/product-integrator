@@ -26,6 +26,7 @@ import styled from "@emotion/styled";
 import { BIProjectForm } from "./biForm";
 import { useVisualizerContext } from "../../contexts/WsContext";
 import { MiProjectWizard } from "./miForm";
+import { SiProjectWizard } from "./siForm";
 import { IntegrationTypeSelector } from "../../components/IntegrationTypeSelector";
 
 const FormContainer = styled.div`
@@ -133,7 +134,7 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
                 </div>
                 {projectType === "WSO2: BI" && <BIProjectForm />}
                 {projectType === "WSO2: MI" && <MiProjectWizard />}
-                {projectType === "WSO2: SI" && <MiProjectWizard />}
+                {projectType === "WSO2: SI" && <SiProjectWizard />}
             </FormContainer>
         </div>
     );

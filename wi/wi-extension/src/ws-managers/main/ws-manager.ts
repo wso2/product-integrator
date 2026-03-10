@@ -32,6 +32,8 @@ import {
     GetSupportedMIVersionsResponse,
     CreateMiProjectRequest,
     CreateMiProjectResponse,
+    CreateSiProjectRequest,
+    CreateSiProjectResponse,
     GettingStartedData,
     GettingStartedCategory,
     GettingStartedSample,
@@ -229,6 +231,29 @@ export class MainWsManager implements WIVisualizerAPI {
                 console.error("Error creating MI project:", error);
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 window.showErrorMessage(`Failed to create MI project: ${errorMessage}`);
+                reject(error);
+            }
+        });
+    }
+
+    async createSiProject(params: CreateSiProjectRequest): Promise<CreateSiProjectResponse> {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const projectPath = path.join(params.directory, params.name);
+                const mainSiddhiPath = path.join(projectPath, "main.siddhi");
+
+                await fs.promises.mkdir(projectPath, { recursive: false });
+                await fs.promises.writeFile(mainSiddhiPath, "", { encoding: "utf8", flag: "wx" });
+
+                if (params.open) {
+                    await commands.executeCommand("vscode.openFolder", Uri.file(projectPath));
+                }
+
+                resolve({ filePath: projectPath });
+            } catch (error) {
+                console.error("Error creating SI project:", error);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                window.showErrorMessage(`Failed to create SI project: ${errorMessage}`);
                 reject(error);
             }
         });

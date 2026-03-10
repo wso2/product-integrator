@@ -20,6 +20,8 @@ import {
     BIProjectRequest,
     CreateMiProjectRequest,
     CreateMiProjectResponse,
+    CreateSiProjectRequest,
+    CreateSiProjectResponse,
     DownloadProgress,
     FetchSamplesRequest,
     FileOrDirRequest,
@@ -77,6 +79,7 @@ export interface WIWsMethodParamsMap {
     getSubFolderNames: GetSubFoldersRequest;
     askProjectDirPath: void;
     createMiProject: CreateMiProjectRequest;
+    createSiProject: CreateSiProjectRequest;
     fetchSamplesFromGithub: FetchSamplesRequest;
     downloadSelectedSampleFromGithub: SampleDownloadRequest;
     createBIProject: BIProjectRequest;
@@ -108,6 +111,7 @@ export interface WIWsMethodResultMap {
     getSubFolderNames: GetSubFoldersResponse;
     askProjectDirPath: ProjectDirResponse;
     createMiProject: CreateMiProjectResponse;
+    createSiProject: CreateSiProjectResponse;
     fetchSamplesFromGithub: GettingStartedData;
     downloadSelectedSampleFromGithub: void;
     createBIProject: void;

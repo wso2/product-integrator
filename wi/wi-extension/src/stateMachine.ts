@@ -29,6 +29,8 @@ import { checkIfMiProject } from './mi/utils';
 import { WebviewManager } from './webviewManager';
 import { ExtensionAPIs } from './extensionAPIs';
 import { registerCommands } from './commands';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /** The data provider for the BI project explorer, kept for refresh access. */
 let biProjectExplorerProvider: ProjectExplorerEntryProvider | undefined;
@@ -195,27 +197,48 @@ const stateMachine = createMachine<MachineContext>({
             } else if (context.projectType === ProjectType.MI) {
                 ext.log('MI project detected - MI tree view would be activated here');
                 vscode.commands.executeCommand('setContext', 'WI.projectType', 'mi');
+            } else if (context.projectType === ProjectType.SI) {
+                ext.log('SI project detected - SI tree view would be activated here');
+                vscode.commands.executeCommand('setContext', 'WI.projectType', 'si');
             } else {
                 vscode.commands.executeCommand('setContext', 'WI.projectType', 'none');
             }
         },
-        focusIntegratorViewIfWorkspaceOpen: () => {
+        focusIntegratorViewIfWorkspaceOpen: (context) => {
             if (!vscode.workspace.workspaceFolders?.length) {
                 ext.log('Skipping Integrator explorer focus: no workspace/folder open');
                 return;
             }
 
-            void vscode.commands.executeCommand('wso2-integrator.explorer.focus').then(
-                () => ext.log('Focused WSO2 Integrator explorer view before extension activation'),
-                (error) => ext.logError('Failed to focus WSO2 Integrator explorer view before extension activation', error)
-            );
+            if (context.projectType === ProjectType.BI_BALLERINA) {
+                void vscode.commands.executeCommand('wso2-integrator.explorer.focus').then(
+                    () => ext.log('Focused WSO2 Integrator explorer view before extension activation'),
+                    (error) => ext.logError('Failed to focus WSO2 Integrator explorer view before extension activation', error)
+                );
+                return;
+            }
+
+            if (context.projectType === ProjectType.MI) {
+                void vscode.commands.executeCommand('workbench.view.extension.micro-integrator').then(
+                    () => ext.log('Focused MI extension view before extension activation'),
+                    (error) => ext.logError('Failed to focus MI extension view before extension activation', error)
+                );
+                return;
+            }
+
+            if (context.projectType === ProjectType.SI) {
+                void vscode.commands.executeCommand('workbench.view.extension.streaming-integrator').then(
+                    () => ext.log('Focused SI extension view before extension activation'),
+                    (error) => ext.logError('Failed to focus SI extension view before extension activation', error)
+                );
+            }
         },
         showWelcomeScreen: (context, event) => {
             // On the disabled path (no project), webviewManager hasn't been created yet
-            if (context.isInWi){
+            if (context.isInWi) {
                 return;
             }
-            
+
             if (!context.webviewManager) {
                 context.webviewManager = new WebviewManager(context.projectUri);
                 ext.context.subscriptions.push({
@@ -282,11 +305,16 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
         // Activate only MI extension for MI projects
         ext.log('Initializing MI extension for MI project');
         await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
+    } else if (context.projectType === ProjectType.SI) {
+        // Activate only SI extension for SI projects
+        ext.log('Initializing SI extension for SI project');
+        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
+        context.extensionAPIs.activateSIExtension();
     } else if (context.projectType === ProjectType.NONE) {
         // if a folder/workspace is open but we couldn't detect the project type, we should show an popup warning the user that the extension couldn't detect the project type
         if (vscode.workspace.workspaceFolders?.length && context.isInWi) {
             ext.log('Workspace is open but project type is unknown');
-            vscode.window.showWarningMessage('We couldn\'t detect the project type. Please ensure you have a valid WSO2 Ballerina or Micro Integrator project open.', { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
+            vscode.window.showWarningMessage('We couldn\'t detect the project type. Please ensure you have a valid WSO2 Ballerina, Micro Integrator, or Streaming Integrator project open.', { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
                 if (selection === 'Go to Welcome Screen') {
                     // close workspace
                     vscode.commands.executeCommand('workbench.action.closeFolder');
@@ -359,6 +387,16 @@ async function detectProjectType(): Promise<{
         ext.log('Detected MI project');
         return {
             projectType: ProjectType.MI
+        };
+    }
+
+    // Check if it's an SI project (default scaffold contains main.siddhi)
+    const isSiProject = workspaceRoot ? fs.existsSync(path.join(workspaceRoot, 'main.siddhi')) : false;
+
+    if (isSiProject) {
+        ext.log('Detected SI project');
+        return {
+            projectType: ProjectType.SI
         };
     }
 

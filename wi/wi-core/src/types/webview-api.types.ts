@@ -89,6 +89,16 @@ export interface CreateMiProjectResponse {
     filePath: string;
 }
 
+export interface CreateSiProjectRequest {
+    directory: string;
+    name: string;
+    open: boolean;
+}
+
+export interface CreateSiProjectResponse {
+    filePath: string;
+}
+
 export interface GettingStartedSample {
     category: number;
     priority: number;
@@ -278,6 +288,7 @@ export interface WIVisualizerAPI {
     getSubFolderNames: (params: GetSubFoldersRequest) => Promise<GetSubFoldersResponse>;
     askProjectDirPath: () => Promise<ProjectDirResponse>;
     createMiProject: (params: CreateMiProjectRequest) => Promise<CreateMiProjectResponse>;
+    createSiProject: (params: CreateSiProjectRequest) => Promise<CreateSiProjectResponse>;
     fetchSamplesFromGithub: (params: FetchSamplesRequest) => Promise<GettingStartedData>;
     downloadSelectedSampleFromGithub: (params: SampleDownloadRequest) => void;
     createBIProject: (params: BIProjectRequest) => Promise<void>;

@@ -38,10 +38,22 @@ export class ExtensionAPIs {
 			try {
 				await vscode.commands.executeCommand("workbench.extensions.installExtension", extension);
 				ext.log(`Extension ${extension} installed successfully`);
-			} catch (error) {
-				ext.logError(`Failed to install extension ${extension}`, error as Error);
-				await vscode.window.showErrorMessage(`Failed to install required extension: ${extension}. Please install it manually from the Extensions view.`);
-				return;
+			} catch (stableInstallError) {
+				ext.logError(`Failed to install stable version of extension ${extension}`, stableInstallError as Error);
+				try {
+					await vscode.commands.executeCommand(
+						"workbench.extensions.installExtension",
+						extension,
+						{ installPreReleaseVersion: true },
+					);
+					ext.log(`Pre-release version of extension ${extension} installed successfully`);
+				} catch (preReleaseInstallError) {
+					ext.logError(`Failed to install pre-release version of extension ${extension}`, preReleaseInstallError as Error);
+					await vscode.window.showErrorMessage(
+						`Failed to install required extension: ${extension}. Tried stable and pre-release versions. Please install it manually from the Extensions view.`,
+					);
+					return;
+				}
 			}
 		}
 		if (extension === EXTENSION_DEPENDENCIES.BALLERINA) {
@@ -78,6 +90,19 @@ export class ExtensionAPIs {
 				},
 				(error) => {
 					ext.logError("Failed to activate MI extension", error as Error);
+				},
+			);
+		}
+	}
+
+	public activateSIExtension(): void {
+		if (this.siExtension && !this.siExtension.isActive) {
+			this.siExtension.activate().then(
+				() => {
+					ext.log("SI Extension activated");
+				},
+				(error) => {
+					ext.logError("Failed to activate SI extension", error as Error);
 				},
 			);
 		}
