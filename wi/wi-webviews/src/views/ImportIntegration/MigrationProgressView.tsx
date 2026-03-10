@@ -37,7 +37,7 @@ export function MigrationProgressView({
     onBack,
 }: MigrationProgressProps) {
     const [isLogsOpen, setIsLogsOpen] = useState(false);
-    const { rpcClient } = useVisualizerContext();
+    const { wsClient } = useVisualizerContext();
 
     // Parse migration report JSON when available
     const parsedReportData = useMemo(() => {
@@ -67,9 +67,9 @@ export function MigrationProgressView({
         console.log("View report clicked", { migrationResponse });
         try {
             if (migrationResponse?.report) {
-                handleMultiProjectReportOpening(migrationResponse, projects, rpcClient);
-                console.log("Report found, opening via RPC...");
-                rpcClient.getMainRpcClient().openMigrationReport({
+                handleMultiProjectReportOpening(migrationResponse, projects, wsClient);
+                console.log("Report found, opening via bridge request...");
+                wsClient.openMigrationReport({
                     reportContent: migrationResponse.report,
                     fileName: "migration-report.html",
                 });
@@ -101,7 +101,7 @@ export function MigrationProgressView({
                 });
 
                 console.log("Saving multi-project reports via VSCode folder dialog...", { projectReports });
-                rpcClient.getMainRpcClient().saveMigrationReport({
+                wsClient.saveMigrationReport({
                     reportContent: migrationResponse.report,
                     defaultFileName: "aggregate_migration_report.html",
                     projectReports: projectReports,
@@ -109,7 +109,7 @@ export function MigrationProgressView({
             } else {
                 // Single project - use simple save dialog
                 console.log("Saving single project report via VSCode save dialog...");
-                rpcClient.getMainRpcClient().saveMigrationReport({
+                wsClient.saveMigrationReport({
                     reportContent: migrationResponse.report,
                     defaultFileName: "migration-report.html",
                 });

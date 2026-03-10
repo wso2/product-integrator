@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -175,6 +175,7 @@ export interface MigrateRequest {
     textEdits: {
         [key: string]: string;
     };
+    projects?: ProjectMigrationResult[];
 }
 
 export interface PullMigrationToolRequest {
@@ -182,7 +183,7 @@ export interface PullMigrationToolRequest {
     version: string;
 }
 
-export interface ImportIntegrationRPCRequest {
+export interface ImportIntegrationWsRequest {
     commandName: string;
     packageName: string;
     sourcePath: string;
@@ -221,6 +222,18 @@ export interface SaveMigrationReportRequest {
     };
 }
 
+export interface ProjectMigrationResult {
+    projectName: string;
+    textEdits: {
+        [key: string]: string;
+    };
+    report: string;
+}
+
+export interface StoreSubProjectReportsRequest {
+    reports: { [projectName: string]: string };
+}
+
 export interface FetchSamplesRequest {
     runtime?: "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 }
@@ -253,4 +266,38 @@ export enum ValidateProjectFormErrorField {
 export interface SetWebviewCacheParams {
     cacheKey: string;
     data: unknown;
+}
+export interface WIVisualizerAPI {
+    getWebviewContext: () => Promise<WebviewContext>;
+    closeWebview: () => void;
+    openBiExtension: () => void;
+    openMiExtension: () => void;
+    openSettings: (settingKey: string) => void;
+    runCommand: (params: RunCommandRequest) => Promise<RunCommandResponse>;
+    selectFileOrDirPath: (params: FileOrDirRequest) => Promise<FileOrDirResponse>;
+    selectFileOrFolderPath: () => Promise<FileOrDirResponse>;
+    getWorkspaceRoot: () => Promise<WorkspaceRootResponse>;
+    getConfiguration: (params: GetConfigurationRequest) => Promise<GetConfigurationResponse>;
+    getSupportedMIVersionsHigherThan: (version: string) => Promise<GetSupportedMIVersionsResponse>;
+    getSubFolderNames: (params: GetSubFoldersRequest) => Promise<GetSubFoldersResponse>;
+    askProjectDirPath: () => Promise<ProjectDirResponse>;
+    createMiProject: (params: CreateMiProjectRequest) => Promise<CreateMiProjectResponse>;
+    fetchSamplesFromGithub: (params: FetchSamplesRequest) => Promise<GettingStartedData>;
+    downloadSelectedSampleFromGithub: (params: SampleDownloadRequest) => void;
+    createBIProject: (params: BIProjectRequest) => Promise<void>;
+    getMigrationTools: () => Promise<GetMigrationToolsResponse>;
+    isSupportedSLVersion: (params: SemanticVersion) => Promise<boolean>;
+    migrateProject: (params: MigrateRequest) => Promise<void>;
+    pullMigrationTool: (params: PullMigrationToolRequest) => Promise<void>;
+    importIntegration: (params: ImportIntegrationWsRequest) => Promise<ImportIntegrationResponse>;
+    showErrorMessage: (params: ShowErrorMessageRequest) => Promise<void>;
+    openMigrationReport: (params: OpenMigrationReportRequest) => Promise<void>;
+    saveMigrationReport: (params: SaveMigrationReportRequest) => Promise<void>;
+    storeSubProjectReports: (params: StoreSubProjectReportsRequest) => Promise<void>;
+    validateProjectPath: (params: ValidateProjectFormRequest) => Promise<ValidateProjectFormResponse>;
+    openFolder: (folderPath: string) => void;
+    openExternal: (url: string) => void;
+    setWebviewCache: (params: SetWebviewCacheParams) => Promise<void>;
+    restoreWebviewCache: (cacheKey: string) => Promise<unknown>;
+    clearWebviewCache: (cacheKey: string) => Promise<void>;
 }

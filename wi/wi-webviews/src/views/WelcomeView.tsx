@@ -19,7 +19,6 @@
 import React, { useState } from "react";
 import "./WelcomeView.css";
 import styled from "@emotion/styled";
-import { Icon } from "@wso2/ui-toolkit";
 import { CreationView } from "./creationView";
 import { ImportIntegration } from "./ImportIntegration";
 import { SamplesView } from "./samplesView";
@@ -250,7 +249,7 @@ const CardDescription = styled.p`
 // Use a native button element. Filter custom props so they are not forwarded to the DOM.
 const StyledButton = styled('button', {
     shouldForwardProp: (prop) => prop !== 'isPrimary'
-})<{ isPrimary?: boolean }>`
+}) <{ isPrimary?: boolean }>`
     height: 44px;
     font-size: 14px;
     font-weight: 500;
@@ -373,7 +372,7 @@ const ProjectPath = styled.span`
 `;
 
 export const WelcomeView: React.FC = () => {
-    const { rpcClient } = useVisualizerContext();
+    const { wsClient } = useVisualizerContext();
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
     const { authState } = useCloudContext();
 
@@ -388,20 +387,20 @@ export const WelcomeView: React.FC = () => {
     const goToImportExternal = () => {
         setCurrentView(ViewState.IMPORT_EXTERNAL);
     };
-    
+
     const handleProjectDirSelection = async () => {
-        const response = await rpcClient.getMainRpcClient().selectFileOrDirPath({});
+        const response = await wsClient.selectFileOrDirPath({});
         if (response?.path) {
-            rpcClient.getMainRpcClient().openFolder(response.path);
+            wsClient.openFolder(response.path);
         }
     };
 
     const goBackToWelcome = () => {
         setCurrentView(ViewState.WELCOME);
     };
-    
+
     const openConfigure = () => {
-        rpcClient.getMainRpcClient().openSettings('integrator.enabledRuntimes');
+        wsClient.openSettings('integrator.enabledRuntimes');
     };
 
     const openProject = () => {
@@ -482,11 +481,11 @@ export const WelcomeView: React.FC = () => {
                             <CardDescription>
                                 Ready to build? Start a new integration project using our intuitive graphical designer.
                             </CardDescription>
-                                <StyledButton
-                                    isPrimary={true}
-                                    onClick={(e: any) => { e.stopPropagation(); goToCreateProject(); }}>
-                                    <ButtonContent>Create</ButtonContent>
-                                </StyledButton>
+                            <StyledButton
+                                isPrimary={true}
+                                onClick={(e: any) => { e.stopPropagation(); goToCreateProject(); }}>
+                                <ButtonContent>Create</ButtonContent>
+                            </StyledButton>
                         </CardContent>
                     </ActionCard>
 
@@ -499,10 +498,10 @@ export const WelcomeView: React.FC = () => {
                             <CardDescription>
                                 Open an existing integration project and continue building your solution.
                             </CardDescription>
-                                <StyledButton
-                                    onClick={(e: any) => { e.stopPropagation(); handleProjectDirSelection(); }}>
-                                    <ButtonContent>Open</ButtonContent>
-                                </StyledButton>
+                            <StyledButton
+                                onClick={(e: any) => { e.stopPropagation(); handleProjectDirSelection(); }}>
+                                <ButtonContent>Open</ButtonContent>
+                            </StyledButton>
                         </CardContent>
                     </ActionCard>
 
@@ -515,10 +514,10 @@ export const WelcomeView: React.FC = () => {
                             <CardDescription>
                                 Need inspiration? Browse through sample projects to see how WSO2 Integrator works in real-world scenarios.
                             </CardDescription>
-                                <StyledButton
-                                    onClick={(e: any) => { e.stopPropagation(); goToSamples(); }}>
-                                    <ButtonContent>Explore</ButtonContent>
-                                </StyledButton>
+                            <StyledButton
+                                onClick={(e: any) => { e.stopPropagation(); goToSamples(); }}>
+                                <ButtonContent>Explore</ButtonContent>
+                            </StyledButton>
                         </CardContent>
                     </ActionCard>
 
@@ -531,10 +530,10 @@ export const WelcomeView: React.FC = () => {
                             <CardDescription>
                                 Have an integration from another platform? Import your MuleSoft or TIBCO integration project and continue building.
                             </CardDescription>
-                                <StyledButton
-                                    onClick={(e: any) => { e.stopPropagation(); goToImportExternal(); }}>
-                                    <ButtonContent>Import</ButtonContent>
-                                </StyledButton>
+                            <StyledButton
+                                onClick={(e: any) => { e.stopPropagation(); goToImportExternal(); }}>
+                                <ButtonContent>Import</ButtonContent>
+                            </StyledButton>
                         </CardContent>
                     </ActionCard>
                 </CardsGrid>

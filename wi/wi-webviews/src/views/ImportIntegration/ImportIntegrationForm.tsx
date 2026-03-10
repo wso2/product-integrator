@@ -18,7 +18,7 @@
 
 import { ActionButtons, Icon, Typography } from "@wso2/ui-toolkit";
 import { useState } from "react";
-import { useVisualizerContext } from "../../contexts/RpcContext";
+import { useVisualizerContext } from "../../contexts/WsContext";
 import { IntegrationParameters } from "./components/IntegrationParameters";
 import {
     BodyText,
@@ -31,7 +31,6 @@ import {
 import { FinalIntegrationParams, ImportIntegrationFormProps } from "./types";
 import { SELECTION_TEXT } from "./utils";
 import ButtonCard from "../../components/ButtonCard";
-import { LoadingRing } from "../../components/Loader";
 import { MigrationTool } from "@wso2/wi-core";
 import { DownloadProgress } from "../../components/DownloadProgress";
 import { DirectorySelector } from "../../components/DirectorySelector/DirectorySelector";
@@ -47,7 +46,7 @@ export function ImportIntegrationForm({
     handleStartImport,
     onBack,
 }: ImportIntegrationFormProps) {
-    const { rpcClient } = useVisualizerContext();
+    const { wsClient } = useVisualizerContext();
 
     const [importSourcePath, setImportSourcePath] = useState("");
     const [integrationParams, setIntegrationParams] = useState<Record<string, any>>({});
@@ -71,7 +70,7 @@ export function ImportIntegrationForm({
     };
 
     const handleFolderSelection = async () => {
-        const result = await rpcClient.getMainRpcClient().selectFileOrFolderPath();
+        const result = await wsClient.selectFileOrFolderPath();
         if (result?.path) {
             setImportSourcePath(result.path);
         }

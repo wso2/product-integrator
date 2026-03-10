@@ -50,21 +50,21 @@ export interface MultiProjectFormFieldsProps {
 }
 
 export function MultiProjectFormFields({ formData, onFormDataChange, pathError, folderNameError }: MultiProjectFormFieldsProps) {
-    const { rpcClient } = useVisualizerContext();
+    const { wsClient } = useVisualizerContext();
 
     const handleIntegrationName = (value: string) => {
         onFormDataChange({ rootFolderName: value });
     };
 
     const handleProjectDirSelection = async () => {
-        const projectDirectory = await rpcClient.getMainRpcClient().selectFileOrDirPath({});
+        const projectDirectory = await wsClient.selectFileOrDirPath({});
         onFormDataChange({ path: projectDirectory.path });
     };
 
     useEffect(() => {
         (async () => {
             if (!formData.path) {
-                const currentDir = await rpcClient.getMainRpcClient().getWorkspaceRoot();
+                const currentDir = await wsClient.getWorkspaceRoot();
                 onFormDataChange({ path: currentDir.path });
             }
         })();

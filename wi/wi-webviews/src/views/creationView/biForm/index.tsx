@@ -19,11 +19,9 @@
 import { useState } from "react";
 import {
     Button,
-    ProgressRing,
 } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { ProjectFormFields, ProjectFormData } from "./ProjectFormFields";
-import { isFormValid } from "./utils";
 import { useVisualizerContext } from "../../../contexts";
 
 const ButtonWrapper = styled.div`
@@ -41,7 +39,7 @@ const ScrollableContent = styled.div`
 `;
 
 export function BIProjectForm() {
-    const { rpcClient } = useVisualizerContext();
+    const { wsClient } = useVisualizerContext();
     const [formData, setFormData] = useState<ProjectFormData>({
         integrationName: "",
         packageName: "",
@@ -75,7 +73,7 @@ export function BIProjectForm() {
 
     const handleCreateProject = async () => {
         setFormSaved(true);
-        rpcClient.getMainRpcClient().createBIProject({
+        wsClient.createBIProject({
             projectName: formData.integrationName,
             packageName: formData.packageName,
             projectPath: formData.path,

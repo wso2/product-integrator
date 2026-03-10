@@ -21,9 +21,9 @@ import { ViewType } from "@wso2/wi-core";
 import { ext } from "./extensionVariables";
 import { Uri } from "vscode";
 import path from "path";
-import { RPCLayer } from "./RPCLayer";
+import { BridgeLayer } from "./BridgeLayer";
 import { StateMachine } from "./stateMachine";
-import { getPlatform } from "./rpc-managers/main/utils";
+import { getPlatform } from "./ws-managers/main/utils";
 
 export const WEB_VIEW_TYPE = "wso2IntegratorWebview";
 
@@ -35,7 +35,21 @@ export class WebviewManager {
 	private currentViewType: ViewType | undefined;
 	private stateSubscription: any;
 
-	constructor(private projectUri: string) { }
+	constructor(private projectUri: string) {
+		if (process.env.WEB_VIEW_DEV_MODE === "true") {
+			try {
+				const bootstrap = BridgeLayer.startWebSocketServer(projectUri);
+				vscode.window.showInformationMessage(
+					`Webview bridge server started on ws://${bootstrap.wsServer}:${bootstrap.wsPort}`,
+				);
+			} catch (error) {
+				ext.logError("Failed to start bridge server", error as Error);
+				vscode.window.showErrorMessage(
+					`Failed to start bridge server: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		}
+	}
 
 	/**
 	 * Show webview with specified type
@@ -70,9 +84,6 @@ export class WebviewManager {
 
 		this.currentViewType = viewType;
 
-		// Set the webview's html content
-		this.currentPanel.webview.html = this.getWebviewContent(this.currentPanel.webview, viewType);
-
 		// Handle panel disposal
 		this.currentPanel.onDidDispose(
 			() => {
@@ -81,18 +92,22 @@ export class WebviewManager {
 				if (this.stateSubscription) {
 					this.stateSubscription.unsubscribe();
 				}
-				RPCLayer.dispose(this.projectUri);
+				BridgeLayer.dispose(this.projectUri);
 			},
 			null,
 			ext.context.subscriptions,
 		);
-		
-		RPCLayer.create(this.currentPanel, this.projectUri);
-		
+
+		BridgeLayer.create(this.currentPanel, this.projectUri);
+
+		// Set the webview's html content after registering the bridge.
+		// This avoids losing initial connect/request messages from the web app.
+		this.currentPanel.webview.html = this.getWebviewContent(this.currentPanel.webview, viewType);
+
 		// Subscribe to state machine changes
 		this.stateSubscription = StateMachine.subscribe(() => {
 			const context = StateMachine.getContext();
-			RPCLayer.notifyStateChanged(this.projectUri, {
+			BridgeLayer.notifyStateChanged(this.projectUri, {
 				currentView: context.currentView,
 				projectUri: this.projectUri,
 				platform: getPlatform(),
@@ -115,7 +130,7 @@ export class WebviewManager {
 	public closeWebview(): void {
 		if (this.currentPanel) {
 			this.dispose();
-			RPCLayer.dispose(this.projectUri);
+			BridgeLayer.dispose(this.projectUri);
 		}
 	}
 
@@ -144,6 +159,8 @@ export class WebviewManager {
 	private getWebviewContent(webview: vscode.Webview, type: ViewType): string {
 		const isDevMode = process.env.WEB_VIEW_DEV_MODE === "true";
 		const devHost = process.env.WEB_VIEW_DEV_HOST || "http://localhost:3000/";
+		const bridgeBootstrap = BridgeLayer.getWebviewBootstrap(this.projectUri);
+		const serializedBridgeBootstrap = JSON.stringify(bridgeBootstrap).replace(/</g, "\\u003c");
 
 		const componentName = "main";
 		const filePath = path.join(ext.context.extensionPath, 'resources', 'jslibs', componentName + '.js');
@@ -151,10 +168,6 @@ export class WebviewManager {
 			? new URL('lib/' + componentName + '.js', devHost).toString()
 			: webview.asWebviewUri(Uri.file(filePath)).toString();
 
-		// CSP: allow dev server in dev mode
-		const cspSource = isDevMode
-			? `${webview.cspSource} http://localhost:* ws://localhost:*`
-			: webview.cspSource;
 		const styles = `
             .container {
                 background-color: var(--vscode-editor-background);
@@ -267,6 +280,9 @@ export class WebviewManager {
 						</div>
 					</div>
 				</div>
+				<script>
+					window.__WI_BRIDGE_BOOTSTRAP = ${serializedBridgeBootstrap};
+				</script>
 				<script src="${scriptUri}"></script>
 				<script>
 					function render() {

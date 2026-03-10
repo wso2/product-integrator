@@ -17,10 +17,10 @@
  */
 
 import { useEffect, useState } from "react";
-import { LocationSelector, TextField, CheckBox, LinkButton, ThemeColors, Codicon } from "@wso2/ui-toolkit";
+import { TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
-import { useVisualizerContext } from "../../../contexts/RpcContext";
-import { sanitizePackageName, validatePackageName } from "./utils";
+import { useVisualizerContext } from "../../../contexts/WsContext";
+import { sanitizePackageName } from "./utils";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { CollapsibleSection, PackageInfoSection, ProjectTypeSelector } from "./components";
 
@@ -105,7 +105,7 @@ export interface ProjectFormFieldsProps {
 }
 
 export function ProjectFormFields({ formData, onFormDataChange, integrationNameError, pathError, packageNameValidationError }: ProjectFormFieldsProps) {
-    const { rpcClient } = useVisualizerContext();
+    const { wsClient } = useVisualizerContext();
     const [packageNameTouched, setPackageNameTouched] = useState(false);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
     const [isWorkspaceSupported, setIsWorkspaceSupported] = useState(false);
@@ -128,7 +128,7 @@ export function ProjectFormFields({ formData, onFormDataChange, integrationNameE
     };
 
     const handleProjectDirSelection = async () => {
-        const projectDirectory = await rpcClient.getMainRpcClient().selectFileOrDirPath({});
+        const projectDirectory = await wsClient.selectFileOrDirPath({});
         onFormDataChange({ path: projectDirectory.path });
     };
 
@@ -139,11 +139,11 @@ export function ProjectFormFields({ formData, onFormDataChange, integrationNameE
     useEffect(() => {
         (async () => {
             if (!formData.path) {
-                const currentDir = await rpcClient.getMainRpcClient().getWorkspaceRoot();
+                const currentDir = await wsClient.getWorkspaceRoot();
                 onFormDataChange({ path: currentDir.path });
             }
-            const isWorkspaceSupported = await rpcClient
-                .getMainRpcClient()
+            const isWorkspaceSupported = await wsClient
+
                 .isSupportedSLVersion({ major: 2201, minor: 13, patch: 0 })
                 .catch((err) => {
                     console.error("Failed to check workspace support:", err);

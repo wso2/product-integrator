@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -39,7 +39,7 @@ import {
     BIProjectRequest,
     GetMigrationToolsResponse,
     MigrateRequest,
-    ImportIntegrationRPCRequest,
+    ImportIntegrationWsRequest,
     ImportIntegrationResponse,
     ImportIntegrationRequest,
     ShowErrorMessageRequest,
@@ -58,14 +58,14 @@ import * as path from "path";
 import axios from "axios";
 import { pullMigrationTool } from "./migrate-integration";
 import { MigrationReportWebview } from "../../migration-report/webview";
-import { RPCLayer } from "../../RPCLayer";
+import { BridgeLayer } from "../../BridgeLayer";
 import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi-core";
 import { StateMachine } from "../../stateMachine";
-import { StoreSubProjectReportsRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration/interfaces";
 import { ext } from "../../extensionVariables";
+import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
 const platform = getPlatform();
 
-export class MainRpcManager implements WIVisualizerAPI {
+export class MainWsManager implements WIVisualizerAPI {
     private subProjectReports: Map<string, string> = new Map();
     constructor(private projectUri?: string) { }
 
@@ -363,7 +363,7 @@ export class MainRpcManager implements WIVisualizerAPI {
         }
     }
 
-    async importIntegration(params: ImportIntegrationRPCRequest): Promise<ImportIntegrationResponse> {
+    async importIntegration(params: ImportIntegrationWsRequest): Promise<ImportIntegrationResponse> {
         const orgName = getUsername();
         const langParams: ImportIntegrationRequest = {
             orgName: orgName,
@@ -378,7 +378,7 @@ export class MainRpcManager implements WIVisualizerAPI {
         const projectUri = StateMachine.getContext().projectUri ?? 'global';
         langClient.onNotification('projectService/pushMigratedProject', (res: any) => {
             try {
-                RPCLayer.notifyMigratedProject(res, projectUri);
+                BridgeLayer.notifyMigratedProject(res, projectUri);
             } catch (error) {
                 console.error('[WI] Error forwarding migratedProject notification:', error);
             }
@@ -436,5 +436,4 @@ export class MainRpcManager implements WIVisualizerAPI {
         await ext.context.workspaceState.update(cacheKey, undefined);
     }
 }
-
 
