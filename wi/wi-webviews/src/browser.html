@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WSO2 Integrator Browser Dev</title>
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+        const query = new URLSearchParams(window.location.search);
+        const bridgeMode = query.get("bridgeMode");
+        const wsServer = query.get("wsServer");
+        const wsPort = Number(query.get("wsPort"));
+
+        window.__WI_BRIDGE_BOOTSTRAP = {
+            mode: bridgeMode === "proxy" || bridgeMode === "websocket" ? bridgeMode : "websocket",
+            wsServer: wsServer || "127.0.0.1",
+            wsPort: Number.isFinite(wsPort) && wsPort > 0 ? wsPort : 8787
+        };
+    </script>
+    <script src="/lib/main.js"></script>
+    <script>
+        if (window.wiWebview?.renderWebview) {
+            window.wiWebview.renderWebview(document.getElementById("root"));
+        } else {
+            console.error("wiWebview.renderWebview is not available.");
+        }
+    </script>
+</body>
+</html>

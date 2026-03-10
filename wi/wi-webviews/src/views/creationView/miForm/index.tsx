@@ -17,15 +17,11 @@
  */
 import React, { useEffect, useState } from "react";
 import { Button, Dropdown, FormGroup, LocationSelector, OptionProps, TextField, ProgressRing } from "@wso2/ui-toolkit";
-// import { useVisualizerContext } from "@wso2/mi-rpc-client";
-// import { EVENT_TYPE, MACHINE_VIEW } from "@wso2/mi-core";
 import { yupResolver } from "@hookform/resolvers/yup"
 import * as yup from "yup";
 import { useForm } from "react-hook-form";
 import styled from "@emotion/styled";
-import { useVisualizerContext } from "../../../contexts/RpcContext";
-// import { Range } from '../../../../syntax-tree/lib/src';
-
+import { useVisualizerContext } from "../../../contexts/WsContext";
 
 type InputsFields = {
     name: string;
@@ -62,7 +58,7 @@ const FieldGroup = styled.div`
 `;
 
 export function MiProjectWizard() {
-    const { rpcClient } = useVisualizerContext();
+    const { wsClient } = useVisualizerContext();
     const [dirContent, setDirContent] = useState([]);
     const [supportedMIVersions, setSupportedMIVersions] = useState<OptionProps[]>([]);
     const [formSaved, setFormSaved] = useState(false);
@@ -96,13 +92,13 @@ export function MiProjectWizard() {
 
     useEffect(() => {
         (async () => {
-            const currentDir = await rpcClient.getMainRpcClient().getWorkspaceRoot();
+            const currentDir = await wsClient.getWorkspaceRoot();
             setValue("directory", currentDir.path);
-            const supportedVersionsResponse = await rpcClient.getMainRpcClient().getSupportedMIVersionsHigherThan('');
+            const supportedVersionsResponse = await wsClient.getSupportedMIVersionsHigherThan('');
             const supportedMIVersions = supportedVersionsResponse.versions.map((version: string) => ({ value: version, content: version }));
             setSupportedMIVersions(supportedMIVersions);
             setValue("miVersion", supportedVersionsResponse.versions[0]); // Set the first supported version as the default, it is the latest version
-            const response = await rpcClient.getMainRpcClient().getSubFolderNames({ path: currentDir.path });
+            const response = await wsClient.getSubFolderNames({ path: currentDir.path });
             setDirContent(response.folders);
         })();
     }, []);
@@ -112,9 +108,9 @@ export function MiProjectWizard() {
     }, [watch("name")]);
 
     const handleProjecDirSelection = async () => {
-        const projectDirectory = await rpcClient.getMainRpcClient().askProjectDirPath();
+        const projectDirectory = await wsClient.askProjectDirPath();
         setValue("directory", projectDirectory.path);
-        const response = await rpcClient.getMainRpcClient().getSubFolderNames({ path: projectDirectory.path });
+        const response = await wsClient.getSubFolderNames({ path: projectDirectory.path });
         setDirContent(response.folders);
     }
 
@@ -125,7 +121,7 @@ export function MiProjectWizard() {
             open: true,
         }
         setFormSaved(true);
-        const response = await rpcClient.getMainRpcClient().createMiProject(createProjectParams);
+        const response = await wsClient.createMiProject(createProjectParams);
         if (response.filePath === "Error") {
             setFormSaved(false);
         } else {

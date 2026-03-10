@@ -25,10 +25,10 @@ import { useVisualizerContext } from "./contexts";
 import { ProgressIndicator } from "@wso2/ui-toolkit";
 
 function IntegratorWebview() {
-	const { rpcClient, webviewContext } = useVisualizerContext();
+	const { wsClient, webviewContext } = useVisualizerContext();
 
 	const goBackToWelcome = () => {
-		rpcClient.getMainRpcClient().closeWebview();
+		wsClient.closeWebview();
 	};
 
 	switch (webviewContext?.currentView) {

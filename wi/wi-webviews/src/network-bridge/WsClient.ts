@@ -1,0 +1,313 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+/**
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import {
+    BIProjectRequest,
+    CreateMiProjectRequest,
+    CreateMiProjectResponse,
+    DownloadProgress,
+    FetchSamplesRequest,
+    FileOrDirRequest,
+    FileOrDirResponse,
+    GetConfigurationRequest,
+    GetConfigurationResponse,
+    GetMigrationToolsResponse,
+    GetSubFoldersRequest,
+    GetSubFoldersResponse,
+    GetSupportedMIVersionsResponse,
+    GettingStartedData,
+    ImportIntegrationWsRequest,
+    ImportIntegrationResponse,
+    MigrateRequest,
+    OpenMigrationReportRequest,
+    ProjectDirResponse,
+    ProjectMigrationResult,
+    PullMigrationToolRequest,
+    RunCommandRequest,
+    RunCommandResponse,
+    SampleDownloadRequest,
+    SaveMigrationReportRequest,
+    SemanticVersion,
+    ShowErrorMessageRequest,
+    StoreSubProjectReportsRequest,
+    ValidateProjectFormRequest,
+    ValidateProjectFormResponse,
+    WebviewContext,
+    WIBridgeRequest,
+    WIBridgeResponse,
+    WI_BRIDGE_EVENTS,
+    WIWsMethod,
+    WIWsMethodParamsMap,
+    WIWsMethodResultMap,
+    WITransportBootstrap,
+    WorkspaceRootResponse,
+} from "@wso2/wi-core";
+import { ConnectionStatus, createWebviewTransportAdapter } from "vscode-webview-network-bridge/webview";
+
+declare global {
+    interface Window {
+        __WI_BRIDGE_BOOTSTRAP?: WITransportBootstrap;
+    }
+}
+
+function parseBridgeMode(rawMode: string | null): WITransportBootstrap["mode"] | undefined {
+    if (rawMode === "proxy" || rawMode === "websocket") {
+        return rawMode;
+    }
+    return undefined;
+}
+
+export function resolveBridgeBootstrap(): WITransportBootstrap {
+    const urlParams = new URLSearchParams(window.location.search);
+    const runtimeBootstrap = window.__WI_BRIDGE_BOOTSTRAP;
+    const queryMode = parseBridgeMode(urlParams.get("bridgeMode"));
+    const queryWsServer = urlParams.get("wsServer") ?? undefined;
+    const queryWsPort = Number(urlParams.get("wsPort"));
+    const hasVsCodeApi = typeof (globalThis as { acquireVsCodeApi?: unknown }).acquireVsCodeApi === "function";
+
+    return {
+        mode: hasVsCodeApi ? runtimeBootstrap?.mode ?? "proxy" : queryMode ?? "websocket",
+        wsServer: queryWsServer ?? runtimeBootstrap?.wsServer ?? "127.0.0.1",
+        wsPort: Number.isFinite(queryWsPort) && queryWsPort > 0 ? queryWsPort : runtimeBootstrap?.wsPort ?? 8787,
+    };
+}
+
+export class WsClient {
+    private readonly bootstrap = resolveBridgeBootstrap();
+    private transport = createWebviewTransportAdapter<WIBridgeRequest, WIBridgeResponse>({
+        mode: this.bootstrap.mode,
+        server: this.bootstrap.wsServer,
+        port: this.bootstrap.wsPort,
+    });
+    private readonly stateChangedListeners = new Set<(context: WebviewContext) => void>();
+    private readonly downloadProgressListeners = new Set<(progress: DownloadProgress) => void>();
+    private readonly migrationToolStateListeners = new Set<(state: string) => void>();
+    private readonly migrationToolLogListeners = new Set<(log: string) => void>();
+    private readonly migratedProjectListeners = new Set<(result: ProjectMigrationResult) => void>();
+
+    constructor() {
+        this.transport.subscribe(
+            (message: WIBridgeResponse) => this.handleIncomingMessage(message),
+            (status: ConnectionStatus) => this.handleConnectionStatus(status)
+        );
+    }
+
+    public getWebviewContext(): Promise<WebviewContext> {
+        return this.request("getWebviewContext");
+    }
+
+    public closeWebview(): void {
+        this.notify("closeWebview");
+    }
+
+    public openBiExtension(): void {
+        this.notify("openBiExtension");
+    }
+
+    public openMiExtension(): void {
+        this.notify("openMiExtension");
+    }
+
+    public openSettings(settingKey: string): void {
+        this.notify("openSettings", settingKey);
+    }
+
+    public runCommand(params: RunCommandRequest): Promise<RunCommandResponse> {
+        return this.request("runCommand", params);
+    }
+
+    public selectFileOrDirPath(params: FileOrDirRequest): Promise<FileOrDirResponse> {
+        return this.request("selectFileOrDirPath", params);
+    }
+
+    public selectFileOrFolderPath(): Promise<FileOrDirResponse> {
+        return this.request("selectFileOrFolderPath");
+    }
+
+    public getWorkspaceRoot(): Promise<WorkspaceRootResponse> {
+        return this.request("getWorkspaceRoot");
+    }
+
+    public getConfiguration(params: GetConfigurationRequest): Promise<GetConfigurationResponse> {
+        return this.request("getConfiguration", params);
+    }
+
+    public getSupportedMIVersionsHigherThan(version: string): Promise<GetSupportedMIVersionsResponse> {
+        return this.request("getSupportedMIVersionsHigherThan", version);
+    }
+
+    public getSubFolderNames(params: GetSubFoldersRequest): Promise<GetSubFoldersResponse> {
+        return this.request("getSubFolderNames", params);
+    }
+
+    public askProjectDirPath(): Promise<ProjectDirResponse> {
+        return this.request("askProjectDirPath");
+    }
+
+    public createMiProject(params: CreateMiProjectRequest): Promise<CreateMiProjectResponse> {
+        return this.request("createMiProject", params);
+    }
+
+    public fetchSamplesFromGithub(params: FetchSamplesRequest): Promise<GettingStartedData> {
+        return this.request("fetchSamplesFromGithub", params);
+    }
+
+    public downloadSelectedSampleFromGithub(params: SampleDownloadRequest): void {
+        this.notify("downloadSelectedSampleFromGithub", params);
+    }
+
+    public createBIProject(params: BIProjectRequest): Promise<void> {
+        return this.request("createBIProject", params);
+    }
+
+    public validateProjectPath(params: ValidateProjectFormRequest): Promise<ValidateProjectFormResponse> {
+        return this.request("validateProjectPath", params);
+    }
+
+    public getMigrationTools(): Promise<GetMigrationToolsResponse> {
+        return this.request("getMigrationTools");
+    }
+
+    public isSupportedSLVersion(params: SemanticVersion): Promise<boolean> {
+        return this.request("isSupportedSLVersion", params);
+    }
+
+    public migrateProject(params: MigrateRequest): Promise<void> {
+        return this.request("migrateProject", params);
+    }
+
+    public storeSubProjectReports(params: StoreSubProjectReportsRequest): Promise<void> {
+        return this.request("storeSubProjectReports", params);
+    }
+
+    public openFolder(folderPath: string): void {
+        this.notify("openFolder", folderPath);
+    }
+
+    public pullMigrationTool(params: PullMigrationToolRequest): Promise<void> {
+        return this.request("pullMigrationTool", params);
+    }
+
+    public importIntegration(params: ImportIntegrationWsRequest): Promise<ImportIntegrationResponse> {
+        return this.request("importIntegration", params);
+    }
+
+    public showErrorMessage(params: ShowErrorMessageRequest): Promise<void> {
+        return this.request("showErrorMessage", params);
+    }
+
+    public openMigrationReport(params: OpenMigrationReportRequest): Promise<void> {
+        return this.request("openMigrationReport", params);
+    }
+
+    public saveMigrationReport(params: SaveMigrationReportRequest): Promise<void> {
+        return this.request("saveMigrationReport", params);
+    }
+
+    public onStateChanged(callback: (context: WebviewContext) => void) {
+        this.stateChangedListeners.add(callback);
+    }
+
+    public onDownloadProgress(callback: (progress: DownloadProgress) => void) {
+        this.downloadProgressListeners.add(callback);
+    }
+
+    public onMigrationToolStateChanged(callback: (state: string) => void) {
+        this.migrationToolStateListeners.add(callback);
+    }
+
+    public onMigrationToolLogs(callback: (log: string) => void) {
+        this.migrationToolLogListeners.add(callback);
+    }
+
+    public onMigratedProject(callback: (result: ProjectMigrationResult) => void) {
+        this.migratedProjectListeners.add(callback);
+    }
+
+    public async request<TAction extends WIWsMethod>(
+        action: TAction,
+        ...args: WIWsMethodParamsMap[TAction] extends void ? [] : [WIWsMethodParamsMap[TAction]]
+    ): Promise<WIWsMethodResultMap[TAction]> {
+        const request = this.createRequestPayload(action, args[0] as WIWsMethodParamsMap[TAction] | undefined);
+        const response = await this.transport.request(request);
+
+        if (response.type !== WI_BRIDGE_EVENTS.WS_RESPONSE || response.action !== action) {
+            throw new Error(`Unexpected response type for "${action}"`);
+        }
+
+        if (!response.success) {
+            const errorMessage = "error" in response ? response.error : undefined;
+            throw new Error(errorMessage ?? `Request failed for "${action}"`);
+        }
+
+        return response.result as WIWsMethodResultMap[TAction];
+    }
+
+    public notify<TAction extends WIWsMethod>(
+        action: TAction,
+        ...args: WIWsMethodParamsMap[TAction] extends void ? [] : [WIWsMethodParamsMap[TAction]]
+    ): void {
+        void this.request(action, ...args).catch((error) => {
+            console.warn(`[WI] Failed to send "${action}" message`, error);
+        });
+    }
+
+    private createRequestPayload<TAction extends WIWsMethod>(
+        action: TAction,
+        params: WIWsMethodParamsMap[TAction] | undefined
+    ): Extract<WIBridgeRequest, { action: TAction }> {
+        if (params === undefined) {
+            return { action } as Extract<WIBridgeRequest, { action: TAction }>;
+        }
+        return {
+            action,
+            params,
+        } as Extract<WIBridgeRequest, { action: TAction }>;
+    }
+
+    private handleIncomingMessage(message: WIBridgeResponse): void {
+        switch (message.type) {
+            case WI_BRIDGE_EVENTS.STATE_CHANGED:
+                this.stateChangedListeners.forEach((listener) => listener(message.context));
+                return;
+            case WI_BRIDGE_EVENTS.DOWNLOAD_PROGRESS:
+                this.downloadProgressListeners.forEach((listener) => listener(message.progress));
+                return;
+            case WI_BRIDGE_EVENTS.MIGRATION_TOOL_STATE_CHANGED:
+                this.migrationToolStateListeners.forEach((listener) => listener(message.state.state));
+                return;
+            case WI_BRIDGE_EVENTS.MIGRATION_TOOL_LOGS:
+                this.migrationToolLogListeners.forEach((listener) => listener(message.log.log));
+                return;
+            case WI_BRIDGE_EVENTS.MIGRATED_PROJECT:
+                this.migratedProjectListeners.forEach((listener) => listener(message.project));
+                return;
+            case WI_BRIDGE_EVENTS.WS_RESPONSE:
+            default:
+                return;
+        }
+    }
+
+    private handleConnectionStatus(status: ConnectionStatus): void {
+        if (status === "error") {
+            console.warn("[WI] Bridge connection error");
+        }
+    }
+}

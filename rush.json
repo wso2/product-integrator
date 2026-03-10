@@ -28,12 +28,6 @@
             "shouldPublish": false
         },
         {
-            "packageName": "@wso2/wi-rpc-client",
-            "projectFolder": "wi/wi-rpc-client",
-            "reviewCategory": "production",
-            "shouldPublish": false
-        },
-        {
             "packageName": "@wso2/wi-webviews",
             "projectFolder": "wi/wi-webviews",
             "reviewCategory": "production",

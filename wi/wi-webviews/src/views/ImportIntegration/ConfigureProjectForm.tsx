@@ -21,13 +21,13 @@ import { useState } from "react";
 import { BodyText, ButtonWrapper } from "./styles";
 import { ConfigureProjectFormProps } from "./types";
 import { ProjectFormData, ProjectFormFields } from "../creationView/biForm/ProjectFormFields";
-import { isFormValid, validatePackageName } from "../creationView/biForm/utils";
+import { validatePackageName } from "../creationView/biForm/utils";
 import { MultiProjectFormData, MultiProjectFormFields } from "./components/MultiProjectFormFields";
 import { useVisualizerContext } from "../../contexts";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 
 export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: ConfigureProjectFormProps) {
-    const { rpcClient } = useVisualizerContext();
+    const { wsClient } = useVisualizerContext();
     const [singleProjectData, setSingleProjectData] = useState<ProjectFormData>({
         integrationName: "",
         packageName: "",
@@ -115,7 +115,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
 
         try {
             // Validate the project path
-            const validationResult = await rpcClient.getMainRpcClient().validateProjectPath({
+            const validationResult = await wsClient.validateProjectPath({
                 projectPath: singleProjectData.path,
                 projectName: singleProjectData.createAsWorkspace ? singleProjectData.workspaceName : singleProjectData.packageName,
                 createDirectory: singleProjectData.createDirectory,
@@ -174,7 +174,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
 
         try {
             // Validate the project path
-            const validationResult = await rpcClient.getMainRpcClient().validateProjectPath({
+            const validationResult = await wsClient.validateProjectPath({
                 projectPath: multiProjectData.path,
                 projectName: multiProjectData.rootFolderName,
                 createDirectory: multiProjectData.createDirectory,

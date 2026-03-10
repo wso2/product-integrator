@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -17,34 +17,34 @@
  */
 
 import React, { ReactNode, useState, useEffect } from 'react';
-import { RpcClient } from '@wso2/wi-rpc-client';
-import { ViewType, WebviewContext as WIWebviewContext } from '@wso2/wi-core';
+import { WsClient } from '../network-bridge/WsClient';
+import { WebviewContext as WIWebviewContext } from '@wso2/wi-core';
 
 export interface VisualizerContext {
-    rpcClient: RpcClient;
+    wsClient: WsClient;
     webviewContext?: WIWebviewContext;
 }
 
 export const Context = React.createContext<VisualizerContext | undefined>(undefined);
 
 export function WebviewContextProvider({ children }: { children: ReactNode }) {
-    const [rpcClient] = useState(() => new RpcClient());
+    const [wsClient] = useState(() => new WsClient());
     const [webviewContext, setWebviewContext] = useState<WIWebviewContext | undefined>();
 
     useEffect(() => {
         // Get initial context
-        rpcClient.getMainRpcClient().getWebviewContext().then((context) => {
+        wsClient.getWebviewContext().then((context) => {
             setWebviewContext(context);
         });
 
         // Listen to state changes
-        rpcClient.onStateChanged((context) => {
+        wsClient.onStateChanged((context) => {
             setWebviewContext(context);
         });
-    }, [rpcClient]);
+    }, [wsClient]);
 
     return (
-        <Context.Provider value={{ rpcClient, webviewContext }}>
+        <Context.Provider value={{ wsClient, webviewContext }}>
             {children}
         </Context.Provider>
     );

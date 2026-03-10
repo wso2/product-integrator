@@ -15,9 +15,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "*"
-  ],
+  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
@@ -57,7 +55,7 @@
     "viewsWelcome": [
       {
         "view": "wso2-integrator.explorer",
-        "contents": "$(loading~spin) Loading WSO2 Integrator...",
+        "contents": "$(loadingspin) Loading WSO2 Integrator...",
         "when": "WI.projectType != 'none'"
       },
       {
@@ -191,36 +189,36 @@
     "package": "node ../../external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js"
   },
   "devDependencies": {
-    "@vscode/vsce": "^3.4.0",
-    "@types/vscode": "^1.100.0",
-    "@types/mocha": "^10.0.3",
-    "@types/node": "^22.15.21",
-    "@typescript-eslint/eslint-plugin": "^8.32.1",
-    "@typescript-eslint/parser": "^8.32.1",
-    "@vscode/test-electron": "^2.5.2",
-    "eslint": "^9.27.0",
-    "glob": "^11.0.2",
-    "mocha": "^11.2.2",
+    "@vscode/vsce": "3.4.0",
+    "@types/vscode": "1.100.0",
+    "@types/mocha": "10.0.3",
+    "@types/node": "22.15.21",
+    "@typescript-eslint/eslint-plugin": "8.32.1",
+    "@typescript-eslint/parser": "8.32.1",
+    "@vscode/test-electron": "2.5.2",
+    "eslint": "9.27.0",
+    "glob": "11.0.2",
+    "mocha": "11.2.2",
     "typescript": "5.8.3",
-    "copyfiles": "^2.4.1",
-    "copy-webpack-plugin": "^13.0.0",
-    "source-map-support": "^0.5.21",
-    "ts-loader": "^9.5.2",
-    "webpack": "^5.102.1",
-    "webpack-cli": "^6.0.1",
-    "webpack-permissions-plugin": "^1.0.9",
-    "@playwright/test": "~1.55.1",
+    "copyfiles": "2.4.1",
+    "copy-webpack-plugin": "13.0.0",
+    "source-map-support": "0.5.21",
+    "ts-loader": "9.5.2",
+    "webpack": "5.102.1",
+    "webpack-cli": "6.0.1",
+    "webpack-permissions-plugin": "1.0.9",
+    "@playwright/test": "1.55.1",
     "@wso2/wi-webviews": "workspace:*"
   },
   "dependencies": {
     "@wso2/wi-core": "workspace:*",
-    "vscode-messenger": "~0.5.1",
-    "xstate": "~4.38.3",
-    "@emotion/styled": "~11.14.1",
+    "vscode-webview-network-bridge": "1.1.1",
+    "xstate": "4.38.3",
+    "@emotion/styled": "11.14.1",
     "@wso2/ui-toolkit": "workspace:*",
-    "unzipper": "~0.12.3",
-    "@types/unzipper": "~0.10.11",
-    "axios": "~1.13.2",
-    "dotenv": "~17.2.3"
+    "unzipper": "0.12.3",
+    "@types/unzipper": "0.10.11",
+    "axios": "1.13.2",
+    "dotenv": "17.2.3"
   }
 }
