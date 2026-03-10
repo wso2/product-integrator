@@ -19,7 +19,9 @@
 import * as vscode from "vscode";
 import { EXTENSION_DEPENDENCIES } from "@wso2/wi-core";
 import type { BIExtensionAPI, MIExtensionAPI } from "@wso2/wi-core";
+import type { IWso2PlatformExtensionAPI } from "@wso2/wso2-platform-core";
 import { ext } from "./extensionVariables";
+import { WICloudExtensionAPI } from "./cloud/cloud-ext-api";
 
 /**
  * Extension APIs manager
@@ -28,6 +30,9 @@ export class ExtensionAPIs {
 	private biExtension: vscode.Extension<BIExtensionAPI> | undefined;
 	private miExtension: vscode.Extension<MIExtensionAPI> | undefined;
 	private siExtension: vscode.Extension<unknown> | undefined;
+
+	/** Cloud APIs — exposes the same surface as IWso2PlatformExtensionAPI */
+	public readonly cloudAPIs: IWso2PlatformExtensionAPI = new WICloudExtensionAPI();
 
 	/**
 	 * Initialize extension APIs
