@@ -92,13 +92,15 @@
         "command": "wso2.integrator.cloud.auth.signIn",
         "title": "Sign In",
         "category": "WSO2 Integrator",
-        "icon": "$(sign-in)"
+        "icon": "$(sign-in)",
+        "enablement": "!isLoggedIn"
       },
       {
         "command": "wso2.integrator.cloud.auth.signOut",
         "title": "Sign Out",
         "category": "WSO2 Integrator",
-        "icon": "$(sign-out)"
+        "icon": "$(sign-out)",
+         "enablement": "isLoggedIn"
       },
       {
         "command": "wso2.integrator.cloud.auth.cancelSignIn",
@@ -145,7 +147,8 @@
         "command": "wso2.integrator.cloud.project.refresh",
         "title": "Refresh Workspace",
         "category": "WSO2 Integrator",
-        "icon": "$(refresh)"
+        "icon": "$(refresh)",
+        "enablement": "!isLoadingContextDirs"
       },
       {
         "command": "wso2.integrator.cloud.integration.push-to-git",
@@ -245,7 +248,7 @@
   "scripts": {
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "vscode:prepublish": "npm run copyJSLibs",
+    "vscode:prepublish": "rm -rf resources/jslibs && npm run copyJSLibs",
     "prebuild": "rm -rf dist",
     "build": "webpack --mode production && npm run download-choreo-cli && npm run package",
     "copyJSLibs": "copyfiles -E -f ../wi-webviews/build/main.js resources/jslibs",

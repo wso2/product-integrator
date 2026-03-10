@@ -69,7 +69,7 @@ import type {
     WICloudFormContext,
     WICloudSubmitComponentsReq,
     WICloudSubmitComponentsResp,
-} from "../rpc-types/cloud/interfaces";
+} from "./cloud.types";
 
 export const WI_BRIDGE_EVENTS = {
     WS_RESPONSE: "wi.ws.response",

@@ -35,6 +35,7 @@ import {
 	type GetConfigFileDriftsReq,
 	ViewType,
 	COMMANDS,
+	WICloudAPI,
 } from "@wso2/wi-core";
 import { parseGitURL } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
@@ -61,7 +62,7 @@ export function openCloudFormWebview(context: WICloudFormContext): void {
 	StateMachine.openWebview(ViewType.CREATE_CLOUD_INTEGRATION);
 }
 
-export class CloudWsManager {
+export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "onContextStateChanged"> {
 	async getCloudFormContext(): Promise<WICloudFormContext> {
 		const ctx = _pendingContext;
 		if (!ctx) {

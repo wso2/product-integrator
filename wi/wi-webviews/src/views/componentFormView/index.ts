@@ -16,4 +16,4 @@
  * under the License.
  */
 
-export * from "./interfaces";
+export { ComponentFormView } from "./ComponentFormView";
