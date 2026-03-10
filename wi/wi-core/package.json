@@ -18,7 +18,11 @@
     "@biomejs/biome": "^1.9.4",
     "@types/vscode": "^1.100.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "vscode-messenger-common": "^0.5.1",
+    "vscode-messenger-webview": "^0.5.1",
+    "@wso2/wso2-platform-core": "workspace:*"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/wso2/ballerina-plugin-vscode.git"

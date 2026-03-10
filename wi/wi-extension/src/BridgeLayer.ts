@@ -38,6 +38,7 @@ import {
     SampleDownloadRequest,
     SaveMigrationReportRequest,
     SemanticVersion,
+    SetWebviewCacheParams,
     ShowErrorMessageRequest,
     StoreSubProjectReportsRequest,
     ValidateProjectFormRequest,
@@ -50,7 +51,19 @@ import {
     WebviewContext,
     WITransportBootstrap,
 } from "@wso2/wi-core";
+import type {
+    AuthState,
+    ContextStoreState,
+    GetAuthorizedGitOrgsReq,
+    GetBranchesReq,
+    GetConfigFileDriftsReq,
+    GetCredentialDetailsReq,
+    GetCredentialsReq,
+    IsRepoAuthorizedReq,
+    WICloudSubmitComponentsReq,
+} from "@wso2/wi-core";
 import { MainWsManager } from "./ws-managers/main/ws-manager";
+import { CloudWsManager } from "./ws-managers/cloud/ws-manager";
 
 type TransportManager = ReturnType<typeof createExtensionTransportManager<WIBridgeRequest, WIBridgeResponse>>;
 type RequestRouter = ReturnType<typeof createRequestRouter<WIBridgeRequest, WIBridgeResponse>>;
@@ -124,6 +137,21 @@ export class BridgeLayer {
         });
     }
 
+    // ── Cloud event publishers ────────────────────────────────
+    static notifyAuthStateChanged(projectUri: string, state: AuthState): void {
+        this.publish(projectUri, {
+            type: WI_BRIDGE_EVENTS.AUTH_STATE_CHANGED,
+            state,
+        });
+    }
+
+    static notifyContextStateChanged(projectUri: string, state: ContextStoreState): void {
+        this.publish(projectUri, {
+            type: WI_BRIDGE_EVENTS.CONTEXT_STATE_CHANGED,
+            state,
+        });
+    }
+
     static dispose(projectUri: string): void {
         const channel = this.channels.get(projectUri);
         if (!channel) {
@@ -141,7 +169,8 @@ export class BridgeLayer {
         }
 
         const wsManager = new MainWsManager(projectUri);
-        const router = this.createRouter(wsManager);
+        const cloudManager = new CloudWsManager();
+        const router = this.createRouter(wsManager, cloudManager);
 
         const transport = createExtensionTransportManager<WIBridgeRequest, WIBridgeResponse>({
             initialMode: "proxy",
@@ -151,10 +180,17 @@ export class BridgeLayer {
 
         const channel: BridgeChannel = { transport };
         this.channels.set(projectUri, channel);
+
+        // Subscribe to cloud state changes and forward as bridge events
+        cloudManager.setupSubscriptions(
+            (state) => this.notifyAuthStateChanged(projectUri, state),
+            (state) => this.notifyContextStateChanged(projectUri, state),
+        );
+
         return channel;
     }
 
-    private static createRouter(wsManager: MainWsManager): RequestRouter {
+    private static createRouter(wsManager: MainWsManager, cloudManager: CloudWsManager): RequestRouter {
         const router = createRequestRouter<WIBridgeRequest, WIBridgeResponse>({
             onUnknownAction: (request) => this.createWsErrorResponse(request.action, `Unsupported ws action: ${request.action}`),
         });
@@ -236,6 +272,44 @@ export class BridgeLayer {
             wsManager.validateProjectPath(request.params as ValidateProjectFormRequest)
         );
         registerRoute("openFolder", async (request) => wsManager.openFolder(request.params));
+        registerRoute("openExternal", async (request) => wsManager.openExternal(request.params));
+        registerRoute("setWebviewCache", async (request) =>
+            wsManager.setWebviewCache(request.params as SetWebviewCacheParams)
+        );
+        registerRoute("restoreWebviewCache", async (request) => wsManager.restoreWebviewCache(request.params));
+        registerRoute("clearWebviewCache", async (request) => wsManager.clearWebviewCache(request.params));
+
+        // ── Cloud routes ──────────────────────────────────────────
+        registerRoute("getCloudFormContext", async () => cloudManager.getCloudFormContext());
+        registerRoute("submitComponents", async (request) =>
+            cloudManager.submitComponents(request.params as WICloudSubmitComponentsReq)
+        );
+        registerRoute("closeCloudFormWebview", async () => cloudManager.closeCloudFormWebview());
+        registerRoute("getAuthState", async () => cloudManager.getAuthState());
+        registerRoute("getContextState", async () => cloudManager.getContextState());
+        registerRoute("getLocalGitData", async (request) => cloudManager.getLocalGitData(request.params));
+        registerRoute("hasDirtyRepo", async (request) => cloudManager.hasDirtyRepo(request.params));
+        registerRoute("getConfigFileDrifts", async (request) =>
+            cloudManager.getConfigFileDrifts(request.params as GetConfigFileDriftsReq)
+        );
+        registerRoute("triggerGithubAuthFlow", async (request) => cloudManager.triggerGithubAuthFlow(request.params));
+        registerRoute("triggerGithubInstallFlow", async (request) => cloudManager.triggerGithubInstallFlow(request.params));
+        registerRoute("getBranches", async (request) =>
+            cloudManager.getBranches(request.params as GetBranchesReq)
+        );
+        registerRoute("getAuthorizedGitOrgs", async (request) =>
+            cloudManager.getAuthorizedGitOrgs(request.params as GetAuthorizedGitOrgsReq)
+        );
+        registerRoute("getCredentials", async (request) =>
+            cloudManager.getCredentials(request.params as GetCredentialsReq)
+        );
+        registerRoute("getCredentialDetails", async (request) =>
+            cloudManager.getCredentialDetails(request.params as GetCredentialDetailsReq)
+        );
+        registerRoute("isRepoAuthorized", async (request) =>
+            cloudManager.isRepoAuthorized(request.params as IsRepoAuthorizedReq)
+        );
+        registerRoute("getConsoleUrl", async () => cloudManager.getConsoleUrl());
 
         return router;
     }

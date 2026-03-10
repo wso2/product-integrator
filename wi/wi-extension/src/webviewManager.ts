@@ -145,6 +145,8 @@ export class WebviewManager {
 				return "Explore Samples";
 			case ViewType.IMPORT_EXTERNAL:
 				return "Import Project";
+			case ViewType.CREATE_CLOUD_INTEGRATION:
+				return "Deploy Integration";
 			case ViewType.WELCOME:
 			default:
 				return "Welcome";

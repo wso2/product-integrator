@@ -17,6 +17,7 @@
  */
 
 import * as vscode from "vscode";
+import { activateCloudFunctionality } from "./cloud/activate";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
 
@@ -35,6 +36,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		// 4. Command registration
 		// 5. Webview manager setup
 		StateMachine.initialize();
+
+		// Boot cloud/RPC/auth functionality
+		await activateCloudFunctionality(context);
 
 		ext.log("WSO2 Integrator Extension activated successfully");
 	} catch (error) {

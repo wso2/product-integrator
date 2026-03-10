@@ -52,7 +52,7 @@ import {
     ValidateProjectFormRequest,
     ValidateProjectFormResponse
 } from "@wso2/wi-core";
-import { commands, window, workspace, MarkdownString, Uri } from "vscode";
+import { commands, window, workspace, MarkdownString, Uri, env } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import * as fs from "fs";
@@ -63,6 +63,7 @@ import { MigrationReportWebview } from "../../migration-report/webview";
 import { BridgeLayer } from "../../BridgeLayer";
 import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi-core";
 import { StateMachine } from "../../stateMachine";
+import { ext } from "../../extensionVariables";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
 const platform = getPlatform();
 
@@ -109,7 +110,11 @@ export class MainWsManager implements WIVisualizerAPI {
     }
 
     async runCommand(props: RunCommandRequest): Promise<RunCommandResponse> {
-        return await commands.executeCommand("wso2.integrator.runCommand", props);
+        return await commands.executeCommand(props.command, ...(props.args || []));
+    }
+
+    async openExternal(url: string): Promise<void> {
+        await env.openExternal(Uri.parse(url));
     }
 
     async selectFileOrDirPath(params: FileOrDirRequest): Promise<FileOrDirResponse> {
@@ -442,6 +447,18 @@ export class MainWsManager implements WIVisualizerAPI {
             await vscode.workspace.fs.writeFile(saveUri, Buffer.from(params.reportContent, 'utf8'));
             vscode.window.showInformationMessage(`Migration report saved to ${saveUri.fsPath}`);
         }
+    }
+
+    async setWebviewCache(params: { cacheKey: string; data: unknown }): Promise<void> {
+        await ext.context.workspaceState.update(params.cacheKey, params.data);
+    }
+
+    async restoreWebviewCache(cacheKey: string): Promise<unknown> {
+        return ext.context.workspaceState.get(cacheKey);
+    }
+
+    async clearWebviewCache(cacheKey: string): Promise<void> {
+        await ext.context.workspaceState.update(cacheKey, undefined);
     }
 }
 

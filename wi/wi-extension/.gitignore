@@ -5,3 +5,4 @@ dist
 .vscode-test
 resources/jslibs/*
 .env
+resources/choreo-cli/*

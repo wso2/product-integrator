@@ -47,6 +47,7 @@ import {
     SampleDownloadRequest,
     SaveMigrationReportRequest,
     SemanticVersion,
+    SetWebviewCacheParams,
     ShowErrorMessageRequest,
     StoreSubProjectReportsRequest,
     ValidateProjectFormRequest,
@@ -54,6 +55,23 @@ import {
     WebviewContext,
     WorkspaceRootResponse
 } from "./webview-api.types";
+import type {
+    AuthState,
+    ContextStoreState,
+    CredentialItem,
+    GetAuthorizedGitOrgsReq,
+    GetAuthorizedGitOrgsResp,
+    GetBranchesReq,
+    GetConfigFileDriftsReq,
+    GetCredentialDetailsReq,
+    GetCredentialsReq,
+    GetLocalGitDataResp,
+    IsRepoAuthorizedReq,
+    IsRepoAuthorizedResp,
+    WICloudFormContext,
+    WICloudSubmitComponentsReq,
+    WICloudSubmitComponentsResp,
+} from "./cloud.types";
 
 export const WI_BRIDGE_EVENTS = {
     WS_RESPONSE: "wi.ws.response",
@@ -62,6 +80,9 @@ export const WI_BRIDGE_EVENTS = {
     MIGRATION_TOOL_STATE_CHANGED: "wi.event.migrationToolStateChanged",
     MIGRATION_TOOL_LOGS: "wi.event.migrationToolLogs",
     MIGRATED_PROJECT: "wi.event.migratedProject",
+    // ── Cloud events ──────────────────────────────────────────
+    AUTH_STATE_CHANGED: "wi.event.authStateChanged",
+    CONTEXT_STATE_CHANGED: "wi.event.contextStateChanged",
 } as const;
 
 export interface WIWsMethodParamsMap {
@@ -94,6 +115,28 @@ export interface WIWsMethodParamsMap {
     storeSubProjectReports: StoreSubProjectReportsRequest;
     validateProjectPath: ValidateProjectFormRequest;
     openFolder: string;
+    openExternal: string;
+    setWebviewCache: SetWebviewCacheParams;
+    restoreWebviewCache: string;
+    clearWebviewCache: string;
+
+    // ── Cloud methods ─────────────────────────────────────────
+    getCloudFormContext: void;
+    submitComponents: WICloudSubmitComponentsReq;
+    closeCloudFormWebview: void;
+    getAuthState: void;
+    getContextState: void;
+    getLocalGitData: string;
+    hasDirtyRepo: string;
+    getConfigFileDrifts: GetConfigFileDriftsReq;
+    triggerGithubAuthFlow: string;
+    triggerGithubInstallFlow: string;
+    getBranches: GetBranchesReq;
+    getAuthorizedGitOrgs: GetAuthorizedGitOrgsReq;
+    getCredentials: GetCredentialsReq;
+    getCredentialDetails: GetCredentialDetailsReq;
+    isRepoAuthorized: IsRepoAuthorizedReq;
+    getConsoleUrl: void;
 }
 
 export interface WIWsMethodResultMap {
@@ -126,6 +169,28 @@ export interface WIWsMethodResultMap {
     storeSubProjectReports: void;
     validateProjectPath: ValidateProjectFormResponse;
     openFolder: void;
+    openExternal: void;
+    setWebviewCache: void;
+    restoreWebviewCache: unknown;
+    clearWebviewCache: void;
+
+    // ── Cloud methods ─────────────────────────────────────────
+    getCloudFormContext: WICloudFormContext;
+    submitComponents: WICloudSubmitComponentsResp;
+    closeCloudFormWebview: void;
+    getAuthState: AuthState;
+    getContextState: ContextStoreState;
+    getLocalGitData: GetLocalGitDataResp | undefined;
+    hasDirtyRepo: boolean;
+    getConfigFileDrifts: string[];
+    triggerGithubAuthFlow: void;
+    triggerGithubInstallFlow: void;
+    getBranches: string[];
+    getAuthorizedGitOrgs: GetAuthorizedGitOrgsResp;
+    getCredentials: CredentialItem[];
+    getCredentialDetails: CredentialItem;
+    isRepoAuthorized: IsRepoAuthorizedResp;
+    getConsoleUrl: string;
 }
 
 export type WIWsMethod = keyof WIWsMethodParamsMap;
@@ -179,6 +244,17 @@ export interface WIMigratedProjectEvent {
     project: ProjectMigrationResult;
 }
 
+// ── Cloud event interfaces ────────────────────────────────
+export interface WIAuthStateChangedEvent {
+    type: typeof WI_BRIDGE_EVENTS.AUTH_STATE_CHANGED;
+    state: AuthState;
+}
+
+export interface WIContextStateChangedEvent {
+    type: typeof WI_BRIDGE_EVENTS.CONTEXT_STATE_CHANGED;
+    state: ContextStoreState;
+}
+
 export type WIBridgeRequest = WIWsRequest;
 
 export type WIBridgeResponse =
@@ -187,7 +263,9 @@ export type WIBridgeResponse =
     | WIDownloadProgressEvent
     | WIMigrationToolStateChangedEvent
     | WIMigrationToolLogsEvent
-    | WIMigratedProjectEvent;
+    | WIMigratedProjectEvent
+    | WIAuthStateChangedEvent
+    | WIContextStateChangedEvent;
 
 export type WITransportMode = "proxy" | "websocket";
 

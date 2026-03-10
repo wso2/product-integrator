@@ -273,6 +273,10 @@ export enum ValidateProjectFormErrorField {
     NAME = 'name'
 }
 
+export interface SetWebviewCacheParams {
+    cacheKey: string;
+    data: unknown;
+}
 export interface WIVisualizerAPI {
     getWebviewContext: () => Promise<WebviewContext>;
     closeWebview: () => void;
@@ -303,4 +307,8 @@ export interface WIVisualizerAPI {
     storeSubProjectReports: (params: StoreSubProjectReportsRequest) => Promise<void>;
     validateProjectPath: (params: ValidateProjectFormRequest) => Promise<ValidateProjectFormResponse>;
     openFolder: (folderPath: string) => void;
+    openExternal: (url: string) => void;
+    setWebviewCache: (params: SetWebviewCacheParams) => Promise<void>;
+    restoreWebviewCache: (cacheKey: string) => Promise<unknown>;
+    clearWebviewCache: (cacheKey: string) => Promise<void>;
 }
