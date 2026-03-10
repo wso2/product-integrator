@@ -79,7 +79,7 @@
         {
           "id": "wso2-integrator",
           "title": "WSO2 Integrator",
-          "icon": "resources/icons/integrator-icon.svg"
+          "icon": "resources/icons/integrator-activity-icon.svg"
         }
       ]
     },
@@ -144,7 +144,7 @@
         "title": "Sign Out",
         "category": "WSO2 Integrator",
         "icon": "$(sign-out)",
-         "enablement": "isLoggedIn"
+        "enablement": "isLoggedIn"
       },
       {
         "command": "wso2.integrator.cloud.auth.cancelSignIn",
