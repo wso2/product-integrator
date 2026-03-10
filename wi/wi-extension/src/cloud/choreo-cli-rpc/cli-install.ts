@@ -42,7 +42,7 @@ export const getCliVersion = (): string => {
 
 export const getChoreoExecPath = () => {
 	const OS = os.platform();
-	const executablePath = workspace.getConfiguration().get<string>("WSO2.WSO2-Platform.Advanced.RpcPath");
+	const executablePath = workspace.getConfiguration().get<string>("integrator.advanced.cloudRpcPath");
 	if (executablePath) {
 		if (OS === "win32" && !executablePath.endsWith(".exe")) {
 			return `${executablePath}.exe`;
@@ -57,7 +57,7 @@ export const getChoreoEnv = (): string => {
 	return (
 		process.env.CHOREO_ENV ||
 		process.env.CLOUD_ENV ||
-		workspace.getConfiguration().get<string>("WSO2.WSO2-Platform.Advanced.ChoreoEnvironment") ||
+		workspace.getConfiguration().get<string>("integrator.advanced.cloudEnv") ||
 		"prod"
 	);
 };
@@ -89,7 +89,7 @@ const choreoCliBinaryExists = async () => {
 };
 
 function getArchitecture() {
-	const arch = workspace.getConfiguration().get<string>("WSO2.WSO2-Platform.Advanced.RpcArchitecture");
+	const arch = workspace.getConfiguration().get<string>("integrator.advanced.cloudRpcArchitecture");
 	if (arch) {
 		return arch;
 	}

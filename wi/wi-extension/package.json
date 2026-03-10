@@ -32,6 +32,40 @@
           "type": "boolean",
           "default": false,
           "description": "Enable WSO2 MI runtime."
+        },
+        "integrator.advanced.cloudEnv": {
+          "type": "string",
+          "enum": [
+            "prod",
+            "stage",
+            "dev"
+          ],
+          "default": "prod",
+          "description": "The WSO2 Cloud Environment to use",
+          "scope": "machine"
+        },
+        "integrator.advanced.cloudRpcPath": {
+          "type": "string",
+          "default": "",
+          "description": "The path to Cloud RPC server",
+          "scope": "window"
+        },
+        "integrator.advanced.cloudRpcArchitecture": {
+          "type": "string",
+          "enum": [
+            "",
+            "amd64",
+            "arm64"
+          ],
+          "default": "",
+          "description": "The architecture of Cloud RPC server. Change only if you are running within a container with a different architecture than your host machine.",
+          "scope": "window"
+        },
+        "integrator.advanced.skipKeyring": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable only if your system does not support keyring.",
+          "scope": "window"
         }
       }
     },

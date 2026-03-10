@@ -45,7 +45,7 @@ export const webviewStateStore = createStore<WebviewStateStore>((set) => ({
 		choreoEnv:
 			process.env.CHOREO_ENV ||
 			process.env.CLOUD_ENV ||
-			workspace.getConfiguration().get<string>("WSO2.WSO2-Platform.Advanced.ChoreoEnvironment") ||
+			workspace.getConfiguration().get<string>("integrator.advanced.cloudEnv") ||
 			"prod",
 	},
 	setExtensionName: (extensionName) => {

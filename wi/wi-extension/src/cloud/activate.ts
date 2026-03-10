@@ -39,7 +39,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	ext.cloudEnv =
 		process.env.CHOREO_ENV ||
 		process.env.CLOUD_ENV ||
-		workspace.getConfiguration().get<string>("WSO2.WSO2-Platform.Advanced.ChoreoEnvironment") ||
+		workspace.getConfiguration().get<string>("integrator.advanced.cloudEnv") ||
 		"prod";
 
 	// 2. Log versions
@@ -102,15 +102,15 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 function registerPreInitHandlers(): void {
 	workspace.onDidChangeConfiguration(async ({ affectsConfiguration }: ConfigurationChangeEvent) => {
 		if (
-			affectsConfiguration("WSO2.WSO2-Platform.Advanced.ChoreoEnvironment") ||
-			affectsConfiguration("WSO2.WSO2-Platform.Advanced.RpcPath")
+			affectsConfiguration("integrator.advanced.cloudEnv") ||
+			affectsConfiguration("integrator.advanced.cloudRpcPath")
 		) {
 			const selection = await window.showInformationMessage(
 				"WSO2 Platform extension configuration changed. Please restart VS Code for changes to take effect.",
 				"Restart Now",
 			);
 			if (selection === "Restart Now") {
-				if (affectsConfiguration("WSO2.WSO2-Platform.Advanced.ChoreoEnvironment")) {
+				if (affectsConfiguration("integrator.advanced.cloudEnv")) {
 					ext.authProvider?.getState().logout();
 				}
 				commands.executeCommand("workbench.action.reloadWindow");
