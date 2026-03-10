@@ -1,20 +1,20 @@
 name: "🚀 Improvement Request"
 description: Suggest an improvement to the product.
 type: "feature"
-labels: ["Type/Improvement"]
+labels: ["Type/Improvement", "Needs Triage"]
 body:
   - type: textarea
     id: limitation
     attributes:
       label: Current Limitation
-      description: Describe the the current limitation.
+      description: Describe the current limitation.
     validations:
       required: true
   - type: textarea
     id: suggestion
     attributes:
       label: Suggested Improvement
-      description: Describe the the improvement you suggest.
+      description: Describe the improvement you suggest.
     validations:
       required: true
   - type: input

@@ -1,6 +1,6 @@
 name: "✍️ Create a Task"
 description: Create a new task.
-labels: ["Type/Task"]
+labels: ["Type/Task", "Needs Triage"]
 type: "task"
 body:
   - type: textarea
