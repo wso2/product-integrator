@@ -16,14 +16,46 @@
  * under the License.
  */
 
+import type { GetCliRpcResp, WSO2Terminologies } from "@wso2/wso2-platform-core";
 import * as vscode from "vscode";
+import type { ChoreoRPCClient } from "./cloud/choreo-cli-rpc";
+import { defaultTerminologies, webviewStateStore } from "./cloud/stores/webview-state-store";
+import type { WSO2AuthenticationProvider } from "./cloud/auth/wso2-auth-provider";
 
 /**
  * Extension context wrapper
  */
-class ExtensionVariables {
+export class ExtensionVariables {
 	private _context: vscode.ExtensionContext | undefined;
 	private _outputChannel: vscode.OutputChannel | undefined;
+
+	// --- Platform feature properties ---
+
+	/** WSO2 auth provider — set during activation. */
+	public authProvider?: WSO2AuthenticationProvider;
+
+	/** Choreo RPC client — set during activation (Stage 4). */
+	public clients!: { rpcClient: ChoreoRPCClient };
+
+	/** Active Cloud environment name (e.g. "prod", "stage", "dev"). */
+	public cloudEnv: string = "prod";
+
+	/** True when running inside the Devant cloud editor (CLOUD_STS_TOKEN is set). */
+	public isDevantCloudEditor: boolean = !!process.env.CLOUD_STS_TOKEN;
+
+	/** Extension config with console URLs and GitHub app config — populated during activation. */
+	public config?: GetCliRpcResp;
+
+	/** Active terminology set — updated reactively from webviewStateStore. */
+	public terminologies: WSO2Terminologies = defaultTerminologies;
+
+	public constructor() {
+		// todo: remove this as it's not needed
+		this.terminologies = webviewStateStore.getState().state?.terminologies || defaultTerminologies;
+		webviewStateStore.subscribe((state) => {
+			this.terminologies = state.state.terminologies || defaultTerminologies;
+		});
+	}
 
 	get context(): vscode.ExtensionContext {
 		if (!this._context) {

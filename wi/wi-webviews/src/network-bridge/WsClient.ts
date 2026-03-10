@@ -45,6 +45,7 @@ import {
     SampleDownloadRequest,
     SaveMigrationReportRequest,
     SemanticVersion,
+    SetWebviewCacheParams,
     ShowErrorMessageRequest,
     StoreSubProjectReportsRequest,
     ValidateProjectFormRequest,
@@ -58,6 +59,23 @@ import {
     WIWsMethodResultMap,
     WITransportBootstrap,
     WorkspaceRootResponse,
+} from "@wso2/wi-core";
+import type {
+    AuthState,
+    ContextStoreState,
+    CredentialItem,
+    GetAuthorizedGitOrgsReq,
+    GetAuthorizedGitOrgsResp,
+    GetBranchesReq,
+    GetConfigFileDriftsReq,
+    GetCredentialDetailsReq,
+    GetCredentialsReq,
+    GetLocalGitDataResp,
+    IsRepoAuthorizedReq,
+    IsRepoAuthorizedResp,
+    WICloudFormContext,
+    WICloudSubmitComponentsReq,
+    WICloudSubmitComponentsResp,
 } from "@wso2/wi-core";
 import { ConnectionStatus, createWebviewTransportAdapter } from "vscode-webview-network-bridge/webview";
 
@@ -101,6 +119,9 @@ export class WsClient {
     private readonly migrationToolStateListeners = new Set<(state: string) => void>();
     private readonly migrationToolLogListeners = new Set<(log: string) => void>();
     private readonly migratedProjectListeners = new Set<(result: ProjectMigrationResult) => void>();
+    // ── Cloud event listeners ─────────────────────────────────
+    private readonly authStateChangedListeners = new Set<(state: AuthState) => void>();
+    private readonly contextStateChangedListeners = new Set<(state: ContextStoreState) => void>();
 
     constructor() {
         this.transport.subscribe(
@@ -201,6 +222,22 @@ export class WsClient {
         this.notify("openFolder", folderPath);
     }
 
+    public openExternal(url: string): void {
+        this.notify("openExternal", url);
+    }
+
+    public setWebviewCache(params: SetWebviewCacheParams): Promise<void> {
+        return this.request("setWebviewCache", params);
+    }
+
+    public restoreWebviewCache(cacheKey: string): Promise<unknown> {
+        return this.request("restoreWebviewCache", cacheKey);
+    }
+
+    public clearWebviewCache(cacheKey: string): Promise<void> {
+        return this.request("clearWebviewCache", cacheKey);
+    }
+
     public pullMigrationTool(params: PullMigrationToolRequest): Promise<void> {
         return this.request("pullMigrationTool", params);
     }
@@ -239,6 +276,80 @@ export class WsClient {
 
     public onMigratedProject(callback: (result: ProjectMigrationResult) => void) {
         this.migratedProjectListeners.add(callback);
+    }
+
+    // ── Cloud methods ─────────────────────────────────────────
+
+    public getCloudFormContext(): Promise<WICloudFormContext> {
+        return this.request("getCloudFormContext");
+    }
+
+    public submitComponents(params: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> {
+        return this.request("submitComponents", params);
+    }
+
+    public closeCloudFormWebview(): void {
+        this.notify("closeCloudFormWebview");
+    }
+
+    public getAuthState(): Promise<AuthState> {
+        return this.request("getAuthState");
+    }
+
+    public getContextState(): Promise<ContextStoreState> {
+        return this.request("getContextState");
+    }
+
+    public getLocalGitData(dirPath: string): Promise<GetLocalGitDataResp | undefined> {
+        return this.request("getLocalGitData", dirPath);
+    }
+
+    public hasDirtyRepo(dirPath: string): Promise<boolean> {
+        return this.request("hasDirtyRepo", dirPath);
+    }
+
+    public getConfigFileDrifts(params: GetConfigFileDriftsReq): Promise<string[]> {
+        return this.request("getConfigFileDrifts", params);
+    }
+
+    public triggerGithubAuthFlow(orgId: string): Promise<void> {
+        return this.request("triggerGithubAuthFlow", orgId);
+    }
+
+    public triggerGithubInstallFlow(orgId: string): Promise<void> {
+        return this.request("triggerGithubInstallFlow", orgId);
+    }
+
+    public getBranches(params: GetBranchesReq): Promise<string[]> {
+        return this.request("getBranches", params);
+    }
+
+    public getAuthorizedGitOrgs(params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
+        return this.request("getAuthorizedGitOrgs", params);
+    }
+
+    public getCredentials(params: GetCredentialsReq): Promise<CredentialItem[]> {
+        return this.request("getCredentials", params);
+    }
+
+    public getCredentialDetails(params: GetCredentialDetailsReq): Promise<CredentialItem> {
+        return this.request("getCredentialDetails", params);
+    }
+
+    public isRepoAuthorized(params: IsRepoAuthorizedReq): Promise<IsRepoAuthorizedResp> {
+        return this.request("isRepoAuthorized", params);
+    }
+
+    public getConsoleUrl(): Promise<string> {
+        return this.request("getConsoleUrl");
+    }
+
+    public onAuthStateChanged(callback: (state: AuthState) => void) {
+        this.authStateChangedListeners.add(callback);
+    }
+
+    public onContextStateChanged(callback: (state: ContextStoreState) => void) {
+        this.contextStateChangedListeners.add(callback);
     }
 
     public async request<TAction extends WIWsMethod>(
@@ -298,6 +409,13 @@ export class WsClient {
                 return;
             case WI_BRIDGE_EVENTS.MIGRATED_PROJECT:
                 this.migratedProjectListeners.forEach((listener) => listener(message.project));
+                return;
+            // ── Cloud events ──────────────────────────────────────
+            case WI_BRIDGE_EVENTS.AUTH_STATE_CHANGED:
+                this.authStateChangedListeners.forEach((listener) => listener(message.state));
+                return;
+            case WI_BRIDGE_EVENTS.CONTEXT_STATE_CHANGED:
+                this.contextStateChangedListeners.forEach((listener) => listener(message.state));
                 return;
             case WI_BRIDGE_EVENTS.WS_RESPONSE:
             default:

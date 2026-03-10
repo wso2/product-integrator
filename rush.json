@@ -22,6 +22,12 @@
             "shouldPublish": false
         },
         {
+            "packageName": "@wso2/wso2-platform-core",
+            "projectFolder": "external/wso2-vscode-extensions/workspaces/wso2-platform/wso2-platform-core",
+            "reviewCategory": "production",
+            "shouldPublish": false
+        },
+        {
             "packageName": "@wso2/wi-core",
             "projectFolder": "wi/wi-core",
             "reviewCategory": "production",
