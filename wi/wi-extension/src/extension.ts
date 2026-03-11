@@ -20,11 +20,17 @@ import * as vscode from "vscode";
 import { activateCloudFunctionality } from "./cloud/activate";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
+import { WICloudExtensionAPI } from "./cloud/cloud-ext-api";
+import { IWso2PlatformExtensionAPI } from "@wso2/wso2-platform-core";
+
+interface ExtensionExports {
+	cloudAPIs: IWso2PlatformExtensionAPI;
+}
 
 /**
  * Activate the extension
  */
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
+export async function activate(context: vscode.ExtensionContext): Promise<ExtensionExports> {
 	ext.context = context;
 	ext.log("Activating WSO2 Integrator Extension");
 
@@ -39,8 +45,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 		// Boot cloud/RPC/auth functionality
 		await activateCloudFunctionality(context);
-
+		const exports: ExtensionExports = { cloudAPIs: new WICloudExtensionAPI() };
 		ext.log("WSO2 Integrator Extension activated successfully");
+		return exports;
 	} catch (error) {
 		ext.logError("Failed to activate WSO2 Integrator Extension", error as Error);
 		vscode.window.showErrorMessage(
