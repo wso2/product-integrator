@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import "./WelcomeView.css";
 import styled from "@emotion/styled";
 import { CreationView } from "./creationView";
@@ -25,6 +25,7 @@ import { SamplesView } from "./samplesView";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
 import { WICommandIds } from "@wso2/wso2-platform-core";
+import { UserAccountPopover } from "./UserAccountPopover";
 
 enum ViewState {
     WELCOME = "welcome",
@@ -106,8 +107,14 @@ export const UserAvatar = styled.div`
     justify-content: center;
     background: var(--vscode-button-background);
     border: 1.5px solid color-mix(in srgb, var(--vscode-button-background) 60%, transparent);
-    cursor: default;
+    cursor: pointer;
     user-select: none;
+    transition: all 0.2s ease;
+
+    &:hover {
+        filter: brightness(1.2);
+        transform: translateY(-1px);
+    }
 `;
 
 export const UserAvatarImg = styled.img`
@@ -375,6 +382,8 @@ export const WelcomeView: React.FC = () => {
     const { wsClient } = useVisualizerContext();
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
     const { authState } = useCloudContext();
+    const [popoverOpen, setPopoverOpen] = useState(false);
+    const avatarRef = useRef<HTMLDivElement>(null);
 
     const goToCreateProject = () => {
         setCurrentView(ViewState.CREATE_PROJECT);
@@ -445,7 +454,11 @@ export const WelcomeView: React.FC = () => {
             <TopSection>
                 <TopBtnSection>
                     {authState?.userInfo ? (
-                        <UserAvatar title={authState.userInfo.displayName}>
+                        <UserAvatar
+                            ref={avatarRef}
+                            title={authState.userInfo.displayName}
+                            onClick={() => setPopoverOpen(true)}
+                        >
                             {authState.userInfo.userProfilePictureUrl ? (
                                 <UserAvatarImg
                                     src={authState.userInfo.userProfilePictureUrl}
@@ -538,6 +551,12 @@ export const WelcomeView: React.FC = () => {
                     </ActionCard>
                 </CardsGrid>
             </CardsContainer>
+
+            <UserAccountPopover
+                isOpen={popoverOpen}
+                anchorEl={avatarRef.current}
+                onClose={() => setPopoverOpen(false)}
+            />
         </>
     );
 

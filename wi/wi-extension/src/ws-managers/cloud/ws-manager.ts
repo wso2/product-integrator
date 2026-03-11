@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { env, Uri, commands } from "vscode";
+import { env, Uri, commands, window, ProgressLocation } from "vscode";
 import {
 	type AuthState,
 	type ContextStoreState,
@@ -30,23 +30,28 @@ import {
 	type GetCredentialsReq,
 	type CredentialItem,
 	type GetCredentialDetailsReq,
+	type GetGitMetadataReq,
+	type GetGitMetadataResp,
 	type IsRepoAuthorizedReq,
 	type IsRepoAuthorizedResp,
+	type CloneRepositoryIntoCompDirReq,
 	type GetConfigFileDriftsReq,
 	ViewType,
 	COMMANDS,
 	WICloudAPI,
 } from "@wso2/wi-core";
-import { parseGitURL } from "@wso2/wso2-platform-core";
+import { buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
 import { StateMachine } from "../../stateMachine";
 import { contextStore } from "../../cloud/stores/context-store";
 import { webviewStateStore } from "../../cloud/stores/webview-state-store";
 import { getGitHead, getGitRemotes, getGitRoot, hasDirtyRepo as checkDirtyRepo, removeCredentialsFromGitURL } from "../../cloud/git/util";
 import { initGit } from "../../cloud/git/main";
+import fs, { readdirSync } from "fs";
 import path, { join } from "path";
 import type { IFileStatus } from "../../cloud/git/git";
 import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-cmd";
+import { enrichGitUsernamePassword } from "../../cloud/cmds/commit-and-push-to-git-cmd";
 
 /**
  * Pending cloud form context — set by openCloudFormWebview before the webview opens,
@@ -184,7 +189,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		const baseUrl = extName === "Devant" ? ext.config?.devantConsoleUrl : ext.config?.choreoConsoleUrl;
 		const callbackUrl = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
 		const state = Buffer.from(
-			JSON.stringify({ origin: "vscode.wi.ext", orgId, callbackUri: callbackUrl.toString(), extensionName: extName }),
+			JSON.stringify({ origin: "vscode.choreo.ext", orgId, callbackUri: callbackUrl.toString(), extensionName: extName }),
 			"binary",
 		).toString("base64");
 		const ghURL = Uri.parse(
@@ -197,7 +202,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		const extName = webviewStateStore.getState().state?.extensionName;
 		const callbackUrl = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
 		const state = Buffer.from(
-			JSON.stringify({ origin: "vscode.wi.ext", orgId, callbackUri: callbackUrl.toString(), extensionName: extName }),
+			JSON.stringify({ origin: "vscode.choreo.ext", orgId, callbackUri: callbackUrl.toString(), extensionName: extName }),
 			"binary",
 		).toString("base64");
 		const ghURL = Uri.parse(`${ext.config?.ghApp.installUrl}?state=${state}`);
@@ -223,6 +228,75 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 	async isRepoAuthorized(params: IsRepoAuthorizedReq): Promise<IsRepoAuthorizedResp> {
 		return ext.clients.rpcClient.isRepoAuthorized(params);
+	}
+
+	async getGitRepoMetadata(params: GetGitMetadataReq): Promise<GetGitMetadataResp> {
+		return ext.clients.rpcClient.getGitRepoMetadata(params);
+	}
+
+	async cloneRepositoryIntoCompDir(params: CloneRepositoryIntoCompDirReq): Promise<string> {
+		const newGit = await initGit(ext.context);
+		if (!newGit) {
+			throw new Error("failed to retrieve Git details");
+		}
+
+		const _repoUrl = buildGitURL(params.repo.orgHandler, params.repo.repo, params.repo.provider, true, params.repo.serverUrl);
+		if (!_repoUrl || !_repoUrl.startsWith("https://")) {
+			throw new Error("failed to parse git details");
+		}
+		const urlObj = new URL(_repoUrl);
+
+		const parsed = parseGitURL(_repoUrl);
+		if (parsed) {
+			const [repoOrg, repoName, provider] = parsed;
+			await enrichGitUsernamePassword(params.org, repoOrg, repoName, provider, urlObj, _repoUrl, params.repo.secretRef || "");
+		}
+
+		const repoUrl = urlObj.href;
+
+		const clonedPath = await window.withProgress(
+			{
+				title: `Cloning repository ${params.repo.orgHandler}/${params.repo.repo}`,
+				location: ProgressLocation.Notification,
+			},
+			async (progress, cancellationToken) =>
+				newGit.clone(
+					repoUrl,
+					{
+						recursive: true,
+						ref: params.repo.branch,
+						parentPath: join(params.cwd, ".."),
+						progress: {
+							report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }),
+						},
+					},
+					cancellationToken,
+				),
+		);
+
+		// Move everything from cwd into the cloned directory at subpath
+		const cwdFiles = readdirSync(params.cwd);
+		const newPath = join(clonedPath, params.subpath);
+		fs.mkdirSync(newPath, { recursive: true });
+
+		for (const file of cwdFiles) {
+			const cwdFilePath = join(params.cwd, file);
+			const destFilePath = join(newPath, file);
+			fs.cpSync(cwdFilePath, destFilePath, { recursive: true });
+		}
+
+		const repoRoot = await newGit.getRepositoryRoot(newPath);
+		const dotGit = await newGit.getRepositoryDotGit(newPath);
+		const repo = newGit.open(repoRoot, dotGit);
+
+		await window.withProgress({ title: "Pushing the changes to your remote repository...", location: ProgressLocation.Notification }, async () => {
+			await repo.add(["."]);
+			await repo.commit(`Add source for new Devant Integration`);
+			const headRef = await repo.getHEADRef();
+			await repo.push(headRef?.upstream?.remote || "origin", headRef?.name || params.repo.branch);
+		});
+
+		return newPath;
 	}
 
 	async getConsoleUrl(): Promise<string> {

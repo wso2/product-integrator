@@ -53,12 +53,14 @@ import {
 } from "@wso2/wi-core";
 import type {
     AuthState,
+    CloneRepositoryIntoCompDirReq,
     ContextStoreState,
     GetAuthorizedGitOrgsReq,
     GetBranchesReq,
     GetConfigFileDriftsReq,
     GetCredentialDetailsReq,
     GetCredentialsReq,
+    GetGitMetadataReq,
     IsRepoAuthorizedReq,
     WICloudSubmitComponentsReq,
 } from "@wso2/wi-core";
@@ -308,6 +310,12 @@ export class BridgeLayer {
         );
         registerRoute("isRepoAuthorized", async (request) =>
             cloudManager.isRepoAuthorized(request.params as IsRepoAuthorizedReq)
+        );
+        registerRoute("getGitRepoMetadata", async (request) =>
+            cloudManager.getGitRepoMetadata(request.params as GetGitMetadataReq)
+        );
+        registerRoute("cloneRepositoryIntoCompDir", async (request) =>
+            cloudManager.cloneRepositoryIntoCompDir(request.params as CloneRepositoryIntoCompDirReq)
         );
         registerRoute("getConsoleUrl", async () => cloudManager.getConsoleUrl());
 

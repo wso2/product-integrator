@@ -58,6 +58,7 @@ import {
 import type {
     AuthState,
     ContextStoreState,
+    CloneRepositoryIntoCompDirReq,
     CredentialItem,
     GetAuthorizedGitOrgsReq,
     GetAuthorizedGitOrgsResp,
@@ -65,6 +66,8 @@ import type {
     GetConfigFileDriftsReq,
     GetCredentialDetailsReq,
     GetCredentialsReq,
+    GetGitMetadataReq,
+    GetGitMetadataResp,
     GetLocalGitDataResp,
     IsRepoAuthorizedReq,
     IsRepoAuthorizedResp,
@@ -136,6 +139,8 @@ export interface WIWsMethodParamsMap {
     getCredentials: GetCredentialsReq;
     getCredentialDetails: GetCredentialDetailsReq;
     isRepoAuthorized: IsRepoAuthorizedReq;
+    getGitRepoMetadata: GetGitMetadataReq;
+    cloneRepositoryIntoCompDir: CloneRepositoryIntoCompDirReq;
     getConsoleUrl: void;
 }
 
@@ -190,6 +195,8 @@ export interface WIWsMethodResultMap {
     getCredentials: CredentialItem[];
     getCredentialDetails: CredentialItem;
     isRepoAuthorized: IsRepoAuthorizedResp;
+    getGitRepoMetadata: GetGitMetadataResp;
+    cloneRepositoryIntoCompDir: string;
     getConsoleUrl: string;
 }
 
