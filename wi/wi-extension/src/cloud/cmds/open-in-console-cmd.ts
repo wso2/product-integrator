@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { WICommandIds, type ComponentKind, type ICreateComponentCmdParams, type IOpenInConsoleCmdParams } from "@wso2/wso2-platform-core";
+import { ICreateNewIntegrationCmdParams, WICommandIds, type ComponentKind, type ICreateComponentCmdParams, type IOpenInConsoleCmdParams } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, type QuickPickItem, QuickPickItemKind, Uri, commands, env, window } from "vscode";
 import { ext } from '../../extensionVariables';
 import { contextStore } from "../stores/context-store";
@@ -80,9 +80,10 @@ export function openInConsoleCommand(context: ExtensionContext) {
 								.then((res) => {
 									if (res === "Proceed") {
 										commands.executeCommand(WICommandIds.CreateNewComponent, {
-											...(params?.newComponentParams || {}),
-											componentDir: params?.componentFsPath || params?.newComponentParams?.componentDir,
-										} as ICreateComponentCmdParams);
+											buildPackLang: params?.newComponentParams?.buildPackLang,
+											workspaceDir: params?.componentFsPath,
+											integrations: [{ fsPath: params?.componentFsPath }]
+										} as ICreateNewIntegrationCmdParams);
 									}
 								});
 						} else if (matchingComponent?.length === 1) {

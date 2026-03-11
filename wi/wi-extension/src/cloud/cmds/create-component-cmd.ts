@@ -24,6 +24,8 @@ import {
 	getComponentKindRepoSource,
 	parseGitURL,
 	GitProvider,
+	ICreateNewIntegrationCmdParams,
+	makeURLSafe,
 } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, Uri, commands, window, workspace } from "vscode";
 import { ext } from "../../extensionVariables";
@@ -34,8 +36,9 @@ import { dataCacheStore } from "../stores/data-cache-store";
 import { isSamePath, isSubpath } from "../../utils/pathUtils";
 import { getUserInfoForCmd, isRpcActive, selectOrg, selectProjectWithCreateNew, setExtensionName } from "./cmd-utils";
 import { updateContextFile } from "./create-directory-context-cmd";
-import { ICreateNewIntegrationCmdParams, WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
+import { WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
+import { ProjectType, StateMachine, stateService } from "../../stateMachine";
 
 
 const allIntegrationTypes = [
@@ -73,14 +76,13 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					let workspaceDir = params?.workspaceDir;
 					let buildPackLang = params?.buildPackLang;
 					if (!buildPackLang) {
-						const buildPackLangPick = await window.showQuickPick(
-							[{ label: "ballerina" }, { label: "microintegrator" }],
-							{ placeHolder: "Select the build pack language for the integration" },
-						);
-						if (!buildPackLangPick) {
-							throw new Error(`Build pack language selection is required`);
+						if (StateMachine.getContext().projectType === ProjectType.BI_BALLERINA) {
+							buildPackLang = "ballerina";
+						} else if (StateMachine.getContext().projectType === ProjectType.MI) {
+							buildPackLang = "microintegrator";
+						} else {
+							throw new Error(`Please ensure that you are within a valid Ballerina or MI project to deploy an integration in the cloud`);
 						}
-						buildPackLang = buildPackLangPick.label as "ballerina" | "microintegrator";
 					}
 
 					if (!params?.workspaceDir || integrations.length === 0) {
@@ -184,6 +186,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 
 					for (const integration of integrations) {
 						let compInitialName = integration?.name || path.basename(integration.fsPath);
+						compInitialName = makeURLSafe(compInitialName);
 						const existingNames = components.map((c) => c.metadata?.name?.toLowerCase?.());
 						const baseIntName = compInitialName;
 						let counter = 1;

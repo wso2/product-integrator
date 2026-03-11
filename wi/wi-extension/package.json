@@ -193,12 +193,6 @@
         "category": "WSO2 Integrator",
         "icon": "$(refresh)",
         "enablement": "!isLoadingContextDirs"
-      },
-      {
-        "command": "wso2.integrator.cloud.integration.push-to-git",
-        "title": "Commit & Push to Remote",
-        "category": "WSO2 Integrator",
-        "icon": "$(repo-push)"
       }
     ],
     "menus": {

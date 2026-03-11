@@ -17,24 +17,9 @@
  */
 
 export type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq } from "@wso2/wso2-platform-core";
-import type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, Organization, Project, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq, ComponentKind, CreateComponentReq } from "@wso2/wso2-platform-core";
+import type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, Organization, Project, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq, ComponentKind, CreateComponentReq, ICreateNewIntegrationCmdIntegrations } from "@wso2/wso2-platform-core";
 
 
-/**
- * A single component entry for the component creation form.
- * Contains only the data the webview needs — platform-core types stay in wi-extension.
- */
-export interface ICreateNewIntegrationCmdIntegrations {
-    fsPath: string;
-    name: string;
-    supportedIntegrationTypes?: string[];
-}
-
-export interface ICreateNewIntegrationCmdParams {
-    buildPackLang?: "ballerina" | "microintegrator";
-    workspaceDir?: string;
-    integrations?: ICreateNewIntegrationCmdIntegrations[];
-}
 
 /**
  * Context passed to the cloud component-form webview.
@@ -61,13 +46,13 @@ export interface WICloudSubmitComponentsReq {
 
 export interface WICloudSubmitComponentsResp {
 	created: ComponentKind[];
-    /** Failed component names with error messages */
-    failed: Array<{
-        name: string;
-        error: string;
-    }>;
-    /** Total components attempted */
-    total: number;
+	/** Failed component names with error messages */
+	failed: Array<{
+		name: string;
+		error: string;
+	}>;
+	/** Total components attempted */
+	total: number;
 }
 
 export interface WICloudAPI {
