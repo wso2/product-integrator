@@ -62,9 +62,9 @@ interface MachineContext {
  */
 function getDefaultIntegratorMode(): ProjectType[] {
     const config = vscode.workspace.getConfiguration("integrator");
-    const biEnabled = config.get<boolean>("enabledRuntimes.bi") ?? false;
-    const miEnabled = config.get<boolean>("enabledRuntimes.mi") ?? false;
-    const siEnabled = config.get<boolean>("enabledRuntimes.si") ?? false;
+    const biEnabled = config.get<boolean>("enabledRuntimes.bi", true);
+    const miEnabled = config.get<boolean>("enabledRuntimes.mi", false);
+    const siEnabled = config.get<boolean>("enabledRuntimes.si", false);
 
     const enabled: ProjectType[] = [];
     if (biEnabled) { enabled.push(ProjectType.BI_BALLERINA); }
