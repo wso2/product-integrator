@@ -17,6 +17,7 @@
  */
 
 import styled from "@emotion/styled";
+import { VSCodeLink } from "@vscode/webview-ui-toolkit/react";
 import { Button, Typography } from "@wso2/ui-toolkit";
 
 export const PageContainer = styled.div`
@@ -102,9 +103,9 @@ export const ComponentListRow = styled.div<ComponentListRowProps>`
 
     &:hover {
         background: ${({ isSelected }: ComponentListRowProps) =>
-            isSelected
-                ? "color-mix(in srgb, var(--vscode-list-hoverBackground) 60%, transparent)"
-                : "color-mix(in srgb, var(--vscode-list-hoverBackground) 25%, transparent)"};
+        isSelected
+            ? "color-mix(in srgb, var(--vscode-list-hoverBackground) 60%, transparent)"
+            : "color-mix(in srgb, var(--vscode-list-hoverBackground) 25%, transparent)"};
     }
 `;
 
@@ -176,7 +177,7 @@ export const NameInput = styled.input<NameInputProps>`
     font-size: 13px;
     font-weight: 600;
     font-family: var(--vscode-font-family);
-    padding: 3px 6px;
+    /* padding: 3px 6px; */
     outline: none;
     transition: border-color 0.1s ease;
 
@@ -250,23 +251,6 @@ export const GitConfigGrid = styled.div`
     position: relative;
 `;
 
-export const FieldGroup = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-`;
-
-export const FieldLabel = styled.label`
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--vscode-foreground);
-    opacity: 0.85;
-
-    span.required {
-        color: var(--vscode-errorForeground);
-        margin-left: 2px;
-    }
-`;
 
 export const FieldSelect = styled.select`
     width: 100%;
@@ -429,3 +413,24 @@ export const FooterRow = styled.div`
 export const CancelButton = styled(Button)``;
 
 export const SubmitButton = styled(Button)``;
+
+export const AuthSectionWrap = styled.div`
+    padding: 20px;
+    display: flex;
+    gap: 4px;
+    flex-direction: column;
+`;
+
+export const SmVSCodeLink = styled(VSCodeLink)`
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    opacity: 0.7;
+    &:hover {
+        opacity: 1;
+    }
+`
+
+export const SmVSCodeLinks = styled.div`
+    display: flex;
+    gap: 10px
+`

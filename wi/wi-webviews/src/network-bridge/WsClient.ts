@@ -62,6 +62,7 @@ import {
 } from "@wso2/wi-core";
 import type {
     AuthState,
+    CloneRepositoryIntoCompDirReq,
     ContextStoreState,
     CredentialItem,
     GetAuthorizedGitOrgsReq,
@@ -70,6 +71,8 @@ import type {
     GetConfigFileDriftsReq,
     GetCredentialDetailsReq,
     GetCredentialsReq,
+    GetGitMetadataReq,
+    GetGitMetadataResp,
     GetLocalGitDataResp,
     IsRepoAuthorizedReq,
     IsRepoAuthorizedResp,
@@ -338,6 +341,14 @@ export class WsClient {
 
     public isRepoAuthorized(params: IsRepoAuthorizedReq): Promise<IsRepoAuthorizedResp> {
         return this.request("isRepoAuthorized", params);
+    }
+
+    public getGitRepoMetadata(params: GetGitMetadataReq): Promise<GetGitMetadataResp> {
+        return this.request("getGitRepoMetadata", params);
+    }
+
+    public cloneRepositoryIntoCompDir(params: CloneRepositoryIntoCompDirReq): Promise<string> {
+        return this.request("cloneRepositoryIntoCompDir", params);
     }
 
     public getConsoleUrl(): Promise<string> {

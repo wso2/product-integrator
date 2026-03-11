@@ -85,6 +85,11 @@ export function createNewComponentCommand(context: ExtensionContext) {
 						}
 					}
 
+					if (ext.isDevantCloudEditor && params?.integrations?.length > 1) {
+						// todo: need to add support for workspace deployments in cloud editor
+						throw new Error(`Workspace deployments are not yet supported in the cloud editor. Please select individual integration to deploy.`);
+					}
+
 					if (!params?.workspaceDir || integrations.length === 0) {
 						let defaultUri: Uri;
 						if (workspace.workspaceFile && workspace.workspaceFile.scheme !== "untitled") {
@@ -258,7 +263,8 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				}
 				const [repoOrg, repoName, repoProvider] = parsedGit;
 				const subPathDir = path.relative(gitRoot!, createParam.componentDir);
-				if (repoProvider === GitProvider.GITHUB) {
+				if (!ext.isDevantCloudEditor && repoProvider === GitProvider.GITHUB) {
+					// This check is not needed in cloud editor, as we have pushed the changes to remote repo
 					const repoMetadata = await ext.clients.rpcClient?.getGitRepoMetadata({
 						branch: createParam.branch,
 						gitOrgName: repoOrg,

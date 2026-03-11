@@ -16,8 +16,8 @@
  * under the License.
  */
 
-export type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq } from "@wso2/wso2-platform-core";
-import type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, Organization, Project, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq, ComponentKind, CreateComponentReq, ICreateNewIntegrationCmdIntegrations } from "@wso2/wso2-platform-core";
+export type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq, CloneRepositoryIntoCompDirReq } from "@wso2/wso2-platform-core";
+import type { AuthState, ContextStoreState, GetLocalGitDataResp, GetBranchesReq, GetAuthorizedGitOrgsReq, GetAuthorizedGitOrgsResp, GetCredentialsReq, CredentialItem, GetCredentialDetailsReq, GetGitMetadataReq, GetGitMetadataResp, Organization, Project, IsRepoAuthorizedReq, IsRepoAuthorizedResp, GetConfigFileDriftsReq, CloneRepositoryIntoCompDirReq, ComponentKind, CreateComponentReq, ICreateNewIntegrationCmdIntegrations } from "@wso2/wso2-platform-core";
 
 
 
@@ -78,6 +78,9 @@ export interface WICloudAPI {
 	getCredentials: (params: GetCredentialsReq) => Promise<CredentialItem[]>;
 	getCredentialDetails: (params: GetCredentialDetailsReq) => Promise<CredentialItem>;
 	isRepoAuthorized: (params: IsRepoAuthorizedReq) => Promise<IsRepoAuthorizedResp>;
+	// Repo metadata & clone
+	getGitRepoMetadata: (params: GetGitMetadataReq) => Promise<GetGitMetadataResp>;
+	cloneRepositoryIntoCompDir: (params: CloneRepositoryIntoCompDirReq) => Promise<string>;
 	// Config
 	getConsoleUrl: () => Promise<string>;
 }
