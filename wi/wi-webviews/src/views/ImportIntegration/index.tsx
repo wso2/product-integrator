@@ -22,7 +22,17 @@ import { useEffect, useState } from "react";
 import { ConfigureProjectForm } from "./ConfigureProjectForm";
 import { ImportIntegrationForm } from "./ImportIntegrationForm";
 import { MigrationProgressView } from "./MigrationProgressView";
-import { FormContainer, TitleContainer, IconButton } from "./styles";
+import {
+    ContentPanel,
+    FormContainer,
+    HeaderSubtitle,
+    HeaderText,
+    IconButton,
+    PageBackdrop,
+    PageContainer,
+    StepperWrapper,
+    TitleContainer,
+} from "./styles";
 import { FinalIntegrationParams, ProjectMigrationResult, ProjectRequest } from "./types";
 import { useVisualizerContext } from "../../contexts";
 import { DownloadProgress, ImportIntegrationResponse, ImportIntegrationWsRequest, MigrationTool } from "@wso2/wi-core";
@@ -160,44 +170,62 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     }, [toolPullProgress, importParams, selectedIntegration]);
 
     return (
-        <FormContainer>
-            <TitleContainer>
-                <IconButton onClick={onBack}>
-                    <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
-                </IconButton>
-                <Typography variant="h3">Migrate External Integration</Typography>
-            </TitleContainer>
-
-            <StepperContainer style={{ marginBottom: "4%" }}>
-                <Stepper alignment="flex-start" steps={defaultSteps} currentStep={step} />
-            </StepperContainer>
-            {step === 0 && (
-                <ImportIntegrationForm
-                    selectedIntegration={selectedIntegration}
-                    migrationTools={migrationTools}
-                    setImportParams={setImportParams}
-                    pullIntegrationTool={pullIntegrationTool}
-                    pullingTool={pullingTool}
-                    toolPullProgress={toolPullProgress}
-                    onSelectIntegration={setSelectedIntegration}
-                    handleStartImport={handleStartImport}
-                    onBack={onBack}
-                />
-            )}
-            {step === 1 && (
-                <MigrationProgressView
-                    migrationState={migrationToolState}
-                    migrationLogs={migrationToolLogs}
-                    migrationCompleted={migrationCompleted}
-                    migrationSuccessful={migrationSuccessful}
-                    migrationResponse={migrationResponse}
-                    projects={migratedProjects}
-                    isMultiProject={isMultiProject}
-                    onNext={() => setStep(2)}
-                    onBack={handleStepBack}
-                />
-            )}
-            {step === 2 && <ConfigureProjectForm isMultiProject={isMultiProject} onNext={handleCreateIntegrationFiles} onBack={handleStepBack} />}
-        </FormContainer>
+        <PageBackdrop>
+            <PageContainer>
+                <TitleContainer>
+                    <IconButton type="button" onClick={onBack} title="Go back">
+                        <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
+                    </IconButton>
+                    <HeaderText>
+                        <Typography variant="h2">Migrate External Integration</Typography>
+                        <HeaderSubtitle>
+                            Convert your MuleSoft or TIBCO project into a new integration project.
+                        </HeaderSubtitle>
+                    </HeaderText>
+                </TitleContainer>
+                <ContentPanel>
+                    <StepperWrapper>
+                        <StepperContainer>
+                            <Stepper alignment="flex-start" steps={defaultSteps} currentStep={step} />
+                        </StepperContainer>
+                    </StepperWrapper>
+                    <FormContainer>
+                        {step === 0 && (
+                            <ImportIntegrationForm
+                                selectedIntegration={selectedIntegration}
+                                migrationTools={migrationTools}
+                                setImportParams={setImportParams}
+                                pullIntegrationTool={pullIntegrationTool}
+                                pullingTool={pullingTool}
+                                toolPullProgress={toolPullProgress}
+                                onSelectIntegration={setSelectedIntegration}
+                                handleStartImport={handleStartImport}
+                                onBack={onBack}
+                            />
+                        )}
+                        {step === 1 && (
+                            <MigrationProgressView
+                                migrationState={migrationToolState}
+                                migrationLogs={migrationToolLogs}
+                                migrationCompleted={migrationCompleted}
+                                migrationSuccessful={migrationSuccessful}
+                                migrationResponse={migrationResponse}
+                                projects={migratedProjects}
+                                isMultiProject={isMultiProject}
+                                onNext={() => setStep(2)}
+                                onBack={handleStepBack}
+                            />
+                        )}
+                        {step === 2 && (
+                            <ConfigureProjectForm
+                                isMultiProject={isMultiProject}
+                                onNext={handleCreateIntegrationFiles}
+                                onBack={handleStepBack}
+                            />
+                        )}
+                    </FormContainer>
+                </ContentPanel>
+            </PageContainer>
+        </PageBackdrop>
     );
 }

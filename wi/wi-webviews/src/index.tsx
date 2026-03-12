@@ -29,6 +29,7 @@ import "./style.css";
 
 const DARK_BROWSER_VSCODE_OVERRIDES: VSCodeCssVariables = {
 	"--vscode-button-border": "#454545",
+	"--vscode-button-foreground": "#ffffff",
 	"--vscode-button-hoverBackground": "#1177bb",
 	"--vscode-button-secondaryBackground": "#3a3d41",
 	"--vscode-button-secondaryForeground": "#cccccc",
@@ -37,15 +38,23 @@ const DARK_BROWSER_VSCODE_OVERRIDES: VSCodeCssVariables = {
 	"--vscode-checkbox-background": "#3c3c3c",
 	"--vscode-descriptionForeground": "#9d9d9d",
 	"--vscode-dropdown-border": "#3c3c3c",
+	"--vscode-editorWidget-border": "#454545",
+	"--vscode-focusBorder": "#3794ff",
 	"--vscode-input-border": "#3c3c3c",
+	"--vscode-input-background": "#2d2d2d",
 	"--vscode-input-foreground": "#cccccc",
 	"--vscode-inputValidation-warningForeground": "#cca700",
+	"--vscode-list-hoverBackground": "#2a2d2e",
+	"--vscode-panel-border": "#454545",
 	"--vscode-terminal-ansiRed": "#cd3131",
 	"--vscode-terminal-ansiYellow": "#e5e510",
+	"--vscode-toolbar-hoverBackground": "#2a2d2e",
+	"--vscode-widget-border": "#454545",
 };
 
 const LIGHT_BROWSER_VSCODE_OVERRIDES: VSCodeCssVariables = {
 	"--vscode-button-border": "#cecece",
+	"--vscode-button-foreground": "#ffffff",
 	"--vscode-button-hoverBackground": "#0062a3",
 	"--vscode-button-secondaryBackground": "#e8e8e8",
 	"--vscode-button-secondaryForeground": "#424242",
@@ -55,11 +64,18 @@ const LIGHT_BROWSER_VSCODE_OVERRIDES: VSCodeCssVariables = {
 	"--vscode-descriptionForeground": "#717171",
 	"--vscode-dropdown-border": "#cecece",
 	"--vscode-dropdown-foreground": "#3c3c3c",
+	"--vscode-editorWidget-border": "#d9d9d9",
+	"--vscode-focusBorder": "#0078d4",
 	"--vscode-input-border": "#cecece",
+	"--vscode-input-background": "#ffffff",
 	"--vscode-input-foreground": "#3c3c3c",
 	"--vscode-inputValidation-warningForeground": "#855f00",
+	"--vscode-list-hoverBackground": "#f0f5ff",
+	"--vscode-panel-border": "#d9d9d9",
 	"--vscode-terminal-ansiRed": "#cd3131",
 	"--vscode-terminal-ansiYellow": "#949800",
+	"--vscode-toolbar-hoverBackground": "#ececec",
+	"--vscode-widget-border": "#d9d9d9",
 };
 
 function resolveBrowserTheme(): VSCodeCssTheme {
