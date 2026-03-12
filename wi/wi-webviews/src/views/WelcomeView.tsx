@@ -297,7 +297,8 @@ const StyledButton = styled('button', {
     padding: 0 24px;
     background: ${(props: { isPrimary?: boolean }) =>
         props.isPrimary ? 'var(--button-primary-background)' : 'var(--button-secondary-background)'};
-    color: white;
+    color: ${(props: { isPrimary?: boolean }) =>
+        props.isPrimary ? 'var(--vscode-button-foreground)' : 'var(--vscode-button-secondaryForeground)'};
     border: none;
     transition: all 0.2s ease;
     cursor: pointer;
