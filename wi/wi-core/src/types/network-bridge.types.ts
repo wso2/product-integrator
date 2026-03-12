@@ -28,6 +28,7 @@ import {
     FileOrDirResponse,
     GetConfigurationRequest,
     GetConfigurationResponse,
+    GetRecentProjectsResponse,
     SetConfigurationRequest,
     GetMigrationToolsResponse,
     GetSubFoldersRequest,
@@ -91,6 +92,7 @@ export const WI_BRIDGE_EVENTS = {
 
 export interface WIWsMethodParamsMap {
     getWebviewContext: void;
+    getRecentProjects: void;
     closeWebview: void;
     openBiExtension: void;
     openMiExtension: void;
@@ -148,6 +150,7 @@ export interface WIWsMethodParamsMap {
 
 export interface WIWsMethodResultMap {
     getWebviewContext: WebviewContext;
+    getRecentProjects: GetRecentProjectsResponse;
     closeWebview: void;
     openBiExtension: void;
     openMiExtension: void;

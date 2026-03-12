@@ -215,6 +215,7 @@ export class BridgeLayer {
         }
 
         registerRoute("getWebviewContext", async () => wsManager.getWebviewContext());
+        registerRoute("getRecentProjects", async () => wsManager.getRecentProjects());
         registerRoute("closeWebview", async () => wsManager.closeWebview());
         registerRoute("openBiExtension", async () => wsManager.openBiExtension());
         registerRoute("openMiExtension", async () => wsManager.openMiExtension());

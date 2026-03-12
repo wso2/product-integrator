@@ -39,6 +39,17 @@ export interface RunCommandResponse {
     error?: string;
 }
 
+export interface RecentProjectItem {
+    path: string;
+    label: string;
+    description?: string;
+    isWorkspace?: boolean;
+}
+
+export interface GetRecentProjectsResponse {
+    projects: RecentProjectItem[];
+}
+
 export interface FileOrDirResponse {
     path: string;
 }
@@ -287,6 +298,7 @@ export interface SetWebviewCacheParams {
 }
 export interface WIVisualizerAPI {
     getWebviewContext: () => Promise<WebviewContext>;
+    getRecentProjects: () => Promise<GetRecentProjectsResponse>;
     closeWebview: () => void;
     openBiExtension: () => void;
     openMiExtension: () => void;

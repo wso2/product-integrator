@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "./WelcomeView.css";
 import styled from "@emotion/styled";
 import { Codicon } from "@wso2/ui-toolkit";
@@ -207,6 +207,13 @@ interface ActionCardProps {
     disabled?: boolean;
 }
 
+interface RecentProject {
+    path: string;
+    label: string;
+    description?: string;
+    isWorkspace?: boolean;
+}
+
 const ActionCard = styled.div<ActionCardProps>`
     background: var(--vscode-editor-background, white);
     border-radius: 12px;
@@ -320,92 +327,116 @@ const ButtonContent = styled.div`
 `;
 
 const BottomSection = styled.div`
-    padding: 10px 60px 10px 60px;
-    text-align: center;
+    padding: 0 60px 56px;
 `;
 
-const AlreadyHaveText = styled.div`
-    font-size: 14px;
-    color: var(--vscode-foreground);
-    opacity: 0.6;
-    margin-bottom: 32px;
-    
-    a {
-        color: var(--vscode-textLink-foreground);
-        text-decoration: none;
-        font-weight: 400;
-        margin-left: 6px;
-        cursor: pointer;
-        
-        &:hover {
-            color: var(--vscode-textLink-activeForeground);
-            text-decoration: underline;
-        }
-    }
-`;
-
-const RecentProjectsSection = styled.div`
-    max-width: 900px;
+const RecentProjectsSection = styled.section`
+    max-width: 1100px;
     margin: 0 auto;
+    border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 82%, transparent);
+    border-radius: 12px;
+    background: var(--vscode-editor-background);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--wso2-brand-ink) 12%, transparent);
+    overflow: hidden;
 `;
 
 const RecentProjectsHeader = styled.div`
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    padding: 0 4px;
+    padding: 14px 18px;
+    border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 74%, transparent);
+    background: color-mix(in srgb, var(--vscode-sideBar-background) 45%, transparent);
 `;
 
 const RecentProjectsTitle = styled.h3`
     font-size: 13px;
-    font-weight: 400;
+    font-weight: 600;
+    letter-spacing: 0.02em;
     color: var(--vscode-foreground);
-    opacity: 0.6;
+    opacity: 0.86;
     margin: 0;
-    text-transform: capitalize;
+    text-transform: uppercase;
 `;
 
-const ViewAllLink = styled.a`
+const ViewAllButton = styled.button`
     font-size: 13px;
+    background: none;
+    border: none;
     color: var(--vscode-textLink-foreground);
     text-decoration: none;
     cursor: pointer;
-    font-weight: 400;
+    font-weight: 500;
+    padding: 0;
     
     &:hover {
         color: var(--vscode-textLink-activeForeground);
         text-decoration: underline;
     }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+        border-radius: 4px;
+    }
 `;
 
 const ProjectsList = styled.div`
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px 16px;
-    text-align: left;
+    display: flex;
+    flex-direction: column;
 `;
 
-const ProjectItem = styled.div`
+const ProjectItem = styled.button`
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 4px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 12px 18px;
     font-size: 13px;
     color: var(--vscode-foreground);
     cursor: pointer;
     transition: all 0.15s ease;
-    border-radius: 4px;
+    border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 58%, transparent);
     
     &:hover {
         background: var(--vscode-list-hoverBackground);
     }
+
+    &:last-of-type {
+        border-bottom: none;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: -1px;
+    }
+`;
+
+const ProjectName = styled.span`
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--vscode-foreground);
 `;
 
 const ProjectPath = styled.span`
+    display: block;
     color: var(--vscode-descriptionForeground);
     font-size: 12px;
-    margin-left: 12px;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+`;
+
+const RecentProjectsEmptyState = styled.div`
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground);
+    padding: 18px;
 `;
 
 export const WelcomeView: React.FC = () => {
@@ -413,7 +444,45 @@ export const WelcomeView: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
     const { authState } = useCloudContext();
     const [popoverOpen, setPopoverOpen] = useState(false);
+    const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
+    const [isRecentProjectsLoaded, setIsRecentProjectsLoaded] = useState(false);
     const avatarRef = useRef<HTMLButtonElement>(null);
+
+    useEffect(() => {
+        if (currentView !== ViewState.WELCOME) {
+            return;
+        }
+
+        let isDisposed = false;
+
+        const fetchRecentProjects = async () => {
+            try {
+                const response = await wsClient.getRecentProjects();
+                if (isDisposed) {
+                    return;
+                }
+
+                const projects = Array.isArray(response?.projects)
+                    ? response.projects.filter(
+                        (project: RecentProject) => typeof project?.path === "string" && project.path.trim().length > 0
+                    )
+                    : [];
+                setRecentProjects(projects);
+                setIsRecentProjectsLoaded(true);
+            } catch {
+                if (!isDisposed) {
+                    setRecentProjects([]);
+                    setIsRecentProjectsLoaded(false);
+                }
+            }
+        };
+
+        fetchRecentProjects();
+
+        return () => {
+            isDisposed = true;
+        };
+    }, [currentView, wsClient]);
 
     const goToCreateProject = () => {
         setCurrentView(ViewState.CREATE_PROJECT);
@@ -446,19 +515,16 @@ export const WelcomeView: React.FC = () => {
         goToSettings();
     };
 
-    const openProject = () => {
-        // Add open existing project action here
-        console.log("Open existing project");
+    const openRecentProjectsPicker = () => {
+        wsClient.runCommand({ command: "workbench.action.openRecent" }).catch((): void => undefined);
     };
 
-    // Sample recent projects data - replace with actual data
-    const recentProjects = [
-        { name: "vscode-extensions", path: "~/Documents/vscode-extension" },
-        { name: "evox-esports-site", path: "~/Documents" },
-        { name: "iso-consultancy-portal", path: "~/Documents/ISOWeb" },
-        { name: "ISOWeb", path: "~/Documents" },
-        { name: "Documents", path: "~" },
-    ];
+    const openRecentProject = (projectPath: string) => {
+        if (!projectPath) {
+            return;
+        }
+        wsClient.openFolder(projectPath);
+    };
 
     // Helper function to render current view content
     const renderCurrentView = () => {
@@ -597,6 +663,38 @@ export const WelcomeView: React.FC = () => {
                     </ActionCard>
                 </CardsGrid>
             </CardsContainer>
+
+            {isRecentProjectsLoaded && (
+                <BottomSection>
+                    <RecentProjectsSection>
+                        <RecentProjectsHeader>
+                            <RecentProjectsTitle>Recent Projects</RecentProjectsTitle>
+                            <ViewAllButton type="button" onClick={openRecentProjectsPicker}>
+                                See more
+                            </ViewAllButton>
+                        </RecentProjectsHeader>
+                        {recentProjects.length > 0 ? (
+                            <ProjectsList>
+                                {recentProjects.map((project) => (
+                                    <ProjectItem
+                                        key={project.path}
+                                        type="button"
+                                        onClick={() => openRecentProject(project.path)}
+                                        title={project.description || project.path}
+                                    >
+                                        <ProjectName>{project.label}</ProjectName>
+                                        <ProjectPath>{project.description || project.path}</ProjectPath>
+                                    </ProjectItem>
+                                ))}
+                            </ProjectsList>
+                        ) : (
+                            <RecentProjectsEmptyState>
+                                No recent projects found in your current history.
+                            </RecentProjectsEmptyState>
+                        )}
+                    </RecentProjectsSection>
+                </BottomSection>
+            )}
 
             <UserAccountPopover
                 isOpen={popoverOpen}

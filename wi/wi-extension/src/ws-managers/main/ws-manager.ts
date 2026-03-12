@@ -26,6 +26,7 @@ import {
     FileOrDirResponse,
     GetConfigurationRequest,
     GetConfigurationResponse,
+    GetRecentProjectsResponse,
     GetSubFoldersRequest,
     GetSubFoldersResponse,
     ProjectDirResponse,
@@ -104,6 +105,34 @@ export class MainWsManager implements WIVisualizerAPI {
         commands.executeCommand('workbench.action.openSettings', settingKey);
     }
 
+    async getRecentProjects(): Promise<GetRecentProjectsResponse> {
+        try {
+            const recentlyOpened = await commands.executeCommand<any>("_workbench.getRecentlyOpened");
+            const workspaceItems: any[] = [
+                ...(Array.isArray(recentlyOpened?.workspaces) ? recentlyOpened.workspaces : []),
+                ...(Array.isArray(recentlyOpened?.folders) ? recentlyOpened.folders : []),
+            ];
+            const projects: GetRecentProjectsResponse["projects"] = [];
+            const seenPaths = new Set<string>();
+
+            for (const item of workspaceItems) {
+                const project = this.normalizeRecentProject(item);
+                if (!project || seenPaths.has(project.path)) {
+                    continue;
+                }
+                seenPaths.add(project.path);
+                projects.push(project);
+                if (projects.length >= 8) {
+                    break;
+                }
+            }
+
+            return { projects };
+        } catch {
+            return { projects: [] };
+        }
+    }
+
     async openFolder(folderPath: string): Promise<void> {
         if (folderPath) {
             await commands.executeCommand('vscode.openFolder', Uri.file(folderPath));
@@ -112,6 +141,62 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async runCommand(props: RunCommandRequest): Promise<RunCommandResponse> {
         return await commands.executeCommand(props.command, ...(props.args || []));
+    }
+
+    private normalizeRecentProject(item: any): GetRecentProjectsResponse["projects"][number] | undefined {
+        const folderPath = this.extractFsPath(item?.folderUri);
+        const workspacePath = this.extractFsPath(item?.workspace?.configPath ?? item?.workspace?.uri);
+        const resolvedPath = folderPath ?? workspacePath;
+        if (!resolvedPath) {
+            return undefined;
+        }
+
+        const label = typeof item?.label === "string" && item.label.trim().length > 0
+            ? item.label.trim()
+            : path.basename(resolvedPath);
+
+        return {
+            path: resolvedPath,
+            label: label || resolvedPath,
+            description: resolvedPath,
+            isWorkspace: !folderPath && !!workspacePath,
+        };
+    }
+
+    private extractFsPath(uriLike: any): string | undefined {
+        if (!uriLike) {
+            return undefined;
+        }
+
+        if (uriLike instanceof Uri) {
+            return uriLike.fsPath;
+        }
+
+        if (typeof uriLike === "string") {
+            if (uriLike.startsWith("file:")) {
+                return Uri.parse(uriLike).fsPath;
+            }
+            return uriLike;
+        }
+
+        if (typeof uriLike === "object") {
+            if (typeof uriLike.fsPath === "string" && uriLike.fsPath.length > 0) {
+                return uriLike.fsPath;
+            }
+
+            if (typeof uriLike.path === "string" && uriLike.path.length > 0) {
+                if (uriLike.scheme === "file") {
+                    return Uri.from({ scheme: "file", path: uriLike.path }).fsPath;
+                }
+                return uriLike.path;
+            }
+
+            if (typeof uriLike.external === "string" && uriLike.external.startsWith("file:")) {
+                return Uri.parse(uriLike.external).fsPath;
+            }
+        }
+
+        return undefined;
     }
 
     async openExternal(url: string): Promise<void> {

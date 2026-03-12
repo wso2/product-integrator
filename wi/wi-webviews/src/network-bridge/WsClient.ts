@@ -30,6 +30,7 @@ import {
     FileOrDirResponse,
     GetConfigurationRequest,
     GetConfigurationResponse,
+    GetRecentProjectsResponse,
     SetConfigurationRequest,
     GetMigrationToolsResponse,
     GetSubFoldersRequest,
@@ -138,6 +139,10 @@ export class WsClient {
 
     public getWebviewContext(): Promise<WebviewContext> {
         return this.request("getWebviewContext");
+    }
+
+    public getRecentProjects(): Promise<GetRecentProjectsResponse> {
+        return this.request("getRecentProjects");
     }
 
     public closeWebview(): void {
