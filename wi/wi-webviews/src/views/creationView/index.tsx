@@ -16,53 +16,183 @@
  * under the License.
  */
 
-import { useState, useEffect } from "react";
-import {
-    Icon,
-    ProgressIndicator,
-    Typography
-} from "@wso2/ui-toolkit";
+import { useEffect, useState } from "react";
+import { Icon, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { BIProjectForm } from "./biForm";
 import { useVisualizerContext } from "../../contexts/WsContext";
 import { MiProjectWizard } from "./miForm";
 import { SiProjectWizard } from "./siForm";
-import { IntegrationTypeSelector } from "../../components/IntegrationTypeSelector";
 
-const FormContainer = styled.div`
+const PageBackdrop = styled.div`
+    min-height: 100vh;
+    padding: 28px 30px 24px;
+    background:
+        radial-gradient(circle at 90% 0%, color-mix(in srgb, var(--wso2-brand-accent) 10%, transparent) 0%, transparent 34%),
+        radial-gradient(circle at 10% 100%, color-mix(in srgb, var(--wso2-brand-primary) 8%, transparent) 0%, transparent 40%),
+        var(--vscode-editor-background);
+`;
+
+const PageContainer = styled.div`
+    max-width: 900px;
+    margin: 0 auto;
+    min-height: calc(100vh - 52px);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    align-items: center;
-    height: 100vh;
-    max-width: 600px;
-    margin: 0 auto;
-    margin-top: calc(25vh - 80px);
+    gap: 14px;
 `;
 
-const TitleContainer = styled.div`
+const HeaderRow = styled.header`
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 32px;
+    gap: 10px;
 `;
 
-const IconButton = styled.div`
+const BackButton = styled.button`
     cursor: pointer;
-    border-radius: 4px;
-    width: 20px;
-    height: 20px;
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
     font-size: 20px;
+    border: 1px solid transparent;
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
     &:hover {
-        background-color: var(--vscode-toolbar-hoverBackground);
+        background-color: color-mix(in srgb, var(--wso2-brand-accent) 16%, transparent);
+        border-color: color-mix(in srgb, var(--wso2-brand-accent) 45%, transparent);
     }
 `;
 
-const DropdownContainer = styled.div`
-    margin-bottom: 20px;
+const HeaderText = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+`;
+
+const HeaderTitle = styled(Typography)`
+    margin: 0;
+    font-weight: 600;
+`;
+
+const HeaderSubtitle = styled.p`
+    margin: 0;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+`;
+
+const RuntimePanel = styled.div`
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 14%, var(--vscode-panel-border));
+    background: var(--vscode-editor-background);
+    width: fit-content;
+`;
+
+const RuntimeLabel = styled.span`
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+`;
+
+const RuntimeOptions = styled.div`
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px;
+`;
+
+const RuntimeOptionButton = styled.button<{ active: boolean }>`
+    border: 1px solid
+        ${(props: { active: boolean }) =>
+            props.active
+                ? "var(--wso2-brand-primary)"
+                : "var(--vscode-input-border)"};
+    background:
+        ${(props: { active: boolean }) =>
+            props.active
+                ? "var(--wso2-brand-primary)"
+                : "var(--vscode-input-background)"};
+    color:
+        ${(props: { active: boolean }) =>
+            props.active ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)"};
+    border-radius: 999px;
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+
+    &:hover {
+        border-color: ${({ active }: { active: boolean }) =>
+            active ? "var(--wso2-brand-primary-alt)" : "var(--vscode-focusBorder)"};
+        background: ${({ active }: { active: boolean }) =>
+            active ? "var(--wso2-brand-primary-alt)" : "var(--vscode-list-hoverBackground)"};
+    }
+`;
+
+const FormPanel = styled.section`
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 16%, var(--vscode-panel-border));
+    background: var(--vscode-editor-background);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
+    overflow: hidden;
+`;
+
+const FormPanelHeader = styled.div`
+    border-bottom: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 10%, var(--vscode-panel-border));
+    padding: 14px 18px 12px;
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--wso2-brand-accent) 4%, var(--vscode-editor-background)) 0%,
+        var(--vscode-editor-background) 100%
+    );
+`;
+
+const FormPanelTitle = styled.h3`
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+`;
+
+const FormPanelSubtitle = styled.p`
+    margin: 3px 0 0;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+`;
+
+const FormBody = styled.div`
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px;
+`;
+
+const LoadingContainer = styled.div`
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
 `;
 
 export type RuntimeType = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
+
+const RUNTIME_HELP: Record<RuntimeType, string> = {
+    "WSO2: BI": "Create a Ballerina integration with package and workspace options.",
+    "WSO2: MI": "Create a Micro Integrator project with runtime version and advanced Maven settings.",
+    "WSO2: SI": "Create a Stream Integrator project with quick path and name setup.",
+};
 
 export function CreationView({ onBack }: { onBack?: () => void }) {
     const [enabledRuntimes, setEnabledRuntimes] = useState<RuntimeType[]>(["WSO2: BI"]);
@@ -70,7 +200,6 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
     const [isLoading, setIsLoading] = useState(true);
     const { wsClient } = useVisualizerContext();
 
-    // Load enabled runtimes from VS Code configuration (three individual boolean settings)
     useEffect(() => {
         const loadDefaultRuntime = async () => {
             try {
@@ -81,11 +210,16 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
                 ]);
 
                 const runtimes: RuntimeType[] = [];
-                if (biResp?.value === true) { runtimes.push("WSO2: BI"); }
-                if (miResp?.value === true) { runtimes.push("WSO2: MI"); }
-                if (siResp?.value === true) { runtimes.push("WSO2: SI"); }
+                if (biResp?.value === true) {
+                    runtimes.push("WSO2: BI");
+                }
+                if (miResp?.value === true) {
+                    runtimes.push("WSO2: MI");
+                }
+                if (siResp?.value === true) {
+                    runtimes.push("WSO2: SI");
+                }
 
-                // Enforce at least one runtime (extension will have already corrected settings)
                 const resolved = runtimes.length > 0 ? runtimes : ["WSO2: BI" as RuntimeType];
                 setEnabledRuntimes(resolved);
                 setProjectType(resolved[0]);
@@ -97,7 +231,7 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
         };
 
         loadDefaultRuntime();
-    }, []);
+    }, [wsClient]);
 
     const gotToWelcome = () => {
         if (onBack) {
@@ -105,37 +239,57 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
         }
     };
 
-    // Show loading while fetching configuration
     if (isLoading) {
         return (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100px' }}>
+            <LoadingContainer>
                 <ProgressIndicator />
-            </div>
+            </LoadingContainer>
         );
     }
 
     return (
-        <div style={{ position: 'absolute', background: 'var(--vscode-editor-background)', height: '100vh', width: '100%', overflow: 'hidden' }} >
-            <FormContainer>
-                <div style={{ width: "100%" }}>
-                    <TitleContainer>
-                        <IconButton onClick={gotToWelcome}>
-                            <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
-                        </IconButton>
-                        <Typography variant="h2">Create Your Integration</Typography>
-                    </TitleContainer>
-                    {enabledRuntimes.length > 1 && (
-                        <IntegrationTypeSelector
-                            value={projectType}
-                            options={enabledRuntimes.map((r) => ({ label: r, value: r }))}
-                            onChange={(value) => setProjectType(value as RuntimeType)}
-                        />
-                    )}
-                </div>
-                {projectType === "WSO2: BI" && <BIProjectForm />}
-                {projectType === "WSO2: MI" && <MiProjectWizard />}
-                {projectType === "WSO2: SI" && <SiProjectWizard />}
-            </FormContainer>
-        </div>
+        <PageBackdrop>
+            <PageContainer>
+                <HeaderRow>
+                    <BackButton type="button" onClick={gotToWelcome} title="Go back">
+                        <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
+                    </BackButton>
+                    <HeaderText>
+                        <HeaderTitle variant="h2">Create New Project</HeaderTitle>
+                        <HeaderSubtitle>
+                            Select a runtime and configure your integration project details.
+                        </HeaderSubtitle>
+                    </HeaderText>
+                </HeaderRow>
+                {enabledRuntimes.length > 1 && (
+                    <RuntimePanel>
+                        <RuntimeLabel>Runtime</RuntimeLabel>
+                        <RuntimeOptions>
+                            {enabledRuntimes.map((runtime: RuntimeType) => (
+                                <RuntimeOptionButton
+                                    type="button"
+                                    key={runtime}
+                                    active={projectType === runtime}
+                                    onClick={() => setProjectType(runtime)}
+                                >
+                                    {runtime}
+                                </RuntimeOptionButton>
+                            ))}
+                        </RuntimeOptions>
+                    </RuntimePanel>
+                )}
+                <FormPanel>
+                    <FormPanelHeader>
+                        <FormPanelTitle>{projectType} Project</FormPanelTitle>
+                        <FormPanelSubtitle>{RUNTIME_HELP[projectType]}</FormPanelSubtitle>
+                    </FormPanelHeader>
+                    <FormBody>
+                        {projectType === "WSO2: BI" && <BIProjectForm />}
+                        {projectType === "WSO2: MI" && <MiProjectWizard />}
+                        {projectType === "WSO2: SI" && <SiProjectWizard />}
+                    </FormBody>
+                </FormPanel>
+            </PageContainer>
+        </PageBackdrop>
     );
 }
