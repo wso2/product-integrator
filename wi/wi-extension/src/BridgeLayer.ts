@@ -26,6 +26,7 @@ import {
     FetchSamplesRequest,
     FileOrDirRequest,
     GetConfigurationRequest,
+    SetConfigurationRequest,
     GetSubFoldersRequest,
     ImportIntegrationWsRequest,
     MigrateRequest,
@@ -226,6 +227,9 @@ export class BridgeLayer {
         registerRoute("getWorkspaceRoot", async () => wsManager.getWorkspaceRoot());
         registerRoute("getConfiguration", async (request) =>
             wsManager.getConfiguration(request.params as GetConfigurationRequest)
+        );
+        registerRoute("setConfiguration", async (request) =>
+            wsManager.setConfiguration(request.params as SetConfigurationRequest)
         );
         registerRoute("getSupportedMIVersionsHigherThan", async (request) =>
             wsManager.getSupportedMIVersionsHigherThan(request.params)

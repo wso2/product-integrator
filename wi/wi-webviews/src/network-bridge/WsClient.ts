@@ -30,6 +30,7 @@ import {
     FileOrDirResponse,
     GetConfigurationRequest,
     GetConfigurationResponse,
+    SetConfigurationRequest,
     GetMigrationToolsResponse,
     GetSubFoldersRequest,
     GetSubFoldersResponse,
@@ -173,6 +174,10 @@ export class WsClient {
 
     public getConfiguration(params: GetConfigurationRequest): Promise<GetConfigurationResponse> {
         return this.request("getConfiguration", params);
+    }
+
+    public setConfiguration(params: SetConfigurationRequest): Promise<void> {
+        return this.request("setConfiguration", params);
     }
 
     public getSupportedMIVersionsHigherThan(version: string): Promise<GetSupportedMIVersionsResponse> {

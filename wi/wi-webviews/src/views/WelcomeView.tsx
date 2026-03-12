@@ -22,6 +22,7 @@ import styled from "@emotion/styled";
 import { CreationView } from "./creationView";
 import { ImportIntegration } from "./ImportIntegration";
 import { SamplesView } from "./samplesView";
+import { SettingsView } from "./settingsView";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
 import { WICommandIds } from "@wso2/wso2-platform-core";
@@ -31,7 +32,8 @@ enum ViewState {
     WELCOME = "welcome",
     CREATE_PROJECT = "create_project",
     SAMPLES = "samples",
-    IMPORT_EXTERNAL = "import_external"
+    IMPORT_EXTERNAL = "import_external",
+    SETTINGS = "settings",
 }
 
 const Wrapper = styled.div`
@@ -401,6 +403,10 @@ export const WelcomeView: React.FC = () => {
         setCurrentView(ViewState.IMPORT_EXTERNAL);
     };
 
+    const goToSettings = () => {
+        setCurrentView(ViewState.SETTINGS);
+    };
+
     const handleProjectDirSelection = async () => {
         const response = await wsClient.selectFileOrDirPath({});
         if (response?.path) {
@@ -413,7 +419,7 @@ export const WelcomeView: React.FC = () => {
     };
 
     const openConfigure = () => {
-        wsClient.openSettings('integrator.enabledRuntimes');
+        goToSettings();
     };
 
     const openProject = () => {
@@ -442,6 +448,10 @@ export const WelcomeView: React.FC = () => {
             case ViewState.IMPORT_EXTERNAL:
                 return (
                     <ImportIntegration onBack={goBackToWelcome} />
+                );
+            case ViewState.SETTINGS:
+                return (
+                    <SettingsView onBack={goBackToWelcome} />
                 );
             case ViewState.WELCOME:
             default:
@@ -477,7 +487,7 @@ export const WelcomeView: React.FC = () => {
                     )}
                     <ConfigureBtn onClick={openConfigure}>
                         <span style={{ fontSize: 25 }}>⚙</span>
-                        <span>Configure</span>
+                        <span>Settings</span>
                     </ConfigureBtn>
                 </TopBtnSection>
                 <GetStartedBadge>Get Started</GetStartedBadge>

@@ -49,10 +49,11 @@ import {
     WebviewContext,
     FetchSamplesRequest,
     SemanticVersion,
+    SetConfigurationRequest,
     ValidateProjectFormRequest,
     ValidateProjectFormResponse
 } from "@wso2/wi-core";
-import { commands, window, workspace, MarkdownString, Uri, env } from "vscode";
+import { commands, window, workspace, MarkdownString, Uri, env, ConfigurationTarget } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import * as fs from "fs";
@@ -166,6 +167,16 @@ export class MainWsManager implements WIVisualizerAPI {
             const configValue = workspace.getConfiguration().get(params.section);
             resolve({ value: configValue });
         });
+    }
+
+    async setConfiguration(params: SetConfigurationRequest): Promise<void> {
+        const target = params.scope === "workspace"
+            ? ConfigurationTarget.Workspace
+            : params.scope === "workspaceFolder"
+                ? ConfigurationTarget.WorkspaceFolder
+                : ConfigurationTarget.Global;
+
+        await workspace.getConfiguration().update(params.section, params.value, target);
     }
 
     async getSupportedMIVersionsHigherThan(version: string): Promise<GetSupportedMIVersionsResponse> {
@@ -461,4 +472,3 @@ export class MainWsManager implements WIVisualizerAPI {
         await ext.context.workspaceState.update(cacheKey, undefined);
     }
 }
-

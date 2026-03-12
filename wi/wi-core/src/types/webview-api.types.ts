@@ -59,6 +59,14 @@ export interface GetConfigurationResponse {
     value: any;
 }
 
+export type ConfigurationScope = "global" | "workspace" | "workspaceFolder";
+
+export interface SetConfigurationRequest {
+    section: string;
+    value: any;
+    scope?: ConfigurationScope;
+}
+
 export interface GetSubFoldersRequest {
     path: string;
 }
@@ -288,6 +296,7 @@ export interface WIVisualizerAPI {
     selectFileOrFolderPath: () => Promise<FileOrDirResponse>;
     getWorkspaceRoot: () => Promise<WorkspaceRootResponse>;
     getConfiguration: (params: GetConfigurationRequest) => Promise<GetConfigurationResponse>;
+    setConfiguration: (params: SetConfigurationRequest) => Promise<void>;
     getSupportedMIVersionsHigherThan: (version: string) => Promise<GetSupportedMIVersionsResponse>;
     getSubFolderNames: (params: GetSubFoldersRequest) => Promise<GetSubFoldersResponse>;
     askProjectDirPath: () => Promise<ProjectDirResponse>;

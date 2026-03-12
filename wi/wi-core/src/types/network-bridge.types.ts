@@ -28,6 +28,7 @@ import {
     FileOrDirResponse,
     GetConfigurationRequest,
     GetConfigurationResponse,
+    SetConfigurationRequest,
     GetMigrationToolsResponse,
     GetSubFoldersRequest,
     GetSubFoldersResponse,
@@ -99,6 +100,7 @@ export interface WIWsMethodParamsMap {
     selectFileOrFolderPath: void;
     getWorkspaceRoot: void;
     getConfiguration: GetConfigurationRequest;
+    setConfiguration: SetConfigurationRequest;
     getSupportedMIVersionsHigherThan: string;
     getSubFolderNames: GetSubFoldersRequest;
     askProjectDirPath: void;
@@ -155,6 +157,7 @@ export interface WIWsMethodResultMap {
     selectFileOrFolderPath: FileOrDirResponse;
     getWorkspaceRoot: WorkspaceRootResponse;
     getConfiguration: GetConfigurationResponse;
+    setConfiguration: void;
     getSupportedMIVersionsHigherThan: GetSupportedMIVersionsResponse;
     getSubFolderNames: GetSubFoldersResponse;
     askProjectDirPath: ProjectDirResponse;
