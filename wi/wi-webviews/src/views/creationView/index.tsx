@@ -188,6 +188,12 @@ const LoadingContainer = styled.div`
 
 export type RuntimeType = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 
+const RUNTIME_DISPLAY_LABEL: Record<RuntimeType, string> = {
+    "WSO2: BI": "Default",
+    "WSO2: MI": "WSO2: MI",
+    "WSO2: SI": "WSO2: SI",
+};
+
 const RUNTIME_HELP: Record<RuntimeType, string> = {
     "WSO2: BI": "Create a Ballerina integration with package and workspace options.",
     "WSO2: MI": "Create a Micro Integrator project with runtime version and advanced Maven settings.",
@@ -272,7 +278,7 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
                                     active={projectType === runtime}
                                     onClick={() => setProjectType(runtime)}
                                 >
-                                    {runtime}
+                                    {RUNTIME_DISPLAY_LABEL[runtime]}
                                 </RuntimeOptionButton>
                             ))}
                         </RuntimeOptions>
@@ -280,7 +286,7 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
                 )}
                 <FormPanel>
                     <FormPanelHeader>
-                        <FormPanelTitle>{projectType} Project</FormPanelTitle>
+                        <FormPanelTitle>{RUNTIME_DISPLAY_LABEL[projectType]} Project</FormPanelTitle>
                         <FormPanelSubtitle>{RUNTIME_HELP[projectType]}</FormPanelSubtitle>
                     </FormPanelHeader>
                     <FormBody>

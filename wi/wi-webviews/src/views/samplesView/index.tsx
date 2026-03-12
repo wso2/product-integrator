@@ -155,6 +155,12 @@ const Loader = styled.div`
 
 export type ProjectType = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 
+const RUNTIME_DISPLAY_LABEL: Record<ProjectType, string> = {
+    "WSO2: BI": "Default",
+    "WSO2: MI": "WSO2: MI",
+    "WSO2: SI": "WSO2: SI",
+};
+
 export function SamplesView({ onBack }: { onBack?: () => void }) {
     const [enabledRuntimes, setEnabledRuntimes] = useState<ProjectType[]>([]);
     const [projectType, setProjectType] = useState<ProjectType | "">("");
@@ -230,7 +236,7 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
                                     active={projectType === runtime}
                                     onClick={() => setProjectType(runtime)}
                                 >
-                                    {runtime}
+                                    {RUNTIME_DISPLAY_LABEL[runtime]}
                                 </RuntimeOptionButton>
                             ))}
                         </RuntimeOptions>
