@@ -96,9 +96,21 @@ export const IconButton = styled.button`
     font-size: 20px;
     border: 1px solid transparent;
     background: transparent;
+    appearance: none;
+    padding: 0;
+    line-height: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    margin-top: 2px;
+
+    & > * {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+
     &:hover {
         background-color: color-mix(in srgb, var(--wso2-brand-accent) 16%, transparent);
         border-color: color-mix(in srgb, var(--wso2-brand-accent) 45%, transparent);

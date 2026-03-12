@@ -174,10 +174,17 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
             <PageContainer>
                 <TitleContainer>
                     <IconButton type="button" onClick={onBack} title="Go back">
-                        <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
+                        <Icon
+                            name="arrow-left"
+                            isCodicon
+                            sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                            iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
+                        />
                     </IconButton>
                     <HeaderText>
-                        <Typography variant="h2">Migrate External Integration</Typography>
+                        <Typography variant="h2" sx={{ margin: 0, fontWeight: 600 }}>
+                            Migrate External Integration
+                        </Typography>
                         <HeaderSubtitle>
                             Convert your MuleSoft or TIBCO project into a new integration project.
                         </HeaderSubtitle>

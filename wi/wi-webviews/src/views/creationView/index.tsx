@@ -44,7 +44,7 @@ const PageContainer = styled.div`
 
 const HeaderRow = styled.header`
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 10px;
 `;
 
@@ -56,9 +56,20 @@ const BackButton = styled.button`
     font-size: 20px;
     border: 1px solid transparent;
     background: transparent;
+    appearance: none;
+    padding: 0;
+    line-height: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    margin-top: 2px;
+
+    & > * {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
 
     &:hover {
         background-color: color-mix(in srgb, var(--wso2-brand-accent) 16%, transparent);
@@ -258,7 +269,12 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
             <PageContainer>
                 <HeaderRow>
                     <BackButton type="button" onClick={gotToWelcome} title="Go back">
-                        <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
+                        <Icon
+                            name="arrow-left"
+                            isCodicon
+                            sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                            iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
+                        />
                     </BackButton>
                     <HeaderText>
                         <HeaderTitle variant="h2">Create New Project</HeaderTitle>
