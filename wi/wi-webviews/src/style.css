@@ -16,6 +16,26 @@
  * under the License.
  */
 
+:root {
+	--wso2-brand-primary: #F14E23;
+	--wso2-brand-primary-alt: #FF6700;
+	--wso2-brand-ink: #17223A;
+	--wso2-brand-ink-alt: #1B2A49;
+	--wso2-brand-accent: #5CD1FF;
+	--wso2-brand-accent-soft: #B7E4FC;
+	--wso2-brand-neutral-900: #0D0D0D;
+	--wso2-brand-neutral-700: #262626;
+	--wso2-brand-neutral-600: #565656;
+	--wso2-brand-neutral-300: #D9D9D9;
+	--wso2-brand-neutral-100: #F2F2F2;
+	--wso2-brand-white: #FFFFFF;
+
+	--button-primary-background: var(--wso2-brand-primary);
+	--button-primary-hover-background: var(--wso2-brand-primary-alt);
+	--button-secondary-background: var(--wso2-brand-ink-alt);
+	--button-secondary-hover-background: var(--wso2-brand-ink);
+}
+
 body {
 	margin: 0;
 	padding: 0;

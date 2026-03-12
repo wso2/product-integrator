@@ -45,7 +45,7 @@ const Wrapper = styled.div`
 `;
 
 const TopSection = styled.div`
-    background: linear-gradient(135deg, #667eea 0%, #204377 100%);
+    background: linear-gradient(120deg, var(--wso2-brand-ink) 0%, var(--wso2-brand-ink-alt) 58%, var(--wso2-brand-primary) 100%);
     padding: 40px 60px 80px;
     position: relative;
     display: flex;
@@ -84,15 +84,17 @@ const ConfigureBtn = styled.button`
         opacity: 0.5;
         cursor: not-allowed;
     }
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%);
     color: white;
 `;
 
 const SigninBtn = styled(ConfigureBtn)`
-    background: var(--vscode-button-background);
+    background: color-mix(in srgb, var(--wso2-brand-white) 18%, transparent);
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-white) 40%, transparent);
+    color: var(--wso2-brand-white);
     &:hover:not(:disabled) {
-        filter: brightness(1.2);
-        background: var(--vscode-button-background);
+        filter: none;
+        background: color-mix(in srgb, var(--wso2-brand-white) 28%, transparent);
     }
 `;
 
@@ -105,8 +107,8 @@ export const UserAvatar = styled.div`
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--vscode-button-background);
-    border: 1.5px solid color-mix(in srgb, var(--vscode-button-background) 60%, transparent);
+    background: color-mix(in srgb, var(--wso2-brand-white) 18%, transparent);
+    border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 45%, transparent);
     cursor: pointer;
     user-select: none;
     transition: all 0.2s ease;
@@ -127,7 +129,7 @@ export const UserAvatarImg = styled.img`
 export const UserInitial = styled.span`
     font-size: 14px;
     font-weight: 700;
-    color: var(--vscode-button-foreground);
+    color: var(--wso2-brand-white);
     line-height: 1;
     text-transform: uppercase;
 `;
@@ -136,7 +138,8 @@ export const UserInitial = styled.span`
 const GetStartedBadge = styled.div`
     display: inline-block;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: color-mix(in srgb, var(--wso2-brand-accent) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 65%, transparent);
     border-radius: 20px;
     padding: 8px 16px;
     margin-bottom: 24px;
@@ -158,7 +161,7 @@ const Caption = styled.p`
     font-size: 16px;
     line-height: 1.6;
     font-weight: 400;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--wso2-brand-neutral-100);
     margin: 16px 0 0 0;
     max-width: 800px;
 `;
@@ -226,7 +229,8 @@ const CardIcon = styled.div<CardIconProps>`
     display: flex;
     align-items: center;
     justify-content: center;
-    background: ${(props: CardIconProps) => props.bgColor || "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"};
+    background: ${(props: CardIconProps) =>
+            props.bgColor || "linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%)"};
     color: white;
     flex-shrink: 0;
     font-size: 26px;
@@ -487,7 +491,7 @@ export const WelcomeView: React.FC = () => {
                 <CardsGrid>
                     <ActionCard onClick={goToCreateProject}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">＋</CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%)">＋</CardIcon>
                         </CardIconContainer>
                         <CardContent>
                             <CardTitle>Create New Project</CardTitle>
@@ -504,7 +508,7 @@ export const WelcomeView: React.FC = () => {
 
                     <ActionCard onClick={handleProjectDirSelection}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, #fa709a 0%, #fee140 100%)">↗</CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink) 0%, var(--wso2-brand-ink-alt) 100%)">↗</CardIcon>
                         </CardIconContainer>
                         <CardContent>
                             <CardTitle>Open Project</CardTitle>
@@ -520,7 +524,7 @@ export const WelcomeView: React.FC = () => {
 
                     <ActionCard onClick={goToSamples}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)">★</CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-ink-alt) 100%)">★</CardIcon>
                         </CardIconContainer>
                         <CardContent>
                             <CardTitle>Explore Samples</CardTitle>
@@ -536,7 +540,7 @@ export const WelcomeView: React.FC = () => {
 
                     <ActionCard onClick={goToImportExternal}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)">⇄</CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-ink-alt) 100%)">⇄</CardIcon>
                         </CardIconContainer>
                         <CardContent>
                             <CardTitle>Import External Integration</CardTitle>

@@ -27,7 +27,7 @@ export function BetaSVG({ width = 40, height = 16 }) {
                 width="40"
                 height="16"
                 rx="8"
-                fill="#4A90E2"
+                fill="var(--wso2-brand-accent)"
                 opacity={0.5}
             />
             <text

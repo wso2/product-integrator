@@ -77,11 +77,11 @@
 }
 
 .bi-icon {
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	background: linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%);
 }
 
 .mi-icon {
-	background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+	background: linear-gradient(135deg, var(--wso2-brand-ink) 0%, var(--wso2-brand-ink-alt) 100%);
 }
 
 .integration-card h2 {
