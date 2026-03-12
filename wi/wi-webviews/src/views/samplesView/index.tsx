@@ -73,6 +73,11 @@ const BackButton = styled.button`
         background-color: color-mix(in srgb, var(--wso2-brand-accent) 16%, transparent);
         border-color: color-mix(in srgb, var(--wso2-brand-accent) 45%, transparent);
     }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
 `;
 
 const HeaderText = styled.div`
@@ -144,6 +149,11 @@ const RuntimeOptionButton = styled.button<{ active: boolean }>`
         background: ${({ active }: { active: boolean }) =>
             active ? "var(--wso2-brand-primary-alt)" : "var(--vscode-list-hoverBackground)"};
     }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
 `;
 
 const ContentPanel = styled.section`
@@ -160,7 +170,7 @@ const Loader = styled.div`
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100%;
+    min-height: 320px;
 `;
 
 export type ProjectType = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
@@ -215,9 +225,13 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
     // Show loading while fetching configuration
     if (isLoading) {
         return (
-            <Loader>
-                <ProgressIndicator />
-            </Loader>
+            <PageBackdrop>
+                <PageContainer>
+                    <Loader>
+                        <ProgressIndicator />
+                    </Loader>
+                </PageContainer>
+            </PageBackdrop>
         );
     }
 

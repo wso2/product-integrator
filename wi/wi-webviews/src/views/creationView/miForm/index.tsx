@@ -44,7 +44,7 @@ const initialEndpoint: InputsFields = {
 const DownloadLabel = styled.div`
     margin-top: 10px;
     font-size: 12px;
-    color: var(--wso2-brand-neutral-600);
+    color: var(--vscode-descriptionForeground);
 `;
 
 const ButtonWrapper = styled.div`

@@ -115,6 +115,11 @@ export const IconButton = styled.button`
         background-color: color-mix(in srgb, var(--wso2-brand-accent) 16%, transparent);
         border-color: color-mix(in srgb, var(--wso2-brand-accent) 45%, transparent);
     }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
 `;
 
 export const ButtonWrapper = styled.div`

@@ -96,6 +96,7 @@ const BackButton = styled.button`
     border-radius: 6px;
     width: 28px;
     height: 28px;
+    font-size: 20px;
     border: 1px solid transparent;
     background: transparent;
     appearance: none;
@@ -106,9 +107,21 @@ const BackButton = styled.button`
     align-items: center;
     justify-content: center;
 
+    & > * {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+
     &:hover {
         background-color: color-mix(in srgb, var(--wso2-brand-accent) 16%, transparent);
         border-color: color-mix(in srgb, var(--wso2-brand-accent) 45%, transparent);
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
     }
 `;
 
@@ -238,6 +251,11 @@ const SecondaryButton = styled.button`
     padding: 0 12px;
     font-size: 12px;
     cursor: pointer;
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
 `;
 
 const Loader = styled.div`
@@ -308,6 +326,11 @@ const ConfirmButton = styled.button<{ primary?: boolean }>`
     padding: 0 12px;
     font-size: 12px;
     cursor: pointer;
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
 `;
 
 export function SettingsView({ onBack }: { onBack?: () => void }) {

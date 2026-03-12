@@ -75,6 +75,11 @@ const BackButton = styled.button`
         background-color: color-mix(in srgb, var(--wso2-brand-accent) 16%, transparent);
         border-color: color-mix(in srgb, var(--wso2-brand-accent) 45%, transparent);
     }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
 `;
 
 const HeaderText = styled.div`
@@ -146,6 +151,11 @@ const RuntimeOptionButton = styled.button<{ active: boolean }>`
         background: ${({ active }: { active: boolean }) =>
             active ? "var(--wso2-brand-primary-alt)" : "var(--vscode-list-hoverBackground)"};
     }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
 `;
 
 const FormPanel = styled.section`
@@ -194,7 +204,7 @@ const LoadingContainer = styled.div`
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100%;
+    min-height: 320px;
 `;
 
 export type RuntimeType = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
@@ -258,9 +268,13 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
 
     if (isLoading) {
         return (
-            <LoadingContainer>
-                <ProgressIndicator />
-            </LoadingContainer>
+            <PageBackdrop>
+                <PageContainer>
+                    <LoadingContainer>
+                        <ProgressIndicator />
+                    </LoadingContainer>
+                </PageContainer>
+            </PageBackdrop>
         );
     }
 

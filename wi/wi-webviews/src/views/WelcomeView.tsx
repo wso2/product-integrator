@@ -19,6 +19,7 @@
 import React, { useRef, useState } from "react";
 import "./WelcomeView.css";
 import styled from "@emotion/styled";
+import { Codicon } from "@wso2/ui-toolkit";
 import { CreationView } from "./creationView";
 import { ImportIntegration } from "./ImportIntegration";
 import { SamplesView } from "./samplesView";
@@ -86,6 +87,11 @@ const ConfigureBtn = styled.button`
         opacity: 0.5;
         cursor: not-allowed;
     }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
     background: linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%);
     color: white;
 `;
@@ -100,7 +106,7 @@ const SigninBtn = styled(ConfigureBtn)`
     }
 `;
 
-export const UserAvatar = styled.div`
+export const UserAvatar = styled.button`
     width: 34px;
     height: 34px;
     border-radius: 50%;
@@ -114,10 +120,17 @@ export const UserAvatar = styled.div`
     cursor: pointer;
     user-select: none;
     transition: all 0.2s ease;
+    appearance: none;
+    padding: 0;
 
     &:hover {
         filter: brightness(1.2);
         transform: translateY(-1px);
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
     }
 `;
 
@@ -235,7 +248,13 @@ const CardIcon = styled.div<CardIconProps>`
             props.bgColor || "linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%)"};
     color: white;
     flex-shrink: 0;
-    font-size: 26px;
+    pointer-events: none;
+
+    i {
+        font-size: 24px;
+        color: var(--wso2-brand-white);
+        line-height: 1;
+    }
 `;
 
 const CardContent = styled.div`
@@ -285,6 +304,11 @@ const StyledButton = styled('button', {
     &:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
     }
 `;
 
@@ -389,7 +413,7 @@ export const WelcomeView: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
     const { authState } = useCloudContext();
     const [popoverOpen, setPopoverOpen] = useState(false);
-    const avatarRef = useRef<HTMLDivElement>(null);
+    const avatarRef = useRef<HTMLButtonElement>(null);
 
     const goToCreateProject = () => {
         setCurrentView(ViewState.CREATE_PROJECT);
@@ -485,8 +509,8 @@ export const WelcomeView: React.FC = () => {
                     ) : (
                         <SigninBtn type="button" onClick={handleSignIn}>Sign In</SigninBtn>
                     )}
-                    <ConfigureBtn onClick={openConfigure}>
-                        <span style={{ fontSize: 25 }}>⚙</span>
+                    <ConfigureBtn type="button" onClick={openConfigure}>
+                        <Codicon name="settings-gear" iconSx={{ fontSize: 16, color: "var(--wso2-brand-white)" }} />
                         <span>Settings</span>
                     </ConfigureBtn>
                 </TopBtnSection>
@@ -501,7 +525,9 @@ export const WelcomeView: React.FC = () => {
                 <CardsGrid>
                     <ActionCard onClick={goToCreateProject}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%)">＋</CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%)">
+                                <Codicon name="plus" />
+                            </CardIcon>
                         </CardIconContainer>
                         <CardContent>
                             <CardTitle>Create New Project</CardTitle>
@@ -518,7 +544,9 @@ export const WelcomeView: React.FC = () => {
 
                     <ActionCard onClick={handleProjectDirSelection}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink) 0%, var(--wso2-brand-ink-alt) 100%)">↗</CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink) 0%, var(--wso2-brand-ink-alt) 100%)">
+                                <Codicon name="file-text" />
+                            </CardIcon>
                         </CardIconContainer>
                         <CardContent>
                             <CardTitle>Open Project</CardTitle>
@@ -534,7 +562,9 @@ export const WelcomeView: React.FC = () => {
 
                     <ActionCard onClick={goToSamples}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-ink-alt) 100%)">★</CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-ink-alt) 100%)">
+                                <Codicon name="symbol-class" />
+                            </CardIcon>
                         </CardIconContainer>
                         <CardContent>
                             <CardTitle>Explore Samples</CardTitle>
@@ -550,7 +580,9 @@ export const WelcomeView: React.FC = () => {
 
                     <ActionCard onClick={goToImportExternal}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-ink-alt) 100%)">⇄</CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-ink-alt) 100%)">
+                                <Codicon name="arrow-swap" />
+                            </CardIcon>
                         </CardIconContainer>
                         <CardContent>
                             <CardTitle>Import External Integration</CardTitle>
