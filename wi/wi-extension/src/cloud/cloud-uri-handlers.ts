@@ -50,12 +50,12 @@ export function activateURIHandlers() {
 			if (uri.path === "/signin") {
 				try {
 					isRpcActive(ext);
-					ext.log("WSO2 Platform Login Callback hit");
+					ext.log("WSO2 Integrator Login Callback hit");
 					const urlParams = new URLSearchParams(uri.query);
 					const authCode = urlParams.get("code");
 					const region = urlParams.get("region") || "";
 					if (authCode) {
-						ext.log("Initiating WSO2 Platform sign in flow from auth code");
+						ext.log("Initiating WSO2 Integrator sign in flow from auth code");
 						window.withProgress(
 							{
 								title: `Verifying user details and logging into ${ext.terminologies?.cloudName}...`,
@@ -85,13 +85,13 @@ export function activateURIHandlers() {
 									if (!(error instanceof ResponseError) || ![ErrorCode.NoOrgsAvailable, ErrorCode.NoAccountAvailable].includes(error.code)) {
 										window.showErrorMessage("Sign in failed. Please check the logs for more details.");
 									}
-									ext.logError(`WSO2 Platform sign in Failed: ${error.message}`, error as Error);
+									ext.logError(`WSO2 Integrator sign in Failed: ${error.message}`, error as Error);
 								}
 							},
 						);
 					} else {
-						ext.logError("WSO2 Platform Login Failed: Authorization code not found!", new Error("No auth code"));
-						window.showErrorMessage("WSO2 Platform Login Failed: Authorization code not found!");
+						ext.logError("WSO2 Integrator Login Failed: Authorization code not found!", new Error("No auth code"));
+						window.showErrorMessage("WSO2 Integrator Login Failed: Authorization code not found!");
 					}
 				} catch (err: any) {
 					console.error("Failed to handle /signin uri handler", err);
@@ -100,7 +100,7 @@ export function activateURIHandlers() {
 			} else if (uri.path === "/ghapp") {
 				try {
 					isRpcActive(ext);
-					ext.log("WSO2 Platform Github auth Callback hit");
+					ext.log("WSO2 Integrator Github auth Callback hit");
 					const urlParams = new URLSearchParams(uri.query);
 					const authCode = urlParams.get("code");
 					const orgId = urlParams.get("orgId");
