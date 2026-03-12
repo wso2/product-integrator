@@ -592,7 +592,7 @@ export const WelcomeView: React.FC = () => {
                     <ActionCard onClick={goToCreateProject}>
                         <CardIconContainer>
                             <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%)">
-                                <Codicon name="plus" />
+                                <Codicon name="plus" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
                         <CardContent>
@@ -611,7 +611,7 @@ export const WelcomeView: React.FC = () => {
                     <ActionCard onClick={handleProjectDirSelection}>
                         <CardIconContainer>
                             <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink) 0%, var(--wso2-brand-ink-alt) 100%)">
-                                <Codicon name="file-text" />
+                                <Codicon name="file-text" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
                         <CardContent>
@@ -629,7 +629,7 @@ export const WelcomeView: React.FC = () => {
                     <ActionCard onClick={goToSamples}>
                         <CardIconContainer>
                             <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-ink-alt) 100%)">
-                                <Codicon name="symbol-class" />
+                                <Codicon name="symbol-class" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
                         <CardContent>
@@ -647,7 +647,7 @@ export const WelcomeView: React.FC = () => {
                     <ActionCard onClick={goToImportExternal}>
                         <CardIconContainer>
                             <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-ink-alt) 100%)">
-                                <Codicon name="arrow-swap" />
+                                <Codicon name="arrow-swap" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
                         <CardContent>
