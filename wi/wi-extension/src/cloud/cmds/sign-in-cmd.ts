@@ -31,10 +31,10 @@ export function signInCommand(context: ExtensionContext) {
 				isRpcActive(ext);
 				// Cancel any pending session creation from accounts menu
 				ext.authProvider?.cancelPendingSessionCreation();
-				ext.log("Signing in to WSO2 Platform");
+				ext.log("Signing in to WSO2 Integrator");
 				const callbackUrl = await vscode.env.asExternalUri(vscode.Uri.parse(`${vscode.env.uriScheme}://wso2.wso2-integrator/signin`));
 
-				console.log("Generating WSO2 Platform login URL for ", callbackUrl.toString());
+				ext.log("Generating WSO2 Integrator login URL for " + callbackUrl.toString());
 				const loginUrl = await window.withProgress({ title: "Generating Login URL...", location: ProgressLocation.Notification }, async () => {
 					if (webviewStateStore.getState().state?.extensionName === "Devant") {
 						return ext.clients.rpcClient.getDevantSignInUrl({ callbackUrl: callbackUrl.toString() });
@@ -49,7 +49,7 @@ export function signInCommand(context: ExtensionContext) {
 					window.showErrorMessage("Unable to open external link for authentication.");
 				}
 			} catch (error: any) {
-				ext.logError(`Error while signing in to WSO2 Platform. ${error?.message}${error?.cause ? `\nCause: ${error.cause.message}` : ""}`, error as Error);
+				ext.logError(`Error while signing in to WSO2 Integrator. ${error?.message}${error?.cause ? `\nCause: ${error.cause.message}` : ""}`, error as Error);
 				if (error instanceof Error) {
 					window.showErrorMessage(error.message);
 				}
