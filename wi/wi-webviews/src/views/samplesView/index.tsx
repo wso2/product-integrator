@@ -173,6 +173,28 @@ const Loader = styled.div`
     min-height: 320px;
 `;
 
+const EmptyState = styled.div`
+    margin-top: calc(50vh - 150px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    color: var(--vscode-descriptionForeground);
+`;
+
+const EmptyStateContent = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    max-width: 420px;
+`;
+
+const EmptyStateMessage = styled(Typography)`
+    margin: 0;
+`;
+
 export type ProjectType = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 
 const RUNTIME_DISPLAY_LABEL: Record<ProjectType, string> = {
@@ -187,7 +209,7 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
     const [isLoading, setIsLoading] = useState(true);
     const { wsClient } = useVisualizerContext();
 
-    // Load enabled runtimes from VS Code configuration (three individual boolean settings)
+    // Load enabled runtimes from VS Code configuration (BI/MI supported in samples view)
     useEffect(() => {
         const loadDefaultRuntime = async () => {
             try {
@@ -200,14 +222,22 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
                 const runtimes: ProjectType[] = [];
                 if (biResp?.value === true) { runtimes.push("WSO2: BI"); }
                 if (miResp?.value === true) { runtimes.push("WSO2: MI"); }
-                if (siResp?.value === true) { runtimes.push("WSO2: SI"); }
+                // Intentionally ignore SI runtime in samples view until SI samples are available.
 
-                // Enforce at least one runtime (extension will have already corrected settings)
-                const resolved = runtimes.length > 0 ? runtimes : ["WSO2: BI" as ProjectType];
-                setEnabledRuntimes(resolved);
-                setProjectType(resolved[0]);
+                if (runtimes.length > 0) {
+                    setEnabledRuntimes(runtimes);
+                    setProjectType(runtimes[0]);
+                } else if (siResp?.value === true) {
+                    setEnabledRuntimes([]);
+                    setProjectType("");
+                } else {
+                    setEnabledRuntimes(["WSO2: BI"]);
+                    setProjectType("WSO2: BI");
+                }
             } catch (error) {
                 console.warn("Failed to load default integrator config, using fallback:", error);
+                setEnabledRuntimes(["WSO2: BI"]);
+                setProjectType("WSO2: BI");
             } finally {
                 setIsLoading(false);
             }
@@ -272,7 +302,23 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
                     </RuntimePanel>
                 )}
                 <ContentPanel>
-                    {projectType && <SamplesContainer projectType={projectType as ProjectType} />}
+                    {projectType ? (
+                        <SamplesContainer projectType={projectType as ProjectType} />
+                    ) : (
+                        <EmptyState>
+                            <EmptyStateContent>
+                                <EmptyStateMessage variant="body2">
+                                    Samples for WSO2: SI are not available yet.
+                                </EmptyStateMessage>
+                                <Icon
+                                    name="info"
+                                    isCodicon
+                                    sx={{ width: "28px", height: "28px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                                    iconSx={{ color: "var(--vscode-descriptionForeground)", fontSize: "24px", lineHeight: 1 }}
+                                />
+                            </EmptyStateContent>
+                        </EmptyState>
+                    )}
                 </ContentPanel>
             </PageContainer>
         </PageBackdrop>
