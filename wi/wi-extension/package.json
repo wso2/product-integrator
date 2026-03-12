@@ -105,7 +105,7 @@
       },
       {
         "view": "wso2-integrator.explorer",
-        "contents": "Welcome to WSO2 Integrator.\n[Get Started](command:wso2.integrator.openWelcome)",
+        "contents": "$(rocket) Build integration solutions with WSO2 Integrator.\n\nUse the welcome page to create a new project, explore samples, import external integrations, and manage runtime settings.\n\nOpen an integration project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
         "when": "WI.projectType == 'none'"
       }
     ],

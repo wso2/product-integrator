@@ -122,8 +122,8 @@ export function ImportIntegrationForm({
     return (
         <>
             <BodyText>
-                This wizard converts an external integration project from MuleSoft or TIBCO into a ready-to-use BI
-                project.
+                This wizard converts an external integration project from MuleSoft or TIBCO into a ready-to-use
+                Default integration project.
             </BodyText>
             <Typography variant="h3" sx={{ marginTop: 20 }}>
                 Choose the source platform
@@ -187,7 +187,7 @@ export function ImportIntegrationForm({
                     primaryButton={{
                         text: "Start Migration",
                         onClick: handleImportIntegration,
-                        disabled: false
+                        disabled: isImportDisabled
                     }}
                     secondaryButton={{
                         text: "Back",

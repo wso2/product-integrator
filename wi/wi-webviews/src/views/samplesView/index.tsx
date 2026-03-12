@@ -16,46 +16,170 @@
  * under the License.
  */
 
-import { useState, useEffect } from "react";
-import {
-    Icon,
-    Typography,
-    ProgressIndicator,
-} from "@wso2/ui-toolkit";
+import { useEffect, useState } from "react";
+import { Icon, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../contexts/WsContext";
 import { SamplesContainer } from "./SamplesContainer";
-import { IntegrationTypeSelector } from "../../components/IntegrationTypeSelector";
 
-const FormContainer = styled.div`
+const PageBackdrop = styled.div`
+    min-height: 100vh;
+    padding: 28px 30px 24px;
+    background:
+        radial-gradient(circle at 88% 0%, color-mix(in srgb, var(--wso2-brand-accent) 12%, transparent) 0%, transparent 36%),
+        radial-gradient(circle at 8% 100%, color-mix(in srgb, var(--wso2-brand-primary) 8%, transparent) 0%, transparent 42%),
+        var(--vscode-editor-background);
+`;
+
+const PageContainer = styled.div`
+    max-width: 1180px;
+    margin: 0 auto;
     display: flex;
     flex-direction: column;
-    margin: 80px 120px;
+    gap: 16px;
+    min-height: calc(100vh - 52px);
 `;
 
-const TitleContainer = styled.div`
+const Header = styled.header`
     display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 32px;
+    align-items: flex-start;
+    gap: 10px;
 `;
 
-const IconButton = styled.div`
+const BackButton = styled.button`
     cursor: pointer;
-    border-radius: 4px;
-    width: 20px;
-    height: 20px;
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
     font-size: 20px;
+    border: 1px solid transparent;
+    background: transparent;
+    appearance: none;
+    padding: 0;
+    line-height: 1;
+    margin-top: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    & > * {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+
     &:hover {
-        background-color: var(--vscode-toolbar-hoverBackground);
+        background-color: color-mix(in srgb, var(--wso2-brand-accent) 16%, transparent);
+        border-color: color-mix(in srgb, var(--wso2-brand-accent) 45%, transparent);
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
     }
 `;
 
-const DropdownContainer = styled.div`
-    margin-bottom: 20px;
+const HeaderText = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+`;
+
+const HeaderTitle = styled(Typography)`
+    margin: 0;
+    font-weight: 600;
+`;
+
+const HeaderSubtitle = styled.p`
+    margin: 0;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+`;
+
+const RuntimePanel = styled.div`
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 14%, var(--vscode-panel-border));
+    background: var(--vscode-editor-background);
+    width: fit-content;
+`;
+
+const RuntimeLabel = styled.span`
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+`;
+
+const RuntimeOptions = styled.div`
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px;
+`;
+
+const RuntimeOptionButton = styled.button<{ active: boolean }>`
+    border: 1px solid
+        ${(props: { active: boolean }) =>
+            props.active
+                ? "var(--wso2-brand-primary)"
+                : "var(--vscode-input-border)"};
+    background:
+        ${(props: { active: boolean }) =>
+            props.active
+                ? "var(--wso2-brand-primary)"
+                : "var(--vscode-input-background)"};
+    color:
+        ${(props: { active: boolean }) =>
+            props.active ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)"};
+    border-radius: 999px;
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+
+    &:hover {
+        border-color: ${({ active }: { active: boolean }) =>
+            active ? "var(--wso2-brand-primary-alt)" : "var(--vscode-focusBorder)"};
+        background: ${({ active }: { active: boolean }) =>
+            active ? "var(--wso2-brand-primary-alt)" : "var(--vscode-list-hoverBackground)"};
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
+`;
+
+const ContentPanel = styled.section`
+    flex: 1;
+    min-height: 0;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 16%, var(--vscode-panel-border));
+    background: var(--vscode-editor-background);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
+    overflow: hidden;
+`;
+
+const Loader = styled.div`
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 320px;
 `;
 
 export type ProjectType = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
+
+const RUNTIME_DISPLAY_LABEL: Record<ProjectType, string> = {
+    "WSO2: BI": "Default",
+    "WSO2: MI": "WSO2: MI",
+    "WSO2: SI": "WSO2: SI",
+};
 
 export function SamplesView({ onBack }: { onBack?: () => void }) {
     const [enabledRuntimes, setEnabledRuntimes] = useState<ProjectType[]>([]);
@@ -101,30 +225,56 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
     // Show loading while fetching configuration
     if (isLoading) {
         return (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100px' }}>
-                <ProgressIndicator />
-            </div>
+            <PageBackdrop>
+                <PageContainer>
+                    <Loader>
+                        <ProgressIndicator />
+                    </Loader>
+                </PageContainer>
+            </PageBackdrop>
         );
     }
 
     return (
-        <div style={{ position: 'absolute', background: 'var(--vscode-editor-background)', height: '100%', width: '100%' }} >
-            <FormContainer>
-                <TitleContainer>
-                    <IconButton onClick={gotToWelcome}>
-                        <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
-                    </IconButton>
-                    <Typography variant="h2">Create using samples</Typography>
-                </TitleContainer>
+        <PageBackdrop>
+            <PageContainer>
+                <Header>
+                    <BackButton type="button" onClick={gotToWelcome} title="Go back">
+                        <Icon
+                            name="arrow-left"
+                            isCodicon
+                            sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                            iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
+                        />
+                    </BackButton>
+                    <HeaderText>
+                        <HeaderTitle variant="h2">Browse Samples</HeaderTitle>
+                        <HeaderSubtitle>
+                            Start quickly by downloading a curated integration sample for your selected runtime.
+                        </HeaderSubtitle>
+                    </HeaderText>
+                </Header>
                 {enabledRuntimes.length > 1 && (
-                    <IntegrationTypeSelector
-                        value={projectType as ProjectType}
-                        options={enabledRuntimes.map((r) => ({ label: r, value: r }))}
-                        onChange={(value) => setProjectType(value as ProjectType)}
-                    />
+                    <RuntimePanel>
+                        <RuntimeLabel>Runtime</RuntimeLabel>
+                        <RuntimeOptions>
+                            {enabledRuntimes.map((runtime: ProjectType) => (
+                                <RuntimeOptionButton
+                                    type="button"
+                                    key={runtime}
+                                    active={projectType === runtime}
+                                    onClick={() => setProjectType(runtime)}
+                                >
+                                    {RUNTIME_DISPLAY_LABEL[runtime]}
+                                </RuntimeOptionButton>
+                            ))}
+                        </RuntimeOptions>
+                    </RuntimePanel>
                 )}
-                {projectType && <SamplesContainer projectType={projectType as ProjectType} />}
-            </FormContainer>
-        </div>
+                <ContentPanel>
+                    {projectType && <SamplesContainer projectType={projectType as ProjectType} />}
+                </ContentPanel>
+            </PageContainer>
+        </PageBackdrop>
     );
 }

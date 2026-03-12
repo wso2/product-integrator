@@ -26,6 +26,7 @@ import {
     FetchSamplesRequest,
     FileOrDirRequest,
     GetConfigurationRequest,
+    SetConfigurationRequest,
     GetSubFoldersRequest,
     ImportIntegrationWsRequest,
     MigrateRequest,
@@ -214,6 +215,7 @@ export class BridgeLayer {
         }
 
         registerRoute("getWebviewContext", async () => wsManager.getWebviewContext());
+        registerRoute("getRecentProjects", async () => wsManager.getRecentProjects());
         registerRoute("closeWebview", async () => wsManager.closeWebview());
         registerRoute("openBiExtension", async () => wsManager.openBiExtension());
         registerRoute("openMiExtension", async () => wsManager.openMiExtension());
@@ -226,6 +228,9 @@ export class BridgeLayer {
         registerRoute("getWorkspaceRoot", async () => wsManager.getWorkspaceRoot());
         registerRoute("getConfiguration", async (request) =>
             wsManager.getConfiguration(request.params as GetConfigurationRequest)
+        );
+        registerRoute("setConfiguration", async (request) =>
+            wsManager.setConfiguration(request.params as SetConfigurationRequest)
         );
         registerRoute("getSupportedMIVersionsHigherThan", async (request) =>
             wsManager.getSupportedMIVersionsHigherThan(request.params)

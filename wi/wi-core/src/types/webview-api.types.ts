@@ -39,6 +39,17 @@ export interface RunCommandResponse {
     error?: string;
 }
 
+export interface RecentProjectItem {
+    path: string;
+    label: string;
+    description?: string;
+    isWorkspace?: boolean;
+}
+
+export interface GetRecentProjectsResponse {
+    projects: RecentProjectItem[];
+}
+
 export interface FileOrDirResponse {
     path: string;
 }
@@ -57,6 +68,14 @@ export interface GetConfigurationRequest {
 
 export interface GetConfigurationResponse {
     value: any;
+}
+
+export type ConfigurationScope = "global" | "workspace" | "workspaceFolder";
+
+export interface SetConfigurationRequest {
+    section: string;
+    value: any;
+    scope?: ConfigurationScope;
 }
 
 export interface GetSubFoldersRequest {
@@ -279,6 +298,7 @@ export interface SetWebviewCacheParams {
 }
 export interface WIVisualizerAPI {
     getWebviewContext: () => Promise<WebviewContext>;
+    getRecentProjects: () => Promise<GetRecentProjectsResponse>;
     closeWebview: () => void;
     openBiExtension: () => void;
     openMiExtension: () => void;
@@ -288,6 +308,7 @@ export interface WIVisualizerAPI {
     selectFileOrFolderPath: () => Promise<FileOrDirResponse>;
     getWorkspaceRoot: () => Promise<WorkspaceRootResponse>;
     getConfiguration: (params: GetConfigurationRequest) => Promise<GetConfigurationResponse>;
+    setConfiguration: (params: SetConfigurationRequest) => Promise<void>;
     getSupportedMIVersionsHigherThan: (version: string) => Promise<GetSupportedMIVersionsResponse>;
     getSubFolderNames: (params: GetSubFoldersRequest) => Promise<GetSubFoldersResponse>;
     askProjectDirPath: () => Promise<ProjectDirResponse>;
