@@ -50,7 +50,8 @@ import {
     FetchSamplesRequest,
     SemanticVersion,
     ValidateProjectFormRequest,
-    ValidateProjectFormResponse
+    ValidateProjectFormResponse,
+    DefaultOrgNameResponse
 } from "@wso2/wi-core";
 import { commands, window, workspace, MarkdownString, Uri, env } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
@@ -355,7 +356,7 @@ export class MainWsManager implements WIVisualizerAPI {
     }
 
     async validateProjectPath(params: ValidateProjectFormRequest): Promise<ValidateProjectFormResponse> {
-        return validateProjectPath(params.projectPath, params.projectName, params.createDirectory);
+        return validateProjectPath(params.projectPath, params.projectName, params.createDirectory, params.createAsWorkspace);
     }
 
     async migrateProject(params: MigrateRequest): Promise<void> {
@@ -459,6 +460,10 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async clearWebviewCache(cacheKey: string): Promise<void> {
         await ext.context.workspaceState.update(cacheKey, undefined);
+    }
+
+    async getDefaultOrgName(): Promise<DefaultOrgNameResponse> {
+        return { orgName: getUsername() };
     }
 }
 

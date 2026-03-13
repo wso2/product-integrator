@@ -22,6 +22,8 @@ import styled from "@emotion/styled";
 import { CreationView } from "./creationView";
 import { ImportIntegration } from "./ImportIntegration";
 import { SamplesView } from "./samplesView";
+import { LibraryCreationView } from "./libraryCreationView";
+import { ProjectCreationView } from "./projectCreationView";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
 import { WICommandIds } from "@wso2/wso2-platform-core";
@@ -29,9 +31,11 @@ import { UserAccountPopover } from "./UserAccountPopover";
 
 enum ViewState {
     WELCOME = "welcome",
-    CREATE_PROJECT = "create_project",
+    CREATE_INTEGRATION = "create_integration",
     SAMPLES = "samples",
-    IMPORT_EXTERNAL = "import_external"
+    IMPORT_EXTERNAL = "import_external",
+    CREATE_LIBRARY = "create_library",
+    CREATE_PROJECT = "create_project",
 }
 
 const Wrapper = styled.div`
@@ -62,7 +66,7 @@ const TopBtnSection = styled.div`
 `;
 
 const ConfigureBtn = styled.button`
-    
+
     height: 33px;
     font-size: 14px;
     font-weight: 500;
@@ -198,6 +202,7 @@ const ActionCard = styled.div<ActionCardProps>`
     transition: all 0.3s ease;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
     min-height: 280px;
+    cursor: pointer;
 
     &:hover {
         ${(props: ActionCardProps) =>
@@ -289,104 +294,101 @@ const ButtonContent = styled.div`
     gap: 8px;
 `;
 
-const BottomSection = styled.div`
-    padding: 10px 60px 10px 60px;
-    text-align: center;
-`;
+// ── More / secondary section ──────────────────────────────────────────────────
 
-const AlreadyHaveText = styled.div`
-    font-size: 14px;
-    color: var(--vscode-foreground);
-    opacity: 0.6;
-    margin-bottom: 32px;
-    
-    a {
-        color: var(--vscode-textLink-foreground);
-        text-decoration: none;
-        font-weight: 400;
-        margin-left: 6px;
-        cursor: pointer;
-        
-        &:hover {
-            color: var(--vscode-textLink-activeForeground);
-            text-decoration: underline;
-        }
-    }
-`;
-
-const RecentProjectsSection = styled.div`
-    max-width: 900px;
-    margin: 0 auto;
-`;
-
-const RecentProjectsHeader = styled.div`
+const MoreToggleWrapper = styled.div`
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    padding: 0 4px;
+    gap: 16px;
+    margin: 28px 0 20px;
 `;
 
-const RecentProjectsTitle = styled.h3`
-    font-size: 13px;
-    font-weight: 400;
-    color: var(--vscode-foreground);
-    opacity: 0.6;
-    margin: 0;
-    text-transform: capitalize;
+const MoreDivider = styled.div`
+    flex: 1;
+    height: 1px;
+    background: var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
 `;
 
-const ViewAllLink = styled.a`
-    font-size: 13px;
-    color: var(--vscode-textLink-foreground);
-    text-decoration: none;
-    cursor: pointer;
-    font-weight: 400;
-    
-    &:hover {
-        color: var(--vscode-textLink-activeForeground);
-        text-decoration: underline;
-    }
-`;
-
-const ProjectsList = styled.div`
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px 16px;
-    text-align: left;
-`;
-
-const ProjectItem = styled.div`
+const MoreToggleButton = styled.button`
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 8px 4px;
+    gap: 6px;
+    padding: 6px 18px;
+    background: transparent;
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+    border-radius: 20px;
+    color: var(--vscode-descriptionForeground);
     font-size: 13px;
-    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
     cursor: pointer;
-    transition: all 0.15s ease;
-    border-radius: 4px;
-    
+    transition: all 0.2s ease;
+    white-space: nowrap;
+
     &:hover {
         background: var(--vscode-list-hoverBackground);
+        color: var(--vscode-foreground);
+        border-color: var(--vscode-focusBorder, rgba(128, 128, 128, 0.5));
     }
 `;
 
-const ProjectPath = styled.span`
-    color: var(--vscode-descriptionForeground);
-    font-size: 12px;
-    margin-left: 12px;
+const MoreChevron = styled.span`
+    display: inline-block;
+    transition: transform 0.25s ease;
+    font-size: 11px;
+    line-height: 1;
 `;
+
+const SecondaryCardsSection = styled.div`
+    overflow: hidden;
+    transition: max-height 0.4s ease, opacity 0.3s ease;
+`;
+
+const SecondaryActionCard = styled.div`
+    background: color-mix(in srgb, var(--vscode-editor-background) 85%, var(--vscode-sideBar-background) 15%);
+    border-radius: 12px;
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.15));
+    min-height: 260px;
+    cursor: pointer;
+
+    &:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14);
+        border-color: var(--vscode-focusBorder, rgba(128, 128, 128, 0.35));
+    }
+`;
+
+const SecondaryCardsGrid = styled.div`
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    padding-top: 6px;
+
+    @media (max-width: 1000px) {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (max-width: 640px) {
+        grid-template-columns: 1fr;
+    }
+`;
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const WelcomeView: React.FC = () => {
     const { wsClient } = useVisualizerContext();
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
     const { authState } = useCloudContext();
     const [popoverOpen, setPopoverOpen] = useState(false);
+    const [showSecondary, setShowSecondary] = useState(false);
     const avatarRef = useRef<HTMLDivElement>(null);
 
-    const goToCreateProject = () => {
-        setCurrentView(ViewState.CREATE_PROJECT);
+    const goToCreateIntegration = () => {
+        setCurrentView(ViewState.CREATE_INTEGRATION);
     };
 
     const goToSamples = () => {
@@ -395,6 +397,14 @@ export const WelcomeView: React.FC = () => {
 
     const goToImportExternal = () => {
         setCurrentView(ViewState.IMPORT_EXTERNAL);
+    };
+
+    const goToCreateLibrary = () => {
+        setCurrentView(ViewState.CREATE_LIBRARY);
+    };
+
+    const goToCreateProject = () => {
+        setCurrentView(ViewState.CREATE_PROJECT);
     };
 
     const handleProjectDirSelection = async () => {
@@ -412,33 +422,18 @@ export const WelcomeView: React.FC = () => {
         wsClient.openSettings('integrator.enabledRuntimes');
     };
 
-    const openProject = () => {
-        // Add open existing project action here
-        console.log("Open existing project");
-    };
-
-    // Sample recent projects data - replace with actual data
-    const recentProjects = [
-        { name: "vscode-extensions", path: "~/Documents/vscode-extension" },
-        { name: "evox-esports-site", path: "~/Documents" },
-        { name: "iso-consultancy-portal", path: "~/Documents/ISOWeb" },
-        { name: "ISOWeb", path: "~/Documents" },
-        { name: "Documents", path: "~" },
-    ];
-
-    // Helper function to render current view content
     const renderCurrentView = () => {
         switch (currentView) {
-            case ViewState.CREATE_PROJECT:
+            case ViewState.CREATE_INTEGRATION:
                 return <CreationView onBack={goBackToWelcome} />;
             case ViewState.SAMPLES:
-                return (
-                    <SamplesView onBack={goBackToWelcome} />
-                );
+                return <SamplesView onBack={goBackToWelcome} />;
             case ViewState.IMPORT_EXTERNAL:
-                return (
-                    <ImportIntegration onBack={goBackToWelcome} />
-                );
+                return <ImportIntegration onBack={goBackToWelcome} />;
+            case ViewState.CREATE_LIBRARY:
+                return <LibraryCreationView onBack={goBackToWelcome} />;
+            case ViewState.CREATE_PROJECT:
+                return <ProjectCreationView onBack={goBackToWelcome} />;
             case ViewState.WELCOME:
             default:
                 return renderWelcomeContent();
@@ -484,19 +479,20 @@ export const WelcomeView: React.FC = () => {
             </TopSection>
 
             <CardsContainer>
+                {/* Primary action cards */}
                 <CardsGrid>
-                    <ActionCard onClick={goToCreateProject}>
+                    <ActionCard onClick={goToCreateIntegration}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">＋</CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, #667eea 0%, #764ba2 100%)">⇌</CardIcon>
                         </CardIconContainer>
                         <CardContent>
-                            <CardTitle>Create New Project</CardTitle>
+                            <CardTitle>Create New Integration</CardTitle>
                             <CardDescription>
-                                Ready to build? Start a new integration project using our intuitive graphical designer.
+                                Ready to build? Start a new integration using our intuitive graphical designer.
                             </CardDescription>
                             <StyledButton
                                 isPrimary={true}
-                                onClick={(e: any) => { e.stopPropagation(); goToCreateProject(); }}>
+                                onClick={(e: any) => { e.stopPropagation(); goToCreateIntegration(); }}>
                                 <ButtonContent>Create</ButtonContent>
                             </StyledButton>
                         </CardContent>
@@ -534,22 +530,92 @@ export const WelcomeView: React.FC = () => {
                         </CardContent>
                     </ActionCard>
 
-                    <ActionCard onClick={goToImportExternal}>
+                    <ActionCard onClick={goToSamples}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)">⇄</CardIcon>
+                            <CardIcon bgColor="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)">☰</CardIcon>
                         </CardIconContainer>
                         <CardContent>
-                            <CardTitle>Import External Integration</CardTitle>
+                            <CardTitle>Pre-built Integrations</CardTitle>
                             <CardDescription>
-                                Have an integration from another platform? Import your MuleSoft or TIBCO integration project and continue building.
+                                Browse and deploy ready-made integration templates and pre-built connectors directly from our catalog.
                             </CardDescription>
                             <StyledButton
-                                onClick={(e: any) => { e.stopPropagation(); goToImportExternal(); }}>
-                                <ButtonContent>Import</ButtonContent>
+                                onClick={(e: any) => { e.stopPropagation(); goToSamples(); }}>
+                                <ButtonContent>Browse</ButtonContent>
                             </StyledButton>
                         </CardContent>
                     </ActionCard>
                 </CardsGrid>
+
+                {/* More actions toggle */}
+                <MoreToggleWrapper>
+                    <MoreDivider />
+                    <MoreToggleButton onClick={() => setShowSecondary(!showSecondary)}>
+                        <span>{showSecondary ? 'Show less' : 'More actions'}</span>
+                        <MoreChevron style={{ transform: showSecondary ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                            ▾
+                        </MoreChevron>
+                    </MoreToggleButton>
+                    <MoreDivider />
+                </MoreToggleWrapper>
+
+                {/* Secondary action cards — expandable */}
+                <SecondaryCardsSection
+                    style={{
+                        maxHeight: showSecondary ? '800px' : '0',
+                        opacity: showSecondary ? 1 : 0,
+                    }}
+                >
+                    <SecondaryCardsGrid>
+                        <SecondaryActionCard onClick={goToCreateLibrary}>
+                            <CardIconContainer>
+                                <CardIcon bgColor="linear-gradient(135deg, #4ecdc4 0%, #1a9691 100%)">⊞</CardIcon>
+                            </CardIconContainer>
+                            <CardContent>
+                                <CardTitle>Create Library</CardTitle>
+                                <CardDescription>
+                                    Build a reusable library of integration components, transformers, and utilities to share across multiple projects.
+                                </CardDescription>
+                                <StyledButton
+                                    onClick={(e: any) => { e.stopPropagation(); goToCreateLibrary(); }}>
+                                    <ButtonContent>Create Library</ButtonContent>
+                                </StyledButton>
+                            </CardContent>
+                        </SecondaryActionCard>
+
+                        <SecondaryActionCard onClick={goToCreateProject}>
+                            <CardIconContainer>
+                                <CardIcon bgColor="linear-gradient(135deg, #f7971e 0%, #d4841a 100%)">◫</CardIcon>
+                            </CardIconContainer>
+                            <CardContent>
+                                <CardTitle>Create Project</CardTitle>
+                                <CardDescription>
+                                    Create a new integration project within your workspace with structure, configuration, and dependencies ready to go.
+                                </CardDescription>
+                                <StyledButton
+                                    onClick={(e: any) => { e.stopPropagation(); goToCreateProject(); }}>
+                                    <ButtonContent>Create Project</ButtonContent>
+                                </StyledButton>
+                            </CardContent>
+                        </SecondaryActionCard>
+
+                        <SecondaryActionCard onClick={goToImportExternal}>
+                            <CardIconContainer>
+                                <CardIcon bgColor="linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)">↷</CardIcon>
+                            </CardIconContainer>
+                            <CardContent>
+                                <CardTitle>Migrate 3rd Party Integrations</CardTitle>
+                                <CardDescription>
+                                    Transform and migrate your existing MuleSoft or TIBCO integrations to WSO2 Integrator automatically.
+                                </CardDescription>
+                                <StyledButton
+                                    onClick={(e: any) => { e.stopPropagation(); goToImportExternal(); }}>
+                                    <ButtonContent>Migrate</ButtonContent>
+                                </StyledButton>
+                            </CardContent>
+                        </SecondaryActionCard>
+                    </SecondaryCardsGrid>
+                </SecondaryCardsSection>
             </CardsContainer>
 
             <UserAccountPopover

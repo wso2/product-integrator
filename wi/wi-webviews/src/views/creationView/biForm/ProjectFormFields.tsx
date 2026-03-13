@@ -17,99 +17,45 @@
  */
 
 import { useEffect, useState } from "react";
-import { TextField, CheckBox } from "@wso2/ui-toolkit";
-import styled from "@emotion/styled";
+import { TextField, CheckBox, DirectorySelector } from "@wso2/ui-toolkit";
 import { useVisualizerContext } from "../../../contexts/WsContext";
-import { sanitizePackageName } from "./utils";
-import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
-import { CollapsibleSection, PackageInfoSection, ProjectTypeSelector } from "./components";
+import {
+    FieldGroup,
+    CheckboxContainer,
+    Description,
+    SectionDivider,
+    OptionalSectionsLabel,
+} from "./styles";
+import { CollapsibleSection, PackageInfoSection } from "./components";
+import { sanitizePackageName, validatePackageName, validateOrgName } from "./utils";
+import { ProjectFormData } from "./types";
 
-const FieldGroup = styled.div`
-    margin-bottom: 20px;
-`;
-
-const CheckboxContainer = styled.div`
-    margin: 16px 0;
-`;
-
-const OptionalConfigRow = styled.div`
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    margin-bottom: 8px;
-`;
-
-const OptionalConfigButtonContainer = styled.div`
-    display: flex;
-    flex-direction: row;
-    flex-grow: 1;
-    justify-content: flex-end;
-`;
-
-const OptionalConfigContent = styled.div`
-    margin-top: 16px;
-`;
-
-const Description = styled.div`
-    color: var(--vscode-list-deemphasizedForeground);
-    margin-top: 4px;
-    text-align: left;
-`;
-
-export const SectionDivider = styled.div`
-    height: 1px;
-    background: var(--vscode-panel-border);
-    margin: 24px 0 20px 0;
-`;
-
-export const OptionalSectionsLabel = styled.div`
-    font-size: 11px;
-    letter-spacing: 0.5px;
-    color: var(--vscode-descriptionForeground);
-    margin-bottom: 12px;
-`;
-
-export interface BaseProjectFormData {
-    integrationName: string;
-    packageName: string;
-    orgName: string;
-    version: string;
-    isLibrary: boolean;
-}
-
-/**
- * Form data for the AddProject form (adding to existing workspace)
- */
-export interface AddProjectFormData extends BaseProjectFormData {
-    workspaceName?: string;
-}
-
-/**
- * Form data for the main Project form (creating new project)
- */
-export interface ProjectFormData extends BaseProjectFormData {
-    path: string;
-    createDirectory: boolean;
-    createAsWorkspace: boolean;
-    workspaceName: string;
-}
+// Re-export for backwards compatibility
+export type { ProjectFormData } from "./types";
 
 export interface ProjectFormFieldsProps {
     formData: ProjectFormData;
     onFormDataChange: (data: Partial<ProjectFormData>) => void;
     integrationNameError?: string;
     pathError?: string;
+    projectNameError?: string;
     packageNameValidationError?: string;
 }
 
-export function ProjectFormFields({ formData, onFormDataChange, integrationNameError, pathError, packageNameValidationError }: ProjectFormFieldsProps) {
+export function ProjectFormFields({
+    formData,
+    onFormDataChange,
+    integrationNameError,
+    pathError,
+    projectNameError,
+    packageNameValidationError,
+}: ProjectFormFieldsProps) {
     const { wsClient } = useVisualizerContext();
     const [packageNameTouched, setPackageNameTouched] = useState(false);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
-    const [isWorkspaceSupported, setIsWorkspaceSupported] = useState(false);
-    const [isProjectStructureExpanded, setIsProjectStructureExpanded] = useState(false);
+    const [orgNameError, setOrgNameError] = useState<string | null>(null);
+    const [isProjectModeSupported, setIsProjectModeSupported] = useState(false);
+    const [isProjectSettingsExpanded, setIsProjectSettingsExpanded] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
 
     const handleIntegrationName = (value: string) => {
@@ -125,33 +71,58 @@ export function ProjectFormFields({ formData, onFormDataChange, integrationNameE
         const sanitized = sanitizePackageName(value);
         onFormDataChange({ packageName: sanitized });
         setPackageNameTouched(value.length > 0);
+        if (packageNameError) {
+            setPackageNameError(null);
+        }
     };
 
     const handleProjectDirSelection = async () => {
-        const projectDirectory = await wsClient.selectFileOrDirPath({});
-        onFormDataChange({ path: projectDirectory.path });
+        const selectedDirectory = await wsClient.selectFileOrDirPath({});
+        onFormDataChange({ path: selectedDirectory.path });
     };
 
-    const handleProjectStructureToggle = () => {
-        setIsProjectStructureExpanded(!isProjectStructureExpanded);
+    const handleProjectSettingsToggle = () => {
+        setIsProjectSettingsExpanded(!isProjectSettingsExpanded);
     };
 
     useEffect(() => {
         (async () => {
+            // Set default path if not already set
             if (!formData.path) {
                 const currentDir = await wsClient.getWorkspaceRoot();
                 onFormDataChange({ path: currentDir.path });
             }
-            const isWorkspaceSupported = await wsClient
 
+            // Set default org name if not already set
+            if (!formData.orgName) {
+                try {
+                    const { orgName } = await wsClient.getDefaultOrgName();
+                    onFormDataChange({ orgName });
+                } catch (error) {
+                    console.error("Failed to fetch default org name:", error);
+                }
+            }
+
+            const projectModeSupported = await wsClient
                 .isSupportedSLVersion({ major: 2201, minor: 13, patch: 0 })
                 .catch((err) => {
-                    console.error("Failed to check workspace support:", err);
+                    console.error("Failed to check project mode support:", err);
                     return false;
                 });
-            setIsWorkspaceSupported(isWorkspaceSupported);
+            setIsProjectModeSupported(projectModeSupported);
         })();
     }, []);
+
+    useEffect(() => {
+        const error = validatePackageName(formData.packageName, formData.integrationName);
+        setPackageNameError(error);
+    }, [formData.packageName, formData.integrationName]);
+
+    // Validation effect for org name
+    useEffect(() => {
+        const orgError = validateOrgName(formData.orgName);
+        setOrgNameError(orgError);
+    }, [formData.orgName]);
 
     return (
         <>
@@ -160,8 +131,8 @@ export function ProjectFormFields({ formData, onFormDataChange, integrationNameE
                 <TextField
                     onTextChange={handleIntegrationName}
                     value={formData.integrationName}
-                    label="Integration Name"
-                    placeholder="Enter an integration name"
+                    label={`Integration Name`}
+                    placeholder={`Enter an integration name`}
                     autoFocus={true}
                     required={true}
                     errorMsg={integrationNameError || ""}
@@ -173,8 +144,8 @@ export function ProjectFormFields({ formData, onFormDataChange, integrationNameE
                     onTextChange={handlePackageName}
                     value={formData.packageName}
                     label="Package Name"
-                    description="This will be used as the Ballerina package name for the integration."
-                    errorMsg={packageNameValidationError || ""}
+                    description={`This will be used as the Ballerina package name for the integration.`}
+                    errorMsg={packageNameValidationError || packageNameError || ""}
                 />
             </FieldGroup>
 
@@ -192,7 +163,7 @@ export function ProjectFormFields({ formData, onFormDataChange, integrationNameE
 
                 <CheckboxContainer>
                     <CheckBox
-                        label={`Create a new folder using the ${formData.createAsWorkspace ? "workspace name" : "package name"}`}
+                        label={`Create a new directory using the ${formData.createAsWorkspace ? "project name" : `package name`}`}
                         checked={formData.createDirectory}
                         onChange={(checked) => onFormDataChange({ createDirectory: checked })}
                     />
@@ -202,52 +173,46 @@ export function ProjectFormFields({ formData, onFormDataChange, integrationNameE
             <SectionDivider />
             <OptionalSectionsLabel>Optional Configurations</OptionalSectionsLabel>
 
-            {/* Project Structure Section */}
-            {isWorkspaceSupported && (
+            {/* Project Section */}
+            {isProjectModeSupported && (
                 <CollapsibleSection
-                    isExpanded={isProjectStructureExpanded}
-                    onToggle={handleProjectStructureToggle}
+                    isExpanded={isProjectSettingsExpanded}
+                    onToggle={handleProjectSettingsToggle}
                     icon="folder"
-                    title="Project Structure"
+                    title="Project"
                 >
                     <CheckboxContainer>
                         <CheckBox
-                            label="Create as workspace"
+                            label="Create as project"
                             checked={formData.createAsWorkspace}
                             onChange={(checked) => onFormDataChange({ createAsWorkspace: checked })}
                         />
                         <Description>
-                            Include this integration in a new workspace for multi-project management.
+                            Enable project mode to manage multiple integrations and libraries within a single repository.
                         </Description>
                     </CheckboxContainer>
                     {formData.createAsWorkspace && (
-                        <>
-                            <FieldGroup>
-                                <TextField
-                                    onTextChange={(value) => onFormDataChange({ workspaceName: value })}
-                                    value={formData.workspaceName}
-                                    label="Workspace Name"
-                                    placeholder="Enter workspace name"
-                                    required={true}
-                                />
-                            </FieldGroup>
-
-                            <ProjectTypeSelector
-                                value={formData.isLibrary}
-                                onChange={(isLibrary) => onFormDataChange({ isLibrary })}
-                                note="This sets the type for your first project. You can add more projects or libraries to this workspace later."
+                        <FieldGroup>
+                            <TextField
+                                onTextChange={(value) => onFormDataChange({ workspaceName: value })}
+                                value={formData.workspaceName}
+                                label="Project Name"
+                                placeholder="Enter project name"
+                                required={true}
+                                errorMsg={projectNameError || ""}
                             />
-                        </>
+                        </FieldGroup>
                     )}
                 </CollapsibleSection>
             )}
 
-            {/* Package Information Section */}
+            {/* Ballerina Package Section */}
             <PackageInfoSection
                 isExpanded={isPackageInfoExpanded}
                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
                 data={{ orgName: formData.orgName, version: formData.version }}
                 onChange={(data) => onFormDataChange(data)}
+                orgNameError={orgNameError}
             />
         </>
     );

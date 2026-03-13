@@ -122,7 +122,7 @@ export function CreationView({ onBack }: { onBack?: () => void }) {
                         <IconButton onClick={gotToWelcome}>
                             <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
                         </IconButton>
-                        <Typography variant="h2">Create Your Integration</Typography>
+                        <Typography variant="h2">Create Integration</Typography>
                     </TitleContainer>
                     {enabledRuntimes.length > 1 && (
                         <IntegrationTypeSelector
