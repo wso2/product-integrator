@@ -552,8 +552,10 @@ export const WelcomeView: React.FC = () => {
                     <MoreDivider />
                     <MoreToggleButton onClick={() => setShowSecondary(!showSecondary)}>
                         <span>{showSecondary ? 'Show less' : 'More actions'}</span>
-                        <MoreChevron style={{ transform: showSecondary ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                            ▾
+                        <MoreChevron>
+                            <span
+                                className={`codicon ${showSecondary ? 'codicon-triangle-up' : 'codicon-triangle-down'}`}
+                            />
                         </MoreChevron>
                     </MoreToggleButton>
                     <MoreDivider />

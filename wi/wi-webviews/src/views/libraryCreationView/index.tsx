@@ -28,9 +28,7 @@ import { SectionDivider, OptionalSectionsLabel } from "../creationView/biForm/st
 const FormContainer = styled.div`
     display: flex;
     flex-direction: column;
-    overflow: hidden;
     align-items: center;
-    height: 100vh;
     max-width: 600px;
     margin: 0 auto;
     margin-top: calc(25vh - 80px);
@@ -70,10 +68,8 @@ const ButtonWrapper = styled.div`
 `;
 
 const ScrollableContent = styled.div`
-    flex: 1;
     overflow-y: auto;
     padding-right: 8px;
-    min-height: 0;
     max-height: calc(100vh - 380px);
     width: 100%;
 `;
@@ -133,6 +129,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             createDirectory: formData.createDirectory,
             orgName: formData.orgName || undefined,
             version: formData.version || undefined,
+            isLibrary: true,
         });
     };
 
@@ -195,6 +192,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                         onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
                         data={{ orgName: formData.orgName, version: formData.version }}
                         onChange={(data) => setFormData(prev => ({ ...prev, ...data }))}
+                        isLibrary={true}
                     />
                 </ScrollableContent>
                 <ButtonWrapper>

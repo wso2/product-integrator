@@ -84,10 +84,10 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
 
     const handleCreate = () => {
         wsClient.createBIProject({
-            projectName: formData.projectName,
-            packageName: formData.projectName,
+            workspaceName: formData.projectName,
             projectPath: formData.path,
             createDirectory: true,
+            createAsWorkspace: true,
         });
     };
 

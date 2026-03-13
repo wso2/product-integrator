@@ -34,6 +34,8 @@ export interface PackageInfoSectionProps {
     data: PackageInfoData;
     /** Callback when the package info changes */
     onChange: (data: Partial<PackageInfoData>) => void;
+    /** Whether the package is a library */
+    isLibrary?: boolean;
     /** Error message for org name validation */
     orgNameError?: string | null;
 }
@@ -43,6 +45,7 @@ export function PackageInfoSection({
     onToggle,
     data,
     onChange,
+    isLibrary,
     orgNameError,
 }: PackageInfoSectionProps) {
     return (
@@ -53,7 +56,7 @@ export function PackageInfoSection({
             title="Package Information"
         >
             <Note style={{ marginBottom: "16px" }}>
-                This integration is generated as a Ballerina package. Define the organization and version that will be assigned to it.     
+                {`This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Define the organization and version that will be assigned to it. `}    
             </Note>
             <FieldGroup>
                 <TextField

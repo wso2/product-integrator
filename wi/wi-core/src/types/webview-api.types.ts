@@ -125,14 +125,15 @@ export interface SampleDownloadRequest {
 }
 
 export interface BIProjectRequest {
-    projectName: string;
-    packageName: string;
+    projectName?: string;
+    packageName?: string;
     projectPath: string;
     createDirectory: boolean;
     createAsWorkspace?: boolean;
     workspaceName?: string;
     orgName?: string;
     version?: string;
+    isLibrary?: boolean;
 }
 
 export interface SemanticVersion {
