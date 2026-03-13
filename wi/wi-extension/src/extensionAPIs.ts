@@ -67,8 +67,6 @@ export class ExtensionAPIs {
 				}
 			});
 		}
-		// activate the extensions
-		await this.activateExtension(extension);
 
 		if (extension === EXTENSION_DEPENDENCIES.BALLERINA) {
 			// Get Ballerina extension
@@ -118,9 +116,6 @@ export class ExtensionAPIs {
 			ext.log(`Extension ${extensionName} installed successfully`);
 		} catch (error) {
 			ext.logError(`Failed to install extension ${extensionName}`, error as Error);
-			await vscode.window.showErrorMessage(
-				`Failed to install extension: ${extensionName}. Please install it manually from the Extensions view.`,
-			);
 			throw error;
 		}
 	}

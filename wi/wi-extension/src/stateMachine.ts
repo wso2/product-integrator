@@ -238,10 +238,10 @@ const stateMachine = createMachine<MachineContext>({
                     ext.log(`Configuration changed: defaultRuntime = ${newMode}`);
 
                     if (newMode.includes(ProjectType.MI)) {
-                        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
+                        context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
                     }
                     if (newMode.includes(ProjectType.SI)) {
-                        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
+                        context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
                     }
 
                     stateService.send({
