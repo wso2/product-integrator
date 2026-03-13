@@ -106,7 +106,7 @@ function registerPreInitHandlers(): void {
 			affectsConfiguration("integrator.advanced.cloudRpcPath")
 		) {
 			const selection = await window.showInformationMessage(
-				"WSO2 Platform extension configuration changed. Please restart VS Code for changes to take effect.",
+				"WSO2 Integrator extension configuration changed. Please restart VS Code for changes to take effect.",
 				"Restart Now",
 			);
 			if (selection === "Restart Now") {
