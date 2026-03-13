@@ -20,15 +20,13 @@ import { assign, createMachine, interpret } from 'xstate';
 import * as vscode from 'vscode';
 import { CONTEXT_KEYS, EXTENSION_DEPENDENCIES, ViewType } from '@wso2/wi-core';
 import { ext } from './extensionVariables';
-import { fetchProjectInfo, fetchExtendedProjectInfo, ProjectInfo } from './bi/utils';
+import { fetchProjectInfo, fetchExtendedProjectInfo } from './bi/utils';
 import { activateProjectExplorer } from './bi/project-explorer/activate';
 import { ProjectExplorerEntryProvider } from './bi/project-explorer/project-explorer-provider';
 import { checkIfMiProject } from './mi/utils';
 import { WebviewManager } from './webviewManager';
 import { ExtensionAPIs } from './extensionAPIs';
 import { registerCommands } from './commands';
-import * as fs from 'fs';
-import * as path from 'path';
 
 /** The data provider for the BI project explorer, kept for refresh access. */
 let biProjectExplorerProvider: ProjectExplorerEntryProvider | undefined;
@@ -53,6 +51,51 @@ interface MachineContext {
     mode: ProjectType[];
     currentView: ViewType;
     isInWi: boolean;
+}
+
+const runtimeConfigKeyByProjectType: Partial<Record<ProjectType, string>> = {
+    [ProjectType.BI_BALLERINA]: 'enabledRuntimes.bi',
+    [ProjectType.MI]: 'enabledRuntimes.mi',
+    [ProjectType.SI]: 'enabledRuntimes.si'
+};
+
+const extensionDependencyByProjectType: Partial<Record<ProjectType, string>> = {
+    [ProjectType.BI_BALLERINA]: EXTENSION_DEPENDENCIES.BALLERINA,
+    [ProjectType.MI]: EXTENSION_DEPENDENCIES.MI,
+    [ProjectType.SI]: EXTENSION_DEPENDENCIES.SI
+};
+
+async function initializeRuntimeExtension(
+    extensionAPIs: ExtensionAPIs,
+    projectType: ProjectType
+): Promise<void> {
+    const extensionDependency = extensionDependencyByProjectType[projectType];
+
+    if (!extensionDependency) {
+        return;
+    }
+
+    await extensionAPIs.initialize(extensionDependency);
+}
+
+async function enableDetectedRuntime(projectType: ProjectType): Promise<void> {
+    const runtimeConfigKey = runtimeConfigKeyByProjectType[projectType];
+
+    if (!runtimeConfigKey) {
+        return;
+    }
+
+    const config = vscode.workspace.getConfiguration('integrator');
+    const isEnabled = config.get<boolean>(runtimeConfigKey, false);
+
+    if (!isEnabled) {
+        await config.update(
+            runtimeConfigKey,
+            true,
+            vscode.ConfigurationTarget.Global
+        );
+        ext.log(`Enabled ${projectType} in settings as we detected a matching project`);
+    }
 }
 
 /**
@@ -237,14 +280,12 @@ const stateMachine = createMachine<MachineContext>({
                     const newMode = getDefaultIntegratorMode();
                     ext.log(`Configuration changed: defaultRuntime = ${newMode}`);
 
-                    if (newMode.includes(ProjectType.BI_BALLERINA)) {
-                        context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA);
-                    }
-                    if (newMode.includes(ProjectType.MI)) {
-                        context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
-                    }
-                    if (newMode.includes(ProjectType.SI)) {
-                        context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
+                    for (const mode of newMode) {
+                        try {
+                            await initializeRuntimeExtension(context.extensionAPIs, mode);
+                        } catch (error) {
+                            ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
+                        }
                     }
 
                     stateService.send({
@@ -345,6 +386,16 @@ export function getBIProjectExplorerProvider(): ProjectExplorerEntryProvider | u
     return biProjectExplorerProvider;
 }
 
+async function hasSiddhiFilesInWorkspace(): Promise<boolean> {
+    const siddhiFiles = await vscode.workspace.findFiles(
+        '**/*.siddhi',
+        '{**/node_modules/**,**/.git/**,**/dist/**,**/build/**,**/target/**}',
+        1
+    );
+
+    return siddhiFiles.length > 0;
+}
+
 async function detectProjectType(): Promise<{
     projectType: ProjectType;
 }> {
@@ -355,47 +406,45 @@ async function detectProjectType(): Promise<{
     const extensionAPIs = new ExtensionAPIs();
     for (const mode of enabledModes) {
         try {
-            if (mode === ProjectType.BI_BALLERINA) {
-                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA, true);
-            } else if (mode === ProjectType.MI) {
-                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
-            } else if (mode === ProjectType.SI) {
-                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
-            }
+            await initializeRuntimeExtension(extensionAPIs, mode);
         } catch (error) {
             ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
             // Don't throw the error, as we want to continue initializing other extensions and detect project type based on available extensions
         }
     }
 
-    // Check if it's an MI project
-    const isMiProject = workspaceRoot ? await checkIfMiProject(workspaceRoot) : false;
+    const projectChecks: Array<{
+        projectType: ProjectType;
+        detect: () => Promise<boolean>;
+        logMessage: string;
+    }> = [
+            {
+                projectType: ProjectType.MI,
+                detect: async () => workspaceRoot ? await checkIfMiProject(workspaceRoot) : false,
+                logMessage: 'Detected MI project'
+            },
+            {
+                projectType: ProjectType.SI,
+                detect: async () => workspaceRoot ? await hasSiddhiFilesInWorkspace() : false,
+                logMessage: 'Detected SI project'
+            },
+            {
+                projectType: ProjectType.BI_BALLERINA,
+                detect: async () => fetchProjectInfo().isBallerina,
+                logMessage: 'Detected BI/Ballerina project'
+            }
+        ];
 
-    if (isMiProject) {
-        ext.log('Detected MI project');
+    for (const projectCheck of projectChecks) {
+        if (!await projectCheck.detect()) {
+            continue;
+        }
+
+        ext.log(projectCheck.logMessage);
+        await enableDetectedRuntime(projectCheck.projectType);
+
         return {
-            projectType: ProjectType.MI
-        };
-    }
-
-    // Check if it's an SI project (default scaffold contains main.siddhi)
-    const isSiProject = workspaceRoot ? fs.existsSync(path.join(workspaceRoot, 'main.siddhi')) : false;
-
-    if (isSiProject) {
-        ext.log('Detected SI project');
-        return {
-            projectType: ProjectType.SI
-        };
-    }
-
-    // Check for BI/Ballerina project
-    const projectInfo: ProjectInfo = fetchProjectInfo();
-
-    if (projectInfo.isBallerina) {
-        ext.log('Detected BI/Ballerina project');
-
-        return {
-            projectType: ProjectType.BI_BALLERINA,
+            projectType: projectCheck.projectType,
         };
     }
 
