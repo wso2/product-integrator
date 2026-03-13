@@ -98,32 +98,6 @@ export class ExtensionAPIs {
 				}
 			}
 
-			// if installed extension is release version, show warning to install pre-release version as the stable version does not have the required API
-			// check if the installed version has the required command: BI.project.createBIProjectPure registered, if not, show warning to install pre-release version
-			const hasRequiredCommand = await vscode.commands.getCommands(true).then((commands) => {
-				return commands.includes("BI.project.createBIProjectPure");
-			});
-			if (!hasRequiredCommand) {
-				ext.logError(`Installed version of Ballerina extension does not have the required API`, new Error("Incompatible Ballerina extension version"));
-				vscode.window
-					.showWarningMessage(
-						`The installed version of the Ballerina extension does not have the required API. Please install the pre-release version of the Ballerina extension for full functionality.`,
-						"Install Pre-release Version"
-					)
-					.then(async (selection) => {
-						if (selection === "Install Pre-release Version") {
-							try {
-								await this.installExtension(EXTENSION_DEPENDENCIES.BALLERINA, true);
-								ext.log(`Pre-release version of Ballerina extension installed successfully`);
-							} catch (error) {
-								ext.logError(`Failed to install pre-release version of Ballerina extension`, error as Error);
-								await vscode.window.showErrorMessage(
-									`Failed to install pre-release version of Ballerina extension. Please install it manually from the Extensions view.`,
-								);
-							}
-						}
-					});
-			}
 		} else if (extension === EXTENSION_DEPENDENCIES.MI) {
 			// Get MI extension
 			this.miExtension = vscode.extensions.getExtension<MIExtensionAPI>(EXTENSION_DEPENDENCIES.MI);
@@ -157,6 +131,35 @@ export class ExtensionAPIs {
 			try {
 				await extension.activate();
 				ext.log(`Extension ${extensionName} activated successfully`);
+
+				if (extensionName === EXTENSION_DEPENDENCIES.BALLERINA) {
+					// if installed extension is release version, show warning to install pre-release version as the stable version does not have the required API
+					// check if the installed version has the required command: BI.project.createBIProjectPure registered, if not, show warning to install pre-release version
+					const hasRequiredCommand = await vscode.commands.getCommands(true).then((commands) => {
+						return commands.includes("BI.project.createBIProjectPure");
+					});
+					if (!hasRequiredCommand) {
+						ext.logError(`Installed version of Ballerina extension does not have the required API`, new Error("Incompatible Ballerina extension version"));
+						vscode.window
+							.showWarningMessage(
+								`The installed version of the Ballerina extension does not have the required API. Please install the pre-release version of the Ballerina extension for full functionality.`,
+								"Install Pre-release Version"
+							)
+							.then(async (selection) => {
+								if (selection === "Install Pre-release Version") {
+									try {
+										await this.installExtension(EXTENSION_DEPENDENCIES.BALLERINA, true);
+										ext.log(`Pre-release version of Ballerina extension installed successfully`);
+									} catch (error) {
+										ext.logError(`Failed to install pre-release version of Ballerina extension`, error as Error);
+										await vscode.window.showErrorMessage(
+											`Failed to install pre-release version of Ballerina extension. Please install it manually from the Extensions view.`,
+										);
+									}
+								}
+							});
+					}
+				}
 			} catch (error) {
 				ext.logError(`Failed to activate extension ${extensionName}`, error as Error);
 				throw error;
