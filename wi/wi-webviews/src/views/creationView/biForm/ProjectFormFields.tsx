@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { TextField, CheckBox } from "@wso2/ui-toolkit";
+import { TextField, CheckBox, ProgressRing } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts/WsContext";
 import { sanitizePackageName } from "./utils";
@@ -107,10 +107,10 @@ export interface ProjectFormFieldsProps {
 export function ProjectFormFields({ formData, onFormDataChange, integrationNameError, pathError, packageNameValidationError }: ProjectFormFieldsProps) {
     const { wsClient } = useVisualizerContext();
     const [packageNameTouched, setPackageNameTouched] = useState(false);
-    const [packageNameError, setPackageNameError] = useState<string | null>(null);
     const [isWorkspaceSupported, setIsWorkspaceSupported] = useState(false);
     const [isProjectStructureExpanded, setIsProjectStructureExpanded] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     const handleIntegrationName = (value: string) => {
         onFormDataChange({ integrationName: value });
@@ -147,11 +147,21 @@ export function ProjectFormFields({ formData, onFormDataChange, integrationNameE
                 .isSupportedSLVersion({ major: 2201, minor: 13, patch: 0 })
                 .catch((err) => {
                     console.error("Failed to check workspace support:", err);
+                    setIsLoading(false);
                     return false;
                 });
             setIsWorkspaceSupported(isWorkspaceSupported);
+            setIsLoading(false);
         })();
     }, []);
+
+    if (isLoading) {
+        return (
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 120 }}>
+                <ProgressRing />
+            </div>
+        );
+    }
 
     return (
         <>
