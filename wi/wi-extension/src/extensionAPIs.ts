@@ -37,7 +37,11 @@ export class ExtensionAPIs {
 		// download extension if not present
 		if (!vscode.extensions.getExtension(extension)) {
 			try {
-				await this.installExtension(extension, false);
+				if (extension === EXTENSION_DEPENDENCIES.BALLERINA) {
+					await this.installExtension(extension, true);
+				} else {
+					await this.installExtension(extension, false);
+				}
 				ext.log(`Extension ${extension} installed successfully`);
 			} catch (stableInstallError) {
 				ext.logError(`Failed to install stable version of extension ${extension}`, stableInstallError as Error);
@@ -52,6 +56,16 @@ export class ExtensionAPIs {
 					return;
 				}
 			}
+
+			// ask to reload window after installation
+			await vscode.window.showInformationMessage(
+				`Extension ${extension} installed successfully. Please reload the window to activate it.`,
+				"Reload Window"
+			).then((selection) => {
+				if (selection === "Reload Window") {
+					vscode.commands.executeCommand("workbench.action.reloadWindow");
+				}
+			});
 		}
 		// activate the extensions
 		await this.activateExtension(extension);

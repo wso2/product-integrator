@@ -16,7 +16,9 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "*"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
@@ -193,9 +195,146 @@
         "category": "WSO2 Integrator",
         "icon": "$(refresh)",
         "enablement": "!isLoadingContextDirs"
+      },
+      {
+        "command": "ballerina.showVisualizer",
+        "title": "Show Visualizer",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "ballerina.force.update.artifacts",
+        "title": "Force Update Artifacts",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add",
+        "title": "Add Artifact",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.overview",
+        "title": "Open Overview",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-connection",
+        "title": "Add Connection",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.delete",
+        "title": "Delete",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-entry-point",
+        "title": "Add Entry Point",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-type",
+        "title": "Add Type",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.view-type-diagram",
+        "title": "View Type Diagram",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-function",
+        "title": "Add Function",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-configuration",
+        "title": "Add Configuration",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.view-configuration",
+        "title": "View Configuration",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-data-mapper",
+        "title": "Add Data Mapper",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-natural-function",
+        "title": "Add Natural Function",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-custom-connector",
+        "title": "Add Custom Connector",
+        "category": "WSO2 Integrator"
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "ballerina.showVisualizer",
+          "when": "false"
+        },
+        {
+          "command": "ballerina.force.update.artifacts",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.overview",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-connection",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.delete",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-entry-point",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-type",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.view-type-diagram",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-function",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-configuration",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.view-configuration",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-data-mapper",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-natural-function",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-custom-connector",
+          "when": "false"
+        }
+      ],
       "view/item/context": [
         {
           "command": "ballerina.showVisualizer",

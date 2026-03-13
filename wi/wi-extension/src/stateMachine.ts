@@ -18,11 +18,9 @@
 
 import { assign, createMachine, interpret } from 'xstate';
 import * as vscode from 'vscode';
-import { findBallerinaExtension } from './utils/ballerinaExtension';
 import { CONTEXT_KEYS, EXTENSION_DEPENDENCIES, ViewType } from '@wso2/wi-core';
 import { ext } from './extensionVariables';
 import { fetchProjectInfo, fetchExtendedProjectInfo, ProjectInfo } from './bi/utils';
-import { ballerinaContext } from './bi/ballerinaContext';
 import { activateProjectExplorer } from './bi/project-explorer/activate';
 import { ProjectExplorerEntryProvider } from './bi/project-explorer/project-explorer-provider';
 import { checkIfMiProject } from './mi/utils';
@@ -123,6 +121,10 @@ const stateMachine = createMachine<MachineContext>({
                             isMI: (context, event) => event.data.isMI
                         })
                     },
+                    {
+                        target: 'disabled',
+                        cond: (context, event) => event.data.projectType === ProjectType.NONE
+                    }
                 ],
                 onError: {
                     target: 'disabled'
@@ -261,9 +263,6 @@ const stateMachine = createMachine<MachineContext>({
 async function activateExtensionsBasedOnProjectType(context: MachineContext): Promise<void> {
     ext.log(`Activating extensions for project type: ${context.projectType}`);
 
-    // Ensure Ballerina extension is available by default irrespective of config change events
-    await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA);
-
     // Create webview manager
     context.webviewManager = new WebviewManager(context.projectUri);
     ext.context.subscriptions.push({
@@ -348,6 +347,24 @@ async function detectProjectType(): Promise<{
 }> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
+    // activate extensions for enabled runtimes in settings, even if we couldn't detect the project type.
+    const enabledModes = getDefaultIntegratorMode();
+    const extensionAPIs = new ExtensionAPIs();
+    for (const mode of enabledModes) {
+        try {
+            if (mode === ProjectType.BI_BALLERINA) {
+                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA);
+            } else if (mode === ProjectType.MI) {
+                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
+            } else if (mode === ProjectType.SI) {
+                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
+            }
+        } catch (error) {
+            ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
+            // Don't throw the error, as we want to continue initializing other extensions and detect project type based on available extensions
+        }
+    }
+
     // Check if it's an MI project
     const isMiProject = workspaceRoot ? await checkIfMiProject(workspaceRoot) : false;
 
@@ -370,9 +387,8 @@ async function detectProjectType(): Promise<{
 
     // Check for BI/Ballerina project
     const projectInfo: ProjectInfo = fetchProjectInfo();
-    const ballerinaExt = findBallerinaExtension();
 
-    if (projectInfo.isBallerina && ballerinaExt) {
+    if (projectInfo.isBallerina) {
         ext.log('Detected BI/Ballerina project');
 
         return {
