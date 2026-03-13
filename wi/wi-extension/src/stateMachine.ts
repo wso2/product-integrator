@@ -350,6 +350,24 @@ async function detectProjectType(): Promise<{
 }> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
+    // activate extensions for enabled runtimes in settings, even if we couldn't detect the project type.
+    const enabledModes = getDefaultIntegratorMode();
+    const extensionAPIs = new ExtensionAPIs();
+    for (const mode of enabledModes) {
+        try {
+            if (mode === ProjectType.BI_BALLERINA) {
+                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA, true);
+            } else if (mode === ProjectType.MI) {
+                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
+            } else if (mode === ProjectType.SI) {
+                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
+            }
+        } catch (error) {
+            ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
+            // Don't throw the error, as we want to continue initializing other extensions and detect project type based on available extensions
+        }
+    }
+
     // Check if it's an MI project
     const isMiProject = workspaceRoot ? await checkIfMiProject(workspaceRoot) : false;
 

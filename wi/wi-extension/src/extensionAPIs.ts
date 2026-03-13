@@ -91,7 +91,11 @@ export class ExtensionAPIs {
 			this.biExtension = vscode.extensions.getExtension<BIExtensionAPI>(EXTENSION_DEPENDENCIES.BALLERINA);
 
 			if (activate) {
-				ballerinaContext.init(this.biExtension.exports);
+				try {
+					ballerinaContext.init(this.biExtension.exports);
+				} catch (error) {
+					ext.logError(`Failed to initialize Ballerina context`, error as Error);
+				}
 			}
 
 			// if installed extension is release version, show warning to install pre-release version as the stable version does not have the required API
