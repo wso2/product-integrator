@@ -17,7 +17,7 @@
  */
 
 import { WebviewPanel } from "vscode";
-import { createExtensionTransportManager, createRequestRouter } from "vscode-webview-network-bridge";
+import { createExtensionTransportManager, createRequestRouter } from "webview-giga-bridge";
 import {
     BIProjectRequest,
     CreateMiProjectRequest,

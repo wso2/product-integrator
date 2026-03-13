@@ -84,7 +84,7 @@ import type {
     WICloudSubmitComponentsReq,
     WICloudSubmitComponentsResp,
 } from "@wso2/wi-core";
-import { ConnectionStatus, createWebviewTransportAdapter } from "vscode-webview-network-bridge/webview";
+import { ConnectionStatus, createWebviewTransportAdapter } from "webview-giga-bridge/webview";
 
 declare global {
     interface Window {
