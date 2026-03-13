@@ -33,7 +33,7 @@ export class ExtensionAPIs {
 	/**
 	 * Initialize extension APIs
 	 */
-	public async initialize(extension: string): Promise<void> {
+	public async initialize(extension: string, activate?: boolean): Promise<void> {
 		// download extension if not present
 		if (!vscode.extensions.getExtension(extension)) {
 			try {
@@ -57,21 +57,42 @@ export class ExtensionAPIs {
 				}
 			}
 
-			// ask to reload window after installation
-			await vscode.window.showInformationMessage(
-				`Extension ${extension} installed successfully. Please reload the window to activate it.`,
-				"Reload Window"
-			).then((selection) => {
-				if (selection === "Reload Window") {
-					vscode.commands.executeCommand("workbench.action.reloadWindow");
-				}
-			});
+			// ask to reload window after installation (do not block initialize on notification interaction)
+			vscode.window
+				.showInformationMessage(
+					`Extension ${extension} installed successfully. Please reload the window to activate it.`,
+					"Reload Window"
+				)
+				.then((selection) => {
+					if (selection === "Reload Window") {
+						vscode.commands.executeCommand("workbench.action.reloadWindow");
+					}
+				});
+
+			// newly installed extensions are not immediately available without reload
+			return;
+		}
+
+		if (activate) {
+			try {
+				await this.activateExtension(extension);
+				ext.log(`Extension ${extension} activated successfully`);
+			} catch (error) {
+				ext.logError(`Failed to activate extension ${extension}`, error as Error);
+				vscode.window.showErrorMessage(
+					`Failed to activate required extension: ${extension}. Please ensure it is activated properly.`,
+				);
+				return;
+			}
 		}
 
 		if (extension === EXTENSION_DEPENDENCIES.BALLERINA) {
 			// Get Ballerina extension
 			this.biExtension = vscode.extensions.getExtension<BIExtensionAPI>(EXTENSION_DEPENDENCIES.BALLERINA);
-			ballerinaContext.init(this.biExtension.exports);
+
+			if (activate) {
+				ballerinaContext.init(this.biExtension.exports);
+			}
 
 			// if installed extension is release version, show warning to install pre-release version as the stable version does not have the required API
 			// check if the installed version has the required command: BI.project.createBIProjectPure registered, if not, show warning to install pre-release version
@@ -80,22 +101,24 @@ export class ExtensionAPIs {
 			});
 			if (!hasRequiredCommand) {
 				ext.logError(`Installed version of Ballerina extension does not have the required API`, new Error("Incompatible Ballerina extension version"));
-				await vscode.window.showWarningMessage(
-					`The installed version of the Ballerina extension does not have the required API. Please install the pre-release version of the Ballerina extension for full functionality.`,
-					"Install Pre-release Version"
-				).then(async (selection) => {
-					if (selection === "Install Pre-release Version") {
-						try {
-							await this.installExtension(EXTENSION_DEPENDENCIES.BALLERINA, true);
-							ext.log(`Pre-release version of Ballerina extension installed successfully`);
-						} catch (error) {
-							ext.logError(`Failed to install pre-release version of Ballerina extension`, error as Error);
-							await vscode.window.showErrorMessage(
-								`Failed to install pre-release version of Ballerina extension. Please install it manually from the Extensions view.`,
-							);
+				vscode.window
+					.showWarningMessage(
+						`The installed version of the Ballerina extension does not have the required API. Please install the pre-release version of the Ballerina extension for full functionality.`,
+						"Install Pre-release Version"
+					)
+					.then(async (selection) => {
+						if (selection === "Install Pre-release Version") {
+							try {
+								await this.installExtension(EXTENSION_DEPENDENCIES.BALLERINA, true);
+								ext.log(`Pre-release version of Ballerina extension installed successfully`);
+							} catch (error) {
+								ext.logError(`Failed to install pre-release version of Ballerina extension`, error as Error);
+								await vscode.window.showErrorMessage(
+									`Failed to install pre-release version of Ballerina extension. Please install it manually from the Extensions view.`,
+								);
+							}
 						}
-					}
-				});
+					});
 			}
 		} else if (extension === EXTENSION_DEPENDENCIES.MI) {
 			// Get MI extension

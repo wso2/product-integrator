@@ -237,6 +237,9 @@ const stateMachine = createMachine<MachineContext>({
                     const newMode = getDefaultIntegratorMode();
                     ext.log(`Configuration changed: defaultRuntime = ${newMode}`);
 
+                    if (newMode.includes(ProjectType.BI_BALLERINA)) {
+                        context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA);
+                    }
                     if (newMode.includes(ProjectType.MI)) {
                         context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
                     }
@@ -277,7 +280,7 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
         // WI always handles BI treeview and webview activation directly,
         // regardless of whether the BI extension is installed.
         ext.log('Initializing BI extension for BI/Ballerina project');
-        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA);
+        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA, true);
 
         ext.log('Activating BI project explorer within WI');
         await activateBIWithinWI();
@@ -285,12 +288,12 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
     } else if (context.projectType === ProjectType.MI) {
         // Activate only MI extension for MI projects
         ext.log('Initializing MI extension for MI project');
-        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
+        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI, true);
 
     } else if (context.projectType === ProjectType.SI) {
         // Activate only SI extension for SI projects
         ext.log('Initializing SI extension for SI project');
-        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
+        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI, true);
 
     } else if (context.projectType === ProjectType.NONE) {
         // if a folder/workspace is open but we couldn't detect the project type, we should show an popup warning the user that the extension couldn't detect the project type
@@ -346,24 +349,6 @@ async function detectProjectType(): Promise<{
     projectType: ProjectType;
 }> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
-    // activate extensions for enabled runtimes in settings, even if we couldn't detect the project type.
-    const enabledModes = getDefaultIntegratorMode();
-    const extensionAPIs = new ExtensionAPIs();
-    for (const mode of enabledModes) {
-        try {
-            if (mode === ProjectType.BI_BALLERINA) {
-                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA);
-            } else if (mode === ProjectType.MI) {
-                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
-            } else if (mode === ProjectType.SI) {
-                extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
-            }
-        } catch (error) {
-            ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
-            // Don't throw the error, as we want to continue initializing other extensions and detect project type based on available extensions
-        }
-    }
 
     // Check if it's an MI project
     const isMiProject = workspaceRoot ? await checkIfMiProject(workspaceRoot) : false;
