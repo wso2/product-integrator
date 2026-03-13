@@ -36,6 +36,17 @@ export class ExtensionAPIs {
 		// download extension if not present
 		if (!vscode.extensions.getExtension(extension)) {
 			try {
+				// install pre-release version if it is Ballerina extension, as the stable version does not have the required API
+				if (extension === EXTENSION_DEPENDENCIES.BALLERINA) {
+					await vscode.commands.executeCommand(
+						"workbench.extensions.installExtension",
+						extension,
+						{ installPreReleaseVersion: true },
+					);
+					ext.log(`Pre-release version of extension ${extension} installed successfully`);
+					return;
+				}
+
 				await vscode.commands.executeCommand("workbench.extensions.installExtension", extension);
 				ext.log(`Extension ${extension} installed successfully`);
 			} catch (stableInstallError) {
