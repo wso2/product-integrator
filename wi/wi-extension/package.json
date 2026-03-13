@@ -96,7 +96,7 @@
       {
         "view": "wso2-integrator.explorer",
         "contents": "$(loadingspin) Loading WSO2 Integrator...",
-        "when": "WI.projectType == 'bi' || WI.projectType == 'mi'"
+        "when": "!WI.projectType"
       },
       {
         "view": "wso2-integrator.explorer",

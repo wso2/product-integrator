@@ -277,6 +277,9 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
     if (context.projectType === ProjectType.BI_BALLERINA) {
         // WI always handles BI treeview and webview activation directly,
         // regardless of whether the BI extension is installed.
+        ext.log('Initializing BI extension for BI/Ballerina project');
+        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA);
+
         ext.log('Activating BI project explorer within WI');
         await activateBIWithinWI();
 
@@ -289,7 +292,6 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
         // Activate only SI extension for SI projects
         ext.log('Initializing SI extension for SI project');
         await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
-        context.extensionAPIs.activateSIExtension();
 
     } else if (context.projectType === ProjectType.NONE) {
         // if a folder/workspace is open but we couldn't detect the project type, we should show an popup warning the user that the extension couldn't detect the project type
@@ -324,16 +326,6 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
  * Activate the BI project explorer directly within WI, without relying on the BI extension.
  */
 async function activateBIWithinWI(): Promise<void> {
-    // Ensure Ballerina extension is active so we can read its exports
-    const ballerinaExt = vscode.extensions.getExtension(EXTENSION_DEPENDENCIES.BALLERINA);
-    if (ballerinaExt) {
-        if (!ballerinaExt.isActive) {
-            await ballerinaExt.activate();
-        }
-        ballerinaContext.init(ballerinaExt.exports);
-        ext.log(`BallerinaContext: biSupported=${ballerinaContext.biSupported}, isNPSupported=${ballerinaContext.isNPSupported}`);
-    }
-
     // Gather detailed project info (package vs workspace, empty workspace)
     const extInfo = await fetchExtendedProjectInfo();
     ext.log(`ExtendedProjectInfo: isBallerinaPackage=${extInfo.isBallerinaPackage}, isBallerinaWorkspace=${extInfo.isBallerinaWorkspace}, isEmptyWorkspace=${extInfo.isEmptyWorkspace}`);
