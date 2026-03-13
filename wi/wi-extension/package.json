@@ -17,7 +17,11 @@
     "Other"
   ],
   "activationEvents": [
-    "*"
+    "workspaceContains:**/Ballerina.toml",
+    "onLanguage:SynapseXml",
+    "workspaceContains:.project",
+    "workspaceContains:pom.xml",
+    "workspaceContains:**/*.siddhi"
   ],
   "main": "./dist/extension.js",
   "contributes": {
