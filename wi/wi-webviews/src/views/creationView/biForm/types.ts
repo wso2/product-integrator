@@ -40,7 +40,6 @@ export interface AddProjectFormData extends BaseProjectFormData {
  */
 export interface ProjectFormData extends BaseProjectFormData {
     path: string;
-    createDirectory: boolean;
     // Kept for RPC payload compatibility; conceptually this is "create as project".
     createAsWorkspace: boolean;
     // Kept for RPC payload compatibility; conceptually this is the project name.

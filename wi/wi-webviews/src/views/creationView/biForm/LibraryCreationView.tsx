@@ -17,10 +17,10 @@
  */
 
 import { useState, useEffect } from "react";
-import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
+import { Button, Icon, TextField } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
-import { sanitizePackageName, validatePackageName, validateOrgName } from "./utils";
+import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { PackageInfoSection } from "./components";
 import { SectionDivider, OptionalSectionsLabel } from "./styles";
@@ -46,15 +46,10 @@ const FieldGroup = styled.div`
     margin-bottom: 20px;
 `;
 
-const CheckboxContainer = styled.div`
-    margin: 16px 0;
-`;
-
 interface LibraryFormData {
     libraryName: string;
     packageName: string;
     path: string;
-    createDirectory: boolean;
     orgName: string;
     version: string;
 }
@@ -68,11 +63,12 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
+    const [defaultPath, setDefaultPath] = useState("");
+    const [pathTouched, setPathTouched] = useState(false);
     const [formData, setFormData] = useState<LibraryFormData>({
         libraryName: "",
         packageName: "",
         path: "",
-        createDirectory: true,
         orgName: "",
         version: "",
     });
@@ -80,8 +76,9 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     useEffect(() => {
         (async () => {
             const { path: workspacePath } = await wsClient.getWorkspaceRoot();
-            const defaultPath = workspacePath || (await wsClient.getDefaultCreationPath()).path;
-            setFormData(prev => ({ ...prev, path: defaultPath }));
+            const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
+            setDefaultPath(dp);
+            setFormData(prev => ({ ...prev, path: dp }));
 
             try {
                 const { orgName } = await wsClient.getDefaultOrgName();
@@ -101,8 +98,11 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         setOrgNameError(validateOrgName(formData.orgName));
     }, [formData.orgName]);
 
+    const displayedPath = pathTouched ? formData.path : joinPath(formData.path || defaultPath, formData.packageName);
+
     const handleLibraryName = (value: string) => {
         if (libraryNameError) setLibraryNameError(null);
+        setPathTouched(false);
         setFormData(prev => ({
             ...prev,
             libraryName: value,
@@ -111,8 +111,10 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     };
 
     const handlePathSelection = async () => {
-        const result = await wsClient.selectFileOrDirPath({ startPath: formData.path });
+        const result = await wsClient.selectFileOrDirPath({ startPath: formData.path || defaultPath });
         if (!result.path) return;
+        if (pathError) setPathError(null);
+        setPathTouched(false);
         setFormData(prev => ({ ...prev, path: result.path }));
     };
 
@@ -154,7 +156,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             const validationResult = await wsClient.validateProjectPath({
                 projectPath: formData.path,
                 projectName: formData.packageName,
-                createDirectory: formData.createDirectory,
+                createDirectory: true,
                 createAsWorkspace: false,
             });
 
@@ -172,7 +174,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 projectName: formData.libraryName,
                 packageName: formData.packageName,
                 projectPath: formData.path,
-                createDirectory: formData.createDirectory,
+                createDirectory: true,
                 orgName: formData.orgName || undefined,
                 version: formData.version || undefined,
                 isLibrary: true,
@@ -226,23 +228,17 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                 <DirectorySelector
                                     id="library-folder-selector"
                                     label="Select Path"
-                                    placeholder="Enter path or browse to select a folder..."
-                                    selectedPath={formData.path}
+                                    placeholder="Browse to select a folder..."
+                                    selectedPath={displayedPath}
                                     required={true}
                                     onSelect={handlePathSelection}
                                     onChange={(value) => {
                                         if (pathError) setPathError(null);
+                                        setPathTouched(true);
                                         setFormData(prev => ({ ...prev, path: value }));
                                     }}
                                     errorMsg={pathError || undefined}
                                 />
-                                <CheckboxContainer>
-                                    <CheckBox
-                                        label="Create a new folder using the package name"
-                                        checked={formData.createDirectory}
-                                        onChange={(checked) => setFormData(prev => ({ ...prev, createDirectory: checked }))}
-                                    />
-                                </CheckboxContainer>
                             </FieldGroup>
 
                             <SectionDivider />
@@ -256,6 +252,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                     if (data.packageName !== undefined) {
                                         setPackageNameTouched(data.packageName.length > 0);
                                         if (packageNameError) setPackageNameError(null);
+                                        setPathTouched(false);
                                     }
                                     setFormData(prev => ({ ...prev, ...data }));
                                 }}

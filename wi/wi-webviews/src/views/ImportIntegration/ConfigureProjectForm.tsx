@@ -33,7 +33,6 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
         integrationName: "",
         packageName: "",
         path: "",
-        createDirectory: true,
         createAsWorkspace: false,
         workspaceName: "",
         orgName: "",
@@ -128,7 +127,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
             const validationResult = await wsClient.validateProjectPath({
                 projectPath: singleIntegrationData.path,
                 projectName: targetNameForValidation,
-                createDirectory: singleIntegrationData.createDirectory,
+                createDirectory: true,
             });
 
             if (!validationResult.isValid) {
@@ -161,7 +160,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
                 projectName: singleIntegrationData.integrationName,
                 packageName: singleIntegrationData.packageName,
                 projectPath: singleIntegrationData.path,
-                createDirectory: singleIntegrationData.createDirectory,
+                createDirectory: true,
                 createAsWorkspace: singleIntegrationData.createAsWorkspace,
                 workspaceName: singleIntegrationData.workspaceName,
                 orgName: singleIntegrationData.orgName || undefined,

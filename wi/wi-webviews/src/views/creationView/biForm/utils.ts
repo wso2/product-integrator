@@ -72,6 +72,33 @@ export const isFormValidAddProject = (formData: AddProjectFormData, isInProject:
     );
 };
 
+/**
+ * Cross-platform path joining for webview display.
+ * Detects the path separator from the base string itself.
+ */
+export const joinPath = (base: string, name: string): string => {
+    if (!base) return '';
+    if (!name) return base;
+    const sep = base.includes('\\') ? '\\' : '/';
+    const trimmed = base.endsWith(sep) ? base.slice(0, -1) : base;
+    return `${trimmed}${sep}${name}`;
+};
+
+/**
+ * Extracts the base (parent) directory from a full path that may have `name` appended.
+ * If the path ends with `/name` or `\name`, strips it. Otherwise strips the last component.
+ */
+export const extractBase = (value: string, name: string): string => {
+    if (!value) return value;
+    if (name) {
+        if (value.endsWith('/' + name)) return value.slice(0, -(name.length + 1));
+        if (value.endsWith('\\' + name)) return value.slice(0, -(name.length + 1));
+    }
+    const lastSep = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
+    return lastSep > 0 ? value.slice(0, lastSep) : value;
+};
+
+
 export const sanitizePackageName = (name: string): string => {
     // Allow dots/underscores but sanitize other characters, then convert consecutive dots/underscores to single ones
     return name

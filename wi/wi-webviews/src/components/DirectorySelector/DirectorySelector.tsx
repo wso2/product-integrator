@@ -116,18 +116,18 @@ const BrowseButton = styled(VSCodeButton)`
 `;
 
 export const DirectorySelector: React.FC<DirectorySelectorProps> = props => {
-    const { 
-        id, 
-        label, 
-        placeholder = "Enter or browse to select a folder...", 
-        selectedPath, 
-        required, 
+    const {
+        id,
+        label,
+        placeholder = "Enter or browse to select a folder...",
+        selectedPath,
+        required,
         description,
-        errorMsg, 
+        errorMsg,
         sx,
         'data-testid': dataTestId,
         onSelect,
-        onChange 
+        onChange,
     } = props;
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

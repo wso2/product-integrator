@@ -21,6 +21,7 @@ import { Button, Icon, TextField } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
+import { joinPath } from "./utils";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -65,6 +66,8 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const [isValidating, setIsValidating] = useState(false);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
+    const [defaultPath, setDefaultPath] = useState("");
+    const [pathTouched, setPathTouched] = useState(false);
     const [formData, setFormData] = useState({
         projectName: "",
         path: "",
@@ -73,15 +76,19 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     useEffect(() => {
         (async () => {
             const { path: workspacePath } = await wsClient.getWorkspaceRoot();
-            const defaultPath = workspacePath || (await wsClient.getDefaultCreationPath()).path;
-            setFormData(prev => ({ ...prev, path: defaultPath }));
+            const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
+            setDefaultPath(dp);
+            setFormData(prev => ({ ...prev, path: dp }));
         })();
     }, []);
 
+    const displayedPath = pathTouched ? formData.path : joinPath(formData.path || defaultPath, formData.projectName);
+
     const handlePathSelection = async () => {
-        const result = await wsClient.selectFileOrDirPath({ startPath: formData.path });
+        const result = await wsClient.selectFileOrDirPath({ startPath: formData.path || defaultPath });
         if (!result.path) return;
         if (pathError) setPathError(null);
+        setPathTouched(false);
         setFormData(prev => ({ ...prev, path: result.path }));
     };
 
@@ -169,6 +176,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                 <TextField
                                     onTextChange={(value) => {
                                         if (projectNameError) setProjectNameError(null);
+                                        setPathTouched(false);
                                         setFormData(prev => ({ ...prev, projectName: value }));
                                     }}
                                     value={formData.projectName}
@@ -184,12 +192,13 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                 <DirectorySelector
                                     id="project-folder-selector"
                                     label="Select Path"
-                                    placeholder="Enter path or browse to select a folder..."
-                                    selectedPath={formData.path}
+                                    placeholder="Browse to select a folder..."
+                                    selectedPath={displayedPath}
                                     required={true}
                                     onSelect={handlePathSelection}
                                     onChange={(value) => {
                                         if (pathError) setPathError(null);
+                                        setPathTouched(true);
                                         setFormData(prev => ({ ...prev, path: value }));
                                     }}
                                     errorMsg={pathError || undefined}

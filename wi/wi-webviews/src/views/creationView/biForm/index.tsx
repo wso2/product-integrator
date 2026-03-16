@@ -36,7 +36,6 @@ export function BIProjectForm() {
         integrationName: "",
         packageName: "",
         path: "",
-        createDirectory: true,
         createAsWorkspace: false,
         workspaceName: "",
         orgName: "",
@@ -112,7 +111,7 @@ export function BIProjectForm() {
             const validationResult = await wsClient.validateProjectPath({
                 projectPath: formData.path,
                 projectName: targetNameForValidation,
-                createDirectory: formData.createDirectory,
+                createDirectory: true,
                 createAsWorkspace: formData.createAsWorkspace,
             });
 
@@ -143,7 +142,7 @@ export function BIProjectForm() {
                 projectName: formData.integrationName,
                 packageName: formData.packageName,
                 projectPath: formData.path,
-                createDirectory: formData.createDirectory,
+                createDirectory: true,
                 createAsWorkspace: formData.createAsWorkspace,
                 workspaceName: formData.workspaceName,
                 orgName: formData.orgName || undefined,

@@ -17,7 +17,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { TextField, CheckBox, DirectorySelector } from "@wso2/ui-toolkit";
+import { TextField, CheckBox } from "@wso2/ui-toolkit";
+import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { useVisualizerContext } from "../../../contexts/WsContext";
 import {
     FieldGroup,
@@ -27,7 +28,7 @@ import {
     OptionalSectionsLabel,
 } from "./styles";
 import { CollapsibleSection, PackageInfoSection } from "./components";
-import { sanitizePackageName, validatePackageName, validateOrgName } from "./utils";
+import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
 import { ProjectFormData } from "./types";
 
 // Re-export for backwards compatibility
@@ -57,9 +58,15 @@ export function ProjectFormFields({
     const [isProjectModeSupported, setIsProjectModeSupported] = useState(false);
     const [isProjectSettingsExpanded, setIsProjectSettingsExpanded] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
+    const [defaultPath, setDefaultPath] = useState("");
+    const [pathTouched, setPathTouched] = useState(false);
+
+    const pathName = formData.createAsWorkspace ? formData.workspaceName : formData.packageName;
+    const displayedPath = pathTouched ? formData.path : joinPath(formData.path || defaultPath, pathName);
 
     const handleIntegrationName = (value: string) => {
         onFormDataChange({ integrationName: value });
+        setPathTouched(false);
         // Auto-populate package name if user hasn't manually edited it
         if (!packageNameTouched) {
             onFormDataChange({ packageName: sanitizePackageName(value) });
@@ -67,8 +74,9 @@ export function ProjectFormFields({
     };
 
     const handleProjectDirSelection = async () => {
-        const selectedDirectory = await wsClient.selectFileOrDirPath({ startPath: formData.path });
+        const selectedDirectory = await wsClient.selectFileOrDirPath({ startPath: formData.path || defaultPath });
         if (!selectedDirectory.path) return;
+        setPathTouched(false);
         onFormDataChange({ path: selectedDirectory.path });
     };
 
@@ -81,8 +89,9 @@ export function ProjectFormFields({
             // Set default path if not already set
             if (!formData.path) {
                 const { path: workspacePath } = await wsClient.getWorkspaceRoot();
-                const defaultPath = workspacePath || (await wsClient.getDefaultCreationPath()).path;
-                onFormDataChange({ path: defaultPath });
+                const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
+                setDefaultPath(dp);
+                onFormDataChange({ path: dp });
             }
 
             // Set default org name if not already set
@@ -135,21 +144,16 @@ export function ProjectFormFields({
                 <DirectorySelector
                     id="project-folder-selector"
                     label="Select Path"
-                    placeholder="Enter path or browse to select a folder..."
-                    selectedPath={formData.path}
+                    placeholder="Browse to select a folder..."
+                    selectedPath={displayedPath}
                     required={true}
                     onSelect={handleProjectDirSelection}
-                    onChange={(value) => onFormDataChange({ path: value })}
+                    onChange={(value) => {
+                        setPathTouched(true);
+                        onFormDataChange({ path: value });
+                    }}
                     errorMsg={pathError || undefined}
                 />
-
-                <CheckboxContainer>
-                    <CheckBox
-                        label={`Create a new directory using the ${formData.createAsWorkspace ? "project name" : `package name`}`}
-                        checked={formData.createDirectory}
-                        onChange={(checked) => onFormDataChange({ createDirectory: checked })}
-                    />
-                </CheckboxContainer>
             </FieldGroup>
 
             <SectionDivider />
@@ -167,7 +171,7 @@ export function ProjectFormFields({
                         <CheckBox
                             label="Create as project"
                             checked={formData.createAsWorkspace}
-                            onChange={(checked) => onFormDataChange({ createAsWorkspace: checked })}
+                            onChange={(checked) => { setPathTouched(false); onFormDataChange({ createAsWorkspace: checked }); }}
                         />
                         <Description>
                             Enable project mode to manage multiple integrations and libraries within a single repository.
@@ -176,7 +180,7 @@ export function ProjectFormFields({
                     {formData.createAsWorkspace && (
                         <FieldGroup>
                             <TextField
-                                onTextChange={(value) => onFormDataChange({ workspaceName: value })}
+                                onTextChange={(value) => { setPathTouched(false); onFormDataChange({ workspaceName: value }); }}
                                 value={formData.workspaceName}
                                 label="Project Name"
                                 placeholder="Enter project name"
@@ -197,6 +201,7 @@ export function ProjectFormFields({
                     if (data.packageName !== undefined) {
                         setPackageNameTouched(data.packageName.length > 0);
                         if (packageNameError) setPackageNameError(null);
+                        setPathTouched(false);
                     }
                     onFormDataChange(data);
                 }}
