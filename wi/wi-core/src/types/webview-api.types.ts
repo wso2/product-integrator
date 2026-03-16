@@ -56,6 +56,7 @@ export interface FileOrDirResponse {
 
 export interface FileOrDirRequest {
     isFile?: boolean;
+    startPath?: string;
 }
 
 export interface WorkspaceRootResponse {
@@ -340,4 +341,5 @@ export interface WIVisualizerAPI {
     restoreWebviewCache: (cacheKey: string) => Promise<unknown>;
     clearWebviewCache: (cacheKey: string) => Promise<void>;
     getDefaultOrgName: () => Promise<DefaultOrgNameResponse>;
+    getDefaultCreationPath: () => Promise<WorkspaceRootResponse>;
 }

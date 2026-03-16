@@ -128,6 +128,7 @@ export interface WIWsMethodParamsMap {
     restoreWebviewCache: string;
     clearWebviewCache: string;
     getDefaultOrgName: void;
+    getDefaultCreationPath: void;
 
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: void;
@@ -187,6 +188,7 @@ export interface WIWsMethodResultMap {
     restoreWebviewCache: unknown;
     clearWebviewCache: void;
     getDefaultOrgName: DefaultOrgNameResponse;
+    getDefaultCreationPath: WorkspaceRootResponse;
 
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: WICloudFormContext;

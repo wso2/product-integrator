@@ -79,8 +79,9 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
     useEffect(() => {
         (async () => {
-            const currentDir = await wsClient.getWorkspaceRoot();
-            setFormData(prev => ({ ...prev, path: currentDir.path }));
+            const { path: workspacePath } = await wsClient.getWorkspaceRoot();
+            const defaultPath = workspacePath || (await wsClient.getDefaultCreationPath()).path;
+            setFormData(prev => ({ ...prev, path: defaultPath }));
 
             try {
                 const { orgName } = await wsClient.getDefaultOrgName();
@@ -110,7 +111,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     };
 
     const handlePathSelection = async () => {
-        const result = await wsClient.selectFileOrDirPath({});
+        const result = await wsClient.selectFileOrDirPath({ startPath: formData.path });
+        if (!result.path) return;
         setFormData(prev => ({ ...prev, path: result.path }));
     };
 

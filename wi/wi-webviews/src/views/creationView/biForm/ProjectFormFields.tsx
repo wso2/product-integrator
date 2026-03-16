@@ -67,7 +67,8 @@ export function ProjectFormFields({
     };
 
     const handleProjectDirSelection = async () => {
-        const selectedDirectory = await wsClient.selectFileOrDirPath({});
+        const selectedDirectory = await wsClient.selectFileOrDirPath({ startPath: formData.path });
+        if (!selectedDirectory.path) return;
         onFormDataChange({ path: selectedDirectory.path });
     };
 
@@ -79,8 +80,9 @@ export function ProjectFormFields({
         (async () => {
             // Set default path if not already set
             if (!formData.path) {
-                const currentDir = await wsClient.getWorkspaceRoot();
-                onFormDataChange({ path: currentDir.path });
+                const { path: workspacePath } = await wsClient.getWorkspaceRoot();
+                const defaultPath = workspacePath || (await wsClient.getDefaultCreationPath()).path;
+                onFormDataChange({ path: defaultPath });
             }
 
             // Set default org name if not already set

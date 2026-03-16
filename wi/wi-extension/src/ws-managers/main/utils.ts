@@ -51,12 +51,12 @@ export async function askFilePath() {
     });
 }
 
-export async function askProjectPath() {
+export async function askProjectPath(startPath?: string) {
     return await window.showOpenDialog({
         canSelectFiles: false,
         canSelectFolders: true,
         canSelectMany: false,
-        defaultUri: Uri.file(os.homedir()),
+        defaultUri: Uri.file(startPath || os.homedir()),
         title: "Select a folder"
     });
 }

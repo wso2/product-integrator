@@ -302,6 +302,10 @@ export class WsClient {
         return this.request("getDefaultOrgName");
     }
 
+    public getDefaultCreationPath(): Promise<WorkspaceRootResponse> {
+        return this.request("getDefaultCreationPath");
+    }
+
     // ── Cloud methods ─────────────────────────────────────────
 
     public getCloudFormContext(): Promise<WICloudFormContext> {

@@ -59,6 +59,7 @@ import { commands, window, workspace, MarkdownString, Uri, env, ConfigurationTar
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import axios from "axios";
 import { pullMigrationTool } from "./migrate-integration";
@@ -216,7 +217,7 @@ export class MainWsManager implements WIVisualizerAPI {
                     resolve({ path: filePath });
                 }
             } else {
-                const selectedDir = await askProjectPath();
+                const selectedDir = await askProjectPath(params.startPath);
                 if (!selectedDir || selectedDir.length === 0) {
                     window.showErrorMessage('A folder must be selected');
                     resolve({ path: "" });
@@ -560,5 +561,13 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async getDefaultOrgName(): Promise<DefaultOrgNameResponse> {
         return { orgName: getUsername() };
+    }
+
+    async getDefaultCreationPath(): Promise<WorkspaceRootResponse> {
+        const defaultPath = path.join(os.homedir(), "wso2Integrator", "projects");
+        if (!fs.existsSync(defaultPath)) {
+            fs.mkdirSync(defaultPath, { recursive: true });
+        }
+        return { path: defaultPath };
     }
 }
