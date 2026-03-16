@@ -21,6 +21,7 @@ import { Button, Icon, TextField } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../contexts";
 import { DirectorySelector } from "../../components/DirectorySelector/DirectorySelector";
+import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
     PageContainer,
@@ -42,8 +43,28 @@ const FieldGroup = styled.div`
     margin-bottom: 20px;
 `;
 
+const validateProjectName = (name: string): string | null => {
+    if (!name || name.length === 0) {
+        return "Project name is required";
+    }
+    if (!/^[a-zA-Z]/.test(name)) {
+        return "Project name must start with an alphabetic letter";
+    }
+    if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
+        return "Project name cannot contain special characters";
+    }
+    const letterCount = (name.match(/[a-zA-Z]/g) || []).length;
+    if (letterCount < 3) {
+        return "Project name must contain at least three letters";
+    }
+    return null;
+};
+
 export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
+    const [isValidating, setIsValidating] = useState(false);
+    const [projectNameError, setProjectNameError] = useState<string | null>(null);
+    const [pathError, setPathError] = useState<string | null>(null);
     const [formData, setFormData] = useState({
         projectName: "",
         path: "",
@@ -58,16 +79,61 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
 
     const handlePathSelection = async () => {
         const result = await wsClient.selectFileOrDirPath({});
+        if (pathError) setPathError(null);
         setFormData(prev => ({ ...prev, path: result.path }));
     };
 
-    const handleCreate = () => {
-        wsClient.createBIProject({
-            workspaceName: formData.projectName,
-            projectPath: formData.path,
-            createDirectory: true,
-            createAsWorkspace: true,
-        });
+    const handleCreate = async () => {
+        setIsValidating(true);
+        setProjectNameError(null);
+        setPathError(null);
+
+        let hasError = false;
+
+        const nameError = validateProjectName(formData.projectName);
+        if (nameError) {
+            setProjectNameError(nameError);
+            hasError = true;
+        }
+
+        if (formData.path.length < 2) {
+            setPathError("Please select a path for your project");
+            hasError = true;
+        }
+
+        if (hasError) {
+            setIsValidating(false);
+            return;
+        }
+
+        try {
+            const validationResult = await wsClient.validateProjectPath({
+                projectPath: formData.path,
+                projectName: formData.projectName,
+                createDirectory: true,
+                createAsWorkspace: true,
+            });
+
+            if (!validationResult.isValid) {
+                if (validationResult.errorField === ValidateProjectFormErrorField.PATH) {
+                    setPathError(validationResult.errorMessage || "Invalid project path");
+                } else if (validationResult.errorField === ValidateProjectFormErrorField.NAME) {
+                    setProjectNameError(validationResult.errorMessage || "Invalid project name");
+                }
+                setIsValidating(false);
+                return;
+            }
+
+            wsClient.createBIProject({
+                workspaceName: formData.projectName,
+                projectPath: formData.path,
+                createDirectory: true,
+                createAsWorkspace: true,
+            });
+        } catch (error) {
+            setPathError("An error occurred during validation");
+            setIsValidating(false);
+        }
     };
 
     return (
@@ -99,12 +165,16 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                         <FormContent>
                             <FieldGroup>
                                 <TextField
-                                    onTextChange={(value) => setFormData(prev => ({ ...prev, projectName: value }))}
+                                    onTextChange={(value) => {
+                                        if (projectNameError) setProjectNameError(null);
+                                        setFormData(prev => ({ ...prev, projectName: value }));
+                                    }}
                                     value={formData.projectName}
                                     label="Project Name"
                                     placeholder="Enter a project name"
                                     autoFocus={true}
                                     required={true}
+                                    errorMsg={projectNameError || ""}
                                 />
                             </FieldGroup>
 
@@ -116,17 +186,21 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                     selectedPath={formData.path}
                                     required={true}
                                     onSelect={handlePathSelection}
-                                    onChange={(value) => setFormData(prev => ({ ...prev, path: value }))}
+                                    onChange={(value) => {
+                                        if (pathError) setPathError(null);
+                                        setFormData(prev => ({ ...prev, path: value }));
+                                    }}
+                                    errorMsg={pathError || undefined}
                                 />
                             </FieldGroup>
 
                             <FormFooter>
                                 <Button
-                                    disabled={!formData.path || !formData.projectName}
+                                    disabled={isValidating}
                                     onClick={handleCreate}
                                     appearance="primary"
                                 >
-                                    Create Project
+                                    {isValidating ? "Validating..." : "Create Project"}
                                 </Button>
                             </FormFooter>
                         </FormContent>

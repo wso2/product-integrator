@@ -66,16 +66,6 @@ export function ProjectFormFields({
         }
     };
 
-    const handlePackageName = (value: string) => {
-        // Allow dots and other characters while typing
-        const sanitized = sanitizePackageName(value);
-        onFormDataChange({ packageName: sanitized });
-        setPackageNameTouched(value.length > 0);
-        if (packageNameError) {
-            setPackageNameError(null);
-        }
-    };
-
     const handleProjectDirSelection = async () => {
         const selectedDirectory = await wsClient.selectFileOrDirPath({});
         onFormDataChange({ path: selectedDirectory.path });
@@ -140,16 +130,6 @@ export function ProjectFormFields({
             </FieldGroup>
 
             <FieldGroup>
-                <TextField
-                    onTextChange={handlePackageName}
-                    value={formData.packageName}
-                    label="Package Name"
-                    description={`This will be used as the Ballerina package name for the integration.`}
-                    errorMsg={packageNameValidationError || packageNameError || ""}
-                />
-            </FieldGroup>
-
-            <FieldGroup>
                 <DirectorySelector
                     id="project-folder-selector"
                     label="Select Path"
@@ -210,9 +190,16 @@ export function ProjectFormFields({
             <PackageInfoSection
                 isExpanded={isPackageInfoExpanded}
                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
-                data={{ orgName: formData.orgName, version: formData.version }}
-                onChange={(data) => onFormDataChange(data)}
+                data={{ packageName: formData.packageName, orgName: formData.orgName, version: formData.version }}
+                onChange={(data) => {
+                    if (data.packageName !== undefined) {
+                        setPackageNameTouched(data.packageName.length > 0);
+                        if (packageNameError) setPackageNameError(null);
+                    }
+                    onFormDataChange(data);
+                }}
                 orgNameError={orgNameError}
+                packageNameError={packageNameValidationError || packageNameError}
             />
         </>
     );

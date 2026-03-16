@@ -20,10 +20,11 @@ import { useState, useEffect } from "react";
 import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../contexts";
-import { sanitizePackageName } from "../creationView/biForm/utils";
+import { sanitizePackageName, validatePackageName, validateOrgName } from "../creationView/biForm/utils";
 import { DirectorySelector } from "../../components/DirectorySelector/DirectorySelector";
 import { PackageInfoSection } from "../creationView/biForm/components";
 import { SectionDivider, OptionalSectionsLabel } from "../creationView/biForm/styles";
+import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
     PageContainer,
@@ -62,6 +63,11 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
     const [packageNameTouched, setPackageNameTouched] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
+    const [isValidating, setIsValidating] = useState(false);
+    const [libraryNameError, setLibraryNameError] = useState<string | null>(null);
+    const [pathError, setPathError] = useState<string | null>(null);
+    const [packageNameError, setPackageNameError] = useState<string | null>(null);
+    const [orgNameError, setOrgNameError] = useState<string | null>(null);
     const [formData, setFormData] = useState<LibraryFormData>({
         libraryName: "",
         packageName: "",
@@ -75,10 +81,27 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         (async () => {
             const currentDir = await wsClient.getWorkspaceRoot();
             setFormData(prev => ({ ...prev, path: currentDir.path }));
+
+            try {
+                const { orgName } = await wsClient.getDefaultOrgName();
+                setFormData(prev => ({ ...prev, orgName }));
+            } catch (error) {
+                console.error("Failed to fetch default org name:", error);
+            }
         })();
     }, []);
 
+    useEffect(() => {
+        const error = validatePackageName(formData.packageName, formData.libraryName);
+        setPackageNameError(error);
+    }, [formData.packageName, formData.libraryName]);
+
+    useEffect(() => {
+        setOrgNameError(validateOrgName(formData.orgName));
+    }, [formData.orgName]);
+
     const handleLibraryName = (value: string) => {
+        if (libraryNameError) setLibraryNameError(null);
         setFormData(prev => ({
             ...prev,
             libraryName: value,
@@ -86,26 +109,76 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         }));
     };
 
-    const handlePackageName = (value: string) => {
-        setFormData(prev => ({ ...prev, packageName: sanitizePackageName(value) }));
-        setPackageNameTouched(value.length > 0);
-    };
-
     const handlePathSelection = async () => {
         const result = await wsClient.selectFileOrDirPath({});
         setFormData(prev => ({ ...prev, path: result.path }));
     };
 
-    const handleCreate = () => {
-        wsClient.createBIProject({
-            projectName: formData.libraryName,
-            packageName: formData.packageName,
-            projectPath: formData.path,
-            createDirectory: formData.createDirectory,
-            orgName: formData.orgName || undefined,
-            version: formData.version || undefined,
-            isLibrary: true,
-        });
+    const handleCreate = async () => {
+        setIsValidating(true);
+        setLibraryNameError(null);
+        setPathError(null);
+        setPackageNameError(null);
+
+        let hasError = false;
+
+        if (formData.libraryName.length < 2) {
+            setLibraryNameError("Library name must be at least 2 characters");
+            hasError = true;
+        }
+
+        if (formData.packageName.length < 2) {
+            setPackageNameError("Package name must be at least 2 characters");
+            hasError = true;
+        } else {
+            const pkgError = validatePackageName(formData.packageName, formData.libraryName);
+            if (pkgError) {
+                setPackageNameError(pkgError);
+                hasError = true;
+            }
+        }
+
+        if (formData.path.length < 2) {
+            setPathError("Please select a path for your library");
+            hasError = true;
+        }
+
+        if (hasError) {
+            setIsValidating(false);
+            return;
+        }
+
+        try {
+            const validationResult = await wsClient.validateProjectPath({
+                projectPath: formData.path,
+                projectName: formData.packageName,
+                createDirectory: formData.createDirectory,
+                createAsWorkspace: false,
+            });
+
+            if (!validationResult.isValid) {
+                if (validationResult.errorField === ValidateProjectFormErrorField.PATH) {
+                    setPathError(validationResult.errorMessage || "Invalid library path");
+                } else if (validationResult.errorField === ValidateProjectFormErrorField.NAME) {
+                    setPackageNameError(validationResult.errorMessage || "Invalid package name");
+                }
+                setIsValidating(false);
+                return;
+            }
+
+            wsClient.createBIProject({
+                projectName: formData.libraryName,
+                packageName: formData.packageName,
+                projectPath: formData.path,
+                createDirectory: formData.createDirectory,
+                orgName: formData.orgName || undefined,
+                version: formData.version || undefined,
+                isLibrary: true,
+            });
+        } catch (error) {
+            setPathError("An error occurred during validation");
+            setIsValidating(false);
+        }
     };
 
     return (
@@ -143,15 +216,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                     placeholder="Enter a library name"
                                     autoFocus={true}
                                     required={true}
-                                />
-                            </FieldGroup>
-
-                            <FieldGroup>
-                                <TextField
-                                    onTextChange={handlePackageName}
-                                    value={formData.packageName}
-                                    label="Package Name"
-                                    description="This will be used as the Ballerina package name for the library."
+                                    errorMsg={libraryNameError || ""}
                                 />
                             </FieldGroup>
 
@@ -163,7 +228,11 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                     selectedPath={formData.path}
                                     required={true}
                                     onSelect={handlePathSelection}
-                                    onChange={(value) => setFormData(prev => ({ ...prev, path: value }))}
+                                    onChange={(value) => {
+                                        if (pathError) setPathError(null);
+                                        setFormData(prev => ({ ...prev, path: value }));
+                                    }}
+                                    errorMsg={pathError || undefined}
                                 />
                                 <CheckboxContainer>
                                     <CheckBox
@@ -180,18 +249,26 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                             <PackageInfoSection
                                 isExpanded={isPackageInfoExpanded}
                                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
-                                data={{ orgName: formData.orgName, version: formData.version }}
-                                onChange={(data) => setFormData(prev => ({ ...prev, ...data }))}
+                                data={{ packageName: formData.packageName, orgName: formData.orgName, version: formData.version }}
+                                onChange={(data) => {
+                                    if (data.packageName !== undefined) {
+                                        setPackageNameTouched(data.packageName.length > 0);
+                                        if (packageNameError) setPackageNameError(null);
+                                    }
+                                    setFormData(prev => ({ ...prev, ...data }));
+                                }}
                                 isLibrary={true}
+                                packageNameError={packageNameError}
+                                orgNameError={orgNameError}
                             />
 
                             <FormFooter>
                                 <Button
-                                    disabled={!formData.path || !formData.libraryName}
+                                    disabled={isValidating}
                                     onClick={handleCreate}
                                     appearance="primary"
                                 >
-                                    Create Library
+                                    {isValidating ? "Validating..." : "Create Library"}
                                 </Button>
                             </FormFooter>
                         </FormContent>

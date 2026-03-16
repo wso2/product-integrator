@@ -19,8 +19,10 @@
 import { TextField } from "@wso2/ui-toolkit";
 import { FieldGroup, Note } from "../styles";
 import { CollapsibleSection } from "./CollapsibleSection";
+import { sanitizePackageName } from "../utils";
 
 export interface PackageInfoData {
+    packageName: string;
     orgName: string;
     version: string;
 }
@@ -38,6 +40,8 @@ export interface PackageInfoSectionProps {
     isLibrary?: boolean;
     /** Error message for org name validation */
     orgNameError?: string | null;
+    /** Error message for package name validation */
+    packageNameError?: string | null;
 }
 
 export function PackageInfoSection({
@@ -47,6 +51,7 @@ export function PackageInfoSection({
     onChange,
     isLibrary,
     orgNameError,
+    packageNameError,
 }: PackageInfoSectionProps) {
     return (
         <CollapsibleSection
@@ -56,8 +61,17 @@ export function PackageInfoSection({
             title="Package Information"
         >
             <Note style={{ marginBottom: "16px" }}>
-                {`This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Define the organization and version that will be assigned to it. `}    
+                {`This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Define the organization and version that will be assigned to it. `}
             </Note>
+            <FieldGroup>
+                <TextField
+                    onTextChange={(value) => onChange({ packageName: sanitizePackageName(value) })}
+                    value={data.packageName}
+                    label="Package Name"
+                    description={`This will be used as the Ballerina package name for the ${isLibrary ? "library" : "integration"}.`}
+                    errorMsg={packageNameError || undefined}
+                />
+            </FieldGroup>
             <FieldGroup>
                 <TextField
                     onTextChange={(value) => onChange({ orgName: value })}
