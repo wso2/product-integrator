@@ -19,8 +19,8 @@
 import { useState, useEffect } from "react";
 import { Button, Icon, TextField } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
-import { useVisualizerContext } from "../../contexts";
-import { DirectorySelector } from "../../components/DirectorySelector/DirectorySelector";
+import { useVisualizerContext } from "../../../contexts";
+import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -37,7 +37,7 @@ import {
     FormBody,
     FormContent,
     FormFooter,
-} from "../shared/FormPageLayout";
+} from "../../shared/FormPageLayout";
 
 const FieldGroup = styled.div`
     margin-bottom: 20px;

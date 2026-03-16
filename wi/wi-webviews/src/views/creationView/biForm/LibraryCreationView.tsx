@@ -19,11 +19,11 @@
 import { useState, useEffect } from "react";
 import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
-import { useVisualizerContext } from "../../contexts";
-import { sanitizePackageName, validatePackageName, validateOrgName } from "../creationView/biForm/utils";
-import { DirectorySelector } from "../../components/DirectorySelector/DirectorySelector";
-import { PackageInfoSection } from "../creationView/biForm/components";
-import { SectionDivider, OptionalSectionsLabel } from "../creationView/biForm/styles";
+import { useVisualizerContext } from "../../../contexts";
+import { sanitizePackageName, validatePackageName, validateOrgName } from "./utils";
+import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
+import { PackageInfoSection } from "./components";
+import { SectionDivider, OptionalSectionsLabel } from "./styles";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -40,7 +40,7 @@ import {
     FormBody,
     FormContent,
     FormFooter,
-} from "../shared/FormPageLayout";
+} from "../../shared/FormPageLayout";
 
 const FieldGroup = styled.div`
     margin-bottom: 20px;
