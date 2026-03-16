@@ -373,6 +373,7 @@ const ViewAllButton = styled.button`
     cursor: pointer;
     font-weight: 500;
     padding: 0;
+    margin-left: auto;
     
     &:hover {
         color: var(--vscode-textLink-activeForeground);
@@ -695,7 +696,7 @@ export const WelcomeView: React.FC = () => {
                     <ActionCard onClick={goToCreateIntegration}>
                         <CardIconContainer>
                             <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%)">
-                                <Codicon name="plus" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
+                                <Codicon name="circuit-board" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
                         <CardContent>
@@ -714,7 +715,7 @@ export const WelcomeView: React.FC = () => {
                     <ActionCard onClick={handleProjectDirSelection}>
                         <CardIconContainer>
                             <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink) 0%, var(--wso2-brand-ink-alt) 100%)">
-                                <Codicon name="file-text" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
+                                <Codicon name="folder-opened" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
                         <CardContent>
@@ -732,7 +733,7 @@ export const WelcomeView: React.FC = () => {
                     <ActionCard onClick={goToSamples}>
                         <CardIconContainer>
                             <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-ink-alt) 100%)">
-                                <Codicon name="symbol-class" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
+                                <Codicon name="lightbulb" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
                         <CardContent>
@@ -750,7 +751,7 @@ export const WelcomeView: React.FC = () => {
                     <ActionCard onClick={goToSamples}>
                         <CardIconContainer>
                             <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-ink-alt) 100%)">
-                                <Codicon name="arrow-swap" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
+                                <Codicon name="extensions" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
                         <CardContent>
@@ -790,7 +791,9 @@ export const WelcomeView: React.FC = () => {
                     <SecondaryCardsGrid>
                         <SecondaryActionCard onClick={goToCreateLibrary}>
                             <CardIconContainer>
-                                <CardIcon bgColor="linear-gradient(135deg, #4ecdc4 0%, #1a9691 100%)">⊞</CardIcon>
+                                <CardIcon bgColor="linear-gradient(135deg, #4ecdc4 0%, #1a9691 100%)">
+                                    <Codicon name="book" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
+                                </CardIcon>
                             </CardIconContainer>
                             <CardContent>
                                 <CardTitle>Create Library</CardTitle>
@@ -806,7 +809,9 @@ export const WelcomeView: React.FC = () => {
 
                         <SecondaryActionCard onClick={goToCreateProject}>
                             <CardIconContainer>
-                                <CardIcon bgColor="linear-gradient(135deg, #f7971e 0%, #d4841a 100%)">◫</CardIcon>
+                                <CardIcon bgColor="linear-gradient(135deg, #f7971e 0%, #d4841a 100%)">
+                                    <Codicon name="new-folder" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
+                                </CardIcon>
                             </CardIconContainer>
                             <CardContent>
                                 <CardTitle>Create Project</CardTitle>
@@ -822,7 +827,9 @@ export const WelcomeView: React.FC = () => {
 
                         <SecondaryActionCard onClick={goToImportExternal}>
                             <CardIconContainer>
-                                <CardIcon bgColor="linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)">↷</CardIcon>
+                                <CardIcon bgColor="linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)">
+                                    <Codicon name="cloud-download" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
+                                </CardIcon>
                             </CardIconContainer>
                             <CardContent>
                                 <CardTitle>Migrate 3rd Party Integrations</CardTitle>
