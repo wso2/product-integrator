@@ -25,7 +25,7 @@
     "@wso2/wso2-platform-core": "workspace:*",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "vscode-webview-network-bridge": "1.1.1",
+    "webview-giga-bridge": "workspace:*",
     "classnames": "2.5.1",
     "@pmmmwh/react-refresh-webpack-plugin": "0.6.1",
     "@emotion/styled": "11.14.1",

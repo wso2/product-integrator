@@ -2,7 +2,7 @@
   "name": "wso2-integrator",
   "displayName": "WSO2 Integrator",
   "description": "Unified integration development environment for WSO2 BI and MI in VS Code",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "cliVersion": "v1.2.212603061900",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
@@ -16,7 +16,13 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "workspaceContains:**/Ballerina.toml",
+    "onLanguage:SynapseXml",
+    "workspaceContains:.project",
+    "workspaceContains:pom.xml",
+    "workspaceContains:**/*.siddhi"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
@@ -96,7 +102,7 @@
       {
         "view": "wso2-integrator.explorer",
         "contents": "$(loadingspin) Loading WSO2 Integrator...",
-        "when": "WI.projectType == 'bi' || WI.projectType == 'mi'"
+        "when": "!WI.projectType"
       },
       {
         "view": "wso2-integrator.explorer",
@@ -105,7 +111,7 @@
       },
       {
         "view": "wso2-integrator.explorer",
-        "contents": "Welcome to WSO2 Integrator.\n[Get Started](command:wso2.integrator.openWelcome)",
+        "contents": "$(rocket) Build integration solutions with WSO2 Integrator.\n\nUse the welcome page to create a new project, explore samples, import external integrations, and manage runtime settings.\n\nOpen an integration project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
         "when": "WI.projectType == 'none'"
       }
     ],
@@ -193,9 +199,146 @@
         "category": "WSO2 Integrator",
         "icon": "$(refresh)",
         "enablement": "!isLoadingContextDirs"
+      },
+      {
+        "command": "ballerina.showVisualizer",
+        "title": "Show Visualizer",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "ballerina.force.update.artifacts",
+        "title": "Force Update Artifacts",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add",
+        "title": "Add Artifact",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.overview",
+        "title": "Open Overview",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-connection",
+        "title": "Add Connection",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.delete",
+        "title": "Delete",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-entry-point",
+        "title": "Add Entry Point",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-type",
+        "title": "Add Type",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.view-type-diagram",
+        "title": "View Type Diagram",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-function",
+        "title": "Add Function",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-configuration",
+        "title": "Add Configuration",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.view-configuration",
+        "title": "View Configuration",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-data-mapper",
+        "title": "Add Data Mapper",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-natural-function",
+        "title": "Add Natural Function",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-custom-connector",
+        "title": "Add Custom Connector",
+        "category": "WSO2 Integrator"
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "ballerina.showVisualizer",
+          "when": "false"
+        },
+        {
+          "command": "ballerina.force.update.artifacts",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.overview",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-connection",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.delete",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-entry-point",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-type",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.view-type-diagram",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-function",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-configuration",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.view-configuration",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-data-mapper",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-natural-function",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-custom-connector",
+          "when": "false"
+        }
+      ],
       "view/item/context": [
         {
           "command": "ballerina.showVisualizer",
@@ -336,7 +479,7 @@
     "@vscode/iconv-lite-umd": "^0.7.0",
     "file-type": "^18.2.1",
     "jschardet": "^3.1.4",
-    "vscode-webview-network-bridge": "1.1.1",
+    "webview-giga-bridge": "workspace:*",
     "xstate": "4.38.3",
     "@emotion/styled": "11.14.1",
     "@wso2/ui-toolkit": "workspace:*",

@@ -28,6 +28,8 @@ import {
     FileOrDirResponse,
     GetConfigurationRequest,
     GetConfigurationResponse,
+    GetRecentProjectsResponse,
+    SetConfigurationRequest,
     GetMigrationToolsResponse,
     GetSubFoldersRequest,
     GetSubFoldersResponse,
@@ -91,6 +93,7 @@ export const WI_BRIDGE_EVENTS = {
 
 export interface WIWsMethodParamsMap {
     getWebviewContext: void;
+    getRecentProjects: void;
     closeWebview: void;
     openBiExtension: void;
     openMiExtension: void;
@@ -100,6 +103,7 @@ export interface WIWsMethodParamsMap {
     selectFileOrFolderPath: void;
     getWorkspaceRoot: void;
     getConfiguration: GetConfigurationRequest;
+    setConfiguration: SetConfigurationRequest;
     getSupportedMIVersionsHigherThan: string;
     getSubFolderNames: GetSubFoldersRequest;
     askProjectDirPath: void;
@@ -148,6 +152,7 @@ export interface WIWsMethodParamsMap {
 
 export interface WIWsMethodResultMap {
     getWebviewContext: WebviewContext;
+    getRecentProjects: GetRecentProjectsResponse;
     closeWebview: void;
     openBiExtension: void;
     openMiExtension: void;
@@ -157,6 +162,7 @@ export interface WIWsMethodResultMap {
     selectFileOrFolderPath: FileOrDirResponse;
     getWorkspaceRoot: WorkspaceRootResponse;
     getConfiguration: GetConfigurationResponse;
+    setConfiguration: void;
     getSupportedMIVersionsHigherThan: GetSupportedMIVersionsResponse;
     getSubFolderNames: GetSubFoldersResponse;
     askProjectDirPath: ProjectDirResponse;

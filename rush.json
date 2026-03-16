@@ -44,6 +44,12 @@
             "projectFolder": "wi/wi-extension",
             "reviewCategory": "production",
             "shouldPublish": false
+        },
+        {
+            "packageName": "webview-giga-bridge",
+            "projectFolder": "wi/webview-giga-bridge",
+            "reviewCategory": "production",
+            "shouldPublish": false
         }
     ],
     "eventHooks": {

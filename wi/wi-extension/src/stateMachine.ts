@@ -18,11 +18,9 @@
 
 import { assign, createMachine, interpret } from 'xstate';
 import * as vscode from 'vscode';
-import { findBallerinaExtension } from './utils/ballerinaExtension';
 import { CONTEXT_KEYS, EXTENSION_DEPENDENCIES, ViewType } from '@wso2/wi-core';
 import { ext } from './extensionVariables';
 import { fetchProjectInfo, fetchExtendedProjectInfo, ProjectInfo } from './bi/utils';
-import { ballerinaContext } from './bi/ballerinaContext';
 import { activateProjectExplorer } from './bi/project-explorer/activate';
 import { ProjectExplorerEntryProvider } from './bi/project-explorer/project-explorer-provider';
 import { checkIfMiProject } from './mi/utils';
@@ -123,6 +121,10 @@ const stateMachine = createMachine<MachineContext>({
                             isMI: (context, event) => event.data.isMI
                         })
                     },
+                    {
+                        target: 'disabled',
+                        cond: (context, event) => event.data.projectType === ProjectType.NONE
+                    }
                 ],
                 onError: {
                     target: 'disabled'
@@ -130,7 +132,6 @@ const stateMachine = createMachine<MachineContext>({
             }
         },
         activateExtensions: {
-            entry: "focusIntegratorViewIfWorkspaceOpen",
             invoke: {
                 src: activateExtensionsBasedOnProjectType,
                 onDone: {
@@ -165,7 +166,7 @@ const stateMachine = createMachine<MachineContext>({
         },
         disabled: {
             // Project type could not be detected or no known project
-            entry: ["showWelcomeScreen", "registerConfigChangeListener"],
+            entry: ["registerConfigChangeListener"],
             exit: "disposeConfigChangeListener",
             on: {
                 UPDATE_MODE: {
@@ -204,35 +205,6 @@ const stateMachine = createMachine<MachineContext>({
                 vscode.commands.executeCommand('setContext', 'WI.projectType', 'none');
             }
         },
-        focusIntegratorViewIfWorkspaceOpen: (context) => {
-            if (!vscode.workspace.workspaceFolders?.length) {
-                ext.log('Skipping Integrator explorer focus: no workspace/folder open');
-                return;
-            }
-
-            if (context.projectType === ProjectType.BI_BALLERINA) {
-                void vscode.commands.executeCommand('wso2-integrator.explorer.focus').then(
-                    () => ext.log('Focused WSO2 Integrator explorer view before extension activation'),
-                    (error) => ext.logError('Failed to focus WSO2 Integrator explorer view before extension activation', error)
-                );
-                return;
-            }
-
-            if (context.projectType === ProjectType.MI) {
-                void vscode.commands.executeCommand('workbench.view.extension.micro-integrator').then(
-                    () => ext.log('Focused MI extension view before extension activation'),
-                    (error) => ext.logError('Failed to focus MI extension view before extension activation', error)
-                );
-                return;
-            }
-
-            if (context.projectType === ProjectType.SI) {
-                void vscode.commands.executeCommand('workbench.view.extension.streaming-integrator').then(
-                    () => ext.log('Focused SI extension view before extension activation'),
-                    (error) => ext.logError('Failed to focus SI extension view before extension activation', error)
-                );
-            }
-        },
         showWelcomeScreen: (context, event) => {
             // On the disabled path (no project), webviewManager hasn't been created yet
             if (context.isInWi) {
@@ -244,7 +216,6 @@ const stateMachine = createMachine<MachineContext>({
                 ext.context.subscriptions.push({
                     dispose: () => context.webviewManager?.dispose(),
                 });
-                registerCommands(ext.context, context.webviewManager, context.extensionAPIs);
             }
             vscode.commands.executeCommand('setContext', 'WI.projectType', 'none');
             context.webviewManager.showWelcome();
@@ -266,11 +237,14 @@ const stateMachine = createMachine<MachineContext>({
                     const newMode = getDefaultIntegratorMode();
                     ext.log(`Configuration changed: defaultRuntime = ${newMode}`);
 
+                    if (newMode.includes(ProjectType.BI_BALLERINA)) {
+                        context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA);
+                    }
                     if (newMode.includes(ProjectType.MI)) {
-                        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
+                        context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
                     }
                     if (newMode.includes(ProjectType.SI)) {
-                        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
+                        context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
                     }
 
                     stateService.send({
@@ -292,24 +266,35 @@ const stateMachine = createMachine<MachineContext>({
 async function activateExtensionsBasedOnProjectType(context: MachineContext): Promise<void> {
     ext.log(`Activating extensions for project type: ${context.projectType}`);
 
-    // Ensure Ballerina extension is available by default irrespective of config change events
-    await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA);
+    // Create webview manager
+    context.webviewManager = new WebviewManager(context.projectUri);
+    ext.context.subscriptions.push({
+        dispose: () => context.webviewManager?.dispose(),
+    });
+
+    // Register commands
+    registerCommands(ext.context, context.webviewManager, context.extensionAPIs);
 
     // Initialize extension APIs and activate appropriate extensions based on project type
     if (context.projectType === ProjectType.BI_BALLERINA) {
         // WI always handles BI treeview and webview activation directly,
         // regardless of whether the BI extension is installed.
+        ext.log('Initializing BI extension for BI/Ballerina project');
+        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.BALLERINA, true);
+
         ext.log('Activating BI project explorer within WI');
         await activateBIWithinWI();
+
     } else if (context.projectType === ProjectType.MI) {
         // Activate only MI extension for MI projects
         ext.log('Initializing MI extension for MI project');
-        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI);
+        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.MI, true);
+
     } else if (context.projectType === ProjectType.SI) {
         // Activate only SI extension for SI projects
         ext.log('Initializing SI extension for SI project');
-        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI);
-        context.extensionAPIs.activateSIExtension();
+        await context.extensionAPIs.initialize(EXTENSION_DEPENDENCIES.SI, true);
+
     } else if (context.projectType === ProjectType.NONE) {
         // if a folder/workspace is open but we couldn't detect the project type, we should show an popup warning the user that the extension couldn't detect the project type
         if (vscode.workspace.workspaceFolders?.length && context.isInWi) {
@@ -324,6 +309,7 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
             });
         } else {
             ext.log('No workspace open');
+            vscode.commands.executeCommand('setContext', 'WI.projectType', 'none');
             throw new Error('No workspace open - cannot activate extensions without a project');
         }
     }
@@ -332,14 +318,8 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
     await vscode.commands.executeCommand("setContext", CONTEXT_KEYS.BALLERINA_AVAILABLE, context.extensionAPIs.isBIAvailable());
     await vscode.commands.executeCommand("setContext", CONTEXT_KEYS.MI_AVAILABLE, context.extensionAPIs.isMIAvailable());
 
-    // Create webview manager
-    context.webviewManager = new WebviewManager(context.projectUri);
-    ext.context.subscriptions.push({
-        dispose: () => context.webviewManager?.dispose(),
-    });
-
-    // Register commands
-    registerCommands(ext.context, context.webviewManager, context.extensionAPIs);
+    // focus avtivated extension view if a workspace is open
+    await vscode.commands.executeCommand('wso2-integrator.explorer.focus');
 
     ext.log('Extensions activated successfully');
 }
@@ -348,16 +328,6 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
  * Activate the BI project explorer directly within WI, without relying on the BI extension.
  */
 async function activateBIWithinWI(): Promise<void> {
-    // Ensure Ballerina extension is active so we can read its exports
-    const ballerinaExt = vscode.extensions.getExtension(EXTENSION_DEPENDENCIES.BALLERINA);
-    if (ballerinaExt) {
-        if (!ballerinaExt.isActive) {
-            await ballerinaExt.activate();
-        }
-        ballerinaContext.init(ballerinaExt.exports);
-        ext.log(`BallerinaContext: biSupported=${ballerinaContext.biSupported}, isNPSupported=${ballerinaContext.isNPSupported}`);
-    }
-
     // Gather detailed project info (package vs workspace, empty workspace)
     const extInfo = await fetchExtendedProjectInfo();
     ext.log(`ExtendedProjectInfo: isBallerinaPackage=${extInfo.isBallerinaPackage}, isBallerinaWorkspace=${extInfo.isBallerinaWorkspace}, isEmptyWorkspace=${extInfo.isEmptyWorkspace}`);
@@ -402,9 +372,8 @@ async function detectProjectType(): Promise<{
 
     // Check for BI/Ballerina project
     const projectInfo: ProjectInfo = fetchProjectInfo();
-    const ballerinaExt = findBallerinaExtension();
 
-    if (projectInfo.isBallerina && ballerinaExt) {
+    if (projectInfo.isBallerina) {
         ext.log('Detected BI/Ballerina project');
 
         return {

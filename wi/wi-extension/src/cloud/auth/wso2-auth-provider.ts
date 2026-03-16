@@ -202,8 +202,8 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 	/**
 	 * Handle logout - signs out from RPC and clears all state
 	 */
-	public async logout(silent = false, skipClearSessions = false) {
-		this.deps.log("Signing out from WSO2 Platform");
+	public async logout(silent = true, skipClearSessions = false) {
+		this.deps.log("Signing out from WSO2 Integrator");
 
 		// Call RPC signOut first
 		try {
@@ -225,7 +225,7 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 		this.resetState();
 
 		if (!silent) {
-			window.showInformationMessage("Successfully signed out from WSO2 Platform!");
+			window.showInformationMessage("Successfully signed out from WSO2 account!");
 		}
 	}
 

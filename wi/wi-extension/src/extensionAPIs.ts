@@ -20,6 +20,7 @@ import * as vscode from "vscode";
 import { EXTENSION_DEPENDENCIES } from "@wso2/wi-core";
 import type { BIExtensionAPI, MIExtensionAPI } from "@wso2/wi-core";
 import { ext } from "./extensionVariables";
+import { ballerinaContext } from "./bi/ballerinaContext";
 
 /**
  * Extension APIs manager
@@ -32,20 +33,20 @@ export class ExtensionAPIs {
 	/**
 	 * Initialize extension APIs
 	 */
-	public async initialize(extension: string): Promise<void> {
+	public async initialize(extension: string, activate?: boolean): Promise<void> {
 		// download extension if not present
 		if (!vscode.extensions.getExtension(extension)) {
 			try {
-				await vscode.commands.executeCommand("workbench.extensions.installExtension", extension);
+				if (extension === EXTENSION_DEPENDENCIES.BALLERINA) {
+					await this.installExtension(extension, true);
+				} else {
+					await this.installExtension(extension, false);
+				}
 				ext.log(`Extension ${extension} installed successfully`);
 			} catch (stableInstallError) {
 				ext.logError(`Failed to install stable version of extension ${extension}`, stableInstallError as Error);
 				try {
-					await vscode.commands.executeCommand(
-						"workbench.extensions.installExtension",
-						extension,
-						{ installPreReleaseVersion: true },
-					);
+					await this.installExtension(extension, true);
 					ext.log(`Pre-release version of extension ${extension} installed successfully`);
 				} catch (preReleaseInstallError) {
 					ext.logError(`Failed to install pre-release version of extension ${extension}`, preReleaseInstallError as Error);
@@ -55,11 +56,70 @@ export class ExtensionAPIs {
 					return;
 				}
 			}
+
+			// ask to reload window after installation (do not block initialize on notification interaction)
+			vscode.window
+				.showInformationMessage(
+					`Extension ${extension} installed successfully. Please reload the window to activate it.`,
+					"Reload Window"
+				)
+				.then((selection) => {
+					if (selection === "Reload Window") {
+						vscode.commands.executeCommand("workbench.action.reloadWindow");
+					}
+				});
+
+			// newly installed extensions are not immediately available without reload
+			return;
 		}
+
+		if (activate) {
+			try {
+				await this.activateExtension(extension);
+				ext.log(`Extension ${extension} activated successfully`);
+			} catch (error) {
+				ext.logError(`Failed to activate extension ${extension}`, error as Error);
+				vscode.window.showErrorMessage(
+					`Failed to activate required extension: ${extension}. Please ensure it is activated properly.`,
+				);
+				return;
+			}
+		}
+
 		if (extension === EXTENSION_DEPENDENCIES.BALLERINA) {
 			// Get Ballerina extension
 			this.biExtension = vscode.extensions.getExtension<BIExtensionAPI>(EXTENSION_DEPENDENCIES.BALLERINA);
 
+			if (activate) {
+				ballerinaContext.init(this.biExtension.exports);
+			}
+
+			// if installed extension is release version, show warning to install pre-release version as the stable version does not have the required API
+			// check if the installed version has the required command: BI.project.createBIProjectPure registered, if not, show warning to install pre-release version
+			const hasRequiredCommand = await vscode.commands.getCommands(true).then((commands) => {
+				return commands.includes("BI.project.createBIProjectPure");
+			});
+			if (!hasRequiredCommand) {
+				ext.logError(`Installed version of Ballerina extension does not have the required API`, new Error("Incompatible Ballerina extension version"));
+				vscode.window
+					.showWarningMessage(
+						`The installed version of the Ballerina extension does not have the required API. Please install the pre-release version of the Ballerina extension for full functionality.`,
+						"Install Pre-release Version"
+					)
+					.then(async (selection) => {
+						if (selection === "Install Pre-release Version") {
+							try {
+								await this.installExtension(EXTENSION_DEPENDENCIES.BALLERINA, true);
+								ext.log(`Pre-release version of Ballerina extension installed successfully`);
+							} catch (error) {
+								ext.logError(`Failed to install pre-release version of Ballerina extension`, error as Error);
+								await vscode.window.showErrorMessage(
+									`Failed to install pre-release version of Ballerina extension. Please install it manually from the Extensions view.`,
+								);
+							}
+						}
+					});
+			}
 		} else if (extension === EXTENSION_DEPENDENCIES.MI) {
 			// Get MI extension
 			this.miExtension = vscode.extensions.getExtension<MIExtensionAPI>(EXTENSION_DEPENDENCIES.MI);
@@ -69,42 +129,37 @@ export class ExtensionAPIs {
 		}
 	}
 
-	public activateBIExtension(): void {
-		if (this.biExtension && !this.biExtension.isActive) {
-			this.biExtension.activate().then(
-				() => {
-					ext.log("BI Extension activated");
-				},
-				(error) => {
-					ext.logError("Failed to activate BI extension", error as Error);
-				},
+	public async installExtension(extensionName: string, preRelease: boolean): Promise<void> {
+		try {
+			await vscode.commands.executeCommand(
+				"workbench.extensions.installExtension",
+				extensionName,
+				{ installPreReleaseVersion: preRelease },
 			);
+			ext.log(`Extension ${extensionName} installed successfully`);
+		} catch (error) {
+			ext.logError(`Failed to install extension ${extensionName}`, error as Error);
+			throw error;
 		}
 	}
 
-	public activateMIExtension(): void {
-		if (this.miExtension && !this.miExtension.isActive) {
-			this.miExtension.activate().then(
-				() => {
-					ext.log("MI Extension activated");
-				},
-				(error) => {
-					ext.logError("Failed to activate MI extension", error as Error);
-				},
-			);
-		}
-	}
-
-	public activateSIExtension(): void {
-		if (this.siExtension && !this.siExtension.isActive) {
-			this.siExtension.activate().then(
-				() => {
-					ext.log("SI Extension activated");
-				},
-				(error) => {
-					ext.logError("Failed to activate SI extension", error as Error);
-				},
-			);
+	/**
+	 * Activate an extension by its name
+	 * @param extensionName The name of the extension to activate
+	 */
+	public async activateExtension(extensionName: string): Promise<void> {
+		const extension = vscode.extensions.getExtension(extensionName);
+		if (extension && !extension.isActive) {
+			try {
+				await extension.activate();
+				ext.log(`Extension ${extensionName} activated successfully`);
+			} catch (error) {
+				ext.logError(`Failed to activate extension ${extensionName}`, error as Error);
+				throw error;
+			}
+		} else {
+			ext.logError(`Extension ${extensionName} not found`, new Error("Extension not found"));
+			throw new Error("Extension not found");
 		}
 	}
 

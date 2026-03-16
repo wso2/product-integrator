@@ -81,6 +81,10 @@ export class WebviewManager {
 				],
 			},
 		);
+		this.currentPanel.iconPath = {
+			light: vscode.Uri.joinPath(ext.context.extensionUri, "resources", "icons", "integrator-activity-icon.svg"),
+			dark: vscode.Uri.joinPath(ext.context.extensionUri, "resources", "icons", "integrator-activity-icon-dark.svg"),
+		};
 
 		this.currentViewType = viewType;
 

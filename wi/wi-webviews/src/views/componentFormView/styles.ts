@@ -20,15 +20,43 @@ import styled from "@emotion/styled";
 import { VSCodeLink } from "@vscode/webview-ui-toolkit/react";
 import { Button, Typography } from "@wso2/ui-toolkit";
 
-export const PageContainer = styled.div`
+export const PageBackdrop = styled.div`
     min-height: 100vh;
-    max-width: 800px;
+    padding: 28px 30px 24px;
+    background:
+        radial-gradient(circle at 90% 0%, color-mix(in srgb, var(--wso2-brand-accent) 10%, transparent) 0%, transparent 34%),
+        radial-gradient(circle at 10% 100%, color-mix(in srgb, var(--wso2-brand-primary) 8%, transparent) 0%, transparent 40%),
+        var(--vscode-editor-background);
+`;
+
+export const PageContainer = styled.div`
+    max-width: 960px;
     margin: 0 auto;
-    padding: 20px;
+    min-height: calc(100vh - 52px);
     display: flex;
     flex-direction: column;
-    padding-top: 100px;
-    gap: 4px;
+    gap: 14px;
+`;
+
+export const FormPanel = styled.section`
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 16%, var(--vscode-panel-border));
+    background: var(--vscode-editor-background);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
+    overflow: hidden;
+`;
+
+export const FormBody = styled.div`
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
 `;
 
 export const TitleRow = styled.div`
@@ -36,7 +64,9 @@ export const TitleRow = styled.div`
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 12%, var(--vscode-panel-border));
 `;
 
 export const SubtitleRow = styled.div`
@@ -140,6 +170,11 @@ export const NameButton = styled.button`
 
     &:hover {
         background: var(--vscode-button-secondaryBackground);
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 1px;
     }
 
     .edit-icon {
@@ -345,6 +380,11 @@ export const RepoBannerButton = styled.button`
     &:hover {
         filter: brightness(1.15);
     }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
 `;
 
 export const RepoBannerRefreshButton = styled.button`
@@ -370,6 +410,11 @@ export const RepoBannerRefreshButton = styled.button`
         opacity: 0.4;
         cursor: not-allowed;
         animation: repo-banner-spin 1s linear infinite;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
     }
 
     @keyframes repo-banner-spin {
@@ -408,6 +453,8 @@ export const FooterRow = styled.div`
     justify-content: flex-end;
     gap: 8px;
     margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 12%, var(--vscode-panel-border));
 `;
 
 export const CancelButton = styled(Button)``;
@@ -415,10 +462,14 @@ export const CancelButton = styled(Button)``;
 export const SubmitButton = styled(Button)``;
 
 export const AuthSectionWrap = styled.div`
-    padding: 20px;
+    padding: 18px;
     display: flex;
-    gap: 4px;
+    gap: 10px;
     flex-direction: column;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 16%, var(--vscode-panel-border));
+    background: var(--vscode-editor-background);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
 `;
 
 export const SmVSCodeLink = styled(VSCodeLink)`

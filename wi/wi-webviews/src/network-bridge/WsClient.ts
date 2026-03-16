@@ -30,6 +30,8 @@ import {
     FileOrDirResponse,
     GetConfigurationRequest,
     GetConfigurationResponse,
+    GetRecentProjectsResponse,
+    SetConfigurationRequest,
     GetMigrationToolsResponse,
     GetSubFoldersRequest,
     GetSubFoldersResponse,
@@ -83,7 +85,7 @@ import type {
     WICloudSubmitComponentsReq,
     WICloudSubmitComponentsResp,
 } from "@wso2/wi-core";
-import { ConnectionStatus, createWebviewTransportAdapter } from "vscode-webview-network-bridge/webview";
+import { ConnectionStatus, createWebviewTransportAdapter } from "webview-giga-bridge/webview";
 
 declare global {
     interface Window {
@@ -140,6 +142,10 @@ export class WsClient {
         return this.request("getWebviewContext");
     }
 
+    public getRecentProjects(): Promise<GetRecentProjectsResponse> {
+        return this.request("getRecentProjects");
+    }
+
     public closeWebview(): void {
         this.notify("closeWebview");
     }
@@ -174,6 +180,10 @@ export class WsClient {
 
     public getConfiguration(params: GetConfigurationRequest): Promise<GetConfigurationResponse> {
         return this.request("getConfiguration", params);
+    }
+
+    public setConfiguration(params: SetConfigurationRequest): Promise<void> {
+        return this.request("setConfiguration", params);
     }
 
     public getSupportedMIVersionsHigherThan(version: string): Promise<GetSupportedMIVersionsResponse> {

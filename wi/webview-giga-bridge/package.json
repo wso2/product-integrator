@@ -1,0 +1,71 @@
+{
+  "name": "webview-giga-bridge",
+  "version": "1.1.1",
+  "description": "Transport bridge for VS Code extension ↔ webview communication over postMessage and optional WebSocket, with request-response support.",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./webview": {
+      "types": "./dist/webview.d.ts",
+      "require": "./dist/webview.js",
+      "default": "./dist/webview.js"
+    },
+    "./extension": {
+      "types": "./dist/extension.d.ts",
+      "require": "./dist/extension.js",
+      "default": "./dist/extension.js"
+    },
+    "./router": {
+      "types": "./dist/router.d.ts",
+      "require": "./dist/router.js",
+      "default": "./dist/router.js"
+    }
+  },
+  "scripts": {
+    "update:vscode-css-vars": "node scripts/generate-vscode-css-vars.mjs",
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pack:dry": "npm pack --dry-run",
+    "prepare": "npm run build",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "vscode",
+    "webview",
+    "postmessage",
+    "websocket",
+    "bridge",
+    "transport",
+    "rpc"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "devDependencies": {
+    "@types/vscode": "^1.109.0",
+    "@types/ws": "^8.18.1",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.8.0"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
