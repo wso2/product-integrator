@@ -17,50 +17,29 @@
  */
 
 import { useState, useEffect } from "react";
-import { Button, Icon, TextField, Typography } from "@wso2/ui-toolkit";
+import { Button, Icon, TextField } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../contexts";
 import { DirectorySelector } from "../../components/DirectorySelector/DirectorySelector";
-
-const FormContainer = styled.div`
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    max-width: 600px;
-    margin: 0 auto;
-    margin-top: calc(25vh - 80px);
-    width: 100%;
-`;
-
-const TitleContainer = styled.div`
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 32px;
-    width: 100%;
-`;
-
-const IconButton = styled.div`
-    cursor: pointer;
-    border-radius: 4px;
-    width: 20px;
-    height: 20px;
-    font-size: 20px;
-    &:hover {
-        background-color: var(--vscode-toolbar-hoverBackground);
-    }
-`;
+import {
+    PageBackdrop,
+    PageContainer,
+    HeaderRow,
+    BackButton,
+    HeaderText,
+    HeaderTitle,
+    HeaderSubtitle,
+    FormPanel,
+    FormPanelHeader,
+    FormPanelTitle,
+    FormPanelSubtitle,
+    FormBody,
+    FormContent,
+    FormFooter,
+} from "../shared/FormPageLayout";
 
 const FieldGroup = styled.div`
     margin-bottom: 20px;
-    width: 100%;
-`;
-
-const ButtonWrapper = styled.div`
-    margin-top: 20px;
-    display: flex;
-    justify-content: flex-end;
-    width: 100%;
 `;
 
 export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
@@ -92,48 +71,68 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     };
 
     return (
-        <div style={{ position: 'absolute', background: 'var(--vscode-editor-background)', height: '100vh', width: '100%', overflow: 'hidden' }}>
-            <FormContainer>
-                <TitleContainer>
-                    <IconButton onClick={onBack}>
-                        <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
-                    </IconButton>
-                    <Typography variant="h2">Create a Project</Typography>
-                </TitleContainer>
+        <PageBackdrop>
+            <PageContainer>
+                <HeaderRow>
+                    <BackButton type="button" onClick={onBack} title="Go back">
+                        <Icon
+                            name="arrow-left"
+                            isCodicon
+                            sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                            iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
+                        />
+                    </BackButton>
+                    <HeaderText>
+                        <HeaderTitle variant="h2">Create Project</HeaderTitle>
+                        <HeaderSubtitle>
+                            Set up a new multi-integration workspace project.
+                        </HeaderSubtitle>
+                    </HeaderText>
+                </HeaderRow>
 
-                <FieldGroup>
-                    <TextField
-                        onTextChange={(value) => setFormData(prev => ({ ...prev, projectName: value }))}
-                        value={formData.projectName}
-                        label="Project Name"
-                        placeholder="Enter a project name"
-                        autoFocus={true}
-                        required={true}
-                    />
-                </FieldGroup>
+                <FormPanel>
+                    <FormPanelHeader>
+                        <FormPanelTitle>Project Details</FormPanelTitle>
+                        <FormPanelSubtitle>Configure the name and location of your project.</FormPanelSubtitle>
+                    </FormPanelHeader>
+                    <FormBody>
+                        <FormContent>
+                            <FieldGroup>
+                                <TextField
+                                    onTextChange={(value) => setFormData(prev => ({ ...prev, projectName: value }))}
+                                    value={formData.projectName}
+                                    label="Project Name"
+                                    placeholder="Enter a project name"
+                                    autoFocus={true}
+                                    required={true}
+                                />
+                            </FieldGroup>
 
-                <FieldGroup>
-                    <DirectorySelector
-                        id="project-folder-selector"
-                        label="Select Path"
-                        placeholder="Enter path or browse to select a folder..."
-                        selectedPath={formData.path}
-                        required={true}
-                        onSelect={handlePathSelection}
-                        onChange={(value) => setFormData(prev => ({ ...prev, path: value }))}
-                    />
-                </FieldGroup>
+                            <FieldGroup>
+                                <DirectorySelector
+                                    id="project-folder-selector"
+                                    label="Select Path"
+                                    placeholder="Enter path or browse to select a folder..."
+                                    selectedPath={formData.path}
+                                    required={true}
+                                    onSelect={handlePathSelection}
+                                    onChange={(value) => setFormData(prev => ({ ...prev, path: value }))}
+                                />
+                            </FieldGroup>
 
-                <ButtonWrapper>
-                    <Button
-                        disabled={!formData.path || !formData.projectName}
-                        onClick={handleCreate}
-                        appearance="primary"
-                    >
-                        Create Project
-                    </Button>
-                </ButtonWrapper>
-            </FormContainer>
-        </div>
+                            <FormFooter>
+                                <Button
+                                    disabled={!formData.path || !formData.projectName}
+                                    onClick={handleCreate}
+                                    appearance="primary"
+                                >
+                                    Create Project
+                                </Button>
+                            </FormFooter>
+                        </FormContent>
+                    </FormBody>
+                </FormPanel>
+            </PageContainer>
+        </PageBackdrop>
     );
 }

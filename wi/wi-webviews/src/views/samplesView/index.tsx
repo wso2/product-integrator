@@ -21,15 +21,18 @@ import { Icon, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../contexts/WsContext";
 import { SamplesContainer } from "./SamplesContainer";
-
-const PageBackdrop = styled.div`
-    min-height: 100vh;
-    padding: 28px 30px 24px;
-    background:
-        radial-gradient(circle at 88% 0%, color-mix(in srgb, var(--wso2-brand-accent) 12%, transparent) 0%, transparent 36%),
-        radial-gradient(circle at 8% 100%, color-mix(in srgb, var(--wso2-brand-primary) 8%, transparent) 0%, transparent 42%),
-        var(--vscode-editor-background);
-`;
+import {
+    PageBackdrop,
+    BackButton,
+    HeaderRow,
+    HeaderText,
+    HeaderTitle,
+    HeaderSubtitle,
+    RuntimePanel,
+    RuntimeLabel,
+    RuntimeOptions,
+    RuntimeOptionButton,
+} from "../shared/FormPageLayout";
 
 const PageContainer = styled.div`
     max-width: 1180px;
@@ -38,122 +41,6 @@ const PageContainer = styled.div`
     flex-direction: column;
     gap: 16px;
     min-height: calc(100vh - 52px);
-`;
-
-const Header = styled.header`
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-`;
-
-const BackButton = styled.button`
-    cursor: pointer;
-    border-radius: 6px;
-    width: 28px;
-    height: 28px;
-    font-size: 20px;
-    border: 1px solid transparent;
-    background: transparent;
-    appearance: none;
-    padding: 0;
-    line-height: 1;
-    margin-top: 2px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    & > * {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
-    }
-
-    &:hover {
-        background-color: color-mix(in srgb, var(--wso2-brand-accent) 16%, transparent);
-        border-color: color-mix(in srgb, var(--wso2-brand-accent) 45%, transparent);
-    }
-
-    &:focus-visible {
-        outline: 1px solid var(--vscode-focusBorder);
-        outline-offset: 2px;
-    }
-`;
-
-const HeaderText = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-`;
-
-const HeaderTitle = styled(Typography)`
-    margin: 0;
-    font-weight: 600;
-`;
-
-const HeaderSubtitle = styled.p`
-    margin: 0;
-    color: var(--vscode-descriptionForeground);
-    font-size: 12px;
-`;
-
-const RuntimePanel = styled.div`
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 9px;
-    border-radius: 10px;
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 14%, var(--vscode-panel-border));
-    background: var(--vscode-editor-background);
-    width: fit-content;
-`;
-
-const RuntimeLabel = styled.span`
-    font-size: 11px;
-    color: var(--vscode-descriptionForeground);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-`;
-
-const RuntimeOptions = styled.div`
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 8px;
-`;
-
-const RuntimeOptionButton = styled.button<{ active: boolean }>`
-    border: 1px solid
-        ${(props: { active: boolean }) =>
-            props.active
-                ? "var(--wso2-brand-primary)"
-                : "var(--vscode-input-border)"};
-    background:
-        ${(props: { active: boolean }) =>
-            props.active
-                ? "var(--wso2-brand-primary)"
-                : "var(--vscode-input-background)"};
-    color:
-        ${(props: { active: boolean }) =>
-            props.active ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)"};
-    border-radius: 999px;
-    height: 28px;
-    padding: 0 12px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease;
-
-    &:hover {
-        border-color: ${({ active }: { active: boolean }) =>
-            active ? "var(--wso2-brand-primary-alt)" : "var(--vscode-focusBorder)"};
-        background: ${({ active }: { active: boolean }) =>
-            active ? "var(--wso2-brand-primary-alt)" : "var(--vscode-list-hoverBackground)"};
-    }
-
-    &:focus-visible {
-        outline: 1px solid var(--vscode-focusBorder);
-        outline-offset: 2px;
-    }
 `;
 
 const ContentPanel = styled.section`
@@ -268,7 +155,7 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
     return (
         <PageBackdrop>
             <PageContainer>
-                <Header>
+                <HeaderRow>
                     <BackButton type="button" onClick={gotToWelcome} title="Go back">
                         <Icon
                             name="arrow-left"
@@ -283,7 +170,7 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
                             Start quickly by downloading a curated integration sample for your selected runtime.
                         </HeaderSubtitle>
                     </HeaderText>
-                </Header>
+                </HeaderRow>
                 {enabledRuntimes.length > 1 && (
                     <RuntimePanel>
                         <RuntimeLabel>Runtime</RuntimeLabel>

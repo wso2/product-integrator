@@ -719,7 +719,7 @@ export const WelcomeView: React.FC = () => {
                             </CardIcon>
                         </CardIconContainer>
                         <CardContent>
-                            <CardTitle>Open Project</CardTitle>
+                            <CardTitle>Open Integration or Project</CardTitle>
                             <CardDescription>
                                 Open an existing integration project and continue building your solution.
                             </CardDescription>
@@ -796,7 +796,7 @@ export const WelcomeView: React.FC = () => {
                                 </CardIcon>
                             </CardIconContainer>
                             <CardContent>
-                                <CardTitle>Create Library</CardTitle>
+                                <CardTitle>Create New Library</CardTitle>
                                 <CardDescription>
                                     Build a reusable library of integration components, transformers, and utilities to share across multiple projects.
                                 </CardDescription>
@@ -814,7 +814,7 @@ export const WelcomeView: React.FC = () => {
                                 </CardIcon>
                             </CardIconContainer>
                             <CardContent>
-                                <CardTitle>Create Project</CardTitle>
+                                <CardTitle>Create New Project</CardTitle>
                                 <CardDescription>
                                     Create a new integration project within your workspace with structure, configuration, and dependencies ready to go.
                                 </CardDescription>

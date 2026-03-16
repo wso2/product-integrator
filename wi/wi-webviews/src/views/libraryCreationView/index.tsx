@@ -17,40 +17,29 @@
  */
 
 import { useState, useEffect } from "react";
-import { Button, Icon, TextField, CheckBox, Typography } from "@wso2/ui-toolkit";
+import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../contexts";
 import { sanitizePackageName } from "../creationView/biForm/utils";
 import { DirectorySelector } from "../../components/DirectorySelector/DirectorySelector";
 import { PackageInfoSection } from "../creationView/biForm/components";
 import { SectionDivider, OptionalSectionsLabel } from "../creationView/biForm/styles";
-
-const FormContainer = styled.div`
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    max-width: 600px;
-    margin: 0 auto;
-    margin-top: calc(25vh - 80px);
-`;
-
-const TitleContainer = styled.div`
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 32px;
-`;
-
-const IconButton = styled.div`
-    cursor: pointer;
-    border-radius: 4px;
-    width: 20px;
-    height: 20px;
-    font-size: 20px;
-    &:hover {
-        background-color: var(--vscode-toolbar-hoverBackground);
-    }
-`;
+import {
+    PageBackdrop,
+    PageContainer,
+    HeaderRow,
+    BackButton,
+    HeaderText,
+    HeaderTitle,
+    HeaderSubtitle,
+    FormPanel,
+    FormPanelHeader,
+    FormPanelTitle,
+    FormPanelSubtitle,
+    FormBody,
+    FormContent,
+    FormFooter,
+} from "../shared/FormPageLayout";
 
 const FieldGroup = styled.div`
     margin-bottom: 20px;
@@ -58,20 +47,6 @@ const FieldGroup = styled.div`
 
 const CheckboxContainer = styled.div`
     margin: 16px 0;
-`;
-
-const ButtonWrapper = styled.div`
-    margin-top: 20px;
-    display: flex;
-    justify-content: flex-end;
-    width: 100%;
-`;
-
-const ScrollableContent = styled.div`
-    overflow-y: auto;
-    padding-right: 8px;
-    max-height: calc(100vh - 380px);
-    width: 100%;
 `;
 
 interface LibraryFormData {
@@ -134,77 +109,95 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     };
 
     return (
-        <div style={{ position: 'absolute', background: 'var(--vscode-editor-background)', height: '100vh', width: '100%', overflow: 'hidden' }}>
-            <FormContainer>
-                <div style={{ width: "100%" }}>
-                    <TitleContainer>
-                        <IconButton onClick={onBack}>
-                            <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
-                        </IconButton>
-                        <Typography variant="h2">Create a Library</Typography>
-                    </TitleContainer>
-                </div>
-                <ScrollableContent>
-                    <FieldGroup>
-                        <TextField
-                            onTextChange={handleLibraryName}
-                            value={formData.libraryName}
-                            label="Library Name"
-                            placeholder="Enter a library name"
-                            autoFocus={true}
-                            required={true}
+        <PageBackdrop>
+            <PageContainer>
+                <HeaderRow>
+                    <BackButton type="button" onClick={onBack} title="Go back">
+                        <Icon
+                            name="arrow-left"
+                            isCodicon
+                            sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                            iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
                         />
-                    </FieldGroup>
+                    </BackButton>
+                    <HeaderText>
+                        <HeaderTitle variant="h2">Create Library</HeaderTitle>
+                        <HeaderSubtitle>
+                            Build a reusable Ballerina library package to share across integrations.
+                        </HeaderSubtitle>
+                    </HeaderText>
+                </HeaderRow>
 
-                    <FieldGroup>
-                        <TextField
-                            onTextChange={handlePackageName}
-                            value={formData.packageName}
-                            label="Package Name"
-                            description="This will be used as the Ballerina package name for the library."
-                        />
-                    </FieldGroup>
+                <FormPanel>
+                    <FormPanelHeader>
+                        <FormPanelTitle>Library Details</FormPanelTitle>
+                        <FormPanelSubtitle>Configure the name, package, and location of your library.</FormPanelSubtitle>
+                    </FormPanelHeader>
+                    <FormBody>
+                        <FormContent>
+                            <FieldGroup>
+                                <TextField
+                                    onTextChange={handleLibraryName}
+                                    value={formData.libraryName}
+                                    label="Library Name"
+                                    placeholder="Enter a library name"
+                                    autoFocus={true}
+                                    required={true}
+                                />
+                            </FieldGroup>
 
-                    <FieldGroup>
-                        <DirectorySelector
-                            id="library-folder-selector"
-                            label="Select Path"
-                            placeholder="Enter path or browse to select a folder..."
-                            selectedPath={formData.path}
-                            required={true}
-                            onSelect={handlePathSelection}
-                            onChange={(value) => setFormData(prev => ({ ...prev, path: value }))}
-                        />
-                        <CheckboxContainer>
-                            <CheckBox
-                                label="Create a new folder using the package name"
-                                checked={formData.createDirectory}
-                                onChange={(checked) => setFormData(prev => ({ ...prev, createDirectory: checked }))}
+                            <FieldGroup>
+                                <TextField
+                                    onTextChange={handlePackageName}
+                                    value={formData.packageName}
+                                    label="Package Name"
+                                    description="This will be used as the Ballerina package name for the library."
+                                />
+                            </FieldGroup>
+
+                            <FieldGroup>
+                                <DirectorySelector
+                                    id="library-folder-selector"
+                                    label="Select Path"
+                                    placeholder="Enter path or browse to select a folder..."
+                                    selectedPath={formData.path}
+                                    required={true}
+                                    onSelect={handlePathSelection}
+                                    onChange={(value) => setFormData(prev => ({ ...prev, path: value }))}
+                                />
+                                <CheckboxContainer>
+                                    <CheckBox
+                                        label="Create a new folder using the package name"
+                                        checked={formData.createDirectory}
+                                        onChange={(checked) => setFormData(prev => ({ ...prev, createDirectory: checked }))}
+                                    />
+                                </CheckboxContainer>
+                            </FieldGroup>
+
+                            <SectionDivider />
+                            <OptionalSectionsLabel>Optional Configurations</OptionalSectionsLabel>
+
+                            <PackageInfoSection
+                                isExpanded={isPackageInfoExpanded}
+                                onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
+                                data={{ orgName: formData.orgName, version: formData.version }}
+                                onChange={(data) => setFormData(prev => ({ ...prev, ...data }))}
+                                isLibrary={true}
                             />
-                        </CheckboxContainer>
-                    </FieldGroup>
 
-                    <SectionDivider />
-                    <OptionalSectionsLabel>Optional Configurations</OptionalSectionsLabel>
-
-                    <PackageInfoSection
-                        isExpanded={isPackageInfoExpanded}
-                        onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
-                        data={{ orgName: formData.orgName, version: formData.version }}
-                        onChange={(data) => setFormData(prev => ({ ...prev, ...data }))}
-                        isLibrary={true}
-                    />
-                </ScrollableContent>
-                <ButtonWrapper>
-                    <Button
-                        disabled={!formData.path || !formData.libraryName}
-                        onClick={handleCreate}
-                        appearance="primary"
-                    >
-                        Create Library
-                    </Button>
-                </ButtonWrapper>
-            </FormContainer>
-        </div>
+                            <FormFooter>
+                                <Button
+                                    disabled={!formData.path || !formData.libraryName}
+                                    onClick={handleCreate}
+                                    appearance="primary"
+                                >
+                                    Create Library
+                                </Button>
+                            </FormFooter>
+                        </FormContent>
+                    </FormBody>
+                </FormPanel>
+            </PageContainer>
+        </PageBackdrop>
     );
 }
