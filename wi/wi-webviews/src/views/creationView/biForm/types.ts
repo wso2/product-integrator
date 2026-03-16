@@ -44,4 +44,8 @@ export interface ProjectFormData extends BaseProjectFormData {
     createAsWorkspace: boolean;
     // Kept for RPC payload compatibility; conceptually this is the project name.
     workspaceName: string;
+    // Automatically wrap the integration/library inside a project folder.
+    createWithinProject: boolean;
+    // The auto-derived (or manually set) project folder name when createWithinProject is true.
+    withinProjectName: string;
 }

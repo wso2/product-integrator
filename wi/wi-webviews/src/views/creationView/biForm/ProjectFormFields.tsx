@@ -39,7 +39,6 @@ export interface ProjectFormFieldsProps {
     onFormDataChange: (data: Partial<ProjectFormData>) => void;
     integrationNameError?: string;
     pathError?: string;
-    projectNameError?: string;
     packageNameValidationError?: string;
 }
 
@@ -48,11 +47,11 @@ export function ProjectFormFields({
     onFormDataChange,
     integrationNameError,
     pathError,
-    projectNameError,
     packageNameValidationError,
 }: ProjectFormFieldsProps) {
     const { wsClient } = useVisualizerContext();
     const [packageNameTouched, setPackageNameTouched] = useState(false);
+    const [withinProjectNameTouched, setWithinProjectNameTouched] = useState(false);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
     const [isProjectModeSupported, setIsProjectModeSupported] = useState(false);
@@ -61,16 +60,30 @@ export function ProjectFormFields({
     const [defaultPath, setDefaultPath] = useState("");
     const [pathTouched, setPathTouched] = useState(false);
 
-    const pathName = formData.createAsWorkspace ? formData.workspaceName : formData.packageName;
-    const displayedPath = pathTouched ? formData.path : joinPath(formData.path || defaultPath, pathName);
+    const computeDisplayedPath = (): string => {
+        const base = formData.path || defaultPath;
+        if (formData.createWithinProject) {
+            const projectPath = formData.withinProjectName
+                ? joinPath(base, formData.withinProjectName)
+                : base;
+            return formData.packageName ? joinPath(projectPath, formData.packageName) : projectPath;
+        }
+        return joinPath(base, formData.packageName);
+    };
+
+    const displayedPath = pathTouched ? formData.path : computeDisplayedPath();
 
     const handleIntegrationName = (value: string) => {
-        onFormDataChange({ integrationName: value });
         setPathTouched(false);
-        // Auto-populate package name if user hasn't manually edited it
+        const updates: Partial<ProjectFormData> = { integrationName: value };
         if (!packageNameTouched) {
-            onFormDataChange({ packageName: sanitizePackageName(value) });
+            const sanitized = sanitizePackageName(value);
+            updates.packageName = sanitized;
+            if (!withinProjectNameTouched) {
+                updates.withinProjectName = sanitized ? sanitized + "_project" : "";
+            }
         }
+        onFormDataChange(updates);
     };
 
     const handleProjectDirSelection = async () => {
@@ -84,11 +97,21 @@ export function ProjectFormFields({
         setIsProjectSettingsExpanded(!isProjectSettingsExpanded);
     };
 
+    const handleCreateWithinProjectToggle = (checked: boolean) => {
+        setPathTouched(false);
+        const updates: Partial<ProjectFormData> = { createWithinProject: checked };
+        if (checked && !formData.withinProjectName && formData.packageName) {
+            updates.withinProjectName = formData.packageName + "_project";
+        }
+        onFormDataChange(updates);
+    };
+
     useEffect(() => {
         (async () => {
+            const { path: workspacePath } = await wsClient.getWorkspaceRoot();
+
             // Set default path if not already set
             if (!formData.path) {
-                const { path: workspacePath } = await wsClient.getWorkspaceRoot();
                 const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
                 setDefaultPath(dp);
                 onFormDataChange({ path: dp });
@@ -111,6 +134,12 @@ export function ProjectFormFields({
                     return false;
                 });
             setIsProjectModeSupported(projectModeSupported);
+
+            if (projectModeSupported && !workspacePath) {
+                // No workspace open: expand project section and enable "create within project" by default
+                setIsProjectSettingsExpanded(true);
+                onFormDataChange({ createWithinProject: true });
+            }
         })();
     }, []);
 
@@ -169,23 +198,27 @@ export function ProjectFormFields({
                 >
                     <CheckboxContainer>
                         <CheckBox
-                            label="Create as project"
-                            checked={formData.createAsWorkspace}
-                            onChange={(checked) => { setPathTouched(false); onFormDataChange({ createAsWorkspace: checked }); }}
+                            label="Create within a project"
+                            checked={formData.createWithinProject}
+                            onChange={handleCreateWithinProjectToggle}
                         />
                         <Description>
-                            Enable project mode to manage multiple integrations and libraries within a single repository.
+                            Wrap this integration inside a project, making it easy to add more integrations and libraries later.
                         </Description>
                     </CheckboxContainer>
-                    {formData.createAsWorkspace && (
+                    {formData.createWithinProject && (
                         <FieldGroup>
                             <TextField
-                                onTextChange={(value) => { setPathTouched(false); onFormDataChange({ workspaceName: value }); }}
-                                value={formData.workspaceName}
+                                onTextChange={(value) => {
+                                    setWithinProjectNameTouched(true);
+                                    setPathTouched(false);
+                                    onFormDataChange({ withinProjectName: value });
+                                }}
+                                value={formData.withinProjectName}
                                 label="Project Name"
                                 placeholder="Enter project name"
                                 required={true}
-                                errorMsg={projectNameError || ""}
+                                errorMsg=""
                             />
                         </FieldGroup>
                     )}
@@ -202,6 +235,12 @@ export function ProjectFormFields({
                         setPackageNameTouched(data.packageName.length > 0);
                         if (packageNameError) setPackageNameError(null);
                         setPathTouched(false);
+                        const updates: Partial<ProjectFormData> = { ...data };
+                        if (!withinProjectNameTouched) {
+                            updates.withinProjectName = data.packageName ? data.packageName + "_project" : "";
+                        }
+                        onFormDataChange(updates);
+                        return;
                     }
                     onFormDataChange(data);
                 }}

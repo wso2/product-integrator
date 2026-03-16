@@ -17,13 +17,13 @@
  */
 
 import { useState, useEffect } from "react";
-import { Button, Icon, TextField } from "@wso2/ui-toolkit";
+import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
-import { PackageInfoSection } from "./components";
-import { SectionDivider, OptionalSectionsLabel } from "./styles";
+import { CollapsibleSection, PackageInfoSection } from "./components";
+import { SectionDivider, OptionalSectionsLabel, CheckboxContainer, Description } from "./styles";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -57,8 +57,13 @@ interface LibraryFormData {
 export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
     const [packageNameTouched, setPackageNameTouched] = useState(false);
+    const [withinProjectNameTouched, setWithinProjectNameTouched] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
+    const [isProjectSectionExpanded, setIsProjectSectionExpanded] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
+    const [isProjectModeSupported, setIsProjectModeSupported] = useState(false);
+    const [createWithinProject, setCreateWithinProject] = useState(false);
+    const [withinProjectName, setWithinProjectName] = useState("");
     const [libraryNameError, setLibraryNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
@@ -86,6 +91,19 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             } catch (error) {
                 console.error("Failed to fetch default org name:", error);
             }
+
+            const projectModeSupported = await wsClient
+                .isSupportedSLVersion({ major: 2201, minor: 13, patch: 0 })
+                .catch((err) => {
+                    console.error("Failed to check project mode support:", err);
+                    return false;
+                });
+            setIsProjectModeSupported(projectModeSupported);
+
+            if (projectModeSupported && !workspacePath) {
+                setIsProjectSectionExpanded(true);
+                setCreateWithinProject(true);
+            }
         })();
     }, []);
 
@@ -98,16 +116,31 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         setOrgNameError(validateOrgName(formData.orgName));
     }, [formData.orgName]);
 
-    const displayedPath = pathTouched ? formData.path : joinPath(formData.path || defaultPath, formData.packageName);
+    const computeDisplayedPath = (): string => {
+        const base = formData.path || defaultPath;
+        if (createWithinProject) {
+            const projectPath = withinProjectName
+                ? joinPath(base, withinProjectName)
+                : base;
+            return formData.packageName ? joinPath(projectPath, formData.packageName) : projectPath;
+        }
+        return joinPath(base, formData.packageName);
+    };
+
+    const displayedPath = pathTouched ? formData.path : computeDisplayedPath();
 
     const handleLibraryName = (value: string) => {
         if (libraryNameError) setLibraryNameError(null);
         setPathTouched(false);
+        const sanitized = sanitizePackageName(value);
         setFormData(prev => ({
             ...prev,
             libraryName: value,
-            packageName: packageNameTouched ? prev.packageName : sanitizePackageName(value),
+            packageName: packageNameTouched ? prev.packageName : sanitized,
         }));
+        if (!packageNameTouched && !withinProjectNameTouched) {
+            setWithinProjectName(sanitized ? sanitized + "_project" : "");
+        }
     };
 
     const handlePathSelection = async () => {
@@ -116,6 +149,14 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         if (pathError) setPathError(null);
         setPathTouched(false);
         setFormData(prev => ({ ...prev, path: result.path }));
+    };
+
+    const handleCreateWithinProjectToggle = (checked: boolean) => {
+        setPathTouched(false);
+        setCreateWithinProject(checked);
+        if (checked && !withinProjectName && formData.packageName) {
+            setWithinProjectName(formData.packageName + "_project");
+        }
     };
 
     const handleCreate = async () => {
@@ -155,9 +196,9 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         try {
             const validationResult = await wsClient.validateProjectPath({
                 projectPath: formData.path,
-                projectName: formData.packageName,
+                projectName: createWithinProject ? withinProjectName : formData.packageName,
                 createDirectory: true,
-                createAsWorkspace: false,
+                createAsWorkspace: createWithinProject,
             });
 
             if (!validationResult.isValid) {
@@ -175,6 +216,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 packageName: formData.packageName,
                 projectPath: formData.path,
                 createDirectory: true,
+                createAsWorkspace: createWithinProject,
+                workspaceName: createWithinProject ? withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
                 version: formData.version || undefined,
                 isLibrary: true,
@@ -244,6 +287,43 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                             <SectionDivider />
                             <OptionalSectionsLabel>Optional Configurations</OptionalSectionsLabel>
 
+                            {/* Project Section */}
+                            {isProjectModeSupported && (
+                                <CollapsibleSection
+                                    isExpanded={isProjectSectionExpanded}
+                                    onToggle={() => setIsProjectSectionExpanded(!isProjectSectionExpanded)}
+                                    icon="folder"
+                                    title="Project"
+                                >
+                                    <CheckboxContainer>
+                                        <CheckBox
+                                            label="Create within a project"
+                                            checked={createWithinProject}
+                                            onChange={handleCreateWithinProjectToggle}
+                                        />
+                                        <Description>
+                                            Wrap this library inside a project, making it easy to add more integrations and libraries later.
+                                        </Description>
+                                    </CheckboxContainer>
+                                    {createWithinProject && (
+                                        <FieldGroup>
+                                            <TextField
+                                                onTextChange={(value) => {
+                                                    setWithinProjectNameTouched(true);
+                                                    setPathTouched(false);
+                                                    setWithinProjectName(value);
+                                                }}
+                                                value={withinProjectName}
+                                                label="Project Name"
+                                                placeholder="Enter project name"
+                                                required={true}
+                                                errorMsg=""
+                                            />
+                                        </FieldGroup>
+                                    )}
+                                </CollapsibleSection>
+                            )}
+
                             <PackageInfoSection
                                 isExpanded={isPackageInfoExpanded}
                                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
@@ -253,6 +333,9 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                         setPackageNameTouched(data.packageName.length > 0);
                                         if (packageNameError) setPackageNameError(null);
                                         setPathTouched(false);
+                                        if (!withinProjectNameTouched) {
+                                            setWithinProjectName(data.packageName ? data.packageName + "_project" : "");
+                                        }
                                     }
                                     setFormData(prev => ({ ...prev, ...data }));
                                 }}

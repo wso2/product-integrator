@@ -38,6 +38,8 @@ export function BIProjectForm() {
         path: "",
         createAsWorkspace: false,
         workspaceName: "",
+        createWithinProject: false,
+        withinProjectName: "",
         orgName: "",
         version: "",
         isLibrary: false,
@@ -47,7 +49,7 @@ export function BIProjectForm() {
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameValidationError, setPackageNameValidationError] = useState<string | null>(null);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
-    const createActionLabel = formData.createAsWorkspace ? "Create Project" : `Create Integration`;
+    const createActionLabel = "Create Integration";
 
 
     const handleFormDataChange = (data: Partial<ProjectFormData>) => {
@@ -93,11 +95,7 @@ export function BIProjectForm() {
         }
 
         if (formData.path.length < 2) {
-            setPathError(
-                formData.createAsWorkspace
-                    ? "Please select a path for your project"
-                    : `Please select a path for your integration`
-            );
+            setPathError("Please select a path for your integration");
             hasError = true;
         }
 
@@ -107,30 +105,26 @@ export function BIProjectForm() {
         }
 
         try {
-            const targetNameForValidation = formData.createAsWorkspace ? formData.workspaceName : formData.packageName;
+            const targetNameForValidation = formData.createWithinProject
+                ? formData.withinProjectName
+                : formData.packageName;
+
             const validationResult = await wsClient.validateProjectPath({
                 projectPath: formData.path,
                 projectName: targetNameForValidation,
                 createDirectory: true,
-                createAsWorkspace: formData.createAsWorkspace,
+                createAsWorkspace: formData.createWithinProject,
             });
 
             if (!validationResult.isValid) {
                 if (validationResult.errorField === ValidateProjectFormErrorField.PATH) {
-                    if (formData.createAsWorkspace) {
-                        setPathError(validationResult.errorMessage || "Invalid project path");
-                    } else {
-                        setPathError(
-                            validationResult.errorMessage || `Invalid integration path`
-                        );
-                    }
+                    setPathError(validationResult.errorMessage || "Invalid integration path");
                 } else if (validationResult.errorField === ValidateProjectFormErrorField.NAME) {
-                    // For workspace projects, route name errors to workspace name field
-                    if (formData.createAsWorkspace) {
+                    if (formData.createWithinProject) {
                         setProjectNameError(validationResult.errorMessage || "Invalid project name");
                     } else {
                         setPackageNameValidationError(
-                            validationResult.errorMessage || `Invalid integration name`
+                            validationResult.errorMessage || "Invalid integration name"
                         );
                     }
                 }
@@ -143,8 +137,8 @@ export function BIProjectForm() {
                 packageName: formData.packageName,
                 projectPath: formData.path,
                 createDirectory: true,
-                createAsWorkspace: formData.createAsWorkspace,
-                workspaceName: formData.workspaceName,
+                createAsWorkspace: formData.createWithinProject,
+                workspaceName: formData.createWithinProject ? formData.withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
                 version: formData.version || undefined
             });
@@ -164,7 +158,6 @@ export function BIProjectForm() {
                         integrationNameError={integrationNameError || undefined}
                         pathError={pathError || undefined}
                         packageNameValidationError={packageNameValidationError || undefined}
-                        projectNameError={projectNameError || undefined}
                     />
                 </ScrollableContent>
 

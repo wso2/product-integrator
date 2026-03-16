@@ -35,6 +35,8 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
         path: "",
         createAsWorkspace: false,
         workspaceName: "",
+        createWithinProject: false,
+        withinProjectName: "",
         orgName: "",
         version: "",
         isLibrary: false,
@@ -121,30 +123,26 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
 
         try {
             // Validate the project path
-            const targetNameForValidation = singleIntegrationData.createAsWorkspace
-                ? singleIntegrationData.workspaceName
+            const targetNameForValidation = singleIntegrationData.createWithinProject
+                ? singleIntegrationData.withinProjectName
                 : singleIntegrationData.packageName;
+
             const validationResult = await wsClient.validateProjectPath({
                 projectPath: singleIntegrationData.path,
                 projectName: targetNameForValidation,
                 createDirectory: true,
+                createAsWorkspace: singleIntegrationData.createWithinProject,
             });
 
             if (!validationResult.isValid) {
                 // Show error on the appropriate field
                 if (validationResult.errorField === ValidateProjectFormErrorField.PATH) {
-                    if (singleIntegrationData.createAsWorkspace) {
-                        setSingleIntegrationPathError(validationResult.errorMessage || "Invalid project path");
-                    } else {
-                        setSingleIntegrationPathError(
-                            validationResult.errorMessage || `Invalid ${selectedResourceTypeLabel.toLowerCase()} path`
-                        );
-                    }
+                    setSingleIntegrationPathError(
+                        validationResult.errorMessage || `Invalid ${selectedResourceTypeLabel.toLowerCase()} path`
+                    );
                 } else if (validationResult.errorField === ValidateProjectFormErrorField.NAME) {
-                    if (singleIntegrationData.createAsWorkspace) {
-                        setProjectNameError(
-                            validationResult.errorMessage || "Invalid project name"
-                        );
+                    if (singleIntegrationData.createWithinProject) {
+                        setProjectNameError(validationResult.errorMessage || "Invalid project name");
                     } else {
                         setSingleIntegrationPackageNameError(
                             validationResult.errorMessage || `Invalid ${selectedResourceTypeLabel.toLowerCase()} name`
@@ -161,8 +159,10 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
                 packageName: singleIntegrationData.packageName,
                 projectPath: singleIntegrationData.path,
                 createDirectory: true,
-                createAsWorkspace: singleIntegrationData.createAsWorkspace,
-                workspaceName: singleIntegrationData.workspaceName,
+                createAsWorkspace: singleIntegrationData.createWithinProject,
+                workspaceName: singleIntegrationData.createWithinProject
+                    ? singleIntegrationData.withinProjectName
+                    : undefined,
                 orgName: singleIntegrationData.orgName || undefined,
                 version: singleIntegrationData.version || undefined,
                 isLibrary: singleIntegrationData.isLibrary,
@@ -272,7 +272,6 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
                         onFormDataChange={handleSingleProjectFormChange}
                         integrationNameError={singleIntegrationNameError || undefined}
                         pathError={singleIntegrationPathError || undefined}
-                        projectNameError={projectNameError || undefined}
                         packageNameValidationError={singleIntegrationPackageNameError || undefined}
                     />
 
@@ -281,9 +280,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
                             primaryButton={{
                                 text: isValidating
                                     ? "Validating..."
-                                    : singleIntegrationData.createAsWorkspace
-                                        ? "Create and Open Project"
-                                        : `Create and Open ${selectedResourceTypeLabel}`,
+                                    : `Create and Open ${selectedResourceTypeLabel}`,
                                 onClick: handleCreateSingleProject,
                                 disabled: isValidating
                             }}
