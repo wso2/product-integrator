@@ -16,9 +16,10 @@
  * under the License.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styled from "@emotion/styled";
 import { Popover, ThemeColors, VSCodeColors, Button, Codicon } from "@wso2/ui-toolkit";
+import { useQueryClient } from "@tanstack/react-query";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
 import { WICommandIds } from "@wso2/wso2-platform-core";
@@ -191,11 +192,13 @@ export interface UserAccountPopoverProps {
     isOpen: boolean;
     anchorEl: HTMLElement | null;
     onClose: () => void;
+    onOrgSwitch?: (orgId: string, orgName: string) => void;
 }
 
-export function UserAccountPopover({ isOpen, anchorEl, onClose }: UserAccountPopoverProps) {
+export function UserAccountPopover({ isOpen, anchorEl, onClose, onOrgSwitch }: UserAccountPopoverProps) {
     const { wsClient } = useVisualizerContext();
     const { authState, contextState } = useCloudContext();
+    const queryClient = useQueryClient();
     const [isSwitchingOrg, setIsSwitchingOrg] = useState(false);
     const [localSelectedOrgId, setLocalSelectedOrgId] = useState<string | null>(null);
     const [orgSwitchError, setOrgSwitchError] = useState<string | null>(null);
@@ -223,7 +226,12 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose }: UserAccountPop
     }, [(authState as any)?.selectedOrgId]);
 
     const handleSignOut = () => {
-        wsClient.runCommand({ command: WICommandIds.SignOut, args: [] });
+        queryClient.setQueryData(["cloud_auth_state"], (old: any) =>
+            old ? { ...old, userInfo: null } : old
+        );
+        wsClient.runCommand({ command: WICommandIds.SignOut, args: [] })
+            .then(() => queryClient.invalidateQueries({ queryKey: ["cloud_auth_state"] }))
+            .catch(() => {});
         onClose();
     };
 
@@ -241,6 +249,7 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose }: UserAccountPop
         setOrgSwitchError(null);
         setIsSwitchingOrg(true);
         setLocalSelectedOrgId(String(org.id));
+        onOrgSwitch?.(String(org.id), org.name);
         try {
             await wsClient.changeOrgContext(String(org.id));
             onClose();
@@ -248,6 +257,10 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose }: UserAccountPop
             console.error("Failed to switch organization", error);
             setOrgSwitchError("Unable to switch organization right now.");
             setLocalSelectedOrgId(previousOrgId);
+            if (previousOrgId) {
+                const prevOrg = organizations.find((o) => String(o.id) === previousOrgId);
+                if (prevOrg) onOrgSwitch?.(previousOrgId, prevOrg.name);
+            }
         } finally {
             setIsSwitchingOrg(false);
         }

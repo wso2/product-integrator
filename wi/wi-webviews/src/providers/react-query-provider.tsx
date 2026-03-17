@@ -16,10 +16,14 @@
  * under the License.
  */
 
-import { QueryClient, DehydratedState } from "@tanstack/react-query";
+import { QueryClient, DehydratedState, Query } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { useVisualizerContext } from "../contexts";
-import React from "react";
+import React, { useState } from "react";
+
+// These queries reflect live extension state and must never be restored from the
+// persisted cache – they should always be fetched fresh on mount.
+const NON_PERSISTENT_QUERY_KEYS = ["cloud_auth_state", "cloud_context_state", "console_url"];
 
 interface PersistedClient {
     timestamp: number;
@@ -44,22 +48,29 @@ const webviewStatePersister = (queryBaseKey: string) => {
 };
 
 export const WIWebviewQueryClientProvider = ({ children }: { children: React.ReactNode }) => {
+    const [queryClient] = useState(
+        () =>
+            new QueryClient({
+                defaultOptions: {
+                    queries: {
+                        gcTime: 1000 * 60 * 60 * 24 * 7, // 1 week
+                        retry: false,
+                        refetchOnWindowFocus: false,
+                    },
+                },
+            })
+    );
+
     return (
         <PersistQueryClientProvider
-            client={
-                new QueryClient({
-                    defaultOptions: {
-                        queries: {
-                            gcTime: 1000 * 60 * 60 * 24 * 7, // 1 week
-                            retry: false,
-                            refetchOnWindowFocus: false,
-                        },
-                    },
-                })
-            }
+            client={queryClient}
             persistOptions={{
                 persister: webviewStatePersister(`wi-react-query-cache`),
                 buster: "wi-cache-v1",
+                dehydrateOptions: {
+                    shouldDehydrateQuery: (query: Query) =>
+                        !NON_PERSISTENT_QUERY_KEYS.some((key) => query.queryKey.includes(key)),
+                },
             }}
         >
             {children}

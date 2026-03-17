@@ -460,9 +460,11 @@ export const WelcomeView: React.FC = () => {
     const [popoverOpen, setPopoverOpen] = useState(false);
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
     const [isRecentProjectsLoaded, setIsRecentProjectsLoaded] = useState(false);
+    const [localOrgName, setLocalOrgName] = useState<string | null>(null);
     const avatarRef = useRef<HTMLButtonElement>(null);
 
     const selectedOrgName = useMemo(() => {
+        if (localOrgName) return localOrgName;
         const orgId = (authState as any)?.selectedOrgId || contextState?.selected?.org?.id;
         if (orgId && authState?.userInfo?.organizations) {
             const match = (authState.userInfo.organizations as Array<{ id?: any; name: string }>)
@@ -470,7 +472,7 @@ export const WelcomeView: React.FC = () => {
             if (match?.name) return match.name;
         }
         return contextState?.selected?.org?.name ?? null;
-    }, [(authState as any)?.selectedOrgId, authState?.userInfo?.organizations, contextState?.selected?.org?.name]);
+    }, [localOrgName, (authState as any)?.selectedOrgId, authState?.userInfo?.organizations, contextState?.selected?.org?.name]);
 
     useEffect(() => {
         if (currentView !== ViewState.WELCOME) {
@@ -703,6 +705,7 @@ export const WelcomeView: React.FC = () => {
                 isOpen={popoverOpen}
                 anchorEl={avatarRef.current}
                 onClose={() => setPopoverOpen(false)}
+                onOrgSwitch={(_id, name) => setLocalOrgName(name)}
             />
         </>
     );
