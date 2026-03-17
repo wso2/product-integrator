@@ -64,6 +64,7 @@ import type {
     GetGitMetadataReq,
     IsRepoAuthorizedReq,
     WICloudSubmitComponentsReq,
+    GetCloudProjectsReq,
 } from "@wso2/wi-core";
 import { MainWsManager } from "./ws-managers/main/ws-manager";
 import { CloudWsManager } from "./ws-managers/cloud/ws-manager";
@@ -325,6 +326,9 @@ export class BridgeLayer {
             cloudManager.cloneRepositoryIntoCompDir(request.params as CloneRepositoryIntoCompDirReq)
         );
         registerRoute("getConsoleUrl", async () => cloudManager.getConsoleUrl());
+        registerRoute("getCloudProjects", async (request) =>
+            cloudManager.getCloudProjects(request.params as GetCloudProjectsReq)
+        );
 
         return router;
     }

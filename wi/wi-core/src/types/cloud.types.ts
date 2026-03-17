@@ -55,6 +55,20 @@ export interface WICloudSubmitComponentsResp {
 	total: number;
 }
 
+export interface GetCloudProjectsReq {
+	orgId: string;
+	orgHandle: string;
+}
+
+export interface GetCloudProjectsResp {
+	projects: Array<{
+		id: string;
+		name: string;
+		handler: string;
+		description: string;
+	}>;
+}
+
 export interface WICloudAPI {
 	getCloudFormContext: () => Promise<WICloudFormContext>;
 	submitComponents: (params: WICloudSubmitComponentsReq) => Promise<WICloudSubmitComponentsResp>;
@@ -83,4 +97,6 @@ export interface WICloudAPI {
 	cloneRepositoryIntoCompDir: (params: CloneRepositoryIntoCompDirReq) => Promise<string>;
 	// Config
 	getConsoleUrl: () => Promise<string>;
+	// Projects
+	getCloudProjects: (params: GetCloudProjectsReq) => Promise<GetCloudProjectsResp>;
 }

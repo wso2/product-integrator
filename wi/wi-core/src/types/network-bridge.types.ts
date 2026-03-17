@@ -77,6 +77,8 @@ import type {
     WICloudFormContext,
     WICloudSubmitComponentsReq,
     WICloudSubmitComponentsResp,
+    GetCloudProjectsReq,
+    GetCloudProjectsResp,
 } from "./cloud.types";
 
 export const WI_BRIDGE_EVENTS = {
@@ -149,6 +151,7 @@ export interface WIWsMethodParamsMap {
     getGitRepoMetadata: GetGitMetadataReq;
     cloneRepositoryIntoCompDir: CloneRepositoryIntoCompDirReq;
     getConsoleUrl: void;
+    getCloudProjects: GetCloudProjectsReq;
 }
 
 export interface WIWsMethodResultMap {
@@ -209,6 +212,7 @@ export interface WIWsMethodResultMap {
     getGitRepoMetadata: GetGitMetadataResp;
     cloneRepositoryIntoCompDir: string;
     getConsoleUrl: string;
+    getCloudProjects: GetCloudProjectsResp;
 }
 
 export type WIWsMethod = keyof WIWsMethodParamsMap;

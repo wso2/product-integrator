@@ -84,6 +84,8 @@ import type {
     WICloudFormContext,
     WICloudSubmitComponentsReq,
     WICloudSubmitComponentsResp,
+    GetCloudProjectsReq,
+    GetCloudProjectsResp,
 } from "@wso2/wi-core";
 import { ConnectionStatus, createWebviewTransportAdapter } from "webview-giga-bridge/webview";
 
@@ -378,6 +380,10 @@ export class WsClient {
 
     public getConsoleUrl(): Promise<string> {
         return this.request("getConsoleUrl");
+    }
+
+    public getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
+        return this.request("getCloudProjects", params);
     }
 
     public onAuthStateChanged(callback: (state: AuthState) => void) {

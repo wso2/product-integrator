@@ -30,6 +30,7 @@ import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { UserAccountPopover } from "./UserAccountPopover";
+import { OpenProjectView } from "./OpenProjectView";
 
 enum ViewState {
     WELCOME = "welcome",
@@ -39,6 +40,7 @@ enum ViewState {
     CREATE_LIBRARY = "create_library",
     CREATE_PROJECT = "create_project",
     SETTINGS = "settings",
+    OPEN_PROJECT = "open_project",
 }
 
 const Wrapper = styled.div`
@@ -631,9 +633,13 @@ export const WelcomeView: React.FC = () => {
     };
 
     const handleProjectDirSelection = async () => {
-        const response = await wsClient.selectFileOrDirPath({});
-        if (response?.path) {
-            wsClient.openFolder(response.path);
+        if (authState?.userInfo) {
+            setCurrentView(ViewState.OPEN_PROJECT);
+        } else {
+            const response = await wsClient.selectFileOrDirPath({});
+            if (response?.path) {
+                wsClient.openFolder(response.path);
+            }
         }
     };
 
@@ -673,6 +679,8 @@ export const WelcomeView: React.FC = () => {
                 return (
                     <SettingsView onBack={goBackToWelcome} />
                 );
+            case ViewState.OPEN_PROJECT:
+                return <OpenProjectView onBack={goBackToWelcome} />;
             case ViewState.WELCOME:
             default:
                 return renderWelcomeContent();
