@@ -21,7 +21,7 @@ import { Button, Icon, TextField } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
-import { joinPath } from "./utils";
+import { joinPath, extractBase } from "./utils";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -93,7 +93,8 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
         if (!result.path) return;
         if (pathError) setPathError(null);
         setPathTouched(false);
-        setFormData(prev => ({ ...prev, path: result.path }));
+        const normalizedPath = extractBase(result.path, formData.projectName);
+        setFormData(prev => ({ ...prev, path: normalizedPath }));
     };
 
     const handleCreate = async () => {
@@ -204,7 +205,8 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                     onChange={(value) => {
                                         if (pathError) setPathError(null);
                                         setPathTouched(true);
-                                        setFormData(prev => ({ ...prev, path: value }));
+                                        const normalizedPath = extractBase(value, formData.projectName);
+                                        setFormData(prev => ({ ...prev, path: normalizedPath }));
                                     }}
                                     errorMsg={pathError || undefined}
                                 />

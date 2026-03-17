@@ -36,7 +36,7 @@ export const PageContainer = styled.div`
     min-height: calc(100vh - 52px);
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 24px;
 `;
 
 /** Row containing back button + title block. */
@@ -113,7 +113,7 @@ export const FormPanel = styled.section`
 
 export const FormPanelHeader = styled.div`
     border-bottom: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 10%, var(--vscode-panel-border));
-    padding: 14px 18px 12px;
+    padding: 25px 18px;
     background: linear-gradient(
         180deg,
         color-mix(in srgb, var(--wso2-brand-accent) 4%, var(--vscode-editor-background)) 0%,
@@ -142,9 +142,10 @@ export const FormBody = styled.div`
     padding: 18px;
 `;
 
-/** Constrains form content width to match the biForm layout. */
+/** Constrains form content width and centers it within FormBody. */
 export const FormContent = styled.div`
-    max-width: 600px;
+    max-width: 800px;
+    margin: 0 auto;
 `;
 
 /** Right-aligned button row pinned to the bottom of FormBody. */
@@ -153,6 +154,7 @@ export const FormFooter = styled.div`
     justify-content: flex-end;
     padding-top: 20px;
 `;
+
 
 // ── Runtime selector (shared between CreationView and SamplesView) ────────────
 

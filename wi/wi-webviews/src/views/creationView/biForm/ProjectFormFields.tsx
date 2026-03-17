@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { TextField, CheckBox } from "@wso2/ui-toolkit";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { useVisualizerContext } from "../../../contexts/WsContext";
@@ -81,9 +81,11 @@ export function ProjectFormFields({
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [defaultPath, setDefaultPath] = useState("");
     const [pathTouched, setPathTouched] = useState(false);
+    const [editablePath, setEditablePath] = useState("");
+    const hasUserToggledCreateWithinProject = useRef(false);
 
     const computeDisplayedPath = (): string => {
-        const base = formData.path || defaultPath;
+        const base = editablePath || formData.path || defaultPath;
         if (formData.createWithinProject) {
             const projectPath = formData.withinProjectName
                 ? joinPath(base, formData.withinProjectName)
@@ -93,7 +95,13 @@ export function ProjectFormFields({
         return joinPath(base, formData.packageName);
     };
 
-    const displayedPath = pathTouched ? formData.path : computeDisplayedPath();
+    const displayedPath = pathTouched ? editablePath : computeDisplayedPath();
+
+    useEffect(() => {
+        if (!pathTouched) {
+            setEditablePath(formData.path || defaultPath);
+        }
+    }, [formData.path, defaultPath, pathTouched]);
 
     const handleIntegrationName = (value: string) => {
         setPathTouched(false);
@@ -109,9 +117,10 @@ export function ProjectFormFields({
     };
 
     const handleProjectDirSelection = async () => {
-        const selectedDirectory = await wsClient.selectFileOrDirPath({ startPath: formData.path || defaultPath });
+        const selectedDirectory = await wsClient.selectFileOrDirPath({ startPath: editablePath || formData.path || defaultPath });
         if (!selectedDirectory.path) return;
         setPathTouched(false);
+        setEditablePath(selectedDirectory.path);
         onFormDataChange({ path: selectedDirectory.path });
     };
 
@@ -120,6 +129,7 @@ export function ProjectFormFields({
     };
 
     const handleCreateWithinProjectToggle = (checked: boolean) => {
+        hasUserToggledCreateWithinProject.current = true;
         setPathTouched(false);
         const updates: Partial<ProjectFormData> = { createWithinProject: checked };
         if (checked && !formData.withinProjectName && formData.packageName) {
@@ -152,7 +162,11 @@ export function ProjectFormFields({
                     console.error("Failed to fetch default org name:", error);
                 }
             }
-            if (isProjectModeSupported && !workspacePath) {
+            if (
+                !hasUserToggledCreateWithinProject.current &&
+                formData.createWithinProject === undefined &&
+                isProjectModeSupported
+            ) {
                 setIsProjectSettingsExpanded(true);
                 const updates: Partial<ProjectFormData> = { createWithinProject: true };
                 if (!formData.withinProjectName && formData.packageName) {
@@ -170,6 +184,7 @@ export function ProjectFormFields({
         formData.orgName,
         formData.packageName,
         formData.withinProjectName,
+        formData.createWithinProject,
         onFormDataChange
     ]);
 
@@ -218,7 +233,12 @@ export function ProjectFormFields({
                     onSelect={handleProjectDirSelection}
                     onChange={(value) => {
                         setPathTouched(true);
-                        onFormDataChange({ path: value });
+                        setEditablePath(value);
+                    }}
+                    onBlur={() => {
+                        if (pathTouched && editablePath !== formData.path) {
+                            onFormDataChange({ path: editablePath });
+                        }
                     }}
                     errorMsg={pathError || undefined}
                 />
@@ -258,7 +278,7 @@ export function ProjectFormFields({
                                 label="Project Name"
                                 placeholder="Enter project name"
                                 required={true}
-                                errorMsg={withinProjectNameTouched && withinProjectNameError ? withinProjectNameError : ""}
+                                errorMsg={projectNameError ?? (withinProjectNameTouched && withinProjectNameError ? withinProjectNameError : "")}
                             />
                         </FieldGroup>
                     )}

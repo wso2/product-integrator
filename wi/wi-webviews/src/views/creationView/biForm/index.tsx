@@ -20,9 +20,7 @@ import { useState } from "react";
 import { Button } from "@wso2/ui-toolkit";
 import { useVisualizerContext } from "../../../contexts";
 import {
-    PageWrapper,
     FormContainer,
-    ScrollableContent,
     ButtonWrapper
 } from "./styles";
 import { ProjectFormFields } from "./ProjectFormFields";
@@ -150,29 +148,25 @@ export function BIProjectForm() {
     };
 
     return (
-        <PageWrapper>
-            <FormContainer>
-                <ScrollableContent>
-                    <ProjectFormFields
-                        formData={formData}
-                        onFormDataChange={handleFormDataChange}
-                        integrationNameError={integrationNameError || undefined}
-                        pathError={pathError || undefined}
-                        projectNameError={projectNameError || undefined}
-                        packageNameValidationError={packageNameValidationError || undefined}
-                    />
-                </ScrollableContent>
+        <FormContainer>
+            <ProjectFormFields
+                formData={formData}
+                onFormDataChange={handleFormDataChange}
+                integrationNameError={integrationNameError || undefined}
+                pathError={pathError || undefined}
+                projectNameError={projectNameError || undefined}
+                packageNameValidationError={packageNameValidationError || undefined}
+            />
 
-                <ButtonWrapper>
-                    <Button
-                        disabled={isValidating}
-                        onClick={handleCreateProject}
-                        appearance="primary"
-                    >
-                        {isValidating ? "Validating..." : createActionLabel}
-                    </Button>
-                </ButtonWrapper>
-            </FormContainer>
-        </PageWrapper>
+            <ButtonWrapper>
+                <Button
+                    disabled={isValidating}
+                    onClick={handleCreateProject}
+                    appearance="primary"
+                >
+                    {isValidating ? "Validating..." : createActionLabel}
+                </Button>
+            </ButtonWrapper>
+        </FormContainer>
     );
 }
