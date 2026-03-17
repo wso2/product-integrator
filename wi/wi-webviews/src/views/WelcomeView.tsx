@@ -194,7 +194,7 @@ const CardsContainer = styled.div`
 
 const CardsGrid = styled.div`
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 24px;
 
     @media (max-width: 1200px) {
@@ -771,24 +771,6 @@ export const WelcomeView: React.FC = () => {
                             <StyledButton
                                 onClick={(e: any) => { e.stopPropagation(); goToSamples(); }}>
                                 <ButtonContent>Explore</ButtonContent>
-                            </StyledButton>
-                        </CardContent>
-                    </ActionCard>
-
-                    <ActionCard onClick={goToSamples}>
-                        <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-ink-alt) 100%)">
-                                <Codicon name="extensions" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
-                            </CardIcon>
-                        </CardIconContainer>
-                        <CardContent>
-                            <CardTitle>Pre-built Integrations</CardTitle>
-                            <CardDescription>
-                                Browse and deploy ready-made integration templates and pre-built connectors directly from our catalog.
-                            </CardDescription>
-                            <StyledButton
-                                onClick={(e: any) => { e.stopPropagation(); goToSamples(); }}>
-                                <ButtonContent>Browse</ButtonContent>
                             </StyledButton>
                         </CardContent>
                     </ActionCard>
