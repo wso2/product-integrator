@@ -17,7 +17,7 @@
  */
 
 import { ActionButtons, Typography } from "@wso2/ui-toolkit";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BodyText, ButtonWrapper } from "./styles";
 import { ConfigureProjectFormProps } from "./types";
 import { ProjectFormData, ProjectFormFields } from "../creationView/biForm/ProjectFormFields";
@@ -26,7 +26,7 @@ import { MultiProjectFormData, MultiProjectFormFields } from "./components/Multi
 import { useVisualizerContext } from "../../contexts";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 
-export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: ConfigureProjectFormProps) {
+export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedOrgName }: ConfigureProjectFormProps) {
     const { wsClient } = useVisualizerContext();
     const [singleProjectData, setSingleProjectData] = useState<ProjectFormData>({
         integrationName: "",
@@ -52,6 +52,13 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
     const [singleProjectIntegrationNameError, setSingleProjectIntegrationNameError] = useState<string | null>(null);
     const [singleProjectPathError, setSingleProjectPathError] = useState<string | null>(null);
     const [singleProjectPackageNameError, setSingleProjectPackageNameError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!selectedOrgName || singleProjectData.orgName === selectedOrgName) {
+            return;
+        }
+        setSingleProjectData((prev) => ({ ...prev, orgName: selectedOrgName }));
+    }, [selectedOrgName, singleProjectData.orgName]);
 
     const handleSingleProjectFormChange = (data: Partial<ProjectFormData>) => {
         setSingleProjectData(prev => ({ ...prev, ...data }));
@@ -245,6 +252,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
                         integrationNameError={singleProjectIntegrationNameError || undefined}
                         pathError={singleProjectPathError || undefined}
                         packageNameValidationError={singleProjectPackageNameError || undefined}
+                        selectedOrgName={selectedOrgName}
                     />
 
                     <ButtonWrapper>

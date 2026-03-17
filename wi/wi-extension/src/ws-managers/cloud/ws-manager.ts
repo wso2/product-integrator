@@ -86,11 +86,31 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async getAuthState(): Promise<AuthState> {
-		return ext.authProvider?.state ?? { userInfo: null, region: "US" };
+		const authState = ext.authProvider?.state ?? { userInfo: null, region: "US" };
+		// Add selected org ID to auth state
+		const selectedOrgId = ext.context.globalState.get<string>("selectedOrgId");
+		return {
+			...authState,
+			selectedOrgId,
+		} as AuthState & { selectedOrgId?: string };
 	}
 
 	async getContextState(): Promise<ContextStoreState> {
 		return contextStore.getState().state;
+	}
+
+	async changeOrgContext(orgId: string): Promise<void> {
+		await ext.clients.rpcClient.changeOrgContext(orgId);
+		
+		// Store the selected org ID in global state
+		await ext.context.globalState.update("selectedOrgId", orgId);
+		
+		// Refresh auth state to get updated user info with new org context
+		const userInfo = await ext.clients.rpcClient.getUserInfo();
+		if (userInfo) {
+			const region = await ext.clients.rpcClient.getCurrentRegion();
+			ext.authProvider?.getState().loginSuccess(userInfo, region);
+		}
 	}
 
 	async getLocalGitData(dirPath: string): Promise<GetLocalGitDataResp | undefined> {
@@ -311,7 +331,8 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		publishContextState: (state: ContextStoreState) => void,
 	): void {
 		ext.authProvider?.subscribe(({ state }) => {
-			publishAuthState(state);
+			const selectedOrgId = ext.context.globalState.get<string>("selectedOrgId");
+			publishAuthState({ ...state, selectedOrgId } as AuthState & { selectedOrgId?: string });
 		});
 		contextStore.subscribe(({ state }) => {
 			publishContextState(state);

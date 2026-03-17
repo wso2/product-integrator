@@ -16,13 +16,14 @@
  * under the License.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Button,
 } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { ProjectFormFields, ProjectFormData } from "./ProjectFormFields";
 import { useVisualizerContext } from "../../../contexts";
+import { useCloudContext } from "../../../providers";
 
 const ButtonWrapper = styled.div`
     margin-top: 20px;
@@ -40,6 +41,8 @@ const ScrollableContent = styled.div`
 
 export function BIProjectForm() {
     const { wsClient } = useVisualizerContext();
+    const { contextState } = useCloudContext();
+    const selectedOrgName = contextState?.selected?.org?.name;
     const [formData, setFormData] = useState<ProjectFormData>({
         integrationName: "",
         packageName: "",
@@ -56,6 +59,13 @@ export function BIProjectForm() {
     const [integrationNameError, setIntegrationNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameValidationError, setPackageNameValidationError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!selectedOrgName || formData.orgName === selectedOrgName) {
+            return;
+        }
+        setFormData((prev) => ({ ...prev, orgName: selectedOrgName }));
+    }, [selectedOrgName, formData.orgName]);
 
     const handleFormDataChange = (data: Partial<ProjectFormData>) => {
         setFormData(prev => ({ ...prev, ...data }));
@@ -94,6 +104,7 @@ export function BIProjectForm() {
                     integrationNameError={integrationNameError || undefined}
                     pathError={pathError || undefined}
                     packageNameValidationError={packageNameValidationError || undefined}
+                    selectedOrgName={selectedOrgName}
                 />
             </ScrollableContent>
             <ButtonWrapper>

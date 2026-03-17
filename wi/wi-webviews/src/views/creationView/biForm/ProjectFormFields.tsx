@@ -102,9 +102,17 @@ export interface ProjectFormFieldsProps {
     integrationNameError?: string;
     pathError?: string;
     packageNameValidationError?: string;
+    selectedOrgName?: string;
 }
 
-export function ProjectFormFields({ formData, onFormDataChange, integrationNameError, pathError, packageNameValidationError }: ProjectFormFieldsProps) {
+export function ProjectFormFields({
+    formData,
+    onFormDataChange,
+    integrationNameError,
+    pathError,
+    packageNameValidationError,
+    selectedOrgName
+}: ProjectFormFieldsProps) {
     const { wsClient } = useVisualizerContext();
     const [packageNameTouched, setPackageNameTouched] = useState(false);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
@@ -248,6 +256,7 @@ export function ProjectFormFields({ formData, onFormDataChange, integrationNameE
                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
                 data={{ orgName: formData.orgName, version: formData.version }}
                 onChange={(data) => onFormDataChange(data)}
+                selectedOrgName={selectedOrgName}
             />
         </>
     );

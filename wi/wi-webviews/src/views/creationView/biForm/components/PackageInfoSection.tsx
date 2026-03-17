@@ -34,6 +34,8 @@ export interface PackageInfoSectionProps {
     data: PackageInfoData;
     /** Callback when the package info changes */
     onChange: (data: Partial<PackageInfoData>) => void;
+    /** Selected organization from global org switcher */
+    selectedOrgName?: string;
 }
 
 export function PackageInfoSection({
@@ -41,19 +43,22 @@ export function PackageInfoSection({
     onToggle,
     data,
     onChange,
+    selectedOrgName,
 }: PackageInfoSectionProps) {
+    const resolvedOrgName = selectedOrgName || data.orgName;
+
     return (
         <CollapsibleSection
             isExpanded={isExpanded}
             onToggle={onToggle}
             icon="package"
             title="Package Information"
-            subtitle={data.orgName || undefined}
+            subtitle={resolvedOrgName || undefined}
         >
             <FieldGroup>
                 <TextField
                     onTextChange={(value) => onChange({ orgName: value })}
-                    value={data.orgName}
+                    value={resolvedOrgName}
                     label="Organization Name"
                     description="The organization that owns this Ballerina package."
                 />

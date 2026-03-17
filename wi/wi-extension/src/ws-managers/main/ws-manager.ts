@@ -485,7 +485,7 @@ export class MainWsManager implements WIVisualizerAPI {
     }
 
     async importIntegration(params: ImportIntegrationWsRequest): Promise<ImportIntegrationResponse> {
-        const orgName = getUsername();
+        const orgName = params.orgName || getUsername();
         const langParams: ImportIntegrationRequest = {
             orgName: orgName,
             packageName: sanitizeName(params.packageName),

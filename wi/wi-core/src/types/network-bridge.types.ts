@@ -133,6 +133,7 @@ export interface WIWsMethodParamsMap {
     closeCloudFormWebview: void;
     getAuthState: void;
     getContextState: void;
+    changeOrgContext: string;
     getLocalGitData: string;
     hasDirtyRepo: string;
     getConfigFileDrifts: GetConfigFileDriftsReq;
@@ -191,6 +192,7 @@ export interface WIWsMethodResultMap {
     closeCloudFormWebview: void;
     getAuthState: AuthState;
     getContextState: ContextStoreState;
+    changeOrgContext: void;
     getLocalGitData: GetLocalGitDataResp | undefined;
     hasDirtyRepo: boolean;
     getConfigFileDrifts: string[];
