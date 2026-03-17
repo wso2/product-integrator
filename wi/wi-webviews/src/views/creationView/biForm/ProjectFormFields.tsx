@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import { TextField, CheckBox } from "@wso2/ui-toolkit";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { useVisualizerContext } from "../../../contexts/WsContext";
+import { useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
 import {
     FieldGroup,
     CheckboxContainer,
@@ -50,11 +51,12 @@ export function ProjectFormFields({
     packageNameValidationError,
 }: ProjectFormFieldsProps) {
     const { wsClient } = useVisualizerContext();
+    const isProjectModeSupported = useProjectModeSupported();
+    const { path: workspacePath, isReady: workspaceReady } = useWorkspaceRoot();
     const [packageNameTouched, setPackageNameTouched] = useState(false);
     const [withinProjectNameTouched, setWithinProjectNameTouched] = useState(false);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
-    const [isProjectModeSupported, setIsProjectModeSupported] = useState(false);
     const [isProjectSettingsExpanded, setIsProjectSettingsExpanded] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [defaultPath, setDefaultPath] = useState("");
@@ -107,17 +109,13 @@ export function ProjectFormFields({
     };
 
     useEffect(() => {
+        if (!workspaceReady) return;
         (async () => {
-            const { path: workspacePath } = await wsClient.getWorkspaceRoot();
-
-            // Set default path if not already set
             if (!formData.path) {
                 const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
                 setDefaultPath(dp);
                 onFormDataChange({ path: dp });
             }
-
-            // Set default org name if not already set
             if (!formData.orgName) {
                 try {
                     const { orgName } = await wsClient.getDefaultOrgName();
@@ -126,22 +124,12 @@ export function ProjectFormFields({
                     console.error("Failed to fetch default org name:", error);
                 }
             }
-
-            const projectModeSupported = await wsClient
-                .isSupportedSLVersion({ major: 2201, minor: 13, patch: 0 })
-                .catch((err) => {
-                    console.error("Failed to check project mode support:", err);
-                    return false;
-                });
-            setIsProjectModeSupported(projectModeSupported);
-
-            if (projectModeSupported && !workspacePath) {
-                // No workspace open: expand project section and enable "create within project" by default
+            if (isProjectModeSupported && !workspacePath) {
                 setIsProjectSettingsExpanded(true);
                 onFormDataChange({ createWithinProject: true });
             }
         })();
-    }, []);
+    }, [workspaceReady]);
 
     useEffect(() => {
         const error = validatePackageName(formData.packageName, formData.integrationName);

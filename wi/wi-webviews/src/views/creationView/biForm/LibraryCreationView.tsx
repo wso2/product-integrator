@@ -20,6 +20,7 @@ import { useState, useEffect } from "react";
 import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
+import { useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { CollapsibleSection, PackageInfoSection } from "./components";
@@ -56,12 +57,13 @@ interface LibraryFormData {
 
 export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
+    const isProjectModeSupported = useProjectModeSupported();
+    const { path: workspacePath, isReady: workspaceReady } = useWorkspaceRoot();
     const [packageNameTouched, setPackageNameTouched] = useState(false);
     const [withinProjectNameTouched, setWithinProjectNameTouched] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [isProjectSectionExpanded, setIsProjectSectionExpanded] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
-    const [isProjectModeSupported, setIsProjectModeSupported] = useState(false);
     const [createWithinProject, setCreateWithinProject] = useState(false);
     const [withinProjectName, setWithinProjectName] = useState("");
     const [libraryNameError, setLibraryNameError] = useState<string | null>(null);
@@ -79,8 +81,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     });
 
     useEffect(() => {
+        if (!workspaceReady) return;
         (async () => {
-            const { path: workspacePath } = await wsClient.getWorkspaceRoot();
             const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
             setDefaultPath(dp);
             setFormData(prev => ({ ...prev, path: dp }));
@@ -92,20 +94,12 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 console.error("Failed to fetch default org name:", error);
             }
 
-            const projectModeSupported = await wsClient
-                .isSupportedSLVersion({ major: 2201, minor: 13, patch: 0 })
-                .catch((err) => {
-                    console.error("Failed to check project mode support:", err);
-                    return false;
-                });
-            setIsProjectModeSupported(projectModeSupported);
-
-            if (projectModeSupported && !workspacePath) {
+            if (isProjectModeSupported && !workspacePath) {
                 setIsProjectSectionExpanded(true);
                 setCreateWithinProject(true);
             }
         })();
-    }, []);
+    }, [workspaceReady]);
 
     useEffect(() => {
         const error = validatePackageName(formData.packageName, formData.libraryName);
