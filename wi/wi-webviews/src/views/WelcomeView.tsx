@@ -427,33 +427,68 @@ const SecondaryCardsSection = styled.div`
     transition: max-height 0.4s ease, opacity 0.3s ease;
 `;
 
-const SecondaryActionCard = styled.div`
-    background: color-mix(in srgb, var(--vscode-editor-background) 85%, var(--vscode-sideBar-background) 15%);
-    border-radius: 12px;
-    padding: 28px 24px;
+const SecondaryActionRow = styled.div`
+    background: transparent;
+    border-radius: 10px;
+    padding: 12px 16px;
     display: flex;
-    flex-direction: column;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.15));
-    min-height: 260px;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
     cursor: pointer;
-    transition: all 0.15s ease;
-    border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 58%, transparent);
-    &:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14);
-        border-color: var(--vscode-focusBorder, rgba(128, 128, 128, 0.35));
-    }
 
-    &:last-of-type {
-        border-bottom: none;
+    &:hover {
+        background: var(--vscode-list-hoverBackground);
+        border-color: color-mix(in srgb, var(--vscode-focusBorder) 55%, transparent);
     }
 
     &:focus-visible {
         outline: 1px solid var(--vscode-focusBorder);
         outline-offset: -1px;
     }
+`;
+
+const SecondaryRowIcon = styled.div<CardIconProps>`
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: ${(props: CardIconProps) =>
+        props.bgColor || "var(--vscode-sideBar-background)"};
+    flex-shrink: 0;
+
+    i {
+        font-size: 16px;
+        color: var(--wso2-brand-white);
+        line-height: 1;
+    }
+`;
+
+const SecondaryRowContent = styled.div`
+    flex: 1;
+    min-width: 0;
+`;
+
+const SecondaryRowTitle = styled.span`
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    margin-bottom: 2px;
+`;
+
+const SecondaryRowDescription = styled.span`
+    display: block;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--vscode-descriptionForeground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 `;
 
 const ProjectName = styled.span`
@@ -480,18 +515,10 @@ const RecentProjectsEmptyState = styled.div`
 `;
 
 const SecondaryCardsGrid = styled.div`
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     padding-top: 6px;
-
-    @media (max-width: 1000px) {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    @media (max-width: 640px) {
-        grid-template-columns: 1fr;
-    }
 `;
 
 // ── More / secondary section ──────────────────────────────────────────────────
@@ -784,64 +811,43 @@ export const WelcomeView: React.FC = () => {
                 {/* Secondary action cards — expandable */}
                 <SecondaryCardsSection
                     style={{
-                        maxHeight: showSecondary ? '800px' : '0',
+                        maxHeight: showSecondary ? '300px' : '0',
                         opacity: showSecondary ? 1 : 0,
                     }}
                 >
                     <SecondaryCardsGrid>
-                        <SecondaryActionCard onClick={goToCreateLibrary}>
-                            <CardIconContainer>
-                                <CardIcon bgColor="linear-gradient(135deg, #4ecdc4 0%, #1a9691 100%)">
-                                    <Codicon name="book" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
-                                </CardIcon>
-                            </CardIconContainer>
-                            <CardContent>
-                                <CardTitle>Create New Library</CardTitle>
-                                <CardDescription>
-                                    Build a reusable library of integration components, transformers, and utilities to share across multiple projects.
-                                </CardDescription>
-                                <StyledButton
-                                    onClick={(e: any) => { e.stopPropagation(); goToCreateLibrary(); }}>
-                                    <ButtonContent>Create Library</ButtonContent>
-                                </StyledButton>
-                            </CardContent>
-                        </SecondaryActionCard>
+                        <SecondaryActionRow onClick={goToCreateLibrary}>
+                            <SecondaryRowIcon bgColor="#3aada5">
+                                <Codicon name="book" iconSx={{ fontSize: '16px' }} sx={{ width: '16px', height: '16px' }} />
+                            </SecondaryRowIcon>
+                            <SecondaryRowContent>
+                                <SecondaryRowTitle>Create Library</SecondaryRowTitle>
+                                <SecondaryRowDescription>Build reusable components and utilities to share across projects.</SecondaryRowDescription>
+                            </SecondaryRowContent>
+                            <Codicon name="chevron-right" iconSx={{ fontSize: '14px', color: 'var(--vscode-descriptionForeground)', opacity: 0.6 }} />
+                        </SecondaryActionRow>
 
-                        <SecondaryActionCard onClick={goToCreateProject}>
-                            <CardIconContainer>
-                                <CardIcon bgColor="linear-gradient(135deg, #f7971e 0%, #d4841a 100%)">
-                                    <Codicon name="new-folder" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
-                                </CardIcon>
-                            </CardIconContainer>
-                            <CardContent>
-                                <CardTitle>Create New Project</CardTitle>
-                                <CardDescription>
-                                    Create a new integration project within your workspace with structure, configuration, and dependencies ready to go.
-                                </CardDescription>
-                                <StyledButton
-                                    onClick={(e: any) => { e.stopPropagation(); goToCreateProject(); }}>
-                                    <ButtonContent>Create Project</ButtonContent>
-                                </StyledButton>
-                            </CardContent>
-                        </SecondaryActionCard>
+                        <SecondaryActionRow onClick={goToCreateProject}>
+                            <SecondaryRowIcon bgColor="#c07d18">
+                                <Codicon name="new-folder" iconSx={{ fontSize: '16px' }} sx={{ width: '16px', height: '16px' }} />
+                            </SecondaryRowIcon>
+                            <SecondaryRowContent>
+                                <SecondaryRowTitle>Create Project</SecondaryRowTitle>
+                                <SecondaryRowDescription>Create a workspace to organize multiple integrations and libraries.</SecondaryRowDescription>
+                            </SecondaryRowContent>
+                            <Codicon name="chevron-right" iconSx={{ fontSize: '14px', color: 'var(--vscode-descriptionForeground)', opacity: 0.6 }} />
+                        </SecondaryActionRow>
 
-                        <SecondaryActionCard onClick={goToImportExternal}>
-                            <CardIconContainer>
-                                <CardIcon bgColor="linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)">
-                                    <Codicon name="cloud-download" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
-                                </CardIcon>
-                            </CardIconContainer>
-                            <CardContent>
-                                <CardTitle>Migrate 3rd Party Integrations</CardTitle>
-                                <CardDescription>
-                                    Transform and migrate your existing MuleSoft or TIBCO integrations to WSO2 Integrator automatically.
-                                </CardDescription>
-                                <StyledButton
-                                    onClick={(e: any) => { e.stopPropagation(); goToImportExternal(); }}>
-                                    <ButtonContent>Migrate</ButtonContent>
-                                </StyledButton>
-                            </CardContent>
-                        </SecondaryActionCard>
+                        <SecondaryActionRow onClick={goToImportExternal}>
+                            <SecondaryRowIcon bgColor="#7c5fb5">
+                                <Codicon name="cloud-download" iconSx={{ fontSize: '16px' }} sx={{ width: '16px', height: '16px' }} />
+                            </SecondaryRowIcon>
+                            <SecondaryRowContent>
+                                <SecondaryRowTitle>Migrate 3rd Party Integrations</SecondaryRowTitle>
+                                <SecondaryRowDescription>Transform MuleSoft or TIBCO integrations to WSO2 Integrator automatically.</SecondaryRowDescription>
+                            </SecondaryRowContent>
+                            <Codicon name="chevron-right" iconSx={{ fontSize: '14px', color: 'var(--vscode-descriptionForeground)', opacity: 0.6 }} />
+                        </SecondaryActionRow>
                     </SecondaryCardsGrid>
                 </SecondaryCardsSection>
             </CardsContainer>
