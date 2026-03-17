@@ -83,6 +83,7 @@ export function ProjectFormFields({
     const [pathTouched, setPathTouched] = useState(false);
     const [editablePath, setEditablePath] = useState("");
     const hasUserToggledCreateWithinProject = useRef(false);
+    const hasAutoInitializedProjectMode = useRef(false);
 
     const computeDisplayedPath = (): string => {
         const base = editablePath || formData.path || defaultPath;
@@ -163,10 +164,11 @@ export function ProjectFormFields({
                 }
             }
             if (
+                !hasAutoInitializedProjectMode.current &&
                 !hasUserToggledCreateWithinProject.current &&
-                formData.createWithinProject === undefined &&
                 isProjectModeSupported
             ) {
+                hasAutoInitializedProjectMode.current = true;
                 setIsProjectSettingsExpanded(true);
                 const updates: Partial<ProjectFormData> = { createWithinProject: true };
                 if (!formData.withinProjectName && formData.packageName) {

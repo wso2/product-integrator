@@ -95,7 +95,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 console.error("Failed to fetch default org name:", error);
             }
 
-            if (isProjectModeSupported && !workspacePath) {
+            if (isProjectModeSupported) {
                 setIsProjectSectionExpanded(true);
                 setCreateWithinProject(true);
             }
