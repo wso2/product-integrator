@@ -35,11 +35,29 @@ import { ProjectFormData } from "./types";
 // Re-export for backwards compatibility
 export type { ProjectFormData } from "./types";
 
+const validateWithinProjectName = (name: string): string | null => {
+    if (!name || name.trim().length === 0) {
+        return "Project name is required";
+    }
+    if (!/^[a-zA-Z]/.test(name)) {
+        return "Project name must start with an alphabetic letter";
+    }
+    if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
+        return "Project name cannot contain special characters";
+    }
+    const letterCount = (name.match(/[a-zA-Z]/g) || []).length;
+    if (letterCount < 3) {
+        return "Project name must contain at least three letters";
+    }
+    return null;
+};
+
 export interface ProjectFormFieldsProps {
     formData: ProjectFormData;
     onFormDataChange: (data: Partial<ProjectFormData>) => void;
     integrationNameError?: string;
     pathError?: string;
+    projectNameError?: string;
     packageNameValidationError?: string;
 }
 
@@ -48,6 +66,7 @@ export function ProjectFormFields({
     onFormDataChange,
     integrationNameError,
     pathError,
+    projectNameError,
     packageNameValidationError,
 }: ProjectFormFieldsProps) {
     const { wsClient } = useVisualizerContext();
@@ -57,6 +76,7 @@ export function ProjectFormFields({
     const [withinProjectNameTouched, setWithinProjectNameTouched] = useState(false);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
+    const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
     const [isProjectSettingsExpanded, setIsProjectSettingsExpanded] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [defaultPath, setDefaultPath] = useState("");
@@ -112,9 +132,17 @@ export function ProjectFormFields({
         if (!workspaceReady) return;
         (async () => {
             if (!formData.path) {
-                const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
-                setDefaultPath(dp);
-                onFormDataChange({ path: dp });
+                try {
+                    const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
+                    setDefaultPath(dp);
+                    onFormDataChange({ path: dp });
+                } catch (error) {
+                    console.error("Failed to fetch default creation path:", error);
+                    if (workspacePath) {
+                        setDefaultPath(workspacePath);
+                        onFormDataChange({ path: workspacePath });
+                    }
+                }
             }
             if (!formData.orgName) {
                 try {
@@ -126,10 +154,24 @@ export function ProjectFormFields({
             }
             if (isProjectModeSupported && !workspacePath) {
                 setIsProjectSettingsExpanded(true);
-                onFormDataChange({ createWithinProject: true });
+                const updates: Partial<ProjectFormData> = { createWithinProject: true };
+                if (!formData.withinProjectName && formData.packageName) {
+                    updates.withinProjectName = formData.packageName + "_project";
+                }
+                onFormDataChange(updates);
             }
         })();
-    }, [workspaceReady]);
+    }, [
+        workspaceReady,
+        wsClient,
+        workspacePath,
+        isProjectModeSupported,
+        formData.path,
+        formData.orgName,
+        formData.packageName,
+        formData.withinProjectName,
+        onFormDataChange
+    ]);
 
     useEffect(() => {
         const error = validatePackageName(formData.packageName, formData.integrationName);
@@ -141,6 +183,15 @@ export function ProjectFormFields({
         const orgError = validateOrgName(formData.orgName);
         setOrgNameError(orgError);
     }, [formData.orgName]);
+
+    useEffect(() => {
+        if (formData.createWithinProject) {
+            const error = validateWithinProjectName(formData.withinProjectName);
+            setWithinProjectNameError(error);
+        } else {
+            setWithinProjectNameError(null);
+        }
+    }, [formData.withinProjectName, formData.createWithinProject]);
 
     return (
         <>
@@ -200,13 +251,14 @@ export function ProjectFormFields({
                                 onTextChange={(value) => {
                                     setWithinProjectNameTouched(true);
                                     setPathTouched(false);
+                                    if (withinProjectNameError) setWithinProjectNameError(null);
                                     onFormDataChange({ withinProjectName: value });
                                 }}
                                 value={formData.withinProjectName}
                                 label="Project Name"
                                 placeholder="Enter project name"
                                 required={true}
-                                errorMsg=""
+                                errorMsg={withinProjectNameTouched && withinProjectNameError ? withinProjectNameError : ""}
                             />
                         </FieldGroup>
                     )}

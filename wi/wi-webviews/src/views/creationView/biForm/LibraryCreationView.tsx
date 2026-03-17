@@ -70,6 +70,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
+    const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
     const [pathTouched, setPathTouched] = useState(false);
     const [formData, setFormData] = useState<LibraryFormData>({
@@ -99,7 +100,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 setCreateWithinProject(true);
             }
         })();
-    }, [workspaceReady]);
+    }, [workspaceReady, wsClient, workspacePath, isProjectModeSupported]);
 
     useEffect(() => {
         const error = validatePackageName(formData.packageName, formData.libraryName);
@@ -158,6 +159,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         setLibraryNameError(null);
         setPathError(null);
         setPackageNameError(null);
+        setWithinProjectNameError(null);
 
         let hasError = false;
 
@@ -179,6 +181,12 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
         if (formData.path.length < 2) {
             setPathError("Please select a path for your library");
+            hasError = true;
+        }
+
+        if (createWithinProject && withinProjectName.trim().length === 0) {
+            setWithinProjectNameError("Project name is required");
+            setWithinProjectNameTouched(true);
             hasError = true;
         }
 
@@ -205,7 +213,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 return;
             }
 
-            wsClient.createBIProject({
+            await wsClient.createBIProject({
                 projectName: formData.libraryName,
                 packageName: formData.packageName,
                 projectPath: formData.path,
@@ -218,6 +226,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             });
         } catch (error) {
             setPathError("An error occurred during validation");
+        } finally {
             setIsValidating(false);
         }
     };
@@ -226,7 +235,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         <PageBackdrop>
             <PageContainer>
                 <HeaderRow>
-                    <BackButton type="button" onClick={onBack} title="Go back">
+                    <BackButton type="button" onClick={() => onBack?.()} title="Go back">
                         <Icon
                             name="arrow-left"
                             isCodicon
@@ -306,12 +315,13 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                                     setWithinProjectNameTouched(true);
                                                     setPathTouched(false);
                                                     setWithinProjectName(value);
+                                                    if (withinProjectNameError) setWithinProjectNameError(null);
                                                 }}
                                                 value={withinProjectName}
                                                 label="Project Name"
                                                 placeholder="Enter project name"
                                                 required={true}
-                                                errorMsg=""
+                                                errorMsg={withinProjectNameTouched && withinProjectName.trim().length === 0 ? (withinProjectNameError || "Project name is required") : ""}
                                             />
                                         </FieldGroup>
                                     )}

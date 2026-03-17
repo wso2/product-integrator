@@ -75,12 +75,16 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
 
     useEffect(() => {
         (async () => {
-            const { path: workspacePath } = await wsClient.getWorkspaceRoot();
-            const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
-            setDefaultPath(dp);
-            setFormData(prev => ({ ...prev, path: dp }));
+            try {
+                const { path: workspacePath } = await wsClient.getWorkspaceRoot();
+                const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
+                setDefaultPath(dp);
+                setFormData(prev => ({ ...prev, path: dp }));
+            } catch (error) {
+                console.error("Failed to fetch default path:", error);
+            }
         })();
-    }, []);
+    }, [wsClient]);
 
     const displayedPath = pathTouched ? formData.path : joinPath(formData.path || defaultPath, formData.projectName);
 
@@ -133,7 +137,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                 return;
             }
 
-            wsClient.createBIProject({
+            await wsClient.createBIProject({
                 workspaceName: formData.projectName,
                 projectPath: formData.path,
                 createDirectory: true,
@@ -141,6 +145,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
             });
         } catch (error) {
             setPathError("An error occurred during validation");
+        } finally {
             setIsValidating(false);
         }
     };

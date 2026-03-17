@@ -132,7 +132,7 @@ export function BIProjectForm() {
                 return;
             }
 
-            wsClient.createBIProject({
+            await wsClient.createBIProject({
                 projectName: formData.integrationName,
                 packageName: formData.packageName,
                 projectPath: formData.path,
@@ -144,6 +144,7 @@ export function BIProjectForm() {
             });
         } catch (error) {
             setPathError("An error occurred during validation");
+        } finally {
             setIsValidating(false);
         }
     };
@@ -157,6 +158,7 @@ export function BIProjectForm() {
                         onFormDataChange={handleFormDataChange}
                         integrationNameError={integrationNameError || undefined}
                         pathError={pathError || undefined}
+                        projectNameError={projectNameError || undefined}
                         packageNameValidationError={packageNameValidationError || undefined}
                     />
                 </ScrollableContent>

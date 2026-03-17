@@ -91,8 +91,14 @@ export const joinPath = (base: string, name: string): string => {
 export const extractBase = (value: string, name: string): string => {
     if (!value) return value;
     if (name) {
-        if (value.endsWith('/' + name)) return value.slice(0, -(name.length + 1));
-        if (value.endsWith('\\' + name)) return value.slice(0, -(name.length + 1));
+        if (value.endsWith('/' + name)) {
+            const base = value.slice(0, -(name.length + 1));
+            return base || '/';
+        }
+        if (value.endsWith('\\' + name)) {
+            const base = value.slice(0, -(name.length + 1));
+            return base || '\\';
+        }
     }
     const lastSep = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
     return lastSep > 0 ? value.slice(0, lastSep) : value;

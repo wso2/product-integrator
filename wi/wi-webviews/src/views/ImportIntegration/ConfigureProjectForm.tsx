@@ -273,6 +273,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
                         integrationNameError={singleIntegrationNameError || undefined}
                         pathError={singleIntegrationPathError || undefined}
                         packageNameValidationError={singleIntegrationPackageNameError || undefined}
+                        projectNameError={projectNameError || undefined}
                     />
 
                     <ButtonWrapper>
