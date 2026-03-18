@@ -90,11 +90,41 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async getAuthState(): Promise<AuthState> {
-		return ext.authProvider?.state ?? { userInfo: null, region: "US" };
+		const authState = ext.authProvider?.state ?? { userInfo: null, region: "US" };
+		// Add selected org ID to auth state
+		const selectedOrgId = ext.context.globalState.get<string>("selectedOrgId");
+		return {
+			...authState,
+			selectedOrgId,
+		} as AuthState & { selectedOrgId?: string };
 	}
 
 	async getContextState(): Promise<ContextStoreState> {
 		return contextStore.getState().state;
+	}
+
+	async changeOrgContext(orgId: string): Promise<void> {
+		try {
+			await ext.clients.rpcClient.changeOrgContext(orgId);
+			
+			const userInfo = await ext.clients.rpcClient.getUserInfo();
+			if (!userInfo) {
+				throw new Error("Failed to retrieve user info after org context change");
+			}
+			
+			const region = await ext.clients.rpcClient.getCurrentRegion();
+			
+			if (!ext.authProvider) {
+				throw new Error("Auth provider is not available");
+			}
+			
+			await ext.context.globalState.update("selectedOrgId", orgId);
+
+			ext.authProvider.getState().loginSuccess(userInfo, region);
+		} catch (error) {
+			console.error("Failed to change org context", error);
+			throw error;
+		}
 	}
 
 	async getLocalGitData(dirPath: string): Promise<GetLocalGitDataResp | undefined> {
@@ -331,7 +361,8 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		publishContextState: (state: ContextStoreState) => void,
 	): void {
 		ext.authProvider?.subscribe(({ state }) => {
-			publishAuthState(state);
+			const selectedOrgId = ext.context.globalState.get<string>("selectedOrgId");
+			publishAuthState({ ...state, selectedOrgId } as AuthState & { selectedOrgId?: string });
 		});
 		contextStore.subscribe(({ state }) => {
 			publishContextState(state);

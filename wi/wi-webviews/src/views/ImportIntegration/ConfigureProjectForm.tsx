@@ -17,7 +17,7 @@
  */
 
 import { ActionButtons, Typography } from "@wso2/ui-toolkit";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useVisualizerContext } from "../../contexts";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { BodyText } from "./styles";
@@ -27,7 +27,7 @@ import { MultiProjectFormData, MultiProjectFormFields } from "./components/Multi
 import { ButtonWrapper } from "./styles";
 import { ConfigureProjectFormProps } from "./types";
 
-export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: ConfigureProjectFormProps) {
+export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedOrgName }: ConfigureProjectFormProps) {
     const { wsClient } = useVisualizerContext();
     const [singleIntegrationData, setSingleIntegrationData] = useState<ProjectFormData>({
         integrationName: "",
@@ -56,6 +56,13 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [singleIntegrationPackageNameError, setSingleIntegrationPackageNameError] = useState<string | null>(null);
     const selectedResourceTypeLabel = singleIntegrationData.isLibrary ? "Library" : "Integration";
+
+    useEffect(() => {
+        if (!selectedOrgName) {
+            return;
+        }
+        setSingleIntegrationData((prev) => ({ ...prev, orgName: selectedOrgName }));
+    }, [selectedOrgName]);
 
     const handleSingleProjectFormChange = (data: Partial<ProjectFormData>) => {
         setSingleIntegrationData(prev => ({ ...prev, ...data }));
@@ -274,6 +281,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack }: Configu
                         pathError={singleIntegrationPathError || undefined}
                         packageNameValidationError={singleIntegrationPackageNameError || undefined}
                         projectNameError={projectNameError || undefined}
+                        selectedOrgName={selectedOrgName}
                     />
 
                     <ButtonWrapper>

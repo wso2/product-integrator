@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@wso2/ui-toolkit";
 import { useVisualizerContext } from "../../../contexts";
 import {
@@ -27,9 +27,12 @@ import { ProjectFormFields } from "./ProjectFormFields";
 import { ProjectFormData } from "./types";
 import { validatePackageName } from "./utils";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
+import { useCloudContext } from "../../../providers";
 
 export function BIProjectForm() {
     const { wsClient } = useVisualizerContext();
+    const { contextState } = useCloudContext();
+    const selectedOrgName = contextState?.selected?.org?.name;
     const [formData, setFormData] = useState<ProjectFormData>({
         integrationName: "",
         packageName: "",
@@ -49,6 +52,15 @@ export function BIProjectForm() {
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const createActionLabel = "Create Integration";
 
+
+    useEffect(() => {
+        setFormData((prev) => {
+            if (!selectedOrgName || prev.orgName === selectedOrgName) {
+                return prev;
+            }
+            return { ...prev, orgName: selectedOrgName };
+        });
+    }, [selectedOrgName]);
 
     const handleFormDataChange = (data: Partial<ProjectFormData>) => {
         setFormData(prev => ({ ...prev, ...data }));
@@ -154,9 +166,9 @@ export function BIProjectForm() {
                 onFormDataChange={handleFormDataChange}
                 integrationNameError={integrationNameError || undefined}
                 pathError={pathError || undefined}
-                projectNameError={projectNameError || undefined}
-                packageNameValidationError={packageNameValidationError || undefined}
-            />
+                projectNameError={projectNameError || undefined}    packageNameValidationError={packageNameValidationError || undefined}
+                    selectedOrgName={selectedOrgName}
+                />
 
             <ButtonWrapper>
                 <Button

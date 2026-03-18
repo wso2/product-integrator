@@ -35,11 +35,14 @@ import {
 } from "./styles";
 import { FinalIntegrationParams, ProjectMigrationResult, ProjectRequest } from "./types";
 import { useVisualizerContext } from "../../contexts";
+import { useCloudContext } from "../../providers";
 import { DownloadProgress, ImportIntegrationResponse, ImportIntegrationWsRequest, MigrationTool } from "@wso2/wi-core";
 import { MigrateRequest } from "@wso2/wi-core";
 
 export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
+    const { contextState } = useCloudContext();
+    const selectedOrgName = contextState?.selected?.org?.name;
 
     // State managed by the parent component
     const [step, setStep] = useState(0);
@@ -83,6 +86,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
             packageName: "",
             commandName: selectedIntegration.commandName,
             sourcePath: importParams.importSourcePath,
+            orgName: selectedOrgName,
             parameters: importParams.parameters,
         };
         wsClient
@@ -228,6 +232,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                 isMultiProject={isMultiProject}
                                 onNext={handleCreateIntegrationFiles}
                                 onBack={handleStepBack}
+                                selectedOrgName={selectedOrgName}
                             />
                         )}
                     </FormContainer>

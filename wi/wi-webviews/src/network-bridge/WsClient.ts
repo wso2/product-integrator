@@ -330,6 +330,10 @@ export class WsClient {
         return this.request("getContextState");
     }
 
+    public changeOrgContext(orgId: string): Promise<void> {
+        return this.request("changeOrgContext", orgId);
+    }
+
     public getLocalGitData(dirPath: string): Promise<GetLocalGitDataResp | undefined> {
         return this.request("getLocalGitData", dirPath);
     }

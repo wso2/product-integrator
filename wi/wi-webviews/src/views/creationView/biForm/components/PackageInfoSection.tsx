@@ -42,6 +42,8 @@ export interface PackageInfoSectionProps {
     orgNameError?: string | null;
     /** Error message for package name validation */
     packageNameError?: string | null;
+    /** Selected organization from global org switcher */
+    selectedOrgName?: string;
 }
 
 export function PackageInfoSection({
@@ -52,13 +54,17 @@ export function PackageInfoSection({
     isLibrary,
     orgNameError,
     packageNameError,
+    selectedOrgName
 }: PackageInfoSectionProps) {
+    const resolvedOrgName = selectedOrgName || data.orgName;
+
     return (
         <CollapsibleSection
             isExpanded={isExpanded}
             onToggle={onToggle}
             icon="package"
             title="Package Information"
+            subtitle={resolvedOrgName || undefined}
         >
             <Note style={{ marginBottom: "16px" }}>
                 {`This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Define the organization and version that will be assigned to it. `}
@@ -74,11 +80,16 @@ export function PackageInfoSection({
             </FieldGroup>
             <FieldGroup>
                 <TextField
-                    onTextChange={(value) => onChange({ orgName: value })}
-                    value={data.orgName}
+                    onTextChange={(value) => {
+                        if (!selectedOrgName) {
+                            onChange({ orgName: value });
+                        }
+                    }}
+                    value={resolvedOrgName}
                     label="Organization Name"
                     description="The organization that owns this Ballerina package."
                     errorMsg={orgNameError || undefined}
+                    disabled={!!selectedOrgName}
                 />
             </FieldGroup>
             <FieldGroup>
