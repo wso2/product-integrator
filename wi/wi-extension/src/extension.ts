@@ -17,11 +17,13 @@
  */
 
 import * as vscode from "vscode";
+import { COMMANDS } from "@wso2/wi-core";
 import { activateCloudFunctionality } from "./cloud/activate";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
 import { WICloudExtensionAPI } from "./cloud/cloud-ext-api";
 import { IWso2PlatformExtensionAPI } from "@wso2/wso2-platform-core";
+import { UpdateChecker } from "./updateChecker";
 
 interface ExtensionExports {
 	cloudAPIs: IWso2PlatformExtensionAPI;
@@ -35,6 +37,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 	ext.log("Activating WSO2 Integrator Extension");
 
 	try {
+		const updateChecker = new UpdateChecker(context);
+		context.subscriptions.push(
+			vscode.commands.registerCommand(COMMANDS.CHECK_FOR_UPDATES, async () => {
+				await updateChecker.checkForUpdates("manual");
+			}),
+		);
+
 		// Initialize state machine - this will handle everything:
 		// 1. Project type detection
 		// 2. Extension activation based on project type
@@ -42,6 +51,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 		// 4. Command registration
 		// 5. Webview manager setup
 		StateMachine.initialize();
+		void updateChecker.checkForUpdates("startup");
 
 		// Boot cloud/RPC/auth functionality
 		await activateCloudFunctionality(context);

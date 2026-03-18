@@ -2,7 +2,7 @@
   "name": "wso2-integrator",
   "displayName": "WSO2 Integrator",
   "description": "Unified integration development environment for WSO2 BI and MI in VS Code",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "cliVersion": "v1.2.212603061900",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
@@ -77,6 +77,43 @@
           "default": false,
           "description": "Enable only if your system does not support keyring.",
           "scope": "window"
+        },
+        "updates.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Enable WSO2 Integrator product update checks."
+        },
+        "updates.checkOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Check for a newer WSO2 Integrator version when the product starts."
+        },
+        "updates.checkIntervalHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "scope": "application",
+          "description": "Minimum number of hours between automatic WSO2 Integrator update checks."
+        },
+        "updates.releaseApiUrl": {
+          "type": "string",
+          "default": "https://api.github.com/repos/wso2/product-integrator/releases/latest",
+          "scope": "application",
+          "description": "HTTP endpoint used to fetch the latest WSO2 Integrator release metadata."
+        },
+        "updates.tagsApiUrl": {
+          "type": "string",
+          "default": "https://api.github.com/repos/wso2/product-integrator/tags?per_page=20",
+          "scope": "application",
+          "description": "Fallback HTTP endpoint used to fetch recent WSO2 Integrator tags."
+        },
+        "updates.releasesPageUrl": {
+          "type": "string",
+          "default": "https://github.com/wso2/product-integrator/releases",
+          "scope": "application",
+          "description": "Browser URL opened when a newer WSO2 Integrator version is available."
         }
       }
     },
@@ -136,6 +173,11 @@
       {
         "command": "wso2.integrator.openMIIntegration",
         "title": "Open MI Integration",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "wso2.integrator.checkForUpdates",
+        "title": "Check for Updates",
         "category": "WSO2 Integrator"
       },
       {
