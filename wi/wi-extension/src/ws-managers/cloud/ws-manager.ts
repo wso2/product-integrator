@@ -120,7 +120,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			
 			await ext.context.globalState.update("selectedOrgId", orgId);
 
-			ext.authProvider.getState().loginSuccess(userInfo, region);
+			await ext.authProvider.getState().loginSuccess(userInfo, region);
 		} catch (error) {
 			console.error("Failed to change org context", error);
 			throw error;

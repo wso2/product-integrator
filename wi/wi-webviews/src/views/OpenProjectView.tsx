@@ -321,7 +321,13 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const [cloning, setCloning] = useState(false);
     const [cloningError, setCloningError] = useState<string | null>(null);
 
-    const org = contextState?.selected?.org ?? authState?.userInfo?.organizations?.[0];
+
+    const selectedOrgId = (authState as any)?.selectedOrgId;
+    const org =
+        (selectedOrgId &&
+            authState?.userInfo?.organizations?.find((o: any) => String(o.id) === String(selectedOrgId))) ||
+        contextState?.selected?.org ||
+        authState?.userInfo?.organizations?.[0];
 
     useEffect(() => {
         if (!authState?.userInfo) {
