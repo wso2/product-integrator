@@ -32,6 +32,7 @@ export const COMMANDS = {
 	REFRESH_EXPLORER: "wso2-integrator.explorer.refresh",
 	OPEN_BI_INTEGRATION: "wso2.integrator.openBIIntegration",
 	OPEN_MI_INTEGRATION: "wso2.integrator.openMIIntegration",
+	CHECK_FOR_UPDATES: "wso2.integrator.checkForUpdates",
 	CREATE_PROJECT: "wso2.integrator.createProject",
 	EXPLORE_SAMPLES: "wso2.integrator.exploreSamples",
 	IMPORT_PROJECT: "wso2.integrator.importProject",

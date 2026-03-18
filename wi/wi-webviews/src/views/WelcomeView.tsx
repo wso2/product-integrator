@@ -16,13 +16,15 @@
  * under the License.
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import "./WelcomeView.css";
 import styled from "@emotion/styled";
 import { Button, Codicon, Icon } from "@wso2/ui-toolkit";
 import { CreationView } from "./creationView";
 import { ImportIntegration } from "./ImportIntegration";
 import { SamplesView } from "./samplesView";
+import { useVisualizerContext } from "../contexts";
+import { ProductUpdateCheckResponse } from "@wso2/wi-core";
 
 enum ViewState {
     WELCOME = "welcome",
@@ -114,6 +116,48 @@ const CardsContainer = styled.div`
     margin-top: -40px;
     position: relative;
     z-index: 1;
+`;
+
+const UpdateBanner = styled.div`
+    margin: 0 60px 24px;
+    margin-top: -24px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.18), rgba(33, 150, 243, 0.2));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    position: relative;
+    z-index: 2;
+`;
+
+const UpdateBannerText = styled.div`
+    color: var(--vscode-foreground);
+    font-size: 14px;
+    line-height: 1.5;
+`;
+
+const UpdateBannerActions = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+`;
+
+const UpdateBannerLink = styled.button`
+    background: none;
+    border: none;
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0;
+
+    &:hover {
+        color: var(--vscode-textLink-activeForeground);
+        text-decoration: underline;
+    }
 `;
 
 const CardsGrid = styled.div`
@@ -325,6 +369,32 @@ const ProjectPath = styled.span`
 
 export const WelcomeView: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
+    const [updateNotification, setUpdateNotification] = useState<ProductUpdateCheckResponse | undefined>();
+    const { rpcClient } = useVisualizerContext();
+
+    useEffect(() => {
+        let isActive = true;
+
+        rpcClient
+            .getMainRpcClient()
+            .checkProductUpdates({ force: false })
+            .then((response) => {
+                if (!isActive) {
+                    return;
+                }
+
+                if (response.status === "update-available") {
+                    setUpdateNotification(response);
+                }
+            })
+            .catch((error) => {
+                console.error("Failed to check product updates from welcome view", error);
+            });
+
+        return () => {
+            isActive = false;
+        };
+    }, [rpcClient]);
 
     const goToCreateProject = () => {
         setCurrentView(ViewState.CREATE_PROJECT);
@@ -355,6 +425,18 @@ export const WelcomeView: React.FC = () => {
     const viewAllProjects = () => {
         // Add view all projects action here
         console.log("View all projects");
+    };
+
+    const dismissUpdateNotification = () => {
+        setUpdateNotification(undefined);
+    };
+
+    const openReleaseNotes = () => {
+        if (!updateNotification?.releaseUrl) {
+            return;
+        }
+
+        rpcClient.getMainRpcClient().openExternalUrl({ url: updateNotification.releaseUrl });
     };
 
     // Sample recent projects data - replace with actual data
@@ -400,6 +482,18 @@ export const WelcomeView: React.FC = () => {
                     A comprehensive integration solution that simplifies your digital transformation journey. Streamlines connectivity among applications, services, data, and cloud using a user-friendly low-code graphical designing experience.
                 </Caption>
             </TopSection>
+
+            {updateNotification && (
+                <UpdateBanner>
+                    <UpdateBannerText>{updateNotification.message}</UpdateBannerText>
+                    <UpdateBannerActions>
+                        <UpdateBannerLink onClick={openReleaseNotes}>Open Release Notes</UpdateBannerLink>
+                        <StyledButton appearance="secondary" onClick={dismissUpdateNotification}>
+                            <ButtonContent>Dismiss</ButtonContent>
+                        </StyledButton>
+                    </UpdateBannerActions>
+                </UpdateBanner>
+            )}
 
             <CardsContainer>
                 <CardsGrid>

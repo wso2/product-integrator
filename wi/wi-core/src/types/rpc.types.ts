@@ -239,6 +239,29 @@ export interface ValidateProjectFormRequest {
     createDirectory: boolean;
 }
 
+export interface ProductUpdateCheckRequest {
+    force?: boolean;
+}
+
+export interface ProductUpdateCheckResponse {
+    status:
+        | "update-available"
+        | "up-to-date"
+        | "disabled"
+        | "throttled"
+        | "already-notified"
+        | "unavailable"
+        | "error";
+    message: string;
+    installedVersion?: string;
+    latestVersion?: string;
+    releaseUrl?: string;
+}
+
+export interface ExternalUrlRequest {
+    url: string;
+}
+
 export interface ValidateProjectFormResponse {
     isValid: boolean;
     errorMessage?: string;

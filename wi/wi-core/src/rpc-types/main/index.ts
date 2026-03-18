@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest, SemanticVersion, ValidateProjectFormRequest, ValidateProjectFormResponse } from "../../types/rpc.types";
+import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest, SemanticVersion, ValidateProjectFormRequest, ValidateProjectFormResponse, ProductUpdateCheckRequest, ProductUpdateCheckResponse, ExternalUrlRequest } from "../../types/rpc.types";
 import { StoreSubProjectReportsRequest } from "../migrate-integration";
 
 export * from "./rpc-type";
@@ -49,4 +49,6 @@ export interface WIVisualizerAPI {
     saveMigrationReport: (params: SaveMigrationReportRequest) => Promise<void>;
     storeSubProjectReports: (params: StoreSubProjectReportsRequest) => Promise<void>;
     validateProjectPath: (params: ValidateProjectFormRequest) => Promise<ValidateProjectFormResponse>;
+    checkProductUpdates: (params: ProductUpdateCheckRequest) => Promise<ProductUpdateCheckResponse>;
+    openExternalUrl: (params: ExternalUrlRequest) => Promise<void>;
 }

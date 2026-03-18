@@ -17,7 +17,7 @@
  * 
  * THIS FILE INCLUDES AUTO GENERATED CODE
  */
-import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, DownloadProgress, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, MigrationToolStateData, MigrationToolLogData, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest, SemanticVersion, ValidateProjectFormRequest, ValidateProjectFormResponse } from "../../types/rpc.types";
+import { RunCommandRequest, RunCommandResponse, FileOrDirRequest, FileOrDirResponse, WorkspaceRootResponse, GetConfigurationRequest, GetConfigurationResponse, GetSubFoldersRequest, GetSubFoldersResponse, ProjectDirResponse, GetSupportedMIVersionsResponse, GettingStartedData, SampleDownloadRequest, BIProjectRequest, CreateMiProjectRequest, CreateMiProjectResponse, DownloadProgress, GetMigrationToolsResponse, MigrateRequest, PullMigrationToolRequest, ImportIntegrationRPCRequest, ImportIntegrationResponse, ShowErrorMessageRequest, MigrationToolStateData, MigrationToolLogData, OpenMigrationReportRequest, SaveMigrationReportRequest, WebviewContext, FetchSamplesRequest, SemanticVersion, ValidateProjectFormRequest, ValidateProjectFormResponse, ProductUpdateCheckRequest, ProductUpdateCheckResponse, ExternalUrlRequest } from "../../types/rpc.types";
 import { NotificationType, RequestType } from "vscode-messenger-common";
 import { ProjectMigrationResult, StoreSubProjectReportsRequest } from "../migrate-integration";
 
@@ -53,3 +53,5 @@ export const openMigrationReport: RequestType<OpenMigrationReportRequest, void> 
 export const saveMigrationReport: RequestType<SaveMigrationReportRequest, void> = { method: `${_preFix}/saveMigrationReport` };
 export const storeSubProjectReports: RequestType<StoreSubProjectReportsRequest, void> = { method: `${_preFix}/storeSubProjectReports` };
 export const validateProjectPath: RequestType<ValidateProjectFormRequest, ValidateProjectFormResponse> = { method: `${_preFix}/validateProjectPath` };
+export const checkProductUpdates: RequestType<ProductUpdateCheckRequest, ProductUpdateCheckResponse> = { method: `${_preFix}/checkProductUpdates` };
+export const openExternalUrl: RequestType<ExternalUrlRequest, void> = { method: `${_preFix}/openExternalUrl` };

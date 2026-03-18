@@ -73,7 +73,12 @@ import {
     storeSubProjectReports,
     ValidateProjectFormRequest,
     ValidateProjectFormResponse,
-    validateProjectPath
+    validateProjectPath,
+    checkProductUpdates,
+    ProductUpdateCheckRequest,
+    ProductUpdateCheckResponse,
+    openExternalUrl,
+    ExternalUrlRequest
 } from "@wso2/wi-core";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration";
 import { HOST_EXTENSION } from "vscode-messenger-common";
@@ -188,6 +193,14 @@ export class MainRpcClient implements WIVisualizerAPI {
 
     saveMigrationReport(params: SaveMigrationReportRequest): Promise<void> {
         return this._messenger.sendRequest(saveMigrationReport, HOST_EXTENSION, params);
+    }
+
+    checkProductUpdates(params: ProductUpdateCheckRequest): Promise<ProductUpdateCheckResponse> {
+        return this._messenger.sendRequest(checkProductUpdates, HOST_EXTENSION, params);
+    }
+
+    openExternalUrl(params: ExternalUrlRequest): Promise<void> {
+        return this._messenger.sendRequest(openExternalUrl, HOST_EXTENSION, params);
     }
 
     getMessenger(): Messenger {

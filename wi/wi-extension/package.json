@@ -2,7 +2,7 @@
   "name": "wso2-integrator",
   "displayName": "WSO2 Integrator",
   "description": "Unified integration development environment for WSO2 BI and MI in VS Code",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
   "license": "Apache-2.0",
@@ -33,6 +33,38 @@
             "WSO2: BI",
             "WSO2: MI"
           ]
+        },
+        "updates.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Enable WSO2 Integrator product update checks."
+        },
+        "updates.checkOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Check for a newer WSO2 Integrator version when the product starts."
+        },
+        "updates.checkIntervalHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "scope": "application",
+          "description": "Minimum number of hours between automatic WSO2 Integrator update checks."
+        },
+        "updates.serviceUrl": {
+          "type": "string",
+          "default": "http://localhost:8080/api/v1/product-updates/check",
+          "scope": "application",
+          "description": "Hosted product update service endpoint used by WSO2 Integrator."
+        },
+        "updates.requestTimeoutMs": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 1000,
+          "scope": "application",
+          "description": "Timeout in milliseconds for calls to the hosted product update service."
         }
       }
     },
@@ -81,6 +113,11 @@
       {
         "command": "wso2.integrator.openMIIntegration",
         "title": "Open MI Integration",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "wso2.integrator.checkForUpdates",
+        "title": "Check for Updates",
         "category": "WSO2 Integrator"
       }
     ],
