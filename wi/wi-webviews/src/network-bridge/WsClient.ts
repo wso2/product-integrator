@@ -63,6 +63,7 @@ import {
     WIWsMethodResultMap,
     WITransportBootstrap,
     WorkspaceRootResponse,
+    CloneProgressStage,
 } from "@wso2/wi-core";
 import type {
     AuthState,
@@ -84,6 +85,8 @@ import type {
     WICloudFormContext,
     WICloudSubmitComponentsReq,
     WICloudSubmitComponentsResp,
+    GetCloudProjectsReq,
+    GetCloudProjectsResp,
 } from "@wso2/wi-core";
 import { ConnectionStatus, createWebviewTransportAdapter } from "webview-giga-bridge/webview";
 
@@ -130,6 +133,7 @@ export class WsClient {
     // ── Cloud event listeners ─────────────────────────────────
     private readonly authStateChangedListeners = new Set<(state: AuthState) => void>();
     private readonly contextStateChangedListeners = new Set<(state: ContextStoreState) => void>();
+    private readonly cloneProgressListeners = new Set<(stage: CloneProgressStage) => void>();
 
     constructor() {
         this.transport.subscribe(
@@ -384,12 +388,21 @@ export class WsClient {
         return this.request("getConsoleUrl");
     }
 
+    public getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
+        return this.request("getCloudProjects", params);
+    }
+
     public onAuthStateChanged(callback: (state: AuthState) => void) {
         this.authStateChangedListeners.add(callback);
     }
 
     public onContextStateChanged(callback: (state: ContextStoreState) => void) {
         this.contextStateChangedListeners.add(callback);
+    }
+
+    public onCloneProgress(callback: (stage: CloneProgressStage) => void): () => void {
+        this.cloneProgressListeners.add(callback);
+        return () => this.cloneProgressListeners.delete(callback);
     }
 
     public async request<TAction extends WIWsMethod>(
@@ -456,6 +469,9 @@ export class WsClient {
                 return;
             case WI_BRIDGE_EVENTS.CONTEXT_STATE_CHANGED:
                 this.contextStateChangedListeners.forEach((listener) => listener(message.state));
+                return;
+            case WI_BRIDGE_EVENTS.CLONE_PROGRESS:
+                this.cloneProgressListeners.forEach((listener) => listener(message.stage));
                 return;
             case WI_BRIDGE_EVENTS.WS_RESPONSE:
             default:

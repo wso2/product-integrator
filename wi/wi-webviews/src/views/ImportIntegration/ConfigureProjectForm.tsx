@@ -61,7 +61,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         if (!selectedOrgName) {
             return;
         }
-        setSingleProjectData((prev) => ({ ...prev, orgName: selectedOrgName }));
+        setSingleIntegrationData((prev) => ({ ...prev, orgName: selectedOrgName }));
     }, [selectedOrgName]);
 
     const handleSingleProjectFormChange = (data: Partial<ProjectFormData>) => {
