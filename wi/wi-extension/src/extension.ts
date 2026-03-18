@@ -17,8 +17,10 @@
  */
 
 import * as vscode from "vscode";
+import { COMMANDS } from "@wso2/wi-core";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
+import { UpdateChecker } from "./updateChecker";
 
 /**
  * Activate the extension
@@ -28,6 +30,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	ext.log("Activating WSO2 Integrator Extension");
 
 	try {
+		const updateChecker = new UpdateChecker(context);
+		context.subscriptions.push(
+			vscode.commands.registerCommand(COMMANDS.CHECK_FOR_UPDATES, async () => {
+				await updateChecker.checkForUpdates("manual");
+			}),
+		);
+
 		// Initialize state machine - this will handle everything:
 		// 1. Project type detection
 		// 2. Extension activation based on project type
@@ -35,6 +44,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		// 4. Command registration
 		// 5. Webview manager setup
 		StateMachine.initialize();
+		void updateChecker.checkForUpdates("startup");
 
 		ext.log("WSO2 Integrator Extension activated successfully");
 	} catch (error) {
