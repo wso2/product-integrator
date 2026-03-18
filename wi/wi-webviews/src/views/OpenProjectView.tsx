@@ -35,7 +35,7 @@ import {
 } from "./shared/FormPageLayout";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
-import type { GetCloudProjectsResp } from "@wso2/wi-core";
+import { CloneProgressStage, GetCloudProjectsResp } from "@wso2/wi-core";
 
 type CloudProject = GetCloudProjectsResp["projects"][number];
 
@@ -319,6 +319,8 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const [error, setError] = useState<string | null>(null);
     const [selectedProject, setSelectedProject] = useState<CloudProject | null>(null);
     const [cloning, setCloning] = useState(false);
+    const [cloneStage, setCloneStage] = useState<CloneProgressStage | null>(null);
+    const [cloneSuccess, setCloneSuccess] = useState(false);
     const [cloningError, setCloningError] = useState<string | null>(null);
 
 
@@ -334,6 +336,10 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
             onBack();
         }
     }, [authState?.userInfo]);
+
+    useEffect(() => {
+        return wsClient.onCloneProgress((stage) => setCloneStage(stage));
+    }, [wsClient]);
 
     const fetchProjects = () => {
         if (!org) {
@@ -386,6 +392,8 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
             return;
         }
         setCloning(true);
+        setCloneStage("selecting_folder");
+        setCloneSuccess(false);
         setCloningError(null);
         wsClient
             .runCommand({
@@ -393,13 +401,20 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                 args: [{ organization: org, project: selectedProject, integrationOnly: true }],
             })
             .then(() => {
-                // Command resolved — either the user cancelled the folder picker or cloning finished.
-                // Either way, reset so the view doesn't stay stuck.
                 setCloning(false);
+                setCloneStage(null);
+                setCloneSuccess(true);
             })
             .catch((err: unknown) => {
                 setCloning(false);
-                setCloningError(err instanceof Error ? err.message : "Cloning failed. Please try again.");
+                setCloneStage(null);
+                // Cancelling the folder picker throws "Directory is required…" — treat it as a
+                // silent cancel rather than an error so the user can try again cleanly.
+                const msg = err instanceof Error ? err.message : String(err);
+                if (msg.toLowerCase().includes("directory is required") || msg.toLowerCase().includes("cancelled")) {
+                    return;
+                }
+                setCloningError(msg || "Cloning failed. Please try again.");
             });
     };
 
@@ -415,14 +430,20 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const renderConfirm = (project: CloudProject) => (
         <>
             <FormPanelHeader>
-                <FormPanelTitle>Clone Project</FormPanelTitle>
-                <FormPanelSubtitle>Review and confirm before cloning</FormPanelSubtitle>
+                <FormPanelTitle>{cloneSuccess ? "All done!" : "Clone Project"}</FormPanelTitle>
+                <FormPanelSubtitle>
+                    {cloneSuccess
+                        ? "The project was cloned. Check the prompt in your editor to open it."
+                        : cloningError
+                        ? "Something went wrong — you can try again below."
+                        : "Review and confirm before cloning"}
+                </FormPanelSubtitle>
             </FormPanelHeader>
             <FormBody>
                 <ConfirmBody>
                     <ConfirmProjectIcon>
                         <Codicon
-                            name="repo"
+                            name="project"
                             iconSx={{ fontSize: "24px", color: "var(--wso2-brand-white)" }}
                             sx={{ width: "24px", height: "24px" }}
                         />
@@ -434,7 +455,18 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                         <ConfirmProjectDescription style={{ marginBottom: 24 }} />
                     )}
 
-                    {cloningError ? (
+                    {cloneSuccess ? (
+                        <CloneInfoCallout style={{ borderColor: "color-mix(in srgb, var(--vscode-testing-iconPassed) 40%, var(--vscode-panel-border))", background: "color-mix(in srgb, var(--vscode-testing-iconPassed) 6%, transparent)" }}>
+                            <Codicon
+                                name="pass-filled"
+                                iconSx={{ fontSize: "15px", color: "var(--vscode-testing-iconPassed)", marginTop: "1px" }}
+                            />
+                            <CalloutText>
+                                <CalloutTitle style={{ color: "var(--vscode-testing-iconPassed)" }}>Cloned successfully!</CalloutTitle>
+                                <CalloutDesc>Your repository has been cloned. A prompt should appear in your editor to open it in this window, a new window, or your workspace.</CalloutDesc>
+                            </CalloutText>
+                        </CloneInfoCallout>
+                    ) : cloningError ? (
                         <CloneInfoCallout style={{ borderColor: "color-mix(in srgb, var(--vscode-errorForeground) 40%, var(--vscode-panel-border))", background: "color-mix(in srgb, var(--vscode-errorForeground) 6%, transparent)" }}>
                             <Codicon
                                 name="error"
@@ -445,6 +477,38 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                                 <CalloutDesc>{cloningError}</CalloutDesc>
                             </CalloutText>
                         </CloneInfoCallout>
+                    ) : cloneStage === "selecting_folder" ? (
+                        <CloneInfoCallout>
+                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--wso2-brand-primary)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
+                            <CalloutText>
+                                <CalloutTitle>Where should we put it?</CalloutTitle>
+                                <CalloutDesc>A folder picker is open in your editor — choose a local directory to clone into.</CalloutDesc>
+                            </CalloutText>
+                        </CloneInfoCallout>
+                    ) : cloneStage === "fetching_components" ? (
+                        <CloneInfoCallout>
+                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--wso2-brand-primary)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
+                            <CalloutText>
+                                <CalloutTitle>Loading project details...</CalloutTitle>
+                                <CalloutDesc>Fetching the list of integrations in this project. Won't be long.</CalloutDesc>
+                            </CalloutText>
+                        </CloneInfoCallout>
+                    ) : cloneStage === "selecting_component" ? (
+                        <CloneInfoCallout>
+                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--wso2-brand-primary)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
+                            <CalloutText>
+                                <CalloutTitle>Which integration to clone?</CalloutTitle>
+                                <CalloutDesc>A picker appeared in your editor — this project has multiple integrations. Select one to continue.</CalloutDesc>
+                            </CalloutText>
+                        </CloneInfoCallout>
+                    ) : cloneStage === "cloning" ? (
+                        <CloneInfoCallout>
+                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--wso2-brand-primary)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
+                            <CalloutText>
+                                <CalloutTitle>Almost there!</CalloutTitle>
+                                <CalloutDesc>Cloning your repository into the selected folder. Hang on just a moment.</CalloutDesc>
+                            </CalloutText>
+                        </CloneInfoCallout>
                     ) : (
                         <CloneInfoCallout>
                             <Codicon
@@ -452,9 +516,9 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                                 iconSx={{ fontSize: "15px", color: "var(--wso2-brand-primary)", marginTop: "1px" }}
                             />
                             <CalloutText>
-                                <CalloutTitle>Choose where to save it</CalloutTitle>
+                                <CalloutTitle>Choose where to clone it</CalloutTitle>
                                 <CalloutDesc>
-                                    You'll be prompted to pick a local folder. The project will be cloned there and opened in the editor.
+                                    You'll be asked to select a local folder. For projects with multiple integrations, you'll also choose which one to clone.
                                 </CalloutDesc>
                             </CalloutText>
                         </CloneInfoCallout>
@@ -463,7 +527,27 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                     <ConfirmActions>
                         <CloneButton type="button" onClick={handleCloneProject} disabled={cloning}>
                             {cloning ? (
-                                <>Cloning…</>
+                                <>
+                                    <Codicon
+                                        name="loading"
+                                        iconSx={{ fontSize: "16px", color: "var(--vscode-button-foreground)", animation: "codicon-spin 1.5s steps(30) infinite" }}
+                                        sx={{ width: "16px", height: "16px" }}
+                                    />
+                                    {cloneStage === "selecting_folder" && "Picking a folder..."}
+                                    {cloneStage === "fetching_components" && "Loading..."}
+                                    {cloneStage === "selecting_component" && "Waiting for selection..."}
+                                    {cloneStage === "cloning" && "Cloning..."}
+                                    {!cloneStage && "Working..."}
+                                </>
+                            ) : cloneSuccess ? (
+                                <>
+                                    <Codicon
+                                        name="repo-clone"
+                                        iconSx={{ fontSize: "16px", color: "var(--vscode-button-foreground)" }}
+                                        sx={{ width: "16px", height: "16px" }}
+                                    />
+                                    Clone Again
+                                </>
                             ) : cloningError ? (
                                 <>
                                     <Codicon
@@ -531,10 +615,10 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         return (
             <ProjectList>
                 {projects.map((project) => (
-                    <ProjectRow key={project.id} type="button" onClick={() => setSelectedProject(project)}>
+                    <ProjectRow key={project.id} type="button" onClick={() => { setSelectedProject(project); setCloneSuccess(false); setCloningError(null); }}>
                         <ProjectRowIcon>
                             <Codicon
-                                name="repo"
+                                name="project"
                                 iconSx={{ fontSize: "16px", color: "var(--wso2-brand-white)" }}
                                 sx={{ width: "16px", height: "16px" }}
                             />
@@ -561,6 +645,8 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         if (selectedProject) {
             setSelectedProject(null);
             setCloning(false);
+            setCloneStage(null);
+            setCloneSuccess(false);
             setCloningError(null);
         } else {
             onBack();

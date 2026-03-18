@@ -30,6 +30,7 @@ import {
 } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, type QuickPickItem, QuickPickItemKind, Uri, commands, window } from "vscode";
 import { ext } from "../../extensionVariables";
+import { BridgeLayer } from "../../BridgeLayer";
 import { initGit } from "../git/main";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { createDirectory, openDirectory } from "../../utils/pathUtils";
@@ -54,6 +55,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 							`Select the project from '${selectedOrg.name}', that needs to be cloned`,
 						));
 
+					BridgeLayer.notifyCloneProgress("selecting_folder");
 					const cloneDir = await window.showOpenDialog({
 						canSelectFolders: true,
 						canSelectFiles: false,
@@ -69,6 +71,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 					const selectedCloneDir = cloneDir[0];
 					const projectCache = dataCacheStore.getState().getProjects(selectedOrg.handle);
 
+					BridgeLayer.notifyCloneProgress("fetching_components");
 					let components: ComponentKind[] = [];
 					if (params?.component) {
 						components = [params?.component];
@@ -112,6 +115,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 					}
 
 					if (repoSet.size > 1) {
+						BridgeLayer.notifyCloneProgress("selecting_component");
 						const componentItems: QuickPickItem[] = components.map((item) => ({
 							label: item.metadata.name,
 							detail: `Repository: ${getComponentKindRepoSource(item.spec.source).repo}`,
@@ -149,6 +153,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 						}
 					}
 
+					BridgeLayer.notifyCloneProgress("cloning");
 					let selectedRepoUrl = "";
 					if (repoSet.size === 1) {
 						[selectedRepoUrl] = repoSet;

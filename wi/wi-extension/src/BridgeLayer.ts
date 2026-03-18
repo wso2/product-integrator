@@ -51,6 +51,7 @@ import {
     WIWsResponseMessage,
     WebviewContext,
     WITransportBootstrap,
+    CloneProgressStage,
 } from "@wso2/wi-core";
 import type {
     AuthState,
@@ -138,6 +139,13 @@ export class BridgeLayer {
         this.publish(projectUri, {
             type: WI_BRIDGE_EVENTS.MIGRATED_PROJECT,
             project,
+        });
+    }
+
+    static notifyCloneProgress(stage: CloneProgressStage, projectUri: string = "global"): void {
+        this.publish(projectUri, {
+            type: WI_BRIDGE_EVENTS.CLONE_PROGRESS,
+            stage,
         });
     }
 

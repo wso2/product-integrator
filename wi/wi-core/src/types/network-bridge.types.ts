@@ -91,7 +91,11 @@ export const WI_BRIDGE_EVENTS = {
     // ── Cloud events ──────────────────────────────────────────
     AUTH_STATE_CHANGED: "wi.event.authStateChanged",
     CONTEXT_STATE_CHANGED: "wi.event.contextStateChanged",
+    CLONE_PROGRESS: "wi.event.cloneProgress",
 } as const;
+
+/** Granular stages emitted by the clone-project command so the webview can show accurate progress. */
+export type CloneProgressStage = "selecting_folder" | "fetching_components" | "selecting_component" | "cloning";
 
 export interface WIWsMethodParamsMap {
     getWebviewContext: void;
@@ -279,6 +283,11 @@ export interface WIContextStateChangedEvent {
     state: ContextStoreState;
 }
 
+export interface WICloneProgressEvent {
+    type: typeof WI_BRIDGE_EVENTS.CLONE_PROGRESS;
+    stage: CloneProgressStage;
+}
+
 export type WIBridgeRequest = WIWsRequest;
 
 export type WIBridgeResponse =
@@ -289,7 +298,8 @@ export type WIBridgeResponse =
     | WIMigrationToolLogsEvent
     | WIMigratedProjectEvent
     | WIAuthStateChangedEvent
-    | WIContextStateChangedEvent;
+    | WIContextStateChangedEvent
+    | WICloneProgressEvent;
 
 export type WITransportMode = "proxy" | "websocket";
 
