@@ -208,7 +208,7 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose, onOrgSwitch }: U
         [authState?.userInfo?.organizations]
     );
 
-    const selectedOrgId = localSelectedOrgId || (authState as any)?.selectedOrgId || contextState?.selected?.org?.id;
+    const selectedOrgId = localSelectedOrgId != null ? localSelectedOrgId : (authState as any)?.selectedOrgId ?? contextState?.selected?.org?.id;
 
     // Clear error when popover closes
     useEffect(() => {
@@ -222,6 +222,8 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose, onOrgSwitch }: U
         const incoming = (authState as any)?.selectedOrgId;
         if (incoming && incoming !== localSelectedOrgId) {
             setLocalSelectedOrgId(String(incoming));
+        } else if (incoming == null) {
+            setLocalSelectedOrgId(null);
         }
     }, [(authState as any)?.selectedOrgId]);
 
@@ -249,9 +251,9 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose, onOrgSwitch }: U
         setOrgSwitchError(null);
         setIsSwitchingOrg(true);
         setLocalSelectedOrgId(String(org.id));
-        onOrgSwitch?.(String(org.id), org.name);
         try {
             await wsClient.changeOrgContext(String(org.id));
+            onOrgSwitch?.(String(org.id), org.name);
             onClose();
         } catch (error) {
             console.error("Failed to switch organization", error);

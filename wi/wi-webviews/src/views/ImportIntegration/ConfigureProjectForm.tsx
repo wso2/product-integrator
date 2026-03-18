@@ -54,11 +54,11 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
     const [singleProjectPackageNameError, setSingleProjectPackageNameError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!selectedOrgName || singleProjectData.orgName === selectedOrgName) {
+        if (!selectedOrgName) {
             return;
         }
         setSingleProjectData((prev) => ({ ...prev, orgName: selectedOrgName }));
-    }, [selectedOrgName, singleProjectData.orgName]);
+    }, [selectedOrgName]);
 
     const handleSingleProjectFormChange = (data: Partial<ProjectFormData>) => {
         setSingleProjectData(prev => ({ ...prev, ...data }));

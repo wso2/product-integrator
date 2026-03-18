@@ -61,11 +61,13 @@ export function BIProjectForm() {
     const [packageNameValidationError, setPackageNameValidationError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!selectedOrgName || formData.orgName === selectedOrgName) {
-            return;
-        }
-        setFormData((prev) => ({ ...prev, orgName: selectedOrgName }));
-    }, [selectedOrgName, formData.orgName]);
+        setFormData((prev) => {
+            if (!selectedOrgName || prev.orgName === selectedOrgName) {
+                return prev;
+            }
+            return { ...prev, orgName: selectedOrgName };
+        });
+    }, [selectedOrgName]);
 
     const handleFormDataChange = (data: Partial<ProjectFormData>) => {
         setFormData(prev => ({ ...prev, ...data }));

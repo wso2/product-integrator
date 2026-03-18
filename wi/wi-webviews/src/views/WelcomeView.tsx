@@ -26,7 +26,7 @@ import { SamplesView } from "./samplesView";
 import { SettingsView } from "./settingsView";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
-import { WICommandIds } from "@wso2/wso2-platform-core";
+import { WICommandIds, type AuthState } from "@wso2/wso2-platform-core";
 import { UserAccountPopover } from "./UserAccountPopover";
 
 enum ViewState {
@@ -225,6 +225,10 @@ interface RecentProject {
     label: string;
     description?: string;
     isWorkspace?: boolean;
+}
+
+interface ExtendedAuthState extends AuthState {
+    selectedOrgId?: string;
 }
 
 const ActionCard = styled.div<ActionCardProps>`
@@ -465,14 +469,37 @@ export const WelcomeView: React.FC = () => {
 
     const selectedOrgName = useMemo(() => {
         if (localOrgName) return localOrgName;
-        const orgId = (authState as any)?.selectedOrgId || contextState?.selected?.org?.id;
+        const extendedAuthState = authState as ExtendedAuthState | undefined;
+        const orgId = extendedAuthState?.selectedOrgId || contextState?.selected?.org?.id;
         if (orgId && authState?.userInfo?.organizations) {
             const match = (authState.userInfo.organizations as Array<{ id?: any; name: string }>)
                 .find((o) => String(o.id) === String(orgId));
             if (match?.name) return match.name;
         }
         return contextState?.selected?.org?.name ?? null;
-    }, [localOrgName, (authState as any)?.selectedOrgId, authState?.userInfo?.organizations, contextState?.selected?.org?.name]);
+    }, [localOrgName, authState, contextState?.selected?.org?.id, contextState?.selected?.org?.name]);
+
+    useEffect(() => {
+        if (!localOrgName) return;
+
+        const extendedAuthState = authState as ExtendedAuthState | undefined;
+        const orgId = extendedAuthState?.selectedOrgId || contextState?.selected?.org?.id;
+        let derivedName: string | null = null;
+
+        if (orgId && authState?.userInfo?.organizations) {
+            const match = (authState.userInfo.organizations as Array<{ id?: any; name: string }>)
+                .find((o) => String(o.id) === String(orgId));
+            if (match?.name) derivedName = match.name;
+        }
+
+        if (!derivedName) {
+            derivedName = contextState?.selected?.org?.name ?? null;
+        }
+
+        if (derivedName && derivedName !== localOrgName) {
+            setLocalOrgName(null);
+        }
+    }, [authState, contextState?.selected?.org?.id, contextState?.selected?.org?.name, localOrgName]);
 
     useEffect(() => {
         if (currentView !== ViewState.WELCOME) {

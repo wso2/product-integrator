@@ -100,16 +100,26 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async changeOrgContext(orgId: string): Promise<void> {
-		await ext.clients.rpcClient.changeOrgContext(orgId);
-		
-		// Store the selected org ID in global state
-		await ext.context.globalState.update("selectedOrgId", orgId);
-		
-		// Refresh auth state to get updated user info with new org context
-		const userInfo = await ext.clients.rpcClient.getUserInfo();
-		if (userInfo) {
+		try {
+			await ext.clients.rpcClient.changeOrgContext(orgId);
+			
+			const userInfo = await ext.clients.rpcClient.getUserInfo();
+			if (!userInfo) {
+				throw new Error("Failed to retrieve user info after org context change");
+			}
+			
 			const region = await ext.clients.rpcClient.getCurrentRegion();
-			ext.authProvider?.getState().loginSuccess(userInfo, region);
+			
+			if (!ext.authProvider) {
+				throw new Error("Auth provider is not available");
+			}
+			
+			ext.authProvider.getState().loginSuccess(userInfo, region);
+			
+			await ext.context.globalState.update("selectedOrgId", orgId);
+		} catch (error) {
+			ext.logger.error("Failed to change org context", error);
+			throw error;
 		}
 	}
 

@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { QueryClient, DehydratedState, Query } from "@tanstack/react-query";
+import { QueryClient, DehydratedState, Query, defaultShouldDehydrateQuery } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { useVisualizerContext } from "../contexts";
 import React, { useState } from "react";
@@ -69,6 +69,7 @@ export const WIWebviewQueryClientProvider = ({ children }: { children: React.Rea
                 buster: "wi-cache-v1",
                 dehydrateOptions: {
                     shouldDehydrateQuery: (query: Query) =>
+                        defaultShouldDehydrateQuery(query) &&
                         !NON_PERSISTENT_QUERY_KEYS.some((key) => query.queryKey.includes(key)),
                 },
             }}

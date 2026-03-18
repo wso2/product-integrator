@@ -57,10 +57,15 @@ export function PackageInfoSection({
         >
             <FieldGroup>
                 <TextField
-                    onTextChange={(value) => onChange({ orgName: value })}
+                    onTextChange={(value) => {
+                        if (!selectedOrgName) {
+                            onChange({ orgName: value });
+                        }
+                    }}
                     value={resolvedOrgName}
                     label="Organization Name"
                     description="The organization that owns this Ballerina package."
+                    disabled={!!selectedOrgName}
                 />
             </FieldGroup>
             <FieldGroup>
