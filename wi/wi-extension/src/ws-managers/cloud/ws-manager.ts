@@ -39,6 +39,7 @@ import {
 	ViewType,
 	COMMANDS,
 	WICloudAPI,
+	DefaultOrgNameResponse,
 } from "@wso2/wi-core";
 import { buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
@@ -52,6 +53,7 @@ import path, { join } from "path";
 import type { IFileStatus } from "../../cloud/git/git";
 import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-cmd";
 import { enrichGitUsernamePassword } from "../../cloud/cmds/commit-and-push-to-git-cmd";
+import { getUsername } from "../main/utils";
 
 /**
  * Pending cloud form context — set by openCloudFormWebview before the webview opens,
@@ -331,6 +333,10 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 	async getConsoleUrl(): Promise<string> {
 		return ext.config?.devantConsoleUrl;
+	}
+
+	async getDefaultOrgName(): Promise<DefaultOrgNameResponse> {
+		return { orgName: getUsername() };
 	}
 
 	/**

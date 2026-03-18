@@ -48,7 +48,7 @@ export const OptionalSectionsLabel = styled.div`
     margin-bottom: 12px;
 `;
 
-export const WorkspaceSection = styled.div`
+export const ProjectSection = styled.div`
     margin-bottom: 24px;
     padding-bottom: 24px;
     border-bottom: 1px solid var(--vscode-panel-border);
@@ -57,10 +57,10 @@ export const WorkspaceSection = styled.div`
 // ========== Page Layout Styles ==========
 
 export const PageWrapper = styled.div`
+    width: 100%;
     display: flex;
     flex-direction: column;
     max-height: 100vh;
-    padding: 40px 120px;
     box-sizing: border-box;
     overflow: hidden;
 `;
@@ -68,8 +68,9 @@ export const PageWrapper = styled.div`
 export const FormContainer = styled.div`
     display: flex;
     flex-direction: column;
-    max-width: 600px;
-    overflow: hidden;
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto;
 `;
 
 export const TitleContainer = styled.div`
@@ -258,7 +259,7 @@ export const RadioDescription = styled.span`
     line-height: 1.4;
 `;
 
-export const ProjectTypeNote = styled.div`
+export const Note = styled.div`
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
     margin-top: 12px;
@@ -267,4 +268,3 @@ export const ProjectTypeNote = styled.div`
     border-left: 3px solid var(--vscode-textBlockQuote-border);
     border-radius: 0 4px 4px 0;
 `;
-

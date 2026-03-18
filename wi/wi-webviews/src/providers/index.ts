@@ -18,3 +18,4 @@
 
 export { WIWebviewQueryClientProvider } from "./react-query-provider";
 export { CloudContextProvider, useCloudContext } from "./cloud-ctx-provider";
+export { WorkspaceInfoPrefetcher, useProjectModeSupported, useWorkspaceRoot } from "./workspace-info-provider";
