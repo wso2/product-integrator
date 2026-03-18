@@ -416,7 +416,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                 <ConfirmBody>
                     <ConfirmProjectIcon>
                         <Codicon
-                            name="cloud"
+                            name="repo"
                             iconSx={{ fontSize: "24px", color: "var(--wso2-brand-white)" }}
                             sx={{ width: "24px", height: "24px" }}
                         />
@@ -528,7 +528,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                     <ProjectRow key={project.id} type="button" onClick={() => setSelectedProject(project)}>
                         <ProjectRowIcon>
                             <Codicon
-                                name="cloud"
+                                name="repo"
                                 iconSx={{ fontSize: "16px", color: "var(--wso2-brand-white)" }}
                                 sx={{ width: "16px", height: "16px" }}
                             />
