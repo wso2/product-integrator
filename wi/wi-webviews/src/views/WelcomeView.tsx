@@ -496,7 +496,7 @@ export const WelcomeView: React.FC = () => {
             derivedName = contextState?.selected?.org?.name ?? null;
         }
 
-        if (derivedName && derivedName !== localOrgName) {
+        if (derivedName && derivedName === localOrgName) {
             setLocalOrgName(null);
         }
     }, [authState, contextState?.selected?.org?.id, contextState?.selected?.org?.name, localOrgName]);
