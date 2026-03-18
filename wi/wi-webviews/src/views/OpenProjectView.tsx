@@ -384,7 +384,12 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         wsClient
             .runCommand({
                 command: WICommandIds.CloneProject,
-                args: [{ organization: org, project: selectedProject }],
+                args: [{ organization: org, project: selectedProject, integrationOnly: true }],
+            })
+            .then(() => {
+                // Command resolved — either the user cancelled the folder picker or cloning finished.
+                // Either way, reset so the view doesn't stay stuck.
+                setCloning(false);
             })
             .catch((err: unknown) => {
                 setCloning(false);
@@ -423,15 +428,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                         <ConfirmProjectDescription style={{ marginBottom: 24 }} />
                     )}
 
-                    {cloning ? (
-                        <CloneInfoCallout style={{ borderColor: "color-mix(in srgb, var(--wso2-brand-primary) 40%, var(--vscode-panel-border))", background: "color-mix(in srgb, var(--wso2-brand-primary) 6%, transparent)" }}>
-                            <ProgressRing color={ThemeColors.PRIMARY} />
-                            <CalloutText>
-                                <CalloutTitle>Cloning {project.name}…</CalloutTitle>
-                                <CalloutDesc>This may take a moment. The editor will open automatically when done.</CalloutDesc>
-                            </CalloutText>
-                        </CloneInfoCallout>
-                    ) : cloningError ? (
+                    {cloningError ? (
                         <CloneInfoCallout style={{ borderColor: "color-mix(in srgb, var(--vscode-errorForeground) 40%, var(--vscode-panel-border))", background: "color-mix(in srgb, var(--vscode-errorForeground) 6%, transparent)" }}>
                             <Codicon
                                 name="error"

@@ -112,21 +112,29 @@ export function cloneRepoCommand(context: ExtensionContext) {
 					}
 
 					if (repoSet.size > 1) {
-						const quickPickOptions: QuickPickItem[] = [
-							{
-								label: "Clone entire project",
-								detail: "Clone all the repositories associated with the selected project",
-								picked: true,
-							},
-							{ kind: QuickPickItemKind.Separator, label: `Clone ${ext.terminologies?.articleComponentTerm} of the project` },
-							...components.map((item) => ({
-								label: item.metadata.name,
-								detail: `Repository: ${getComponentKindRepoSource(item.spec.source).repo}`,
-								item,
-							})),
-						];
+						const componentItems: QuickPickItem[] = components.map((item) => ({
+							label: item.metadata.name,
+							detail: `Repository: ${getComponentKindRepoSource(item.spec.source).repo}`,
+							item,
+						}));
+						const quickPickOptions: QuickPickItem[] = params?.integrationOnly
+							? componentItems
+							: [
+									{
+										label: "Clone entire project",
+										detail: "Clone all the repositories associated with the selected project",
+										picked: true,
+									},
+									{ kind: QuickPickItemKind.Separator, label: `Clone ${ext.terminologies?.articleComponentTerm} of the project` },
+									...componentItems,
+							  ];
+						const componentTermPlural = ext.terminologies?.componentTermPlural ?? "integrations";
+						const articleComponentTerm = ext.terminologies?.articleComponentTerm ?? "an integration";
 						const selection = await window.showQuickPick(quickPickOptions, {
-							title: "Select an option",
+							title: params?.integrationOnly ? "Select an integration or library to open" : "Select an option",
+							placeHolder: params?.integrationOnly
+								? `This project contains ${componentTermPlural} across multiple repositories. Select which ${articleComponentTerm} you'd like to clone and open.`
+								: undefined,
 						});
 
 						if (selection?.label === "Clone entire project") {
