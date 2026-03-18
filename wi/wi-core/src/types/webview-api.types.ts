@@ -218,6 +218,7 @@ export interface ImportIntegrationWsRequest {
     commandName: string;
     packageName: string;
     sourcePath: string;
+    orgName?: string;
     parameters?: Record<string, any>;
 }
 

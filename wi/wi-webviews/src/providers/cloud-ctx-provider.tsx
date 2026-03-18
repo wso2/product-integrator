@@ -55,6 +55,9 @@ export const CloudContextProvider: FC<Props> = ({ children }) => {
         queryKey: ["cloud_auth_state"],
         queryFn: () => wsClient.getAuthState(),
         refetchOnWindowFocus: true,
+        // Poll every 3 s when signed out so login via browser callback is detected promptly.
+        // Polling stops as soon as userInfo is populated.
+        refetchInterval: (query) => query.state.data?.userInfo ? false : 3000,
     });
 
     const { data: contextState, isLoading: contextStateLoading } = useQuery({

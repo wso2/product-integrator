@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./WelcomeView.css";
 import styled from "@emotion/styled";
 import { Codicon } from "@wso2/ui-toolkit";
@@ -28,7 +28,7 @@ import { LibraryCreationView } from "./creationView/biForm/LibraryCreationView";
 import { ProjectCreationView } from "./creationView/biForm/ProjectCreationView";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
-import { WICommandIds } from "@wso2/wso2-platform-core";
+import { WICommandIds, type AuthState } from "@wso2/wso2-platform-core";
 import { UserAccountPopover } from "./UserAccountPopover";
 
 enum ViewState {
@@ -153,7 +153,6 @@ export const UserInitial = styled.span`
     text-transform: uppercase;
 `;
 
-
 const GetStartedBadge = styled.div`
     display: inline-block;
     backdrop-filter: blur(10px);
@@ -183,6 +182,20 @@ const Caption = styled.p`
     color: var(--wso2-brand-neutral-100);
     margin: 16px 0 0 0;
     max-width: 800px;
+`;
+
+const OrgBadge = styled.div`
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 20px;
+    align-self: flex-start;
+    padding: 5px 12px 5px 8px;
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--wso2-brand-white) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-white) 22%, transparent);
+    font-size: 12px;
+    color: color-mix(in srgb, var(--wso2-brand-white) 75%, transparent);
 `;
 
 const CardsContainer = styled.div`
@@ -216,6 +229,10 @@ interface RecentProject {
     label: string;
     description?: string;
     isWorkspace?: boolean;
+}
+
+interface ExtendedAuthState extends AuthState {
+    selectedOrgId?: string;
 }
 
 const ActionCard = styled.div<ActionCardProps>`
@@ -563,12 +580,47 @@ const MoreToggleButton = styled.button`
 export const WelcomeView: React.FC = () => {
     const { wsClient } = useVisualizerContext();
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
-    const { authState } = useCloudContext();
+    const { authState, contextState } = useCloudContext();
     const [popoverOpen, setPopoverOpen] = useState(false);
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
     const [isRecentProjectsLoaded, setIsRecentProjectsLoaded] = useState(false);
     const [showSecondary, setShowSecondary] = useState(false);
+    const [localOrgName, setLocalOrgName] = useState<string | null>(null);
     const avatarRef = useRef<HTMLButtonElement>(null);
+
+    const selectedOrgName = useMemo(() => {
+        if (localOrgName) return localOrgName;
+        const extendedAuthState = authState as ExtendedAuthState | undefined;
+        const orgId = extendedAuthState?.selectedOrgId || contextState?.selected?.org?.id;
+        if (orgId && authState?.userInfo?.organizations) {
+            const match = (authState.userInfo.organizations as Array<{ id?: any; name: string }>)
+                .find((o) => String(o.id) === String(orgId));
+            if (match?.name) return match.name;
+        }
+        return contextState?.selected?.org?.name ?? null;
+    }, [localOrgName, authState, contextState?.selected?.org?.id, contextState?.selected?.org?.name]);
+
+    useEffect(() => {
+        if (!localOrgName) return;
+
+        const extendedAuthState = authState as ExtendedAuthState | undefined;
+        const orgId = extendedAuthState?.selectedOrgId || contextState?.selected?.org?.id;
+        let derivedName: string | null = null;
+
+        if (orgId && authState?.userInfo?.organizations) {
+            const match = (authState.userInfo.organizations as Array<{ id?: any; name: string }>)
+                .find((o) => String(o.id) === String(orgId));
+            if (match?.name) derivedName = match.name;
+        }
+
+        if (!derivedName) {
+            derivedName = contextState?.selected?.org?.name ?? null;
+        }
+
+        if (derivedName && derivedName === localOrgName) {
+            setLocalOrgName(null);
+        }
+    }, [authState, contextState?.selected?.org?.id, contextState?.selected?.org?.name, localOrgName]);
 
     useEffect(() => {
         if (currentView !== ViewState.WELCOME) {
@@ -606,29 +658,13 @@ export const WelcomeView: React.FC = () => {
         };
     }, [currentView, wsClient]);
 
-    const goToCreateIntegration = () => {
-        setCurrentView(ViewState.CREATE_INTEGRATION);
-    };
-
-    const goToSamples = () => {
-        setCurrentView(ViewState.SAMPLES);
-    };
-
-    const goToImportExternal = () => {
-        setCurrentView(ViewState.IMPORT_EXTERNAL);
-    };
-
-    const goToSettings = () => {
-        setCurrentView(ViewState.SETTINGS);
-    };
-
-    const goToCreateLibrary = () => {
-        setCurrentView(ViewState.CREATE_LIBRARY);
-    };
-
-    const goToCreateProject = () => {
-        setCurrentView(ViewState.CREATE_PROJECT);
-    };
+    const goToCreateIntegration = () => setCurrentView(ViewState.CREATE_INTEGRATION);
+    const goToSamples = () => setCurrentView(ViewState.SAMPLES);
+    const goToImportExternal = () => setCurrentView(ViewState.IMPORT_EXTERNAL);
+    const goToSettings = () => setCurrentView(ViewState.SETTINGS);
+    const goBackToWelcome = () => setCurrentView(ViewState.WELCOME);
+    const goToCreateLibrary = () => setCurrentView(ViewState.CREATE_LIBRARY);
+    const goToCreateProject = () => setCurrentView(ViewState.CREATE_PROJECT);
 
     const handleProjectDirSelection = async () => {
         const response = await wsClient.selectFileOrDirPath({});
@@ -637,26 +673,19 @@ export const WelcomeView: React.FC = () => {
         }
     };
 
-    const goBackToWelcome = () => {
-        setCurrentView(ViewState.WELCOME);
-    };
-
-    const openConfigure = () => {
-        goToSettings();
-    };
-
     const openRecentProjectsPicker = () => {
         wsClient.runCommand({ command: "workbench.action.openRecent" }).catch((): void => undefined);
     };
 
     const openRecentProject = (projectPath: string) => {
-        if (!projectPath) {
-            return;
-        }
+        if (!projectPath) return;
         wsClient.openFolder(projectPath);
     };
 
-    // Helper function to render current view content
+    const handleSignIn = () => {
+        wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
+    };
+
     const renderCurrentView = () => {
         switch (currentView) {
             case ViewState.CREATE_INTEGRATION:
@@ -670,17 +699,11 @@ export const WelcomeView: React.FC = () => {
             case ViewState.CREATE_PROJECT:
                 return <ProjectCreationView onBack={goBackToWelcome} />;
             case ViewState.SETTINGS:
-                return (
-                    <SettingsView onBack={goBackToWelcome} />
-                );
+                return <SettingsView onBack={goBackToWelcome} />;
             case ViewState.WELCOME:
             default:
                 return renderWelcomeContent();
         }
-    };
-
-    const handleSignIn = () => {
-        wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
     };
 
     const renderWelcomeContent = () => (
@@ -705,7 +728,7 @@ export const WelcomeView: React.FC = () => {
                     ) : (
                         <SigninBtn type="button" onClick={handleSignIn}>Sign In</SigninBtn>
                     )}
-                    <ConfigureBtn type="button" onClick={openConfigure}>
+                    <ConfigureBtn type="button" onClick={goToSettings}>
                         <Codicon name="settings-gear" iconSx={{ fontSize: 16, color: "var(--wso2-brand-white)" }} />
                         <span>Settings</span>
                     </ConfigureBtn>
@@ -715,6 +738,12 @@ export const WelcomeView: React.FC = () => {
                 <Caption>
                     Connect any system across your business, build AI agents, and orchestrate AI-enabled workflows with the 100% open source and AI-native WSO2 Integrator.
                 </Caption>
+                {selectedOrgName && (
+                    <OrgBadge>
+                        <Codicon name="organization" iconSx={{ fontSize: 12, color: "color-mix(in srgb, var(--wso2-brand-white) 75%, transparent)" }} />
+                        {selectedOrgName}
+                    </OrgBadge>
+                )}
             </TopSection>
 
             <CardsContainer>
@@ -870,6 +899,7 @@ export const WelcomeView: React.FC = () => {
                 isOpen={popoverOpen}
                 anchorEl={avatarRef.current}
                 onClose={() => setPopoverOpen(false)}
+                onOrgSwitch={(_id, name) => setLocalOrgName(name)}
             />
         </>
     );

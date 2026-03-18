@@ -296,6 +296,7 @@ export class BridgeLayer {
         registerRoute("closeCloudFormWebview", async () => cloudManager.closeCloudFormWebview());
         registerRoute("getAuthState", async () => cloudManager.getAuthState());
         registerRoute("getContextState", async () => cloudManager.getContextState());
+        registerRoute("changeOrgContext", async (request) => cloudManager.changeOrgContext(request.params));
         registerRoute("getLocalGitData", async (request) => cloudManager.getLocalGitData(request.params));
         registerRoute("hasDirtyRepo", async (request) => cloudManager.hasDirtyRepo(request.params));
         registerRoute("getConfigFileDrifts", async (request) =>

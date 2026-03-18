@@ -88,6 +88,7 @@ export interface ConfigureProjectFormProps {
     isMultiProject: boolean;
     onNext: (project: ProjectRequest) => void;
     onBack: () => void;
+    selectedOrgName?: string;
 }
 
 export interface MigrationDisplayState {

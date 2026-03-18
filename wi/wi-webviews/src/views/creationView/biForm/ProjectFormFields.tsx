@@ -59,6 +59,7 @@ export interface ProjectFormFieldsProps {
     pathError?: string;
     projectNameError?: string;
     packageNameValidationError?: string;
+    selectedOrgName?: string;
 }
 
 export function ProjectFormFields({
@@ -68,6 +69,7 @@ export function ProjectFormFields({
     pathError,
     projectNameError,
     packageNameValidationError,
+    selectedOrgName
 }: ProjectFormFieldsProps) {
     const { wsClient } = useVisualizerContext();
     const isProjectModeSupported = useProjectModeSupported();
@@ -308,6 +310,7 @@ export function ProjectFormFields({
                 }}
                 orgNameError={orgNameError}
                 packageNameError={packageNameValidationError || packageNameError}
+                selectedOrgName={selectedOrgName}
             />
         </>
     );
