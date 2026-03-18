@@ -56,6 +56,7 @@ export interface FileOrDirResponse {
 
 export interface FileOrDirRequest {
     isFile?: boolean;
+    startPath?: string;
 }
 
 export interface WorkspaceRootResponse {
@@ -144,14 +145,15 @@ export interface SampleDownloadRequest {
 }
 
 export interface BIProjectRequest {
-    projectName: string;
-    packageName: string;
+    projectName?: string;
+    packageName?: string;
     projectPath: string;
     createDirectory: boolean;
     createAsWorkspace?: boolean;
     workspaceName?: string;
     orgName?: string;
     version?: string;
+    isLibrary?: boolean;
 }
 
 export interface SemanticVersion {
@@ -279,6 +281,7 @@ export interface ValidateProjectFormRequest {
     projectPath: string;
     projectName: string;
     createDirectory: boolean;
+    createAsWorkspace?: boolean;
 }
 
 export interface ValidateProjectFormResponse {
@@ -296,6 +299,11 @@ export interface SetWebviewCacheParams {
     cacheKey: string;
     data: unknown;
 }
+
+export interface DefaultOrgNameResponse {
+    orgName: string;
+}
+
 export interface WIVisualizerAPI {
     getWebviewContext: () => Promise<WebviewContext>;
     getRecentProjects: () => Promise<GetRecentProjectsResponse>;
@@ -332,4 +340,6 @@ export interface WIVisualizerAPI {
     setWebviewCache: (params: SetWebviewCacheParams) => Promise<void>;
     restoreWebviewCache: (cacheKey: string) => Promise<unknown>;
     clearWebviewCache: (cacheKey: string) => Promise<void>;
+    getDefaultOrgName: () => Promise<DefaultOrgNameResponse>;
+    getDefaultCreationPath: () => Promise<WorkspaceRootResponse>;
 }

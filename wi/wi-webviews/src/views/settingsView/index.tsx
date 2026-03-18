@@ -16,10 +16,23 @@
  * under the License.
  */
 
-import { CheckBox, Icon, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
+import { CheckBox, Icon, ProgressIndicator } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useEffect, useState } from "react";
 import { useVisualizerContext } from "../../contexts/WsContext";
+import {
+    PageBackdrop,
+    BackButton,
+    HeaderRow,
+    HeaderText,
+    HeaderTitle,
+    HeaderSubtitle,
+    FormPanel,
+    FormPanelHeader,
+    FormPanelTitle,
+    FormPanelSubtitle,
+    FormBody,
+} from "../shared/FormPageLayout";
 
 type RuntimeKey = "bi" | "mi" | "si";
 
@@ -67,15 +80,6 @@ const RUNTIME_DEFINITIONS: RuntimeDefinition[] = [
     },
 ];
 
-const PageBackdrop = styled.div`
-    min-height: 100vh;
-    padding: 28px 30px 24px;
-    background:
-        radial-gradient(circle at 90% 0%, color-mix(in srgb, var(--wso2-brand-accent) 10%, transparent) 0%, transparent 34%),
-        radial-gradient(circle at 10% 100%, color-mix(in srgb, var(--wso2-brand-primary) 8%, transparent) 0%, transparent 40%),
-        var(--vscode-editor-background);
-`;
-
 const PageContainer = styled.div`
     max-width: 920px;
     margin: 0 auto;
@@ -85,103 +89,7 @@ const PageContainer = styled.div`
     gap: 14px;
 `;
 
-const Header = styled.header`
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-`;
-
-const BackButton = styled.button`
-    cursor: pointer;
-    border-radius: 6px;
-    width: 28px;
-    height: 28px;
-    font-size: 20px;
-    border: 1px solid transparent;
-    background: transparent;
-    appearance: none;
-    padding: 0;
-    line-height: 1;
-    margin-top: 2px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    & > * {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
-    }
-
-    &:hover {
-        background-color: color-mix(in srgb, var(--wso2-brand-accent) 16%, transparent);
-        border-color: color-mix(in srgb, var(--wso2-brand-accent) 45%, transparent);
-    }
-
-    &:focus-visible {
-        outline: 1px solid var(--vscode-focusBorder);
-        outline-offset: 2px;
-    }
-`;
-
-const HeaderText = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-`;
-
-const HeaderTitle = styled(Typography)`
-    margin: 0;
-    font-weight: 600;
-`;
-
-const HeaderSubtitle = styled.p`
-    margin: 0;
-    color: var(--vscode-descriptionForeground);
-    font-size: 12px;
-`;
-
-const SettingsPanel = styled.section`
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    border-radius: 14px;
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 16%, var(--vscode-panel-border));
-    background: var(--vscode-editor-background);
-    box-shadow: 0 10px 24px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
-    overflow: hidden;
-`;
-
-const PanelHeader = styled.div`
-    border-bottom: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 10%, var(--vscode-panel-border));
-    padding: 14px 18px 12px;
-    background: linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--wso2-brand-accent) 4%, var(--vscode-editor-background)) 0%,
-        var(--vscode-editor-background) 100%
-    );
-`;
-
-const PanelTitle = styled.h3`
-    margin: 0;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--vscode-foreground);
-`;
-
-const PanelSubtitle = styled.p`
-    margin: 3px 0 0;
-    font-size: 12px;
-    color: var(--vscode-descriptionForeground);
-`;
-
-const PanelBody = styled.div`
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 18px;
+const PanelBody = styled(FormBody)`
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -454,7 +362,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
     return (
         <PageBackdrop>
             <PageContainer>
-                <Header>
+                <HeaderRow>
                     <BackButton type="button" onClick={onBack} title="Go back">
                         <Icon
                             name="arrow-left"
@@ -467,12 +375,12 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                         <HeaderTitle variant="h2">Settings</HeaderTitle>
                         <HeaderSubtitle>Manage runtime availability for project creation and sample browsing.</HeaderSubtitle>
                     </HeaderText>
-                </Header>
-                <SettingsPanel>
-                    <PanelHeader>
-                        <PanelTitle>Enabled Runtimes</PanelTitle>
-                        <PanelSubtitle>Changes are saved directly to your integrator configuration.</PanelSubtitle>
-                    </PanelHeader>
+                </HeaderRow>
+                <FormPanel>
+                    <FormPanelHeader>
+                        <FormPanelTitle>Enabled Runtimes</FormPanelTitle>
+                        <FormPanelSubtitle>Changes are saved directly to your integrator configuration.</FormPanelSubtitle>
+                    </FormPanelHeader>
                     <PanelBody>
                         <InfoText>Select which runtimes should be available in project creation and samples.</InfoText>
                         {error && <ErrorText>{error}</ErrorText>}
@@ -502,7 +410,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                             </SecondaryButton>
                         </Footer>
                     </PanelBody>
-                </SettingsPanel>
+                </FormPanel>
             </PageContainer>
             {pendingEnableConfirmation && (
                 <ConfirmBackdrop>

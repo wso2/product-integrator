@@ -285,6 +285,8 @@ export class BridgeLayer {
         );
         registerRoute("restoreWebviewCache", async (request) => wsManager.restoreWebviewCache(request.params));
         registerRoute("clearWebviewCache", async (request) => wsManager.clearWebviewCache(request.params));
+        registerRoute("getDefaultOrgName", async () => cloudManager.getDefaultOrgName());
+        registerRoute("getDefaultCreationPath", async () => wsManager.getDefaultCreationPath());
 
         // ── Cloud routes ──────────────────────────────────────────
         registerRoute("getCloudFormContext", async () => cloudManager.getCloudFormContext());

@@ -69,6 +69,7 @@ import type {
     CloneRepositoryIntoCompDirReq,
     ContextStoreState,
     CredentialItem,
+    DefaultOrgNameResponse,
     GetAuthorizedGitOrgsReq,
     GetAuthorizedGitOrgsResp,
     GetBranchesReq,
@@ -295,6 +296,14 @@ export class WsClient {
 
     public onMigratedProject(callback: (result: ProjectMigrationResult) => void) {
         this.migratedProjectListeners.add(callback);
+    }
+
+    public getDefaultOrgName(): Promise<DefaultOrgNameResponse> {
+        return this.request("getDefaultOrgName");
+    }
+
+    public getDefaultCreationPath(): Promise<WorkspaceRootResponse> {
+        return this.request("getDefaultCreationPath");
     }
 
     // ── Cloud methods ─────────────────────────────────────────

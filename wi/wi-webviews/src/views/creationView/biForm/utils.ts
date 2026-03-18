@@ -16,8 +16,7 @@
  * under the License.
  */
 
-// Import from the component file since types.ts was removed
-import { ProjectFormData } from "./ProjectFormFields";
+import { AddProjectFormData } from "./types";
 
 export const isValidPackageName = (name: string): boolean => {
     return /^[a-z0-9_.]+$/.test(name);
@@ -36,6 +35,10 @@ export const validatePackageName = (name: string, integrationName: string): stri
         return "Package name can only contain lowercase letters, numbers, underscores, and dots";
     }
 
+    if (name.startsWith("_")) {
+        return "Package name cannot start with an underscore";
+    }
+
     if (/__/.test(name)) {
         return "Package name cannot have consecutive underscores";
     }
@@ -52,22 +55,102 @@ export const validatePackageName = (name: string, integrationName: string): stri
         return "Package name cannot end with a dot";
     }
 
+    if (name.length > 256) {
+        return "Package name cannot exceed 256 characters";
+    }
+
     return null; // No error
 };
 
-export const isFormValid = (formData: ProjectFormData): boolean => {
+export const isFormValidAddProject = (formData: AddProjectFormData, isInProject: boolean): boolean => {
     return (
         formData.integrationName.length >= 2 &&
         formData.packageName.length >= 2 &&
-        formData.path.length >= 2 &&
-        validatePackageName(formData.packageName, formData.integrationName) === null
+        (isInProject || (formData.workspaceName?.length ?? 0) >= 1) &&
+        validatePackageName(formData.packageName, formData.integrationName) === null &&
+        validateOrgName(formData.orgName) === null
     );
 };
 
+/**
+ * Cross-platform path joining for webview display.
+ * Detects the path separator from the base string itself.
+ */
+export const joinPath = (base: string, name: string): string => {
+    if (!base) return '';
+    if (!name) return base;
+    const sep = base.includes('\\') ? '\\' : '/';
+    const trimmed = base.endsWith(sep) ? base.slice(0, -1) : base;
+    return `${trimmed}${sep}${name}`;
+};
+
+/**
+ * Extracts the base (parent) directory from a full path that may have `name` appended.
+ * If the path ends with `/name` or `\name`, strips it. Otherwise strips the last component.
+ */
+export const extractBase = (value: string, name: string): string => {
+    if (!value) return value;
+    if (name) {
+        if (value.endsWith('/' + name)) {
+            const base = value.slice(0, -(name.length + 1));
+            return base || '/';
+        }
+        if (value.endsWith('\\' + name)) {
+            const base = value.slice(0, -(name.length + 1));
+            return base || '\\';
+        }
+    }
+    const lastSep = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
+    return lastSep > 0 ? value.slice(0, lastSep) : value;
+};
+
+
 export const sanitizePackageName = (name: string): string => {
-    // Allow dots but sanitize other characters, then convert consecutive dots to single dot
+    // Allow dots/underscores but sanitize other characters, then convert consecutive dots/underscores to single ones
     return name
         .replace(/[^a-z0-9._]/gi, "_")
         .toLowerCase()
-        .replace(/\.{2,}/g, "."); // Convert multiple consecutive dots to single dot
+        .replace(/\.{2,}/g, ".") // Convert multiple consecutive dots to single dot
+        .replace(/_{2,}/g, "_"); // Convert multiple consecutive underscores to single underscore
+};
+
+// Reserved organization names
+const RESERVED_ORG_NAMES = ["ballerina", "ballerinax", "wso2"];
+
+// Org name pattern (based on Ballerina language specification for RestrictedIdentifier)
+// RestrictedIdentifier := AsciiLetter RestrictedFollowingChar* RestrictedIdentifierWord*
+// RestrictedIdentifierWord := _ RestrictedFollowingChar+
+// RestrictedFollowingChar := AsciiLetter | Digit
+// AsciiLetter := A .. Z | a .. z
+const RESTRICTED_IDENTIFIER_REGEX = /^[a-zA-Z][a-zA-Z0-9]*(_[a-zA-Z0-9]+)*$/;
+
+export const validateOrgName = (orgName: string): string | null => {
+    // Empty org name is allowed (optional field)
+    if (!orgName || orgName.length === 0) {
+        return null;
+    }
+
+    // Check for reserved org names (case-insensitive)
+    if (RESERVED_ORG_NAMES.includes(orgName.toLowerCase())) {
+        return `"${orgName}" is a reserved organization name`;
+    }
+
+    // Validate against RestrictedIdentifier pattern
+    if (!RESTRICTED_IDENTIFIER_REGEX.test(orgName)) {
+        if (!/^[a-zA-Z]/.test(orgName)) {
+            return "Organization name must start with a letter (a-z, A-Z)";
+        }
+        if (orgName.includes("__")) {
+            return "Organization name cannot have consecutive underscores";
+        }
+        if (orgName.endsWith("_")) {
+            return "Organization name cannot end with an underscore";
+        }
+        if (/_[^a-zA-Z0-9]/.test(orgName)) {
+            return "Underscore must be followed by at least one letter or digit";
+        }
+        return "Organization name can only contain letters (a-z, A-Z), digits (0-9), and underscores";
+    }
+
+    return null;
 };

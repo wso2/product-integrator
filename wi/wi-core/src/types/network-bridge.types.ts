@@ -55,7 +55,8 @@ import {
     ValidateProjectFormRequest,
     ValidateProjectFormResponse,
     WebviewContext,
-    WorkspaceRootResponse
+    WorkspaceRootResponse,
+    DefaultOrgNameResponse
 } from "./webview-api.types";
 import type {
     AuthState,
@@ -126,6 +127,8 @@ export interface WIWsMethodParamsMap {
     setWebviewCache: SetWebviewCacheParams;
     restoreWebviewCache: string;
     clearWebviewCache: string;
+    getDefaultOrgName: void;
+    getDefaultCreationPath: void;
 
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: void;
@@ -184,6 +187,8 @@ export interface WIWsMethodResultMap {
     setWebviewCache: void;
     restoreWebviewCache: unknown;
     clearWebviewCache: void;
+    getDefaultOrgName: DefaultOrgNameResponse;
+    getDefaultCreationPath: WorkspaceRootResponse;
 
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: WICloudFormContext;

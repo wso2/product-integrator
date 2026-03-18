@@ -20,7 +20,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import IntegratorWebview from "./IntegratorWebview";
 import { WebviewContextProvider } from "./contexts/WsContext";
-import { CloudContextProvider, WIWebviewQueryClientProvider } from "./providers";
+import { CloudContextProvider, WIWebviewQueryClientProvider, WorkspaceInfoPrefetcher } from "./providers";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { injectVSCodeCssVariables } from "webview-giga-bridge/webview";
 import type { VSCodeCssTheme, VSCodeCssVariables } from "webview-giga-bridge/webview";
@@ -162,9 +162,11 @@ export function renderWebview(target: HTMLElement) {
 			<WebviewContextProvider>
 				<WIWebviewQueryClientProvider>
 					<CloudContextProvider>
-						<ErrorBoundary>
-							<IntegratorWebview />
-						</ErrorBoundary>
+						<WorkspaceInfoPrefetcher>
+							<ErrorBoundary>
+								<IntegratorWebview />
+							</ErrorBoundary>
+						</WorkspaceInfoPrefetcher>
 					</CloudContextProvider>
 				</WIWebviewQueryClientProvider>
 			</WebviewContextProvider>

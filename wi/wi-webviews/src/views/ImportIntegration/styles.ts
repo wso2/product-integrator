@@ -18,16 +18,22 @@
 
 import styled from "@emotion/styled";
 import { Button, Codicon, Typography } from "@wso2/ui-toolkit";
+import {
+    PageBackdrop as _PageBackdrop,
+    HeaderRow as _HeaderRow,
+    HeaderText as _HeaderText,
+    HeaderSubtitle as _HeaderSubtitle,
+    BackButton as _BackButton,
+    FormPanel as _FormPanel,
+} from "../shared/FormPageLayout";
 
-// Main container styles
-export const PageBackdrop = styled.div`
-    min-height: 100vh;
-    padding: 28px 30px 24px;
-    background:
-        radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--wso2-brand-accent) 10%, transparent) 0%, transparent 34%),
-        radial-gradient(circle at 8% 100%, color-mix(in srgb, var(--wso2-brand-primary) 8%, transparent) 0%, transparent 40%),
-        var(--vscode-editor-background);
-`;
+// Main container styles — re-exported from shared under the names this module uses
+export const PageBackdrop = _PageBackdrop;
+export const ContentPanel = _FormPanel;
+export const TitleContainer = _HeaderRow;
+export const HeaderText = _HeaderText;
+export const HeaderSubtitle = _HeaderSubtitle;
+export const IconButton = _BackButton;
 
 export const PageContainer = styled.div`
     max-width: 960px;
@@ -36,18 +42,6 @@ export const PageContainer = styled.div`
     display: flex;
     flex-direction: column;
     gap: 14px;
-`;
-
-export const ContentPanel = styled.section`
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    border-radius: 14px;
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 16%, var(--vscode-panel-border));
-    background: var(--vscode-editor-background);
-    box-shadow: 0 10px 24px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
-    overflow: hidden;
 `;
 
 export const StepperWrapper = styled.div`
@@ -68,58 +62,6 @@ export const FormContainer = styled.div`
     display: flex;
     flex-direction: column;
     position: relative;
-`;
-
-export const TitleContainer = styled.div`
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-`;
-
-export const HeaderText = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-`;
-
-export const HeaderSubtitle = styled.p`
-    margin: 0;
-    color: var(--vscode-descriptionForeground);
-    font-size: 12px;
-`;
-
-export const IconButton = styled.button`
-    cursor: pointer;
-    border-radius: 6px;
-    width: 28px;
-    height: 28px;
-    font-size: 20px;
-    border: 1px solid transparent;
-    background: transparent;
-    appearance: none;
-    padding: 0;
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-top: 2px;
-
-    & > * {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
-    }
-
-    &:hover {
-        background-color: color-mix(in srgb, var(--wso2-brand-accent) 16%, transparent);
-        border-color: color-mix(in srgb, var(--wso2-brand-accent) 45%, transparent);
-    }
-
-    &:focus-visible {
-        outline: 1px solid var(--vscode-focusBorder);
-        outline-offset: 2px;
-    }
 `;
 
 export const ButtonWrapper = styled.div`
