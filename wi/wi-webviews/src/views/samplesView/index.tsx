@@ -16,23 +16,26 @@
  * under the License.
  */
 
-import { useEffect, useState } from "react";
-import { Icon, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
+import { Icon, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
+import { useEffect, useState } from "react";
 import { useVisualizerContext } from "../../contexts/WsContext";
-import { SamplesContainer } from "./SamplesContainer";
 import {
-    PageBackdrop,
     BackButton,
     HeaderRow,
+    HeaderSubtitle,
     HeaderText,
     HeaderTitle,
-    HeaderSubtitle,
-    RuntimePanel,
-    RuntimeLabel,
-    RuntimeOptions,
-    RuntimeOptionButton,
+    PageBackdrop,
 } from "../shared/FormPageLayout";
+import {
+	RUNTIME_DISPLAY_LABEL,
+	type WIRuntime,
+	getDefaultRuntime,
+	loadEnabledRuntimes,
+	supportsSamples,
+} from "../shared/runtime";
+import { SamplesContainer } from "./SamplesContainer";
 
 const PageContainer = styled.div`
     max-width: 1180px;
@@ -82,56 +85,48 @@ const EmptyStateMessage = styled(Typography)`
     margin: 0;
 `;
 
-export type ProjectType = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
-
-const RUNTIME_DISPLAY_LABEL: Record<ProjectType, string> = {
-    "WSO2: BI": "Default",
-    "WSO2: MI": "WSO2: MI",
-    "WSO2: SI": "WSO2: SI",
-};
-
-export function SamplesView({ onBack }: { onBack?: () => void }) {
-    const [enabledRuntimes, setEnabledRuntimes] = useState<ProjectType[]>([]);
-    const [projectType, setProjectType] = useState<ProjectType | "">("");
-    const [isLoading, setIsLoading] = useState(true);
+export function SamplesView({ onBack, runtime }: { onBack?: () => void; runtime?: WIRuntime }) {
+    const [projectType, setProjectType] = useState<WIRuntime | null>(runtime ?? null);
+    const [isLoading, setIsLoading] = useState(runtime === undefined);
     const { wsClient } = useVisualizerContext();
 
-    // Load enabled runtimes from VS Code configuration (BI/MI supported in samples view)
     useEffect(() => {
-        const loadDefaultRuntime = async () => {
+        if (runtime) {
+            setProjectType(runtime);
+            setIsLoading(false);
+            return;
+        }
+
+        let disposed = false;
+
+        const resolveRuntime = async () => {
+            setIsLoading(true);
             try {
-                const [biResp, miResp, siResp] = await Promise.all([
-                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.bi" }),
-                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.mi" }),
-                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.si" }),
-                ]);
-
-                const runtimes: ProjectType[] = [];
-                if (biResp?.value === true) { runtimes.push("WSO2: BI"); }
-                if (miResp?.value === true) { runtimes.push("WSO2: MI"); }
-                // Intentionally ignore SI runtime in samples view until SI samples are available.
-
-                if (runtimes.length > 0) {
-                    setEnabledRuntimes(runtimes);
-                    setProjectType(runtimes[0]);
-                } else if (siResp?.value === true) {
-                    setEnabledRuntimes([]);
-                    setProjectType("");
-                } else {
-                    setEnabledRuntimes(["WSO2: BI"]);
-                    setProjectType("WSO2: BI");
+                const enabledRuntimes = await loadEnabledRuntimes(wsClient);
+                if (!disposed) {
+                    setProjectType(getDefaultRuntime(enabledRuntimes));
                 }
             } catch (error) {
-                console.warn("Failed to load default integrator config, using fallback:", error);
-                setEnabledRuntimes(["WSO2: BI"]);
-                setProjectType("WSO2: BI");
+                console.warn(
+                    "Failed to load default integrator config, using fallback:",
+                    error,
+                );
+                if (!disposed) {
+                    setProjectType("WSO2: BI");
+                }
             } finally {
-                setIsLoading(false);
+                if (!disposed) {
+                    setIsLoading(false);
+                }
             }
         };
 
-        loadDefaultRuntime();
-    }, []);
+        resolveRuntime();
+
+        return () => {
+            disposed = true;
+        };
+    }, [runtime, wsClient]);
 
     const gotToWelcome = () => {
         if (onBack) {
@@ -139,7 +134,6 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
         }
     };
 
-    // Show loading while fetching configuration
     if (isLoading) {
         return (
             <PageBackdrop>
@@ -160,48 +154,55 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
                         <Icon
                             name="arrow-left"
                             isCodicon
-                            sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                            iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
+                            sx={{
+                                width: "16px",
+                                height: "16px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                            iconSx={{
+                                color: "var(--vscode-foreground)",
+                                fontSize: "16px",
+                                lineHeight: 1,
+                            }}
                         />
                     </BackButton>
                     <HeaderText>
                         <HeaderTitle variant="h2">Browse Samples</HeaderTitle>
                         <HeaderSubtitle>
-                            Start quickly by downloading a curated integration sample for your selected runtime.
+                            Start quickly by downloading a curated integration sample for your runtime.
                         </HeaderSubtitle>
                     </HeaderText>
                 </HeaderRow>
-                {enabledRuntimes.length > 1 && (
-                    <RuntimePanel>
-                        <RuntimeLabel>Runtime</RuntimeLabel>
-                        <RuntimeOptions>
-                            {enabledRuntimes.map((runtime: ProjectType) => (
-                                <RuntimeOptionButton
-                                    type="button"
-                                    key={runtime}
-                                    active={projectType === runtime}
-                                    onClick={() => setProjectType(runtime)}
-                                >
-                                    {RUNTIME_DISPLAY_LABEL[runtime]}
-                                </RuntimeOptionButton>
-                            ))}
-                        </RuntimeOptions>
-                    </RuntimePanel>
-                )}
                 <ContentPanel>
-                    {projectType ? (
-                        <SamplesContainer projectType={projectType as ProjectType} />
+                    {projectType && supportsSamples(projectType) ? (
+                        <SamplesContainer projectType={projectType} />
                     ) : (
                         <EmptyState>
                             <EmptyStateContent>
                                 <EmptyStateMessage variant="body2">
-                                    Samples for WSO2: SI are not available yet.
+                                    Samples for{" "}
+                                    {projectType
+                                        ? RUNTIME_DISPLAY_LABEL[projectType]
+                                        : "this runtime"}{" "}
+                                    are not available yet.
                                 </EmptyStateMessage>
                                 <Icon
                                     name="info"
                                     isCodicon
-                                    sx={{ width: "28px", height: "28px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                                    iconSx={{ color: "var(--vscode-descriptionForeground)", fontSize: "24px", lineHeight: 1 }}
+                                    sx={{
+                                        width: "28px",
+                                        height: "28px",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                    }}
+                                    iconSx={{
+                                        color: "var(--vscode-descriptionForeground)",
+                                        fontSize: "24px",
+                                        lineHeight: 1,
+                                    }}
                                 />
                             </EmptyStateContent>
                         </EmptyState>
