@@ -48,11 +48,34 @@ const Wrapper = styled.div`
 `;
 
 const TopSection = styled.div`
-    background: linear-gradient(120deg, var(--wso2-brand-ink) 0%, var(--wso2-brand-ink-alt) 58%, var(--wso2-brand-primary) 100%);
+    --welcome-hero-foreground: var(--wso2-brand-white);
+    --welcome-hero-muted: color-mix(in srgb, var(--wso2-brand-white) 78%, transparent);
+    --welcome-hero-surface: color-mix(in srgb, var(--wso2-brand-white) 16%, transparent);
+    --welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-white) 36%, transparent);
+    --welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent);
+    --welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent-soft) 52%, transparent);
+    background:
+        radial-gradient(circle at 82% 14%, color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent) 0%, transparent 34%),
+        radial-gradient(circle at 12% 100%, color-mix(in srgb, var(--wso2-brand-neutral-900) 46%, transparent) 0%, transparent 52%),
+        linear-gradient(115deg, #050a14 0%, var(--wso2-brand-ink) 42%, var(--wso2-brand-ink-alt) 100%);
     padding: 40px 60px 80px;
     position: relative;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+
+    body.vscode-light & {
+        --welcome-hero-foreground: var(--wso2-brand-ink);
+        --welcome-hero-muted: color-mix(in srgb, var(--wso2-brand-ink) 76%, var(--wso2-brand-white));
+        --welcome-hero-surface: color-mix(in srgb, var(--wso2-brand-white) 70%, transparent);
+        --welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
+        --welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
+        --welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent) 34%, transparent);
+        background:
+            radial-gradient(circle at 10% 100%, color-mix(in srgb, var(--wso2-brand-accent) 40%, transparent) 0%, transparent 42%),
+            radial-gradient(circle at 72% 18%, color-mix(in srgb, var(--wso2-brand-white) 94%, transparent) 0%, transparent 34%),
+            linear-gradient(110deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-soft) 28%, var(--wso2-brand-white) 100%);
+    }
 `;
 
 const TopBtnSection = styled.div`
@@ -65,13 +88,12 @@ const TopBtnSection = styled.div`
 `;
 
 const ConfigureBtn = styled.button`
-    
     height: 33px;
     font-size: 14px;
     font-weight: 500;
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 0 24px;
-    border: none;
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-white) 18%, transparent);
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
@@ -92,17 +114,50 @@ const ConfigureBtn = styled.button`
         outline: 1px solid var(--vscode-focusBorder);
         outline-offset: 2px;
     }
-    background: linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%);
+    background: linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--wso2-brand-primary) 94%, var(--wso2-brand-white)) 0%,
+        var(--wso2-brand-primary-alt) 100%
+    );
     color: white;
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
+
+    body.vscode-light & {
+        border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 20%, transparent);
+        background: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--wso2-brand-ink) 94%, var(--wso2-brand-accent-soft)) 0%,
+            color-mix(in srgb, var(--wso2-brand-ink-alt) 96%, var(--wso2-brand-accent)) 100%
+        );
+        color: var(--wso2-brand-white);
+        box-shadow: 0 6px 16px color-mix(in srgb, var(--wso2-brand-ink-alt) 14%, transparent);
+    }
 `;
 
 const SigninBtn = styled(ConfigureBtn)`
-    background: color-mix(in srgb, var(--wso2-brand-white) 18%, transparent);
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-white) 40%, transparent);
-    color: var(--wso2-brand-white);
+    height: 33px;
+    padding: 0 18px;
+    border-radius: 10px;
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--wso2-brand-white) 98%, var(--wso2-brand-accent-soft)) 0%,
+        color-mix(in srgb, var(--wso2-brand-white) 90%, var(--wso2-brand-accent-soft)) 100%
+    );
+    border: 2px solid color-mix(in srgb, var(--wso2-brand-ink-alt) 40%, var(--wso2-brand-accent) 44%);
+    color: var(--wso2-brand-ink);
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 76%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--wso2-brand-accent-soft) 24%, transparent),
+        0 8px 18px color-mix(in srgb, var(--wso2-brand-accent) 14%, transparent);
+
     &:hover:not(:disabled) {
         filter: none;
-        background: color-mix(in srgb, var(--wso2-brand-white) 28%, transparent);
+        transform: translateY(-1px);
+        background: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--wso2-brand-white) 94%, var(--wso2-brand-accent)) 0%,
+            color-mix(in srgb, var(--wso2-brand-white) 84%, var(--wso2-brand-accent-soft)) 100%
+        );
     }
 `;
 
@@ -115,8 +170,8 @@ export const UserAvatar = styled.button`
     display: flex;
     align-items: center;
     justify-content: center;
-    background: color-mix(in srgb, var(--wso2-brand-white) 18%, transparent);
-    border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 45%, transparent);
+    background: var(--welcome-hero-surface);
+    border: 1.5px solid var(--welcome-hero-surface-border);
     cursor: pointer;
     user-select: none;
     transition: all 0.2s ease;
@@ -144,7 +199,7 @@ export const UserAvatarImg = styled.img`
 export const UserInitial = styled.span`
     font-size: 14px;
     font-weight: 700;
-    color: var(--wso2-brand-white);
+    color: var(--welcome-hero-foreground);
     line-height: 1;
     text-transform: uppercase;
 `;
@@ -153,13 +208,12 @@ export const UserInitial = styled.span`
 const GetStartedBadge = styled.div`
     display: inline-block;
     backdrop-filter: blur(10px);
-    background: color-mix(in srgb, var(--wso2-brand-accent) 20%, transparent);
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 65%, transparent);
+    background: var(--welcome-hero-badge-bg);
     border-radius: 20px;
     padding: 8px 16px;
     margin-bottom: 24px;
     font-size: 13px;
-    color: white;
+    color: var(--welcome-hero-foreground);
     font-weight: 500;
     width: 106px;
 `;
@@ -168,7 +222,7 @@ const Headline = styled.h1`
     font-size: 48px;
     font-weight: 700;
     margin: 0;
-    color: white;
+    color: var(--welcome-hero-foreground);
     line-height: 1.2;
 `;
 
@@ -176,7 +230,7 @@ const Caption = styled.p`
     font-size: 16px;
     line-height: 1.6;
     font-weight: 400;
-    color: var(--wso2-brand-neutral-100);
+    color: var(--welcome-hero-muted);
     margin: 16px 0 0 0;
     max-width: 800px;
 `;
@@ -256,6 +310,11 @@ const CardIcon = styled.div<CardIconProps>`
     color: white;
     flex-shrink: 0;
     pointer-events: none;
+    position: relative;
+    z-index: 1;
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 18%, transparent),
+        0 10px 18px color-mix(in srgb, var(--wso2-brand-neutral-900) 20%, transparent);
 
     i {
         font-size: 24px;
@@ -300,6 +359,8 @@ const StyledButton = styled('button', {
     color: ${(props: { isPrimary?: boolean }) =>
         props.isPrimary ? 'var(--vscode-button-foreground)' : 'var(--vscode-button-secondaryForeground)'};
     border: none;
+    box-shadow: ${(props: { isPrimary?: boolean }) =>
+        props.isPrimary ? 'none' : 'var(--button-secondary-shadow)'};
     transition: all 0.2s ease;
     cursor: pointer;
 
@@ -592,7 +653,7 @@ export const WelcomeView: React.FC = () => {
                 <CardsGrid>
                     <ActionCard onClick={goToCreateProject}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%)">
+                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, #35537d 100%)">
                                 <Codicon name="plus" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
@@ -611,7 +672,7 @@ export const WelcomeView: React.FC = () => {
 
                     <ActionCard onClick={handleProjectDirSelection}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink) 0%, var(--wso2-brand-ink-alt) 100%)">
+                            <CardIcon bgColor="linear-gradient(135deg, #0b1220 0%, var(--wso2-brand-ink-alt) 100%)">
                                 <Codicon name="file-text" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
@@ -629,7 +690,7 @@ export const WelcomeView: React.FC = () => {
 
                     <ActionCard onClick={goToSamples}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-ink-alt) 100%)">
+                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, #3a90bf 100%)">
                                 <Codicon name="symbol-class" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
@@ -647,7 +708,7 @@ export const WelcomeView: React.FC = () => {
 
                     <ActionCard onClick={goToImportExternal}>
                         <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-ink-alt) 100%)">
+                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent-soft) 0%, #4f84aa 100%)">
                                 <Codicon name="arrow-swap" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
                             </CardIcon>
                         </CardIconContainer>
