@@ -17,8 +17,8 @@
  */
 
 :root {
-	--wso2-brand-primary: #F14E23;
-	--wso2-brand-primary-alt: #FF6700;
+	--wso2-brand-primary: #17223A;
+	--wso2-brand-primary-alt: #1B2A49;
 	--wso2-brand-ink: #17223A;
 	--wso2-brand-ink-alt: #1B2A49;
 	--wso2-brand-accent: #5CD1FF;
@@ -32,8 +32,34 @@
 
 	--button-primary-background: var(--wso2-brand-primary);
 	--button-primary-hover-background: var(--wso2-brand-primary-alt);
-	--button-secondary-background: var(--wso2-brand-ink-alt);
-	--button-secondary-hover-background: var(--wso2-brand-ink);
+	--button-secondary-background: linear-gradient(
+		135deg,
+		color-mix(in srgb, var(--wso2-brand-accent-soft) 72%, var(--wso2-brand-white)) 0%,
+		color-mix(in srgb, var(--wso2-brand-accent) 16%, var(--wso2-brand-white)) 100%
+	);
+	--button-secondary-hover-background: linear-gradient(
+		135deg,
+		color-mix(in srgb, var(--wso2-brand-accent-soft) 82%, var(--wso2-brand-white)) 0%,
+		color-mix(in srgb, var(--wso2-brand-accent) 24%, var(--wso2-brand-white)) 100%
+	);
+	--button-secondary-shadow: 0 8px 18px color-mix(in srgb, var(--wso2-brand-accent) 14%, transparent);
+}
+
+body.vscode-dark,
+body.vscode-high-contrast {
+	--button-secondary-background: linear-gradient(
+		135deg,
+		color-mix(in srgb, var(--wso2-brand-accent) 22%, var(--wso2-brand-ink)) 0%,
+		color-mix(in srgb, var(--wso2-brand-accent-soft) 10%, var(--wso2-brand-ink-alt)) 100%
+	);
+	--button-secondary-hover-background: linear-gradient(
+		135deg,
+		color-mix(in srgb, var(--wso2-brand-accent) 30%, var(--wso2-brand-ink)) 0%,
+		color-mix(in srgb, var(--wso2-brand-accent-soft) 16%, var(--wso2-brand-ink-alt)) 100%
+	);
+	--button-secondary-shadow:
+		inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 8%, transparent),
+		0 10px 20px color-mix(in srgb, var(--wso2-brand-neutral-900) 24%, transparent);
 }
 
 body {
