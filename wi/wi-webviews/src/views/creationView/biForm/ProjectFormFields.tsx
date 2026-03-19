@@ -29,7 +29,7 @@ import {
     OptionalSectionsLabel,
     ResolvedPathText,
 } from "./styles";
-import { CollapsibleSection, PackageInfoSection } from "./components";
+import { PackageInfoSection } from "./components";
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
 import { ProjectFormData } from "./types";
 
@@ -80,7 +80,6 @@ export function ProjectFormFields({
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
     const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
-    const [isProjectSettingsExpanded, setIsProjectSettingsExpanded] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [defaultPath, setDefaultPath] = useState("");
     const [pathTouched, setPathTouched] = useState(false);
@@ -128,18 +127,15 @@ export function ProjectFormFields({
         onFormDataChange({ path: selectedDirectory.path });
     };
 
-    const handleProjectSettingsToggle = () => {
-        setIsProjectSettingsExpanded(!isProjectSettingsExpanded);
-    };
-
-    const handleCreateWithinProjectToggle = (checked: boolean) => {
+    const handleSkipProjectToggle = (checked: boolean) => {
         hasUserToggledCreateWithinProject.current = true;
         setPathTouched(false);
-        const updates: Partial<ProjectFormData> = { createWithinProject: checked };
-        if (checked && !formData.withinProjectName && formData.packageName) {
-            updates.withinProjectName = formData.packageName + "_project";
+        if (checked) {
+            onFormDataChange({ createWithinProject: false, withinProjectName: "" });
+        } else {
+            const projectName = formData.packageName ? formData.packageName + "_project" : "";
+            onFormDataChange({ createWithinProject: true, withinProjectName: projectName });
         }
-        onFormDataChange(updates);
     };
 
     useEffect(() => {
@@ -172,7 +168,6 @@ export function ProjectFormFields({
                 isProjectModeSupported
             ) {
                 hasAutoInitializedProjectMode.current = true;
-                setIsProjectSettingsExpanded(true);
                 const updates: Partial<ProjectFormData> = { createWithinProject: true };
                 if (!formData.withinProjectName && formData.packageName) {
                     updates.withinProjectName = formData.packageName + "_project";
@@ -228,6 +223,39 @@ export function ProjectFormFields({
                 />
             </FieldGroup>
 
+            {/* Project Name - shown by default when project mode is supported */}
+            {isProjectModeSupported && (
+                <FieldGroup>
+                    {formData.createWithinProject && (
+                        <div style={{ marginBottom: "12px" }}>
+                            <TextField
+                                onTextChange={(value) => {
+                                    setWithinProjectNameTouched(true);
+                                    setPathTouched(false);
+                                    if (withinProjectNameError) setWithinProjectNameError(null);
+                                    onFormDataChange({ withinProjectName: value });
+                                }}
+                                value={formData.withinProjectName}
+                                label="Project Name"
+                                placeholder="Enter project name"
+                                required={true}
+                                errorMsg={projectNameError ?? (withinProjectNameTouched && withinProjectNameError ? withinProjectNameError : "")}
+                            />
+                        </div>
+                    )}
+                    <CheckboxContainer style={{ margin: 0 }}>
+                        <CheckBox
+                            label="Skip create within a project"
+                            checked={!formData.createWithinProject}
+                            onChange={handleSkipProjectToggle}
+                        />
+                        <Description>
+                            Create the integration directly without a project. Use this for simple, single-purpose integrations that don't require project-level organization.
+                        </Description>
+                    </CheckboxContainer>
+                </FieldGroup>
+            )}
+
             <FieldGroup>
                 <DirectorySelector
                     id="project-folder-selector"
@@ -254,44 +282,6 @@ export function ProjectFormFields({
 
             <SectionDivider />
             <OptionalSectionsLabel>Optional Configurations</OptionalSectionsLabel>
-
-            {/* Project Section */}
-            {isProjectModeSupported && (
-                <CollapsibleSection
-                    isExpanded={isProjectSettingsExpanded}
-                    onToggle={handleProjectSettingsToggle}
-                    icon="folder"
-                    title="Project"
-                >
-                    <CheckboxContainer>
-                        <CheckBox
-                            label="Create within a project"
-                            checked={formData.createWithinProject}
-                            onChange={handleCreateWithinProjectToggle}
-                        />
-                        <Description>
-                            Wrap this integration inside a project, making it easy to add more integrations and libraries later.
-                        </Description>
-                    </CheckboxContainer>
-                    {formData.createWithinProject && (
-                        <FieldGroup>
-                            <TextField
-                                onTextChange={(value) => {
-                                    setWithinProjectNameTouched(true);
-                                    setPathTouched(false);
-                                    if (withinProjectNameError) setWithinProjectNameError(null);
-                                    onFormDataChange({ withinProjectName: value });
-                                }}
-                                value={formData.withinProjectName}
-                                label="Project Name"
-                                placeholder="Enter project name"
-                                required={true}
-                                errorMsg={projectNameError ?? (withinProjectNameTouched && withinProjectNameError ? withinProjectNameError : "")}
-                            />
-                        </FieldGroup>
-                    )}
-                </CollapsibleSection>
-            )}
 
             {/* Ballerina Package Section */}
             <PackageInfoSection
