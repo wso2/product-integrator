@@ -152,8 +152,8 @@ const CloneInfoCallout = styled.div`
     gap: 10px;
     padding: 12px 14px;
     border-radius: 8px;
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 30%, var(--vscode-panel-border));
-    background: color-mix(in srgb, var(--wso2-brand-primary) 6%, transparent);
+    border: 1px solid var(--vscode-panel-border);
+    background: color-mix(in srgb, var(--vscode-foreground) 4%, transparent);
     width: 100%;
     max-width: 420px;
     margin-bottom: 28px;
@@ -530,7 +530,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         wsClient
             .runCommand({
                 command: WICommandIds.CloneProject,
-                args: [{ organization: org, project: selectedProject, integrationType: true }],
+                args: [{ organization: org, project: selectedProject, integrationOnly: true }],
             })
             .then(() => {
                 setCloning(false);
@@ -544,6 +544,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                 // silent cancel rather than an error so the user can try again cleanly.
                 const msg = err instanceof Error ? err.message : String(err);
                 if (msg.toLowerCase().includes("directory is required") || msg.toLowerCase().includes("cancelled")) {
+                    setCloneSuccess(false);
                     return;
                 }
                 setCloningError(msg || "Cloning failed. Please try again.");
@@ -611,7 +612,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                         </CloneInfoCallout>
                     ) : cloneStage === "selecting_folder" ? (
                         <CloneInfoCallout>
-                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--wso2-brand-primary)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
+                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--vscode-descriptionForeground)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
                             <CalloutText>
                                 <CalloutTitle>Where should we put it?</CalloutTitle>
                                 <CalloutDesc>A folder picker is open in your editor — choose a local directory to clone into.</CalloutDesc>
@@ -619,7 +620,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                         </CloneInfoCallout>
                     ) : cloneStage === "fetching_components" ? (
                         <CloneInfoCallout>
-                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--wso2-brand-primary)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
+                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--vscode-descriptionForeground)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
                             <CalloutText>
                                 <CalloutTitle>Loading project details...</CalloutTitle>
                                 <CalloutDesc>Fetching the list of integrations in this project. Won't be long.</CalloutDesc>
@@ -627,7 +628,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                         </CloneInfoCallout>
                     ) : cloneStage === "selecting_component" ? (
                         <CloneInfoCallout>
-                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--wso2-brand-primary)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
+                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--vscode-descriptionForeground)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
                             <CalloutText>
                                 <CalloutTitle>Which integration to clone?</CalloutTitle>
                                 <CalloutDesc>A picker appeared in your editor — this project has multiple integrations. Select one to continue.</CalloutDesc>
@@ -635,17 +636,17 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                         </CloneInfoCallout>
                     ) : cloneStage === "cloning" ? (
                         <CloneInfoCallout>
-                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--wso2-brand-primary)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
+                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--vscode-descriptionForeground)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
                             <CalloutText>
                                 <CalloutTitle>Almost there!</CalloutTitle>
                                 <CalloutDesc>Cloning your repository into the selected folder. Hang on just a moment.</CalloutDesc>
                             </CalloutText>
                         </CloneInfoCallout>
                     ) : (
-                        <CloneInfoCallout>
+                        <CloneInfoCallout style={{ borderColor: "color-mix(in srgb, var(--vscode-editorInfo-foreground) 40%, var(--vscode-panel-border))", background: "color-mix(in srgb, var(--vscode-editorInfo-foreground) 6%, transparent)" }}>
                             <Codicon
                                 name="info"
-                                iconSx={{ fontSize: "15px", color: "var(--wso2-brand-primary)", marginTop: "1px" }}
+                                iconSx={{ fontSize: "15px", color: "var(--vscode-editorInfo-foreground)", marginTop: "1px" }}
                             />
                             <CalloutText>
                                 <CalloutTitle>Choose where to clone it</CalloutTitle>
