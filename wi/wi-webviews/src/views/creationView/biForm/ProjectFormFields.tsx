@@ -29,6 +29,7 @@ import {
     OptionalSectionsLabel,
 } from "./styles";
 import { CollapsibleSection, PackageInfoSection } from "./components";
+import { Organization } from "./components/PackageInfoSection";
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
 import { ProjectFormData } from "./types";
 
@@ -59,7 +60,7 @@ export interface ProjectFormFieldsProps {
     pathError?: string;
     projectNameError?: string;
     packageNameValidationError?: string;
-    selectedOrgName?: string;
+    organizations?: Organization[];
 }
 
 export function ProjectFormFields({
@@ -69,7 +70,7 @@ export function ProjectFormFields({
     pathError,
     projectNameError,
     packageNameValidationError,
-    selectedOrgName
+    organizations,
 }: ProjectFormFieldsProps) {
     const { wsClient } = useVisualizerContext();
     const isProjectModeSupported = useProjectModeSupported();
@@ -158,11 +159,15 @@ export function ProjectFormFields({
                 }
             }
             if (!formData.orgName) {
-                try {
-                    const { orgName } = await wsClient.getDefaultOrgName();
-                    onFormDataChange({ orgName });
-                } catch (error) {
-                    console.error("Failed to fetch default org name:", error);
+                if (organizations && organizations.length > 0) {
+                    onFormDataChange({ orgName: organizations[0].handle });
+                } else {
+                    try {
+                        const { orgName } = await wsClient.getDefaultOrgName();
+                        onFormDataChange({ orgName });
+                    } catch (error) {
+                        console.error("Failed to fetch default org name:", error);
+                    }
                 }
             }
             if (
@@ -189,7 +194,8 @@ export function ProjectFormFields({
         formData.packageName,
         formData.withinProjectName,
         formData.createWithinProject,
-        onFormDataChange
+        onFormDataChange,
+        organizations,
     ]);
 
     useEffect(() => {
@@ -310,7 +316,7 @@ export function ProjectFormFields({
                 }}
                 orgNameError={orgNameError}
                 packageNameError={packageNameValidationError || packageNameError}
-                selectedOrgName={selectedOrgName}
+                organizations={organizations}
             />
         </>
     );

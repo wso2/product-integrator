@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import styled from "@emotion/styled";
 import { Codicon, ProgressRing, ThemeColors } from "@wso2/ui-toolkit";
 import { WICommandIds } from "@wso2/wso2-platform-core";
@@ -305,6 +305,123 @@ const OpenLocalButton = styled.button`
     }
 `;
 
+// ── Org switcher ──────────────────────────────────────────────────────────────
+
+const OrgSwitcherWrapper = styled.div`
+    position: relative;
+    flex-shrink: 0;
+`;
+
+const OrgTriggerButton = styled.button<{ open: boolean }>`
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 10px 5px 6px;
+    border-radius: 20px;
+    border: 1px solid ${({ open }: { open: boolean }) =>
+        open
+            ? "color-mix(in srgb, var(--vscode-focusBorder) 55%, transparent)"
+            : "var(--vscode-widget-border, rgba(128,128,128,0.3))"};
+    background: ${({ open }: { open: boolean }) => (open ? "var(--vscode-list-hoverBackground)" : "transparent")};
+    color: var(--vscode-foreground);
+    font-size: 13px;
+    font-family: var(--vscode-font-family);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, border-color 0.15s ease;
+
+    &:hover {
+        background: var(--vscode-list-hoverBackground);
+        border-color: color-mix(in srgb, var(--vscode-focusBorder) 55%, transparent);
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
+`;
+
+const OrgAvatar = styled.div`
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--wso2-brand-white, #fff);
+    text-transform: uppercase;
+`;
+
+const OrgChevron = styled.span<{ open: boolean }>`
+    display: flex;
+    align-items: center;
+    opacity: 0.6;
+    transition: transform 0.15s ease;
+    transform: ${({ open }: { open: boolean }) => (open ? "rotate(180deg)" : "rotate(0deg)")};
+`;
+
+const OrgDropdownPanel = styled.div`
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 200px;
+    max-height: 260px;
+    overflow-y: auto;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--vscode-widget-shadow, #000) 20%, transparent);
+    z-index: 100;
+    padding: 4px;
+`;
+
+const OrgDropdownItem = styled.button<{ active: boolean }>`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 6px;
+    background: ${({ active }: { active: boolean }) =>
+        active ? "color-mix(in srgb, var(--wso2-brand-primary) 8%, transparent)" : "transparent"};
+    color: var(--vscode-foreground);
+    font-size: 13px;
+    font-family: var(--vscode-font-family);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s ease;
+
+    &:hover {
+        background: var(--vscode-list-hoverBackground);
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: -1px;
+    }
+`;
+
+const OrgDropdownItemName = styled.span`
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+`;
+
+const FormPanelHeaderRow = styled.div`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+`;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface OpenProjectViewProps {
@@ -313,7 +430,7 @@ interface OpenProjectViewProps {
 
 export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const { wsClient } = useVisualizerContext();
-    const { authState, contextState } = useCloudContext();
+    const { authState } = useCloudContext();
     const [projects, setProjects] = useState<CloudProject[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -322,14 +439,12 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const [cloneStage, setCloneStage] = useState<CloneProgressStage | null>(null);
     const [cloneSuccess, setCloneSuccess] = useState(false);
     const [cloningError, setCloningError] = useState<string | null>(null);
+    const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
 
-
-    const selectedOrgId = (authState as any)?.selectedOrgId;
-    const org =
-        (selectedOrgId &&
-            authState?.userInfo?.organizations?.find((o: any) => String(o.id) === String(selectedOrgId))) ||
-        contextState?.selected?.org ||
-        authState?.userInfo?.organizations?.[0];
+    const orgs = (authState?.userInfo?.organizations as Array<{ id: number | string; handle: string; name: string }> | undefined) ?? [];
+    const org = (selectedOrgId ? orgs.find((o) => String(o.id) === selectedOrgId) : null) ?? orgs[0];
+    const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
+    const orgSwitcherRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!authState?.userInfo) {
@@ -338,8 +453,25 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     }, [authState?.userInfo]);
 
     useEffect(() => {
+        setSelectedProject(null);
+        setCloneSuccess(false);
+        setCloningError(null);
+    }, [org?.id]);
+
+    useEffect(() => {
         return wsClient.onCloneProgress((stage) => setCloneStage(stage));
     }, [wsClient]);
+
+    useEffect(() => {
+        if (!orgDropdownOpen) return;
+        const handleMouseDown = (e: MouseEvent) => {
+            if (orgSwitcherRef.current && !orgSwitcherRef.current.contains(e.target as Node)) {
+                setOrgDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleMouseDown);
+        return () => document.removeEventListener("mousedown", handleMouseDown);
+    }, [orgDropdownOpen]);
 
     const fetchProjects = () => {
         if (!org) {
@@ -398,7 +530,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         wsClient
             .runCommand({
                 command: WICommandIds.CloneProject,
-                args: [{ organization: org, project: selectedProject, integrationOnly: true }],
+                args: [{ organization: org, project: selectedProject, integrationType: true }],
             })
             .then(() => {
                 setCloning(false);
@@ -654,7 +786,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     };
 
     const headerTitle = selectedProject ? "Clone Project" : "Open Project";
-    const panelTitle = selectedProject ? null : (org ? `Projects in ${org.name}` : "Cloud Projects");
+    const panelTitle = selectedProject ? null : "Cloud Projects";
     const panelSubtitle = !selectedProject && org ? "Select a project to clone it to your local machine." : null;
 
     return (
@@ -675,8 +807,52 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                     ) : (
                         <>
                             <FormPanelHeader>
-                                <FormPanelTitle>{panelTitle}</FormPanelTitle>
-                                {panelSubtitle && <FormPanelSubtitle>{panelSubtitle}</FormPanelSubtitle>}
+                                <FormPanelHeaderRow>
+                                    <div>
+                                        <FormPanelTitle>{panelTitle}</FormPanelTitle>
+                                        {panelSubtitle && <FormPanelSubtitle>{panelSubtitle}</FormPanelSubtitle>}
+                                    </div>
+                                    {orgs.length > 1 && (
+                                        <OrgSwitcherWrapper ref={orgSwitcherRef}>
+                                            <OrgTriggerButton
+                                                type="button"
+                                                open={orgDropdownOpen}
+                                                onClick={() => setOrgDropdownOpen((v) => !v)}
+                                                title="Switch organization"
+                                            >
+                                                <OrgAvatar>{org?.name?.charAt(0) ?? "?"}</OrgAvatar>
+                                                <span>{org?.name}</span>
+                                                <OrgChevron open={orgDropdownOpen}>
+                                                    <Codicon name="chevron-down" iconSx={{ fontSize: "12px" }} />
+                                                </OrgChevron>
+                                            </OrgTriggerButton>
+                                            {orgDropdownOpen && (
+                                                <OrgDropdownPanel>
+                                                    {orgs.map((o) => (
+                                                        <OrgDropdownItem
+                                                            key={o.id}
+                                                            type="button"
+                                                            active={String(o.id) === String(org?.id)}
+                                                            onClick={() => {
+                                                                setSelectedOrgId(String(o.id));
+                                                                setOrgDropdownOpen(false);
+                                                            }}
+                                                        >
+                                                            <OrgAvatar>{o.name.charAt(0)}</OrgAvatar>
+                                                            <OrgDropdownItemName>{o.name}</OrgDropdownItemName>
+                                                            {String(o.id) === String(org?.id) && (
+                                                                <Codicon
+                                                                    name="check"
+                                                                    iconSx={{ fontSize: "12px", color: "var(--wso2-brand-primary)", flexShrink: 0 }}
+                                                                />
+                                                            )}
+                                                        </OrgDropdownItem>
+                                                    ))}
+                                                </OrgDropdownPanel>
+                                            )}
+                                        </OrgSwitcherWrapper>
+                                    )}
+                                </FormPanelHeaderRow>
                             </FormPanelHeader>
                             <FormBody style={{ padding: 0 }}>
                                 {renderList()}

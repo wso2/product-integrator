@@ -281,7 +281,6 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                         pathError={singleIntegrationPathError || undefined}
                         packageNameValidationError={singleIntegrationPackageNameError || undefined}
                         projectNameError={projectNameError || undefined}
-                        selectedOrgName={selectedOrgName}
                     />
 
                     <ButtonWrapper>
