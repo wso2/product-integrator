@@ -93,7 +93,7 @@ const ConfigureBtn = styled.button`
     font-weight: 500;
     border-radius: 10px;
     padding: 0 24px;
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-white) 18%, transparent);
+    border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 28%, transparent);
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
@@ -120,44 +120,66 @@ const ConfigureBtn = styled.button`
         var(--wso2-brand-primary-alt) 100%
     );
     color: white;
-    box-shadow: 0 6px 16px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 10%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--wso2-brand-white) 6%, transparent),
+        0 8px 18px color-mix(in srgb, var(--wso2-brand-neutral-900) 18%, transparent);
 
     body.vscode-light & {
-        border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 20%, transparent);
+        border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 28%, transparent);
         background: linear-gradient(
             135deg,
             color-mix(in srgb, var(--wso2-brand-ink) 94%, var(--wso2-brand-accent-soft)) 0%,
             color-mix(in srgb, var(--wso2-brand-ink-alt) 96%, var(--wso2-brand-accent)) 100%
         );
         color: var(--wso2-brand-white);
-        box-shadow: 0 6px 16px color-mix(in srgb, var(--wso2-brand-ink-alt) 14%, transparent);
+        box-shadow:
+            inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 10%, transparent),
+            0 0 0 1px color-mix(in srgb, var(--wso2-brand-white) 24%, transparent),
+            0 8px 18px color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
     }
 `;
 
 const SigninBtn = styled(ConfigureBtn)`
-    height: 33px;
-    padding: 0 18px;
-    border-radius: 10px;
-    background: linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--wso2-brand-white) 98%, var(--wso2-brand-accent-soft)) 0%,
-        color-mix(in srgb, var(--wso2-brand-white) 90%, var(--wso2-brand-accent-soft)) 100%
-    );
-    border: 2px solid color-mix(in srgb, var(--wso2-brand-ink-alt) 40%, var(--wso2-brand-accent) 44%);
-    color: var(--wso2-brand-ink);
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 76%, transparent),
-        0 0 0 1px color-mix(in srgb, var(--wso2-brand-accent-soft) 24%, transparent),
-        0 8px 18px color-mix(in srgb, var(--wso2-brand-accent) 14%, transparent);
+    && {
+        height: 33px;
+        padding: 0 18px;
+        border-radius: 10px;
+        background: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--wso2-brand-white) 18%, transparent) 0%,
+            color-mix(in srgb, var(--wso2-brand-white) 10%, transparent) 100%
+        );
+        border: 2px solid color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
+        color: var(--wso2-brand-white);
+        box-shadow:
+            inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 24%, transparent),
+            0 0 0 1px color-mix(in srgb, var(--wso2-brand-white) 10%, transparent),
+            0 8px 18px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
+    }
 
-    &:hover:not(:disabled) {
+    body.vscode-light && {
+        background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+        border: 2px solid color-mix(in srgb, var(--wso2-brand-accent) 58%, var(--wso2-brand-primary-alt) 18%);
+        color: var(--wso2-brand-ink);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.92),
+            0 0 0 1px color-mix(in srgb, var(--wso2-brand-accent-soft) 50%, transparent),
+            0 8px 18px color-mix(in srgb, var(--wso2-brand-accent) 20%, transparent);
+    }
+
+    &&:hover {
         filter: none;
         transform: translateY(-1px);
         background: linear-gradient(
             180deg,
-            color-mix(in srgb, var(--wso2-brand-white) 94%, var(--wso2-brand-accent)) 0%,
-            color-mix(in srgb, var(--wso2-brand-white) 84%, var(--wso2-brand-accent-soft)) 100%
+            color-mix(in srgb, var(--wso2-brand-white) 24%, transparent) 0%,
+            color-mix(in srgb, var(--wso2-brand-white) 14%, transparent) 100%
         );
+    }
+
+    body.vscode-light &&:hover {
+        background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
     }
 `;
 
