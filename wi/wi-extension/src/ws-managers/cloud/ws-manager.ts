@@ -36,6 +36,8 @@ import {
 	type IsRepoAuthorizedResp,
 	type CloneRepositoryIntoCompDirReq,
 	type GetConfigFileDriftsReq,
+	type GetCloudProjectsReq,
+	type GetCloudProjectsResp,
 	ViewType,
 	COMMANDS,
 	WICloudAPI,
@@ -118,7 +120,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			
 			await ext.context.globalState.update("selectedOrgId", orgId);
 
-			ext.authProvider.getState().loginSuccess(userInfo, region);
+			await ext.authProvider.getState().loginSuccess(userInfo, region);
 		} catch (error) {
 			console.error("Failed to change org context", error);
 			throw error;
@@ -333,6 +335,18 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 	async getConsoleUrl(): Promise<string> {
 		return ext.config?.devantConsoleUrl;
+	}
+
+	async getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
+		const projects = await ext.clients.rpcClient.getProjects(params.orgId);
+		return {
+			projects: (projects ?? []).map((p) => ({
+				id: p.id,
+				name: p.name,
+				handler: p.handler,
+				description: p.description ?? "",
+			})),
+		};
 	}
 
 	async getDefaultOrgName(): Promise<DefaultOrgNameResponse> {

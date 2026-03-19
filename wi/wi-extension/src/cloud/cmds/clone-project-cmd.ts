@@ -30,6 +30,7 @@ import {
 } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, type QuickPickItem, QuickPickItemKind, Uri, commands, window } from "vscode";
 import { ext } from "../../extensionVariables";
+import { BridgeLayer } from "../../BridgeLayer";
 import { initGit } from "../git/main";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { createDirectory, openDirectory } from "../../utils/pathUtils";
@@ -54,6 +55,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 							`Select the project from '${selectedOrg.name}', that needs to be cloned`,
 						));
 
+					BridgeLayer.notifyCloneProgress("selecting_folder");
 					const cloneDir = await window.showOpenDialog({
 						canSelectFolders: true,
 						canSelectFiles: false,
@@ -69,6 +71,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 					const selectedCloneDir = cloneDir[0];
 					const projectCache = dataCacheStore.getState().getProjects(selectedOrg.handle);
 
+					BridgeLayer.notifyCloneProgress("fetching_components");
 					let components: ComponentKind[] = [];
 					if (params?.component) {
 						components = [params?.component];
@@ -112,21 +115,30 @@ export function cloneRepoCommand(context: ExtensionContext) {
 					}
 
 					if (repoSet.size > 1) {
-						const quickPickOptions: QuickPickItem[] = [
-							{
-								label: "Clone entire project",
-								detail: "Clone all the repositories associated with the selected project",
-								picked: true,
-							},
-							{ kind: QuickPickItemKind.Separator, label: `Clone ${ext.terminologies?.articleComponentTerm} of the project` },
-							...components.map((item) => ({
-								label: item.metadata.name,
-								detail: `Repository: ${getComponentKindRepoSource(item.spec.source).repo}`,
-								item,
-							})),
-						];
+						BridgeLayer.notifyCloneProgress("selecting_component");
+						const componentItems: QuickPickItem[] = components.map((item) => ({
+							label: item.metadata.name,
+							detail: `Repository: ${getComponentKindRepoSource(item.spec.source).repo}`,
+							item,
+						}));
+						const quickPickOptions: QuickPickItem[] = params?.integrationOnly
+							? componentItems
+							: [
+									{
+										label: "Clone entire project",
+										detail: "Clone all the repositories associated with the selected project",
+										picked: true,
+									},
+									{ kind: QuickPickItemKind.Separator, label: `Clone ${ext.terminologies?.articleComponentTerm} of the project` },
+									...componentItems,
+							  ];
+						const componentTermPlural = ext.terminologies?.componentTermPlural ?? "integrations";
+						const articleComponentTerm = ext.terminologies?.articleComponentTerm ?? "an integration";
 						const selection = await window.showQuickPick(quickPickOptions, {
-							title: "Select an option",
+							title: params?.integrationOnly ? "Select an integration or library to open" : "Select an option",
+							placeHolder: params?.integrationOnly
+								? `This project contains ${componentTermPlural} across multiple repositories. Select which ${articleComponentTerm} you'd like to clone and open.`
+								: undefined,
 						});
 
 						if (selection?.label === "Clone entire project") {
@@ -141,6 +153,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 						}
 					}
 
+					BridgeLayer.notifyCloneProgress("cloning");
 					let selectedRepoUrl = "";
 					if (repoSet.size === 1) {
 						[selectedRepoUrl] = repoSet;

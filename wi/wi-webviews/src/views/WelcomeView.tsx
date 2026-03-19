@@ -38,13 +38,14 @@ import {
 } from "./shared/runtime";
 
 enum ViewState {
-	WELCOME = "welcome",
-	CREATE_INTEGRATION = "create_integration",
-	SAMPLES = "samples",
-	IMPORT_EXTERNAL = "import_external",
-	CREATE_LIBRARY = "create_library",
-	CREATE_PROJECT = "create_project",
-	SETTINGS = "settings",
+    WELCOME = "welcome",
+    CREATE_INTEGRATION = "create_integration",
+    SAMPLES = "samples",
+    IMPORT_EXTERNAL = "import_external",
+    CREATE_LIBRARY = "create_library",
+    CREATE_PROJECT = "create_project",
+    SETTINGS = "settings",
+    OPEN_PROJECT = "open_project",
 }
 
 const Wrapper = styled.div`
@@ -806,6 +807,17 @@ export const WelcomeView: React.FC = () => {
 		};
 
 		fetchRecentProjects();
+
+        const handleProjectDirSelection = async () => {
+            if (authState?.userInfo) {
+                setCurrentView(ViewState.OPEN_PROJECT);
+            } else {
+                const response = await wsClient.selectFileOrDirPath({});
+                if (response?.path) {
+                    wsClient.openFolder(response.path);
+                }
+            }
+        };
 
 		return () => {
 			isDisposed = true;

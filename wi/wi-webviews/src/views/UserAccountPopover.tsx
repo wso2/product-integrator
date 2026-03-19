@@ -253,6 +253,9 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose, onOrgSwitch }: U
         setLocalSelectedOrgId(String(org.id));
         try {
             await wsClient.changeOrgContext(String(org.id));
+            queryClient.setQueryData(["cloud_auth_state"], (old: any) =>
+                old ? { ...old, selectedOrgId: String(org.id) } : old
+            );
             onOrgSwitch?.(String(org.id), org.name);
             onClose();
         } catch (error) {

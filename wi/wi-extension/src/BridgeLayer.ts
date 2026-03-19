@@ -51,6 +51,7 @@ import {
     WIWsResponseMessage,
     WebviewContext,
     WITransportBootstrap,
+    CloneProgressStage,
 } from "@wso2/wi-core";
 import type {
     AuthState,
@@ -64,6 +65,7 @@ import type {
     GetGitMetadataReq,
     IsRepoAuthorizedReq,
     WICloudSubmitComponentsReq,
+    GetCloudProjectsReq,
 } from "@wso2/wi-core";
 import { MainWsManager } from "./ws-managers/main/ws-manager";
 import { CloudWsManager } from "./ws-managers/cloud/ws-manager";
@@ -137,6 +139,13 @@ export class BridgeLayer {
         this.publish(projectUri, {
             type: WI_BRIDGE_EVENTS.MIGRATED_PROJECT,
             project,
+        });
+    }
+
+    static notifyCloneProgress(stage: CloneProgressStage, projectUri: string = "global"): void {
+        this.publish(projectUri, {
+            type: WI_BRIDGE_EVENTS.CLONE_PROGRESS,
+            stage,
         });
     }
 
@@ -326,6 +335,9 @@ export class BridgeLayer {
             cloudManager.cloneRepositoryIntoCompDir(request.params as CloneRepositoryIntoCompDirReq)
         );
         registerRoute("getConsoleUrl", async () => cloudManager.getConsoleUrl());
+        registerRoute("getCloudProjects", async (request) =>
+            cloudManager.getCloudProjects(request.params as GetCloudProjectsReq)
+        );
 
         return router;
     }
