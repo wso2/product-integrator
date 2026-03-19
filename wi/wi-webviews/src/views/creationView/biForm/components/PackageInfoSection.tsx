@@ -68,9 +68,8 @@ export function PackageInfoSection({
         <CollapsibleSection
             isExpanded={isExpanded}
             onToggle={onToggle}
-            icon="package"
-            title="Package Information"
-            subtitle={data.orgName || undefined}
+            icon="gear"
+            title="Advanced Configurations"
         >
             <Note style={{ marginBottom: "16px" }}>
                 {`This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Define the organization and version that will be assigned to it. `}

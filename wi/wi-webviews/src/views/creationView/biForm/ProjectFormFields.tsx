@@ -26,7 +26,6 @@ import {
     CheckboxContainer,
     Description,
     SectionDivider,
-    OptionalSectionsLabel,
     ResolvedPathText,
 } from "./styles";
 import { PackageInfoSection } from "./components";
@@ -287,7 +286,6 @@ export function ProjectFormFields({
             </FieldGroup>
 
             <SectionDivider />
-            <OptionalSectionsLabel>Optional Configurations</OptionalSectionsLabel>
 
             {/* Ballerina Package Section */}
             <PackageInfoSection

@@ -24,7 +24,7 @@ import { useCloudContext, useProjectModeSupported, useWorkspaceRoot } from "../.
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { PackageInfoSection } from "./components";
-import { SectionDivider, OptionalSectionsLabel, CheckboxContainer, Description, ResolvedPathText } from "./styles";
+import { SectionDivider, CheckboxContainer, Description, ResolvedPathText } from "./styles";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -331,7 +331,6 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                             </FieldGroup>
 
                             <SectionDivider />
-                            <OptionalSectionsLabel>Optional Configurations</OptionalSectionsLabel>
 
                             <PackageInfoSection
                                 isExpanded={isPackageInfoExpanded}
