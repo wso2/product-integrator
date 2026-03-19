@@ -16,19 +16,12 @@
  * under the License.
  */
 
-import { useEffect, useMemo, useState } from "react";
 import styled from "@emotion/styled";
 import { Popover, ThemeColors, VSCodeColors, Button, Codicon } from "@wso2/ui-toolkit";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
 import { WICommandIds } from "@wso2/wso2-platform-core";
-
-interface UserOrganization {
-    id?: number | string;
-    uuid?: string;
-    name: string;
-}
 
 const PopoverContent = styled.div`
     min-width: 220px;
@@ -141,91 +134,17 @@ const RowValueButton = styled(RowValue)`
     }
 `;
 
-const OrgList = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    max-height: 160px;
-    overflow-y: auto;
-    margin: 0 -4px;
-`;
-
-const OrgItem = styled.button<{ isSelected?: boolean }>`
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    border: none;
-    background: ${(p: { isSelected?: boolean }) =>
-        p.isSelected ? "var(--vscode-list-activeSelectionBackground)" : "transparent"};
-    color: ${(p: { isSelected?: boolean }) =>
-        p.isSelected ? "var(--vscode-list-activeSelectionForeground)" : "var(--vscode-foreground)"};
-    border-radius: 4px;
-    padding: 6px 8px;
-    text-align: left;
-    cursor: pointer;
-
-    &:hover:not(:disabled) {
-        background: var(--vscode-list-hoverBackground);
-    }
-
-    &:disabled {
-        cursor: default;
-    }
-`;
-
-const OrgItemName = styled.span`
-    flex: 1;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    font-size: 12px;
-`;
-
-const OrgErrorText = styled.div`
-    font-size: 11px;
-    color: var(--vscode-errorForeground);
-    padding: 4px 2px 0;
-`;
 
 export interface UserAccountPopoverProps {
     isOpen: boolean;
     anchorEl: HTMLElement | null;
     onClose: () => void;
-    onOrgSwitch?: (orgId: string, orgName: string) => void;
 }
 
-export function UserAccountPopover({ isOpen, anchorEl, onClose, onOrgSwitch }: UserAccountPopoverProps) {
+export function UserAccountPopover({ isOpen, anchorEl, onClose }: UserAccountPopoverProps) {
     const { wsClient } = useVisualizerContext();
     const { authState, contextState } = useCloudContext();
     const queryClient = useQueryClient();
-    const [isSwitchingOrg, setIsSwitchingOrg] = useState(false);
-    const [localSelectedOrgId, setLocalSelectedOrgId] = useState<string | null>(null);
-    const [orgSwitchError, setOrgSwitchError] = useState<string | null>(null);
-
-    const organizations = useMemo(
-        () => ((authState?.userInfo?.organizations || []) as UserOrganization[]).filter((org) => Boolean(org?.name)),
-        [authState?.userInfo?.organizations]
-    );
-
-    const selectedOrgId = localSelectedOrgId != null ? localSelectedOrgId : (authState as any)?.selectedOrgId ?? contextState?.selected?.org?.id;
-
-    // Clear error when popover closes
-    useEffect(() => {
-        if (!isOpen) {
-            setOrgSwitchError(null);
-        }
-    }, [isOpen]);
-
-    // Sync from authState when an external update arrives (e.g. AUTH_STATE_CHANGED)
-    useEffect(() => {
-        const incoming = (authState as any)?.selectedOrgId;
-        if (incoming && incoming !== localSelectedOrgId) {
-            setLocalSelectedOrgId(String(incoming));
-        } else if (incoming == null) {
-            setLocalSelectedOrgId(null);
-        }
-    }, [(authState as any)?.selectedOrgId]);
 
     const handleSignOut = () => {
         queryClient.setQueryData(["cloud_auth_state"], (old: any) =>
@@ -240,35 +159,6 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose, onOrgSwitch }: U
     const handleSwitchProject = () => {
         wsClient.runCommand({ command: WICommandIds.ManageDirectoryContext, args: [{ onlyShowSwitchProject: true }] });
         onClose();
-    };
-
-    const handleSwitchOrg = async (org: UserOrganization) => {
-        if (!org?.id || String(org.id) === String(selectedOrgId) || isSwitchingOrg) {
-            return;
-        }
-
-        const previousOrgId = localSelectedOrgId;
-        setOrgSwitchError(null);
-        setIsSwitchingOrg(true);
-        setLocalSelectedOrgId(String(org.id));
-        try {
-            await wsClient.changeOrgContext(String(org.id));
-            queryClient.setQueryData(["cloud_auth_state"], (old: any) =>
-                old ? { ...old, selectedOrgId: String(org.id) } : old
-            );
-            onOrgSwitch?.(String(org.id), org.name);
-            onClose();
-        } catch (error) {
-            console.error("Failed to switch organization", error);
-            setOrgSwitchError("Unable to switch organization right now.");
-            setLocalSelectedOrgId(previousOrgId);
-            if (previousOrgId) {
-                const prevOrg = organizations.find((o) => String(o.id) === previousOrgId);
-                if (prevOrg) onOrgSwitch?.(previousOrgId, prevOrg.name);
-            }
-        } finally {
-            setIsSwitchingOrg(false);
-        }
     };
 
     return (
@@ -305,44 +195,6 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose, onOrgSwitch }: U
                         <Codicon name="sign-out" iconSx={{ color: ThemeColors.ERROR }} />
                     </Button>
                 </UserHeader>
-
-                {organizations.length > 0 && (
-                    <ContextSection>
-                        <SectionLabel>Organization</SectionLabel>
-                        {organizations.length === 1 ? (
-                            <RowValue>{organizations[0].name}</RowValue>
-                        ) : (
-                            <OrgList>
-                                {organizations.map((org) => {
-                                    const isSelected = String(org.id) === String(selectedOrgId);
-                                    return (
-                                        <OrgItem
-                                            type="button"
-                                            key={String(org.id || org.uuid || org.name)}
-                                            isSelected={isSelected}
-                                            disabled={isSwitchingOrg || isSelected}
-                                            onClick={() => handleSwitchOrg(org)}
-                                        >
-                                            <OrgItemName title={org.name}>{org.name}</OrgItemName>
-                                            {isSelected && (
-                                                <Codicon
-                                                    name={isSwitchingOrg ? "loading" : "check"}
-                                                    iconSx={{
-                                                        fontSize: 12,
-                                                        ...(isSwitchingOrg && {
-                                                            animation: "codicon-spin 1.5s steps(30) infinite",
-                                                        }),
-                                                    }}
-                                                />
-                                            )}
-                                        </OrgItem>
-                                    );
-                                })}
-                            </OrgList>
-                        )}
-                        {orgSwitchError && <OrgErrorText>{orgSwitchError}</OrgErrorText>}
-                    </ContextSection>
-                )}
 
                 {contextState?.selected?.project && (
                     <ContextSection>

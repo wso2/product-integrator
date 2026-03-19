@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { TextField } from "@wso2/ui-toolkit";
+import { Dropdown, TextField } from "@wso2/ui-toolkit";
 import { FieldGroup, Note } from "../styles";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { sanitizePackageName } from "../utils";
@@ -25,6 +25,12 @@ export interface PackageInfoData {
     packageName: string;
     orgName: string;
     version: string;
+}
+
+export interface Organization {
+    id?: number | string;
+    handle: string;
+    name: string;
 }
 
 export interface PackageInfoSectionProps {
@@ -42,8 +48,8 @@ export interface PackageInfoSectionProps {
     orgNameError?: string | null;
     /** Error message for package name validation */
     packageNameError?: string | null;
-    /** Selected organization from global org switcher */
-    selectedOrgName?: string;
+    /** Organizations list — when provided, renders a dropdown instead of a free-text field */
+    organizations?: Organization[];
 }
 
 export function PackageInfoSection({
@@ -54,9 +60,9 @@ export function PackageInfoSection({
     isLibrary,
     orgNameError,
     packageNameError,
-    selectedOrgName
+    organizations,
 }: PackageInfoSectionProps) {
-    const resolvedOrgName = selectedOrgName || data.orgName;
+    const hasOrgs = organizations && organizations.length > 0;
 
     return (
         <CollapsibleSection
@@ -64,7 +70,7 @@ export function PackageInfoSection({
             onToggle={onToggle}
             icon="package"
             title="Package Information"
-            subtitle={resolvedOrgName || undefined}
+            subtitle={data.orgName || undefined}
         >
             <Note style={{ marginBottom: "16px" }}>
                 {`This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Define the organization and version that will be assigned to it. `}
@@ -79,18 +85,23 @@ export function PackageInfoSection({
                 />
             </FieldGroup>
             <FieldGroup>
-                <TextField
-                    onTextChange={(value) => {
-                        if (!selectedOrgName) {
-                            onChange({ orgName: value });
-                        }
-                    }}
-                    value={resolvedOrgName}
-                    label="Organization Name"
-                    description="The organization that owns this Ballerina package."
-                    errorMsg={orgNameError || undefined}
-                    disabled={!!selectedOrgName}
-                />
+                {hasOrgs ? (
+                    <Dropdown
+                        id="org-name-dropdown"
+                        label="Organization Name"
+                        items={organizations.map((org) => ({ value: org.handle, content: org.name }))}
+                        value={data.orgName}
+                        onValueChange={(value: string) => onChange({ orgName: value })}
+                    />
+                ) : (
+                    <TextField
+                        onTextChange={(value) => onChange({ orgName: value })}
+                        value={data.orgName}
+                        label="Organization Name"
+                        description="The organization that owns this Ballerina package."
+                        errorMsg={orgNameError || undefined}
+                    />
+                )}
             </FieldGroup>
             <FieldGroup>
                 <TextField

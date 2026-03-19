@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "./WelcomeView.css";
 import styled from "@emotion/styled";
 import { Codicon } from "@wso2/ui-toolkit";
@@ -28,7 +28,7 @@ import { LibraryCreationView } from "./creationView/biForm/LibraryCreationView";
 import { ProjectCreationView } from "./creationView/biForm/ProjectCreationView";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
-import { WICommandIds, type AuthState } from "@wso2/wso2-platform-core";
+import { WICommandIds } from "@wso2/wso2-platform-core";
 import { UserAccountPopover } from "./UserAccountPopover";
 import { OpenProjectView } from "./OpenProjectView";
 
@@ -186,20 +186,6 @@ const Caption = styled.p`
     max-width: 800px;
 `;
 
-const OrgBadge = styled.div`
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 20px;
-    align-self: flex-start;
-    padding: 5px 12px 5px 8px;
-    border-radius: 20px;
-    background: color-mix(in srgb, var(--wso2-brand-white) 10%, transparent);
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-white) 22%, transparent);
-    font-size: 12px;
-    color: color-mix(in srgb, var(--wso2-brand-white) 75%, transparent);
-`;
-
 const CardsContainer = styled.div`
     padding: 0 60px 60px;
     margin-top: -40px;
@@ -231,10 +217,6 @@ interface RecentProject {
     label: string;
     description?: string;
     isWorkspace?: boolean;
-}
-
-interface ExtendedAuthState extends AuthState {
-    selectedOrgId?: string;
 }
 
 const ActionCard = styled.div<ActionCardProps>`
@@ -582,47 +564,12 @@ const MoreToggleButton = styled.button`
 export const WelcomeView: React.FC = () => {
     const { wsClient } = useVisualizerContext();
     const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
-    const { authState, contextState } = useCloudContext();
+    const { authState } = useCloudContext();
     const [popoverOpen, setPopoverOpen] = useState(false);
     const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
     const [isRecentProjectsLoaded, setIsRecentProjectsLoaded] = useState(false);
     const [showSecondary, setShowSecondary] = useState(false);
-    const [localOrgName, setLocalOrgName] = useState<string | null>(null);
     const avatarRef = useRef<HTMLButtonElement>(null);
-
-    const selectedOrgName = useMemo(() => {
-        if (localOrgName) return localOrgName;
-        const extendedAuthState = authState as ExtendedAuthState | undefined;
-        const orgId = extendedAuthState?.selectedOrgId || contextState?.selected?.org?.id;
-        if (orgId && authState?.userInfo?.organizations) {
-            const match = (authState.userInfo.organizations as Array<{ id?: any; name: string }>)
-                .find((o) => String(o.id) === String(orgId));
-            if (match?.name) return match.name;
-        }
-        return contextState?.selected?.org?.name ?? null;
-    }, [localOrgName, authState, contextState?.selected?.org?.id, contextState?.selected?.org?.name]);
-
-    useEffect(() => {
-        if (!localOrgName) return;
-
-        const extendedAuthState = authState as ExtendedAuthState | undefined;
-        const orgId = extendedAuthState?.selectedOrgId || contextState?.selected?.org?.id;
-        let derivedName: string | null = null;
-
-        if (orgId && authState?.userInfo?.organizations) {
-            const match = (authState.userInfo.organizations as Array<{ id?: any; name: string }>)
-                .find((o) => String(o.id) === String(orgId));
-            if (match?.name) derivedName = match.name;
-        }
-
-        if (!derivedName) {
-            derivedName = contextState?.selected?.org?.name ?? null;
-        }
-
-        if (derivedName && derivedName === localOrgName) {
-            setLocalOrgName(null);
-        }
-    }, [authState, contextState?.selected?.org?.id, contextState?.selected?.org?.name, localOrgName]);
 
     useEffect(() => {
         if (currentView !== ViewState.WELCOME) {
@@ -746,12 +693,6 @@ export const WelcomeView: React.FC = () => {
                 <Caption>
                     Connect any system across your business, build AI agents, and orchestrate AI-enabled workflows with the 100% open source and AI-native WSO2 Integrator.
                 </Caption>
-                {selectedOrgName && (
-                    <OrgBadge>
-                        <Codicon name="organization" iconSx={{ fontSize: 12, color: "color-mix(in srgb, var(--wso2-brand-white) 75%, transparent)" }} />
-                        {selectedOrgName}
-                    </OrgBadge>
-                )}
             </TopSection>
 
             <CardsContainer>
@@ -907,7 +848,6 @@ export const WelcomeView: React.FC = () => {
                 isOpen={popoverOpen}
                 anchorEl={avatarRef.current}
                 onClose={() => setPopoverOpen(false)}
-                onOrgSwitch={(_id, name) => setLocalOrgName(name)}
             />
         </>
     );
