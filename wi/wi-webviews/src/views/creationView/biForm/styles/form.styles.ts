@@ -268,3 +268,10 @@ export const Note = styled.div`
     border-left: 3px solid var(--vscode-textBlockQuote-border);
     border-radius: 0 4px 4px 0;
 `;
+
+export const ResolvedPathText = styled.div`
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 6px;
+    word-break: break-all;
+`;

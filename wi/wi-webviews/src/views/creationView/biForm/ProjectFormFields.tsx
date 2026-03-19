@@ -27,6 +27,7 @@ import {
     Description,
     SectionDivider,
     OptionalSectionsLabel,
+    ResolvedPathText,
 } from "./styles";
 import { CollapsibleSection, PackageInfoSection } from "./components";
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
@@ -98,7 +99,7 @@ export function ProjectFormFields({
         return joinPath(base, formData.packageName);
     };
 
-    const displayedPath = pathTouched ? editablePath : computeDisplayedPath();
+    const resolvedPath = computeDisplayedPath();
 
     useEffect(() => {
         if (!pathTouched) {
@@ -232,7 +233,7 @@ export function ProjectFormFields({
                     id="project-folder-selector"
                     label="Select Path"
                     placeholder="Browse to select a folder..."
-                    selectedPath={displayedPath}
+                    selectedPath={editablePath}
                     required={true}
                     onSelect={handleProjectDirSelection}
                     onChange={(value) => {
@@ -246,6 +247,9 @@ export function ProjectFormFields({
                     }}
                     errorMsg={pathError || undefined}
                 />
+                {resolvedPath && resolvedPath !== editablePath && (
+                    <ResolvedPathText>Will be created at: {resolvedPath}</ResolvedPathText>
+                )}
             </FieldGroup>
 
             <SectionDivider />

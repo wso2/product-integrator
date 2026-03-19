@@ -24,7 +24,7 @@ import { useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { CollapsibleSection, PackageInfoSection } from "./components";
-import { SectionDivider, OptionalSectionsLabel, CheckboxContainer, Description } from "./styles";
+import { SectionDivider, OptionalSectionsLabel, CheckboxContainer, Description, ResolvedPathText } from "./styles";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -122,7 +122,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         return joinPath(base, formData.packageName);
     };
 
-    const displayedPath = pathTouched ? formData.path : computeDisplayedPath();
+    const resolvedPath = computeDisplayedPath();
 
     const handleLibraryName = (value: string) => {
         if (libraryNameError) setLibraryNameError(null);
@@ -279,7 +279,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                     id="library-folder-selector"
                                     label="Select Path"
                                     placeholder="Browse to select a folder..."
-                                    selectedPath={displayedPath}
+                                    selectedPath={formData.path || defaultPath}
                                     required={true}
                                     onSelect={handlePathSelection}
                                     onChange={(value) => {
@@ -289,6 +289,9 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                     }}
                                     errorMsg={pathError || undefined}
                                 />
+                                {resolvedPath && resolvedPath !== (formData.path || defaultPath) && (
+                                    <ResolvedPathText>Will be created at: {resolvedPath}</ResolvedPathText>
+                                )}
                             </FieldGroup>
 
                             <SectionDivider />
