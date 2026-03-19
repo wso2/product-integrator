@@ -3,6 +3,8 @@ set -euo pipefail
 
 # Accept version as first arg, default to 1.0.0
 VERSION=${1:-"1.0.0"}
+WI_EXTENSION_VERSION=$(node -p "require('./wi/wi-extension/package.json').version")
+WI_EXTENSION_VSIX_PATH="../../wi/wi-extension/wso2-integrator-${WI_EXTENSION_VERSION}.vsix"
 
 echo '{
     "commit": "'$VERSION'",
@@ -99,7 +101,7 @@ echo '{
       },
       {
         "name": "wso2.wso2-integrator",
-        "vsix": "../../wi/wi-extension/wso2-integrator-1.0.0.vsix",
+        "vsix": "'$WI_EXTENSION_VSIX_PATH'",
         "version": "latest"
       }
 	  ],
