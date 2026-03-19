@@ -16,12 +16,17 @@
  * under the License.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
-import { Button, Codicon, Dropdown, SearchBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react";
+import { Button, Codicon, Dropdown, SearchBox } from "@wso2/ui-toolkit";
+import {
+	GettingStartedCategory,
+	GettingStartedSample,
+	SampleDownloadRequest,
+} from "@wso2/wi-core";
+import React, { useEffect, useMemo, useState } from "react";
 import { useVisualizerContext } from "../../contexts/WsContext";
-import { GettingStartedCategory, GettingStartedSample, SampleDownloadRequest } from "@wso2/wi-core";
+import type { SampleSupportedRuntime } from "../shared/runtime";
 
 const SamplesRoot = styled.div`
     display: flex;
@@ -301,7 +306,7 @@ function CategoryArtwork({ imageUrl, label }: CategoryArtworkProps) {
 }
 
 export interface SamplesContainerProps {
-    projectType: "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
+    projectType: SampleSupportedRuntime;
 }
 
 export function SamplesContainer(props: SamplesContainerProps) {
@@ -330,8 +335,8 @@ export function SamplesContainer(props: SamplesContainerProps) {
                 const nextCategories = [{ id: 0, title: "All", icon: "" }, ...(response?.categories ?? [])];
                 const sampleIconBaseUrl =
                     props.projectType === "WSO2: MI"
-                        ? webviewContext?.env?.MI_SAMPLE_ICONS_GITHUB_URL ?? ""
-                        : webviewContext?.env?.BI_SAMPLE_ICONS_GITHUB_URL ?? "";
+                        ? (webviewContext?.env?.MI_SAMPLE_ICONS_GITHUB_URL ?? "")
+                        : (webviewContext?.env?.BI_SAMPLE_ICONS_GITHUB_URL ?? "");
 
                 const nextCategoryImages: Record<number, string> = {};
                 for (const category of nextCategories) {
@@ -369,7 +374,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
     ]);
 
     const selectedCategoryId = useMemo(() => {
-        return categories.find((category) => category.title === selectedCategory)?.id ?? 0;
+        return (categories.find((category) => category.title === selectedCategory)?.id ?? 0);
     }, [categories, selectedCategory]);
 
     const categoryTitleById = useMemo(() => {
