@@ -20,7 +20,7 @@ import { useState, useEffect } from "react";
 import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
-import { useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
+import { useCloudContext, useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { PackageInfoSection } from "./components";
@@ -57,6 +57,8 @@ interface LibraryFormData {
 
 export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
+    const { authState } = useCloudContext();
+    const organizations = (authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined);
     const isProjectModeSupported = useProjectModeSupported();
     const { path: workspacePath, isReady: workspaceReady } = useWorkspaceRoot();
     const [packageNameTouched, setPackageNameTouched] = useState(false);
@@ -86,11 +88,15 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             setDefaultPath(dp);
             setFormData(prev => ({ ...prev, path: dp }));
 
-            try {
-                const { orgName } = await wsClient.getDefaultOrgName();
-                setFormData(prev => ({ ...prev, orgName }));
-            } catch (error) {
-                console.error("Failed to fetch default org name:", error);
+            if (organizations && organizations.length > 0) {
+                setFormData(prev => ({ ...prev, orgName: organizations[0].handle }));
+            } else {
+                try {
+                    const { orgName } = await wsClient.getDefaultOrgName();
+                    setFormData(prev => ({ ...prev, orgName }));
+                } catch (error) {
+                    console.error("Failed to fetch default org name:", error);
+                }
             }
 
             if (isProjectModeSupported) {
@@ -344,6 +350,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                 isLibrary={true}
                                 packageNameError={packageNameError}
                                 orgNameError={orgNameError}
+                                organizations={organizations}
                             />
 
                             <FormFooter>
