@@ -491,7 +491,8 @@ const StyledButton = styled("button", {
 			props.isPrimary
 				? "var(--vscode-button-foreground)"
 				: "var(--vscode-button-secondaryForeground)"};
-    border: none;
+    border: ${(props: { isPrimary?: boolean }) =>
+        props.isPrimary ? 'none' : '1px solid var(--button-primary-background)'};
     box-shadow: ${(props: { isPrimary?: boolean }) =>
         props.isPrimary ? 'none' : 'var(--button-secondary-shadow)'};
     transition: all 0.2s ease;
