@@ -276,6 +276,74 @@ const RetryButton = styled.button`
     }
 `;
 
+const SignInPrompt = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 32px 36px;
+    gap: 0;
+    text-align: center;
+`;
+
+const SignInIconWrapper = styled.div`
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--wso2-brand-primary) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 20%, transparent);
+    margin-bottom: 16px;
+    flex-shrink: 0;
+`;
+
+const SignInTitle = styled.h3`
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--vscode-foreground);
+`;
+
+const SignInDescription = styled.p`
+    margin: 0 0 24px;
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground);
+    line-height: 1.5;
+    max-width: 320px;
+`;
+
+const SignInButton = styled.button`
+    height: 36px;
+    padding: 0 20px;
+    border-radius: 8px;
+    border: none;
+    background: var(--button-primary-background);
+    color: var(--vscode-button-foreground);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--vscode-font-family);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    transition: background 0.15s ease;
+
+    &:hover:not(:disabled) {
+        background: var(--button-primary-hover-background);
+    }
+
+    &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
+`;
+
 const FooterBar = styled.div`
     border-top: 1px solid color-mix(in srgb, var(--vscode-panel-border) 70%, transparent);
     padding: 12px 16px;
@@ -431,7 +499,7 @@ interface OpenProjectViewProps {
 
 export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const { wsClient } = useVisualizerContext();
-    const { authState } = useCloudContext();
+    const { authState, authStateLoading } = useCloudContext();
     const [projects, setProjects] = useState<CloudProject[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -441,17 +509,13 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const [cloneSuccess, setCloneSuccess] = useState(false);
     const [cloningError, setCloningError] = useState<string | null>(null);
     const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+    const [isSigningIn, setIsSigningIn] = useState(false);
+    const signingInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const orgs = (authState?.userInfo?.organizations as Array<{ id: number | string; handle: string; name: string }> | undefined) ?? [];
     const org = (selectedOrgId ? orgs.find((o) => String(o.id) === selectedOrgId) : null) ?? orgs[0];
     const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
     const orgSwitcherRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!authState?.userInfo) {
-            onBack();
-        }
-    }, [authState?.userInfo]);
 
     useEffect(() => {
         setSelectedProject(null);
@@ -473,6 +537,33 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         document.addEventListener("mousedown", handleMouseDown);
         return () => document.removeEventListener("mousedown", handleMouseDown);
     }, [orgDropdownOpen]);
+
+    useEffect(() => {
+        const unsubscribe = wsClient.onSignInInitiated(() => {
+            setIsSigningIn(true);
+            signingInTimeoutRef.current = setTimeout(() => {
+                setIsSigningIn(false);
+                signingInTimeoutRef.current = null;
+            }, 15000);
+        });
+        return unsubscribe;
+    }, [wsClient]);
+
+    useEffect(() => {
+        if (authState?.userInfo && isSigningIn) {
+            setIsSigningIn(false);
+            if (signingInTimeoutRef.current) {
+                clearTimeout(signingInTimeoutRef.current);
+                signingInTimeoutRef.current = null;
+            }
+        }
+    }, [authState?.userInfo]);
+
+    useEffect(() => {
+        return () => {
+            if (signingInTimeoutRef.current) clearTimeout(signingInTimeoutRef.current);
+        };
+    }, []);
 
     const fetchProjects = () => {
         if (!org) {
@@ -550,6 +641,10 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                 }
                 setCloningError(msg || "Cloning failed. Please try again.");
             });
+    };
+
+    const handleSignIn = () => {
+        wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
     };
 
     const handleOpenLocal = async () => {
@@ -716,6 +811,52 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     // ── Project list ──────────────────────────────────────────────────────────
 
     const renderList = () => {
+        if (authStateLoading && !authState?.userInfo) {
+            return (
+                <CenteredMessage>
+                    <ProgressRing color={ThemeColors.PRIMARY} />
+                    <span>Checking sign-in...</span>
+                </CenteredMessage>
+            );
+        }
+        if (!authState?.userInfo) {
+            return (
+                <SignInPrompt>
+                    <SignInIconWrapper>
+                        <Codicon
+                            name="cloud"
+                            iconSx={{ fontSize: "22px", color: "var(--wso2-brand-primary)" }}
+                            sx={{ width: "22px", height: "22px" }}
+                        />
+                    </SignInIconWrapper>
+                    <SignInTitle>Sign in to browse cloud projects</SignInTitle>
+                    <SignInDescription>
+                        Connect your WSO2 account to clone and open projects directly from the cloud.
+                    </SignInDescription>
+                    <SignInButton type="button" onClick={handleSignIn} disabled={isSigningIn}>
+                        {isSigningIn ? (
+                            <>
+                                <Codicon
+                                    name="loading"
+                                    iconSx={{ fontSize: "14px", color: "var(--vscode-button-foreground)", animation: "codicon-spin 1.5s steps(30) infinite" }}
+                                    sx={{ width: "14px", height: "14px" }}
+                                />
+                                Signing in...
+                            </>
+                        ) : (
+                            <>
+                                <Codicon
+                                    name="account"
+                                    iconSx={{ fontSize: "14px", color: "var(--vscode-button-foreground)" }}
+                                    sx={{ width: "14px", height: "14px" }}
+                                />
+                                Sign In
+                            </>
+                        )}
+                    </SignInButton>
+                </SignInPrompt>
+            );
+        }
         if (loading) {
             return (
                 <CenteredMessage>

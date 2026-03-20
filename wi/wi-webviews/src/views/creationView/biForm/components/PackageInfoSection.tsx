@@ -16,10 +16,15 @@
  * under the License.
  */
 
-import { Dropdown, TextField } from "@wso2/ui-toolkit";
+import { useEffect, useRef, useState } from "react";
+import styled from "@emotion/styled";
+import { Codicon, Dropdown, TextField } from "@wso2/ui-toolkit";
+import { WICommandIds } from "@wso2/wso2-platform-core";
 import { FieldGroup, Note } from "../styles";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { sanitizePackageName } from "../utils";
+import { useVisualizerContext } from "../../../../contexts";
+import { useCloudContext } from "../../../../providers";
 
 export interface PackageInfoData {
     packageName: string;
@@ -52,6 +57,48 @@ export interface PackageInfoSectionProps {
     organizations?: Organization[];
 }
 
+// ── Sign-in hint styles ────────────────────────────────────────────────────────
+
+const SignInHint = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+`;
+
+const SignInHintButton = styled.button`
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0;
+    background: none;
+    border: none;
+    font-size: 12px;
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover:not(:disabled) {
+        color: var(--vscode-textLink-activeForeground);
+        text-decoration: underline;
+    }
+
+    &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
+`;
+
+// ── Component ──────────────────────────────────────────────────────────────────
+
 export function PackageInfoSection({
     isExpanded,
     onToggle,
@@ -62,7 +109,43 @@ export function PackageInfoSection({
     packageNameError,
     organizations,
 }: PackageInfoSectionProps) {
+    const { wsClient } = useVisualizerContext();
+    const { authState } = useCloudContext();
+    const [isSigningIn, setIsSigningIn] = useState(false);
+    const signingInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const hasOrgs = organizations && organizations.length > 0;
+
+    useEffect(() => {
+        const unsubscribe = wsClient.onSignInInitiated(() => {
+            setIsSigningIn(true);
+            signingInTimeoutRef.current = setTimeout(() => {
+                setIsSigningIn(false);
+                signingInTimeoutRef.current = null;
+            }, 15000);
+        });
+        return unsubscribe;
+    }, [wsClient]);
+
+    useEffect(() => {
+        if (authState?.userInfo && isSigningIn) {
+            setIsSigningIn(false);
+            if (signingInTimeoutRef.current) {
+                clearTimeout(signingInTimeoutRef.current);
+                signingInTimeoutRef.current = null;
+            }
+        }
+    }, [authState?.userInfo]);
+
+    useEffect(() => {
+        return () => {
+            if (signingInTimeoutRef.current) clearTimeout(signingInTimeoutRef.current);
+        };
+    }, []);
+
+    const handleSignIn = () => {
+        wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
+    };
 
     return (
         <CollapsibleSection
@@ -93,13 +176,36 @@ export function PackageInfoSection({
                         onValueChange={(value: string) => onChange({ orgName: value })}
                     />
                 ) : (
-                    <TextField
-                        onTextChange={(value) => onChange({ orgName: value })}
-                        value={data.orgName}
-                        label="Organization Name"
-                        description="The organization that owns this Ballerina package."
-                        errorMsg={orgNameError || undefined}
-                    />
+                    <>
+                        <TextField
+                            onTextChange={(value) => onChange({ orgName: value })}
+                            value={data.orgName}
+                            label="Organization Name"
+                            description="The organization that owns this Ballerina package."
+                            errorMsg={orgNameError || undefined}
+                        />
+                        <SignInHint>
+                            <Codicon
+                                name="account"
+                                iconSx={{ color: "var(--vscode-descriptionForeground)" }}
+                                sx={{ display: "flex" }}
+                            />
+                            <span>Sign in to pick from your organizations —</span>
+                            <SignInHintButton type="button" onClick={handleSignIn} disabled={isSigningIn}>
+                                {isSigningIn ? (
+                                    <>
+                                        <Codicon
+                                            name="loading"
+                                            iconSx={{ fontSize: "11px", animation: "codicon-spin 1.5s steps(30) infinite" }}
+                                        />
+                                        Signing in...
+                                    </>
+                                ) : (
+                                    "Sign In"
+                                )}
+                            </SignInHintButton>
+                        </SignInHint>
+                    </>
                 )}
             </FieldGroup>
             <FieldGroup>
@@ -114,4 +220,3 @@ export function PackageInfoSection({
         </CollapsibleSection>
     );
 }
-

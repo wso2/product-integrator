@@ -847,15 +847,8 @@ export const WelcomeView: React.FC = () => {
 	const goToCreateLibrary = () => setCurrentView(ViewState.CREATE_LIBRARY);
 	const goToCreateProject = () => setCurrentView(ViewState.CREATE_PROJECT);
 
-    const handleProjectDirSelection = async () => {
-        if (authState?.userInfo) {
-            setCurrentView(ViewState.OPEN_PROJECT);
-        } else {
-            const response = await wsClient.selectFileOrDirPath({});
-            if (response?.path) {
-                wsClient.openFolder(response.path);
-            }
-        }
+    const handleProjectDirSelection = () => {
+        setCurrentView(ViewState.OPEN_PROJECT);
     };
 
 	const openRecentProjectsPicker = () => {
