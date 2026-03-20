@@ -464,6 +464,9 @@ export const StateMachine = {
         stateService.start();
     },
     getContext: () => stateService.getSnapshot().context,
+    setCurrentView: (view: ViewType) => {
+        stateService.getSnapshot().context.currentView = view;
+    },
     openWebview: (view: ViewType) => {
         ext.log(`Opening webview with view: ${view}`);
 

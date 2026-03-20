@@ -28,6 +28,7 @@ export const EXTENSION_PUBLISHER = "wso2";
  */
 export const COMMANDS = {
 	OPEN_WELCOME: "wso2.integrator.openWelcome",
+	GET_EMBEDDED_WELCOME_BOOTSTRAP: "wso2.integrator.getEmbeddedWelcomeBootstrap",
 	REFRESH_VIEW: "wso2.integrator.refreshView",
 	REFRESH_EXPLORER: "wso2-integrator.explorer.refresh",
 	OPEN_BI_INTEGRATION: "wso2.integrator.openBIIntegration",

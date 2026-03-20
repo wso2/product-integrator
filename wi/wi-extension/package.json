@@ -17,6 +17,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onCommand:wso2.integrator.getEmbeddedWelcomeBootstrap",
     "workspaceContains:**/Ballerina.toml",
     "onLanguage:SynapseXml",
     "workspaceContains:.project",
