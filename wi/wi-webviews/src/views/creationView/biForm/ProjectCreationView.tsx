@@ -74,7 +74,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const [pathError, setPathError] = useState<string | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
     const [formData, setFormData] = useState({
-        projectName: "",
+        projectName: "untitled",
         path: "",
         orgName: "",
         version: "",

@@ -66,7 +66,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
     const [createWithinProject, setCreateWithinProject] = useState(false);
-    const [withinProjectName, setWithinProjectName] = useState("");
+    const [withinProjectName, setWithinProjectName] = useState("untitled_project");
     const [libraryNameError, setLibraryNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
@@ -74,8 +74,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
     const [formData, setFormData] = useState<LibraryFormData>({
-        libraryName: "",
-        packageName: "",
+        libraryName: "untitled",
+        packageName: "untitled",
         path: "",
         orgName: "",
         version: "",
