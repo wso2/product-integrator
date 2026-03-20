@@ -40,8 +40,7 @@ import {
     FormContent,
     FormFooter,
 } from "../../shared/FormPageLayout";
-import { ResolvedPathText, SectionDivider } from "../biForm/styles";
-import { PackageInfoSection } from "./components";
+import { ResolvedPathText } from "../biForm/styles";
 
 const FieldGroup = styled.div`
     margin-bottom: 20px;
@@ -229,16 +228,6 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                     <ResolvedPathText>Will be created at: {resolvedPath}</ResolvedPathText>
                                 )}
                             </FieldGroup>
-
-                            <SectionDivider />
-
-                            <PackageInfoSection
-                                isExpanded={isPackageInfoExpanded}
-                                onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
-                                data={{ packageName: "", orgName: formData.orgName, version: formData.version }}
-                                onChange={(data) => setFormData(prev => ({ ...prev, ...data }))}
-                                organizations={organizations}
-                            />
 
                             <FormFooter>
                                 <Button
