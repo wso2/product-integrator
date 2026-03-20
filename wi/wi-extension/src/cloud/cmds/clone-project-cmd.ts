@@ -234,7 +234,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 			}
 		} catch (err: any) {
 			if (err instanceof UserCancellationError) {
-				return;
+				throw err;
 			}
 			console.error("Failed to clone project", err);
 			window.showErrorMessage(err?.message || "Failed to clone project");
