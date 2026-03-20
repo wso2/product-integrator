@@ -1065,7 +1065,7 @@ export const WelcomeView: React.FC = () => {
 						<CardsGrid>
 							<ActionCard onClick={goToCreateIntegration}>
 								<CardIconContainer>
-									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, #35537d 100%)">
+									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-primary-deep) 100%)">
 										<Codicon
 											name="circuit-board"
 											iconSx={{ fontSize: "25px" }}
@@ -1093,7 +1093,7 @@ export const WelcomeView: React.FC = () => {
 
 							<ActionCard onClick={handleProjectDirSelection}>
 								<CardIconContainer>
-									<CardIcon bgColor="linear-gradient(135deg, #0b1220 0%, var(--wso2-brand-ink-alt) 100%)">
+									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink-deep) 0%, var(--wso2-brand-ink-alt) 100%)">
 										<Codicon
 											name="folder-opened"
 											iconSx={{ fontSize: "25px" }}
@@ -1121,7 +1121,7 @@ export const WelcomeView: React.FC = () => {
 							{selectedRuntime !== "WSO2: SI" && (
 								<ActionCard onClick={goToSamples}>
 									<CardIconContainer>
-										<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, #3a90bf 100%)">
+										<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-alt) 100%)">
 											<Codicon
 												name="lightbulb"
 												iconSx={{ fontSize: "25px" }}
@@ -1174,7 +1174,7 @@ export const WelcomeView: React.FC = () => {
 								>
 									<SecondaryCardsGrid>
 										<SecondaryActionRow onClick={goToCreateLibrary}>
-											<SecondaryRowIcon bgColor="#3aada5">
+											<SecondaryRowIcon bgColor="var(--welcome-library-accent)">
 												<Codicon
 													name="book"
 													iconSx={{ fontSize: "16px" }}
@@ -1199,7 +1199,7 @@ export const WelcomeView: React.FC = () => {
 										</SecondaryActionRow>
 
 										<SecondaryActionRow onClick={goToCreateProject}>
-											<SecondaryRowIcon bgColor="#c07d18">
+											<SecondaryRowIcon bgColor="var(--welcome-project-accent)">
 												<Codicon
 													name="new-folder"
 													iconSx={{ fontSize: "16px" }}
@@ -1224,7 +1224,7 @@ export const WelcomeView: React.FC = () => {
 										</SecondaryActionRow>
 
 										<SecondaryActionRow onClick={goToImportExternal}>
-											<SecondaryRowIcon bgColor="#7c5fb5">
+											<SecondaryRowIcon bgColor="var(--welcome-import-accent)">
 												<Codicon
 													name="cloud-download"
 													iconSx={{ fontSize: "16px" }}
