@@ -378,10 +378,14 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		contextStore.getState().refreshState();
 	}
 
-	if (result.failed?.length === 0 && result.created.length > 0) {
-		let successMessage = "Successfully create integration in the cloud";
-		if (result.created.length > 1) {
-			successMessage = "Successfully created all integrations in the cloud";
+	if (result.created.length > 0) {
+		let successMessage: string;
+		if (result.failed?.length === 0) {
+			successMessage = result.created.length === 1
+				? "Successfully created integration in the cloud"
+				: "Successfully created all integrations in the cloud";
+		} else {
+			successMessage = `Successfully created ${result.created.length} of ${totalCount} integrations in the cloud`;
 		}
 
 		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
@@ -418,8 +422,9 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				}
 			});
 		}
+	}
 
-	} else if (result.failed?.length > 0) {
+	if (result.failed?.length > 0) {
 		const failedNames = result.failed.map(item => item.name).join(", ");
 		window.showErrorMessage(`Failed to create the following integrations: ${failedNames}`);
 	}
