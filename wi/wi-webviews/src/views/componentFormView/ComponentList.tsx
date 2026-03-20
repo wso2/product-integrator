@@ -18,7 +18,7 @@
 
 import React from "react";
 import { CheckBox } from "@wso2/ui-toolkit";
-import { ICreateNewIntegrationCmdIntegrations } from "@wso2/wso2-platform-core";
+import { ICreateNewIntegrationCmdIntegrations, Project } from "@wso2/wso2-platform-core";
 import {
 	CheckboxCell,
 	ComponentInfo,
@@ -49,6 +49,7 @@ export interface EntryFormState {
 }
 
 interface ComponentListProps {
+	project?: Project;
 	integrations: ICreateNewIntegrationCmdIntegrations[];
 	formState: EntryFormState[];
 	isBatch: boolean;
@@ -64,6 +65,7 @@ interface ComponentListProps {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ComponentList({
+	project,
 	integrations,
 	formState,
 	isBatch,
@@ -80,7 +82,7 @@ export function ComponentList({
 	return (
 		<ComponentListSection>
 			<ComponentListHeader>
-				<ComponentListLabel>{isBatch ? "Select Integrations to Deploy in the cloud" : "Deploy integration in the cloud"}</ComponentListLabel>
+				<ComponentListLabel>{isBatch ? `Select Integrations to Deploy in WSO2 Cloud project '${project?.name}'` : `Deploy integration in WSO2 Cloud project '${project?.name}'`}</ComponentListLabel>
 				{isBatch && <SelectionCount>{selectedCount} of {integrations.length} selected</SelectionCount>}
 			</ComponentListHeader>
 

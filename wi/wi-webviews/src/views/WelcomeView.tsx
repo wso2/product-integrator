@@ -277,13 +277,23 @@ const Caption = styled.p`
 `;
 
 const RuntimeSelectorWrap = styled.div`
-    width: 228px;
+    --welcome-runtime-foreground: var(--wso2-brand-white);
+    --welcome-runtime-muted: color-mix(in srgb, var(--wso2-brand-white) 82%, transparent);
+    width: 222px;
     padding: 8px;
     border-radius: 12px;
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-white) 24%, transparent);
+    border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 24%, transparent);
     background: color-mix(in srgb, var(--wso2-brand-white) 10%, transparent);
     box-shadow: 0 10px 24px color-mix(in srgb, var(--wso2-brand-ink) 24%, transparent);
     backdrop-filter: blur(14px);
+
+    body.vscode-light & {
+        --welcome-runtime-foreground: var(--wso2-brand-ink-alt);
+        --welcome-runtime-muted: color-mix(in srgb, var(--wso2-brand-ink-alt) 70%, transparent);
+        border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
+        background: color-mix(in srgb, var(--wso2-brand-white) 34%, transparent);
+        box-shadow: none;
+    }
 `;
 
 const RuntimeSelectorLabel = styled.div`
@@ -291,7 +301,7 @@ const RuntimeSelectorLabel = styled.div`
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: color-mix(in srgb, var(--wso2-brand-white) 82%, transparent);
+    color: var(--welcome-runtime-muted);
     margin-bottom: 6px;
 `;
 
@@ -302,14 +312,14 @@ const RuntimeSelectField = styled.div`
 const RuntimeSelect = styled.select`
     width: 100%;
     height: 30px;
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-white) 24%, transparent);
+    border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 24%, transparent);
     border-radius: 7px;
     padding: 0 34px 0 10px;
     appearance: none;
     font-family: var(--vscode-font-family);
     font-size: 12px;
     font-weight: 500;
-    color: var(--wso2-brand-white);
+    color: var(--welcome-runtime-foreground);
     background:
         linear-gradient(
             135deg,
@@ -333,13 +343,34 @@ const RuntimeSelect = styled.select`
     }
 
     &:focus-visible {
-        outline: 1px solid color-mix(in srgb, var(--wso2-brand-white) 68%, transparent);
+        outline: 1px solid color-mix(in srgb, var(--welcome-runtime-foreground) 68%, transparent);
         outline-offset: 2px;
     }
 
     option {
         color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
         background: var(--vscode-dropdown-background, var(--vscode-editor-background));
+    }
+
+    body.vscode-light & {
+        border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
+        background:
+            linear-gradient(
+                135deg,
+                color-mix(in srgb, var(--wso2-brand-white) 78%, transparent) 0%,
+                color-mix(in srgb, var(--wso2-brand-white) 60%, transparent) 100%
+            );
+        box-shadow: none;
+
+        &:hover {
+            border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 22%, transparent);
+            background:
+                linear-gradient(
+                    135deg,
+                    color-mix(in srgb, var(--wso2-brand-white) 86%, transparent) 0%,
+                    color-mix(in srgb, var(--wso2-brand-white) 68%, transparent) 100%
+                );
+        }
     }
 `;
 
@@ -352,7 +383,7 @@ const RuntimeSelectIcon = styled.div`
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: color-mix(in srgb, var(--wso2-brand-white) 78%, transparent);
+    color: var(--welcome-runtime-muted);
 `;
 
 const CardsContainer = styled.div`
@@ -1028,7 +1059,7 @@ export const WelcomeView: React.FC = () => {
 						<CardsGrid>
 							<ActionCard onClick={goToCreateIntegration}>
 								<CardIconContainer>
-									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, #35537d 100%)">
+									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-primary-deep) 100%)">
 										<Codicon
 											name="circuit-board"
 											iconSx={{ fontSize: "25px" }}
@@ -1056,7 +1087,7 @@ export const WelcomeView: React.FC = () => {
 
 							<ActionCard onClick={handleProjectDirSelection}>
 								<CardIconContainer>
-									<CardIcon bgColor="linear-gradient(135deg, #0b1220 0%, var(--wso2-brand-ink-alt) 100%)">
+									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink-deep) 0%, var(--wso2-brand-ink-alt) 100%)">
 										<Codicon
 											name="folder-opened"
 											iconSx={{ fontSize: "25px" }}
@@ -1084,7 +1115,7 @@ export const WelcomeView: React.FC = () => {
 							{selectedRuntime !== "WSO2: SI" && (
 								<ActionCard onClick={goToSamples}>
 									<CardIconContainer>
-                                        <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, #3a90bf 100%)">
+										<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-alt) 100%)">
 											<Codicon
 												name="lightbulb"
 												iconSx={{ fontSize: "25px" }}
@@ -1137,7 +1168,7 @@ export const WelcomeView: React.FC = () => {
 								>
 									<SecondaryCardsGrid>
 										<SecondaryActionRow onClick={goToCreateLibrary}>
-											<SecondaryRowIcon bgColor="#3aada5">
+											<SecondaryRowIcon bgColor="var(--welcome-library-accent)">
 												<Codicon
 													name="book"
 													iconSx={{ fontSize: "16px" }}
@@ -1162,7 +1193,7 @@ export const WelcomeView: React.FC = () => {
 										</SecondaryActionRow>
 
 										<SecondaryActionRow onClick={goToCreateProject}>
-											<SecondaryRowIcon bgColor="#c07d18">
+											<SecondaryRowIcon bgColor="var(--welcome-project-accent)">
 												<Codicon
 													name="new-folder"
 													iconSx={{ fontSize: "16px" }}
@@ -1187,7 +1218,7 @@ export const WelcomeView: React.FC = () => {
 										</SecondaryActionRow>
 
 										<SecondaryActionRow onClick={goToImportExternal}>
-											<SecondaryRowIcon bgColor="#7c5fb5">
+											<SecondaryRowIcon bgColor="var(--welcome-import-accent)">
 												<Codicon
 													name="cloud-download"
 													iconSx={{ fontSize: "16px" }}
