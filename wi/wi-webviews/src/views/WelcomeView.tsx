@@ -1016,7 +1016,7 @@ export const WelcomeView: React.FC = () => {
 										</CardIcon>
 									</CardIconContainer>
 									<CardContent>
-										<CardTitle>Explore Samples</CardTitle>
+										<CardTitle>Explore Samples and Pre-built Integrations</CardTitle>
 										<CardDescription>
 											Need inspiration? Browse through sample projects to see
 											how WSO2 Integrator works in real-world scenarios.
