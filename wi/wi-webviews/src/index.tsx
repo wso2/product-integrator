@@ -28,10 +28,10 @@ import { resolveBridgeBootstrap } from "./network-bridge/WsClient";
 import "./style.css";
 
 const DARK_BROWSER_VSCODE_OVERRIDES: VSCodeCssVariables = {
-	"--vscode-button-background": "#f14e23",
-	"--vscode-button-border": "#b43817",
+	"--vscode-button-background": "#17223a",
+	"--vscode-button-border": "#1b2a49",
 	"--vscode-button-foreground": "#ffffff",
-	"--vscode-button-hoverBackground": "#ff6700",
+	"--vscode-button-hoverBackground": "#1b2a49",
 	"--vscode-button-secondaryBackground": "#3a3d41",
 	"--vscode-button-secondaryForeground": "#cccccc",
 	"--vscode-charts-green": "#73c991",
@@ -82,10 +82,10 @@ const DARK_BROWSER_VSCODE_OVERRIDES: VSCodeCssVariables = {
 };
 
 const LIGHT_BROWSER_VSCODE_OVERRIDES: VSCodeCssVariables = {
-	"--vscode-button-background": "#f14e23",
-	"--vscode-button-border": "#cc441f",
+	"--vscode-button-background": "#17223a",
+	"--vscode-button-border": "#1b2a49",
 	"--vscode-button-foreground": "#ffffff",
-	"--vscode-button-hoverBackground": "#ff6700",
+	"--vscode-button-hoverBackground": "#1b2a49",
 	"--vscode-button-secondaryBackground": "#e8e8e8",
 	"--vscode-button-secondaryForeground": "#424242",
 	"--vscode-charts-green": "#388a34",
