@@ -150,6 +150,12 @@ export class BridgeLayer {
     }
 
     // ── Cloud event publishers ────────────────────────────────
+    static notifySignInInitiated(projectUri: string = "global"): void {
+        this.publish(projectUri, {
+            type: WI_BRIDGE_EVENTS.SIGN_IN_INITIATED,
+        });
+    }
+
     static notifyAuthStateChanged(projectUri: string, state: AuthState): void {
         this.publish(projectUri, {
             type: WI_BRIDGE_EVENTS.AUTH_STATE_CHANGED,

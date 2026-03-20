@@ -679,7 +679,9 @@ export const WelcomeView: React.FC = () => {
 	const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
     const [isRecentProjectsLoaded, setIsRecentProjectsLoaded] = useState(false);
     const [showSecondary, setShowSecondary] = useState(false);
+    const [isSigningIn, setIsSigningIn] = useState(false);
 	const avatarRef = useRef<HTMLButtonElement>(null);
+    const signingInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         if (currentView !== ViewState.WELCOME) {
@@ -784,6 +786,36 @@ export const WelcomeView: React.FC = () => {
 		wsClient.openFolder(projectPath);
 	};
 
+	// Show loader when the extension's URI handler fires (i.e. user confirmed
+	// the "Allow WSO2 Integrator to open this URI?" VS Code dialog).
+	// Clear it once auth completes or after a short timeout (user cancelled).
+	useEffect(() => {
+		const unsubscribe = wsClient.onSignInInitiated(() => {
+			setIsSigningIn(true);
+			signingInTimeoutRef.current = setTimeout(() => {
+				setIsSigningIn(false);
+				signingInTimeoutRef.current = null;
+			}, 15000);
+		});
+		return unsubscribe;
+	}, []);
+
+	useEffect(() => {
+		if (authState?.userInfo && isSigningIn) {
+			setIsSigningIn(false);
+			if (signingInTimeoutRef.current) {
+				clearTimeout(signingInTimeoutRef.current);
+				signingInTimeoutRef.current = null;
+			}
+		}
+	}, [authState?.userInfo]);
+
+	useEffect(() => {
+		return () => {
+			if (signingInTimeoutRef.current) clearTimeout(signingInTimeoutRef.current);
+		};
+	}, []);
+
 	const handleSignIn = () => {
 		wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
 	};
@@ -849,8 +881,18 @@ export const WelcomeView: React.FC = () => {
 								)}
 							</UserAvatar>
 						) : (
-							<SigninBtn type="button" onClick={handleSignIn}>
-								Sign In
+							<SigninBtn type="button" onClick={handleSignIn} disabled={isSigningIn}>
+								{isSigningIn ? (
+									<>
+										<Codicon
+											name="loading"
+											iconSx={{ fontSize: 13, color: "var(--wso2-brand-white)", animation: "codicon-spin 1.5s steps(30) infinite" }}
+										/>
+										Signing in...
+									</>
+								) : (
+									"Sign In"
+								)}
 							</SigninBtn>
 						)}
 						<ConfigureBtn type="button" onClick={goToSettings}>

@@ -16,6 +16,7 @@
  * under the License.
  */
 
+import React from "react";
 import styled from "@emotion/styled";
 import { Popover, ThemeColors, VSCodeColors, Button, Codicon } from "@wso2/ui-toolkit";
 import { useQueryClient } from "@tanstack/react-query";
@@ -145,15 +146,19 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose }: UserAccountPop
     const { wsClient } = useVisualizerContext();
     const { authState, contextState } = useCloudContext();
     const queryClient = useQueryClient();
+    const [isSigningOut, setIsSigningOut] = React.useState(false);
 
-    const handleSignOut = () => {
-        queryClient.setQueryData(["cloud_auth_state"], (old: any) =>
-            old ? { ...old, userInfo: null } : old
-        );
-        wsClient.runCommand({ command: WICommandIds.SignOut, args: [] })
-            .then(() => queryClient.invalidateQueries({ queryKey: ["cloud_auth_state"] }))
-            .catch(() => {});
-        onClose();
+    const handleSignOut = async () => {
+        setIsSigningOut(true);
+        try {
+            await wsClient.runCommand({ command: WICommandIds.SignOut, args: [] });
+            await queryClient.invalidateQueries({ queryKey: ["cloud_auth_state"] });
+        } catch {
+            // ignore
+        } finally {
+            setIsSigningOut(false);
+            onClose();
+        }
     };
 
     const handleSwitchProject = () => {
@@ -191,8 +196,11 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose }: UserAccountPop
                         <UserName title={authState?.userInfo?.displayName}>{authState?.userInfo?.displayName}</UserName>
                         <UserEmail title={authState?.userInfo?.userEmail}>{authState?.userInfo?.userEmail}</UserEmail>
                     </UserDetails>
-                    <Button appearance="icon" tooltip="Sign Out" onClick={handleSignOut}>
-                        <Codicon name="sign-out" iconSx={{ color: ThemeColors.ERROR }} />
+                    <Button appearance="icon" tooltip={isSigningOut ? "Signing out..." : "Sign Out"} onClick={handleSignOut} disabled={isSigningOut}>
+                        <Codicon
+                            name={isSigningOut ? "loading" : "sign-out"}
+                            iconSx={{ color: ThemeColors.ERROR, ...(isSigningOut && { animation: "codicon-spin 1.5s steps(30) infinite" }) }}
+                        />
                     </Button>
                 </UserHeader>
 

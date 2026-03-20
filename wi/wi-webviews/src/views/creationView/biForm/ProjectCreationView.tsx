@@ -20,6 +20,7 @@ import { useState, useEffect } from "react";
 import { Button, Icon, TextField } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
+import { useCloudContext } from "../../../providers";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { joinPath } from "./utils";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
@@ -39,7 +40,8 @@ import {
     FormContent,
     FormFooter,
 } from "../../shared/FormPageLayout";
-import { ResolvedPathText } from "../biForm/styles";
+import { ResolvedPathText, SectionDivider } from "../biForm/styles";
+import { PackageInfoSection } from "./components";
 
 const FieldGroup = styled.div`
     margin-bottom: 20px;
@@ -64,13 +66,18 @@ const validateProjectName = (name: string): string | null => {
 
 export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
+    const { authState } = useCloudContext();
+    const organizations = authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined;
     const [isValidating, setIsValidating] = useState(false);
+    const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
     const [formData, setFormData] = useState({
         projectName: "",
         path: "",
+        orgName: "",
+        version: "",
     });
 
     useEffect(() => {
@@ -85,6 +92,17 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
             }
         })();
     }, [wsClient]);
+
+    useEffect(() => {
+        if (formData.orgName) return;
+        if (organizations && organizations.length > 0) {
+            setFormData(prev => ({ ...prev, orgName: organizations[0].handle }));
+        } else {
+            wsClient.getDefaultOrgName().then(({ orgName }) => {
+                setFormData(prev => ({ ...prev, orgName }));
+            }).catch(() => {});
+        }
+    }, [organizations]);
 
     const resolvedPath = joinPath(formData.path || defaultPath, formData.projectName);
 
@@ -141,6 +159,8 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                 projectPath: formData.path,
                 createDirectory: true,
                 createAsWorkspace: true,
+                orgName: formData.orgName || undefined,
+                version: formData.version || undefined,
             });
         } catch (error) {
             setPathError("An error occurred during validation");
@@ -209,6 +229,16 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                     <ResolvedPathText>Will be created at: {resolvedPath}</ResolvedPathText>
                                 )}
                             </FieldGroup>
+
+                            <SectionDivider />
+
+                            <PackageInfoSection
+                                isExpanded={isPackageInfoExpanded}
+                                onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
+                                data={{ packageName: "", orgName: formData.orgName, version: formData.version }}
+                                onChange={(data) => setFormData(prev => ({ ...prev, ...data }))}
+                                organizations={organizations}
+                            />
 
                             <FormFooter>
                                 <Button

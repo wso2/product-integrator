@@ -441,6 +441,12 @@ export class MainWsManager implements WIVisualizerAPI {
         return new Promise(async (resolve, reject) => {
             try {
                 const projectRoot: string = await commands.executeCommand('BI.project.createBIProjectPure', params);
+                if (ext.authProvider?.getUserInfo() && params.orgName && projectRoot) {
+                    const projectName = params.workspaceName || params.packageName || params.projectName;
+                    if (projectName) {
+                        await this.writeChoreoContext(projectRoot, params.orgName, projectName);
+                    }
+                }
                 openInVSCode(projectRoot);
                 resolve();
             } catch (error) {
@@ -450,6 +456,14 @@ export class MainWsManager implements WIVisualizerAPI {
                 reject(error);
             }
         });
+    }
+
+    private async writeChoreoContext(projectRoot: string, orgName: string, projectName: string): Promise<void> {
+        const choreoDir = path.join(projectRoot, '.choreo');
+        const contextFile = path.join(choreoDir, 'context.yaml');
+        const content = `- org: ${orgName}\n  project: ${projectName}\n`;
+        await fs.promises.mkdir(choreoDir, { recursive: true });
+        await fs.promises.writeFile(contextFile, content, { encoding: 'utf8' });
     }
 
     async validateProjectPath(params: ValidateProjectFormRequest): Promise<ValidateProjectFormResponse> {

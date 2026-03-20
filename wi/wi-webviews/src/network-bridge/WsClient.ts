@@ -131,6 +131,7 @@ export class WsClient {
     private readonly migrationToolLogListeners = new Set<(log: string) => void>();
     private readonly migratedProjectListeners = new Set<(result: ProjectMigrationResult) => void>();
     // ── Cloud event listeners ─────────────────────────────────
+    private readonly signInInitiatedListeners = new Set<() => void>();
     private readonly authStateChangedListeners = new Set<(state: AuthState) => void>();
     private readonly contextStateChangedListeners = new Set<(state: ContextStoreState) => void>();
     private readonly cloneProgressListeners = new Set<(stage: CloneProgressStage) => void>();
@@ -392,6 +393,11 @@ export class WsClient {
         return this.request("getCloudProjects", params);
     }
 
+    public onSignInInitiated(callback: () => void): () => void {
+        this.signInInitiatedListeners.add(callback);
+        return () => this.signInInitiatedListeners.delete(callback);
+    }
+
     public onAuthStateChanged(callback: (state: AuthState) => void) {
         this.authStateChangedListeners.add(callback);
     }
@@ -464,6 +470,9 @@ export class WsClient {
                 this.migratedProjectListeners.forEach((listener) => listener(message.project));
                 return;
             // ── Cloud events ──────────────────────────────────────
+            case WI_BRIDGE_EVENTS.SIGN_IN_INITIATED:
+                this.signInInitiatedListeners.forEach((listener) => listener());
+                return;
             case WI_BRIDGE_EVENTS.AUTH_STATE_CHANGED:
                 this.authStateChangedListeners.forEach((listener) => listener(message.state));
                 return;
