@@ -24,7 +24,7 @@ import { useCloudContext, useProjectModeSupported, useWorkspaceRoot } from "../.
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { PackageInfoSection } from "./components";
-import { SectionDivider, CheckboxContainer, Description, ResolvedPathText } from "./styles";
+import { SectionDivider, Description, ResolvedPathText, ProjectSectionContainer, ProjectSectionLabel, ProjectFieldCollapse, SkipOptionRow } from "./styles";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -281,34 +281,33 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
                             {/* Project Name - shown by default when project mode is supported */}
                             {isProjectModeSupported && (
-                                <FieldGroup>
-                                    {createWithinProject && (
-                                        <div style={{ marginBottom: "12px" }}>
-                                            <TextField
-                                                onTextChange={(value) => {
-                                                    setWithinProjectNameTouched(true);
-                                                    setWithinProjectName(value);
-                                                    if (withinProjectNameError) setWithinProjectNameError(null);
-                                                }}
-                                                value={withinProjectName}
-                                                label="Project Name"
-                                                placeholder="Enter project name"
-                                                required={true}
-                                                errorMsg={withinProjectNameTouched && withinProjectName.trim().length === 0 ? (withinProjectNameError || "Project name is required") : ""}
-                                            />
-                                        </div>
-                                    )}
-                                    <CheckboxContainer style={{ margin: 0 }}>
+                                <ProjectSectionContainer>
+                                    <ProjectSectionLabel>Project</ProjectSectionLabel>
+                                    <ProjectFieldCollapse isVisible={createWithinProject}>
+                                        <TextField
+                                            onTextChange={(value) => {
+                                                setWithinProjectNameTouched(true);
+                                                setWithinProjectName(value);
+                                                if (withinProjectNameError) setWithinProjectNameError(null);
+                                            }}
+                                            value={withinProjectName}
+                                            label="Project Name"
+                                            placeholder="Enter project name"
+                                            required={true}
+                                            errorMsg={withinProjectNameTouched && withinProjectName.trim().length === 0 ? (withinProjectNameError || "Project name is required") : ""}
+                                        />
+                                    </ProjectFieldCollapse>
+                                    <SkipOptionRow>
                                         <CheckBox
                                             label="Skip create within a project"
                                             checked={!createWithinProject}
                                             onChange={handleSkipProjectToggle}
                                         />
-                                        <Description>
+                                        <Description style={{ marginTop: "6px" }}>
                                             Create the integration directly without a project. Use this for simple, single-purpose integrations that don't require project-level organization.
                                         </Description>
-                                    </CheckboxContainer>
-                                </FieldGroup>
+                                    </SkipOptionRow>
+                                </ProjectSectionContainer>
                             )}
 
                             <FieldGroup>

@@ -27,6 +27,10 @@ import {
     Description,
     SectionDivider,
     ResolvedPathText,
+    ProjectSectionContainer,
+    ProjectSectionLabel,
+    ProjectFieldCollapse,
+    SkipOptionRow,
 } from "./styles";
 import { PackageInfoSection } from "./components";
 import { Organization } from "./components/PackageInfoSection";
@@ -230,35 +234,34 @@ export function ProjectFormFields({
 
             {/* Project Name - shown by default when project mode is supported */}
             {isProjectModeSupported && (
-                <FieldGroup>
-                    {formData.createWithinProject && (
-                        <div style={{ marginBottom: "12px" }}>
-                            <TextField
-                                onTextChange={(value) => {
-                                    setWithinProjectNameTouched(true);
-                                    setPathTouched(false);
-                                    if (withinProjectNameError) setWithinProjectNameError(null);
-                                    onFormDataChange({ withinProjectName: value });
-                                }}
-                                value={formData.withinProjectName}
-                                label="Project Name"
-                                placeholder="Enter project name"
-                                required={true}
-                                errorMsg={projectNameError ?? (withinProjectNameTouched && withinProjectNameError ? withinProjectNameError : "")}
-                            />
-                        </div>
-                    )}
-                    <CheckboxContainer style={{ margin: 0 }}>
+                <ProjectSectionContainer>
+                    <ProjectSectionLabel>Project</ProjectSectionLabel>
+                    <ProjectFieldCollapse isVisible={formData.createWithinProject}>
+                        <TextField
+                            onTextChange={(value) => {
+                                setWithinProjectNameTouched(true);
+                                setPathTouched(false);
+                                if (withinProjectNameError) setWithinProjectNameError(null);
+                                onFormDataChange({ withinProjectName: value });
+                            }}
+                            value={formData.withinProjectName}
+                            label="Project Name"
+                            placeholder="Enter project name"
+                            required={true}
+                            errorMsg={projectNameError ?? (withinProjectNameTouched && withinProjectNameError ? withinProjectNameError : "")}
+                        />
+                    </ProjectFieldCollapse>
+                    <SkipOptionRow>
                         <CheckBox
                             label="Skip create within a project"
                             checked={!formData.createWithinProject}
                             onChange={handleSkipProjectToggle}
                         />
-                        <Description>
+                        <Description style={{ marginTop: "6px" }}>
                             Create the integration directly without a project. Use this for simple, single-purpose integrations that don't require project-level organization.
                         </Description>
-                    </CheckboxContainer>
-                </FieldGroup>
+                    </SkipOptionRow>
+                </ProjectSectionContainer>
             )}
 
             <FieldGroup>

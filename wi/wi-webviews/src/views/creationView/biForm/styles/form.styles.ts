@@ -28,6 +28,43 @@ export const CheckboxContainer = styled.div`
     margin: 12px 0;
 `;
 
+export const ProjectSectionContainer = styled.div`
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    transition: border-color 0.2s ease;
+
+    &:focus-within {
+        border-color: var(--vscode-focusBorder);
+    }
+`;
+
+export const ProjectSectionLabel = styled.div`
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    color: var(--vscode-descriptionForeground);
+    padding: 7px 12px;
+    background: var(--vscode-sideBar-background);
+    border-bottom: 1px solid var(--vscode-panel-border);
+`;
+
+export const ProjectFieldCollapse = styled.div<{ isVisible: boolean }>`
+    max-height: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? "120px" : "0")};
+    opacity: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? 1 : 0)};
+    overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+    padding: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? "12px 12px 12px 12px" : "0 12px")};
+`;
+
+export const SkipOptionRow = styled.div`
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--vscode-panel-border);
+    padding: 10px 12px;
+`;
+
 export const Description = styled.div`
     color: var(--vscode-descriptionForeground);
     font-size: 12px;
