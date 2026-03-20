@@ -169,16 +169,16 @@ function ComponentForm() {
 			if (!hasSelected || !validate()) { return; }
 
 			let workspaceFsPath = params!.workspaceFsPath;
-			let repoUrl: string | null = null;
-			let branch: string | null = null;
-			let gitProvider: string | null = null;
-			let credential: string | null = null;
+			let repoUrl: string | null = gitConfigDataRef?.current?.gitRemote ?? null;
+			let branch: string | null = gitConfigDataRef?.current?.branch ?? null;;
+			let gitProvider: string | null = gitConfigDataRef?.current?.gitProvider ?? null;;
+			let credential: string | null = gitConfigDataRef?.current?.credential ?? null;;
 
 			if (isNewCodeServerComp) {
 				const repoInit = repoInitDataRef.current;
 				if (!repoInit) { throw new Error("Repo init data is missing"); }
 
-				repoUrl = buildGitURL(repoInit.orgHandler, repoInit.repo, repoInit.gitProvider, false, repoInit.serverUrl);
+				const repoUrl = buildGitURL(repoInit.orgHandler, repoInit.repo, repoInit.gitProvider, false, repoInit.serverUrl);
 
 				// Validate subpath via getGitRepoMetadata
 				const subPath = repoInit.subPath.startsWith("/") ? repoInit.subPath.slice(1) : repoInit.subPath;
@@ -296,6 +296,7 @@ function ComponentForm() {
 
 						{/* Component list */}
 						<ComponentList
+							project={params?.project}
 							integrations={params?.integrations ?? []}
 							formState={formState}
 							isBatch={isBatch}
