@@ -649,7 +649,8 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
 
     const handleOpenLocal = async () => {
         try {
-            const response = await wsClient.selectFileOrDirPath({});
+            const { path: startPath } = await wsClient.getDefaultCreationPath();
+            const response = await wsClient.selectFileOrDirPath({ startPath });
             if (response?.path) {
                 wsClient.openFolder(response.path);
             }

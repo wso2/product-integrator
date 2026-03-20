@@ -57,9 +57,9 @@ import {
 } from "@wso2/wi-core";
 import { commands, window, workspace, MarkdownString, Uri, env, ConfigurationTarget } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
+import { getDefaultCreationPath } from "../../utils/pathUtils";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import axios from "axios";
 import { stringify as stringifyYaml } from "yaml";
@@ -584,10 +584,6 @@ export class MainWsManager implements WIVisualizerAPI {
     }
 
     async getDefaultCreationPath(): Promise<WorkspaceRootResponse> {
-        const defaultPath = path.join(os.homedir(), "wso2Integrator", "projects");
-        if (!fs.existsSync(defaultPath)) {
-            fs.mkdirSync(defaultPath, { recursive: true });
-        }
-        return { path: defaultPath };
+        return { path: getDefaultCreationPath() };
     }
 }

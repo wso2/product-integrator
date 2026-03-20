@@ -17,7 +17,6 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
-import * as os from "os";
 import { join } from "path";
 import {
 	WICommandIds,
@@ -33,7 +32,7 @@ import { ext } from "../../extensionVariables";
 import { BridgeLayer } from "../../BridgeLayer";
 import { initGit } from "../git/main";
 import { dataCacheStore } from "../stores/data-cache-store";
-import { createDirectory, openDirectory } from "../../utils/pathUtils";
+import { createDirectory, getDefaultCreationPath, openDirectory } from "../../utils/pathUtils";
 import { getUserInfoForCmd, isRpcActive, selectOrg, selectProject, setExtensionName } from "./cmd-utils";
 import { updateContextFile } from "./create-directory-context-cmd";
 
@@ -72,7 +71,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 					canSelectFiles: false,
 					canSelectMany: false,
 					title: "Select a folder to clone the project repository",
-					defaultUri: Uri.file(os.homedir()),
+					defaultUri: Uri.file(getDefaultCreationPath()),
 				});
 
 				if (cloneDir === undefined || cloneDir.length === 0) {
