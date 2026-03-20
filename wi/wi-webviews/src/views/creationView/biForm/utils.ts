@@ -101,7 +101,9 @@ export const extractBase = (value: string, name: string): string => {
         }
     }
     const lastSep = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
-    return lastSep > 0 ? value.slice(0, lastSep) : value;
+    if (lastSep < 0) return value;
+    if (lastSep === 0) return value.slice(0, 1);
+    return value.slice(0, lastSep);
 };
 
 

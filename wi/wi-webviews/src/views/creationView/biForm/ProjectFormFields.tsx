@@ -124,11 +124,16 @@ export function ProjectFormFields({
     };
 
     const handleProjectDirSelection = async () => {
-        const selectedDirectory = await wsClient.selectFileOrDirPath({ startPath: editablePath || formData.path || defaultPath });
-        if (!selectedDirectory.path) return;
-        setPathTouched(false);
-        setEditablePath(selectedDirectory.path);
-        onFormDataChange({ path: selectedDirectory.path });
+        try {
+            const selectedDirectory = await wsClient.selectFileOrDirPath({ startPath: editablePath || formData.path || defaultPath });
+            if (!selectedDirectory.path) return;
+            setPathTouched(false);
+            setEditablePath(selectedDirectory.path);
+            onFormDataChange({ path: selectedDirectory.path });
+        } catch (error) {
+            console.error("Failed to select directory:", error);
+            return;
+        }
     };
 
     const handleSkipProjectToggle = (checked: boolean) => {

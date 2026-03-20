@@ -68,7 +68,6 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const { authState } = useCloudContext();
     const organizations = authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined;
     const [isValidating, setIsValidating] = useState(false);
-    const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
@@ -99,17 +98,24 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
         } else {
             wsClient.getDefaultOrgName().then(({ orgName }) => {
                 setFormData(prev => ({ ...prev, orgName }));
-            }).catch(() => {});
+            }).catch((error) => {
+                console.error("Failed to fetch default organization name:", error);
+            });
         }
-    }, [organizations]);
+    }, [organizations, wsClient, formData.orgName]);
 
     const resolvedPath = joinPath(formData.path || defaultPath, formData.projectName);
 
     const handlePathSelection = async () => {
-        const result = await wsClient.selectFileOrDirPath({ startPath: formData.path || defaultPath });
-        if (!result.path) return;
-        if (pathError) setPathError(null);
-        setFormData(prev => ({ ...prev, path: result.path }));
+        try {
+            const result = await wsClient.selectFileOrDirPath({ startPath: formData.path || defaultPath });
+            if (!result.path) return;
+            if (pathError) setPathError(null);
+            setFormData(prev => ({ ...prev, path: result.path }));
+        } catch (error) {
+            console.error("Failed to select path:", error);
+            setPathError("Failed to select path. Please try again.");
+        }
     };
 
     const handleCreate = async () => {

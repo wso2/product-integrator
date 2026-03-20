@@ -238,6 +238,11 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 			const userInfo = await this.deps.rpcClient.getUserInfo();
 			if (userInfo) {
 				const region = await this.deps.rpcClient.getCurrentRegion();
+				
+				if (!region) {
+					throw new Error("Region is not available or invalid");
+				}
+				
 				await this.loginSuccess(userInfo, region);
 				const contextStoreState = contextStore.getState().state;
 				if (contextStoreState.selected?.org) {

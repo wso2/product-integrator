@@ -62,6 +62,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import axios from "axios";
+import { stringify as stringifyYaml } from "yaml";
 import { pullMigrationTool } from "./migrate-integration";
 import { MigrationReportWebview } from "../../migration-report/webview";
 import { BridgeLayer } from "../../BridgeLayer";
@@ -444,7 +445,11 @@ export class MainWsManager implements WIVisualizerAPI {
                 if (ext.authProvider?.getUserInfo() && params.orgName && projectRoot) {
                     const projectName = params.workspaceName || params.packageName || params.projectName;
                     if (projectName) {
-                        await this.writeChoreoContext(projectRoot, params.orgName, projectName);
+                        try {
+                            await this.writeChoreoContext(projectRoot, params.orgName, projectName);
+                        } catch (contextError) {
+                            console.warn("Failed to write Choreo context file (non-critical):", contextError);
+                        }
                     }
                 }
                 openInVSCode(projectRoot);
@@ -461,7 +466,8 @@ export class MainWsManager implements WIVisualizerAPI {
     private async writeChoreoContext(projectRoot: string, orgName: string, projectName: string): Promise<void> {
         const choreoDir = path.join(projectRoot, '.choreo');
         const contextFile = path.join(choreoDir, 'context.yaml');
-        const content = `- org: ${orgName}\n  project: ${projectName}\n`;
+        const contextData = [{ org: orgName, project: projectName }];
+        const content = stringifyYaml(contextData);
         await fs.promises.mkdir(choreoDir, { recursive: true });
         await fs.promises.writeFile(contextFile, content, { encoding: 'utf8' });
     }

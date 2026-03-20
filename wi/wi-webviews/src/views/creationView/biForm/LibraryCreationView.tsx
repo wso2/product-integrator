@@ -83,16 +83,20 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
     useEffect(() => {
         if (!workspaceReady) return;
+        let mounted = true;
         (async () => {
             const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
+            if (!mounted) return;
             setDefaultPath(dp);
             setFormData(prev => ({ ...prev, path: dp }));
 
             if (organizations && organizations.length > 0) {
+                if (!mounted) return;
                 setFormData(prev => ({ ...prev, orgName: organizations[0].handle }));
             } else {
                 try {
                     const { orgName } = await wsClient.getDefaultOrgName();
+                    if (!mounted) return;
                     setFormData(prev => ({ ...prev, orgName }));
                 } catch (error) {
                     console.error("Failed to fetch default org name:", error);
@@ -100,10 +104,14 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             }
 
             if (isProjectModeSupported) {
+                if (!mounted) return;
                 setCreateWithinProject(true);
             }
         })();
-    }, [workspaceReady, wsClient, workspacePath, isProjectModeSupported]);
+        return () => {
+            mounted = false;
+        };
+    }, [workspaceReady, wsClient, workspacePath, isProjectModeSupported, organizations]);
 
     useEffect(() => {
         const error = validatePackageName(formData.packageName, formData.libraryName);

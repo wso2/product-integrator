@@ -114,6 +114,10 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			
 			const region = await ext.clients.rpcClient.getCurrentRegion();
 			
+			if (!region || (region !== "US" && region !== "EU")) {
+				throw new Error("Region is not available or invalid. Expected 'US' or 'EU'.");
+			}
+			
 			if (!ext.authProvider) {
 				throw new Error("Auth provider is not available");
 			}
@@ -343,7 +347,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			projects: (projects ?? []).map((p) => ({
 				id: p.id,
 				name: p.name,
-				handler: p.handler,
+				handle: p.handler,
 				description: p.description ?? "",
 			})),
 		};

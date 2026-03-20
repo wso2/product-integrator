@@ -64,7 +64,7 @@ export interface GetCloudProjectsResp {
 	projects: Array<{
 		id: string;
 		name: string;
-		handler: string;
+		handle: string;
 		description: string;
 	}>;
 }

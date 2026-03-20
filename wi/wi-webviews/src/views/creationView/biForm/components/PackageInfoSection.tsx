@@ -135,7 +135,7 @@ export function PackageInfoSection({
                 signingInTimeoutRef.current = null;
             }
         }
-    }, [authState?.userInfo]);
+    }, [authState?.userInfo, isSigningIn]);
 
     useEffect(() => {
         return () => {

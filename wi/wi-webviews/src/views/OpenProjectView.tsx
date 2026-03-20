@@ -648,9 +648,15 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     };
 
     const handleOpenLocal = async () => {
-        const response = await wsClient.selectFileOrDirPath({});
-        if (response?.path) {
-            wsClient.openFolder(response.path);
+        try {
+            const response = await wsClient.selectFileOrDirPath({});
+            if (response?.path) {
+                wsClient.openFolder(response.path);
+            }
+        } catch (err) {
+            console.error("Failed to open local folder:", err);
+            const errorMessage = err instanceof Error ? err.message : "Failed to open local folder";
+            setError(errorMessage);
         }
     };
 
