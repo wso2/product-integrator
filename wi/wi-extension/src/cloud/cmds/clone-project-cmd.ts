@@ -220,6 +220,10 @@ export function cloneRepoCommand(context: ExtensionContext) {
 					}
 				}
 			} catch (err: any) {
+				const msg = (err?.message || "").toLowerCase();
+				if (msg.includes("directory is required") || msg.includes("cancelled") || msg.includes("selection is required")) {
+					throw err;
+				}
 				console.error("Failed to clone project", err);
 				window.showErrorMessage(err?.message || "Failed to clone project");
 			}
