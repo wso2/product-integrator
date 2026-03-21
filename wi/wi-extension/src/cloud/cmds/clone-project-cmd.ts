@@ -17,7 +17,6 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
-import * as os from "os";
 import { join } from "path";
 import {
 	WICommandIds,
@@ -30,11 +29,23 @@ import {
 } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, type QuickPickItem, QuickPickItemKind, Uri, commands, window } from "vscode";
 import { ext } from "../../extensionVariables";
+import { BridgeLayer } from "../../BridgeLayer";
 import { initGit } from "../git/main";
 import { dataCacheStore } from "../stores/data-cache-store";
-import { createDirectory, openDirectory } from "../../utils/pathUtils";
+import { createDirectory, getDefaultCreationPath, openDirectory } from "../../utils/pathUtils";
 import { getUserInfoForCmd, isRpcActive, selectOrg, selectProject, setExtensionName } from "./cmd-utils";
 import { updateContextFile } from "./create-directory-context-cmd";
+
+/**
+ * Error thrown when a user cancels an operation.
+ * This is used to distinguish user-initiated cancellations from actual errors.
+ */
+class UserCancellationError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "UserCancellationError";
+	}
+}
 
 export function cloneRepoCommand(context: ExtensionContext) {
 	context.subscriptions.push(
@@ -54,21 +65,23 @@ export function cloneRepoCommand(context: ExtensionContext) {
 							`Select the project from '${selectedOrg.name}', that needs to be cloned`,
 						));
 
-					const cloneDir = await window.showOpenDialog({
-						canSelectFolders: true,
-						canSelectFiles: false,
-						canSelectMany: false,
-						title: "Select a folder to clone the project repository",
-						defaultUri: Uri.file(os.homedir()),
-					});
+				BridgeLayer.notifyCloneProgress("selecting_folder");
+				const cloneDir = await window.showOpenDialog({
+					canSelectFolders: true,
+					canSelectFiles: false,
+					canSelectMany: false,
+					title: "Select a folder to clone the project repository",
+					defaultUri: Uri.file(getDefaultCreationPath()),
+				});
 
-					if (cloneDir === undefined || cloneDir.length === 0) {
-						throw new Error("Directory is required in order to clone the repository in");
-					}
+				if (cloneDir === undefined || cloneDir.length === 0) {
+					throw new UserCancellationError("Directory selection was cancelled");
+				}
 
 					const selectedCloneDir = cloneDir[0];
 					const projectCache = dataCacheStore.getState().getProjects(selectedOrg.handle);
 
+					BridgeLayer.notifyCloneProgress("fetching_components");
 					let components: ComponentKind[] = [];
 					if (params?.component) {
 						components = [params?.component];
@@ -111,36 +124,48 @@ export function cloneRepoCommand(context: ExtensionContext) {
 						throw new Error(`No repos found to link within ${selectedProject.name}.`);
 					}
 
-					if (repoSet.size > 1) {
-						const quickPickOptions: QuickPickItem[] = [
-							{
-								label: "Clone entire project",
-								detail: "Clone all the repositories associated with the selected project",
-								picked: true,
-							},
-							{ kind: QuickPickItemKind.Separator, label: `Clone ${ext.terminologies?.articleComponentTerm} of the project` },
-							...components.map((item) => ({
-								label: item.metadata.name,
-								detail: `Repository: ${getComponentKindRepoSource(item.spec.source).repo}`,
-								item,
-							})),
-						];
+				if (repoSet.size > 1) {
+					BridgeLayer.notifyCloneProgress("selecting_component");
+					const componentItems: QuickPickItem[] = components
+						.filter((c) => getComponentKindRepoSource(c.spec.source).repo)
+						.map((item) => ({
+							label: item.metadata.name,
+							detail: `Repository: ${getComponentKindRepoSource(item.spec.source).repo}`,
+							item,
+						}));
+						const quickPickOptions: QuickPickItem[] = params?.integrationOnly
+							? componentItems
+							: [
+									{
+										label: "Clone entire project",
+										detail: "Clone all the repositories associated with the selected project",
+										picked: true,
+									},
+									{ kind: QuickPickItemKind.Separator, label: `Clone ${ext.terminologies?.articleComponentTerm} of the project` },
+									...componentItems,
+							  ];
+						const componentTermPlural = ext.terminologies?.componentTermPlural ?? "integrations";
+						const articleComponentTerm = ext.terminologies?.articleComponentTerm ?? "an integration";
 						const selection = await window.showQuickPick(quickPickOptions, {
-							title: "Select an option",
+							title: params?.integrationOnly ? "Select an integration or library to open" : "Select an option",
+							placeHolder: params?.integrationOnly
+								? `This project contains ${componentTermPlural} across multiple repositories. Select which ${articleComponentTerm} you'd like to clone and open.`
+								: undefined,
 						});
 
-						if (selection?.label === "Clone entire project") {
-							// do nothing
-						} else if ((selection as any)?.item) {
-							repoSet.clear();
-							repoSet.add(getComponentKindRepoSource((selection as any)?.item.spec.source).repo);
-						} else {
-							throw new Error(
-								`Repository or ${ext.terminologies?.componentTerm} selection is required in order to clone the repository`,
-							);
-						}
+					if (selection?.label === "Clone entire project") {
+						// do nothing
+					} else if ((selection as any)?.item) {
+						repoSet.clear();
+						repoSet.add(getComponentKindRepoSource((selection as any)?.item.spec.source).repo);
+					} else {
+						throw new UserCancellationError(
+							`${ext.terminologies?.componentTerm || "Component"} selection was cancelled`,
+						);
+					}
 					}
 
+					BridgeLayer.notifyCloneProgress("cloning");
 					let selectedRepoUrl = "";
 					if (repoSet.size === 1) {
 						[selectedRepoUrl] = repoSet;
@@ -205,11 +230,14 @@ export function cloneRepoCommand(context: ExtensionContext) {
 						);
 						await openClonedDirectory(projectDirPath);
 					}
-				}
-			} catch (err: any) {
-				console.error("Failed to clone project", err);
-				window.showErrorMessage(err?.message || "Failed to clone project");
 			}
+		} catch (err: any) {
+			if (err instanceof UserCancellationError) {
+				throw err;
+			}
+			console.error("Failed to clone project", err);
+			window.showErrorMessage(err?.message || "Failed to clone project");
+		}
 		}),
 	);
 }

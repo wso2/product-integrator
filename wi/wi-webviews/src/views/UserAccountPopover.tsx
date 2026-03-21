@@ -19,6 +19,7 @@
 import React from "react";
 import styled from "@emotion/styled";
 import { Popover, ThemeColors, VSCodeColors, Button, Codicon } from "@wso2/ui-toolkit";
+import { useQueryClient } from "@tanstack/react-query";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
 import { WICommandIds } from "@wso2/wso2-platform-core";
@@ -91,46 +92,7 @@ const UserEmail = styled.div`
     margin-top: 2px;
 `;
 
-const ContextSection = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding-top: 10px;
-    border-top: 1px solid ${VSCodeColors.PANEL_BORDER};
-`;
 
-const Row = styled.div`
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-`;
-
-const RowContent = styled.div`
-    flex: 1;
-    min-width: 0;
-`;
-
-const RowLabel = styled.div`
-    font-size: 10px;
-    opacity: 0.6;
-    line-height: 1;
-    margin-bottom: 2px;
-`;
-
-const RowValue = styled.div`
-    font-size: 12px;
-    line-height: 1.3;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-`;
-
-const RowValueButton = styled(RowValue)`
-    cursor: pointer;
-    &:hover {
-        text-decoration: underline;
-    }
-`;
 
 export interface UserAccountPopoverProps {
     isOpen: boolean;
@@ -138,22 +100,23 @@ export interface UserAccountPopoverProps {
     onClose: () => void;
 }
 
-export function UserAccountPopover({
-    isOpen,
-    anchorEl,
-    onClose,
-}: UserAccountPopoverProps) {
+export function UserAccountPopover({ isOpen, anchorEl, onClose }: UserAccountPopoverProps) {
     const { wsClient } = useVisualizerContext();
-    const { authState, contextState } = useCloudContext();
+    const { authState } = useCloudContext();
+    const queryClient = useQueryClient();
+    const [isSigningOut, setIsSigningOut] = React.useState(false);
 
-    const handleSignOut = () => {
-        wsClient.runCommand({ command: WICommandIds.SignOut, args: [] });
-        onClose();
-    };
-
-    const handleSwitchProject = () => {
-        wsClient.runCommand({ command: WICommandIds.ManageDirectoryContext, args: [{ onlyShowSwitchProject: true }] });
-        onClose();
+    const handleSignOut = async () => {
+        setIsSigningOut(true);
+        try {
+            await wsClient.runCommand({ command: WICommandIds.SignOut, args: [] });
+            await queryClient.invalidateQueries({ queryKey: ["cloud_auth_state"] });
+        } catch {
+            // ignore
+        } finally {
+            setIsSigningOut(false);
+            onClose();
+        }
     };
 
     return (
@@ -186,35 +149,14 @@ export function UserAccountPopover({
                         <UserName title={authState?.userInfo?.displayName}>{authState?.userInfo?.displayName}</UserName>
                         <UserEmail title={authState?.userInfo?.userEmail}>{authState?.userInfo?.userEmail}</UserEmail>
                     </UserDetails>
-                    <Button appearance="icon" tooltip="Sign Out" onClick={handleSignOut}>
-                        <Codicon name="sign-out" iconSx={{ color: ThemeColors.ERROR }} />
+                    <Button appearance="icon" tooltip={isSigningOut ? "Signing out..." : "Sign Out"} onClick={handleSignOut} disabled={isSigningOut}>
+                        <Codicon
+                            name={isSigningOut ? "loading" : "sign-out"}
+                            iconSx={{ color: ThemeColors.ERROR, ...(isSigningOut && { animation: "codicon-spin 1.5s steps(30) infinite" }) }}
+                        />
                     </Button>
                 </UserHeader>
 
-                {contextState?.selected?.project && (
-                    <ContextSection>
-                        <Row>
-                            <RowContent>
-                                <RowLabel>Organization</RowLabel>
-                                <RowValue>{contextState.selected.org?.name}</RowValue>
-                            </RowContent>
-                        </Row>
-                        <Row>
-                            <RowContent>
-                                <RowLabel>Project</RowLabel>
-                                <RowValueButton
-                                    title="Switch to a different project"
-                                    onClick={handleSwitchProject}
-                                >
-                                    {contextState.selected.project?.name}
-                                </RowValueButton>
-                            </RowContent>
-                            <Button appearance="icon" tooltip="Switch Project" onClick={handleSwitchProject}>
-                                <Codicon name="arrow-swap" />
-                            </Button>
-                        </Row>
-                    </ContextSection>
-                )}
             </PopoverContent>
         </Popover>
     );

@@ -26,7 +26,7 @@ export function signOutCommand(context: ExtensionContext) {
 		commands.registerCommand(WICommandIds.SignOut, async () => {
 			try {
 				isRpcActive(ext);
-				ext.authProvider?.getState().logout(false);
+				await ext.authProvider?.getState().logout(false);
 			} catch (error: any) {
 				ext.logError(`Error while signing out from WSO2 Integrator. ${error?.message}${error?.cause ? `\nCause: ${error.cause.message}` : ""}`, error as Error);
 				if (error instanceof Error) {

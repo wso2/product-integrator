@@ -87,6 +87,14 @@ export const createDirectory = (basePath: string, dirName: string): { dirName: s
     return { dirName: newDirName, dirPath };
 };
 
+export const getDefaultCreationPath = (): string => {
+    const defaultPath = path.join(os.homedir(), "wso2integrator", "projects");
+    if (!existsSync(defaultPath)) {
+        mkdirSync(defaultPath, { recursive: true });
+    }
+    return defaultPath;
+};
+
 export async function openDirectory(openingPath: string, message: string, onSelect?: () => void): Promise<void> {
     const openInCurrentWorkspace = await window.showInformationMessage(message, { modal: true }, "Current Window", "New Window");
     if (openInCurrentWorkspace && onSelect) {

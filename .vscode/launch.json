@@ -8,6 +8,10 @@
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}/wi/wi-extension",
 			],
+			"env": {
+				"WEB_VIEW_DEV_MODE": "true",
+				"WEB_VIEW_DEV_HOST": "http://localhost:3000",
+			},
 			"outFiles": [
 				"${workspaceFolder}/wi/wi-extension/dist/**/*.js"
 			],

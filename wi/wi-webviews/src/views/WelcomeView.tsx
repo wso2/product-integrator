@@ -19,22 +19,34 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./WelcomeView.css";
 import styled from "@emotion/styled";
-import { Codicon } from "@wso2/ui-toolkit";
-import { CreationView } from "./creationView";
-import { ImportIntegration } from "./ImportIntegration";
-import { SamplesView } from "./samplesView";
-import { SettingsView } from "./settingsView";
+import { Codicon, ProgressIndicator } from "@wso2/ui-toolkit";
+import { WICommandIds } from "@wso2/wso2-platform-core";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
-import { WICommandIds } from "@wso2/wso2-platform-core";
+import { ImportIntegration } from "./ImportIntegration";
 import { UserAccountPopover } from "./UserAccountPopover";
+import { CreationView } from "./creationView";
+import { LibraryCreationView } from "./creationView/biForm/LibraryCreationView";
+import { ProjectCreationView } from "./creationView/biForm/ProjectCreationView";
+import { SamplesView } from "./samplesView";
+import { SettingsView } from "./settingsView";
+import {
+	RUNTIME_DISPLAY_LABEL,
+	type WIRuntime,
+	getDefaultRuntime,
+	loadEnabledRuntimes,
+} from "./shared/runtime";
+import { OpenProjectView } from "./OpenProjectView";
 
 enum ViewState {
     WELCOME = "welcome",
-    CREATE_PROJECT = "create_project",
+    CREATE_INTEGRATION = "create_integration",
     SAMPLES = "samples",
     IMPORT_EXTERNAL = "import_external",
+    CREATE_LIBRARY = "create_library",
+    CREATE_PROJECT = "create_project",
     SETTINGS = "settings",
+    OPEN_PROJECT = "open_project",
 }
 
 const Wrapper = styled.div`
@@ -78,10 +90,18 @@ const TopSection = styled.div`
     }
 `;
 
-const TopBtnSection = styled.div`
+const TopControlsSection = styled.div`
     position: absolute;
     top: 40px;
     right: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+    width: fit-content;
+`;
+
+const TopBtnSection = styled.div`
     display: flex;
     align-items: center;
     gap: 12px;
@@ -226,7 +246,6 @@ export const UserInitial = styled.span`
     text-transform: uppercase;
 `;
 
-
 const GetStartedBadge = styled.div`
     display: inline-block;
     backdrop-filter: blur(10px);
@@ -257,6 +276,116 @@ const Caption = styled.p`
     max-width: 800px;
 `;
 
+const RuntimeSelectorWrap = styled.div`
+    --welcome-runtime-foreground: var(--wso2-brand-white);
+    --welcome-runtime-muted: color-mix(in srgb, var(--wso2-brand-white) 82%, transparent);
+    width: 222px;
+    padding: 8px;
+    border-radius: 12px;
+    border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 24%, transparent);
+    background: color-mix(in srgb, var(--wso2-brand-white) 10%, transparent);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--wso2-brand-ink) 24%, transparent);
+    backdrop-filter: blur(14px);
+
+    body.vscode-light & {
+        --welcome-runtime-foreground: var(--wso2-brand-ink-alt);
+        --welcome-runtime-muted: color-mix(in srgb, var(--wso2-brand-ink-alt) 70%, transparent);
+        border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
+        background: color-mix(in srgb, var(--wso2-brand-white) 34%, transparent);
+        box-shadow: none;
+    }
+`;
+
+const RuntimeSelectorLabel = styled.div`
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--welcome-runtime-muted);
+    margin-bottom: 6px;
+`;
+
+const RuntimeSelectField = styled.div`
+    position: relative;
+`;
+
+const RuntimeSelect = styled.select`
+    width: 100%;
+    height: 30px;
+    border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 24%, transparent);
+    border-radius: 7px;
+    padding: 0 34px 0 10px;
+    appearance: none;
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--welcome-runtime-foreground);
+    background:
+        linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--wso2-brand-white) 16%, transparent) 0%,
+            color-mix(in srgb, var(--wso2-brand-white) 8%, transparent) 100%
+        );
+    box-shadow:
+        inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 16%, transparent),
+        0 8px 20px color-mix(in srgb, var(--wso2-brand-ink) 16%, transparent);
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+
+    &:hover {
+        border-color: color-mix(in srgb, var(--wso2-brand-white) 38%, transparent);
+        background:
+            linear-gradient(
+                135deg,
+                color-mix(in srgb, var(--wso2-brand-white) 20%, transparent) 0%,
+                color-mix(in srgb, var(--wso2-brand-white) 10%, transparent) 100%
+            );
+    }
+
+    &:focus-visible {
+        outline: 1px solid color-mix(in srgb, var(--welcome-runtime-foreground) 68%, transparent);
+        outline-offset: 2px;
+    }
+
+    option {
+        color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+        background: var(--vscode-dropdown-background, var(--vscode-editor-background));
+    }
+
+    body.vscode-light & {
+        border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
+        background:
+            linear-gradient(
+                135deg,
+                color-mix(in srgb, var(--wso2-brand-white) 78%, transparent) 0%,
+                color-mix(in srgb, var(--wso2-brand-white) 60%, transparent) 100%
+            );
+        box-shadow: none;
+
+        &:hover {
+            border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 22%, transparent);
+            background:
+                linear-gradient(
+                    135deg,
+                    color-mix(in srgb, var(--wso2-brand-white) 86%, transparent) 0%,
+                    color-mix(in srgb, var(--wso2-brand-white) 68%, transparent) 100%
+                );
+        }
+    }
+`;
+
+const RuntimeSelectIcon = styled.div`
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    pointer-events: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--welcome-runtime-muted);
+`;
+
 const CardsContainer = styled.div`
     padding: 0 60px 60px;
     margin-top: -40px;
@@ -264,9 +393,16 @@ const CardsContainer = styled.div`
     z-index: 1;
 `;
 
+const CardsLoadingState = styled.div`
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+`;
+
 const CardsGrid = styled.div`
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 24px;
 
     @media (max-width: 1200px) {
@@ -279,15 +415,15 @@ const CardsGrid = styled.div`
 `;
 
 interface ActionCardProps {
-    isPrimary?: boolean;
-    disabled?: boolean;
+	isPrimary?: boolean;
+	disabled?: boolean;
 }
 
 interface RecentProject {
-    path: string;
-    label: string;
-    description?: string;
-    isWorkspace?: boolean;
+	path: string;
+	label: string;
+	description?: string;
+	isWorkspace?: boolean;
 }
 
 const ActionCard = styled.div<ActionCardProps>`
@@ -299,11 +435,12 @@ const ActionCard = styled.div<ActionCardProps>`
     transition: all 0.3s ease;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
     min-height: 280px;
+    cursor: pointer;
 
     &:hover {
         ${(props: ActionCardProps) =>
-        !props.disabled &&
-        `
+					!props.disabled &&
+					`
             transform: translateY(-4px);
             box-shadow: 0 8px 16px rgba(0,0,0,0.25);
         `}
@@ -311,7 +448,7 @@ const ActionCard = styled.div<ActionCardProps>`
 `;
 
 interface CardIconProps {
-    bgColor?: string;
+	bgColor?: string;
 }
 
 const CardIconContainer = styled.div`
@@ -328,7 +465,8 @@ const CardIcon = styled.div<CardIconProps>`
     align-items: center;
     justify-content: center;
     background: ${(props: CardIconProps) =>
-            props.bgColor || "linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%)"};
+			props.bgColor ||
+			"linear-gradient(135deg, var(--wso2-brand-primary) 0%, var(--wso2-brand-primary-alt) 100%)"};
     color: white;
     flex-shrink: 0;
     pointer-events: none;
@@ -367,9 +505,9 @@ const CardDescription = styled.p`
 `;
 
 // Use a native button element. Filter custom props so they are not forwarded to the DOM.
-const StyledButton = styled('button', {
-    shouldForwardProp: (prop) => prop !== 'isPrimary'
-}) <{ isPrimary?: boolean }>`
+const StyledButton = styled("button", {
+	shouldForwardProp: (prop) => prop !== "isPrimary",
+})<{ isPrimary?: boolean }>`
     height: 44px;
     font-size: 14px;
     font-weight: 500;
@@ -377,10 +515,15 @@ const StyledButton = styled('button', {
     align-self: flex-start;
     padding: 0 24px;
     background: ${(props: { isPrimary?: boolean }) =>
-        props.isPrimary ? 'var(--button-primary-background)' : 'var(--button-secondary-background)'};
+			props.isPrimary
+				? "var(--button-primary-background)"
+				: "var(--button-secondary-background)"};
     color: ${(props: { isPrimary?: boolean }) =>
-        props.isPrimary ? 'var(--vscode-button-foreground)' : 'var(--vscode-button-secondaryForeground)'};
-    border: none;
+			props.isPrimary
+				? "var(--vscode-button-foreground)"
+				: "var(--vscode-button-secondaryForeground)"};
+    border: ${(props: { isPrimary?: boolean }) =>
+        props.isPrimary ? 'none' : '1px solid var(--button-primary-background)'};
     box-shadow: ${(props: { isPrimary?: boolean }) =>
         props.isPrimary ? 'none' : 'var(--button-secondary-shadow)'};
     transition: all 0.2s ease;
@@ -388,7 +531,9 @@ const StyledButton = styled('button', {
 
     &:hover:not(:disabled) {
         background: ${(props: { isPrimary?: boolean }) =>
-        props.isPrimary ? 'var(--button-primary-hover-background)' : 'var(--button-secondary-hover-background)'};
+					props.isPrimary
+						? "var(--button-primary-hover-background)"
+						: "var(--button-secondary-hover-background)"};
         transform: translateY(-1px);
     }
 
@@ -426,7 +571,6 @@ const RecentProjectsSection = styled.section`
 
 const RecentProjectsHeader = styled.div`
     display: flex;
-    justify-content: space-between;
     align-items: center;
     padding: 14px 18px;
     border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 74%, transparent);
@@ -452,6 +596,7 @@ const ViewAllButton = styled.button`
     cursor: pointer;
     font-weight: 500;
     padding: 0;
+    margin-left: auto;
     
     &:hover {
         color: var(--vscode-textLink-activeForeground);
@@ -481,23 +626,92 @@ const ProjectItem = styled.button`
     text-align: left;
     padding: 12px 18px;
     font-size: 13px;
-    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
     cursor: pointer;
-    transition: all 0.15s ease;
-    border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 58%, transparent);
-    
+    transition: all 0.2s ease;
+    white-space: nowrap;
+
     &:hover {
         background: var(--vscode-list-hoverBackground);
+        color: var(--vscode-foreground);
+        border-color: var(--vscode-focusBorder, rgba(128, 128, 128, 0.5));
     }
+`;
 
-    &:last-of-type {
-        border-bottom: none;
+const MoreChevron = styled.span`
+    display: inline-block;
+    transition: transform 0.25s ease;
+    font-size: 11px;
+    line-height: 1;
+`;
+
+const SecondaryCardsSection = styled.div`
+    overflow: hidden;
+    transition: max-height 0.4s ease, opacity 0.3s ease;
+`;
+
+const SecondaryActionRow = styled.div`
+    background: transparent;
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+    cursor: pointer;
+
+    &:hover {
+        background: var(--vscode-list-hoverBackground);
+        border-color: color-mix(in srgb, var(--vscode-focusBorder) 55%, transparent);
     }
 
     &:focus-visible {
         outline: 1px solid var(--vscode-focusBorder);
         outline-offset: -1px;
     }
+`;
+
+const SecondaryRowIcon = styled.div<CardIconProps>`
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: ${(props: CardIconProps) =>
+			props.bgColor || "var(--vscode-sideBar-background)"};
+    flex-shrink: 0;
+
+    i {
+        font-size: 16px;
+        color: var(--wso2-brand-white);
+        line-height: 1;
+    }
+`;
+
+const SecondaryRowContent = styled.div`
+    flex: 1;
+    min-width: 0;
+`;
+
+const SecondaryRowTitle = styled.span`
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    margin-bottom: 2px;
+`;
+
+const SecondaryRowDescription = styled.span`
+    display: block;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--vscode-descriptionForeground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 `;
 
 const ProjectName = styled.span`
@@ -523,262 +737,553 @@ const RecentProjectsEmptyState = styled.div`
     padding: 18px;
 `;
 
+const SecondaryCardsGrid = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 6px;
+`;
+
+// ── More / secondary section ──────────────────────────────────────────────────
+
+const MoreToggleWrapper = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 28px 0 20px;
+`;
+
+const MoreDivider = styled.div`
+    flex: 1;
+    height: 1px;
+    background: var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+`;
+
+const MoreToggleButton = styled.button`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 18px;
+    background: transparent;
+    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
+    border-radius: 20px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 13px;
+    font-family: var(--vscode-font-family);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+
+    &:hover {
+        background: var(--vscode-list-hoverBackground);
+        color: var(--vscode-foreground);
+        border-color: var(--vscode-focusBorder, rgba(128, 128, 128, 0.5));
+    }
+`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const WelcomeView: React.FC = () => {
-    const { wsClient } = useVisualizerContext();
-    const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
-    const { authState } = useCloudContext();
-    const [popoverOpen, setPopoverOpen] = useState(false);
-    const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
+	const { wsClient } = useVisualizerContext();
+	const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
+	const { authState } = useCloudContext();
+	const [popoverOpen, setPopoverOpen] = useState(false);
+	const [enabledRuntimes, setEnabledRuntimes] = useState<WIRuntime[]>([]);
+	const [selectedRuntime, setSelectedRuntime] = useState<WIRuntime | null>(null);
+	const [isRuntimeLoading, setIsRuntimeLoading] = useState(true);
+	const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
     const [isRecentProjectsLoaded, setIsRecentProjectsLoaded] = useState(false);
-    const avatarRef = useRef<HTMLButtonElement>(null);
+    const [showSecondary, setShowSecondary] = useState(false);
+    const [isSigningIn, setIsSigningIn] = useState(false);
+	const avatarRef = useRef<HTMLButtonElement>(null);
+    const signingInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         if (currentView !== ViewState.WELCOME) {
             return;
         }
 
-        let isDisposed = false;
-
-        const fetchRecentProjects = async () => {
+        const fetchEnabledRuntimes = async () => {
+            setIsRuntimeLoading(true);
             try {
-                const response = await wsClient.getRecentProjects();
-                if (isDisposed) {
-                    return;
-                }
-
-                const projects = Array.isArray(response?.projects)
-                    ? response.projects.filter(
-                        (project: RecentProject) => typeof project?.path === "string" && project.path.trim().length > 0
-                    )
-                    : [];
-                setRecentProjects(projects);
-                setIsRecentProjectsLoaded(true);
-            } catch {
-                if (!isDisposed) {
-                    setRecentProjects([]);
-                    setIsRecentProjectsLoaded(false);
-                }
+                const runtimes = await loadEnabledRuntimes(wsClient);
+                setEnabledRuntimes(runtimes);
+                setSelectedRuntime((previousRuntime) => {
+                    if (previousRuntime && runtimes.includes(previousRuntime)) {
+                        return previousRuntime;
+                    }
+                    return getDefaultRuntime(runtimes);
+                });
+            } catch (error) {
+                console.warn("Failed to load enabled runtimes, using fallback:", error);
+                setEnabledRuntimes(["WSO2: BI"]);
+                setSelectedRuntime("WSO2: BI");
+            } finally {
+                setIsRuntimeLoading(false);
             }
         };
 
-        fetchRecentProjects();
-
-        return () => {
-            isDisposed = true;
-        };
+        fetchEnabledRuntimes();
     }, [currentView, wsClient]);
 
-    const goToCreateProject = () => {
-        setCurrentView(ViewState.CREATE_PROJECT);
-    };
-
-    const goToSamples = () => {
-        setCurrentView(ViewState.SAMPLES);
-    };
-
-    const goToImportExternal = () => {
-        setCurrentView(ViewState.IMPORT_EXTERNAL);
-    };
-
-    const goToSettings = () => {
-        setCurrentView(ViewState.SETTINGS);
-    };
-
-    const handleProjectDirSelection = async () => {
-        const response = await wsClient.selectFileOrDirPath({});
-        if (response?.path) {
-            wsClient.openFolder(response.path);
-        }
-    };
-
-    const goBackToWelcome = () => {
-        setCurrentView(ViewState.WELCOME);
-    };
-
-    const openConfigure = () => {
-        goToSettings();
-    };
-
-    const openRecentProjectsPicker = () => {
-        wsClient.runCommand({ command: "workbench.action.openRecent" }).catch((): void => undefined);
-    };
-
-    const openRecentProject = (projectPath: string) => {
-        if (!projectPath) {
+    useEffect(() => {
+        if (currentView !== ViewState.WELCOME) {
             return;
         }
-        wsClient.openFolder(projectPath);
+
+		let isDisposed = false;
+
+		const fetchRecentProjects = async () => {
+			try {
+				const response = await wsClient.getRecentProjects();
+				if (isDisposed) {
+					return;
+				}
+
+				const projects = Array.isArray(response?.projects)
+					? response.projects.filter(
+							(project: RecentProject) =>
+								typeof project?.path === "string" &&
+								project.path.trim().length > 0,
+						)
+					: [];
+				setRecentProjects(projects);
+				setIsRecentProjectsLoaded(true);
+			} catch {
+				if (!isDisposed) {
+					setRecentProjects([]);
+					setIsRecentProjectsLoaded(false);
+				}
+			}
+		};
+
+		fetchRecentProjects();
+
+		return () => {
+			isDisposed = true;
+		};
+	}, [currentView, wsClient]);
+
+	useEffect(() => {
+		if (selectedRuntime !== "WSO2: BI") {
+			setShowSecondary(false);
+		}
+	}, [selectedRuntime]);
+
+	const goToCreateIntegration = () =>
+		setCurrentView(ViewState.CREATE_INTEGRATION);
+	const goToSamples = () => setCurrentView(ViewState.SAMPLES);
+	const goToImportExternal = () => setCurrentView(ViewState.IMPORT_EXTERNAL);
+	const goToSettings = () => setCurrentView(ViewState.SETTINGS);
+	const goBackToWelcome = () => setCurrentView(ViewState.WELCOME);
+	const goToCreateLibrary = () => setCurrentView(ViewState.CREATE_LIBRARY);
+	const goToCreateProject = () => setCurrentView(ViewState.CREATE_PROJECT);
+
+    const handleProjectDirSelection = () => {
+        setCurrentView(ViewState.OPEN_PROJECT);
     };
 
-    // Helper function to render current view content
-    const renderCurrentView = () => {
-        switch (currentView) {
-            case ViewState.CREATE_PROJECT:
-                return <CreationView onBack={goBackToWelcome} />;
-            case ViewState.SAMPLES:
-                return (
-                    <SamplesView onBack={goBackToWelcome} />
-                );
-            case ViewState.IMPORT_EXTERNAL:
-                return (
-                    <ImportIntegration onBack={goBackToWelcome} />
-                );
-            case ViewState.SETTINGS:
-                return (
-                    <SettingsView onBack={goBackToWelcome} />
-                );
-            case ViewState.WELCOME:
-            default:
-                return renderWelcomeContent();
-        }
-    };
+	const openRecentProjectsPicker = () => {
+		wsClient
+			.runCommand({ command: "workbench.action.openRecent" })
+			.catch((): void => undefined);
+	};
 
-    const handleSignIn = () => {
-        wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
-    };
+	const openRecentProject = (projectPath: string) => {
+		if (!projectPath) return;
+		wsClient.openFolder(projectPath);
+	};
 
-    const renderWelcomeContent = () => (
-        <>
-            <TopSection>
-                <TopBtnSection>
-                    {authState?.userInfo ? (
-                        <UserAvatar
-                            ref={avatarRef}
-                            title={authState.userInfo.displayName}
-                            onClick={() => setPopoverOpen(true)}
-                        >
-                            {authState.userInfo.userProfilePictureUrl ? (
-                                <UserAvatarImg
-                                    src={authState.userInfo.userProfilePictureUrl}
-                                    alt={authState.userInfo.displayName}
-                                />
-                            ) : (
-                                <UserInitial>{authState.userInfo.displayName.charAt(0)}</UserInitial>
-                            )}
-                        </UserAvatar>
-                    ) : (
-                        <SigninBtn type="button" onClick={handleSignIn}>Sign In</SigninBtn>
-                    )}
-                    <ConfigureBtn type="button" onClick={openConfigure}>
-                        <Codicon name="settings-gear" iconSx={{ fontSize: 16, color: "var(--wso2-brand-white)" }} />
-                        <span>Settings</span>
-                    </ConfigureBtn>
-                </TopBtnSection>
-                <GetStartedBadge>Get Started</GetStartedBadge>
-                <Headline>WSO2 Integrator</Headline>
-                <Caption>
-                    Connect any system across your business, build AI agents, and orchestrate AI-enabled workflows with the 100% open source and AI-native WSO2 Integrator.
-                </Caption>
-            </TopSection>
+	// Show loader when the extension's URI handler fires (i.e. user confirmed
+	// the "Allow WSO2 Integrator to open this URI?" VS Code dialog).
+	// Clear it once auth completes or after a short timeout (user cancelled).
+	useEffect(() => {
+		const unsubscribe = wsClient.onSignInInitiated(() => {
+			setIsSigningIn(true);
+			signingInTimeoutRef.current = setTimeout(() => {
+				setIsSigningIn(false);
+				signingInTimeoutRef.current = null;
+			}, 15000);
+		});
+		return unsubscribe;
+	}, []);
 
-            <CardsContainer>
-                <CardsGrid>
-                    <ActionCard onClick={goToCreateProject}>
-                        <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, #35537d 100%)">
-                                <Codicon name="plus" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
-                            </CardIcon>
-                        </CardIconContainer>
-                        <CardContent>
-                            <CardTitle>Create New Project</CardTitle>
-                            <CardDescription>
-                                Ready to build? Start a new integration project using our intuitive graphical designer.
-                            </CardDescription>
-                            <StyledButton
-                                isPrimary={true}
-                                onClick={(e: any) => { e.stopPropagation(); goToCreateProject(); }}>
-                                <ButtonContent>Create</ButtonContent>
-                            </StyledButton>
-                        </CardContent>
-                    </ActionCard>
+	useEffect(() => {
+		if (authState?.userInfo && isSigningIn) {
+			setIsSigningIn(false);
+			if (signingInTimeoutRef.current) {
+				clearTimeout(signingInTimeoutRef.current);
+				signingInTimeoutRef.current = null;
+			}
+		}
+	}, [authState?.userInfo]);
 
-                    <ActionCard onClick={handleProjectDirSelection}>
-                        <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, #0b1220 0%, var(--wso2-brand-ink-alt) 100%)">
-                                <Codicon name="file-text" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
-                            </CardIcon>
-                        </CardIconContainer>
-                        <CardContent>
-                            <CardTitle>Open Project</CardTitle>
-                            <CardDescription>
-                                Open an existing integration project and continue building your solution.
-                            </CardDescription>
-                            <StyledButton
-                                onClick={(e: any) => { e.stopPropagation(); handleProjectDirSelection(); }}>
-                                <ButtonContent>Open</ButtonContent>
-                            </StyledButton>
-                        </CardContent>
-                    </ActionCard>
+	useEffect(() => {
+		return () => {
+			if (signingInTimeoutRef.current) clearTimeout(signingInTimeoutRef.current);
+		};
+	}, []);
 
-                    <ActionCard onClick={goToSamples}>
-                        <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, #3a90bf 100%)">
-                                <Codicon name="symbol-class" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
-                            </CardIcon>
-                        </CardIconContainer>
-                        <CardContent>
-                            <CardTitle>Explore Samples</CardTitle>
-                            <CardDescription>
-                                Need inspiration? Browse through sample projects to see how WSO2 Integrator works in real-world scenarios.
-                            </CardDescription>
-                            <StyledButton
-                                onClick={(e: any) => { e.stopPropagation(); goToSamples(); }}>
-                                <ButtonContent>Explore</ButtonContent>
-                            </StyledButton>
-                        </CardContent>
-                    </ActionCard>
+	const handleSignIn = () => {
+		wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
+	};
 
-                    <ActionCard onClick={goToImportExternal}>
-                        <CardIconContainer>
-                            <CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent-soft) 0%, #4f84aa 100%)">
-                                <Codicon name="arrow-swap" iconSx={{ fontSize: '25px' }} sx={{ width: '23px', height: '25px' }} />
-                            </CardIcon>
-                        </CardIconContainer>
-                        <CardContent>
-                            <CardTitle>Import External Integration</CardTitle>
-                            <CardDescription>
-                                Have an integration from another platform? Import your MuleSoft or TIBCO integration project and continue building.
-                            </CardDescription>
-                            <StyledButton
-                                onClick={(e: any) => { e.stopPropagation(); goToImportExternal(); }}>
-                                <ButtonContent>Import</ButtonContent>
-                            </StyledButton>
-                        </CardContent>
-                    </ActionCard>
-                </CardsGrid>
-            </CardsContainer>
+	const handleRuntimeChange = (value: string) => {
+		if (enabledRuntimes.includes(value as WIRuntime)) {
+			setSelectedRuntime(value as WIRuntime);
+		}
+	};
 
-            {isRecentProjectsLoaded && (
-                <BottomSection>
-                    <RecentProjectsSection>
-                        <RecentProjectsHeader>
-                            <RecentProjectsTitle>Recent Projects</RecentProjectsTitle>
-                            <ViewAllButton type="button" onClick={openRecentProjectsPicker}>
-                                See more
-                            </ViewAllButton>
-                        </RecentProjectsHeader>
-                        {recentProjects.length > 0 ? (
-                            <ProjectsList>
-                                {recentProjects.map((project) => (
-                                    <ProjectItem
-                                        key={project.path}
-                                        type="button"
-                                        onClick={() => openRecentProject(project.path)}
-                                        title={project.description || project.path}
-                                    >
-                                        <ProjectName>{project.label}</ProjectName>
-                                        <ProjectPath>{project.description || project.path}</ProjectPath>
-                                    </ProjectItem>
-                                ))}
-                            </ProjectsList>
-                        ) : (
-                            <RecentProjectsEmptyState>
-                                No recent projects found in your current history.
-                            </RecentProjectsEmptyState>
-                        )}
-                    </RecentProjectsSection>
-                </BottomSection>
-            )}
+	const renderCurrentView = () => {
+		switch (currentView) {
+			case ViewState.CREATE_INTEGRATION:
+				return (
+					<CreationView
+						onBack={goBackToWelcome}
+						runtime={selectedRuntime ?? undefined}
+					/>
+				);
+			case ViewState.SAMPLES:
+				return (
+					<SamplesView
+						onBack={goBackToWelcome}
+						runtime={selectedRuntime ?? undefined}
+					/>
+				);
+			case ViewState.IMPORT_EXTERNAL:
+				return <ImportIntegration onBack={goBackToWelcome} />;
+			case ViewState.CREATE_LIBRARY:
+				return <LibraryCreationView onBack={goBackToWelcome} />;
+			case ViewState.CREATE_PROJECT:
+				return <ProjectCreationView onBack={goBackToWelcome} />;
+			case ViewState.SETTINGS:
+				return <SettingsView onBack={goBackToWelcome} />;
+            case ViewState.OPEN_PROJECT:
+                return <OpenProjectView onBack={goBackToWelcome} />;
+			case ViewState.WELCOME:
+			default:
+				return renderWelcomeContent();
+		}
+	};
+
+	const renderWelcomeContent = () => (
+		<>
+			<TopSection>
+				<TopControlsSection>
+					<TopBtnSection>
+						{authState?.userInfo ? (
+							<UserAvatar
+								ref={avatarRef}
+								title={authState.userInfo.displayName}
+								onClick={() => setPopoverOpen(true)}
+							>
+								{authState.userInfo.userProfilePictureUrl ? (
+									<UserAvatarImg
+										src={authState.userInfo.userProfilePictureUrl}
+										alt={authState.userInfo.displayName}
+									/>
+								) : (
+									<UserInitial>
+										{authState.userInfo.displayName.charAt(0)}
+									</UserInitial>
+								)}
+							</UserAvatar>
+						) : (
+							<SigninBtn type="button" onClick={handleSignIn} disabled={isSigningIn}>
+								{isSigningIn ? (
+									<>
+										<Codicon
+											name="loading"
+											iconSx={{ fontSize: 13, color: "var(--wso2-brand-white)", animation: "codicon-spin 1.5s steps(30) infinite" }}
+										/>
+										Signing in...
+									</>
+								) : (
+									"Sign In"
+								)}
+							</SigninBtn>
+						)}
+						<ConfigureBtn type="button" onClick={goToSettings}>
+							<Codicon
+								name="settings-gear"
+								iconSx={{ fontSize: 16, color: "var(--wso2-brand-white)" }}
+							/>
+							<span>Settings</span>
+						</ConfigureBtn>
+					</TopBtnSection>
+					{!isRuntimeLoading &&
+						enabledRuntimes.length > 1 &&
+						selectedRuntime && (
+							<RuntimeSelectorWrap>
+								<RuntimeSelectorLabel>Runtime</RuntimeSelectorLabel>
+								<RuntimeSelectField>
+									<RuntimeSelect
+										id="welcome-runtime-selector"
+										value={selectedRuntime}
+										onChange={(event) =>
+											handleRuntimeChange(event.target.value)
+										}
+									>
+										{enabledRuntimes.map((runtime) => (
+											<option key={runtime} value={runtime}>
+												{RUNTIME_DISPLAY_LABEL[runtime]}
+											</option>
+										))}
+									</RuntimeSelect>
+									<RuntimeSelectIcon>
+										<Codicon
+											name="chevron-down"
+											iconSx={{ fontSize: 18, color: "inherit" }}
+										/>
+									</RuntimeSelectIcon>
+								</RuntimeSelectField>
+							</RuntimeSelectorWrap>
+						)}
+				</TopControlsSection>
+				<GetStartedBadge>Get Started</GetStartedBadge>
+				<Headline>WSO2 Integrator</Headline>
+				<Caption>
+					Connect any system across your business, build AI agents, and
+					orchestrate AI-enabled workflows with the 100% open source and
+					AI-native WSO2 Integrator.
+				</Caption>
+			</TopSection>
+
+			<CardsContainer>
+				{isRuntimeLoading || !selectedRuntime ? (
+					<CardsLoadingState>
+						<ProgressIndicator />
+					</CardsLoadingState>
+				) : (
+					<>
+						<CardsGrid>
+							<ActionCard onClick={goToCreateIntegration}>
+								<CardIconContainer>
+									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-primary-deep) 100%)">
+										<Codicon
+											name="circuit-board"
+											iconSx={{ fontSize: "25px" }}
+											sx={{ width: "23px", height: "25px" }}
+										/>
+									</CardIcon>
+								</CardIconContainer>
+								<CardContent>
+									<CardTitle>Create New Integration</CardTitle>
+									<CardDescription>
+										Ready to build? Start a new integration using our intuitive
+										graphical designer.
+									</CardDescription>
+									<StyledButton
+										isPrimary={true}
+										onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+											e.stopPropagation();
+											goToCreateIntegration();
+										}}
+									>
+										<ButtonContent>Create</ButtonContent>
+									</StyledButton>
+								</CardContent>
+							</ActionCard>
+
+							<ActionCard onClick={handleProjectDirSelection}>
+								<CardIconContainer>
+									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink-deep) 0%, var(--wso2-brand-ink-alt) 100%)">
+										<Codicon
+											name="folder-opened"
+											iconSx={{ fontSize: "25px" }}
+											sx={{ width: "23px", height: "25px" }}
+										/>
+									</CardIcon>
+								</CardIconContainer>
+								<CardContent>
+									<CardTitle>Open Integration or Project</CardTitle>
+									<CardDescription>
+										Open an existing integration project and continue building
+										your solution.
+									</CardDescription>
+									<StyledButton
+										onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+											e.stopPropagation();
+											handleProjectDirSelection();
+										}}
+									>
+										<ButtonContent>Open</ButtonContent>
+									</StyledButton>
+								</CardContent>
+							</ActionCard>
+
+							{selectedRuntime !== "WSO2: SI" && (
+								<ActionCard onClick={goToSamples}>
+									<CardIconContainer>
+										<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-alt) 100%)">
+											<Codicon
+												name="lightbulb"
+												iconSx={{ fontSize: "25px" }}
+												sx={{ width: "23px", height: "25px" }}
+											/>
+										</CardIcon>
+									</CardIconContainer>
+									<CardContent>
+										<CardTitle>Explore Samples and Pre-built Integrations</CardTitle>
+										<CardDescription>
+											Need inspiration? Browse through sample projects to see
+											how WSO2 Integrator works in real-world scenarios.
+										</CardDescription>
+										<StyledButton
+											onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+												e.stopPropagation();
+												goToSamples();
+											}}
+										>
+											<ButtonContent>Explore</ButtonContent>
+										</StyledButton>
+									</CardContent>
+								</ActionCard>
+							)}
+						</CardsGrid>
+
+						{selectedRuntime === "WSO2: BI" && (
+							<>
+								<MoreToggleWrapper>
+									<MoreDivider />
+									<MoreToggleButton
+										type="button"
+										onClick={() => setShowSecondary(!showSecondary)}
+									>
+										<span>{showSecondary ? "Show less" : "More actions"}</span>
+										<MoreChevron>
+											<span
+												className={`codicon ${showSecondary ? "codicon-triangle-up" : "codicon-triangle-down"}`}
+											/>
+										</MoreChevron>
+									</MoreToggleButton>
+									<MoreDivider />
+								</MoreToggleWrapper>
+
+								<SecondaryCardsSection
+									style={{
+										maxHeight: showSecondary ? "300px" : "0",
+										opacity: showSecondary ? 1 : 0,
+									}}
+								>
+									<SecondaryCardsGrid>
+										<SecondaryActionRow onClick={goToCreateLibrary}>
+											<SecondaryRowIcon bgColor="var(--welcome-library-accent)">
+												<Codicon
+													name="book"
+													iconSx={{ fontSize: "16px" }}
+													sx={{ width: "16px", height: "16px" }}
+												/>
+											</SecondaryRowIcon>
+											<SecondaryRowContent>
+												<SecondaryRowTitle>Create Library</SecondaryRowTitle>
+												<SecondaryRowDescription>
+													Build reusable components and utilities to share
+													across projects.
+												</SecondaryRowDescription>
+											</SecondaryRowContent>
+											<Codicon
+												name="chevron-right"
+												iconSx={{
+													fontSize: "14px",
+													color: "var(--vscode-descriptionForeground)",
+													opacity: 0.6,
+												}}
+											/>
+										</SecondaryActionRow>
+
+										<SecondaryActionRow onClick={goToCreateProject}>
+											<SecondaryRowIcon bgColor="var(--welcome-project-accent)">
+												<Codicon
+													name="new-folder"
+													iconSx={{ fontSize: "16px" }}
+													sx={{ width: "16px", height: "16px" }}
+												/>
+											</SecondaryRowIcon>
+											<SecondaryRowContent>
+												<SecondaryRowTitle>Create Project</SecondaryRowTitle>
+												<SecondaryRowDescription>
+													Create a workspace to organize multiple integrations
+													and libraries.
+												</SecondaryRowDescription>
+											</SecondaryRowContent>
+											<Codicon
+												name="chevron-right"
+												iconSx={{
+													fontSize: "14px",
+													color: "var(--vscode-descriptionForeground)",
+													opacity: 0.6,
+												}}
+											/>
+										</SecondaryActionRow>
+
+										<SecondaryActionRow onClick={goToImportExternal}>
+											<SecondaryRowIcon bgColor="var(--welcome-import-accent)">
+												<Codicon
+													name="cloud-download"
+													iconSx={{ fontSize: "16px" }}
+													sx={{ width: "16px", height: "16px" }}
+												/>
+											</SecondaryRowIcon>
+											<SecondaryRowContent>
+												<SecondaryRowTitle>
+													Migrate 3rd Party Integrations
+												</SecondaryRowTitle>
+												<SecondaryRowDescription>
+													Transform MuleSoft or TIBCO integrations to WSO2
+													Integrator automatically.
+												</SecondaryRowDescription>
+											</SecondaryRowContent>
+											<Codicon
+												name="chevron-right"
+												iconSx={{
+													fontSize: "14px",
+													color: "var(--vscode-descriptionForeground)",
+													opacity: 0.6,
+												}}
+											/>
+										</SecondaryActionRow>
+									</SecondaryCardsGrid>
+								</SecondaryCardsSection>
+							</>
+						)}
+					</>
+				)}
+			</CardsContainer>
+
+			{isRecentProjectsLoaded && (
+				<BottomSection>
+					<RecentProjectsSection>
+						<RecentProjectsHeader>
+							<RecentProjectsTitle>Recent Projects</RecentProjectsTitle>
+							<ViewAllButton type="button" onClick={openRecentProjectsPicker}>
+								See more
+							</ViewAllButton>
+						</RecentProjectsHeader>
+						{recentProjects.length > 0 ? (
+							<ProjectsList>
+								{recentProjects.map((project) => (
+									<ProjectItem
+										key={project.path}
+										type="button"
+										onClick={() => openRecentProject(project.path)}
+										title={project.description || project.path}
+									>
+										<ProjectName>{project.label}</ProjectName>
+										<ProjectPath>
+											{project.description || project.path}
+										</ProjectPath>
+									</ProjectItem>
+								))}
+							</ProjectsList>
+						) : (
+							<RecentProjectsEmptyState>
+								No recent projects found in your current history.
+							</RecentProjectsEmptyState>
+						)}
+					</RecentProjectsSection>
+				</BottomSection>
+			)}
 
             <UserAccountPopover
                 isOpen={popoverOpen}
@@ -788,9 +1293,5 @@ export const WelcomeView: React.FC = () => {
         </>
     );
 
-    return (
-        <Wrapper>
-            {renderCurrentView()}
-        </Wrapper>
-    );
+	return <Wrapper>{renderCurrentView()}</Wrapper>;
 };

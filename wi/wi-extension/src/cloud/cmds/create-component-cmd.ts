@@ -26,6 +26,10 @@ import {
 	GitProvider,
 	ICreateNewIntegrationCmdParams,
 	makeURLSafe,
+	ContextItem,
+	UserInfo,
+	Organization,
+	Project,
 } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, Uri, commands, window, workspace } from "vscode";
 import { ext } from "../../extensionVariables";
@@ -39,6 +43,8 @@ import { updateContextFile } from "./create-directory-context-cmd";
 import { WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 import { ProjectType, StateMachine, stateService } from "../../stateMachine";
+import { existsSync, readFileSync, writeFileSync } from "fs";
+import * as yaml from "js-yaml";
 
 
 const allIntegrationTypes = [
@@ -61,9 +67,17 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					let selectedProject = selected?.project;
 					let selectedOrg = selected?.org;
 
-					if (!selectedProject || !selectedOrg) {
-						selectedOrg = await selectOrg(userInfo, "Select organization");
+					if (!selectedOrg || !selectedOrg) {
+						const contextFileEntry = await createProjectFromContext(userInfo, params?.workspaceDir);
+						selectedOrg = contextFileEntry?.org;
+						selectedProject = contextFileEntry?.project;
+					}
 
+					if (!selectedOrg) {
+						selectedOrg = await selectOrg(userInfo, "Select organization");
+					}
+
+					if (!selectedProject) {
 						const createdProjectRes = await selectProjectWithCreateNew(
 							selectedOrg,
 							`Loading projects from '${selectedOrg.name}'`,
@@ -364,10 +378,14 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		contextStore.getState().refreshState();
 	}
 
-	if (result.failed?.length === 0 && result.created.length > 0) {
-		let successMessage = "Successfully create integration in the cloud";
-		if (result.created.length > 1) {
-			successMessage = "Successfully created all integrations in the cloud";
+	if (result.created.length > 0) {
+		let successMessage: string;
+		if (result.failed?.length === 0) {
+			successMessage = result.created.length === 1
+				? "Successfully created integration in the cloud"
+				: "Successfully created all integrations in the cloud";
+		} else {
+			successMessage = `Successfully created ${result.created.length} of ${totalCount} integrations in the cloud`;
 		}
 
 		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
@@ -390,7 +408,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		} else if (isWithinWorkspace) {
 			window.showInformationMessage(successMessage, `View in console`).then(async (resp) => {
 				if (resp === `View in console`) {
-					let consoleProjectPath = `${ext.config?.devantConsoleUrl}/organizations/${org.handle}/projects/${project.id}`;
+					let consoleProjectPath = `${ext.config?.devantConsoleUrl}/organizations/${org.handle}/projects/${project.handler}`;
 					if (result.created.length === 1) {
 						consoleProjectPath += `/components/${result.created[0]?.metadata.handler}/overview`;
 					}
@@ -404,7 +422,70 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				}
 			});
 		}
+	}
 
+	if (result.failed?.length > 0) {
+		const failedNames = result.failed.map(item => item.name).join(", ");
+		window.showErrorMessage(`Failed to create the following integrations: ${failedNames}`);
 	}
 	return result;
 };
+
+/** If project in context.yaml doesn't exist, create it automatically */
+const createProjectFromContext = async (userInfo: UserInfo, workspacePath?: string): Promise<{ org?: Organization; project?: Project }> => {
+	try {
+		const contextFilePath = path.join(workspacePath || "", ".choreo", "context.yaml");
+		if (existsSync(contextFilePath)) {
+			let parsedData: ContextItem[] = yaml.load(readFileSync(contextFilePath, "utf8")) as any;
+			if (!Array.isArray(parsedData) && (parsedData as any)?.org && (parsedData as any)?.project) {
+				parsedData = [{ org: (parsedData as any).org, project: (parsedData as any).project }];
+			}
+
+			if (!parsedData || parsedData.length !== 1) {
+				return;
+			}
+
+			const newContextItem = parsedData[0];
+			const matchingOrg = userInfo.organizations.find((org) => org.handle === newContextItem.org);
+			if (!matchingOrg) {
+				return;
+			}
+
+			const projects = await window.withProgress(
+				{
+					title: `Fetching cloud projects of organization ${matchingOrg.name}...`,
+					location: ProgressLocation.Notification,
+				},
+				() => ext.clients.rpcClient.getProjects(matchingOrg.id.toString()),
+			);
+			dataCacheStore.getState().setProjects(matchingOrg.handle, projects);
+
+			let projectName = newContextItem.project;
+			let suffix = 1;
+			while (projects.some((project) => project.handler === projectName || project.name === projectName)) {
+				projectName = `${newContextItem.project}-${suffix}`;
+				suffix++;
+			}
+
+			const createdProject = await window.withProgress(
+				{
+					title: `Creating new cloud project ${matchingOrg.name}...`,
+					location: ProgressLocation.Notification,
+				},
+				() => ext.clients.rpcClient.createProject({
+					orgId: matchingOrg.id.toString(),
+					orgHandler: matchingOrg.handle,
+					projectName: projectName,
+					region: ext.authProvider?.getState().state.region || "US"
+				}),
+			);
+
+			const newList: ContextItem[] = [{ org: matchingOrg.handle, project: createdProject.handler }];
+			writeFileSync(contextFilePath, yaml.dump(newList));
+			return { org: matchingOrg, project: createdProject };
+		}
+	} catch (err) {
+		ext.logError(`Failed to get context file entry`, err as Error);
+		return
+	}
+}

@@ -40,6 +40,7 @@ import { dataCacheStore } from "./stores/data-cache-store";
 import { locationStore } from "./stores/location-store";
 import { webviewStateStore } from "./stores/webview-state-store";
 import { isSamePath, openDirectory } from "../utils/pathUtils";
+import { BridgeLayer } from "../BridgeLayer";
 
 export function activateURIHandlers() {
 	window.registerUriHandler({
@@ -51,6 +52,7 @@ export function activateURIHandlers() {
 				try {
 					isRpcActive(ext);
 					ext.log("WSO2 Integrator Login Callback hit");
+					BridgeLayer.notifySignInInitiated();
 					const urlParams = new URLSearchParams(uri.query);
 					const authCode = urlParams.get("code");
 					const region = urlParams.get("region") || "";

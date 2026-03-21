@@ -36,9 +36,12 @@ import {
 	type IsRepoAuthorizedResp,
 	type CloneRepositoryIntoCompDirReq,
 	type GetConfigFileDriftsReq,
+	type GetCloudProjectsReq,
+	type GetCloudProjectsResp,
 	ViewType,
 	COMMANDS,
 	WICloudAPI,
+	DefaultOrgNameResponse,
 } from "@wso2/wi-core";
 import { buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
@@ -52,6 +55,7 @@ import path, { join } from "path";
 import type { IFileStatus } from "../../cloud/git/git";
 import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-cmd";
 import { enrichGitUsernamePassword } from "../../cloud/cmds/commit-and-push-to-git-cmd";
+import { getUsername } from "../main/utils";
 
 /**
  * Pending cloud form context — set by openCloudFormWebview before the webview opens,
@@ -86,11 +90,45 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async getAuthState(): Promise<AuthState> {
-		return ext.authProvider?.state ?? { userInfo: null, region: "US" };
+		const authState = ext.authProvider?.state ?? { userInfo: null, region: "US" };
+		// Add selected org ID to auth state
+		const selectedOrgId = ext.context.globalState.get<string>("selectedOrgId");
+		return {
+			...authState,
+			selectedOrgId,
+		} as AuthState & { selectedOrgId?: string };
 	}
 
 	async getContextState(): Promise<ContextStoreState> {
 		return contextStore.getState().state;
+	}
+
+	async changeOrgContext(orgId: string): Promise<void> {
+		try {
+			await ext.clients.rpcClient.changeOrgContext(orgId);
+			
+			const userInfo = await ext.clients.rpcClient.getUserInfo();
+			if (!userInfo) {
+				throw new Error("Failed to retrieve user info after org context change");
+			}
+			
+			const region = await ext.clients.rpcClient.getCurrentRegion();
+			
+			if (!region || (region !== "US" && region !== "EU")) {
+				throw new Error("Region is not available or invalid. Expected 'US' or 'EU'.");
+			}
+			
+			if (!ext.authProvider) {
+				throw new Error("Auth provider is not available");
+			}
+			
+			await ext.context.globalState.update("selectedOrgId", orgId);
+
+			await ext.authProvider.getState().loginSuccess(userInfo, region);
+		} catch (error) {
+			console.error("Failed to change org context", error);
+			throw error;
+		}
 	}
 
 	async getLocalGitData(dirPath: string): Promise<GetLocalGitDataResp | undefined> {
@@ -303,6 +341,22 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		return ext.config?.devantConsoleUrl;
 	}
 
+	async getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
+		const projects = await ext.clients.rpcClient.getProjects(params.orgId);
+		return {
+			projects: (projects ?? []).map((p) => ({
+				id: p.id,
+				name: p.name,
+				handle: p.handler,
+				description: p.description ?? "",
+			})),
+		};
+	}
+
+	async getDefaultOrgName(): Promise<DefaultOrgNameResponse> {
+		return { orgName: getUsername() };
+	}
+
 	/**
 	 * Subscribe to auth/context state changes and forward via the provided callbacks.
 	 */
@@ -311,7 +365,8 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		publishContextState: (state: ContextStoreState) => void,
 	): void {
 		ext.authProvider?.subscribe(({ state }) => {
-			publishAuthState(state);
+			const selectedOrgId = ext.context.globalState.get<string>("selectedOrgId");
+			publishAuthState({ ...state, selectedOrgId } as AuthState & { selectedOrgId?: string });
 		});
 		contextStore.subscribe(({ state }) => {
 			publishContextState(state);
