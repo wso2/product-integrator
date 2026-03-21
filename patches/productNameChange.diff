@@ -2,7 +2,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/platform/product/common/product.ts
 +++ product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
-@@ -71,12 +71,12 @@ else {
+@@ -62,12 +62,12 @@ else {
  	if (Object.keys(product).length === 0) {
  		Object.assign(product, {
  			version: '1.104.0-dev',
@@ -21,3 +21,56 @@ Index: product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
  			licenseName: 'MIT',
  			licenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt',
  			serverLicenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt'
+Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
++++ product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
+@@ -3,38 +3,28 @@
+  *  Licensed under the MIT License. See License.txt in the project root for license information.
+  *--------------------------------------------------------------------------------------------*/
+ 
+-import { fromNow } from '../../../base/common/date.js';
+ import { isLinuxSnap } from '../../../base/common/platform.js';
+ import { localize } from '../../../nls.js';
+ import { IOSProperties } from '../../native/common/native.js';
+ import { IProductService } from '../../product/common/productService.js';
+-import { process } from '../../../base/parts/sandbox/electron-browser/globals.js';
+ 
+ export function createNativeAboutDialogDetails(productService: IProductService, osProps: IOSProperties): { title: string; details: string; detailsToCopy: string } {
+-	let version = productService.version;
+-	if (productService.target) {
+-		version = `${version} (${productService.target} setup)`;
+-	} else if (productService.darwinUniversalAssetId) {
+-		version = `${version} (Universal)`;
+-	}
++	let version = (productService as any).wiversion;
++	const builtInExtensions = productService.builtInExtensions?.length
++		? `\n${localize('aboutBuiltInExtensions', "Built-in Extensions:")}\n${productService.builtInExtensions.filter(ext => ext.name.startsWith('wso2.')).map(extension => `${extension.name.split('.')[1]}: ${extension.version}`).join('\n')}`
++		: '';
+ 
+-	const getDetails = (useAgo: boolean): string => {
++	const getDetails = (): string => {
+ 		return localize({ key: 'aboutDetail', comment: ['Electron, Chromium, Node.js and V8 are product names that need no translation'] },
+-			"Version: {0}\nCommit: {1}\nDate: {2}\nElectron: {3}\nElectronBuildId: {4}\nChromium: {5}\nNode.js: {6}\nV8: {7}\nOS: {8}",
++			"Version: {0}\nOS: {1}{2}",
+ 			version,
+-			productService.commit || 'Unknown',
+-			productService.date ? `${productService.date}${useAgo ? ' (' + fromNow(new Date(productService.date), true) + ')' : ''}` : 'Unknown',
+-			process.versions['electron'],
+-			process.versions['microsoft-build'],
+-			process.versions['chrome'],
+-			process.versions['node'],
+-			process.versions['v8'],
+-			`${osProps.type} ${osProps.arch} ${osProps.release}${isLinuxSnap ? ' snap' : ''}`
++			`${osProps.type} ${osProps.arch} ${osProps.release}${isLinuxSnap ? ' snap' : ''}`,
++			builtInExtensions
+ 		);
+ 	};
+ 
+-	const details = getDetails(true);
+-	const detailsToCopy = getDetails(false);
++	const details = getDetails();
++	const detailsToCopy = getDetails();
+ 
+ 	return {
+ 		title: productService.nameLong,

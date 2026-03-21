@@ -5,7 +5,7 @@ set -euo pipefail
 VERSION=${1:-"1.0.0"}
 
 echo '{
-    "commit": "'$VERSION'",
+    "wiversion": "'$VERSION'",
     "quality": "stable",
     "nameShort": "WSO2 Integrator",
     "nameLong": "WSO2 Integrator",
@@ -87,12 +87,12 @@ echo '{
       },
       {
         "name": "wso2.micro-integrator",
-        "version": "3.1.526031212"
+        "version": "3.1.5"
       },
       {
         "name": "wso2.wso2-integrator",
         "vsix": "../../wi/wi-extension/wso2-integrator-0.2.0.vsix",
-        "version": "latest"
+        "version": "0.2.0"
       }
 	  ],
     "runtimeEnv": {
