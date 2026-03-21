@@ -149,8 +149,9 @@ function resolveBrowserTheme(): VSCodeCssTheme {
 
 export function renderWebview(target: HTMLElement) {
 	const mode = resolveBridgeBootstrap();
+	const hasVsCodeApi = typeof (globalThis as { acquireVsCodeApi?: unknown }).acquireVsCodeApi === "function";
 
-	if (mode.mode === 'websocket') {
+	if (mode.mode === 'websocket' && !hasVsCodeApi) {
 		const theme = resolveBrowserTheme();
 		const overrides = theme === "light" ? LIGHT_BROWSER_VSCODE_OVERRIDES : DARK_BROWSER_VSCODE_OVERRIDES;
 		injectVSCodeCssVariables(overrides, undefined, theme);

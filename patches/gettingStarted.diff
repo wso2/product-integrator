@@ -30,16 +30,19 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2C
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,26 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
 + *--------------------------------------------------------------------------------------------*/
 +
 +export const WI_MODE_SETTING_ID = 'integrator.defaultRuntime';
++export const WI_EXTENSION_ID = 'wso2.wso2-integrator';
 +export const WI_CREATE_PROJECT_COMMAND_ID = 'wso2.integrator.createProject';
 +export const WI_EXPLORE_SAMPLES_COMMAND_ID = 'wso2.integrator.exploreSamples';
 +export const WI_IMPORT_PROJECT_COMMAND_ID = 'wso2.integrator.importProject';
++export const WI_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND_ID = 'wso2.integrator.getEmbeddedWelcomeBootstrap';
++export const WI_EMBEDDED_WELCOME_VIEW_TYPE = 'wso2.integrator.embeddedWelcome';
 +
 +// Authentication constants
 +export const WI_LOGIN_COMPLETED_KEY = 'wso2.integrator.loginCompleted';
@@ -54,820 +57,601 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2C
 +export const WSO2_PLATFORM_LOGOUT_COMMAND_ID = 'wso2.wso2-platform.sign.out';
 +export const WSO2_PLATFORM_CHECK_LOGIN_COMMAND = 'wso2.wso2-platform.check.login';
 +export const WSO2_PLATFORM_CANCEL_SIGN_IN_COMMAND = 'wso2.wso2-platform.cancel.sign.in';
-\ No newline at end of file
 Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
-@@ -0,0 +1,840 @@
+@@ -0,0 +1,600 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
 + *--------------------------------------------------------------------------------------------*/
 +
-+import { $, append, clearNode } from '../../../../base/browser/dom.js';
-+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
-+import { IWorkspacesService, IRecentlyOpened, isRecentFolder, isRecentWorkspace } from '../../../../platform/workspaces/common/workspaces.js';
++import { $, append, clearNode, getWindow } from '../../../../base/browser/dom.js';
++import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
++import { joinPath } from '../../../../base/common/resources.js';
 +import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
-+import { ILabelService, Verbosity } from '../../../../platform/label/common/label.js';
 +import { ICommandService } from '../../../../platform/commands/common/commands.js';
 +import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-+import { WI_CREATE_PROJECT_COMMAND_ID, WI_EXPLORE_SAMPLES_COMMAND_ID, WI_IMPORT_PROJECT_COMMAND_ID, WI_MODE_SETTING_ID, WI_LOGIN_COMPLETED_KEY, WI_SHOW_LOGIN_COMMAND_ID, WSO2_PLATFORM_LOGOUT_COMMAND_ID, WSO2_PLATFORM_PROVIDER_ID } from './wso2Constants.js';
-+import { IAuthenticationService } from '../../../services/authentication/common/authentication.js';
-+import { checkWSO2LoginStatus } from './wso2AuthUtils.js';
-+import { URI } from '../../../../base/common/uri.js';
-+import { mainWindow } from '../../../../base/browser/window.js';
++import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 +import { IEditorGroupsService, GroupsOrder } from '../../../services/editor/common/editorGroupsService.js';
++import { IWebviewElement, IWebviewService } from '../../../contrib/webview/browser/webview.js';
++import { asWebviewUri } from '../../../contrib/webview/common/webview.js';
++import { IExtensionService } from '../../../services/extensions/common/extensions.js';
++import { WI_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND_ID, WI_EMBEDDED_WELCOME_VIEW_TYPE, WI_EXTENSION_ID } from './wso2Constants.js';
++import { WSO2LoginDialog } from './wso2LoginDialog.js';
++
++interface IEmbeddedWelcomeBootstrap {
++	mode: 'proxy' | 'websocket';
++	wsServer: string;
++	wsPort: number;
++}
++
++const embeddedWelcomeBridgeLoaderIcon = encodeURIComponent(`
++	<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
++		<style>
++			.ringCircle {
++				fill: none;
++				stroke: #4d78c2;
++				stroke-width: 9;
++				stroke-linecap: round;
++				opacity: 0.95;
++				filter: drop-shadow(0 -2px 3px rgba(77, 120, 194, 0.30)) drop-shadow(0 2px 3px rgba(77, 120, 194, 0.14));
++				animation: heartbeatRingGlow 1.4s ease-in-out infinite;
++			}
++
++			.waveBase {
++				fill: none;
++				stroke: #4d78c2;
++				stroke-width: 8;
++				stroke-linecap: round;
++				stroke-linejoin: round;
++				opacity: 0.65;
++			}
++
++			.waveRunner {
++				fill: none;
++				stroke: #4d78c2;
++				stroke-width: 8;
++				stroke-linecap: round;
++				stroke-linejoin: round;
++				opacity: 1;
++				stroke-dasharray: 32 180;
++				animation: heartbeatWaveRun 1.1s linear infinite;
++				filter: drop-shadow(0 0 6px rgba(77, 120, 194, 0.90));
++			}
++
++			@keyframes heartbeatWaveRun {
++				0% { stroke-dashoffset: 212; }
++				100% { stroke-dashoffset: 0; }
++			}
++
++			@keyframes heartbeatRingGlow {
++				0%, 100% {
++					filter: drop-shadow(0 -3px 5px rgba(77, 120, 194, 0.32)) drop-shadow(0 1px 3px rgba(77, 120, 194, 0.15));
++				}
++				50% {
++					filter: drop-shadow(0 -1px 3px rgba(77, 120, 194, 0.15)) drop-shadow(0 3px 5px rgba(77, 120, 194, 0.32));
++				}
++			}
++
++			@media (prefers-reduced-motion: reduce) {
++				.ringCircle,
++				.waveRunner {
++					animation: none;
++				}
++			}
++		</style>
++		<circle class="ringCircle" cx="60" cy="60" r="50"/>
++		<path class="waveBase" d="M10 60 H41 L58 34 L75 84 L91 52 H110"/>
++		<path class="waveRunner" d="M10 60 H41 L58 34 L75 84 L91 52 H110"/>
++	</svg>
++`);
 +
 +export class WSO2EditorGroupWatermark extends Disposable {
 +
++	private static activeLoginDialog: WSO2LoginDialog | undefined;
++	private static activeLoginDialogPromise: Promise<boolean> | undefined;
++	private static autoLoginDialogHandled = false;
++
 +	private readonly container: HTMLElement;
-+	private readonly transientDisposables = this._register(new DisposableStore());
++	private readonly embeddedWebview = this._register(new MutableDisposable<IWebviewElement>());
 +	private enabled = false;
 +	private workbenchState: WorkbenchState;
-+	private isLoggedIn = false;
-+	private userEmail: string | undefined;
-+	private isCheckingAuth = true;
++	private renderRequestId = 0;
 +
 +	constructor(
 +		parent: HTMLElement,
-+		@IWorkspacesService private readonly workspacesService: IWorkspacesService,
++		@IInstantiationService private readonly instantiationService: IInstantiationService,
 +		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService,
-+		@ILabelService private readonly labelService: ILabelService,
 +		@ICommandService private readonly commandService: ICommandService,
 +		@IConfigurationService private readonly configurationService: IConfigurationService,
-+		@IStorageService private readonly storageService: IStorageService,
-+		@IAuthenticationService private readonly authenticationService: IAuthenticationService,
-+		@IEditorGroupsService private readonly editorGroupsService: IEditorGroupsService
++		@IEditorGroupsService private readonly editorGroupsService: IEditorGroupsService,
++		@IExtensionService private readonly extensionService: IExtensionService,
++		@IWebviewService private readonly webviewService: IWebviewService
 +	) {
 +		super();
 +
 +		this.workbenchState = this.contextService.getWorkbenchState();
 +
-+		// Create container - CSS will handle visibility based on parent's .empty class
 +		this.container = append(parent, $('.wso2-editor-watermark'));
-+
-+		// Add CSS styles
 +		this.addStyles();
-+
 +		this.registerListeners();
 +
-+		// Close all editors if in empty workspace
 +		if (this.workbenchState === WorkbenchState.EMPTY) {
 +			void this.closeAllEditors();
 +		}
 +
-+		this.render();
-+		this.checkLoginState();
++		void this.render();
 +	}
 +
 +	private registerListeners(): void {
 +		this._register(this.contextService.onDidChangeWorkbenchState(workbenchState => {
 +			if (this.workbenchState !== workbenchState) {
 +				this.workbenchState = workbenchState;
-+				// Close all editors when switching to empty workspace
 +				if (workbenchState === WorkbenchState.EMPTY) {
 +					void this.closeAllEditors();
 +				}
-+				this.render();
++				void this.render();
 +			}
 +		}));
 +
-+		// Listen for workspace changes to update recent projects
-+		this._register(this.workspacesService.onDidChangeRecentlyOpened(() => {
-+			if (this.enabled) {
-+				this.render();
++		this._register(this.extensionService.onDidRegisterExtensions(() => {
++			if (this.workbenchState !== WorkbenchState.EMPTY || this.embeddedWebview.value) {
++				return;
 +			}
-+		}));
 +
-+		// Listen for authentication session changes
-+		this._register(this.authenticationService.onDidChangeSessions(e => {
-+			// Check if the change is for our provider
-+			if (e.providerId === WSO2_PLATFORM_PROVIDER_ID) {
-+				this.checkLoginState();
-+			}
++			void this.render();
 +		}));
 +	}
 +
 +	private addStyles(): void {
-+		const style = document.createElement('style');
++		const style = getWindow(this.container).document.createElement('style');
 +		style.textContent = `
-+			/* WSO2 Watermark Container - hidden when editor group is not empty */
 +			.monaco-workbench .part.editor > .content .editor-group-container:not(.empty) > .wso2-editor-watermark {
 +				display: none;
 +			}
 +
 +			.wso2-editor-watermark {
 +				position: absolute;
-+				top: 0;
-+				left: 0;
-+				right: 0;
-+				bottom: 0;
-+				overflow-y: auto;
++				inset: 0;
 +				pointer-events: all;
-+				background: var(--vscode-sideBar-background);
++				overflow: hidden;
++				background: var(--vscode-editor-background);
 +			}
 +
-+			/* Hide classic scrollbar and use VS Code scrollbar */
-+			.wso2-editor-watermark::-webkit-scrollbar {
-+				width: 10px;
++			.wso2-editor-watermark .embedded-welcome-shell {
++				position: absolute;
++				inset: 0;
++				overflow: hidden;
++				background: var(--vscode-editor-background);
 +			}
 +
-+			.wso2-editor-watermark::-webkit-scrollbar-track {
-+				background: transparent;
++			.wso2-editor-watermark .embedded-welcome-host {
++				position: absolute;
++				inset: 0;
++				overflow: hidden;
++				background: var(--vscode-editor-background);
 +			}
 +
-+			.wso2-editor-watermark::-webkit-scrollbar-thumb {
-+				background: var(--vscode-scrollbarSlider-background);
-+				border-radius: 10px;
++			.wso2-editor-watermark .embedded-welcome-shell::before {
++				content: '';
++				position: absolute;
++				left: 50%;
++				top: 50%;
++				width: 100px;
++				height: 100px;
++				transform: translate(-50%, -58px);
++				background: center / contain no-repeat url("data:image/svg+xml,${embeddedWelcomeBridgeLoaderIcon}");
++				pointer-events: none;
++				z-index: 1;
++				opacity: 1;
++				transition: opacity 180ms ease;
 +			}
 +
-+			.wso2-editor-watermark::-webkit-scrollbar-thumb:hover {
-+				background: var(--vscode-scrollbarSlider-hoverBackground);
-+			}
-+
-+			.wso2-editor-watermark::-webkit-scrollbar-thumb:active {
-+				background: var(--vscode-scrollbarSlider-activeBackground);
-+			}
-+
-+			/* For Firefox */
-+			.wso2-editor-watermark {
-+				scrollbar-width: thin;
-+				scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
-+			}
-+
-+			.wso2-editor-watermark .wrapper {
-+				max-width: 100%;
-+				height: 100%;
-+			}
-+
-+			.wso2-editor-watermark .top-section {
-+				background: linear-gradient(135deg, #667eea 0%, #204377 100%);
-+				padding: 40px 60px 80px;
-+				position: relative;
-+				display: flex;
-+				flex-direction: column;
-+				color: white;
-+			}
-+
-+		.wso2-editor-watermark .top-right-controls {
-+			position: absolute;
-+			top: 40px;
-+			right: 60px;
-+			display: flex;
-+			align-items: center;
-+			gap: 12px;
-+		}
-+
-+	.wso2-editor-watermark .user-info {
-+		display: flex;
-+		align-items: center;
-+		gap: 10px;
-+		background: rgba(255, 255, 255, 0.15);
-+		border: 1px solid rgba(255, 255, 255, 0.2);
-+		border-radius: 8px;
-+		padding: 8px 16px;
-+		color: white;
-+		font-size: 13px;
-+		position: relative;
-+		cursor: pointer;
-+		transition: all 0.2s ease;
-+		height: 33px;
-+		box-sizing: border-box;
-+	}		.wso2-editor-watermark .user-info:hover {
-+			background: rgba(255, 255, 255, 0.25);
-+		}
-+
-+		.wso2-editor-watermark .user-info-content {
-+			display: flex;
-+			align-items: center;
-+			gap: 10px;
-+		}
-+
-+		.wso2-editor-watermark .dropdown-arrow {
-+			margin-left: 8px;
-+			font-size: 10px;
-+			transition: transform 0.2s ease;
-+		}
-+
-+		.wso2-editor-watermark .user-info.open .dropdown-arrow {
-+			transform: rotate(180deg);
-+		}
-+
-+		.wso2-editor-watermark .user-dropdown {
-+			position: absolute;
-+			top: calc(100% + 8px);
-+			right: 0;
-+			background: var(--vscode-dropdown-background);
-+			border: 1px solid var(--vscode-dropdown-border);
-+			border-radius: 8px;
-+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-+			min-width: 200px;
-+			padding: 4px 0;
-+			display: none;
-+			z-index: 1000;
-+		}
-+
-+		.wso2-editor-watermark .user-info.open .user-dropdown {
-+			display: block;
-+		}
-+
-+		.wso2-editor-watermark .dropdown-item {
-+			padding: 10px 16px;
-+			color: var(--vscode-dropdown-foreground);
-+			font-size: 13px;
-+			cursor: pointer;
-+			transition: background 0.15s ease;
-+			display: flex;
-+			align-items: center;
-+			gap: 10px;
-+		}
-+
-+		.wso2-editor-watermark .dropdown-item:hover {
-+			background: var(--vscode-list-hoverBackground);
-+		}
-+
-+		.wso2-editor-watermark .dropdown-item.danger:hover {
-+			background: var(--vscode-inputValidation-errorBackground, rgba(244, 67, 54, 0.2));
-+			color: var(--vscode-errorForeground, #f44336);
-+		}
-+
-+	.wso2-editor-watermark .user-avatar {
-+		width: 24px;
-+		height: 24px;
-+		border-radius: 50%;
-+		background: white;
-+		color: #667eea;
-+		display: flex;
-+		align-items: center;
-+		justify-content: center;
-+		font-weight: 600;
-+		font-size: 12px;
-+		line-height: 1;
-+	}		.wso2-editor-watermark .configure-btn,
-+		.wso2-editor-watermark .sign-in-btn {
-+			height: 33px;
-+			font-size: 14px;
-+			font-weight: 500;
-+			border-radius: 8px;
-+			padding: 0 24px;
-+			background: var(--vscode-button-background);
-+			color: var(--vscode-button-foreground);
-+			border: none;
-+			transition: all 0.2s ease;
-+			display: flex;
-+			align-items: center;
-+			gap: 10px;
-+			cursor: pointer;
-+		}
-+
-+		.wso2-editor-watermark .configure-btn {
-+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-+			color: white;
-+		}
-+
-+		.wso2-editor-watermark .configure-btn:hover {
-+			background: linear-gradient(135deg, #7a8ff0 0%, #8859b0 100%);
-+			transform: translateY(-1px);
-+		}
-+
-+		.wso2-editor-watermark .sign-in-btn:hover {
-+			background: var(--vscode-button-hoverBackground);
-+			transform: translateY(-1px);
-+		}
-+
-+		.wso2-editor-watermark .auth-loading {
-+			height: 33px;
-+			padding: 0 24px;
-+			background: rgba(255, 255, 255, 0.15);
-+			border: 1px solid rgba(255, 255, 255, 0.2);
-+			border-radius: 8px;
-+			display: flex;
-+			align-items: center;
-+			gap: 8px;
-+			color: white;
-+			font-size: 13px;
-+		}
-+
-+		.wso2-editor-watermark .spinner {
-+			width: 14px;
-+			height: 14px;
-+			border: 2px solid rgba(255, 255, 255, 0.3);
-+			border-top-color: white;
-+			border-radius: 50%;
-+			animation: spin 0.8s linear infinite;
-+		}
-+
-+		@keyframes spin {
-+			0% { transform: rotate(0deg); }
-+			100% { transform: rotate(360deg); }
-+		}			.wso2-editor-watermark .get-started-badge {
-+				display: inline-block;
-+				backdrop-filter: blur(10px);
-+				border: 1px solid rgba(255, 255, 255, 0.3);
-+				border-radius: 20px;
-+				padding: 8px 16px;
-+				margin-bottom: 24px;
++			.wso2-editor-watermark .embedded-welcome-shell::after {
++				content: 'Loading WSO2 Integrator...';
++				position: absolute;
++				left: 50%;
++				top: 50%;
++				transform: translate(-50%, 54px);
++				color: var(--vscode-foreground);
++				font-family: sans-serif;
 +				font-size: 13px;
 +				font-weight: 500;
-+				width: fit-content;
-+			}
-+
-+			.wso2-editor-watermark .headline {
-+				font-size: 48px;
-+				font-weight: 700;
-+				margin: 0;
-+				line-height: 1.2;
-+			}
-+
-+			.wso2-editor-watermark .caption {
-+				font-size: 16px;
-+				line-height: 1.6;
-+				font-weight: 400;
-+				color: rgba(255, 255, 255, 0.9);
-+				margin: 16px 0 0 0;
-+				max-width: 800px;
-+			}
-+
-+			.wso2-editor-watermark .cards-container {
-+				padding: 0 60px 60px;
-+				margin-top: -40px;
-+				position: relative;
++				letter-spacing: 0.02em;
++				opacity: 0.82;
++				pointer-events: none;
 +				z-index: 1;
++				white-space: nowrap;
++				transition: opacity 180ms ease;
 +			}
 +
-+			.wso2-editor-watermark .cards-grid {
-+				display: grid;
-+				grid-template-columns: repeat(4, 1fr);
-+				gap: 24px;
-+			}
-+
-+			@media (max-width: 1200px) {
-+				.wso2-editor-watermark .cards-grid {
-+					grid-template-columns: repeat(2, 1fr);
-+				}
-+			}
-+
-+			@media (max-width: 768px) {
-+				.wso2-editor-watermark .cards-grid {
-+					grid-template-columns: 1fr;
-+				}
-+			}
-+
-+			.wso2-editor-watermark .action-card {
-+				background: var(--vscode-editor-background, white);
-+				border-radius: 12px;
-+				padding: 32px 24px;
-+				display: flex;
-+				flex-direction: column;
-+				transition: all 0.3s ease;
-+				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.05);
-+				min-height: 220px;
-+			}
-+
-+			.wso2-editor-watermark .action-card:hover {
-+				transform: translateY(-4px);
-+				box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12), 0 6px 12px rgba(0, 0, 0, 0.08);
-+			}
-+
-+			.wso2-editor-watermark .card-icon-container {
-+				display: flex;
-+				justify-content: flex-start;
-+				margin-bottom: 20px;
-+			}
-+
-+			.wso2-editor-watermark .card-icon {
-+				width: 56px;
-+				height: 56px;
-+				border-radius: 12px;
-+				display: flex;
-+				align-items: center;
-+				justify-content: center;
-+				color: white;
-+				flex-shrink: 0;
-+				font-size: 24px;
-+			}
-+
-+			.wso2-editor-watermark .gradient-purple {
-+				background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-+			}
-+
-+			.wso2-editor-watermark .gradient-blue {
-+				background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-+			}
-+
-+			.wso2-editor-watermark .gradient-pink {
-+				background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-+			}
-+
-+		.wso2-editor-watermark .gradient-green {
-+			background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-+		}			.wso2-editor-watermark .card-title {
-+				font-size: 20px;
-+				font-weight: 600;
-+				margin: 0 0 12px 0;
-+				color: var(--vscode-foreground);
-+			}
-+
-+			.wso2-editor-watermark .card-description {
-+				font-size: 14px;
-+				line-height: 1.6;
-+				margin: 0 0 24px 0;
-+				color: var(--vscode-descriptionForeground);
-+				flex: 1;
-+			}
-+
-+		.wso2-editor-watermark .styled-btn {
-+			height: 44px;
-+			font-size: 14px;
-+			font-weight: 500;
-+			border-radius: 8px;
-+			padding: 0 24px;
-+			color: var(--vscode-button-foreground);
-+			border: none;
-+			transition: all 0.2s ease;
-+			cursor: pointer;
-+		}
-+
-+		.wso2-editor-watermark .styled-btn.primary {
-+			background: var(--vscode-button-background);
-+		}
-+
-+		.wso2-editor-watermark .styled-btn.primary:hover {
-+			background: var(--vscode-button-hoverBackground);
-+			transform: translateY(-1px);
-+		}
-+
-+		.wso2-editor-watermark .styled-btn.secondary {
-+			background: var(--vscode-button-secondaryBackground);
-+			color: var(--vscode-button-secondaryForeground);
-+		}
-+
-+		.wso2-editor-watermark .styled-btn.secondary:hover {
-+			background: var(--vscode-button-secondaryHoverBackground);
-+			transform: translateY(-1px);
-+		}			.wso2-editor-watermark .bottom-section {
-+				padding: 10px 60px 10px 60px;
-+				text-align: center;
-+			}
-+
-+			.wso2-editor-watermark .already-have-text {
-+				font-size: 14px;
-+				color: var(--vscode-foreground);
-+				opacity: 0.6;
-+				margin-bottom: 32px;
-+			}
-+
-+			.wso2-editor-watermark .already-have-text a {
-+				color: var(--vscode-textLink-foreground);
-+				text-decoration: none;
-+				margin-left: 6px;
-+				cursor: pointer;
-+			}
-+
-+			.wso2-editor-watermark .already-have-text a:hover {
-+				color: var(--vscode-textLink-activeForeground);
-+				text-decoration: underline;
-+			}
-+
-+			.wso2-editor-watermark .recent-projects-section {
-+				max-width: 900px;
-+				margin: 0 auto;
-+			}
-+
-+			.wso2-editor-watermark .recent-projects-header {
-+				display: flex;
-+				justify-content: space-between;
-+				align-items: center;
-+				margin-bottom: 20px;
-+				padding: 0 4px;
-+			}
-+
-+			.wso2-editor-watermark .recent-projects-title {
-+				font-size: 13px;
-+				font-weight: 400;
-+				color: var(--vscode-foreground);
-+				opacity: 0.6;
-+				margin: 0;
-+			}
-+
-+			.wso2-editor-watermark .view-all-link {
-+				font-size: 13px;
-+				color: var(--vscode-textLink-foreground);
-+				text-decoration: none;
-+				cursor: pointer;
-+			}
-+
-+			.wso2-editor-watermark .view-all-link:hover {
-+				color: var(--vscode-textLink-activeForeground);
-+				text-decoration: underline;
-+			}
-+
-+			.wso2-editor-watermark .projects-list {
-+				display: grid;
-+				grid-template-columns: repeat(2, 1fr);
-+				gap: 8px 16px;
-+				text-align: left;
-+			}
-+
-+			.wso2-editor-watermark .project-item {
-+				display: flex;
-+				justify-content: space-between;
-+				align-items: center;
-+				padding: 8px 4px;
-+				font-size: 13px;
-+				color: var(--vscode-foreground);
-+				cursor: pointer;
-+				transition: all 0.15s ease;
-+				border-radius: 4px;
-+			}
-+
-+			.wso2-editor-watermark .project-item:hover {
-+				background: var(--vscode-list-hoverBackground);
-+			}
-+
-+			.wso2-editor-watermark .project-path {
-+				color: var(--vscode-descriptionForeground);
-+				font-size: 12px;
-+				margin-left: 12px;
++			.wso2-editor-watermark .embedded-welcome-shell.embedded-welcome-shell-ready::before,
++			.wso2-editor-watermark .embedded-welcome-shell.embedded-welcome-shell-ready::after {
++				opacity: 0;
 +			}
 +		`;
-+		mainWindow.document.head.appendChild(style);
++		getWindow(this.container).document.head.appendChild(style);
 +		this._register({ dispose: () => style.remove() });
 +	}
 +
 +	private async render(): Promise<void> {
 +		this.enabled = this.configurationService.getValue<boolean>('workbench.tips.enabled') !== false;
-+
-+		// Only render content for empty workspace
 +		const shouldShow = this.workbenchState === WorkbenchState.EMPTY && this.enabled;
 +
-+		clearNode(this.container);
-+		this.transientDisposables.clear();
-+
 +		if (!shouldShow) {
++			this.renderRequestId++;
++			this.disposeEmbeddedWelcome();
++			clearNode(this.container);
 +			return;
 +		}
 +
-+		const wrapper = append(this.container, $('.wrapper'));
-+
-+		// Top section
-+		const topSection = append(wrapper, $('.top-section'));
-+
-+		// Top right controls
-+		const topRightControls = append(topSection, $('.top-right-controls'));
-+
-+		if (this.isCheckingAuth) {
-+			// Show loading state
-+			const loadingContainer = append(topRightControls, $('.auth-loading'));
-+			append(loadingContainer, $('.spinner'));
-+			const loadingText = append(loadingContainer, $('span'));
-+			loadingText.textContent = 'Checking login status...';
-+		} else if (this.isLoggedIn && this.userEmail) {
-+			// Show user info with dropdown
-+			const userInfo = append(topRightControls, $('.user-info'));
-+			
-+			const userInfoContent = append(userInfo, $('.user-info-content'));
-+			const avatar = append(userInfoContent, $('.user-avatar'));
-+			avatar.textContent = this.userEmail.charAt(0).toUpperCase();
-+			const email = append(userInfoContent, $('span'));
-+			email.textContent = this.userEmail;
-+			
-+			const dropdownArrow = append(userInfo, $('span.dropdown-arrow'));
-+			dropdownArrow.textContent = '▼';
-+
-+			// Create dropdown menu
-+			const dropdown = append(userInfo, $('.user-dropdown'));
-+			
-+			// Logout menu item
-+			const logoutItem = append(dropdown, $('.dropdown-item.danger'));
-+			logoutItem.textContent = 'Logout';
-+			this.transientDisposables.add(this.addClickHandler(logoutItem, WSO2_PLATFORM_LOGOUT_COMMAND_ID));
-+
-+			// Toggle dropdown on click
-+			const toggleDropdown = (e: MouseEvent) => {
-+				e.preventDefault();
-+				e.stopPropagation();
-+				userInfo.classList.toggle('open');
-+			};
-+			userInfo.addEventListener('click', toggleDropdown);
-+			this.transientDisposables.add({
-+				dispose: () => userInfo.removeEventListener('click', toggleDropdown)
-+			});
-+
-+			// Close dropdown when clicking outside
-+			const closeDropdown = (e: MouseEvent) => {
-+				if (!userInfo.contains(e.target as Node)) {
-+					userInfo.classList.remove('open');
-+				}
-+			};
-+			mainWindow.document.addEventListener('click', closeDropdown);
-+			this.transientDisposables.add({
-+				dispose: () => mainWindow.document.removeEventListener('click', closeDropdown)
-+			});
-+		} else {
-+			// Show sign in button
-+			const signInBtn = append(topRightControls, $('button.sign-in-btn'));
-+			signInBtn.textContent = 'Sign In';
-+			this.transientDisposables.add(this.addClickHandler(signInBtn, WI_SHOW_LOGIN_COMMAND_ID));
++		if (this.embeddedWebview.value) {
++			this.showLoginDialogIfNeeded();
++			return;
 +		}
 +
-+		const configureBtn = append(topRightControls, $('button.configure-btn'));
-+		const configIcon = append(configureBtn, $('span'));
-+		configIcon.textContent = '⚙';
-+		configIcon.style.fontSize = '25px';
-+		const configText = append(configureBtn, $('span'));
-+		configText.textContent = 'Configure';
-+		this.transientDisposables.add(this.addClickHandler(configureBtn, 'workbench.action.openSettings', [WI_MODE_SETTING_ID]));
++		const requestId = ++this.renderRequestId;
++		clearNode(this.container);
++		const shell = append(this.container, $('.embedded-welcome-shell'));
++		const host = append(shell, $('.embedded-welcome-host'));
++		const disposeLoaderBridge = this.installEmbeddedWelcomeLoaderBridge(shell, host, requestId);
 +
-+		const badge = append(topSection, $('.get-started-badge'));
-+		badge.textContent = 'Get Started';
-+
-+		const headline = append(topSection, $('h1.headline'));
-+		headline.textContent = 'WSO2 Integrator';
-+
-+		const caption = append(topSection, $('p.caption'));
-+		caption.textContent = 'Connect any system across your business, build AI agents, and orchestrate AI-enabled workflows with the 100% open source and AI-native WSO2 Integrator.';
-+
-+		// Cards section
-+		const cardsContainer = append(wrapper, $('.cards-container'));
-+		const cardsGrid = append(cardsContainer, $('.cards-grid'));
-+
-+		// Create New Project Card
-+		this.createActionCard(
-+			cardsGrid,
-+			'＋',
-+			'gradient-purple',
-+			'Create a New Project',
-+			'Ready to build? Start a new integration project using our intuitive graphical designer.',
-+			'Create',
-+			'primary',
-+			WI_CREATE_PROJECT_COMMAND_ID
-+		);
-+
-+		// Open Project Card
-+		this.createActionCard(
-+			cardsGrid,
-+			'↗',
-+			'gradient-green',
-+			'Open Project',
-+			'Open an existing integration project and continue building your solution.',
-+			'Open',
-+			'secondary',
-+			'workbench.action.files.openFolder'
-+		);
-+
-+		// Explore Samples Card
-+		this.createActionCard(
-+			cardsGrid,
-+			'★',
-+			'gradient-blue',
-+			'Explore Samples',
-+			'Need inspiration? Browse through sample projects to see how WSO2 Integrator works in real-world scenarios.',
-+			'Explore',
-+			'secondary',
-+			WI_EXPLORE_SAMPLES_COMMAND_ID
-+		);
-+
-+		// Import External Integration Card
-+		this.createActionCard(
-+			cardsGrid,
-+			'⇄',
-+			'gradient-pink',
-+			'Import an External Integration',
-+			'Have an integration from another platform? Import your MuleSoft or TIBCO integration project and continue building.',
-+			'Import',
-+			'secondary',
-+			WI_IMPORT_PROJECT_COMMAND_ID
-+		);
-+
-+		// Bottom section
-+		const bottomSection = append(wrapper, $('.bottom-section'));
-+
-+		// Recent projects section
-+		await this.renderRecentProjects(bottomSection);
-+	}
-+
-+	private createActionCard(
-+		parent: HTMLElement,
-+		icon: string,
-+		gradientClass: string,
-+		title: string,
-+		description: string,
-+		buttonText: string,
-+		buttonClass: string,
-+		commandId: string
-+	): HTMLElement {
-+		const card = append(parent, $('.action-card'));
-+
-+		const iconContainer = append(card, $('.card-icon-container'));
-+		const iconElement = append(iconContainer, $(`.card-icon.${gradientClass}`));
-+		iconElement.textContent = icon;
-+
-+		const content = append(card, $('.card-content'));
-+
-+		const titleElement = append(content, $('h3.card-title'));
-+		titleElement.textContent = title;
-+
-+		const descriptionElement = append(content, $('p.card-description'));
-+		descriptionElement.textContent = description;
-+
-+		const button = append(content, $(`button.styled-btn.${buttonClass}`));
-+		button.textContent = buttonText;
-+		this.transientDisposables.add(this.addClickHandler(button, commandId));
-+
-+		return card;
-+	}
-+
-+	private async renderRecentProjects(parent: HTMLElement): Promise<void> {
 +		try {
-+			const recentlyOpened: IRecentlyOpened = await this.workspacesService.getRecentlyOpened();
-+			const recentWorkspaces = recentlyOpened.workspaces.slice(0, 5);
-+
-+			if (recentWorkspaces.length === 0) {
++			await this.renderEmbeddedWelcome(host, requestId);
++			if (this.isCurrentRenderRequest(requestId)) {
++				this.showLoginDialogIfNeeded();
++			} else {
++				disposeLoaderBridge();
++			}
++		} catch (error) {
++			disposeLoaderBridge();
++			if (requestId !== this.renderRequestId) {
 +				return;
 +			}
 +
-+			const recentSection = append(parent, $('.recent-projects-section'));
-+
-+			const header = append(recentSection, $('.recent-projects-header'));
-+
-+			const titleElement = append(header, $('h3.recent-projects-title'));
-+			titleElement.textContent = 'Recent projects';
-+
-+			const viewAllLink = append(header, $('a.view-all-link'));
-+			viewAllLink.textContent = `View all (${recentlyOpened.workspaces.length})`;
-+			this.transientDisposables.add(this.addClickHandler(viewAllLink, 'workbench.action.openRecent'));
-+
-+			const projectsList = append(recentSection, $('.projects-list'));
-+
-+			for (const recent of recentWorkspaces) {
-+				const projectItem = append(projectsList, $('.project-item'));
-+
-+				let label: string;
-+				let uri: URI;
-+
-+				if (isRecentFolder(recent)) {
-+					uri = recent.folderUri;
-+					label = recent.label || this.labelService.getWorkspaceLabel(uri, { verbose: Verbosity.SHORT });
-+				} else if (isRecentWorkspace(recent)) {
-+					uri = recent.workspace.configPath;
-+					label = recent.label || this.labelService.getWorkspaceLabel(recent.workspace, { verbose: Verbosity.SHORT });
-+				} else {
-+					continue;
-+				} const nameSpan = append(projectItem, $('span'));
-+				nameSpan.textContent = label;
-+
-+				const pathSpan = append(projectItem, $('span.project-path'));
-+				const path = this.labelService.getUriLabel(uri, { relative: true });
-+				pathSpan.textContent = path;
-+
-+				// Add click handler to open workspace/folder
-+				this.transientDisposables.add(this.addClickHandler(projectItem, 'vscode.openFolder', [uri, { forceNewWindow: false }]));
-+			}
-+		} catch (error) {
-+			console.error('Failed to render recent projects:', error);
++			console.error('Failed to render embedded welcome view:', error);
++			this.disposeEmbeddedWelcome();
++			clearNode(this.container);
 +		}
 +	}
 +
-+	private async checkLoginState(): Promise<void> {
-+		try {
-+			// Use shared utility to check login status
-+			const loginStatus = await checkWSO2LoginStatus(this.authenticationService);
-+			const wasLoggedIn = this.isLoggedIn;
-+			const previousEmail = this.userEmail;
-+			const wasCheckingAuth = this.isCheckingAuth;
++	private async renderEmbeddedWelcome(host: HTMLElement, requestId: number): Promise<void> {
++		await this.extensionService.activateByEvent(`onCommand:${WI_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND_ID}`);
++		const bootstrap = await this.commandService.executeCommand(WI_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND_ID) as IEmbeddedWelcomeBootstrap | undefined;
 +
-+			this.isLoggedIn = loginStatus.isLoggedIn;
-+			this.userEmail = loginStatus.email;
-+			this.isCheckingAuth = false;
-+
-+			// Update storage to match actual login state
-+			if (this.isLoggedIn) {
-+				this.storageService.store(WI_LOGIN_COMPLETED_KEY, true, StorageScope.APPLICATION, StorageTarget.MACHINE);
-+			} else {
-+				this.storageService.remove(WI_LOGIN_COMPLETED_KEY, StorageScope.APPLICATION);
-+			}
-+
-+			// Re-render if login state changed or if we were checking auth
-+			if (wasLoggedIn !== this.isLoggedIn || previousEmail !== this.userEmail || wasCheckingAuth) {
-+				this.render();
-+			}
-+		} catch (error) {
-+			console.error('Failed to check login state:', error);
-+			this.isLoggedIn = false;
-+			this.userEmail = undefined;
-+			this.isCheckingAuth = false;
-+			// Render to show the error state (sign in button)
-+			this.render();
++		if (!this.isCurrentRenderRequest(requestId)) {
++			return;
 +		}
++
++		if (!bootstrap) {
++			throw new Error('Missing embedded welcome bootstrap response');
++		}
++
++		const extension = await this.extensionService.getExtension(WI_EXTENSION_ID);
++
++		if (!this.isCurrentRenderRequest(requestId)) {
++			return;
++		}
++
++		if (!extension) {
++			throw new Error(`Unable to locate extension ${WI_EXTENSION_ID}`);
++		}
++
++		const resourcesRoot = joinPath(extension.extensionLocation, 'resources');
++		const scriptUri = asWebviewUri(joinPath(resourcesRoot, 'jslibs', 'main.js')).toString(true);
++		const webview = this.webviewService.createWebviewElement({
++			providedViewType: WI_EMBEDDED_WELCOME_VIEW_TYPE,
++			title: 'WSO2 Integrator',
++			options: {},
++			contentOptions: {
++				allowScripts: true,
++				localResourceRoots: [resourcesRoot]
++			},
++			extension: {
++				id: extension.identifier,
++				location: extension.extensionLocation
++			}
++		});
++
++		if (!this.isCurrentRenderRequest(requestId)) {
++			webview.dispose();
++			return;
++		}
++
++		this.embeddedWebview.value = webview;
++		webview.mountTo(host, getWindow(host));
++		webview.setHtml(this.getEmbeddedWelcomeHtml(scriptUri, bootstrap));
++	}
++
++	private showLoginDialogIfNeeded(): void {
++		if (
++			this.workbenchState !== WorkbenchState.EMPTY ||
++			WSO2EditorGroupWatermark.activeLoginDialogPromise ||
++			WSO2EditorGroupWatermark.autoLoginDialogHandled
++		) {
++			return;
++		}
++
++		const document = getWindow(this.container).document;
++		const dialogParent = (document.querySelector('.monaco-workbench') as HTMLElement | null) ?? document.body;
++		if (!dialogParent) {
++			return;
++		}
++
++		WSO2EditorGroupWatermark.autoLoginDialogHandled = true;
++		const loginDialog = this.instantiationService.createInstance(WSO2LoginDialog, dialogParent);
++		const loginDialogPromise = loginDialog.show().catch(error => {
++			console.error('Failed to show WSO2 login dialog:', error);
++			WSO2EditorGroupWatermark.autoLoginDialogHandled = false;
++			return false;
++		}).finally(() => {
++			loginDialog.dispose();
++
++			if (WSO2EditorGroupWatermark.activeLoginDialog === loginDialog) {
++				WSO2EditorGroupWatermark.activeLoginDialog = undefined;
++			}
++
++			if (WSO2EditorGroupWatermark.activeLoginDialogPromise === loginDialogPromise) {
++				WSO2EditorGroupWatermark.activeLoginDialogPromise = undefined;
++			}
++		});
++
++		WSO2EditorGroupWatermark.activeLoginDialog = loginDialog;
++		WSO2EditorGroupWatermark.activeLoginDialogPromise = loginDialogPromise;
++	}
++
++	private getEmbeddedWelcomeHtml(scriptUri: string, bootstrap: IEmbeddedWelcomeBootstrap): string {
++		const serializedBootstrap = JSON.stringify(bootstrap).replace(/</g, '\\u003c');
++
++		return `<!DOCTYPE html>
++				<html lang="en">
++					<head>
++						<meta charset="utf-8">
++						<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
++					<title>WSO2 Integrator</title>
++					<style>
++						#root, body, html {
++							width: 100%;
++							height: 100%;
++						}
++
++						body {
++							margin: 0px;
++							padding: 0;
++							overflow: hidden;
++							background: var(--vscode-editor-background);
++						}
++
++						#root {
++							position: relative;
++							width: 100%;
++							height: 100%;
++						}
++
++						.embedded-welcome-loader {
++							position: fixed;
++							inset: 0;
++							display: flex;
++							flex-direction: column;
++							align-items: center;
++							justify-content: center;
++							gap: 16px;
++							background: var(--vscode-editor-background);
++							color: #4d78c2;
++							opacity: 1;
++							transition: opacity 180ms ease;
++							pointer-events: none;
++							z-index: 1;
++						}
++
++						body.embedded-welcome-ready .embedded-welcome-loader {
++							opacity: 0;
++						}
++
++						.embedded-welcome-loader-visual {
++							position: relative;
++							width: 100px;
++							height: 100px;
++						}
++
++						.embedded-welcome-loader-svg {
++							position: absolute;
++							inset: 0;
++							width: 100%;
++							height: 100%;
++							overflow: visible;
++						}
++
++						.embedded-welcome-loader-ring {
++							fill: none;
++							stroke: currentColor;
++							stroke-width: 9;
++							stroke-linecap: round;
++							opacity: 0.95;
++							filter: drop-shadow(0 -2px 3px rgba(77, 120, 194, 0.30)) drop-shadow(0 2px 3px rgba(77, 120, 194, 0.14));
++							animation: embedded-welcome-loader-ring-glow 1.4s ease-in-out infinite;
++						}
++
++						.embedded-welcome-loader-wave-base {
++							fill: none;
++							stroke: currentColor;
++							stroke-width: 8;
++							stroke-linecap: round;
++							stroke-linejoin: round;
++							opacity: 0.65;
++						}
++
++						.embedded-welcome-loader-wave-runner {
++							fill: none;
++							stroke: currentColor;
++							stroke-width: 8;
++							stroke-linecap: round;
++							stroke-linejoin: round;
++							opacity: 1;
++							stroke-dasharray: 32 180;
++							animation: embedded-welcome-loader-wave-run 1.1s linear infinite;
++							filter: drop-shadow(0 0 6px rgba(77, 120, 194, 0.90));
++						}
++
++						.embedded-welcome-loader-text {
++							color: var(--vscode-foreground);
++							font-family: sans-serif;
++							font-size: 13px;
++							font-weight: 500;
++							letter-spacing: 0.02em;
++							opacity: 0.82;
++							white-space: nowrap;
++						}
++
++						@keyframes embedded-welcome-loader-wave-run {
++							0% {
++								stroke-dashoffset: 212;
++							}
++
++							100% {
++								stroke-dashoffset: 0;
++							}
++						}
++
++						@keyframes embedded-welcome-loader-ring-glow {
++							0%, 100% {
++								filter: drop-shadow(0 -3px 5px rgba(77, 120, 194, 0.32)) drop-shadow(0 1px 3px rgba(77, 120, 194, 0.15));
++							}
++
++							50% {
++								filter: drop-shadow(0 -1px 3px rgba(77, 120, 194, 0.15)) drop-shadow(0 3px 5px rgba(77, 120, 194, 0.32));
++							}
++						}
++
++						@media (prefers-reduced-motion: reduce) {
++							.embedded-welcome-loader-ring,
++							.embedded-welcome-loader-wave-runner {
++								animation: none;
++							}
++						}
++					</style>
++				</head>
++				<body>
++					<div class="embedded-welcome-loader">
++						<div class="embedded-welcome-loader-visual">
++							<svg class="embedded-welcome-loader-svg" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
++								<circle class="embedded-welcome-loader-ring" cx="60" cy="60" r="50"></circle>
++							</svg>
++							<svg class="embedded-welcome-loader-svg" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
++								<path class="embedded-welcome-loader-wave-base" d="M10 60 H41 L58 34 L75 84 L91 52 H110"></path>
++								<path class="embedded-welcome-loader-wave-runner" d="M10 60 H41 L58 34 L75 84 L91 52 H110"></path>
++							</svg>
++						</div>
++						<div class="embedded-welcome-loader-text">Loading WSO2 Integrator...</div>
++					</div>
++					<div id="root"></div>
++						<script>
++							window.__WI_BRIDGE_BOOTSTRAP = ${serializedBootstrap};
++							window.__WI_EMBEDDED_WELCOME_HIDE_LOADER = function () {
++								document.body.classList.add('embedded-welcome-ready');
++							};
++							document.addEventListener('DOMContentLoaded', function () {
++								var render = function () {
++									try {
++										window.wiWebview.renderWebview(document.getElementById('root'));
++									} catch (error) {
++										console.error('Failed to render embedded welcome webview:', error);
++									} finally {
++									window.requestAnimationFrame(function () {
++										window.requestAnimationFrame(function () {
++											window.__WI_EMBEDDED_WELCOME_HIDE_LOADER();
++										});
++										});
++									}
++								};
++
++								var loadScript = function () {
++									var script = document.createElement('script');
++									script.src = ${JSON.stringify(scriptUri)};
++									script.onload = render;
++									script.onerror = function () {
++										console.error('Failed to load embedded welcome bundle');
++									};
++									document.body.appendChild(script);
++								};
++
++								window.requestAnimationFrame(function () {
++									window.requestAnimationFrame(loadScript);
++								});
++							});
++						</script>
++					</body>
++				</html>`;
++	}
++
++	private isCurrentRenderRequest(requestId: number): boolean {
++		return requestId === this.renderRequestId;
++	}
++
++	private disposeEmbeddedWelcome(): void {
++		this.embeddedWebview.clear();
++	}
++
++	private installEmbeddedWelcomeLoaderBridge(shell: HTMLElement, host: HTMLElement, requestId: number): () => void {
++		const targetWindow = getWindow(shell);
++		let revealTimer: number | undefined;
++		let disposed = false;
++
++		const cleanupTimers = () => {
++			if (typeof revealTimer === 'number') {
++				targetWindow.clearTimeout(revealTimer);
++				revealTimer = undefined;
++			}
++			targetWindow.clearTimeout(fallbackTimer);
++		};
++
++		const reveal = () => {
++			if (disposed || typeof revealTimer === 'number') {
++				return;
++			}
++
++			revealTimer = targetWindow.setTimeout(() => {
++				if (!disposed && this.isCurrentRenderRequest(requestId) && shell.isConnected) {
++					shell.classList.add('embedded-welcome-shell-ready');
++				}
++				dispose();
++			}, 500);
++		};
++
++		const checkReady = () => {
++			if (host.querySelector('iframe.webview.ready')) {
++				reveal();
++			}
++		};
++
++		const observer = new targetWindow.MutationObserver(() => checkReady());
++		observer.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
++
++		const fallbackTimer = targetWindow.setTimeout(() => {
++			if (!disposed && this.isCurrentRenderRequest(requestId) && shell.isConnected) {
++				shell.classList.add('embedded-welcome-shell-ready');
++			}
++			dispose();
++		}, 6000);
++
++		const dispose = () => {
++			if (disposed) {
++				return;
++			}
++
++			disposed = true;
++			observer.disconnect();
++			cleanupTimers();
++		};
++
++		checkReady();
++		return dispose;
 +	}
 +
 +	private async closeAllEditors(): Promise<void> {
-+		// Close all editors in all groups without saving
 +		try {
-+			// Get all groups and close all editors in each
 +			await Promise.all(
 +				this.editorGroupsService.getGroups(GroupsOrder.MOST_RECENTLY_ACTIVE).map(group =>
 +					group.closeAllEditors({ excludeSticky: false })
@@ -877,40 +661,17 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +			console.error('Failed to close editors:', error);
 +		}
 +	}
-+
-+	private addClickHandler(element: HTMLElement, commandId: string, args?: string[] | (URI | { forceNewWindow: boolean })[] | undefined): { dispose: () => void } {
-+		const handler = async (e: MouseEvent) => {
-+			e.preventDefault();
-+			e.stopPropagation();
-+			try {
-+				if (args) {
-+					await this.commandService.executeCommand(commandId, ...args);
-+				} else {
-+					await this.commandService.executeCommand(commandId);
-+				}
-+			} catch (error) {
-+				console.error(`Failed to execute command ${commandId}:`, error);
-+			}
-+		};
-+
-+		element.addEventListener('click', handler);
-+
-+		return {
-+			dispose: () => element.removeEventListener('click', handler)
-+		};
-+	}
 +}
 Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
-@@ -51,18 +51,24 @@ import { ILogService } from '../../../..
+@@ -51,18 +51,23 @@ import { ILogService } from '../../../..
  import { TelemetryTrustedValue } from '../../../../platform/telemetry/common/telemetryUtils.js';
  import { defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
  import { IBoundarySashes } from '../../../../base/browser/ui/sash/sash.js';
 -import { EditorGroupWatermark } from './editorGroupWatermark.js';
 +import { WSO2EditorGroupWatermark } from './wso2EditorGroupWatermark.js';
-+import { WSO2LoginDialog } from './wso2LoginDialog.js';
 +import { WSO2AuthenticationContribution } from './wso2AuthenticationContribution.js';
 +import './wso2Constants.js';
  import { EditorTitleControl } from './editorTitleControl.js';
@@ -930,7 +691,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/edito
  	static createNew(editorPartsView: IEditorPartsView, groupsView: IEditorGroupsView, groupsLabel: string, groupIndex: number, instantiationService: IInstantiationService, options?: IEditorGroupViewOptions): IEditorGroupView {
  		return instantiationService.createInstance(EditorGroupView, null, editorPartsView, groupsView, groupsLabel, groupIndex, options);
  	}
-@@ -161,10 +167,17 @@ export class EditorGroupView extends The
+@@ -161,10 +166,17 @@ export class EditorGroupView extends The
  		@IEditorResolverService private readonly editorResolverService: IEditorResolverService,
  		@IHostService private readonly hostService: IHostService,
  		@IDialogService private readonly dialogService: IDialogService,
@@ -949,21 +710,18 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/edito
  		if (from instanceof EditorGroupView) {
  			this.model = this._register(from.model.clone());
  		} else if (isSerializedEditorGroupModel(from)) {
-@@ -190,8 +203,11 @@ export class EditorGroupView extends The
+@@ -190,8 +202,8 @@ export class EditorGroupView extends The
  			// Container context menu
  			this.createContainerContextMenu();
  
 -			// Watermark & shortcuts
 -			this._register(this.instantiationService.createInstance(EditorGroupWatermark, this.element));
-+			// Watermark & shortcuts - Use WSO2 custom watermark with login dialog
-+			const loginDialog = this._register(this.instantiationService.createInstance(WSO2LoginDialog, this.element));
-+			loginDialog.show().then(() => {
-+				this._register(this.instantiationService.createInstance(WSO2EditorGroupWatermark, this.element));
-+			});
++			// Watermark & shortcuts - Use WSO2 custom watermark host
++			this._register(this.instantiationService.createInstance(WSO2EditorGroupWatermark, this.element));
  
  			// Progress bar
  			this.progressBar = this._register(new ProgressBar(this.element, defaultProgressBarStyles));
-@@ -379,6 +395,11 @@ export class EditorGroupView extends The
+@@ -379,6 +391,11 @@ export class EditorGroupView extends The
  
  		// Open new file via doubleclick on empty container
  		this._register(addDisposableListener(this.element, EventType.DBLCLICK, e => {
@@ -975,7 +733,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/edito
  			if (this.isEmpty) {
  				EventHelper.stop(e);
  
-@@ -446,6 +467,11 @@ export class EditorGroupView extends The
+@@ -446,6 +463,11 @@ export class EditorGroupView extends The
  			return; // only for empty editor groups
  		}
  
@@ -1418,7 +1176,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
-@@ -0,0 +1,460 @@
+@@ -0,0 +1,591 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -1449,11 +1207,15 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +	}
 +
 +	async show(): Promise<boolean> {
-+		// Check if already skipped
-+		const loginSkipped = this.storageService.getBoolean(WI_LOGIN_SKIPPED_KEY, StorageScope.APPLICATION, false);
 +		const loginCompleted = this.storageService.getBoolean(WI_LOGIN_COMPLETED_KEY, StorageScope.APPLICATION, false);
-+		if (loginSkipped || loginCompleted) {
-+			return false;
++		if (loginCompleted) {
++			const loginStatus = await checkWSO2LoginStatus(this.authenticationService);
++			if (loginStatus.isLoggedIn) {
++				return false;
++			}
++
++			// The stored completion flag is stale if there is no active session.
++			this.storageService.remove(WI_LOGIN_COMPLETED_KEY, StorageScope.APPLICATION);
 +		}
 +
 +		// Show login UI
@@ -1479,8 +1241,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +
 +		const logoContainer = append(leftSection, $('.logo-container'));
 +		const logo = append(logoContainer, $('img.logo')) as HTMLImageElement;
-+		logo.src = FileAccess.asBrowserUri('vs/workbench/browser/parts/editor/media/wso2.png').toString(true);
-+		logo.alt = 'WSO2';
++		logo.src = FileAccess.asBrowserUri('vs/workbench/browser/parts/editor/media/integrator-activity-icon-dark.svg').toString(true);
++		logo.alt = 'WSO2 Integrator';
++
++		const heroBadge = append(leftSection, $('div.login-badge'));
++		heroBadge.textContent = 'Get Started';
 +
 +		const headline = append(leftSection, $('h1.login-headline'));
 +		headline.textContent = 'Welcome to WSO2 Integrator';
@@ -1492,6 +1257,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		const rightSection = append(wrapper, $('.login-right-section'));
 +
 +		const formContainer = append(rightSection, $('.login-form-container'));
++
++		const formOverline = append(formContainer, $('div.form-overline'));
++		formOverline.textContent = 'WSO2 Integrator';
 +
 +		const formTitle = append(formContainer, $('h2.form-title'));
 +		formTitle.textContent = 'Get Started';
@@ -1512,8 +1280,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		// Sign In with WSO2 button (hidden initially)
 +		const signInButton = append(formContainer, $('button.wso2-sign-in-btn')) as HTMLButtonElement;
 +		signInButton.style.display = 'none';
-+		const iconSpan = append(signInButton, $('span.btn-icon'));
-+		iconSpan.textContent = '🔐';
 +		const textSpan = append(signInButton, $('span.btn-text'));
 +		textSpan.textContent = 'Sign in with WSO2 account';
 +
@@ -1644,12 +1410,31 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		const style = document.createElement('style');
 +		style.textContent = `
 +			.wso2-login-dialog {
++				--wso2-brand-primary: #17223a;
++				--wso2-brand-primary-alt: #1b2a49;
++				--wso2-brand-ink: #17223a;
++				--wso2-brand-ink-alt: #1b2a49;
++				--wso2-brand-accent: #5cd1ff;
++				--wso2-brand-accent-soft: #b7e4fc;
++				--wso2-brand-neutral-900: #0d0d0d;
++				--wso2-brand-neutral-700: #262626;
++				--wso2-brand-neutral-600: #565656;
++				--wso2-brand-neutral-300: #d9d9d9;
++				--wso2-brand-neutral-100: #f2f2f2;
++				--wso2-brand-white: #ffffff;
++				--welcome-hero-foreground: var(--wso2-brand-white);
++				--welcome-hero-muted: color-mix(in srgb, var(--wso2-brand-white) 78%, transparent);
++				--welcome-hero-surface: color-mix(in srgb, var(--wso2-brand-white) 16%, transparent);
++				--welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-white) 36%, transparent);
++				--welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent);
++				--welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent-soft) 52%, transparent);
 +				position: fixed;
-+				top: 0;
-+				left: 0;
-+				right: 0;
-+				bottom: 0;
-+				background: var(--vscode-editor-background);
++				inset: 0;
++				padding: 32px;
++				background:
++					radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--wso2-brand-accent) 8%, transparent) 0%, transparent 36%),
++					color-mix(in srgb, var(--vscode-editor-background) 90%, transparent);
++				backdrop-filter: blur(12px);
 +				z-index: 10000;
 +				display: flex;
 +				align-items: center;
@@ -1658,59 +1443,132 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +
 +			.wso2-login-dialog .login-wrapper {
 +				display: grid;
-+				grid-template-columns: 1fr 1fr;
-+				width: 100%;
-+				height: 100%;
++				grid-template-columns: minmax(0, 1.08fr) minmax(380px, 0.92fr);
++				width: min(1180px, 100%);
++				min-height: min(760px, calc(100vh - 64px));
++				background: color-mix(in srgb, var(--wso2-brand-primary) 3%, var(--vscode-editor-background));
++				border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 16%, var(--vscode-widget-border));
++				border-radius: 28px;
++				overflow: hidden;
++				box-shadow:
++					0 24px 64px color-mix(in srgb, var(--wso2-brand-neutral-900) 30%, transparent),
++					0 0 0 1px color-mix(in srgb, var(--wso2-brand-white) 4%, transparent);
 +			}
 +
 +			@media (max-width: 968px) {
++				.wso2-login-dialog {
++					padding: 16px;
++				}
++
 +				.wso2-login-dialog .login-wrapper {
 +					grid-template-columns: 1fr;
++					min-height: auto;
 +				}
 +
 +				.wso2-login-dialog .login-left-section {
-+					display: none;
++					min-height: 280px;
++					padding: 40px 32px;
++				}
++
++				.wso2-login-dialog .login-right-section {
++					padding: 24px;
 +				}
 +			}
 +
 +			.wso2-login-dialog .login-left-section {
-+				background: linear-gradient(135deg, #667eea 0%, #204377 100%);
-+				padding: 0;
++				background:
++					radial-gradient(circle at 82% 14%, color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent) 0%, transparent 34%),
++					radial-gradient(circle at 12% 100%, color-mix(in srgb, var(--wso2-brand-neutral-900) 46%, transparent) 0%, transparent 52%),
++					linear-gradient(115deg, #050a14 0%, var(--wso2-brand-ink) 42%, var(--wso2-brand-ink-alt) 100%);
++				padding: 56px 60px;
 +				display: flex;
 +				flex-direction: column;
 +				justify-content: center;
-+				align-items: center;
-+				color: white;
++				align-items: flex-start;
++				gap: 18px;
++				color: var(--welcome-hero-foreground);
++				position: relative;
++				overflow: hidden;
++			}
++
++			body.vscode-light .wso2-login-dialog {
++				--welcome-hero-foreground: var(--wso2-brand-ink);
++				--welcome-hero-muted: color-mix(in srgb, var(--wso2-brand-ink) 76%, var(--wso2-brand-white));
++				--welcome-hero-surface: color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
++				--welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
++				--welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
++				--welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent) 34%, transparent);
++			}
++
++			body.vscode-light .wso2-login-dialog .login-left-section {
++				background:
++					radial-gradient(circle at 10% 100%, color-mix(in srgb, var(--wso2-brand-accent) 40%, transparent) 0%, transparent 42%),
++					radial-gradient(circle at 72% 18%, color-mix(in srgb, var(--wso2-brand-white) 94%, transparent) 0%, transparent 34%),
++					linear-gradient(110deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-soft) 28%, var(--wso2-brand-white) 100%);
 +			}
 +
 +			.wso2-login-dialog .logo-container {
-+				margin-bottom: 60px;
++				width: 96px;
++				height: 96px;
++				border-radius: 24px;
++				background: linear-gradient(
++					180deg,
++					color-mix(in srgb, var(--wso2-brand-primary) 96%, var(--wso2-brand-accent-soft)) 0%,
++					color-mix(in srgb, var(--wso2-brand-primary-alt) 98%, var(--wso2-brand-accent)) 100%
++				);
++				border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 18%, transparent);
++				box-shadow:
++					inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 12%, transparent),
++					0 18px 34px color-mix(in srgb, var(--wso2-brand-neutral-900) 22%, transparent);
++				display: flex;
++				align-items: center;
++				justify-content: center;
++			}
++
++			.wso2-login-dialog .login-badge {
++				display: inline-flex;
++				align-items: center;
++				padding: 8px 14px;
++				border-radius: 999px;
++				font-size: 13px;
++				font-weight: 600;
++				background: var(--welcome-hero-badge-bg);
++				color: var(--welcome-hero-foreground);
++				border: 1px solid var(--welcome-hero-badge-border);
++				backdrop-filter: blur(10px);
 +			}
 +
 +			.wso2-login-dialog .logo {
-+				max-width: 200px;
-+				height: auto;
++				width: 54px;
++				height: 54px;
 +				display: block;
++				object-fit: contain;
 +			}
 +
 +			.wso2-login-dialog .login-headline {
-+				font-size: 42px;
++				font-size: 48px;
 +				font-weight: 700;
-+				margin: 0 0 24px 0;
-+				line-height: 1.2;
++				margin: 0;
++				line-height: 1.12;
++				max-width: 460px;
 +			}
 +
 +			.wso2-login-dialog .login-caption {
-+				font-size: 18px;
-+				line-height: 1.6;
++				font-size: 16px;
++				line-height: 1.65;
 +				margin: 0;
-+				color: rgba(255, 255, 255, 0.9);
-+				max-width: 500px;
++				color: var(--welcome-hero-muted);
++				max-width: 540px;
 +			}
 +
 +			.wso2-login-dialog .login-right-section {
-+				background: var(--vscode-sideBar-background);
-+				padding: 0;
++				background:
++					linear-gradient(
++						180deg,
++						color-mix(in srgb, var(--wso2-brand-accent) 4%, var(--vscode-editor-background)) 0%,
++						var(--vscode-editor-background) 100%
++					);
++				padding: 40px;
 +				display: flex;
 +				align-items: center;
 +				justify-content: center;
@@ -1719,19 +1577,50 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +
 +			.wso2-login-dialog .login-form-container {
 +				width: 100%;
-+				max-width: 400px;
++				max-width: 430px;
++				padding: 40px 36px;
++				border-radius: 24px;
++				background:
++					linear-gradient(
++						180deg,
++						color-mix(in srgb, var(--wso2-brand-white) 4%, var(--vscode-editor-background)) 0%,
++						var(--vscode-editor-background) 100%
++					);
++				border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 14%, var(--vscode-panel-border));
++				box-shadow: 0 18px 36px color-mix(in srgb, var(--wso2-brand-neutral-900) 12%, transparent);
++			}
++
++			body.vscode-light .wso2-login-dialog .login-form-container {
++				background:
++					linear-gradient(
++						180deg,
++						color-mix(in srgb, var(--wso2-brand-accent-soft) 12%, var(--wso2-brand-white)) 0%,
++						#ffffff 100%
++					);
++				box-shadow: 0 18px 36px color-mix(in srgb, var(--wso2-brand-accent) 12%, transparent);
++			}
++
++			.wso2-login-dialog .form-overline {
++				margin-bottom: 10px;
++				font-size: 12px;
++				font-weight: 700;
++				letter-spacing: 0.12em;
++				text-transform: uppercase;
++				color: var(--wso2-brand-accent);
 +			}
 +
 +			.wso2-login-dialog .form-title {
-+				font-size: 32px;
-+				font-weight: 600;
++				font-size: 34px;
++				font-weight: 700;
 +				margin: 0 0 12px 0;
 +				color: var(--vscode-foreground);
++				letter-spacing: -0.02em;
 +			}
 +
 +			.wso2-login-dialog .form-subtitle {
 +				font-size: 14px;
-+				margin: 0 0 48px 0;
++				line-height: 1.6;
++				margin: 0 0 32px 0;
 +				color: var(--vscode-descriptionForeground);
 +			}
 +
@@ -1741,66 +1630,42 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +				align-items: center;
 +				justify-content: center;
 +				gap: 16px;
-+				padding: 32px 0;
-+				margin-bottom: 16px;
-+			}
-+
-+			.wso2-login-dialog .spinner {
-+				width: 40px;
-+				height: 40px;
-+				border: 4px solid rgba(128, 128, 128, 0.2);
-+				border-top-color: var(--vscode-button-background);
-+				border-radius: 50%;
-+				animation: spin 1s linear infinite;
-+			}
-+
-+			@keyframes spin {
-+				0% { transform: rotate(0deg); }
-+				100% { transform: rotate(360deg); }
-+			}
-+
-+			.wso2-login-dialog .loader-text {
-+				font-size: 14px;
-+				color: var(--vscode-descriptionForeground);
-+			}
-+
-+			.wso2-login-dialog .error-message {
-+				display: flex;
-+				flex-direction: column;
-+				align-items: center;
-+				justify-content: center;
-+				gap: 16px;
-+				padding: 32px 0;
-+				margin-bottom: 16px;
-+			}
-+
-+			.wso2-login-dialog .spinner {
-+				width: 40px;
-+				height: 40px;
-+				border: 4px solid var(--vscode-progressBar-background);
-+				border-top-color: var(--vscode-button-background);
-+				border-radius: 50%;
-+				animation: spin 1s linear infinite;
-+			}
-+
-+			@keyframes spin {
-+				0% { transform: rotate(0deg); }
-+				100% { transform: rotate(360deg); }
-+			}
-+
-+			.wso2-login-dialog .loader-text {
-+				font-size: 14px;
-+				color: var(--vscode-descriptionForeground);
-+			}
-+
-+			.wso2-login-dialog .error-message {
-+				padding: 10px 14px;
++				padding: 24px 20px;
 +				margin-bottom: 20px;
-+				background: var(--vscode-inputValidation-errorBackground);
-+				border: 1px solid var(--vscode-inputValidation-errorBorder);
-+				border-radius: 6px;
-+				color: var(--vscode-inputValidation-errorForeground);
++				border-radius: 18px;
++				background: color-mix(in srgb, var(--wso2-brand-primary) 4%, var(--vscode-editor-background));
++				border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 12%, var(--vscode-panel-border));
++			}
++
++			.wso2-login-dialog .spinner {
++				width: 40px;
++				height: 40px;
++				border: 4px solid color-mix(in srgb, var(--wso2-brand-primary) 12%, var(--vscode-progressBar-background));
++				border-top-color: var(--wso2-brand-accent);
++				border-radius: 50%;
++				animation: spin 1s linear infinite;
++			}
++
++			@keyframes spin {
++				0% { transform: rotate(0deg); }
++				100% { transform: rotate(360deg); }
++			}
++
++			.wso2-login-dialog .loader-text {
++				font-size: 14px;
++				color: var(--vscode-descriptionForeground);
++				text-align: center;
++			}
++
++			.wso2-login-dialog .error-message {
++				padding: 12px 14px;
++				margin-bottom: 20px;
++				background: color-mix(in srgb, var(--vscode-inputValidation-errorBackground) 84%, var(--vscode-editor-background));
++				border: 1px solid color-mix(in srgb, var(--vscode-inputValidation-errorBorder) 72%, var(--vscode-widget-border));
++				border-radius: 12px;
++				color: var(--vscode-errorForeground);
 +				font-size: 13px;
++				line-height: 1.5;
 +			}
 +
 +			.wso2-login-dialog .wso2-sign-in-btn {
@@ -1808,22 +1673,23 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +				height: 52px;
 +				font-size: 16px;
 +				font-weight: 600;
-+				border-radius: 8px;
-+				background: var(--vscode-button-background);
-+				color: var(--vscode-button-foreground);
-+				border: none;
++				border-radius: 12px;
++				background: linear-gradient(
++					135deg,
++					color-mix(in srgb, var(--wso2-brand-primary) 94%, var(--wso2-brand-white)) 0%,
++					var(--wso2-brand-primary-alt) 100%
++				);
++				color: var(--wso2-brand-white);
++				border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 8%, transparent);
 +				cursor: pointer;
 +				transition: all 0.2s ease;
 +				margin-bottom: 16px;
 +				display: flex;
 +				align-items: center;
 +				justify-content: center;
-+				gap: 8px;
-+			}
-+
-+			.wso2-login-dialog .wso2-sign-in-btn .btn-icon {
-+				font-size: 20px;
-+				line-height: 1;
++				box-shadow:
++					inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 10%, transparent),
++					0 10px 20px color-mix(in srgb, var(--wso2-brand-neutral-900) 24%, transparent);
 +			}
 +
 +			.wso2-login-dialog .wso2-sign-in-btn .btn-text {
@@ -1831,9 +1697,15 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +			}
 +
 +			.wso2-login-dialog .wso2-sign-in-btn:hover:not(:disabled) {
-+				background: var(--vscode-button-hoverBackground);
++				background: linear-gradient(
++					135deg,
++					color-mix(in srgb, var(--wso2-brand-primary) 92%, var(--wso2-brand-accent-soft)) 0%,
++					color-mix(in srgb, var(--wso2-brand-primary-alt) 96%, var(--wso2-brand-accent)) 100%
++				);
 +				transform: translateY(-1px);
-+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
++				box-shadow:
++					inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 12%, transparent),
++					0 14px 24px color-mix(in srgb, var(--wso2-brand-neutral-900) 26%, transparent);
 +			}
 +
 +			.wso2-login-dialog .wso2-sign-in-btn:disabled {
@@ -1846,33 +1718,50 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +				height: 44px;
 +				font-size: 15px;
 +				font-weight: 500;
-+				border-radius: 6px;
-+				background: var(--vscode-button-secondaryBackground);
-+				color: var(--vscode-button-secondaryForeground);
-+				border: 1px solid var(--vscode-button-border, transparent);
++				border-radius: 12px;
++				background: linear-gradient(
++					180deg,
++					color-mix(in srgb, var(--wso2-brand-accent-soft) 72%, var(--wso2-brand-white)) 0%,
++					color-mix(in srgb, var(--wso2-brand-accent) 16%, var(--wso2-brand-white)) 100%
++				);
++				color: var(--wso2-brand-ink);
++				border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 28%, var(--vscode-button-border));
 +				cursor: pointer;
 +				transition: all 0.2s ease;
++				box-shadow: 0 8px 18px color-mix(in srgb, var(--wso2-brand-accent) 14%, transparent);
 +			}
 +
 +			.wso2-login-dialog .skip-btn:hover {
-+				background: var(--vscode-button-secondaryHoverBackground);
++				background: linear-gradient(
++					180deg,
++					color-mix(in srgb, var(--wso2-brand-accent-soft) 82%, var(--wso2-brand-white)) 0%,
++					color-mix(in srgb, var(--wso2-brand-accent) 24%, var(--wso2-brand-white)) 100%
++				);
++				transform: translateY(-1px);
 +			}
 +
 +			.wso2-login-dialog .cancel-btn {
 +				height: 36px;
 +				font-size: 14px;
 +				font-weight: 500;
-+				border-radius: 6px;
++				border-radius: 10px;
 +				padding: 0 20px;
-+				background: transparent;
++				background: color-mix(in srgb, var(--wso2-brand-accent) 8%, transparent);
 +				color: var(--vscode-button-secondaryForeground);
-+				border: 1px solid var(--vscode-button-border, rgba(128, 128, 128, 0.3));
++				border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 20%, var(--vscode-button-border));
 +				cursor: pointer;
 +				transition: all 0.2s ease;
 +			}
 +
 +			.wso2-login-dialog .cancel-btn:hover {
-+				background: var(--vscode-button-secondaryHoverBackground);
++				background: color-mix(in srgb, var(--wso2-brand-accent) 12%, transparent);
++			}
++
++			.wso2-login-dialog .wso2-sign-in-btn:focus-visible,
++			.wso2-login-dialog .skip-btn:focus-visible,
++			.wso2-login-dialog .cancel-btn:focus-visible {
++				outline: 1px solid var(--vscode-focusBorder);
++				outline-offset: 2px;
 +			}
 +		`;
 +		mainWindow.document.head.appendChild(style);
@@ -1958,7 +1847,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 +
 +/**
 + * Check the login status using the WSO2 Platform authentication provider
-+ * 
++ *
 + * @param authenticationService - The authentication service to check for sessions
 + * @returns Promise<WSO2LoginStatus> - The login status with user email if logged in
 + */
@@ -1992,7 +1881,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 +
 +/**
 + * Sign in using the WSO2 Platform authentication provider
-+ * 
++ *
 + * @param authenticationService - The authentication service to create a session
 + * @param commandService - The command service to execute cancellation command
 + * @param scopes - Optional scopes to request (defaults to [])
@@ -2022,3 +1911,223 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 +		throw error;
 +	}
 +}
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
+@@ -38,6 +38,15 @@ const configurationKey = 'workbench.star
+ const oldConfigurationKey = 'workbench.welcome.enabled';
+ const telemetryOptOutStorageKey = 'workbench.telemetryOptOutShown';
+ 
++function shouldSkipEmptyWorkbenchWelcomePage(configurationService: IConfigurationService, contextService: IWorkspaceContextService): boolean {
++	if (contextService.getWorkbenchState() !== WorkbenchState.EMPTY) {
++		return false;
++	}
++
++	const startupEditor = configurationService.getValue<string>(configurationKey);
++	return startupEditor === 'welcomePage' || startupEditor === 'welcomePageInEmptyWorkbench';
++}
++
+ export class StartupPageEditorResolverContribution extends Disposable implements IWorkbenchContribution {
+ 
+ 	static readonly ID = 'workbench.contrib.startupPageEditorResolver';
+@@ -128,6 +137,16 @@ export class StartupPageRunnerContributi
+ 			return;
+ 		}
+ 
++		// WSO2 Integrator renders its own tabless welcome experience in empty editor groups.
++		if (shouldSkipEmptyWorkbenchWelcomePage(this.configurationService, this.contextService)) {
++			const activeEditor = this.editorService.activeEditor;
++			const activeGroup = this.editorService.activeEditorPane?.group;
++			if (activeEditor?.typeId === gettingStartedInputTypeId && activeGroup) {
++				await this.editorService.closeEditor({ groupId: activeGroup.id, editor: activeEditor });
++			}
++			return;
++		}
++
+ 		const enabled = isStartupPageEnabled(this.configurationService, this.contextService, this.environmentService, this.logService);
+ 		if (enabled && this.lifecycleService.startupKind !== StartupKind.ReloadedWindow) {
+ 
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/media/integrator-activity-icon-dark.svg
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/media/integrator-activity-icon-dark.svg
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="66.8 66.8 391.78 391.78">
++  <path fill="#f3f4f6" d="M293.19,358.72c-.22,0-.44,0-.66-.02-4.77-.29-8.83-3.58-10.09-8.19l-36.05-132.2-18.46,61.66c-1.41,4.71-5.75,7.95-10.67,7.95h-69.15c-6.15,0-11.14-4.99-11.14-11.14s4.99-11.14,11.14-11.14h60.86l27.26-91.03c1.42-4.72,5.75-7.95,10.67-7.95.04,0,.09,0,.14,0,4.97.06,9.3,3.41,10.61,8.21l37.62,137.94,16.3-40.22c1.7-4.21,5.79-6.96,10.33-6.96h55.4c6.15,0,11.14,4.99,11.14,11.14s-4.99,11.14-11.14,11.14h-47.9l-25.87,63.84c-1.71,4.22-5.81,6.96-10.32,6.96Z"/>
++  <path fill="#f3f4f6" d="M262.69,458.58c-108.01,0-195.89-87.87-195.89-195.89s87.87-195.89,195.89-195.89,195.89,87.88,195.89,195.89-87.88,195.89-195.89,195.89ZM262.69,89.08c-95.72,0-173.6,77.88-173.6,173.61s77.88,173.6,173.6,173.6,173.6-77.88,173.6-173.6-77.88-173.61-173.6-173.61Z"/>
++</svg>
+Index: product-integrator/lib/vscode/src/vs/code/electron-browser/workbench/workbench.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/code/electron-browser/workbench/workbench.ts
++++ product-integrator/lib/vscode/src/vs/code/electron-browser/workbench/workbench.ts
+@@ -22,6 +22,67 @@
+ 
+ 	//#region Splash Screen Helpers
+ 
++	const wso2SplashLoaderIcon = encodeURIComponent(`
++		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
++			<style>
++				.ringCircle {
++					fill: none;
++					stroke: #4d78c2;
++					stroke-width: 9;
++					stroke-linecap: round;
++					opacity: 0.95;
++					filter: drop-shadow(0 -2px 3px rgba(77, 120, 194, 0.30)) drop-shadow(0 2px 3px rgba(77, 120, 194, 0.14));
++					animation: heartbeatRingGlow 1.4s ease-in-out infinite;
++				}
++
++				.waveBase {
++					fill: none;
++					stroke: #4d78c2;
++					stroke-width: 8;
++					stroke-linecap: round;
++					stroke-linejoin: round;
++					opacity: 0.65;
++				}
++
++				.waveRunner {
++					fill: none;
++					stroke: #4d78c2;
++					stroke-width: 8;
++					stroke-linecap: round;
++					stroke-linejoin: round;
++					opacity: 1;
++					stroke-dasharray: 32 180;
++					animation: heartbeatWaveRun 1.1s linear infinite;
++					filter: drop-shadow(0 0 6px rgba(77, 120, 194, 0.90));
++				}
++
++				@keyframes heartbeatWaveRun {
++					0% { stroke-dashoffset: 212; }
++					100% { stroke-dashoffset: 0; }
++				}
++
++				@keyframes heartbeatRingGlow {
++					0%, 100% {
++						filter: drop-shadow(0 -3px 5px rgba(77, 120, 194, 0.32)) drop-shadow(0 1px 3px rgba(77, 120, 194, 0.15));
++					}
++					50% {
++						filter: drop-shadow(0 -1px 3px rgba(77, 120, 194, 0.15)) drop-shadow(0 3px 5px rgba(77, 120, 194, 0.32));
++					}
++				}
++
++				@media (prefers-reduced-motion: reduce) {
++					.ringCircle,
++					.waveRunner {
++						animation: none;
++					}
++				}
++			</style>
++			<circle class="ringCircle" cx="60" cy="60" r="50"/>
++			<path class="waveBase" d="M10 60 H41 L58 34 L75 84 L91 52 H110"/>
++			<path class="waveRunner" d="M10 60 H41 L58 34 L75 84 L91 52 H110"/>
++		</svg>
++	`);
++
+ 	function showSplash(configuration: INativeWindowConfiguration) {
+ 		performance.mark('code/willShowPartsSplash');
+ 
+@@ -76,7 +137,38 @@
+ 		const style = document.createElement('style');
+ 		style.className = 'initialShellColors';
+ 		window.document.head.appendChild(style);
+-		style.textContent = `body {	background-color: ${shellBackground}; color: ${shellForeground}; margin: 0; padding: 0; }`;
++		const emptyWindowLoaderStyles = !configuration.workspace ? `
++			body::before {
++				content: '';
++				position: fixed;
++				left: 50%;
++				top: 50%;
++				width: 100px;
++				height: 100px;
++				transform: translate(-50%, -58px);
++				background: center / contain no-repeat url("data:image/svg+xml,${wso2SplashLoaderIcon}");
++				pointer-events: none;
++				z-index: 2147483646;
++			}
++
++			body::after {
++				content: 'Loading WSO2 Integrator...';
++				position: fixed;
++				left: 50%;
++				top: 50%;
++				transform: translate(-50%, 54px);
++				color: ${shellForeground ?? '#CCCCCC'};
++				font-family: sans-serif;
++				font-size: 13px;
++				font-weight: 500;
++				letter-spacing: 0.02em;
++				opacity: 0.82;
++				pointer-events: none;
++				z-index: 2147483646;
++				white-space: nowrap;
++			}
++		` : '';
++		style.textContent = `body { background-color: ${shellBackground}; color: ${shellForeground}; margin: 0; padding: 0; }${emptyWindowLoaderStyles}`;
+ 
+ 		// set zoom level as soon as possible
+ 		if (typeof data?.zoomLevel === 'number' && typeof preloadGlobals?.webFrame?.setZoomLevel === 'function') {
+@@ -237,34 +329,34 @@
+ 				}
+ 			}
+ 
+-			// part: statusbar
+-			if (layoutInfo.statusBarHeight > 0) {
+-				const statusDiv = document.createElement('div');
+-				statusDiv.style.position = 'absolute';
+-				statusDiv.style.width = '100%';
+-				statusDiv.style.height = `${layoutInfo.statusBarHeight}px`;
+-				statusDiv.style.bottom = '0';
+-				statusDiv.style.left = '0';
+-				if (configuration.workspace && colorInfo.statusBarBackground) {
+-					statusDiv.style.backgroundColor = colorInfo.statusBarBackground;
+-				} else if (!configuration.workspace && colorInfo.statusBarNoFolderBackground) {
+-					statusDiv.style.backgroundColor = colorInfo.statusBarNoFolderBackground;
+-				}
+-				splash.appendChild(statusDiv);
+-
+-				if (colorInfo.statusBarBorder) {
+-					const statusBorderDiv = document.createElement('div');
+-					statusBorderDiv.style.position = 'absolute';
+-					statusBorderDiv.style.width = '100%';
+-					statusBorderDiv.style.height = '1px';
+-					statusBorderDiv.style.top = '0';
+-					statusBorderDiv.style.borderTop = `1px solid ${colorInfo.statusBarBorder}`;
+-					statusDiv.appendChild(statusBorderDiv);
++				// part: statusbar
++				if (layoutInfo.statusBarHeight > 0) {
++					const statusDiv = document.createElement('div');
++					statusDiv.style.position = 'absolute';
++					statusDiv.style.width = '100%';
++					statusDiv.style.height = `${layoutInfo.statusBarHeight}px`;
++					statusDiv.style.bottom = '0';
++					statusDiv.style.left = '0';
++					if (configuration.workspace && colorInfo.statusBarBackground) {
++						statusDiv.style.backgroundColor = colorInfo.statusBarBackground;
++					} else if (!configuration.workspace && colorInfo.statusBarNoFolderBackground) {
++						statusDiv.style.backgroundColor = colorInfo.statusBarNoFolderBackground;
++					}
++					splash.appendChild(statusDiv);
++
++					if (colorInfo.statusBarBorder) {
++						const statusBorderDiv = document.createElement('div');
++						statusBorderDiv.style.position = 'absolute';
++						statusBorderDiv.style.width = '100%';
++						statusBorderDiv.style.height = '1px';
++						statusBorderDiv.style.top = '0';
++						statusBorderDiv.style.borderTop = `1px solid ${colorInfo.statusBarBorder}`;
++						statusDiv.appendChild(statusBorderDiv);
++					}
+ 				}
+-			}
+ 
+-			window.document.body.appendChild(splash);
+-		}
++				window.document.body.appendChild(splash);
++			}
+ 
+ 		performance.mark('code/didShowPartsSplash');
+ 	}

@@ -23,7 +23,6 @@ import { useVisualizerContext } from "../../../contexts/WsContext";
 import { useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
 import {
     FieldGroup,
-    CheckboxContainer,
     Description,
     SectionDivider,
     ResolvedPathText,

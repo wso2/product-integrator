@@ -70,10 +70,6 @@ echo '{
     },
 	  "builtInExtensions": [
       {
-        "name": "wso2.wso2-platform",
-        "version": "1.0.23"
-      },
-      {
         "name": "redhat.vscode-yaml",
         "version": "latest"
       },
@@ -87,19 +83,15 @@ echo '{
       },
       {
         "name": "wso2.ballerina",
-        "version": "5.9.26022711"
-      },
-      {
-        "name": "wso2.ballerina-integrator",
-        "version": "1.8.26022707"
+        "version": "5.9.26031318"
       },
       {
         "name": "wso2.micro-integrator",
-        "version": "3.1.426022718"
+        "version": "3.1.526031212"
       },
       {
         "name": "wso2.wso2-integrator",
-        "vsix": "../../wi/wi-extension/wso2-integrator-1.0.0.vsix",
+        "vsix": "../../wi/wi-extension/wso2-integrator-0.2.0.vsix",
         "version": "latest"
       }
 	  ],

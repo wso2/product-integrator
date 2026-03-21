@@ -93,7 +93,9 @@ export class BridgeLayer {
 
     static startWebSocketServer(projectUri: string): WITransportBootstrap {
         const channel = this.getOrCreateChannel(projectUri);
-        if (!channel.transport.isWebSocketServerRunning()) {
+        if (channel.transport.getMode() !== "websocket") {
+            channel.transport.switchMode("websocket");
+        } else if (!channel.transport.isWebSocketServerRunning()) {
             channel.transport.startWebSocketServer();
         }
         return channel.transport.getWebviewBootstrap();
@@ -386,8 +388,12 @@ export class BridgeLayer {
     }
 
     private static resolveWebSocketPort(): number {
-        const fallbackPort = 8787;
         const configuredPort = Number(process.env.WEB_VIEW_BRIDGE_PORT);
-        return Number.isFinite(configuredPort) && configuredPort > 0 ? configuredPort : fallbackPort;
+        if (Number.isInteger(configuredPort) && configuredPort >= 0) {
+            return configuredPort;
+        }
+
+        // Let the OS allocate an available port when one is not explicitly configured.
+        return 0;
     }
 }

@@ -109,12 +109,19 @@ export function resolveBridgeBootstrap(): WITransportBootstrap {
     const queryMode = parseBridgeMode(urlParams.get("bridgeMode"));
     const queryWsServer = urlParams.get("wsServer") ?? undefined;
     const queryWsPort = Number(urlParams.get("wsPort"));
+    const runtimeWsPort = runtimeBootstrap?.wsPort;
     const hasVsCodeApi = typeof (globalThis as { acquireVsCodeApi?: unknown }).acquireVsCodeApi === "function";
+    const explicitMode = runtimeBootstrap?.mode ?? queryMode;
+    const resolvedWsPort = Number.isFinite(queryWsPort) && queryWsPort > 0
+        ? queryWsPort
+        : Number.isFinite(runtimeWsPort) && runtimeWsPort > 0
+            ? runtimeWsPort
+            : 8787;
 
     return {
-        mode: hasVsCodeApi ? runtimeBootstrap?.mode ?? "proxy" : queryMode ?? "websocket",
+        mode: explicitMode ?? (hasVsCodeApi ? "proxy" : "websocket"),
         wsServer: queryWsServer ?? runtimeBootstrap?.wsServer ?? "127.0.0.1",
-        wsPort: Number.isFinite(queryWsPort) && queryWsPort > 0 ? queryWsPort : runtimeBootstrap?.wsPort ?? 8787,
+        wsPort: resolvedWsPort,
     };
 }
 
