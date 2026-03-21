@@ -51,12 +51,12 @@ export async function askFilePath() {
     });
 }
 
-export async function askProjectPath() {
+export async function askProjectPath(startPath?: string) {
     return await window.showOpenDialog({
         canSelectFiles: false,
         canSelectFolders: true,
         canSelectMany: false,
-        defaultUri: Uri.file(os.homedir()),
+        defaultUri: Uri.file(startPath || os.homedir()),
         title: "Select a folder"
     });
 }
@@ -327,15 +327,21 @@ function compareVersions(
 /**
  * Validates the project path before creating a new project
  * @param projectPath - The directory path where the project will be created
- * @param projectName - The name of the project (used if createDirectory is true)
+ * @param projectName - The name of the package (used if createDirectory is true). For workspace projects, this contains the workspace name.
  * @param createDirectory - Whether a new directory will be created
+ * @param createAsWorkspace - Whether this is a workspace project creation
  * @returns Validation result with error message and field information if invalid
  */
-export function validateProjectPath(projectPath: string, projectName: string, createDirectory: boolean): { isValid: boolean; errorMessage?: string; errorField?: ValidateProjectFormErrorField } {
+export function validateProjectPath(projectPath: string, projectName: string, createDirectory: boolean, createAsWorkspace?: boolean): { isValid: boolean; errorMessage?: string; errorField?: ValidateProjectFormErrorField } {
     try {
         // Check if projectPath is provided and not empty
         if (!projectPath || projectPath.trim() === '') {
-            return { isValid: false, errorMessage: 'Project path is required', errorField: ValidateProjectFormErrorField.PATH };
+            return { isValid: false, errorMessage: 'Path is required', errorField: ValidateProjectFormErrorField.PATH };
+        }
+
+        // For workspace projects, validate workspace name specifically
+        if (createAsWorkspace && createDirectory && (!projectName || projectName.trim() === '')) {
+            return { isValid: false, errorMessage: 'Project name is required', errorField: ValidateProjectFormErrorField.NAME };
         }
 
         // Check if the base directory exists
@@ -359,7 +365,7 @@ export function validateProjectPath(projectPath: string, projectName: string, cr
         } else {
             // If creating a new directory, check if it already exists
             if (fs.existsSync(finalPath)) {
-                return { isValid: false, errorMessage: `A directory with this name already exists at the selected location`, errorField: ValidateProjectFormErrorField.NAME };
+                return { isValid: false, errorMessage: `A directory with this name already exists at the selected location`, errorField: ValidateProjectFormErrorField.NAME};
             }
         }
 

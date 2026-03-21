@@ -205,12 +205,9 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 	public async logout(silent = true, skipClearSessions = false) {
 		this.deps.log("Signing out from WSO2 Integrator");
 
-		// Call RPC signOut first
-		try {
-			await this.deps.rpcClient.signOut();
-		} catch (error) {
-			this.deps.logError("Error during RPC signOut", error as Error);
-		}
+		// Reset local state immediately so subscribers (e.g. the webview) are notified
+		// right away, before any potentially-slow async operations.
+		this.resetState();
 
 		// Clear VS Code session storage (unless already cleared by removeSession)
 		if (!skipClearSessions) {
@@ -221,8 +218,12 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 			}
 		}
 
-		// Clear local state
-		this.resetState();
+		// Tell the RPC server to sign out
+		try {
+			await this.deps.rpcClient.signOut();
+		} catch (error) {
+			this.deps.logError("Error during RPC signOut", error as Error);
+		}
 
 		if (!silent) {
 			window.showInformationMessage("Successfully signed out from WSO2 account!");
@@ -237,6 +238,11 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 			const userInfo = await this.deps.rpcClient.getUserInfo();
 			if (userInfo) {
 				const region = await this.deps.rpcClient.getCurrentRegion();
+				
+				if (!region) {
+					throw new Error("Region is not available or invalid");
+				}
+				
 				await this.loginSuccess(userInfo, region);
 				const contextStoreState = contextStore.getState().state;
 				if (contextStoreState.selected?.org) {

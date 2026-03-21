@@ -52,14 +52,17 @@ import {
     SemanticVersion,
     SetConfigurationRequest,
     ValidateProjectFormRequest,
-    ValidateProjectFormResponse
+    ValidateProjectFormResponse,
+    DefaultOrgNameResponse
 } from "@wso2/wi-core";
 import { commands, window, workspace, MarkdownString, Uri, env, ConfigurationTarget } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
+import { getDefaultCreationPath } from "../../utils/pathUtils";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import * as fs from "fs";
 import * as path from "path";
 import axios from "axios";
+import { stringify as stringifyYaml } from "yaml";
 import { pullMigrationTool } from "./migrate-integration";
 import { MigrationReportWebview } from "../../migration-report/webview";
 import { BridgeLayer } from "../../BridgeLayer";
@@ -215,7 +218,7 @@ export class MainWsManager implements WIVisualizerAPI {
                     resolve({ path: filePath });
                 }
             } else {
-                const selectedDir = await askProjectPath();
+                const selectedDir = await askProjectPath(params.startPath);
                 if (!selectedDir || selectedDir.length === 0) {
                     window.showErrorMessage('A folder must be selected');
                     resolve({ path: "" });
@@ -439,6 +442,16 @@ export class MainWsManager implements WIVisualizerAPI {
         return new Promise(async (resolve, reject) => {
             try {
                 const projectRoot: string = await commands.executeCommand('BI.project.createBIProjectPure', params);
+                if (ext.authProvider?.getUserInfo() && params.orgName && projectRoot) {
+                    const projectName = params.workspaceName || params.packageName || params.projectName;
+                    if (projectName) {
+                        try {
+                            await this.writeChoreoContext(projectRoot, params.orgName, projectName);
+                        } catch (contextError) {
+                            console.warn("Failed to write Choreo context file (non-critical):", contextError);
+                        }
+                    }
+                }
                 openInVSCode(projectRoot);
                 resolve();
             } catch (error) {
@@ -450,8 +463,17 @@ export class MainWsManager implements WIVisualizerAPI {
         });
     }
 
+    private async writeChoreoContext(projectRoot: string, orgName: string, projectName: string): Promise<void> {
+        const choreoDir = path.join(projectRoot, '.choreo');
+        const contextFile = path.join(choreoDir, 'context.yaml');
+        const contextData = [{ org: orgName, project: projectName }];
+        const content = stringifyYaml(contextData);
+        await fs.promises.mkdir(choreoDir, { recursive: true });
+        await fs.promises.writeFile(contextFile, content, { encoding: 'utf8' });
+    }
+
     async validateProjectPath(params: ValidateProjectFormRequest): Promise<ValidateProjectFormResponse> {
-        return validateProjectPath(params.projectPath, params.projectName, params.createDirectory);
+        return validateProjectPath(params.projectPath, params.projectName, params.createDirectory, params.createAsWorkspace);
     }
 
     async migrateProject(params: MigrateRequest): Promise<void> {
@@ -485,7 +507,7 @@ export class MainWsManager implements WIVisualizerAPI {
     }
 
     async importIntegration(params: ImportIntegrationWsRequest): Promise<ImportIntegrationResponse> {
-        const orgName = getUsername();
+        const orgName = params.orgName || getUsername();
         const langParams: ImportIntegrationRequest = {
             orgName: orgName,
             packageName: sanitizeName(params.packageName),
@@ -555,5 +577,13 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async clearWebviewCache(cacheKey: string): Promise<void> {
         await ext.context.workspaceState.update(cacheKey, undefined);
+    }
+
+    async getDefaultOrgName(): Promise<DefaultOrgNameResponse> {
+        return { orgName: getUsername() };
+    }
+
+    async getDefaultCreationPath(): Promise<WorkspaceRootResponse> {
+        return { path: getDefaultCreationPath() };
     }
 }

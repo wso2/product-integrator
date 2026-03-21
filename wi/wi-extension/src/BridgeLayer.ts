@@ -51,6 +51,7 @@ import {
     WIWsResponseMessage,
     WebviewContext,
     WITransportBootstrap,
+    CloneProgressStage,
 } from "@wso2/wi-core";
 import type {
     AuthState,
@@ -64,6 +65,7 @@ import type {
     GetGitMetadataReq,
     IsRepoAuthorizedReq,
     WICloudSubmitComponentsReq,
+    GetCloudProjectsReq,
 } from "@wso2/wi-core";
 import { MainWsManager } from "./ws-managers/main/ws-manager";
 import { CloudWsManager } from "./ws-managers/cloud/ws-manager";
@@ -142,7 +144,20 @@ export class BridgeLayer {
         });
     }
 
+    static notifyCloneProgress(stage: CloneProgressStage, projectUri: string = "global"): void {
+        this.publish(projectUri, {
+            type: WI_BRIDGE_EVENTS.CLONE_PROGRESS,
+            stage,
+        });
+    }
+
     // ── Cloud event publishers ────────────────────────────────
+    static notifySignInInitiated(projectUri: string = "global"): void {
+        this.publish(projectUri, {
+            type: WI_BRIDGE_EVENTS.SIGN_IN_INITIATED,
+        });
+    }
+
     static notifyAuthStateChanged(projectUri: string, state: AuthState): void {
         this.publish(projectUri, {
             type: WI_BRIDGE_EVENTS.AUTH_STATE_CHANGED,
@@ -287,6 +302,8 @@ export class BridgeLayer {
         );
         registerRoute("restoreWebviewCache", async (request) => wsManager.restoreWebviewCache(request.params));
         registerRoute("clearWebviewCache", async (request) => wsManager.clearWebviewCache(request.params));
+        registerRoute("getDefaultOrgName", async () => cloudManager.getDefaultOrgName());
+        registerRoute("getDefaultCreationPath", async () => wsManager.getDefaultCreationPath());
 
         // ── Cloud routes ──────────────────────────────────────────
         registerRoute("getCloudFormContext", async () => cloudManager.getCloudFormContext());
@@ -296,6 +313,7 @@ export class BridgeLayer {
         registerRoute("closeCloudFormWebview", async () => cloudManager.closeCloudFormWebview());
         registerRoute("getAuthState", async () => cloudManager.getAuthState());
         registerRoute("getContextState", async () => cloudManager.getContextState());
+        registerRoute("changeOrgContext", async (request) => cloudManager.changeOrgContext(request.params));
         registerRoute("getLocalGitData", async (request) => cloudManager.getLocalGitData(request.params));
         registerRoute("hasDirtyRepo", async (request) => cloudManager.hasDirtyRepo(request.params));
         registerRoute("getConfigFileDrifts", async (request) =>
@@ -325,6 +343,9 @@ export class BridgeLayer {
             cloudManager.cloneRepositoryIntoCompDir(request.params as CloneRepositoryIntoCompDirReq)
         );
         registerRoute("getConsoleUrl", async () => cloudManager.getConsoleUrl());
+        registerRoute("getCloudProjects", async (request) =>
+            cloudManager.getCloudProjects(request.params as GetCloudProjectsReq)
+        );
 
         return router;
     }

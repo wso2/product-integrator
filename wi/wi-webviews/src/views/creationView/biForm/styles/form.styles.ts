@@ -28,6 +28,43 @@ export const CheckboxContainer = styled.div`
     margin: 12px 0;
 `;
 
+export const ProjectSectionContainer = styled.div`
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    transition: border-color 0.2s ease;
+
+    &:focus-within {
+        border-color: var(--vscode-focusBorder);
+    }
+`;
+
+export const ProjectSectionLabel = styled.div`
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    color: var(--vscode-descriptionForeground);
+    padding: 7px 12px;
+    background: var(--vscode-sideBar-background);
+    border-bottom: 1px solid var(--vscode-panel-border);
+`;
+
+export const ProjectFieldCollapse = styled.div<{ isVisible: boolean }>`
+    max-height: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? "120px" : "0")};
+    opacity: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? 1 : 0)};
+    overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+    padding: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? "12px 12px 12px 12px" : "0 12px")};
+`;
+
+export const SkipOptionRow = styled.div`
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--vscode-panel-border);
+    padding: 10px 12px;
+`;
+
 export const Description = styled.div`
     color: var(--vscode-descriptionForeground);
     font-size: 12px;
@@ -48,7 +85,7 @@ export const OptionalSectionsLabel = styled.div`
     margin-bottom: 12px;
 `;
 
-export const WorkspaceSection = styled.div`
+export const ProjectSection = styled.div`
     margin-bottom: 24px;
     padding-bottom: 24px;
     border-bottom: 1px solid var(--vscode-panel-border);
@@ -57,10 +94,10 @@ export const WorkspaceSection = styled.div`
 // ========== Page Layout Styles ==========
 
 export const PageWrapper = styled.div`
+    width: 100%;
     display: flex;
     flex-direction: column;
     max-height: 100vh;
-    padding: 40px 120px;
     box-sizing: border-box;
     overflow: hidden;
 `;
@@ -68,8 +105,9 @@ export const PageWrapper = styled.div`
 export const FormContainer = styled.div`
     display: flex;
     flex-direction: column;
-    max-width: 600px;
-    overflow: hidden;
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto;
 `;
 
 export const TitleContainer = styled.div`
@@ -258,7 +296,7 @@ export const RadioDescription = styled.span`
     line-height: 1.4;
 `;
 
-export const ProjectTypeNote = styled.div`
+export const Note = styled.div`
     font-size: 11px;
     color: var(--vscode-descriptionForeground);
     margin-top: 12px;
@@ -268,3 +306,9 @@ export const ProjectTypeNote = styled.div`
     border-radius: 0 4px 4px 0;
 `;
 
+export const ResolvedPathText = styled.div`
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 6px;
+    word-break: break-all;
+`;

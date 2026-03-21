@@ -19,9 +19,12 @@
 :root {
 	--wso2-brand-primary: #17223A;
 	--wso2-brand-primary-alt: #1B2A49;
+	--wso2-brand-primary-deep: #35537D;
 	--wso2-brand-ink: #17223A;
 	--wso2-brand-ink-alt: #1B2A49;
+	--wso2-brand-ink-deep: #0B1220;
 	--wso2-brand-accent: #5CD1FF;
+	--wso2-brand-accent-alt: #3A90BF;
 	--wso2-brand-accent-soft: #B7E4FC;
 	--wso2-brand-neutral-900: #0D0D0D;
 	--wso2-brand-neutral-700: #262626;
@@ -29,6 +32,9 @@
 	--wso2-brand-neutral-300: #D9D9D9;
 	--wso2-brand-neutral-100: #F2F2F2;
 	--wso2-brand-white: #FFFFFF;
+	--welcome-library-accent: #3AADA5;
+	--welcome-project-accent: #C07D18;
+	--welcome-import-accent: #7C5FB5;
 
 	--button-primary-background: var(--wso2-brand-primary);
 	--button-primary-hover-background: var(--wso2-brand-primary-alt);
