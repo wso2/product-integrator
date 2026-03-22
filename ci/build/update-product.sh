@@ -82,6 +82,10 @@ echo '{
         "version": "latest"
       },
       {
+        "name": "wso2.wso2-platform",
+        "version": "1.0.23"
+      },
+      {
         "name": "wso2.ballerina",
         "version": "5.9.26031318"
       },
