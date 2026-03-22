@@ -25,7 +25,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/di
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
 +++ product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
-@@ -3,38 +3,28 @@
+@@ -3,38 +3,32 @@
   *  Licensed under the MIT License. See License.txt in the project root for license information.
   *--------------------------------------------------------------------------------------------*/
  
@@ -35,6 +35,10 @@ Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/di
  import { IOSProperties } from '../../native/common/native.js';
  import { IProductService } from '../../product/common/productService.js';
 -import { process } from '../../../base/parts/sandbox/electron-browser/globals.js';
++
++interface IWIProductService extends IProductService {
++	readonly wiversion?: string;
++}
  
  export function createNativeAboutDialogDetails(productService: IProductService, osProps: IOSProperties): { title: string; details: string; detailsToCopy: string } {
 -	let version = productService.version;
@@ -43,7 +47,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/di
 -	} else if (productService.darwinUniversalAssetId) {
 -		version = `${version} (Universal)`;
 -	}
-+	let version = (productService as any).wiversion;
++	const version = (productService as IWIProductService).wiversion ?? productService.version ?? 'Unknown';
 +	const builtInExtensions = productService.builtInExtensions?.length
 +		? `\n${localize('aboutBuiltInExtensions', "Built-in Extensions:")}\n${productService.builtInExtensions.filter(ext => ext.name.startsWith('wso2.')).map(extension => `${extension.name.split('.')[1]}: ${extension.version}`).join('\n')}`
 +		: '';
