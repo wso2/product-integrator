@@ -22,6 +22,7 @@ import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
 import { ProductUpdateServiceClient } from "./services/productUpdateServiceClient";
 import { BallerinaUpdateServiceClient } from "./services/ballerinaUpdateServiceClient";
+import { BIUpdateServiceClient } from "./services/biUpdateServiceClient";
 
 const BACKGROUND_UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
 const STARTUP_BALLERINA_CHECK_DELAY_MS = 10 * 1000;
@@ -73,12 +74,14 @@ async function showUpdateResult(
 async function showAllUpdateResults(
 	productUpdateService: ProductUpdateServiceClient,
 	ballerinaUpdateService: BallerinaUpdateServiceClient,
+	biUpdateService: BIUpdateServiceClient,
 	force: boolean,
 	showNonUpdateMessages: boolean,
 ): Promise<void> {
 	await Promise.all([
 		showUpdateResult(productUpdateService, force, showNonUpdateMessages, "Open Release Notes"),
 		showUpdateResult(ballerinaUpdateService, force, showNonUpdateMessages, "Open Ballerina Release Notes"),
+		showUpdateResult(biUpdateService, force, showNonUpdateMessages, "Open BI Release Notes"),
 	]);
 }
 
@@ -92,6 +95,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	try {
 		const productUpdateService = new ProductUpdateServiceClient(context);
 		const ballerinaUpdateService = new BallerinaUpdateServiceClient(context);
+		const biUpdateService = new BIUpdateServiceClient(context);
 		context.subscriptions.push(
 			vscode.commands.registerCommand(COMMANDS.OPEN_WELCOME, () => {
 				try {
@@ -104,7 +108,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		);
 		context.subscriptions.push(
 			vscode.commands.registerCommand(COMMANDS.CHECK_FOR_UPDATES, async () => {
-				await showAllUpdateResults(productUpdateService, ballerinaUpdateService, true, true);
+				await showAllUpdateResults(productUpdateService, ballerinaUpdateService, biUpdateService, true, true);
 			}),
 		);
 
@@ -120,11 +124,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		const startupBallerinaCheck = setTimeout(() => {
 			void showUpdateResult(ballerinaUpdateService, true, false, "Open Ballerina Release Notes");
 		}, STARTUP_BALLERINA_CHECK_DELAY_MS);
+		const startupBICheck = setTimeout(() => {
+			void showUpdateResult(biUpdateService, true, false, "Open BI Release Notes");
+		}, STARTUP_BALLERINA_CHECK_DELAY_MS);
 		const backgroundUpdateCheck = setInterval(() => {
-			void showAllUpdateResults(productUpdateService, ballerinaUpdateService, true, false);
+			void showAllUpdateResults(productUpdateService, ballerinaUpdateService, biUpdateService, true, false);
 		}, BACKGROUND_UPDATE_CHECK_INTERVAL_MS);
 		context.subscriptions.push({
 			dispose: () => clearTimeout(startupBallerinaCheck),
+		});
+		context.subscriptions.push({
+			dispose: () => clearTimeout(startupBICheck),
 		});
 		context.subscriptions.push({
 			dispose: () => clearInterval(backgroundUpdateCheck),
