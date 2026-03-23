@@ -129,6 +129,38 @@
           "minimum": 1000,
           "scope": "application",
           "description": "Timeout in milliseconds for calls to the hosted BI update service."
+        },
+        "miUpdates.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Enable MI update checks inside WSO2 Integrator."
+        },
+        "miUpdates.checkOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Check for a newer MI version when WSO2 Integrator starts."
+        },
+        "miUpdates.checkIntervalHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "scope": "application",
+          "description": "Minimum number of hours between automatic MI update checks."
+        },
+        "miUpdates.serviceUrl": {
+          "type": "string",
+          "default": "http://localhost:8080/api/v1/mi-updates/check",
+          "scope": "application",
+          "description": "Hosted MI update service endpoint used by WSO2 Integrator."
+        },
+        "miUpdates.requestTimeoutMs": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 1000,
+          "scope": "application",
+          "description": "Timeout in milliseconds for calls to the hosted MI update service."
         }
       }
     },
