@@ -204,76 +204,91 @@
       {
         "command": "ballerina.showVisualizer",
         "title": "Show Visualizer",
+        "icon": "$(preview)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "ballerina.force.update.artifacts",
         "title": "Force Update Artifacts",
+        "icon": "$(refresh)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.add",
         "title": "Add Artifact",
+        "icon": "$(add)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.overview",
         "title": "Open Overview",
+        "icon": "$(preview)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.add-connection",
         "title": "Add Connection",
+        "icon": "$(add)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.delete",
         "title": "Delete",
+        "icon": "$(trash)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.add-entry-point",
         "title": "Add Entry Point",
+        "icon": "$(add)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.add-type",
         "title": "Add Type",
+        "icon": "$(add)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.view-type-diagram",
         "title": "View Type Diagram",
+        "icon": "$(preview)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.add-function",
         "title": "Add Function",
+        "icon": "$(add)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.add-configuration",
         "title": "Add Configuration",
+        "icon": "$(add)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.view-configuration",
         "title": "View Configuration",
+        "icon": "$(preview)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.add-data-mapper",
         "title": "Add Data Mapper",
+        "icon": "$(add)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.add-natural-function",
         "title": "Add Natural Function",
+        "icon": "$(add)",
         "category": "WSO2 Integrator"
       },
       {
         "command": "BI.project-explorer.add-custom-connector",
         "title": "Add Custom Connector",
+        "icon": "$(add)",
         "category": "WSO2 Integrator"
       }
     ],
