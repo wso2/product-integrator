@@ -17,28 +17,36 @@
  */
 
 import * as vscode from "vscode";
-import { COMMANDS, ViewType } from "@wso2/wi-core";
+import { COMMANDS, ProductUpdateCheckResponse, ViewType } from "@wso2/wi-core";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
 import { ProductUpdateServiceClient } from "./services/productUpdateServiceClient";
+import { BallerinaUpdateServiceClient } from "./services/ballerinaUpdateServiceClient";
 
 const BACKGROUND_UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
+const STARTUP_BALLERINA_CHECK_DELAY_MS = 10 * 1000;
 
-async function showProductUpdateResult(
-	productUpdateService: ProductUpdateServiceClient,
+interface UpdateNotifier {
+	checkForUpdates: (request: { force?: boolean }) => Promise<ProductUpdateCheckResponse>;
+	openExternalUrl: (request: { url: string }) => Promise<void>;
+}
+
+async function showUpdateResult(
+	updateService: UpdateNotifier,
 	force: boolean,
 	showNonUpdateMessages: boolean,
+	openReleaseNotesLabel: string,
 ): Promise<void> {
-	const result = await productUpdateService.checkForUpdates({ force });
+	const result = await updateService.checkForUpdates({ force });
 
 	if (result.status === "update-available" && result.releaseUrl) {
 		const selection = await vscode.window.showInformationMessage(
 			result.message,
-			"Open Release Notes",
+			openReleaseNotesLabel,
 			"Dismiss",
 		);
-		if (selection === "Open Release Notes") {
-			await productUpdateService.openExternalUrl({ url: result.releaseUrl });
+		if (selection === openReleaseNotesLabel) {
+			await updateService.openExternalUrl({ url: result.releaseUrl });
 		}
 		return;
 	}
@@ -62,6 +70,18 @@ async function showProductUpdateResult(
 	}
 }
 
+async function showAllUpdateResults(
+	productUpdateService: ProductUpdateServiceClient,
+	ballerinaUpdateService: BallerinaUpdateServiceClient,
+	force: boolean,
+	showNonUpdateMessages: boolean,
+): Promise<void> {
+	await Promise.all([
+		showUpdateResult(productUpdateService, force, showNonUpdateMessages, "Open Release Notes"),
+		showUpdateResult(ballerinaUpdateService, force, showNonUpdateMessages, "Open Ballerina Release Notes"),
+	]);
+}
+
 /**
  * Activate the extension
  */
@@ -71,6 +91,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 	try {
 		const productUpdateService = new ProductUpdateServiceClient(context);
+		const ballerinaUpdateService = new BallerinaUpdateServiceClient(context);
 		context.subscriptions.push(
 			vscode.commands.registerCommand(COMMANDS.OPEN_WELCOME, () => {
 				try {
@@ -83,7 +104,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		);
 		context.subscriptions.push(
 			vscode.commands.registerCommand(COMMANDS.CHECK_FOR_UPDATES, async () => {
-				await showProductUpdateResult(productUpdateService, true, true);
+				await showAllUpdateResults(productUpdateService, ballerinaUpdateService, true, true);
 			}),
 		);
 
@@ -95,10 +116,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		// 5. Webview manager setup
 		StateMachine.initialize();
 
-		void showProductUpdateResult(productUpdateService, true, false);
+		void showUpdateResult(productUpdateService, true, false, "Open Release Notes");
+		const startupBallerinaCheck = setTimeout(() => {
+			void showUpdateResult(ballerinaUpdateService, true, false, "Open Ballerina Release Notes");
+		}, STARTUP_BALLERINA_CHECK_DELAY_MS);
 		const backgroundUpdateCheck = setInterval(() => {
-			void showProductUpdateResult(productUpdateService, true, false);
+			void showAllUpdateResults(productUpdateService, ballerinaUpdateService, true, false);
 		}, BACKGROUND_UPDATE_CHECK_INTERVAL_MS);
+		context.subscriptions.push({
+			dispose: () => clearTimeout(startupBallerinaCheck),
+		});
 		context.subscriptions.push({
 			dispose: () => clearInterval(backgroundUpdateCheck),
 		});
