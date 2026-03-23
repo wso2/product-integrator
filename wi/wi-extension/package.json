@@ -161,6 +161,38 @@
           "minimum": 1000,
           "scope": "application",
           "description": "Timeout in milliseconds for calls to the hosted MI update service."
+        },
+        "icpUpdates.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Enable ICP update checks inside WSO2 Integrator."
+        },
+        "icpUpdates.checkOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Check for a newer ICP version when WSO2 Integrator starts."
+        },
+        "icpUpdates.checkIntervalHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "scope": "application",
+          "description": "Minimum number of hours between automatic ICP update checks."
+        },
+        "icpUpdates.serviceUrl": {
+          "type": "string",
+          "default": "http://localhost:8080/api/v1/icp-updates/check",
+          "scope": "application",
+          "description": "Hosted ICP update service endpoint used by WSO2 Integrator."
+        },
+        "icpUpdates.requestTimeoutMs": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 1000,
+          "scope": "application",
+          "description": "Timeout in milliseconds for calls to the hosted ICP update service."
         }
       }
     },

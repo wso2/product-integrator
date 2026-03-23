@@ -24,6 +24,7 @@ import { ProductUpdateServiceClient } from "./services/productUpdateServiceClien
 import { BallerinaUpdateServiceClient } from "./services/ballerinaUpdateServiceClient";
 import { BIUpdateServiceClient } from "./services/biUpdateServiceClient";
 import { MIUpdateServiceClient } from "./services/miUpdateServiceClient";
+import { ICPUpdateServiceClient } from "./services/icpUpdateServiceClient";
 
 const BACKGROUND_UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
 const STARTUP_BALLERINA_CHECK_DELAY_MS = 10 * 1000;
@@ -77,6 +78,7 @@ async function showAllUpdateResults(
 	ballerinaUpdateService: BallerinaUpdateServiceClient,
 	biUpdateService: BIUpdateServiceClient,
 	miUpdateService: MIUpdateServiceClient,
+	icpUpdateService: ICPUpdateServiceClient,
 	force: boolean,
 	showNonUpdateMessages: boolean,
 ): Promise<void> {
@@ -85,6 +87,7 @@ async function showAllUpdateResults(
 		showUpdateResult(ballerinaUpdateService, force, showNonUpdateMessages, "Open Ballerina Release Notes"),
 		showUpdateResult(biUpdateService, force, showNonUpdateMessages, "Open BI Release Notes"),
 		showUpdateResult(miUpdateService, force, showNonUpdateMessages, "Open MI Release Notes"),
+		showUpdateResult(icpUpdateService, force, showNonUpdateMessages, "Open ICP Release Notes"),
 	]);
 }
 
@@ -100,6 +103,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		const ballerinaUpdateService = new BallerinaUpdateServiceClient(context);
 		const biUpdateService = new BIUpdateServiceClient(context);
 		const miUpdateService = new MIUpdateServiceClient(context);
+		const icpUpdateService = new ICPUpdateServiceClient(context);
 		context.subscriptions.push(
 			vscode.commands.registerCommand(COMMANDS.OPEN_WELCOME, () => {
 				try {
@@ -117,6 +121,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 					ballerinaUpdateService,
 					biUpdateService,
 					miUpdateService,
+					icpUpdateService,
 					true,
 					true,
 				);
@@ -141,12 +146,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		const startupMICheck = setTimeout(() => {
 			void showUpdateResult(miUpdateService, true, false, "Open MI Release Notes");
 		}, STARTUP_BALLERINA_CHECK_DELAY_MS);
+		const startupICPCheck = setTimeout(() => {
+			void showUpdateResult(icpUpdateService, true, false, "Open ICP Release Notes");
+		}, STARTUP_BALLERINA_CHECK_DELAY_MS);
 		const backgroundUpdateCheck = setInterval(() => {
 			void showAllUpdateResults(
 				productUpdateService,
 				ballerinaUpdateService,
 				biUpdateService,
 				miUpdateService,
+				icpUpdateService,
 				true,
 				false,
 			);
@@ -159,6 +168,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		});
 		context.subscriptions.push({
 			dispose: () => clearTimeout(startupMICheck),
+		});
+		context.subscriptions.push({
+			dispose: () => clearTimeout(startupICPCheck),
 		});
 		context.subscriptions.push({
 			dispose: () => clearInterval(backgroundUpdateCheck),
