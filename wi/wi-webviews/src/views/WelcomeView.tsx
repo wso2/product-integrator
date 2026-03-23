@@ -584,7 +584,6 @@ const RecentProjectsTitle = styled.h3`
     color: var(--vscode-foreground);
     opacity: 0.86;
     margin: 0;
-    text-transform: uppercase;
 `;
 
 const ViewAllButton = styled.button`
@@ -1043,9 +1042,9 @@ export const WelcomeView: React.FC = () => {
 				<GetStartedBadge>Get Started</GetStartedBadge>
 				<Headline>WSO2 Integrator</Headline>
 				<Caption>
-					Connect any system across your business, build AI agents, and
-					orchestrate AI-enabled workflows with the 100% open source and
-					AI-native WSO2 Integrator.
+                    Connect AI agents, APIs, data, and events across cloud, on-prem,
+                    and hybrid environments. Build any type of integration and AI agent
+                    with the 100% open source WSO2 Integrator.
 				</Caption>
 			</TopSection>
 
@@ -1070,8 +1069,7 @@ export const WelcomeView: React.FC = () => {
 								<CardContent>
 									<CardTitle>Create New Integration</CardTitle>
 									<CardDescription>
-										Ready to build? Start a new integration using our intuitive
-										graphical designer.
+                                        Start building a new integration.
 									</CardDescription>
 									<StyledButton
 										isPrimary={true}
@@ -1098,8 +1096,7 @@ export const WelcomeView: React.FC = () => {
 								<CardContent>
 									<CardTitle>Open Integration or Project</CardTitle>
 									<CardDescription>
-										Open an existing integration project and continue building
-										your solution.
+                                        Open an existing integration or project and continue building your solution.
 									</CardDescription>
 									<StyledButton
 										onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -1124,10 +1121,9 @@ export const WelcomeView: React.FC = () => {
 										</CardIcon>
 									</CardIconContainer>
 									<CardContent>
-										<CardTitle>Explore Samples and Pre-built Integrations</CardTitle>
+										<CardTitle>Explore Pre-built Integrations and Samples</CardTitle>
 										<CardDescription>
-											Need inspiration? Browse through sample projects to see
-											how WSO2 Integrator works in real-world scenarios.
+                                            Explore ready-to-use pre-built integrations and samples to accelerate your development.
 										</CardDescription>
 										<StyledButton
 											onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -1150,7 +1146,7 @@ export const WelcomeView: React.FC = () => {
 										type="button"
 										onClick={() => setShowSecondary(!showSecondary)}
 									>
-										<span>{showSecondary ? "Show less" : "More actions"}</span>
+										<span>{showSecondary ? "Show less" : "More Actions"}</span>
 										<MoreChevron>
 											<span
 												className={`codicon ${showSecondary ? "codicon-triangle-up" : "codicon-triangle-down"}`}
@@ -1178,8 +1174,7 @@ export const WelcomeView: React.FC = () => {
 											<SecondaryRowContent>
 												<SecondaryRowTitle>Create Library</SecondaryRowTitle>
 												<SecondaryRowDescription>
-													Build reusable components and utilities to share
-													across projects.
+                                                    Create reusable components and utilities to share across integrations and projects.
 												</SecondaryRowDescription>
 											</SecondaryRowContent>
 											<Codicon
@@ -1203,8 +1198,7 @@ export const WelcomeView: React.FC = () => {
 											<SecondaryRowContent>
 												<SecondaryRowTitle>Create Project</SecondaryRowTitle>
 												<SecondaryRowDescription>
-													Create a workspace to organize multiple integrations
-													and libraries.
+													Create a project to organize and manage multiple integrations.
 												</SecondaryRowDescription>
 											</SecondaryRowContent>
 											<Codicon
@@ -1227,11 +1221,10 @@ export const WelcomeView: React.FC = () => {
 											</SecondaryRowIcon>
 											<SecondaryRowContent>
 												<SecondaryRowTitle>
-													Migrate 3rd Party Integrations
+                                                    Migrate Integrations from Other Vendors
 												</SecondaryRowTitle>
 												<SecondaryRowDescription>
-													Transform MuleSoft or TIBCO integrations to WSO2
-													Integrator automatically.
+                                                    Import integrations from other vendors and convert them to WSO2 Integrator format.
 												</SecondaryRowDescription>
 											</SecondaryRowContent>
 											<Codicon
@@ -1255,7 +1248,7 @@ export const WelcomeView: React.FC = () => {
 				<BottomSection>
 					<RecentProjectsSection>
 						<RecentProjectsHeader>
-							<RecentProjectsTitle>Recent Projects</RecentProjectsTitle>
+							<RecentProjectsTitle>Recent Integrations and Projects</RecentProjectsTitle>
 							<ViewAllButton type="button" onClick={openRecentProjectsPicker}>
 								See more
 							</ViewAllButton>
