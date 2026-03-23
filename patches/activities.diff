@@ -20,7 +20,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/extensions/browser
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
-@@ -125,7 +125,7 @@ export const VIEW_CONTAINER = Registry.a
+@@ -126,7 +126,7 @@ export const VIEW_CONTAINER = Registry.a
  		order: 4,
  		rejectAddedViews: true,
  		alwaysUseContainerInfo: true,
@@ -68,20 +68,20 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/testing/browser/te
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/testing/browser/testing.contribution.ts
-@@ -75,7 +75,7 @@ const viewContainer = Registry.as<IViewC
- 		order: 4,
- 	},
- 	hideIfEmpty: true,
--}, ViewContainerLocation.Sidebar);
-+}, ViewContainerLocation.AuxiliaryBar);
- 
- 
- const testResultsViewContainer = Registry.as<IViewContainersRegistry>(ViewContainerExtensions.ViewContainersRegistry).registerViewContainer({
+@@ -66,7 +66,7 @@ const viewContainer = Registry.as<IViewC
+ 	ctorDescriptor: new SyncDescriptor(TestingViewPaneContainer),
+ 	icon: testingViewIcon,
+ 	alwaysUseContainerInfo: true,
+-	order: 6,
++	order: 13,
+ 	openCommandActionDescriptor: {
+ 		id: Testing.ViewletId,
+ 		mnemonicTitle: localize({ key: 'miViewTesting', comment: ['&& denotes a mnemonic'] }, "T&&esting"),
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/scm/browser/scm.contribution.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/scm/browser/scm.contribution.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/scm/browser/scm.contribution.ts
-@@ -69,7 +69,7 @@ const viewContainer = Registry.as<IViewC
+@@ -72,7 +72,7 @@ const viewContainer = Registry.as<IViewC
  	storageId: 'workbench.scm.views.state',
  	icon: sourceControlViewIcon,
  	alwaysUseContainerInfo: true,
