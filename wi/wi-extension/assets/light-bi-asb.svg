@@ -15,5 +15,8 @@
  ~ specific language governing permissions and limitations
  ~ under the License.
 -->
-
-<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8"><path fill="#000" d="M0 1v1l4 2l4-2V1zm0 2v4h8V3L4 5z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+	<g transform="translate(5 5) scale(2)">
+		<path fill="#000" d="M0 1v1l4 2l4-2V1zm0 2v4h8V3L4 5z"/>
+	</g>
+</svg>
