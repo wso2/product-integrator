@@ -87,7 +87,7 @@ echo '{
       },
       {
         "name": "wso2.hurl-client",
-        "version": "0.9.1"
+        "version": "0.9.2"
       },
       {
         "name": "wso2.ballerina",
