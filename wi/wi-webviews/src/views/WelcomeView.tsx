@@ -883,7 +883,7 @@ export const WelcomeView: React.FC = () => {
 						<ConfigureBtn type="button" onClick={goToSettings}>
 							<Codicon
 								name="settings-gear"
-								iconSx={{ fontSize: 16, color: "var(--wso2-brand-primary)" }}
+								iconSx={{ fontSize: 16 }}
 							/>
 							<span>Settings</span>
 						</ConfigureBtn>
