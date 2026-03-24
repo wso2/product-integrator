@@ -882,10 +882,16 @@ export const WelcomeView: React.FC = () => {
         setCurrentView(ViewState.OPEN_PROJECT);
     };
 
-    const openIntegrationFileBrowser = () => {
-        wsClient
-            .runCommand({ command: "workbench.action.files.openFolder" })
-            .catch((): void => undefined);
+    const openIntegrationFileBrowser = async () => {
+        try {
+            const { path: startPath } = await wsClient.getDefaultCreationPath();
+            const response = await wsClient.selectFileOrDirPath({ startPath });
+            if (response?.path) {
+                wsClient.openFolder(response.path);
+            }
+        } catch (err) {
+            console.error("Failed to open local folder:", err);
+        }
     };
 
 	const openRecentProjectsPicker = () => {
