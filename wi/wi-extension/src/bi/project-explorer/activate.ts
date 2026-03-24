@@ -100,7 +100,7 @@ function registerBallerinaCommands(isBallerinaWorkspace?: boolean, isEmptyWorksp
     if (isBallerinaWorkspace) {
         commands.executeCommand('setContext', 'BI.isBallerinaWorkspace', true);
         if (isEmptyWorkspace) {
-            commands.executeCommand('setContext', 'BI.status', 'emptyWorkspace');
+            commands.executeCommand('setContext', 'BI.project.empty', true);
         }
     }
     // Focus tree and show visualizer for BI projects

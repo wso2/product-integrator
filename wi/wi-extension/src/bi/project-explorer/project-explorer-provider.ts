@@ -98,6 +98,7 @@ export class ProjectExplorerEntryProvider implements vscode.TreeDataProvider<Pro
                 this._data = [];
                 const data = await getProjectStructureData();
                 this._data = data;
+                commands.executeCommand('setContext', 'BI.project.empty', data.length === 0);
                 this._onDidChangeTreeData.fire();
             } catch (err) {
                 console.error('[WI ProjectExplorer] Error during refresh:', err);

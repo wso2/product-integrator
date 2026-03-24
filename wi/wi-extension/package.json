@@ -114,6 +114,11 @@
         "view": "wso2-integrator.explorer",
         "contents": "$(rocket) Build integration solutions with WSO2 Integrator.\n\nUse the welcome page to create a new project, explore samples, import external integrations, and manage runtime settings.\n\nOpen an integration project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
         "when": "WI.projectType == 'none'"
+      },
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": "No integrations or libraries found in this project.\n\nGet started by adding your first integration or library.\n\n[$(add) Create Integration or Library](command:BI.project-explorer.add)",
+        "when": "BI.project.empty"
       }
     ],
     "commands": [
