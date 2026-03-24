@@ -36,7 +36,7 @@ export const RUNTIME_DISPLAY_LABEL: Record<WIRuntime, string> = {
 
 export const CREATION_RUNTIME_HELP: Record<WIRuntime, string> = {
 	"WSO2: BI":
-		"Create a Ballerina integration using the selected profile with package and workspace options.",
+		"Create an integration with package and workspace options.",
 	"WSO2: MI":
 		"Create a Micro Integrator project using the selected profile with version and advanced Maven settings.",
 	"WSO2: SI":
