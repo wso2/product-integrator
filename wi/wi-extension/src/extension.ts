@@ -26,7 +26,7 @@ import { BIUpdateServiceClient } from "./services/biUpdateServiceClient";
 import { MIUpdateServiceClient } from "./services/miUpdateServiceClient";
 import { ICPUpdateServiceClient } from "./services/icpUpdateServiceClient";
 
-const BACKGROUND_UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 1000;
+const BACKGROUND_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const STARTUP_BALLERINA_CHECK_DELAY_MS = 10 * 1000;
 
 interface UpdateNotifier {
