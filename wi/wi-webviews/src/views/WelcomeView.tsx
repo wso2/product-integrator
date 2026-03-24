@@ -932,7 +932,7 @@ export const WelcomeView: React.FC = () => {
 
 							<ActionCard onClick={handleProjectDirSelection}>
 								<CardIconContainer>
-									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink-deep) 0%, var(--wso2-brand-ink-alt) 100%)">
+									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-accent-alt) 100%)">
 										<Codicon
 											name="folder-opened"
 											iconSx={{ fontSize: "25px" }}
@@ -1011,7 +1011,7 @@ export const WelcomeView: React.FC = () => {
 								>
 									<SecondaryCardsGrid>
 										<SecondaryActionRow onClick={goToCreateLibrary}>
-											<SecondaryRowIcon bgColor="var(--welcome-library-accent)">
+											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 												<Codicon
 													name="book"
 													iconSx={{ fontSize: "16px" }}
@@ -1035,7 +1035,7 @@ export const WelcomeView: React.FC = () => {
 										</SecondaryActionRow>
 
 										<SecondaryActionRow onClick={goToCreateProject}>
-											<SecondaryRowIcon bgColor="var(--welcome-project-accent)">
+											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 												<Codicon
 													name="new-folder"
 													iconSx={{ fontSize: "16px" }}
@@ -1059,7 +1059,7 @@ export const WelcomeView: React.FC = () => {
 										</SecondaryActionRow>
 
 										<SecondaryActionRow onClick={goToImportExternal}>
-											<SecondaryRowIcon bgColor="var(--welcome-import-accent)">
+											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 												<Codicon
 													name="cloud-download"
 													iconSx={{ fontSize: "16px" }}
