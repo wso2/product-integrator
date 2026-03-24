@@ -153,7 +153,7 @@ export function MiProjectWizard() {
             <FieldGroup>
                 <Dropdown
                     id='miVersion'
-                    label="WSO2 Integrator: MI runtime version"
+                    label="WSO2 Integrator: MI profile version"
                     isRequired={true}
                     errorMsg={errors.miVersion?.message.toString()}
                     items={supportedMIVersions}
@@ -198,7 +198,7 @@ export function MiProjectWizard() {
                 </FormGroup>
             </FieldGroup>
             <FieldGroup>
-                <DownloadLabel>If the necessary WSO2 Integrator: MI runtime and tools are not available, you will be prompted to download them after project creation.</DownloadLabel>
+                <DownloadLabel>If the necessary WSO2 Integrator: MI profile's runtime and development tools are not available, you will be prompted to download them after project creation.</DownloadLabel>
             </FieldGroup>
             <ButtonWrapper>
                 <Button

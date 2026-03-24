@@ -30,17 +30,17 @@ export const RUNTIME_PRIORITY: WIRuntime[] = [
 
 export const RUNTIME_DISPLAY_LABEL: Record<WIRuntime, string> = {
 	"WSO2: BI": "Default",
-	"WSO2: MI": "WSO2: MI",
-	"WSO2: SI": "WSO2: SI",
+	"WSO2: MI": "WSO2 Integrator: MI",
+	"WSO2: SI": "WSO2 Integrator: SI",
 };
 
 export const CREATION_RUNTIME_HELP: Record<WIRuntime, string> = {
 	"WSO2: BI":
 		"Create an integration with package and workspace options.",
 	"WSO2: MI":
-		"Create a Micro Integrator project using the selected profile with version and advanced Maven settings.",
+		"Create a WSO2 Integrator: MI project.",
 	"WSO2: SI":
-		"Create a Stream Integrator project using the selected profile with quick path and name setup.",
+		"Create a WSO2 Integrator: SI project.",
 };
 
 const RUNTIME_CONFIG_SECTIONS: Record<WIRuntime, string> = {
