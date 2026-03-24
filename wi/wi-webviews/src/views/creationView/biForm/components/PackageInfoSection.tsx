@@ -155,14 +155,14 @@ export function PackageInfoSection({
             title="Advanced Configurations"
         >
             <Note style={{ marginBottom: "16px" }}>
-                {`This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Define the organization and version that will be assigned to it. `}
+                {`This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Specify the organization and version to be assigned. `}
             </Note>
             <FieldGroup>
                 <TextField
                     onTextChange={(value) => onChange({ packageName: sanitizePackageName(value) })}
                     value={data.packageName}
                     label="Package Name"
-                    description={`This will be used as the Ballerina package name for the ${isLibrary ? "library" : "integration"}.`}
+                    description={`Specify the package name.`}
                     errorMsg={packageNameError || undefined}
                 />
             </FieldGroup>
@@ -181,7 +181,7 @@ export function PackageInfoSection({
                             onTextChange={(value) => onChange({ orgName: value })}
                             value={data.orgName}
                             label="Organization Name"
-                            description="The organization that owns this Ballerina package."
+                            description="The organization that owns the package."
                             errorMsg={orgNameError || undefined}
                         />
                         <SignInHint>
@@ -214,7 +214,7 @@ export function PackageInfoSection({
                     value={data.version}
                     label="Package Version"
                     placeholder="0.1.0"
-                    description="Version of the Ballerina package."
+                    description="Version of the package."
                 />
             </FieldGroup>
         </CollapsibleSection>

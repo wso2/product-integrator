@@ -37,6 +37,7 @@ export enum ProjectType {
     SI = 'WSO2: SI',
     NONE = 'NONE'
 }
+type ProfileKey = 'bi' | 'mi' | 'si';
 
 interface MachineContext {
     projectUri: string;
@@ -58,6 +59,21 @@ const runtimeConfigKeyByProjectType: Partial<Record<ProjectType, string>> = {
     [ProjectType.MI]: 'enabledRuntimes.mi',
     [ProjectType.SI]: 'enabledRuntimes.si'
 };
+const profileKeyByProjectType: Partial<Record<ProjectType, ProfileKey>> = {
+    [ProjectType.BI_BALLERINA]: 'bi',
+    [ProjectType.MI]: 'mi',
+    [ProjectType.SI]: 'si'
+};
+
+const projectTypeByProfileKey: Record<ProfileKey, ProjectType> = {
+    bi: ProjectType.BI_BALLERINA,
+    mi: ProjectType.MI,
+    si: ProjectType.SI
+};
+
+function isProfileKey(value: unknown): value is ProfileKey {
+    return value === 'bi' || value === 'mi' || value === 'si';
+}
 
 const extensionDependencyByProjectType: Partial<Record<ProjectType, string>> = {
     [ProjectType.BI_BALLERINA]: EXTENSION_DEPENDENCIES.BALLERINA,
@@ -87,6 +103,8 @@ async function enableDetectedRuntime(projectType: ProjectType): Promise<void> {
 
     const config = vscode.workspace.getConfiguration('integrator');
     const isEnabled = config.get<boolean>(runtimeConfigKey, false);
+    const selectedProfile = config.get<string>('selectedProfile');
+    const expectedProfile = profileKeyByProjectType[projectType];
 
     if (!isEnabled) {
         await config.update(
@@ -96,6 +114,15 @@ async function enableDetectedRuntime(projectType: ProjectType): Promise<void> {
         );
         ext.log(`Enabled ${projectType} in settings as we detected a matching project`);
     }
+
+    if (expectedProfile && selectedProfile !== expectedProfile) {
+        await config.update(
+            'selectedProfile',
+            expectedProfile,
+            vscode.ConfigurationTarget.Global
+        );
+        ext.log(`Selected profile changed to ${expectedProfile} as we detected a matching project`);
+    }
 }
 
 /**
@@ -103,6 +130,12 @@ async function enableDetectedRuntime(projectType: ProjectType): Promise<void> {
  */
 function getDefaultIntegratorMode(): ProjectType[] {
     const config = vscode.workspace.getConfiguration("integrator");
+    const selectedProfile = config.get<string>('selectedProfile');
+
+    if (isProfileKey(selectedProfile)) {
+        return [projectTypeByProfileKey[selectedProfile]];
+    }
+
     const biEnabled = config.get<boolean>("enabledRuntimes.bi", true);
     const miEnabled = config.get<boolean>("enabledRuntimes.mi", false);
     const siEnabled = config.get<boolean>("enabledRuntimes.si", false);
@@ -114,17 +147,22 @@ function getDefaultIntegratorMode(): ProjectType[] {
 
     if (enabled.length === 0) {
         vscode.window.showWarningMessage(
-            'WSO2 Integrator: At least one runtime must be enabled. Re-enabling WSO2 BI.',
+            'WSO2 Integrator: A profile must be selected. Re-selecting Default profile.',
             'Open Settings'
         ).then((selection) => {
             if (selection === 'Open Settings') {
                 vscode.commands.executeCommand(
                     'workbench.action.openSettings',
-                    'integrator.enabledRuntimes'
+                    'integrator.selectedProfile'
                 );
             }
         });
         // Restore BI in settings so the checkbox reflects reality
+        config.update(
+            'integrator.selectedProfile',
+            'bi',
+            vscode.ConfigurationTarget.Global
+        );
         config.update(
             'integrator.enabledRuntimes.bi',
             true,
@@ -133,7 +171,16 @@ function getDefaultIntegratorMode(): ProjectType[] {
         return [ProjectType.BI_BALLERINA];
     }
 
-    return enabled;
+    const fallbackProfile = profileKeyByProjectType[enabled[0]];
+    if (fallbackProfile) {
+        config.update(
+            'integrator.selectedProfile',
+            fallbackProfile,
+            vscode.ConfigurationTarget.Global
+        );
+    }
+
+    return [enabled[0]];
 }
 
 const stateMachine = createMachine<MachineContext>({
@@ -271,6 +318,7 @@ const stateMachine = createMachine<MachineContext>({
 
             context.configChangeDisposable = vscode.workspace.onDidChangeConfiguration(async (event) => {
                 const runtimeSettingChanged =
+                    event.affectsConfiguration('integrator.selectedProfile') ||
                     event.affectsConfiguration('integrator.enabledRuntimes.bi') ||
                     event.affectsConfiguration('integrator.enabledRuntimes.mi') ||
                     event.affectsConfiguration('integrator.enabledRuntimes.si');

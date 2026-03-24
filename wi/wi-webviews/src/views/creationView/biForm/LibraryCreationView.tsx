@@ -263,7 +263,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                     <HeaderText>
                         <HeaderTitle variant="h2">Create Library</HeaderTitle>
                         <HeaderSubtitle>
-                            Build a reusable Ballerina library package to share across integrations.
+                            Build reusable components and utilities to share across projects.
                         </HeaderSubtitle>
                     </HeaderText>
                 </HeaderRow>

@@ -1,7 +1,7 @@
 {
   "name": "wso2-integrator",
   "displayName": "WSO2 Integrator (Alpha)",
-  "description": "Unified integration development environment for WSO2 BI and MI in VS Code",
+  "description": "Integration development environment for WSO2 Integrator",
   "version": "0.2.0",
   "cliVersion": "v1.2.212603061900",
   "publisher": "wso2",
@@ -30,6 +30,16 @@
       "type": "object",
       "title": "WSO2 Integrator",
       "properties": {
+        "integrator.selectedProfile": {
+          "type": "string",
+          "enum": [
+            "bi",
+            "mi",
+            "si"
+          ],
+          "default": "bi",
+          "description": "Select the active WSO2 Integrator profile."
+        },
         "integrator.enabledRuntimes.bi": {
           "type": "boolean",
           "default": true,
@@ -112,7 +122,7 @@
       },
       {
         "view": "wso2-integrator.explorer",
-        "contents": "$(rocket) Build integration solutions with WSO2 Integrator.\n\nUse the welcome page to create a new project, explore samples, import external integrations, and manage runtime settings.\n\nOpen an integration project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
+        "contents": "$(rocket) Build integration solutions with WSO2 Integrator.\n\nUse the welcome page to create a new project, explore samples, import external integrations, and manage profile settings.\n\nOpen an integration project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
         "when": "WI.projectType == 'none'"
       },
       {
