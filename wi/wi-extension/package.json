@@ -2,7 +2,7 @@
   "name": "wso2-integrator",
   "displayName": "WSO2 Integrator (Alpha)",
   "description": "Unified integration development environment for WSO2 BI and MI in VS Code",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "cliVersion": "v1.2.212603061900",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
@@ -209,7 +209,10 @@
       {
         "command": "ballerina.showVisualizer",
         "title": "Show Visualizer",
-        "icon": "$(preview)",
+        "icon": {
+          "light": "resources/icons/preview-command-icon.svg",
+          "dark": "resources/icons/preview-command-icon-dark.svg"
+        },
         "category": "WSO2 Integrator"
       },
       {
@@ -227,7 +230,10 @@
       {
         "command": "BI.project-explorer.overview",
         "title": "Open Overview",
-        "icon": "$(preview)",
+        "icon": {
+          "light": "resources/icons/preview-command-icon.svg",
+          "dark": "resources/icons/preview-command-icon-dark.svg"
+        },
         "category": "WSO2 Integrator"
       },
       {
@@ -257,7 +263,10 @@
       {
         "command": "BI.project-explorer.view-type-diagram",
         "title": "View Type Diagram",
-        "icon": "$(preview)",
+        "icon": {
+          "light": "resources/icons/preview-command-icon.svg",
+          "dark": "resources/icons/preview-command-icon-dark.svg"
+        },
         "category": "WSO2 Integrator"
       },
       {
@@ -275,7 +284,10 @@
       {
         "command": "BI.project-explorer.view-configuration",
         "title": "View Configuration",
-        "icon": "$(preview)",
+        "icon": {
+          "light": "resources/icons/preview-command-icon.svg",
+          "dark": "resources/icons/preview-command-icon-dark.svg"
+        },
         "category": "WSO2 Integrator"
       },
       {
