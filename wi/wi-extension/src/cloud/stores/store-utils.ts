@@ -19,7 +19,8 @@
 import { type PersistOptions, createJSONStorage } from "zustand/middleware";
 import { ext } from '../../extensionVariables';
 
-const version = "v4";
+const versionInt = 5;
+const version = `v${versionInt}`;
 
 export const getGlobalStateStore = (storeName: string): PersistOptions<any, any> => {
     return {
@@ -32,6 +33,7 @@ export const getGlobalStateStore = (storeName: string): PersistOptions<any, any>
             removeItem: (name) => ext.context.globalState.update(name, undefined),
             setItem: (name, value) => ext.context.globalState.update(name, value),
         })),
+        version: versionInt,
         skipHydration: true,
     };
 };
@@ -47,6 +49,7 @@ export const getWorkspaceStateStore = (storeName: string): PersistOptions<any, a
             removeItem: (name) => ext.context.workspaceState.update(name, undefined),
             setItem: (name, value) => ext.context.workspaceState.update(name, value),
         })),
+        version: versionInt,
         skipHydration: true,
     };
 };

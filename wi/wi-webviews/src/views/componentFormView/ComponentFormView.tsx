@@ -169,10 +169,10 @@ function ComponentForm() {
 			if (!hasSelected || !validate()) { return; }
 
 			let workspaceFsPath = params!.workspaceFsPath;
-			let repoUrl: string | null = gitConfigDataRef?.current?.gitRemote ?? null;
-			let branch: string | null = gitConfigDataRef?.current?.branch ?? null;;
-			let gitProvider: string | null = gitConfigDataRef?.current?.gitProvider ?? null;;
-			let credential: string | null = gitConfigDataRef?.current?.credential ?? null;;
+			let repoUrl: string = gitConfigDataRef?.current?.gitRemote ?? "";
+			let branch: string = gitConfigDataRef?.current?.branch ?? "";
+			let gitProvider: string = gitConfigDataRef?.current?.gitProvider ?? "";
+			let credential: string = gitConfigDataRef?.current?.credential ?? "";
 
 			if (isNewCodeServerComp) {
 				const repoInit = repoInitDataRef.current;
@@ -256,10 +256,11 @@ function ComponentForm() {
 			};
 
 			const created = await wsClient.submitComponents(req);
-			if (created.created?.length === created.total) {
-				wsClient.closeCloudFormWebview();
-			} else {
+			if (created.failed?.length > 0) {
 				console.error("Some components failed to create", created);
+			}
+			if (created.created?.length > 0) {
+				wsClient.closeCloudFormWebview();
 			}
 		},
 		onError: (error) => {
