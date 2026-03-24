@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import type { AuthState, UserInfo } from "@wso2/wso2-platform-core";
+import { WICommandIds, type AuthState, type UserInfo } from "@wso2/wso2-platform-core";
 import {
 	type AuthenticationProvider,
 	type AuthenticationProviderAuthenticationSessionsChangeEvent,
@@ -146,9 +146,7 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 
 		// Return a promise that will be resolved when login succeeds or timeout occurs
 		return new Promise<AuthenticationSession>((resolve, reject) => {
-			commands.executeCommand("wso2.wi.sign.in", {
-				extName: platform,
-			}).then(undefined, (error) => {
+			commands.executeCommand(WICommandIds.SignIn).then(undefined, (error) => {
 				console.error("Sign-in command failed:", error);
 			});
 
