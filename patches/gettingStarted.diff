@@ -203,7 +203,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2C
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,23 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -224,12 +224,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2C
 +export const WI_SHOW_LOGIN_COMMAND_ID = 'wso2.integrator.showLogin';
 +
 +// WSO2 Platform Extension constants
-+export const WSO2_PLATFORM_EXTENSION_ID = 'wso2.wso2-platform';
-+export const WSO2_PLATFORM_PROVIDER_ID = 'wso2-platform'; // Authentication provider ID
-+export const WSO2_PLATFORM_SIGN_IN_COMMAND = 'wso2.wso2-platform.sign.in';
-+export const WSO2_PLATFORM_LOGOUT_COMMAND_ID = 'wso2.wso2-platform.sign.out';
-+export const WSO2_PLATFORM_CHECK_LOGIN_COMMAND = 'wso2.wso2-platform.check.login';
-+export const WSO2_PLATFORM_CANCEL_SIGN_IN_COMMAND = 'wso2.wso2-platform.cancel.sign.in';
++export const WSO2_PLATFORM_PROVIDER_ID = 'wso2-wi'; // Authentication provider ID
++export const WSO2_PLATFORM_LOGOUT_COMMAND_ID = 'wso2.integrator.cloud.auth.signOut';
++export const WSO2_PLATFORM_CANCEL_SIGN_IN_COMMAND = 'wso2.integrator.cloud.auth.cancelSignIn';
 Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
 ===================================================================
 --- /dev/null
