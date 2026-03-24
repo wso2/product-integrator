@@ -60,21 +60,21 @@ const RUNTIME_DEFINITIONS: RuntimeDefinition[] = [
     {
         key: "bi",
         label: "Default",
-        description: "Enable the default runtime for Ballerina-based integration projects.",
+        description: "Use the default profile for Ballerina-based integration projects.",
         extensionName: "Ballerina Integrator extension",
         section: "integrator.enabledRuntimes.bi",
     },
     {
         key: "mi",
         label: "WSO2: MI",
-        description: "Enable Micro Integrator runtime templates and samples.",
+        description: "Use the Micro Integrator profile templates and samples.",
         extensionName: "WSO2 Micro Integrator extension",
         section: "integrator.enabledRuntimes.mi",
     },
     {
         key: "si",
         label: "WSO2: SI",
-        description: "Enable Stream Integrator runtime templates and samples.",
+        description: "Use the Stream Integrator profile templates and samples.",
         extensionName: "WSO2 Stream Integrator extension",
         section: "integrator.enabledRuntimes.si",
     },
@@ -297,7 +297,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
 
                 setRuntimeState(nextState);
             } catch (loadError) {
-                console.error("Failed to load runtime settings:", loadError);
+                console.error("Failed to load profile settings:", loadError);
                 setError("Failed to load settings. Showing defaults.");
                 setRuntimeState({ bi: true, mi: false, si: false });
             } finally {
@@ -339,7 +339,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                 ),
             );
         } catch (updateError) {
-            console.error("Failed to update runtime setting:", updateError);
+            console.error("Failed to update profile setting:", updateError);
             setRuntimeState(previousState);
             setError("Failed to save the setting. Please try again.");
         } finally {
@@ -400,16 +400,16 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                     </BackButton>
                     <HeaderText>
                         <HeaderTitle variant="h2">Settings</HeaderTitle>
-                        <HeaderSubtitle>Manage runtime availability for project creation and sample browsing.</HeaderSubtitle>
+                        <HeaderSubtitle>Manage profile selection for project creation and sample browsing.</HeaderSubtitle>
                     </HeaderText>
                 </HeaderRow>
                 <FormPanel>
                     <FormPanelHeader>
-                        <FormPanelTitle>Enabled Runtimes</FormPanelTitle>
+                        <FormPanelTitle>Selected Profile</FormPanelTitle>
                         <FormPanelSubtitle>Changes are saved directly to your integrator configuration.</FormPanelSubtitle>
                     </FormPanelHeader>
                     <PanelBody>
-                        <InfoText>Select one runtime to use for project creation and welcome content.</InfoText>
+                        <InfoText>Select one profile to use for project creation and welcome content.</InfoText>
                         {error && <ErrorText>{error}</ErrorText>}
                         <RuntimeList>
                             {RUNTIME_DEFINITIONS.map((runtime) => (
@@ -445,8 +445,8 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
             </PageContainer>
             {pendingEnableConfirmation && (
                 <ConfirmBackdrop>
-                    <ConfirmDialog role="dialog" aria-modal="true" aria-label="Enable runtime confirmation">
-                        <ConfirmTitle>Select Runtime</ConfirmTitle>
+                    <ConfirmDialog role="dialog" aria-modal="true" aria-label="Select profile confirmation">
+                        <ConfirmTitle>Select Profile</ConfirmTitle>
                         <ConfirmDescription>
                             Selecting {pendingEnableConfirmation.runtimeLabel} will download the{" "}
                             {pendingEnableConfirmation.extensionName}. Do you want to continue?
@@ -462,7 +462,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                                     void confirmEnableRuntime();
                                 }}
                             >
-                                Select Runtime
+                                Select Profile
                             </ConfirmButton>
                         </ConfirmActions>
                     </ConfirmDialog>

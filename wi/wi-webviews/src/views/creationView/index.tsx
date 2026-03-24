@@ -131,7 +131,7 @@ export function CreationView({
                     <HeaderText>
                         <HeaderTitle variant="h2">Create Integration</HeaderTitle>
                         <HeaderSubtitle>
-                            Configure your integration details for the selected runtime.
+                            Configure your integration details for the selected profile.
                         </HeaderSubtitle>
                     </HeaderText>
                 </HeaderRow>
