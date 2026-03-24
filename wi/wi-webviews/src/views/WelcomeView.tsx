@@ -134,17 +134,47 @@ const ConfigureBtn = styled.button`
         outline-offset: 2px;
     }
     background: linear-gradient(
-        135deg,
-        color-mix(in srgb, var(--wso2-brand-primary) 94%, var(--wso2-brand-white)) 0%,
-        var(--wso2-brand-primary-alt) 100%
+        180deg,
+        color-mix(in srgb, var(--wso2-brand-white) 18%, transparent) 0%,
+        color-mix(in srgb, var(--wso2-brand-white) 10%, transparent) 100%
     );
-    color: white;
+    border: 2px solid color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
+    color: var(--wso2-brand-white);
     box-shadow:
-        inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 10%, transparent),
-        0 0 0 1px color-mix(in srgb, var(--wso2-brand-white) 6%, transparent),
-        0 8px 18px color-mix(in srgb, var(--wso2-brand-neutral-900) 18%, transparent);
+        inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 24%, transparent),
+        0 0 0 1px color-mix(in srgb, var(--wso2-brand-white) 10%, transparent),
+        0 8px 18px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
 
     body.vscode-light & {
+        background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+        border: 2px solid color-mix(in srgb, var(--wso2-brand-accent) 58%, var(--wso2-brand-primary-alt) 18%);
+        color: var(--wso2-brand-ink);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.92),
+            0 0 0 1px color-mix(in srgb, var(--wso2-brand-accent-soft) 50%, transparent),
+            0 8px 18px color-mix(in srgb, var(--wso2-brand-accent) 20%, transparent);
+    }
+`;
+
+const SigninBtn = styled(ConfigureBtn)`
+    && {
+        height: 33px;
+        padding: 0 18px;
+        border-radius: 10px;
+        border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 28%, transparent);
+        background: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--wso2-brand-primary) 94%, var(--wso2-brand-white)) 0%,
+            var(--wso2-brand-primary-alt) 100%
+        );
+        color: white;
+        box-shadow:
+            inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 10%, transparent),
+            0 0 0 1px color-mix(in srgb, var(--wso2-brand-white) 6%, transparent),
+            0 8px 18px color-mix(in srgb, var(--wso2-brand-neutral-900) 18%, transparent);
+    }
+
+    body.vscode-light && {
         border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 28%, transparent);
         background: linear-gradient(
             135deg,
@@ -157,48 +187,21 @@ const ConfigureBtn = styled.button`
             0 0 0 1px color-mix(in srgb, var(--wso2-brand-white) 24%, transparent),
             0 8px 18px color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
     }
-`;
-
-const SigninBtn = styled(ConfigureBtn)`
-    && {
-        height: 33px;
-        padding: 0 18px;
-        border-radius: 10px;
-        background: linear-gradient(
-            180deg,
-            color-mix(in srgb, var(--wso2-brand-white) 18%, transparent) 0%,
-            color-mix(in srgb, var(--wso2-brand-white) 10%, transparent) 100%
-        );
-        border: 2px solid color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
-        color: var(--wso2-brand-white);
-        box-shadow:
-            inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 24%, transparent),
-            0 0 0 1px color-mix(in srgb, var(--wso2-brand-white) 10%, transparent),
-            0 8px 18px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
-    }
-
-    body.vscode-light && {
-        background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
-        border: 2px solid color-mix(in srgb, var(--wso2-brand-accent) 58%, var(--wso2-brand-primary-alt) 18%);
-        color: var(--wso2-brand-ink);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.92),
-            0 0 0 1px color-mix(in srgb, var(--wso2-brand-accent-soft) 50%, transparent),
-            0 8px 18px color-mix(in srgb, var(--wso2-brand-accent) 20%, transparent);
-    }
 
     &&:hover {
-        filter: none;
-        transform: translateY(-1px);
         background: linear-gradient(
-            180deg,
-            color-mix(in srgb, var(--wso2-brand-white) 24%, transparent) 0%,
-            color-mix(in srgb, var(--wso2-brand-white) 14%, transparent) 100%
+            135deg,
+            color-mix(in srgb, var(--wso2-brand-primary) 100%, var(--wso2-brand-white)) 0%,
+            var(--wso2-brand-primary-deep) 100%
         );
     }
 
     body.vscode-light &&:hover {
-        background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
+        background: linear-gradient(
+            135deg,
+            var(--wso2-brand-ink) 0%,
+            var(--wso2-brand-ink-alt) 100%
+        );
     }
 `;
 
@@ -880,7 +883,7 @@ export const WelcomeView: React.FC = () => {
 						<ConfigureBtn type="button" onClick={goToSettings}>
 							<Codicon
 								name="settings-gear"
-								iconSx={{ fontSize: 16, color: "var(--wso2-brand-white)" }}
+								iconSx={{ fontSize: 16, color: "var(--wso2-brand-primary)" }}
 							/>
 							<span>Settings</span>
 						</ConfigureBtn>
