@@ -1178,7 +1178,7 @@ export const WelcomeView: React.FC = () => {
 										<SecondaryActionRow onClick={goToCreateLibrary}>
 											<SecondaryRowIcon bgColor="var(--welcome-library-accent)">
 												<Codicon
-													name="book"
+													name="library"
 													iconSx={{ fontSize: "16px" }}
 													sx={{ width: "16px", height: "16px" }}
 												/>
