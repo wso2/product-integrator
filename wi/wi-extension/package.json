@@ -1,7 +1,7 @@
 {
   "name": "wso2-integrator",
   "displayName": "WSO2 Integrator (Alpha)",
-  "description": "Unified integration development environment for WSO2 BI and MI in VS Code",
+  "description": "Integration development environment for WSO2 Integrator",
   "version": "0.2.0",
   "cliVersion": "v1.2.212603061900",
   "publisher": "wso2",
