@@ -303,7 +303,7 @@ function generateTreeData(project: ProjectStructure, isSingleProject: boolean): 
     const packageName = project.projectTitle || project.projectName;
     const packagePath = project.projectPath;
     const isLibrary = project.isLibrary ?? false;
-    const icon = isLibrary ? 'library' : 'project';
+    const icon = isLibrary ? 'library' : 'package';
 
     const projectRootEntry = new ProjectExplorerEntry(
         `${packageName}${isLibrary ? ' (Library)' : ''}`,
