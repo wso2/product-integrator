@@ -222,12 +222,12 @@ const getSelected = async (items: { [key: string]: ContextItemEnriched }, prevSe
                 } as ContextItemEnriched;
             }
         }
+    }
 
-        const globalCompId: string | null | undefined = ext.context.globalState.get("code-server-component-id");
-        if (globalCompId) {
-            await ext.context.globalState.update("code-server-component-id", null);
-            await ext.context.workspaceState.update("code-server-component-id", globalCompId);
-        }
+    const globalCompId: string | null | undefined = ext.context.globalState.get("SOURCE_COMPONENT_ID");
+    if (globalCompId) {
+        await ext.context.globalState.update("SOURCE_COMPONENT_ID", null);
+        await ext.context.workspaceState.update("SOURCE_COMPONENT_ID", globalCompId);
     }
 
     let selected: ContextItemEnriched | undefined = undefined;
@@ -335,8 +335,8 @@ const getComponentsInfo = async (selected?: ContextItemEnriched): Promise<Contex
 };
 
 const getFilteredComponents = (components: ComponentKind[]) => {
-    const workspaceCompId: string | null | undefined = ext.context.workspaceState.get("code-server-component-id") || process.env.SOURCE_COMPONENT_ID;
-    if (ext.isDevantCloudEditor && process.env.CLOUD_INITIAL_ORG_ID && process.env.CLOUD_INITIAL_PROJECT_ID && workspaceCompId) {
+    const workspaceCompId: string | null | undefined = process.env.SOURCE_COMPONENT_ID;
+    if (workspaceCompId) {
         const filteredComps = components.filter((item) => item.metadata?.id === workspaceCompId);
         if (filteredComps.length === 1) {
             return filteredComps;

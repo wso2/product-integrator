@@ -256,10 +256,11 @@ function ComponentForm() {
 			};
 
 			const created = await wsClient.submitComponents(req);
-			if (created.created?.length === created.total) {
-				wsClient.closeCloudFormWebview();
-			} else {
+			if (created.failed?.length > 0) {
 				console.error("Some components failed to create", created);
+			}
+			if (created.created?.length > 0) {
+				wsClient.closeCloudFormWebview();
 			}
 		},
 		onError: (error) => {

@@ -21,6 +21,7 @@ import type {
 	BuildPackReq,
 	Buildpack,
 	CancelApprovalReq,
+	ChangePrebuiltIntegrationRepositoryReq,
 	CheckWorkflowStatusReq,
 	CheckWorkflowStatusResp,
 	CommitHistory,
@@ -115,7 +116,7 @@ export class RPCClient {
 	private _conn: MessageConnection | undefined;
 	private static _instance: RPCClient;
 
-	private constructor() {}
+	private constructor() { }
 
 	async init() {
 		ext.log("Activating choreo rpc server");
@@ -726,6 +727,13 @@ export class ChoreoRPCClient implements IChoreoRPCClient {
 			throw new Error("RPC client is not initialized");
 		}
 		await this.client.sendRequest("component/updateCodeServer", params);
+	}
+
+	async changePrebuiltIntegrationRepository(params: ChangePrebuiltIntegrationRepositoryReq): Promise<void> {
+		if (!this.client) {
+			throw new Error("RPC client is not initialized");
+		}
+		await this.client.sendRequest("component/changePrebuiltIntegrationRepository", params);
 	}
 
 	async getConfigFromCli(): Promise<GetCliRpcResp> {
