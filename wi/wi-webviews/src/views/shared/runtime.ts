@@ -20,6 +20,7 @@ import type { WsClient } from "../../network-bridge/WsClient";
 
 export type WIRuntime = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 export type SampleSupportedRuntime = Exclude<WIRuntime, "WSO2: SI">;
+type ProfileKey = "bi" | "mi" | "si";
 
 export const RUNTIME_PRIORITY: WIRuntime[] = [
 	"WSO2: BI",
@@ -29,17 +30,17 @@ export const RUNTIME_PRIORITY: WIRuntime[] = [
 
 export const RUNTIME_DISPLAY_LABEL: Record<WIRuntime, string> = {
 	"WSO2: BI": "Default",
-	"WSO2: MI": "WSO2: MI",
-	"WSO2: SI": "WSO2: SI",
+	"WSO2: MI": "WSO2 Integrator: MI",
+	"WSO2: SI": "WSO2 Integrator: SI",
 };
 
 export const CREATION_RUNTIME_HELP: Record<WIRuntime, string> = {
 	"WSO2: BI":
-		"Create a Ballerina integration with package and workspace options.",
+		"Create an integration with package and workspace options.",
 	"WSO2: MI":
-		"Create a Micro Integrator project with runtime version and advanced Maven settings.",
+		"Create a WSO2 Integrator: MI project.",
 	"WSO2: SI":
-		"Create a Stream Integrator project with quick path and name setup.",
+		"Create a WSO2 Integrator: SI project.",
 };
 
 const RUNTIME_CONFIG_SECTIONS: Record<WIRuntime, string> = {
@@ -48,9 +49,29 @@ const RUNTIME_CONFIG_SECTIONS: Record<WIRuntime, string> = {
 	"WSO2: SI": "integrator.enabledRuntimes.si",
 };
 
+const PROFILE_CONFIG_SECTION = "integrator.selectedProfile";
+
+const PROFILE_RUNTIME_MAP: Record<ProfileKey, WIRuntime> = {
+	bi: "WSO2: BI",
+	mi: "WSO2: MI",
+	si: "WSO2: SI",
+};
+
+function isProfileKey(value: unknown): value is ProfileKey {
+	return value === "bi" || value === "mi" || value === "si";
+}
+
 export async function loadEnabledRuntimes(
 	wsClient: WsClient,
 ): Promise<WIRuntime[]> {
+	const selectedProfileResponse = await wsClient.getConfiguration({
+		section: PROFILE_CONFIG_SECTION,
+	});
+
+	if (isProfileKey(selectedProfileResponse?.value)) {
+		return [PROFILE_RUNTIME_MAP[selectedProfileResponse.value]];
+	}
+
 	const runtimeResponses = await Promise.all(
 		RUNTIME_PRIORITY.map((runtime) =>
 			wsClient.getConfiguration({ section: RUNTIME_CONFIG_SECTIONS[runtime] }),

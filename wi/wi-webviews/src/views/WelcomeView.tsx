@@ -31,7 +31,6 @@ import { ProjectCreationView } from "./creationView/biForm/ProjectCreationView";
 import { SamplesView } from "./samplesView";
 import { SettingsView } from "./settingsView";
 import {
-	RUNTIME_DISPLAY_LABEL,
 	type WIRuntime,
 	getDefaultRuntime,
 	loadEnabledRuntimes,
@@ -274,116 +273,6 @@ const Caption = styled.p`
     color: var(--welcome-hero-muted);
     margin: 16px 0 0 0;
     max-width: 800px;
-`;
-
-const RuntimeSelectorWrap = styled.div`
-    --welcome-runtime-foreground: var(--wso2-brand-white);
-    --welcome-runtime-muted: color-mix(in srgb, var(--wso2-brand-white) 82%, transparent);
-    width: 222px;
-    padding: 8px;
-    border-radius: 12px;
-    border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 24%, transparent);
-    background: color-mix(in srgb, var(--wso2-brand-white) 10%, transparent);
-    box-shadow: 0 10px 24px color-mix(in srgb, var(--wso2-brand-ink) 24%, transparent);
-    backdrop-filter: blur(14px);
-
-    body.vscode-light & {
-        --welcome-runtime-foreground: var(--wso2-brand-ink-alt);
-        --welcome-runtime-muted: color-mix(in srgb, var(--wso2-brand-ink-alt) 70%, transparent);
-        border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
-        background: color-mix(in srgb, var(--wso2-brand-white) 34%, transparent);
-        box-shadow: none;
-    }
-`;
-
-const RuntimeSelectorLabel = styled.div`
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--welcome-runtime-muted);
-    margin-bottom: 6px;
-`;
-
-const RuntimeSelectField = styled.div`
-    position: relative;
-`;
-
-const RuntimeSelect = styled.select`
-    width: 100%;
-    height: 30px;
-    border: 1.5px solid color-mix(in srgb, var(--wso2-brand-white) 24%, transparent);
-    border-radius: 7px;
-    padding: 0 34px 0 10px;
-    appearance: none;
-    font-family: var(--vscode-font-family);
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--welcome-runtime-foreground);
-    background:
-        linear-gradient(
-            135deg,
-            color-mix(in srgb, var(--wso2-brand-white) 16%, transparent) 0%,
-            color-mix(in srgb, var(--wso2-brand-white) 8%, transparent) 100%
-        );
-    box-shadow:
-        inset 0 1px 0 color-mix(in srgb, var(--wso2-brand-white) 16%, transparent),
-        0 8px 20px color-mix(in srgb, var(--wso2-brand-ink) 16%, transparent);
-    cursor: pointer;
-    transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
-
-    &:hover {
-        border-color: color-mix(in srgb, var(--wso2-brand-white) 38%, transparent);
-        background:
-            linear-gradient(
-                135deg,
-                color-mix(in srgb, var(--wso2-brand-white) 20%, transparent) 0%,
-                color-mix(in srgb, var(--wso2-brand-white) 10%, transparent) 100%
-            );
-    }
-
-    &:focus-visible {
-        outline: 1px solid color-mix(in srgb, var(--welcome-runtime-foreground) 68%, transparent);
-        outline-offset: 2px;
-    }
-
-    option {
-        color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
-        background: var(--vscode-dropdown-background, var(--vscode-editor-background));
-    }
-
-    body.vscode-light & {
-        border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
-        background:
-            linear-gradient(
-                135deg,
-                color-mix(in srgb, var(--wso2-brand-white) 78%, transparent) 0%,
-                color-mix(in srgb, var(--wso2-brand-white) 60%, transparent) 100%
-            );
-        box-shadow: none;
-
-        &:hover {
-            border-color: color-mix(in srgb, var(--wso2-brand-ink-alt) 22%, transparent);
-            background:
-                linear-gradient(
-                    135deg,
-                    color-mix(in srgb, var(--wso2-brand-white) 86%, transparent) 0%,
-                    color-mix(in srgb, var(--wso2-brand-white) 68%, transparent) 100%
-                );
-        }
-    }
-`;
-
-const RuntimeSelectIcon = styled.div`
-    position: absolute;
-    top: 50%;
-    right: 10px;
-    transform: translateY(-50%);
-    pointer-events: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--welcome-runtime-muted);
 `;
 
 const CardsContainer = styled.div`
@@ -787,7 +676,6 @@ export const WelcomeView: React.FC = () => {
 	const [currentView, setCurrentView] = useState<ViewState>(ViewState.WELCOME);
 	const { authState } = useCloudContext();
 	const [popoverOpen, setPopoverOpen] = useState(false);
-	const [enabledRuntimes, setEnabledRuntimes] = useState<WIRuntime[]>([]);
 	const [selectedRuntime, setSelectedRuntime] = useState<WIRuntime | null>(null);
 	const [isRuntimeLoading, setIsRuntimeLoading] = useState(true);
 	const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
@@ -806,16 +694,9 @@ export const WelcomeView: React.FC = () => {
             setIsRuntimeLoading(true);
             try {
                 const runtimes = await loadEnabledRuntimes(wsClient);
-                setEnabledRuntimes(runtimes);
-                setSelectedRuntime((previousRuntime) => {
-                    if (previousRuntime && runtimes.includes(previousRuntime)) {
-                        return previousRuntime;
-                    }
-                    return getDefaultRuntime(runtimes);
-                });
+                setSelectedRuntime(getDefaultRuntime(runtimes));
             } catch (error) {
                 console.warn("Failed to load enabled runtimes, using fallback:", error);
-                setEnabledRuntimes(["WSO2: BI"]);
                 setSelectedRuntime("WSO2: BI");
             } finally {
                 setIsRuntimeLoading(false);
@@ -882,6 +763,18 @@ export const WelcomeView: React.FC = () => {
         setCurrentView(ViewState.OPEN_PROJECT);
     };
 
+    const openIntegrationFileBrowser = async () => {
+        try {
+            const { path: startPath } = await wsClient.getDefaultCreationPath();
+            const response = await wsClient.selectFileOrDirPath({ startPath });
+            if (response?.path) {
+                wsClient.openFolder(response.path);
+            }
+        } catch (err) {
+            console.error("Failed to open local folder:", err);
+        }
+    };
+
 	const openRecentProjectsPicker = () => {
 		wsClient
 			.runCommand({ command: "workbench.action.openRecent" })
@@ -925,12 +818,6 @@ export const WelcomeView: React.FC = () => {
 
 	const handleSignIn = () => {
 		wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
-	};
-
-	const handleRuntimeChange = (value: string) => {
-		if (enabledRuntimes.includes(value as WIRuntime)) {
-			setSelectedRuntime(value as WIRuntime);
-		}
 	};
 
 	const renderCurrentView = () => {
@@ -1010,34 +897,6 @@ export const WelcomeView: React.FC = () => {
 							<span>Settings</span>
 						</ConfigureBtn>
 					</TopBtnSection>
-					{!isRuntimeLoading &&
-						enabledRuntimes.length > 1 &&
-						selectedRuntime && (
-							<RuntimeSelectorWrap>
-								<RuntimeSelectorLabel>Runtime</RuntimeSelectorLabel>
-								<RuntimeSelectField>
-									<RuntimeSelect
-										id="welcome-runtime-selector"
-										value={selectedRuntime}
-										onChange={(event) =>
-											handleRuntimeChange(event.target.value)
-										}
-									>
-										{enabledRuntimes.map((runtime) => (
-											<option key={runtime} value={runtime}>
-												{RUNTIME_DISPLAY_LABEL[runtime]}
-											</option>
-										))}
-									</RuntimeSelect>
-									<RuntimeSelectIcon>
-										<Codicon
-											name="chevron-down"
-											iconSx={{ fontSize: 18, color: "inherit" }}
-										/>
-									</RuntimeSelectIcon>
-								</RuntimeSelectField>
-							</RuntimeSelectorWrap>
-						)}
 				</TopControlsSection>
 				<GetStartedBadge>Get Started</GetStartedBadge>
 				<Headline>WSO2 Integrator</Headline>
@@ -1083,9 +942,9 @@ export const WelcomeView: React.FC = () => {
 								</CardContent>
 							</ActionCard>
 
-							<ActionCard onClick={handleProjectDirSelection}>
+							<ActionCard onClick={openIntegrationFileBrowser}>
 								<CardIconContainer>
-									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink-deep) 0%, var(--wso2-brand-ink-alt) 100%)">
+									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-accent-alt) 100%)">
 										<Codicon
 											name="folder-opened"
 											iconSx={{ fontSize: "25px" }}
@@ -1094,14 +953,14 @@ export const WelcomeView: React.FC = () => {
 									</CardIcon>
 								</CardIconContainer>
 								<CardContent>
-									<CardTitle>Open Integration or Project</CardTitle>
+									<CardTitle>Open Integration</CardTitle>
 									<CardDescription>
-                                        Open an existing integration or project and continue building your solution.
+                                        Open an existing integration and continue building your solution.
 									</CardDescription>
 									<StyledButton
 										onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
 											e.stopPropagation();
-											handleProjectDirSelection();
+											openIntegrationFileBrowser();
 										}}
 									>
 										<ButtonContent>Open</ButtonContent>
@@ -1164,9 +1023,9 @@ export const WelcomeView: React.FC = () => {
 								>
 									<SecondaryCardsGrid>
 										<SecondaryActionRow onClick={goToCreateLibrary}>
-											<SecondaryRowIcon bgColor="var(--welcome-library-accent)">
+											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 												<Codicon
-													name="book"
+													name="library"
 													iconSx={{ fontSize: "16px" }}
 													sx={{ width: "16px", height: "16px" }}
 												/>
@@ -1188,7 +1047,7 @@ export const WelcomeView: React.FC = () => {
 										</SecondaryActionRow>
 
 										<SecondaryActionRow onClick={goToCreateProject}>
-											<SecondaryRowIcon bgColor="var(--welcome-project-accent)">
+											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 												<Codicon
 													name="new-folder"
 													iconSx={{ fontSize: "16px" }}
@@ -1211,8 +1070,32 @@ export const WelcomeView: React.FC = () => {
 											/>
 										</SecondaryActionRow>
 
+										<SecondaryActionRow onClick={handleProjectDirSelection}>
+											<SecondaryRowIcon bgColor="var(--welcome-open-project-accent)">
+												<Codicon
+													name="root-folder-opened"
+													iconSx={{ fontSize: "16px" }}
+													sx={{ width: "16px", height: "16px" }}
+												/>
+											</SecondaryRowIcon>
+											<SecondaryRowContent>
+												<SecondaryRowTitle>Open Project</SecondaryRowTitle>
+												<SecondaryRowDescription>
+													Open an existing project to view and manage its integrations.
+												</SecondaryRowDescription>
+											</SecondaryRowContent>
+											<Codicon
+												name="chevron-right"
+												iconSx={{
+													fontSize: "14px",
+													color: "var(--vscode-descriptionForeground)",
+													opacity: 0.6,
+												}}
+											/>
+										</SecondaryActionRow>
+
 										<SecondaryActionRow onClick={goToImportExternal}>
-											<SecondaryRowIcon bgColor="var(--welcome-import-accent)">
+											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 												<Codicon
 													name="cloud-download"
 													iconSx={{ fontSize: "16px" }}

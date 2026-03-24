@@ -171,7 +171,7 @@ export function SamplesView({ onBack, runtime }: { onBack?: () => void; runtime?
                     <HeaderText>
                         <HeaderTitle variant="h2">Browse Samples</HeaderTitle>
                         <HeaderSubtitle>
-                            Start quickly by downloading a curated integration sample for your runtime.
+                            Start quickly by downloading a curated integration sample for your selected profile.
                         </HeaderSubtitle>
                     </HeaderText>
                 </HeaderRow>
@@ -185,7 +185,7 @@ export function SamplesView({ onBack, runtime }: { onBack?: () => void; runtime?
                                     Samples for{" "}
                                     {projectType
                                         ? RUNTIME_DISPLAY_LABEL[projectType]
-                                        : "this runtime"}{" "}
+                                        : "this profile"}{" "}
                                     are not available yet.
                                 </EmptyStateMessage>
                                 <Icon

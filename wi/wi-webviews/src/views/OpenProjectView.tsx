@@ -935,7 +935,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         }
     };
 
-    const headerTitle = "Open Integration or Project";
+    const headerTitle = "Open Project";
     const headerSubtitle = "Clone a cloud project or open an existing local folder.";
     const panelTitle = selectedProject ? null : "Cloud Projects";
     const panelSubtitle = !selectedProject && org ? "Select a project to clone it to your local machine." : null;
