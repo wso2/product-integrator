@@ -3,7 +3,7 @@
   "displayName": "WSO2 Integrator (Alpha)",
   "description": "Unified integration development environment for WSO2 BI and MI in VS Code",
   "version": "0.2.0",
-  "cliVersion": "v1.2.212603061900",
+  "cliVersion": "v1.2.212603241600",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
   "license": "Apache-2.0",
