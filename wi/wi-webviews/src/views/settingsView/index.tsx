@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { CheckBox, Icon, ProgressIndicator } from "@wso2/ui-toolkit";
+import { Icon, ProgressIndicator } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useEffect, useState } from "react";
 import { useVisualizerContext } from "../../contexts/WsContext";
@@ -119,6 +119,18 @@ const RuntimeHeader = styled.div`
     justify-content: space-between;
     align-items: center;
     gap: 12px;
+`;
+
+const RuntimeOption = styled.label`
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+`;
+
+const RuntimeRadio = styled.input`
+    margin: 0;
 `;
 
 const RuntimeState = styled.span<{ enabled: boolean }>`
@@ -258,19 +270,30 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                     wsClient.getConfiguration({ section: "integrator.enabledRuntimes.si" }),
                 ]);
 
-                const nextState: RuntimeConfigState = {
+                const currentState: RuntimeConfigState = {
                     bi: biResp?.value === true,
                     mi: miResp?.value === true,
                     si: siResp?.value === true,
                 };
 
-                if (!Object.values(nextState).some(Boolean)) {
-                    nextState.bi = true;
-                    await wsClient.setConfiguration({
-                        section: "integrator.enabledRuntimes.bi",
-                        value: true,
-                    });
-                }
+                const selectedRuntime = (Object.keys(currentState) as RuntimeKey[]).find(
+                    (runtimeKey) => currentState[runtimeKey],
+                ) ?? "bi";
+
+                const nextState: RuntimeConfigState = {
+                    bi: selectedRuntime === "bi",
+                    mi: selectedRuntime === "mi",
+                    si: selectedRuntime === "si",
+                };
+
+                await Promise.all(
+                    RUNTIME_DEFINITIONS.map((runtime) =>
+                        wsClient.setConfiguration({
+                            section: runtime.section,
+                            value: nextState[runtime.key],
+                        }),
+                    ),
+                );
 
                 setRuntimeState(nextState);
             } catch (loadError) {
@@ -285,32 +308,36 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
         loadRuntimeSettings();
     }, [wsClient]);
 
-    const applyRuntimeToggle = async (runtimeKey: RuntimeKey, enabled: boolean) => {
+    const applyRuntimeSelection = async (runtimeKey: RuntimeKey) => {
         const runtimeDefinition = RUNTIME_DEFINITIONS.find((runtime) => runtime.key === runtimeKey);
         if (!runtimeDefinition) {
             return;
         }
 
-        if (!enabled && runtimeState[runtimeKey] && Object.values(runtimeState).filter(Boolean).length === 1) {
-            setError("At least one runtime must stay enabled.");
+        if (runtimeState[runtimeKey]) {
             return;
         }
 
         setError(null);
         const previousState = runtimeState;
-        const nextState = {
-            ...runtimeState,
-            [runtimeKey]: enabled,
+        const nextState: RuntimeConfigState = {
+            bi: runtimeKey === "bi",
+            mi: runtimeKey === "mi",
+            si: runtimeKey === "si",
         };
 
         setRuntimeState(nextState);
         setSavingRuntime(runtimeKey);
 
         try {
-            await wsClient.setConfiguration({
-                section: runtimeDefinition.section,
-                value: enabled,
-            });
+            await Promise.all(
+                RUNTIME_DEFINITIONS.map((runtime) =>
+                    wsClient.setConfiguration({
+                        section: runtime.section,
+                        value: nextState[runtime.key],
+                    }),
+                ),
+            );
         } catch (updateError) {
             console.error("Failed to update runtime setting:", updateError);
             setRuntimeState(previousState);
@@ -320,13 +347,13 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
         }
     };
 
-    const handleRuntimeToggle = (runtimeKey: RuntimeKey, enabled: boolean) => {
+    const handleRuntimeSelect = (runtimeKey: RuntimeKey) => {
         const runtimeDefinition = RUNTIME_DEFINITIONS.find((runtime) => runtime.key === runtimeKey);
         if (!runtimeDefinition) {
             return;
         }
 
-        if (enabled && !runtimeState[runtimeKey]) {
+        if (!runtimeState[runtimeKey]) {
             setPendingEnableConfirmation({
                 runtimeKey,
                 runtimeLabel: runtimeDefinition.label,
@@ -335,7 +362,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
             return;
         }
 
-        void applyRuntimeToggle(runtimeKey, enabled);
+        void applyRuntimeSelection(runtimeKey);
     };
 
     const confirmEnableRuntime = async () => {
@@ -344,7 +371,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
         }
         const runtimeKey = pendingEnableConfirmation.runtimeKey;
         setPendingEnableConfirmation(null);
-        await applyRuntimeToggle(runtimeKey, true);
+        await applyRuntimeSelection(runtimeKey);
     };
 
     if (isLoading) {
@@ -382,22 +409,26 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                         <FormPanelSubtitle>Changes are saved directly to your integrator configuration.</FormPanelSubtitle>
                     </FormPanelHeader>
                     <PanelBody>
-                        <InfoText>Select which runtimes should be available in project creation and samples.</InfoText>
+                        <InfoText>Select one runtime to use for project creation and welcome content.</InfoText>
                         {error && <ErrorText>{error}</ErrorText>}
                         <RuntimeList>
                             {RUNTIME_DEFINITIONS.map((runtime) => (
                                 <RuntimeItem key={runtime.key}>
                                     <RuntimeHeader>
-                                        <CheckBox
-                                            label={runtime.label}
-                                            checked={runtimeState[runtime.key]}
-                                            disabled={savingRuntime !== null}
-                                            onChange={(checked) => {
-                                                handleRuntimeToggle(runtime.key, checked);
-                                            }}
-                                        />
+                                        <RuntimeOption>
+                                            <RuntimeRadio
+                                                type="radio"
+                                                name="selected-runtime"
+                                                checked={runtimeState[runtime.key]}
+                                                disabled={savingRuntime !== null}
+                                                onChange={() => {
+                                                    handleRuntimeSelect(runtime.key);
+                                                }}
+                                            />
+                                            <span>{runtime.label}</span>
+                                        </RuntimeOption>
                                         <RuntimeState enabled={runtimeState[runtime.key]}>
-                                            {runtimeState[runtime.key] ? "Enabled" : "Disabled"}
+                                            {runtimeState[runtime.key] ? "Selected" : "Not selected"}
                                         </RuntimeState>
                                     </RuntimeHeader>
                                     <RuntimeDescription>{runtime.description}</RuntimeDescription>
@@ -415,9 +446,9 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
             {pendingEnableConfirmation && (
                 <ConfirmBackdrop>
                     <ConfirmDialog role="dialog" aria-modal="true" aria-label="Enable runtime confirmation">
-                        <ConfirmTitle>Enable Runtime</ConfirmTitle>
+                        <ConfirmTitle>Select Runtime</ConfirmTitle>
                         <ConfirmDescription>
-                            Enabling {pendingEnableConfirmation.runtimeLabel} will download the{" "}
+                            Selecting {pendingEnableConfirmation.runtimeLabel} will download the{" "}
                             {pendingEnableConfirmation.extensionName}. Do you want to continue?
                         </ConfirmDescription>
                         <ConfirmActions>
@@ -431,7 +462,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                                     void confirmEnableRuntime();
                                 }}
                             >
-                                Enable Runtime
+                                Select Runtime
                             </ConfirmButton>
                         </ConfirmActions>
                     </ConfirmDialog>
