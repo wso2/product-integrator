@@ -384,7 +384,7 @@ const checkComponentLimitReached = async (createParams: CreateComponentReq[], or
 				if (res === "Upgrade") {
 					commands.executeCommand(
 						"vscode.open",
-						`${ext.config?.billingConsoleUrl}/cloud/devant/upgrade`,
+						`${ext.config?.billingConsoleUrl}/cloud/devant/upgrade?orgId=${org.uuid.toString()}`,
 					);
 				}
 			});
