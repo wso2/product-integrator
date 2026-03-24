@@ -209,7 +209,10 @@
       {
         "command": "ballerina.showVisualizer",
         "title": "Show Visualizer",
-        "icon": "$(preview)",
+        "icon": {
+          "light": "resources/icons/preview-command-icon.svg",
+          "dark": "resources/icons/preview-command-icon-dark.svg"
+        },
         "category": "WSO2 Integrator"
       },
       {
@@ -227,7 +230,10 @@
       {
         "command": "BI.project-explorer.overview",
         "title": "Open Overview",
-        "icon": "$(preview)",
+        "icon": {
+          "light": "resources/icons/preview-command-icon.svg",
+          "dark": "resources/icons/preview-command-icon-dark.svg"
+        },
         "category": "WSO2 Integrator"
       },
       {
@@ -257,7 +263,10 @@
       {
         "command": "BI.project-explorer.view-type-diagram",
         "title": "View Type Diagram",
-        "icon": "$(preview)",
+        "icon": {
+          "light": "resources/icons/preview-command-icon.svg",
+          "dark": "resources/icons/preview-command-icon-dark.svg"
+        },
         "category": "WSO2 Integrator"
       },
       {
@@ -275,7 +284,10 @@
       {
         "command": "BI.project-explorer.view-configuration",
         "title": "View Configuration",
-        "icon": "$(preview)",
+        "icon": {
+          "light": "resources/icons/preview-command-icon.svg",
+          "dark": "resources/icons/preview-command-icon-dark.svg"
+        },
         "category": "WSO2 Integrator"
       },
       {
