@@ -86,16 +86,25 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	// 9. Initialize authentication (restores session from CLI if already signed in)
 	await authProvider.getState().initAuth();
 
-	// 10. Fetch remote config (billing/console URLs etc.)
+	// 10. Sync auth state when the login dialog signs in via the wso2-platform provider.
+	context.subscriptions.push(
+		authentication.onDidChangeSessions(async (e) => {
+			if (e.provider.id === "wso2-platform") {
+				await authProvider.getState().initAuth();
+			}
+		})
+	);
+
+	// 12. Fetch remote config (billing/console URLs etc.)
 	ext.config = await ext.clients.rpcClient.getConfigFromCli();
 
-	// 11. Prompt restart when Advanced configuration keys change
+	// 13. Prompt restart when Advanced configuration keys change
 	registerPreInitHandlers();
 
-	// 12. Register VS Code commands
+	// 14. Register VS Code commands
 	activateCmds(context);
 
-	// 13. Register URI handlers (sign-in callback, deep-link open)
+	// 15. Register URI handlers (sign-in callback, deep-link open)
 	activateURIHandlers();
 }
 

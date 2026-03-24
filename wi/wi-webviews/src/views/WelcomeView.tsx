@@ -882,6 +882,18 @@ export const WelcomeView: React.FC = () => {
         setCurrentView(ViewState.OPEN_PROJECT);
     };
 
+    const openIntegrationFileBrowser = async () => {
+        try {
+            const { path: startPath } = await wsClient.getDefaultCreationPath();
+            const response = await wsClient.selectFileOrDirPath({ startPath });
+            if (response?.path) {
+                wsClient.openFolder(response.path);
+            }
+        } catch (err) {
+            console.error("Failed to open local folder:", err);
+        }
+    };
+
 	const openRecentProjectsPicker = () => {
 		wsClient
 			.runCommand({ command: "workbench.action.openRecent" })
@@ -1083,7 +1095,7 @@ export const WelcomeView: React.FC = () => {
 								</CardContent>
 							</ActionCard>
 
-							<ActionCard onClick={handleProjectDirSelection}>
+							<ActionCard onClick={openIntegrationFileBrowser}>
 								<CardIconContainer>
 									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-ink-deep) 0%, var(--wso2-brand-ink-alt) 100%)">
 										<Codicon
@@ -1094,14 +1106,14 @@ export const WelcomeView: React.FC = () => {
 									</CardIcon>
 								</CardIconContainer>
 								<CardContent>
-									<CardTitle>Open Integration or Project</CardTitle>
+									<CardTitle>Open Integration</CardTitle>
 									<CardDescription>
-                                        Open an existing integration or project and continue building your solution.
+                                        Open an existing integration and continue building your solution.
 									</CardDescription>
 									<StyledButton
 										onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
 											e.stopPropagation();
-											handleProjectDirSelection();
+											openIntegrationFileBrowser();
 										}}
 									>
 										<ButtonContent>Open</ButtonContent>
@@ -1166,7 +1178,7 @@ export const WelcomeView: React.FC = () => {
 										<SecondaryActionRow onClick={goToCreateLibrary}>
 											<SecondaryRowIcon bgColor="var(--welcome-library-accent)">
 												<Codicon
-													name="book"
+													name="library"
 													iconSx={{ fontSize: "16px" }}
 													sx={{ width: "16px", height: "16px" }}
 												/>
@@ -1199,6 +1211,30 @@ export const WelcomeView: React.FC = () => {
 												<SecondaryRowTitle>Create Project</SecondaryRowTitle>
 												<SecondaryRowDescription>
 													Create a project to organize and manage multiple integrations.
+												</SecondaryRowDescription>
+											</SecondaryRowContent>
+											<Codicon
+												name="chevron-right"
+												iconSx={{
+													fontSize: "14px",
+													color: "var(--vscode-descriptionForeground)",
+													opacity: 0.6,
+												}}
+											/>
+										</SecondaryActionRow>
+
+										<SecondaryActionRow onClick={handleProjectDirSelection}>
+											<SecondaryRowIcon bgColor="var(--welcome-open-project-accent)">
+												<Codicon
+													name="root-folder-opened"
+													iconSx={{ fontSize: "16px" }}
+													sx={{ width: "16px", height: "16px" }}
+												/>
+											</SecondaryRowIcon>
+											<SecondaryRowContent>
+												<SecondaryRowTitle>Open Project</SecondaryRowTitle>
+												<SecondaryRowDescription>
+													Open an existing project to view and manage its integrations.
 												</SecondaryRowDescription>
 											</SecondaryRowContent>
 											<Codicon
