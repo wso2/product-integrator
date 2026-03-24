@@ -52,30 +52,35 @@ interface EnableConfirmationState {
 interface RuntimeDefinition {
     key: RuntimeKey;
     label: string;
-    description: string;
+    description?: string;
     extensionName: string;
 }
 
 const RUNTIME_DEFINITIONS: RuntimeDefinition[] = [
     {
         key: "bi",
-        label: "Default",
-        description: "Use the default profile for Ballerina-based integration projects.",
+        label: "WSO2 Integrator: Default Profile",
         extensionName: "Ballerina Integrator extension",
     },
     {
         key: "mi",
-        label: "WSO2: MI",
-        description: "Use the Micro Integrator profile templates and samples.",
+        label: "WSO2 Integrator: MI Profile",
+        description: "Enable the Micro Integrator profile templates and samples.",
         extensionName: "WSO2 Micro Integrator extension",
     },
     {
         key: "si",
-        label: "WSO2: SI",
-        description: "Use the Stream Integrator profile templates and samples.",
+        label: "WSO2 Integrator: SI Profile",
+        description: "Enable the Stream Integrator profile templates and samples.",
         extensionName: "WSO2 Stream Integrator extension",
     },
 ];
+
+const RuntimeDescription = styled.p`
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+`;
 
 function isRuntimeKey(value: unknown): value is RuntimeKey {
     return value === "bi" || value === "mi" || value === "si";
@@ -148,12 +153,6 @@ const RuntimeState = styled.span<{ enabled: boolean }>`
     text-transform: uppercase;
     color: ${(props: { enabled: boolean }) =>
         props.enabled ? "var(--wso2-brand-primary)" : "var(--vscode-descriptionForeground)"};
-`;
-
-const RuntimeDescription = styled.p`
-    margin: 8px 0 0;
-    font-size: 12px;
-    color: var(--vscode-descriptionForeground);
 `;
 
 const ErrorText = styled.div`
@@ -400,16 +399,15 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                     </BackButton>
                     <HeaderText>
                         <HeaderTitle variant="h2">Settings</HeaderTitle>
-                        <HeaderSubtitle>Manage profile selection for project creation and sample browsing.</HeaderSubtitle>
+                        <HeaderSubtitle>Settings related to WSO2 Integrator.</HeaderSubtitle>
                     </HeaderText>
                 </HeaderRow>
                 <FormPanel>
                     <FormPanelHeader>
-                        <FormPanelTitle>Selected Profile</FormPanelTitle>
-                        <FormPanelSubtitle>Changes are saved directly to your integrator configuration.</FormPanelSubtitle>
+                        <FormPanelTitle>Enabled Profile</FormPanelTitle>
+                        <FormPanelSubtitle>Select Integration Profile to be enabled.</FormPanelSubtitle>
                     </FormPanelHeader>
                     <PanelBody>
-                        <InfoText>Select one profile to use for project creation and welcome content.</InfoText>
                         {error && <ErrorText>{error}</ErrorText>}
                         <RuntimeList>
                             {RUNTIME_DEFINITIONS.map((runtime) => (
@@ -427,11 +425,11 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                                             />
                                             <span>{runtime.label}</span>
                                         </RuntimeOption>
-                                        <RuntimeState enabled={runtimeState[runtime.key]}>
+                                    <RuntimeState enabled={runtimeState[runtime.key]}>
                                             {runtimeState[runtime.key] ? "Selected" : "Not selected"}
                                         </RuntimeState>
                                     </RuntimeHeader>
-                                    <RuntimeDescription>{runtime.description}</RuntimeDescription>
+                                    {runtime.description && <RuntimeDescription>{runtime.description}</RuntimeDescription>}
                                 </RuntimeItem>
                             ))}
                         </RuntimeList>
