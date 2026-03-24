@@ -35,6 +35,7 @@ import {
 } from "../shared/FormPageLayout";
 
 type RuntimeKey = "bi" | "mi" | "si";
+const SELECTED_PROFILE_SECTION = "integrator.selectedProfile";
 
 interface RuntimeConfigState {
     bi: boolean;
@@ -53,7 +54,6 @@ interface RuntimeDefinition {
     label: string;
     description: string;
     extensionName: string;
-    section: string;
 }
 
 const RUNTIME_DEFINITIONS: RuntimeDefinition[] = [
@@ -62,23 +62,32 @@ const RUNTIME_DEFINITIONS: RuntimeDefinition[] = [
         label: "Default",
         description: "Use the default profile for Ballerina-based integration projects.",
         extensionName: "Ballerina Integrator extension",
-        section: "integrator.enabledRuntimes.bi",
     },
     {
         key: "mi",
         label: "WSO2: MI",
         description: "Use the Micro Integrator profile templates and samples.",
         extensionName: "WSO2 Micro Integrator extension",
-        section: "integrator.enabledRuntimes.mi",
     },
     {
         key: "si",
         label: "WSO2: SI",
         description: "Use the Stream Integrator profile templates and samples.",
         extensionName: "WSO2 Stream Integrator extension",
-        section: "integrator.enabledRuntimes.si",
     },
 ];
+
+function isRuntimeKey(value: unknown): value is RuntimeKey {
+    return value === "bi" || value === "mi" || value === "si";
+}
+
+function getStateForSelectedProfile(selectedProfile: RuntimeKey): RuntimeConfigState {
+    return {
+        bi: selectedProfile === "bi",
+        mi: selectedProfile === "mi",
+        si: selectedProfile === "si",
+    };
+}
 
 const PageContainer = styled.div`
     max-width: 920px;
@@ -261,9 +270,25 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
     const [pendingEnableConfirmation, setPendingEnableConfirmation] = useState<EnableConfirmationState | null>(null);
     const [error, setError] = useState<string | null>(null);
 
+    const persistSelectedProfile = async (selectedProfile: RuntimeKey) => {
+        await wsClient.setConfiguration({
+            section: SELECTED_PROFILE_SECTION,
+            value: selectedProfile,
+        });
+    };
+
     useEffect(() => {
         const loadRuntimeSettings = async () => {
             try {
+                const selectedProfileResponse = await wsClient.getConfiguration({
+                    section: SELECTED_PROFILE_SECTION,
+                });
+
+                if (isRuntimeKey(selectedProfileResponse?.value)) {
+                    setRuntimeState(getStateForSelectedProfile(selectedProfileResponse.value));
+                    return;
+                }
+
                 const [biResp, miResp, siResp] = await Promise.all([
                     wsClient.getConfiguration({ section: "integrator.enabledRuntimes.bi" }),
                     wsClient.getConfiguration({ section: "integrator.enabledRuntimes.mi" }),
@@ -280,22 +305,8 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                     (runtimeKey) => currentState[runtimeKey],
                 ) ?? "bi";
 
-                const nextState: RuntimeConfigState = {
-                    bi: selectedRuntime === "bi",
-                    mi: selectedRuntime === "mi",
-                    si: selectedRuntime === "si",
-                };
-
-                await Promise.all(
-                    RUNTIME_DEFINITIONS.map((runtime) =>
-                        wsClient.setConfiguration({
-                            section: runtime.section,
-                            value: nextState[runtime.key],
-                        }),
-                    ),
-                );
-
-                setRuntimeState(nextState);
+                await persistSelectedProfile(selectedRuntime);
+                setRuntimeState(getStateForSelectedProfile(selectedRuntime));
             } catch (loadError) {
                 console.error("Failed to load profile settings:", loadError);
                 setError("Failed to load settings. Showing defaults.");
@@ -320,24 +331,13 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
 
         setError(null);
         const previousState = runtimeState;
-        const nextState: RuntimeConfigState = {
-            bi: runtimeKey === "bi",
-            mi: runtimeKey === "mi",
-            si: runtimeKey === "si",
-        };
+        const nextState = getStateForSelectedProfile(runtimeKey);
 
         setRuntimeState(nextState);
         setSavingRuntime(runtimeKey);
 
         try {
-            await Promise.all(
-                RUNTIME_DEFINITIONS.map((runtime) =>
-                    wsClient.setConfiguration({
-                        section: runtime.section,
-                        value: nextState[runtime.key],
-                    }),
-                ),
-            );
+            await persistSelectedProfile(runtimeKey);
         } catch (updateError) {
             console.error("Failed to update profile setting:", updateError);
             setRuntimeState(previousState);
@@ -436,7 +436,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                             ))}
                         </RuntimeList>
                         <Footer>
-                            <SecondaryButton type="button" onClick={() => wsClient.openSettings("integrator.enabledRuntimes")}>
+                            <SecondaryButton type="button" onClick={() => wsClient.openSettings("integrator.selectedProfile")}>
                                 Open Advanced Settings
                             </SecondaryButton>
                         </Footer>
