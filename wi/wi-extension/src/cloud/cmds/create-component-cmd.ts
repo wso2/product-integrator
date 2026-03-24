@@ -262,14 +262,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		}
 	}
 
-	/*
-	// todo: check if subscription available. if not, need to check create component count via
-	// const url = `${componentManagementApiUrl}/${orgUuid}/component-limits?originCloud=devant`;
-	const subscriptions = await ext.clients?.rpcClient?.getSubscriptions({
-		orgId: org.id.toString(),
-		cloudType: "devant",
-	})
-	*/
+	await checkComponentLimitReached(createParams, org);
 
 	// Verify if the source code has been pushed to remote repo
 	await checkIfSourcePushedToRemoteRepo(createParams, org, gitRoot!);
@@ -360,6 +353,45 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	}
 	return result;
 };
+
+const checkComponentLimitReached = async (createParams: CreateComponentReq[], org: Organization) => {
+	const subscriptions = await window.withProgress(
+		{ title: "Checking organization subscription...", location: ProgressLocation.Notification },
+		() =>
+			ext.clients?.rpcClient?.getSubscriptions({
+				orgId: org.id.toString(),
+				cloudType: "devant",
+			})
+	);
+	const isSubscribed = subscriptions?.list?.some(sub => sub.subscriptionType === 'devant-subscription');
+	if (!isSubscribed) {
+		const FREE_COMPONENT_LIMIT = 5;
+		const componentUsage = await window.withProgress(
+			{ title: "Checking integration usage within your organization...", location: ProgressLocation.Notification },
+			() =>
+				ext.clients?.rpcClient?.getComponentUsage({
+					orgId: org.id.toString(),
+					orgUuid: org.uuid,
+					cloudOrigin: "devant",
+				})
+		);
+		const remainingLimit = FREE_COMPONENT_LIMIT - componentUsage?.data?.billableComponentCount;
+		if (createParams?.length > remainingLimit) {
+			const limitReachedMsg = remainingLimit <= 0 ?
+				`Your organization has reached the free usage limit. Please upgrade your subscription to create more integrations` :
+				`You can only create ${remainingLimit} more integration(s). Please upgrade your subscription to create more integrations.`
+			window.showErrorMessage(limitReachedMsg, "Upgrade",).then((res) => {
+				if (res === "Upgrade") {
+					commands.executeCommand(
+						"vscode.open",
+						`${ext.config?.billingConsoleUrl}/cloud/devant/upgrade`,
+					);
+				}
+			});
+			throw new Error(limitReachedMsg);
+		}
+	}
+}
 
 
 const checkIfSourcePushedToRemoteRepo = async (createParams: CreateComponentReq[], org: Organization, gitRoot: string) => {

@@ -58,6 +58,8 @@ import type {
 	GetCommitsReq,
 	GetComponentEndpointsReq,
 	GetComponentItemReq,
+	GetComponentUsageReq,
+	GetComponentUsageResp,
 	GetComponentsReq,
 	GetConnectionGuideReq,
 	GetConnectionGuideResp,
@@ -734,6 +736,14 @@ export class ChoreoRPCClient implements IChoreoRPCClient {
 			throw new Error("RPC client is not initialized");
 		}
 		await this.client.sendRequest("component/changePrebuiltIntegrationRepository", params);
+	}
+
+	async getComponentUsage(params: GetComponentUsageReq): Promise<GetComponentUsageResp> {
+		if (!this.client) {
+			throw new Error("RPC client is not initialized");
+		}
+		const response: GetComponentUsageResp = await this.client.sendRequest("component/getComponentUsage", params);
+		return response;
 	}
 
 	async getConfigFromCli(): Promise<GetCliRpcResp> {
