@@ -21,6 +21,7 @@ import type {
 	BuildPackReq,
 	Buildpack,
 	CancelApprovalReq,
+	ChangePrebuiltIntegrationRepositoryReq,
 	CheckWorkflowStatusReq,
 	CheckWorkflowStatusResp,
 	CommitHistory,
@@ -57,6 +58,8 @@ import type {
 	GetCommitsReq,
 	GetComponentEndpointsReq,
 	GetComponentItemReq,
+	GetComponentUsageReq,
+	GetComponentUsageResp,
 	GetComponentsReq,
 	GetConnectionGuideReq,
 	GetConnectionGuideResp,
@@ -115,7 +118,7 @@ export class RPCClient {
 	private _conn: MessageConnection | undefined;
 	private static _instance: RPCClient;
 
-	private constructor() {}
+	private constructor() { }
 
 	async init() {
 		ext.log("Activating choreo rpc server");
@@ -726,6 +729,21 @@ export class ChoreoRPCClient implements IChoreoRPCClient {
 			throw new Error("RPC client is not initialized");
 		}
 		await this.client.sendRequest("component/updateCodeServer", params);
+	}
+
+	async changePrebuiltIntegrationRepository(params: ChangePrebuiltIntegrationRepositoryReq): Promise<void> {
+		if (!this.client) {
+			throw new Error("RPC client is not initialized");
+		}
+		await this.client.sendRequest("component/changePrebuiltIntegrationRepository", params);
+	}
+
+	async getComponentUsage(params: GetComponentUsageReq): Promise<GetComponentUsageResp> {
+		if (!this.client) {
+			throw new Error("RPC client is not initialized");
+		}
+		const response: GetComponentUsageResp = await this.client.sendRequest("component/getComponentUsage", params);
+		return response;
 	}
 
 	async getConfigFromCli(): Promise<GetCliRpcResp> {

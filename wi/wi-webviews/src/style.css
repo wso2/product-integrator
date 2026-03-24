@@ -35,6 +35,7 @@
 	--welcome-library-accent: #3AADA5;
 	--welcome-project-accent: #C07D18;
 	--welcome-import-accent: #7C5FB5;
+	--welcome-open-project-accent: #4B7FA2;
 
 	--button-primary-background: var(--wso2-brand-primary);
 	--button-primary-hover-background: var(--wso2-brand-primary-alt);
