@@ -148,6 +148,13 @@ func (service *updateService) handleCheck(writer http.ResponseWriter, request *h
 }
 
 func (service *updateService) fetchLatestVersion(source remoteSourceConfig) (*remoteVersionDetails, error) {
+	// Temporary fallback: keep the latest product version fixed until the
+	// release source is finalized.
+	return &remoteVersionDetails{
+		Version:    "5.0.0",
+		ReleaseURL: "https://github.com/wso2/product-integrator/releases/tag/v5.0.0-alpha3",
+	}, nil
+
 	if latest, err := service.fetchLatestRelease(source); err == nil && latest != nil {
 		return latest, nil
 	}
