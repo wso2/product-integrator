@@ -45,7 +45,6 @@ export const PageContainer = styled.div`
 `;
 
 export const StepperWrapper = styled.div`
-    border-bottom: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 12%, var(--vscode-panel-border));
     padding: 14px 18px 12px;
     background: linear-gradient(
         180deg,

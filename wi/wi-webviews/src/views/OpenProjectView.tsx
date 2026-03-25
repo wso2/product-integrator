@@ -671,8 +671,8 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                     {cloneSuccess
                         ? "The project was cloned. Check the prompt in your editor to open it."
                         : cloningError
-                        ? "Something went wrong — you can try again below."
-                        : "Review and confirm before cloning"}
+                            ? "Something went wrong — you can try again below."
+                            : "Review and confirm before cloning"}
                 </FormPanelSubtitle>
             </FormPanelHeader>
             <FormBody>
@@ -937,22 +937,10 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
 
     const headerTitle = "Open Project";
     const headerSubtitle = "Clone a cloud project or open an existing local folder.";
-    const panelTitle = selectedProject ? null : "Cloud Projects";
-    const panelSubtitle = !selectedProject && org ? "Select a project to clone it to your local machine." : null;
 
     return (
         <PageBackdrop>
             <PageContainer>
-                <HeaderRow>
-                    <BackButton type="button" onClick={handleBack} title="Back">
-                        <Codicon name="arrow-left" iconSx={{ fontSize: "18px", color: "var(--vscode-foreground)" }} />
-                    </BackButton>
-                    <HeaderText>
-                        <HeaderTitle variant="h2">{headerTitle}</HeaderTitle>
-                        <HeaderSubtitle>{headerSubtitle}</HeaderSubtitle>
-                    </HeaderText>
-                </HeaderRow>
-
                 <FormPanel>
                     {selectedProject ? (
                         renderConfirm(selectedProject)
@@ -960,10 +948,15 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                         <>
                             <FormPanelHeader>
                                 <FormPanelHeaderRow>
-                                    <div>
-                                        <FormPanelTitle>{panelTitle}</FormPanelTitle>
-                                        {panelSubtitle && <FormPanelSubtitle>{panelSubtitle}</FormPanelSubtitle>}
-                                    </div>
+                                    <HeaderRow>
+                                        <BackButton type="button" onClick={handleBack} title="Back">
+                                            <Codicon name="arrow-left" iconSx={{ fontSize: "18px", color: "var(--vscode-foreground)" }} />
+                                        </BackButton>
+                                        <HeaderText>
+                                            <HeaderTitle variant="h2">{headerTitle}</HeaderTitle>
+                                            <HeaderSubtitle>{headerSubtitle}</HeaderSubtitle>
+                                        </HeaderText>
+                                    </HeaderRow>
                                     {orgs.length > 1 && (
                                         <OrgSwitcherWrapper ref={orgSwitcherRef}>
                                             <OrgTriggerButton

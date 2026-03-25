@@ -83,9 +83,7 @@ const TopSection = styled.div`
         --welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
         --welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent) 34%, transparent);
         background:
-            radial-gradient(circle at 10% 100%, color-mix(in srgb, var(--wso2-brand-accent) 40%, transparent) 0%, transparent 42%),
-            radial-gradient(circle at 72% 18%, color-mix(in srgb, var(--wso2-brand-white) 94%, transparent) 0%, transparent 34%),
-            linear-gradient(110deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-soft) 28%, var(--wso2-brand-white) 100%);
+            linear-gradient(110deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-soft) 100%);
     }
 `;
 

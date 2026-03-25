@@ -43,7 +43,7 @@ export const PageContainer = styled.div`
 export const HeaderRow = styled.header`
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: 8px;
 `;
 
 /** Icon-only back button. */
