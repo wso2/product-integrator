@@ -1096,7 +1096,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                     </HeaderText>
                 </HeaderRow>
 
-                <FormPanel style={view === "landing" ? { flex: "none" } : undefined}>
+                <FormPanel variant={view === "landing" ? "compact" : "default"}>
                     {selectedProject ? (
                         renderConfirm(selectedProject)
                     ) : view === "landing" ? (

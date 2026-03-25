@@ -99,8 +99,8 @@ export const HeaderSubtitle = styled.p`
 `;
 
 /** The bordered card that wraps the form. */
-export const FormPanel = styled.section`
-    flex: 1;
+export const FormPanel = styled.section<{ variant?: "default" | "compact" }>`
+    flex: ${({ variant }: { variant?: "default" | "compact" }) => (variant === "compact" ? "none" : 1)};
     min-height: 0;
     display: flex;
     flex-direction: column;
