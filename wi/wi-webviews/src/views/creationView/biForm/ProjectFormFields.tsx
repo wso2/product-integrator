@@ -34,7 +34,7 @@ import {
 import { PackageInfoSection } from "./components";
 import { Organization } from "./components/PackageInfoSection";
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
-import { ProjectFormData } from "./types";
+import { DEFAULT_PROJECT_NAME, ProjectFormData } from "./types";
 
 // Re-export for backwards compatibility
 export type { ProjectFormData } from "./types";
@@ -136,7 +136,7 @@ export function ProjectFormFields({
         hasUserToggledCreateWithinProject.current = true;
         setPathTouched(false);
         if (checked) {
-            const projectName = formData.withinProjectName || "Default";
+            const projectName = formData.withinProjectName || DEFAULT_PROJECT_NAME;
             onFormDataChange({ createWithinProject: true, withinProjectName: projectName });
         } else {
             onFormDataChange({ createWithinProject: false, withinProjectName: "" });
@@ -179,7 +179,7 @@ export function ProjectFormFields({
                 hasAutoInitializedProjectMode.current = true;
                 const updates: Partial<ProjectFormData> = { createWithinProject: true };
                 if (!formData.withinProjectName) {
-                    updates.withinProjectName = "Default";
+                    updates.withinProjectName = DEFAULT_PROJECT_NAME;
                 }
                 onFormDataChange(updates);
             }
@@ -303,7 +303,7 @@ export function ProjectFormFields({
                         setPathTouched(false);
                         const updates: Partial<ProjectFormData> = { ...data };
                         if (!withinProjectNameTouched && !formData.withinProjectName) {
-                            updates.withinProjectName = "Default";
+                            updates.withinProjectName = DEFAULT_PROJECT_NAME;
                         }
                         onFormDataChange(updates);
                         return;

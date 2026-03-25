@@ -16,6 +16,11 @@
  * under the License.
  */
 
+export const DEFAULT_PROJECT_NAME = "Default";
+export const DEFAULT_PACKAGE_NAME = "untitled";
+export const DEFAULT_INTEGRATION_NAME = "Untitled";
+export const DEFAULT_LIBRARY_NAME = "Untitled";
+
 /**
  * Base form data shared between add/create integration forms
  */
