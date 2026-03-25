@@ -147,6 +147,18 @@ function resolveBrowserTheme(): VSCodeCssTheme {
 	return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
+function applyBundledFontVariables() {
+	const rootStyle = document.documentElement.style;
+	rootStyle.setProperty(
+		"--vscode-font-family",
+		"'Inter', 'Segoe UI', Ubuntu, 'Droid Sans', sans-serif",
+	);
+	rootStyle.setProperty(
+		"--vscode-editor-font-family",
+		"'Inter', 'Segoe UI', Ubuntu, 'Droid Sans', sans-serif",
+	);
+}
+
 export function renderWebview(target: HTMLElement) {
 	const mode = resolveBridgeBootstrap();
 	const hasVsCodeApi = typeof (globalThis as { acquireVsCodeApi?: unknown }).acquireVsCodeApi === "function";
@@ -156,6 +168,8 @@ export function renderWebview(target: HTMLElement) {
 		const overrides = theme === "light" ? LIGHT_BROWSER_VSCODE_OVERRIDES : DARK_BROWSER_VSCODE_OVERRIDES;
 		injectVSCodeCssVariables(overrides, undefined, theme);
 	}
+
+	applyBundledFontVariables();
 
 	const reactRoot = ReactDOM.createRoot(target);
 	reactRoot.render(
