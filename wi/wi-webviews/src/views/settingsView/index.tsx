@@ -16,8 +16,13 @@
  * under the License.
  */
 
-import { Icon, ProgressIndicator } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
+import {
+    Dropdown,
+    Icon,
+    type OptionProps,
+    ProgressIndicator,
+} from "@wso2/ui-toolkit";
 import { useEffect, useState } from "react";
 import { useVisualizerContext } from "../../contexts/WsContext";
 import {
@@ -36,45 +41,24 @@ type SelectedProfileValue = "Default" | "WSO2 Integrator: MI" | "WSO2 Integrator
 type LegacyProfileValue = "bi" | "mi" | "si";
 const SELECTED_PROFILE_SECTION = "integrator.selectedProfile";
 
-interface EnableConfirmationState {
-    runtimeProfile: SelectedProfileValue;
-    runtimeLabel: string;
-    extensionName: string;
-}
-
-interface RuntimeDefinition {
-    profile: SelectedProfileValue;
-    description?: string;
-    extensionName: string;
-}
-
-const RUNTIME_DEFINITIONS: RuntimeDefinition[] = [
-    {
-        profile: "Default",
-        extensionName: "Ballerina Integrator extension",
-    },
-    {
-        profile: "WSO2 Integrator: MI",
-        description: "Enable the Micro Integrator profile templates and samples.",
-        extensionName: "WSO2 Micro Integrator extension",
-    },
-    {
-        profile: "WSO2 Integrator: SI",
-        description: "Enable the Stream Integrator profile templates and samples.",
-        extensionName: "WSO2 Stream Integrator extension",
-    },
+const PROFILES: SelectedProfileValue[] = [
+    "Default",
+    "WSO2 Integrator: MI",
+    "WSO2 Integrator: SI",
 ];
 
-const RuntimeDescription = styled.p`
-    margin: 8px 0 0;
-    font-size: 12px;
-    color: var(--vscode-descriptionForeground);
-`;
+const PROFILE_OPTIONS: OptionProps[] = PROFILES.map((profile) => ({
+    id: profile,
+    value: profile,
+    content: profile,
+}));
 
 function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
-    return value === "Default"
-        || value === "WSO2 Integrator: MI"
-        || value === "WSO2 Integrator: SI";
+    return (
+        value === "Default" ||
+        value === "WSO2 Integrator: MI" ||
+        value === "WSO2 Integrator: SI"
+    );
 }
 
 function isLegacyProfileValue(value: unknown): value is LegacyProfileValue {
@@ -126,39 +110,33 @@ const PanelBody = styled(FormBody)`
     display: flex;
     flex-direction: column;
     gap: 12px;
+    padding: 28px;
 `;
 
-const RuntimeList = styled.div`
+const RuntimeField = styled.div`
     display: flex;
     flex-direction: column;
     gap: 12px;
 `;
 
-const RuntimeItem = styled.div`
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 12%, var(--vscode-panel-border));
-    border-radius: 10px;
-    padding: 12px;
-    background: color-mix(in srgb, var(--wso2-brand-primary) 4%, var(--vscode-editor-background));
+const DropdownShell = styled.div`
+    max-width: 320px;
 `;
 
-const RuntimeHeader = styled.div`
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-`;
+const profileDropdownSx = {
+    width: "100%",
+};
 
-const RuntimeOption = styled.label`
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    user-select: none;
-`;
-
-const RuntimeRadio = styled.input`
-    margin: 0;
-`;
+const profileDropdownContainerSx = {
+    position: "relative",
+    "& vscode-dropdown::part(listbox)": {
+        position: "absolute !important",
+        top: "100% !important",
+        bottom: "auto !important",
+        transform: "none !important",
+        marginTop: "2px !important",
+    },
+};
 
 const ErrorText = styled.div`
     padding: 10px 12px;
@@ -169,28 +147,6 @@ const ErrorText = styled.div`
     font-size: 12px;
 `;
 
-const Footer = styled.div`
-    margin-top: 4px;
-    display: flex;
-    justify-content: flex-end;
-`;
-
-const SecondaryButton = styled.button`
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 30%, var(--vscode-button-border));
-    background: color-mix(in srgb, var(--wso2-brand-accent) 10%, transparent);
-    color: var(--vscode-foreground);
-    border-radius: 8px;
-    height: 30px;
-    padding: 0 12px;
-    font-size: 12px;
-    cursor: pointer;
-
-    &:focus-visible {
-        outline: 1px solid var(--vscode-focusBorder);
-        outline-offset: 2px;
-    }
-`;
-
 const Loader = styled.div`
     display: flex;
     align-items: center;
@@ -198,80 +154,11 @@ const Loader = styled.div`
     height: 100%;
 `;
 
-const ConfirmBackdrop = styled.div`
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: color-mix(in srgb, var(--vscode-editor-background) 45%, transparent);
-    backdrop-filter: blur(1px);
-    z-index: 1000;
-`;
-
-const ConfirmDialog = styled.div`
-    width: min(460px, calc(100vw - 32px));
-    border-radius: 12px;
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 20%, var(--vscode-panel-border));
-    background: var(--vscode-editor-background);
-    box-shadow: 0 16px 32px color-mix(in srgb, var(--wso2-brand-neutral-900) 25%, transparent);
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-`;
-
-const ConfirmTitle = styled.h4`
-    margin: 0;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--vscode-foreground);
-`;
-
-const ConfirmDescription = styled.p`
-    margin: 0;
-    font-size: 12px;
-    color: var(--vscode-descriptionForeground);
-    line-height: 1.45;
-`;
-
-const ConfirmActions = styled.div`
-    margin-top: 6px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-`;
-
-const ConfirmButton = styled.button<{ primary?: boolean }>`
-    border: 1px solid
-        ${(props: { primary?: boolean }) =>
-        props.primary
-            ? "color-mix(in srgb, var(--wso2-brand-primary) 55%, var(--vscode-button-border))"
-            : "color-mix(in srgb, var(--wso2-brand-accent) 30%, var(--vscode-button-border))"};
-    background:
-        ${(props: { primary?: boolean }) =>
-        props.primary
-            ? "var(--wso2-brand-primary)"
-            : "color-mix(in srgb, var(--wso2-brand-accent) 10%, transparent)"};
-    color: ${(props: { primary?: boolean }) => (props.primary ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)")};
-    border-radius: 8px;
-    height: 30px;
-    padding: 0 12px;
-    font-size: 12px;
-    cursor: pointer;
-
-    &:focus-visible {
-        outline: 1px solid var(--vscode-focusBorder);
-        outline-offset: 2px;
-    }
-`;
-
 export function SettingsView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
     const [selectedProfile, setSelectedProfile] = useState<SelectedProfileValue>("Default");
     const [isLoading, setIsLoading] = useState(true);
     const [savingRuntime, setSavingRuntime] = useState<SelectedProfileValue | null>(null);
-    const [pendingEnableConfirmation, setPendingEnableConfirmation] = useState<EnableConfirmationState | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const persistSelectedProfile = async (profile: SelectedProfileValue) => {
@@ -325,11 +212,6 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
     }, [wsClient]);
 
     const applyRuntimeSelection = async (runtimeProfile: SelectedProfileValue) => {
-        const runtimeDefinition = RUNTIME_DEFINITIONS.find((runtime) => runtime.profile === runtimeProfile);
-        if (!runtimeDefinition) {
-            return;
-        }
-
         if (selectedProfile === runtimeProfile) {
             return;
         }
@@ -351,33 +233,6 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
         }
     };
 
-    const handleRuntimeSelect = (runtimeProfile: SelectedProfileValue) => {
-        const runtimeDefinition = RUNTIME_DEFINITIONS.find((runtime) => runtime.profile === runtimeProfile);
-        if (!runtimeDefinition) {
-            return;
-        }
-
-        if (selectedProfile !== runtimeProfile) {
-            setPendingEnableConfirmation({
-                runtimeProfile,
-                runtimeLabel: runtimeDefinition.profile,
-                extensionName: runtimeDefinition.extensionName,
-            });
-            return;
-        }
-
-        void applyRuntimeSelection(runtimeProfile);
-    };
-
-    const confirmEnableRuntime = async () => {
-        if (!pendingEnableConfirmation) {
-            return;
-        }
-        const runtimeProfile = pendingEnableConfirmation.runtimeProfile;
-        setPendingEnableConfirmation(null);
-        await applyRuntimeSelection(runtimeProfile);
-    };
-
     if (isLoading) {
         return (
             <PageBackdrop>
@@ -393,7 +248,6 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
     return (
         <PageBackdrop>
             <PageContainer>
-
                 <FormPanel>
                     <FormPanelHeader>
                         <HeaderRow>
@@ -414,55 +268,24 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                     <PanelBody>
                         <div style={{ marginBottom: '5px'}}>Select your Integration Profile.</div>
                         {error && <ErrorText>{error}</ErrorText>}
-                        <RuntimeList>
-                            {RUNTIME_DEFINITIONS.map((runtime) => (
-                                <RuntimeItem key={runtime.profile}>
-                                    <RuntimeHeader>
-                                        <RuntimeOption>
-                                            <RuntimeRadio
-                                                type="radio"
-                                                name="selected-runtime"
-                                                checked={selectedProfile === runtime.profile}
-                                                disabled={savingRuntime !== null}
-                                                onChange={() => {
-                                                    handleRuntimeSelect(runtime.profile);
-                                                }}
-                                            />
-                                            <span>{runtime.profile}</span>
-                                        </RuntimeOption>
-                                    </RuntimeHeader>
-                                    {runtime.description && <RuntimeDescription>{runtime.description}</RuntimeDescription>}
-                                </RuntimeItem>
-                            ))}
-                        </RuntimeList>
+                        <RuntimeField>
+                            <DropdownShell>
+                                <Dropdown
+                                    id="selected-runtime"
+                                    items={PROFILE_OPTIONS}
+                                    value={selectedProfile}
+                                    disabled={savingRuntime !== null}
+                                    onValueChange={(value: string) => {
+                                        void applyRuntimeSelection(value as SelectedProfileValue);
+                                    }}
+                                    sx={profileDropdownSx}
+                                    containerSx={profileDropdownContainerSx}
+                                />
+                            </DropdownShell>
+                        </RuntimeField>
                     </PanelBody>
                 </FormPanel>
             </PageContainer>
-            {pendingEnableConfirmation && (
-                <ConfirmBackdrop>
-                    <ConfirmDialog role="dialog" aria-modal="true" aria-label="Select profile confirmation">
-                        <ConfirmTitle>Select Profile</ConfirmTitle>
-                        <ConfirmDescription>
-                            Selecting {pendingEnableConfirmation.runtimeLabel} will download the{" "}
-                            {pendingEnableConfirmation.extensionName}. Do you want to continue?
-                        </ConfirmDescription>
-                        <ConfirmActions>
-                            <ConfirmButton type="button" onClick={() => setPendingEnableConfirmation(null)}>
-                                Cancel
-                            </ConfirmButton>
-                            <ConfirmButton
-                                type="button"
-                                primary
-                                onClick={() => {
-                                    void confirmEnableRuntime();
-                                }}
-                            >
-                                Select Profile
-                            </ConfirmButton>
-                        </ConfirmActions>
-                    </ConfirmDialog>
-                </ConfirmBackdrop>
-            )}
         </PageBackdrop>
     );
 }
