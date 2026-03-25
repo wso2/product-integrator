@@ -43,7 +43,8 @@ echo '{
       "https://console.devant.dev"
     ],
     "trustedExtensionProtocolHandlers": [
-      "wso2.wso2-platform"
+      "wso2.wso2-platform",
+      "wso2.wso2-integrator"
     ],
     "trustedExtensionAuthAccess": [
       "vscode.git", "vscode.github",
@@ -51,6 +52,7 @@ echo '{
       "github.copilot", "github.copilot-chat",
       "wso2.ballerina", "wso2.ballerina-integrator",
       "wso2.wso2-platform",
+      "wso2.wso2-integrator",
       "wso2.micro-integrator"
     ],
     "aiConfig": {
