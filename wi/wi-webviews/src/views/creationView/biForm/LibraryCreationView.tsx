@@ -155,15 +155,15 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         setFormData(prev => ({ ...prev, path: result.path }));
     };
 
-    const handleSkipProjectToggle = (checked: boolean) => {
+    const handleCreateWithinProjectToggle = (checked: boolean) => {
         if (checked) {
-            setCreateWithinProject(false);
-            setWithinProjectName("");
-        } else {
             setCreateWithinProject(true);
             if (!withinProjectName) {
                 setWithinProjectName("Default");
             }
+        } else {
+            setCreateWithinProject(false);
+            setWithinProjectName("");
         }
     };
 
@@ -307,12 +307,12 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                     </ProjectFieldCollapse>
                                     <SkipOptionRow>
                                         <CheckBox
-                                            label="Skip create within a project"
-                                            checked={!createWithinProject}
-                                            onChange={handleSkipProjectToggle}
+                                            label="Create within a project"
+                                            checked={createWithinProject}
+                                            onChange={handleCreateWithinProjectToggle}
                                         />
                                         <Description style={{ marginTop: "6px" }}>
-                                            Create the integration directly without a project. Use this for simple, single-purpose integrations that don't require project-level organization.
+                                            Enable project mode to manage multiple integrations and libraries within a single repository.
                                         </Description>
                                     </SkipOptionRow>
                                 </ProjectSectionContainer>
