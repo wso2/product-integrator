@@ -21,13 +21,8 @@ import { COMMANDS, ProductUpdateCheckResponse, ViewType } from "@wso2/wi-core";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
 import { ProductUpdateServiceClient } from "./services/productUpdateServiceClient";
-import { BallerinaUpdateServiceClient } from "./services/ballerinaUpdateServiceClient";
-import { BIUpdateServiceClient } from "./services/biUpdateServiceClient";
-import { MIUpdateServiceClient } from "./services/miUpdateServiceClient";
-import { ICPUpdateServiceClient } from "./services/icpUpdateServiceClient";
 
 const BACKGROUND_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const STARTUP_BALLERINA_CHECK_DELAY_MS = 10 * 1000;
 
 interface UpdateNotifier {
 	checkForUpdates: (request: { force?: boolean }) => Promise<ProductUpdateCheckResponse>;
@@ -73,24 +68,6 @@ async function showUpdateResult(
 	}
 }
 
-async function showAllUpdateResults(
-	productUpdateService: ProductUpdateServiceClient,
-	ballerinaUpdateService: BallerinaUpdateServiceClient,
-	biUpdateService: BIUpdateServiceClient,
-	miUpdateService: MIUpdateServiceClient,
-	icpUpdateService: ICPUpdateServiceClient,
-	force: boolean,
-	showNonUpdateMessages: boolean,
-): Promise<void> {
-	await Promise.all([
-		showUpdateResult(productUpdateService, force, showNonUpdateMessages, "Open Release Notes"),
-		showUpdateResult(ballerinaUpdateService, force, showNonUpdateMessages, "Open Ballerina Release Notes"),
-		showUpdateResult(biUpdateService, force, showNonUpdateMessages, "Open BI Release Notes"),
-		showUpdateResult(miUpdateService, force, showNonUpdateMessages, "Open MI Release Notes"),
-		showUpdateResult(icpUpdateService, force, showNonUpdateMessages, "Open ICP Release Notes"),
-	]);
-}
-
 /**
  * Activate the extension
  */
@@ -100,10 +77,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 	try {
 		const productUpdateService = new ProductUpdateServiceClient(context);
-		const ballerinaUpdateService = new BallerinaUpdateServiceClient(context);
-		const biUpdateService = new BIUpdateServiceClient(context);
-		const miUpdateService = new MIUpdateServiceClient(context);
-		const icpUpdateService = new ICPUpdateServiceClient(context);
 		context.subscriptions.push(
 			vscode.commands.registerCommand(COMMANDS.OPEN_WELCOME, () => {
 				try {
@@ -116,15 +89,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		);
 		context.subscriptions.push(
 			vscode.commands.registerCommand(COMMANDS.CHECK_FOR_UPDATES, async () => {
-				await showAllUpdateResults(
-					productUpdateService,
-					ballerinaUpdateService,
-					biUpdateService,
-					miUpdateService,
-					icpUpdateService,
-					true,
-					true,
-				);
+				await showUpdateResult(productUpdateService, true, true, "Open Release Notes");
 			}),
 		);
 
@@ -137,41 +102,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		StateMachine.initialize();
 
 		void showUpdateResult(productUpdateService, true, false, "Open Release Notes");
-		const startupBallerinaCheck = setTimeout(() => {
-			void showUpdateResult(ballerinaUpdateService, true, false, "Open Ballerina Release Notes");
-		}, STARTUP_BALLERINA_CHECK_DELAY_MS);
-		const startupBICheck = setTimeout(() => {
-			void showUpdateResult(biUpdateService, true, false, "Open BI Release Notes");
-		}, STARTUP_BALLERINA_CHECK_DELAY_MS);
-		const startupMICheck = setTimeout(() => {
-			void showUpdateResult(miUpdateService, true, false, "Open MI Release Notes");
-		}, STARTUP_BALLERINA_CHECK_DELAY_MS);
-		const startupICPCheck = setTimeout(() => {
-			void showUpdateResult(icpUpdateService, true, false, "Open ICP Release Notes");
-		}, STARTUP_BALLERINA_CHECK_DELAY_MS);
 		const backgroundUpdateCheck = setInterval(() => {
-			void showAllUpdateResults(
-				productUpdateService,
-				ballerinaUpdateService,
-				biUpdateService,
-				miUpdateService,
-				icpUpdateService,
-				true,
-				false,
-			);
+			void showUpdateResult(productUpdateService, true, false, "Open Release Notes");
 		}, BACKGROUND_UPDATE_CHECK_INTERVAL_MS);
-		context.subscriptions.push({
-			dispose: () => clearTimeout(startupBallerinaCheck),
-		});
-		context.subscriptions.push({
-			dispose: () => clearTimeout(startupBICheck),
-		});
-		context.subscriptions.push({
-			dispose: () => clearTimeout(startupMICheck),
-		});
-		context.subscriptions.push({
-			dispose: () => clearTimeout(startupICPCheck),
-		});
 		context.subscriptions.push({
 			dispose: () => clearInterval(backgroundUpdateCheck),
 		});
