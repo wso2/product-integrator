@@ -109,40 +109,34 @@ export function CreationView({
     return (
         <PageBackdrop>
             <PageContainer>
-                <HeaderRow>
-                    <BackButton type="button" onClick={gotToWelcome} title="Go back">
-                        <Icon
-                            name="arrow-left"
-                            isCodicon
-                            sx={{
-                                width: "16px",
-                                height: "16px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                            }}
-                            iconSx={{
-                                color: "var(--vscode-foreground)",
-                                fontSize: "16px",
-                                lineHeight: 1,
-                            }}
-                        />
-                    </BackButton>
-                    <HeaderText>
-                        <HeaderTitle variant="h2">Create Integration</HeaderTitle>
-                        <HeaderSubtitle>
-                            Start building a new integration.
-                        </HeaderSubtitle>
-                    </HeaderText>
-                </HeaderRow>
                 <FormPanel>
                     <FormPanelHeader>
-                        <FormPanelTitle>
-                            {RUNTIME_DISPLAY_LABEL[projectType]} Project
-                        </FormPanelTitle>
-                        <FormPanelSubtitle>
-                            {CREATION_RUNTIME_HELP[projectType]}
-                        </FormPanelSubtitle>
+                        <HeaderRow>
+                            <BackButton type="button" onClick={gotToWelcome} title="Go back">
+                                <Icon
+                                    name="arrow-left"
+                                    isCodicon
+                                    sx={{
+                                        width: "16px",
+                                        height: "16px",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                    }}
+                                    iconSx={{
+                                        color: "var(--vscode-foreground)",
+                                        fontSize: "16px",
+                                        lineHeight: 1,
+                                    }}
+                                />
+                            </BackButton>
+                            <HeaderText>
+                                <HeaderTitle variant="h2">Create Integration</HeaderTitle>
+                                <HeaderSubtitle>
+                                    Start building a new integration.
+                                </HeaderSubtitle>
+                            </HeaderText>
+                        </HeaderRow>
                     </FormPanelHeader>
                     <FormBody>
                         {projectType === "WSO2: BI" && <BIProjectForm />}
