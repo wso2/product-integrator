@@ -34,7 +34,7 @@ import {
 import { PackageInfoSection } from "./components";
 import { Organization } from "./components/PackageInfoSection";
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
-import { ProjectFormData } from "./types";
+import { DEFAULT_PROJECT_NAME, ProjectFormData } from "./types";
 
 // Re-export for backwards compatibility
 export type { ProjectFormData } from "./types";
@@ -115,9 +115,6 @@ export function ProjectFormFields({
         if (!packageNameTouched) {
             const sanitized = sanitizePackageName(value);
             updates.packageName = sanitized;
-            if (!withinProjectNameTouched) {
-                updates.withinProjectName = sanitized ? sanitized + "_project" : "";
-            }
         }
         onFormDataChange(updates);
     };
@@ -135,14 +132,14 @@ export function ProjectFormFields({
         }
     };
 
-    const handleSkipProjectToggle = (checked: boolean) => {
+    const handleCreateWithinProjectToggle = (checked: boolean) => {
         hasUserToggledCreateWithinProject.current = true;
         setPathTouched(false);
         if (checked) {
-            onFormDataChange({ createWithinProject: false, withinProjectName: "" });
-        } else {
-            const projectName = formData.packageName ? formData.packageName + "_project" : "";
+            const projectName = formData.withinProjectName || DEFAULT_PROJECT_NAME;
             onFormDataChange({ createWithinProject: true, withinProjectName: projectName });
+        } else {
+            onFormDataChange({ createWithinProject: false, withinProjectName: "" });
         }
     };
 
@@ -181,8 +178,8 @@ export function ProjectFormFields({
             ) {
                 hasAutoInitializedProjectMode.current = true;
                 const updates: Partial<ProjectFormData> = { createWithinProject: true };
-                if (!formData.withinProjectName && formData.packageName) {
-                    updates.withinProjectName = formData.packageName + "_project";
+                if (!formData.withinProjectName) {
+                    updates.withinProjectName = DEFAULT_PROJECT_NAME;
                 }
                 onFormDataChange(updates);
             }
@@ -257,12 +254,12 @@ export function ProjectFormFields({
                     </ProjectFieldCollapse>
                     <SkipOptionRow>
                         <CheckBox
-                            label="Skip create within a project"
-                            checked={!formData.createWithinProject}
-                            onChange={handleSkipProjectToggle}
+                            label="Create within a project"
+                            checked={formData.createWithinProject}
+                            onChange={handleCreateWithinProjectToggle}
                         />
                         <Description style={{ marginTop: "6px" }}>
-                            Create the integration directly without a project. Use this for simple, single-purpose integrations that don't require project-level organization.
+                            Enable project mode to manage multiple integrations and libraries within a single repository.
                         </Description>
                     </SkipOptionRow>
                 </ProjectSectionContainer>
@@ -305,8 +302,8 @@ export function ProjectFormFields({
                         if (packageNameError) setPackageNameError(null);
                         setPathTouched(false);
                         const updates: Partial<ProjectFormData> = { ...data };
-                        if (!withinProjectNameTouched) {
-                            updates.withinProjectName = data.packageName ? data.packageName + "_project" : "";
+                        if (!withinProjectNameTouched && !formData.withinProjectName) {
+                            updates.withinProjectName = DEFAULT_PROJECT_NAME;
                         }
                         onFormDataChange(updates);
                         return;

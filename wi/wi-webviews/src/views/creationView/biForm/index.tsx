@@ -24,7 +24,7 @@ import {
     ButtonWrapper
 } from "./styles";
 import { ProjectFormFields } from "./ProjectFormFields";
-import { ProjectFormData } from "./types";
+import { DEFAULT_INTEGRATION_NAME, DEFAULT_PROJECT_NAME, ProjectFormData } from "./types";
 import { validatePackageName } from "./utils";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { useCloudContext } from "../../../providers";
@@ -34,13 +34,13 @@ export function BIProjectForm() {
     const { authState } = useCloudContext();
     const organizations = (authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined);
     const [formData, setFormData] = useState<ProjectFormData>({
-        integrationName: "untitled",
+        integrationName: DEFAULT_INTEGRATION_NAME,
         packageName: "untitled",
         path: "",
         createAsWorkspace: false,
         workspaceName: "",
         createWithinProject: false,
-        withinProjectName: "untitled_project",
+        withinProjectName: DEFAULT_PROJECT_NAME,
         orgName: "",
         version: "",
         isLibrary: false,

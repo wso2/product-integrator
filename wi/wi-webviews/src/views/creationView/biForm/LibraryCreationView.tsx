@@ -42,6 +42,7 @@ import {
     FormContent,
     FormFooter,
 } from "../../shared/FormPageLayout";
+import { DEFAULT_LIBRARY_NAME, DEFAULT_PACKAGE_NAME, DEFAULT_PROJECT_NAME } from "./types";
 
 const FieldGroup = styled.div`
     margin-bottom: 20px;
@@ -66,7 +67,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
     const [createWithinProject, setCreateWithinProject] = useState(false);
-    const [withinProjectName, setWithinProjectName] = useState("untitled_project");
+    const [withinProjectName, setWithinProjectName] = useState(DEFAULT_PROJECT_NAME);
     const [libraryNameError, setLibraryNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
@@ -74,8 +75,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
     const [formData, setFormData] = useState<LibraryFormData>({
-        libraryName: "untitled",
-        packageName: "untitled",
+        libraryName: DEFAULT_LIBRARY_NAME,
+        packageName: DEFAULT_PACKAGE_NAME,
         path: "",
         orgName: "",
         version: "",
@@ -143,8 +144,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             libraryName: value,
             packageName: packageNameTouched ? prev.packageName : sanitized,
         }));
-        if (!packageNameTouched && !withinProjectNameTouched) {
-            setWithinProjectName(sanitized ? sanitized + "_project" : "");
+        if (!packageNameTouched && !withinProjectNameTouched && !withinProjectName) {
+            setWithinProjectName(DEFAULT_PROJECT_NAME);
         }
     };
 
@@ -155,15 +156,15 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         setFormData(prev => ({ ...prev, path: result.path }));
     };
 
-    const handleSkipProjectToggle = (checked: boolean) => {
+    const handleCreateWithinProjectToggle = (checked: boolean) => {
         if (checked) {
+            setCreateWithinProject(true);
+            if (!withinProjectName) {
+                setWithinProjectName(DEFAULT_PROJECT_NAME);
+            }
+        } else {
             setCreateWithinProject(false);
             setWithinProjectName("");
-        } else {
-            setCreateWithinProject(true);
-            if (!withinProjectName && formData.packageName) {
-                setWithinProjectName(formData.packageName + "_project");
-            }
         }
     };
 
@@ -305,12 +306,12 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                     </ProjectFieldCollapse>
                                     <SkipOptionRow>
                                         <CheckBox
-                                            label="Skip create within a project"
-                                            checked={!createWithinProject}
-                                            onChange={handleSkipProjectToggle}
+                                            label="Create within a project"
+                                            checked={createWithinProject}
+                                            onChange={handleCreateWithinProjectToggle}
                                         />
                                         <Description style={{ marginTop: "6px" }}>
-                                            Create the integration directly without a project. Use this for simple, single-purpose integrations that don't require project-level organization.
+                                            Enable project mode to manage multiple integrations and libraries within a single repository.
                                         </Description>
                                     </SkipOptionRow>
                                 </ProjectSectionContainer>
@@ -345,8 +346,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                     if (data.packageName !== undefined) {
                                         setPackageNameTouched(data.packageName.length > 0);
                                         if (packageNameError) setPackageNameError(null);
-                                        if (!withinProjectNameTouched) {
-                                            setWithinProjectName(data.packageName ? data.packageName + "_project" : "");
+                                        if (!withinProjectNameTouched && !withinProjectName) {
+                                            setWithinProjectName(DEFAULT_PROJECT_NAME);
                                         }
                                     }
                                     setFormData(prev => ({ ...prev, ...data }));

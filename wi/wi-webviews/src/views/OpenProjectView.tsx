@@ -245,11 +245,9 @@ const BackToListButton = styled.button`
 // ── Landing choice card styles ────────────────────────────────────────────────
 
 const LandingWrapper = styled.div`
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 400px;
     padding: 32px 24px;
 `;
 
@@ -266,7 +264,7 @@ const ChoiceCard = styled.button`
     align-items: center;
     justify-content: center;
     gap: 0;
-    padding: 120px 20px;
+    padding: 60px 20px;
     border-radius: 10px;
     border: 1px solid var(--vscode-panel-border);
     background: color-mix(in srgb, var(--vscode-foreground) 3%, transparent);
@@ -1088,7 +1086,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     return (
         <PageBackdrop>
             <PageContainer>
-                <FormPanel>
+                <FormPanel variant={view === "landing" ? "compact" : "default"}>
                     <FormPanelHeader>
                         <HeaderRow>
                             <BackButton type="button" onClick={handleBack} title="Back">

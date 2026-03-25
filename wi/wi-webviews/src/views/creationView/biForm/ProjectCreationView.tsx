@@ -41,6 +41,7 @@ import {
     FormFooter,
 } from "../../shared/FormPageLayout";
 import { ResolvedPathText } from "../biForm/styles";
+import { DEFAULT_PROJECT_NAME } from "./types";
 
 const FieldGroup = styled.div`
     margin-bottom: 20px;
@@ -72,7 +73,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const [pathError, setPathError] = useState<string | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
     const [formData, setFormData] = useState({
-        projectName: "untitled",
+        projectName: DEFAULT_PROJECT_NAME,
         path: "",
         orgName: "",
         version: "",
