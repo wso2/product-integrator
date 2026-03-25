@@ -99,8 +99,8 @@ echo '{
       },
       {
         "name": "wso2.wso2-integrator",
-        "vsix": "../../wi/wi-extension/wso2-integrator-0.2.0.vsix",
-        "version": "0.2.0"
+        "vsix": "../../wi/wi-extension/wso2-integrator-0.2.1.vsix",
+        "version": "0.2.1"
       }
 	  ],
     "runtimeEnv": {
