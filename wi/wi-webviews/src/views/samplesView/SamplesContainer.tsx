@@ -40,7 +40,6 @@ const Toolbar = styled.div`
     flex-direction: column;
     gap: 10px;
     padding: 16px 18px 14px;
-    border-bottom: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 10%, var(--vscode-panel-border));
     background: linear-gradient(
         180deg,
         color-mix(in srgb, var(--wso2-brand-accent) 4%, var(--vscode-editor-background)) 0%,
@@ -226,31 +225,29 @@ const CardFooter = styled.div`
     margin-top: auto;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: 8px;
+    width: 100%;
 `;
 
-const Availability = styled.span<{ isAvailable: boolean }>`
-    display: inline-flex;
-    align-items: center;
-    border-radius: 999px;
-    padding: 4px 8px;
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: none;
-    letter-spacing: 0;
-    color: ${(props: { isAvailable: boolean }) =>
-        props.isAvailable ? "var(--vscode-foreground)" : "var(--vscode-descriptionForeground)"};
-    border: 1px solid
-        ${(props: { isAvailable: boolean }) =>
-            props.isAvailable
-                ? "color-mix(in srgb, var(--wso2-brand-accent) 52%, transparent)"
-                : "var(--vscode-input-border)"};
-    background:
-        ${(props: { isAvailable: boolean }) =>
-            props.isAvailable
-                ? "color-mix(in srgb, var(--wso2-brand-accent) 24%, transparent)"
-                : "color-mix(in srgb, var(--vscode-input-background) 75%, transparent)"};
+const DownloadAction = styled.div`
+    width: 100%;
+    opacity: 0;
+    transform: translateY(4px);
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+
+    .sample-card:hover & {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
+
+    @media (hover: none) {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
 `;
 
 const LoaderWrapper = styled.div`
@@ -432,10 +429,6 @@ export function SamplesContainer(props: SamplesContainerProps) {
     return (
         <SamplesRoot>
             <Toolbar>
-                <ToolbarTitleRow>
-                    <ToolbarTitle>Samples</ToolbarTitle>
-                    <ToolbarSubtitle>Choose a starter project and download it to your workspace.</ToolbarSubtitle>
-                </ToolbarTitleRow>
                 <FiltersRow>
                     <div>
                         <FilterLabel>Category</FilterLabel>
@@ -457,15 +450,6 @@ export function SamplesContainer(props: SamplesContainerProps) {
                         />
                     </SearchContainer>
                 </FiltersRow>
-                <MetaRow>
-                    <ResultCount>
-                        <Codicon name="list-selection" />
-                        Showing {filteredSamples.length} of {samples.length}
-                    </ResultCount>
-                    {selectedCategory !== "All" && (
-                        <ActiveFilter>{selectedCategory}</ActiveFilter>
-                    )}
-                </MetaRow>
             </Toolbar>
             <SamplesViewport>
                 {isLoading ? (
@@ -475,10 +459,12 @@ export function SamplesContainer(props: SamplesContainerProps) {
                 ) : filteredSamples.length > 0 ? (
                     <SampleGrid>
                         {filteredSamples.map((sample) => {
-                            const isAvailable = sample.isAvailable === true;
                             const categoryName = categoryTitleById[sample.category] || "Sample";
                             return (
-                                <SampleCard key={`${sample.category}-${sample.zipFileName}`}>
+                                <SampleCard
+                                    key={`${sample.category}-${sample.zipFileName}`}
+                                    className="sample-card"
+                                >
                                     <CardHeader>
                                         <CardTitle>{sample.title}</CardTitle>
                                         <CategoryLabel>{categoryName}</CategoryLabel>
@@ -491,16 +477,16 @@ export function SamplesContainer(props: SamplesContainerProps) {
                                     </IconFrame>
                                     <Description>{sample.description}</Description>
                                     <CardFooter>
-                                        <Availability isAvailable={isAvailable}>
-                                            {isAvailable ? "Available" : "Coming Soon"}
-                                        </Availability>
-                                        <Button
-                                            appearance={isAvailable ? "primary" : "secondary"}
-                                            disabled={!isAvailable}
-                                            onClick={() => downloadSample(sample.zipFileName)}
-                                        >
-                                            {isAvailable ? "Download" : "Unavailable"}
-                                        </Button>
+                                        <DownloadAction>
+                                            <Button
+                                                appearance="primary"
+                                                sx={{ width: "100%" }}
+                                                onClick={() => downloadSample(sample.zipFileName)}
+                                                buttonSx={{ width: "100%" }}
+                                            >
+                                                Download
+                                            </Button>
+                                        </DownloadAction>
                                     </CardFooter>
                                 </SampleCard>
                             );

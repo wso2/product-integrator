@@ -203,7 +203,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2C
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,23 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -224,17 +224,14 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2C
 +export const WI_SHOW_LOGIN_COMMAND_ID = 'wso2.integrator.showLogin';
 +
 +// WSO2 Platform Extension constants
-+export const WSO2_PLATFORM_EXTENSION_ID = 'wso2.wso2-platform';
-+export const WSO2_PLATFORM_PROVIDER_ID = 'wso2-platform'; // Authentication provider ID
-+export const WSO2_PLATFORM_SIGN_IN_COMMAND = 'wso2.wso2-platform.sign.in';
-+export const WSO2_PLATFORM_LOGOUT_COMMAND_ID = 'wso2.wso2-platform.sign.out';
-+export const WSO2_PLATFORM_CHECK_LOGIN_COMMAND = 'wso2.wso2-platform.check.login';
-+export const WSO2_PLATFORM_CANCEL_SIGN_IN_COMMAND = 'wso2.wso2-platform.cancel.sign.in';
++export const WSO2_PLATFORM_PROVIDER_ID = 'wso2-wi'; // Authentication provider ID
++export const WSO2_PLATFORM_LOGOUT_COMMAND_ID = 'wso2.integrator.cloud.auth.signOut';
++export const WSO2_PLATFORM_CANCEL_SIGN_IN_COMMAND = 'wso2.integrator.cloud.auth.cancelSignIn';
 Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
-@@ -0,0 +1,631 @@
+@@ -0,0 +1,667 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -252,6 +249,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +import { IWebviewElement, IWebviewService } from '../../../contrib/webview/browser/webview.js';
 +// eslint-disable-next-line local/code-import-patterns
 +import { asWebviewUri } from '../../../contrib/webview/common/webview.js';
++// eslint-disable-next-line local/code-import-patterns
++import { WebviewThemeDataProvider } from '../../../contrib/webview/browser/themeing.js';
 +import { IExtensionService } from '../../../services/extensions/common/extensions.js';
 +import { WI_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND_ID, WI_EMBEDDED_WELCOME_VIEW_TYPE, WI_EXTENSION_ID } from './wso2Constants.js';
 +import { WSO2LoginDialog } from './wso2LoginDialog.js';
@@ -260,6 +259,13 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +	mode: 'proxy' | 'websocket';
 +	wsServer: string;
 +	wsPort: number;
++}
++
++interface IEmbeddedWelcomeThemeData {
++	activeTheme: string;
++	themeLabel: string;
++	themeId: string;
++	styles: Readonly<Record<string, string>>;
 +}
 +
 +const embeddedWelcomeBridgeLoaderIcon = encodeURIComponent(`
@@ -331,6 +337,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +
 +	private readonly container: HTMLElement;
 +	private readonly embeddedWebview = this._register(new MutableDisposable<IWebviewElement>());
++	private readonly webviewThemeDataProvider: WebviewThemeDataProvider;
 +	private enabled = false;
 +	private workbenchState: WorkbenchState;
 +	private renderRequestId = 0;
@@ -346,6 +353,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		@IWebviewService private readonly webviewService: IWebviewService
 +	) {
 +		super();
++
++		this.webviewThemeDataProvider = this._register(this.instantiationService.createInstance(WebviewThemeDataProvider));
 +
 +		this.workbenchState = this.contextService.getWorkbenchState();
 +
@@ -521,6 +530,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +
 +		const resourcesRoot = joinPath(extension.extensionLocation, 'resources');
 +		const scriptUri = asWebviewUri(joinPath(resourcesRoot, 'jslibs', 'main.js')).toString(true);
++		const themeData = this.getEmbeddedWelcomeThemeData();
 +		const webview = this.webviewService.createWebviewElement({
 +			providedViewType: WI_EMBEDDED_WELCOME_VIEW_TYPE,
 +			title: 'WSO2 Integrator',
@@ -542,7 +552,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +
 +		this.embeddedWebview.value = webview;
 +		webview.mountTo(host, getWindow(host));
-+		webview.setHtml(this.getEmbeddedWelcomeHtml(scriptUri, bootstrap));
++		webview.setHtml(this.getEmbeddedWelcomeHtml(scriptUri, bootstrap, themeData));
 +	}
 +
 +	private showLoginDialogIfNeeded(): void {
@@ -582,8 +592,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		WSO2EditorGroupWatermark.activeLoginDialogPromise = loginDialogPromise;
 +	}
 +
-+	private getEmbeddedWelcomeHtml(scriptUri: string, bootstrap: IEmbeddedWelcomeBootstrap): string {
++	private getEmbeddedWelcomeHtml(scriptUri: string, bootstrap: IEmbeddedWelcomeBootstrap, themeData: IEmbeddedWelcomeThemeData): string {
 +		const serializedBootstrap = JSON.stringify(bootstrap).replace(/</g, '\\u003c');
++		const serializedThemeData = JSON.stringify(themeData).replace(/</g, '\\u003c');
 +
 +		return `<!DOCTYPE html>
 +				<html lang="en">
@@ -714,6 +725,29 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +					</style>
 +				</head>
 +				<body>
++					<script>
++						(function () {
++							var themeData = ${serializedThemeData};
++							var rootStyle = document.documentElement.style;
++							for (var name in themeData.styles) {
++								if (Object.prototype.hasOwnProperty.call(themeData.styles, name)) {
++									rootStyle.setProperty('--' + name, themeData.styles[name]);
++								}
++							}
++
++							document.body.classList.remove('vscode-light', 'vscode-dark', 'vscode-high-contrast', 'vscode-high-contrast-light');
++							if (themeData.activeTheme) {
++								document.body.classList.add(themeData.activeTheme);
++								if (themeData.activeTheme === 'vscode-high-contrast-light') {
++									document.body.classList.add('vscode-high-contrast');
++								}
++							}
++
++							document.body.dataset.vscodeThemeKind = themeData.activeTheme || '';
++							document.body.dataset.vscodeThemeName = themeData.themeLabel || '';
++							document.body.dataset.vscodeThemeId = themeData.themeId || '';
++						})();
++					</script>
 +					<div class="embedded-welcome-loader">
 +						<div class="embedded-welcome-loader-visual">
 +							<svg class="embedded-welcome-loader-svg" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
@@ -727,43 +761,42 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +						<div class="embedded-welcome-loader-text">Loading WSO2 Integrator...</div>
 +					</div>
 +					<div id="root"></div>
-+						<script>
-+							window.__WI_BRIDGE_BOOTSTRAP = ${serializedBootstrap};
-+							window.__WI_EMBEDDED_WELCOME_HIDE_LOADER = function () {
-+								document.body.classList.add('embedded-welcome-ready');
-+							};
-+							document.addEventListener('DOMContentLoaded', function () {
-+								var render = function () {
-+									try {
-+										window.wiWebview.renderWebview(document.getElementById('root'));
-+									} catch (error) {
-+										console.error('Failed to render embedded welcome webview:', error);
-+									} finally {
-+									window.requestAnimationFrame(function () {
-+										window.requestAnimationFrame(function () {
-+											window.__WI_EMBEDDED_WELCOME_HIDE_LOADER();
-+										});
-+										});
-+									}
-+								};
-+
-+								var loadScript = function () {
-+									var script = document.createElement('script');
-+									script.src = ${JSON.stringify(scriptUri)};
-+									script.onload = render;
-+									script.onerror = function () {
-+										console.error('Failed to load embedded welcome bundle');
-+									};
-+									document.body.appendChild(script);
-+								};
-+
++					<script>
++						window.__WI_BRIDGE_BOOTSTRAP = ${serializedBootstrap};
++						window.__WI_EMBEDDED_WELCOME_HIDE_LOADER = function () {
++							document.body.classList.add('embedded-welcome-ready');
++						};
++						document.addEventListener('DOMContentLoaded', function () {
++							try {
++								window.wiWebview.renderWebview(document.getElementById('root'));
++							} catch (error) {
++								console.error('Failed to render embedded welcome webview:', error);
++							} finally {
 +								window.requestAnimationFrame(function () {
-+									window.requestAnimationFrame(loadScript);
++									window.requestAnimationFrame(function () {
++										window.__WI_EMBEDDED_WELCOME_HIDE_LOADER();
++									});
 +								});
-+							});
-+						</script>
++							}
++						});
++					</script>
++					<script defer src=${JSON.stringify(scriptUri)}></script>
 +					</body>
 +				</html>`;
++	}
++
++	private getEmbeddedWelcomeThemeData(): IEmbeddedWelcomeThemeData {
++		const themeData = this.webviewThemeDataProvider.getWebviewThemeData();
++		const styles = Object.keys(themeData.styles).reduce<Record<string, string>>((result, key) => {
++			result[key] = String(themeData.styles[key]);
++			return result;
++		}, {});
++		return {
++			activeTheme: themeData.activeTheme,
++			themeLabel: themeData.themeLabel,
++			themeId: themeData.themeId,
++			styles
++		};
 +	}
 +
 +	private isCurrentRenderRequest(requestId: number): boolean {

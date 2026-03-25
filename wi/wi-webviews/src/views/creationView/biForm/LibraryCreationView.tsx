@@ -252,27 +252,25 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     return (
         <PageBackdrop>
             <PageContainer>
-                <HeaderRow>
-                    <BackButton type="button" onClick={() => onBack?.()} title="Go back">
-                        <Icon
-                            name="arrow-left"
-                            isCodicon
-                            sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                            iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
-                        />
-                    </BackButton>
-                    <HeaderText>
-                        <HeaderTitle variant="h2">Create Library</HeaderTitle>
-                        <HeaderSubtitle>
-                            Build reusable components and utilities to share across projects.
-                        </HeaderSubtitle>
-                    </HeaderText>
-                </HeaderRow>
 
                 <FormPanel>
                     <FormPanelHeader>
-                        <FormPanelTitle>Library Details</FormPanelTitle>
-                        <FormPanelSubtitle>Configure the name, package, and location of your library.</FormPanelSubtitle>
+                        <HeaderRow>
+                            <BackButton type="button" onClick={() => onBack?.()} title="Go back">
+                                <Icon
+                                    name="arrow-left"
+                                    isCodicon
+                                    sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                                    iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
+                                />
+                            </BackButton>
+                            <HeaderText>
+                                <HeaderTitle variant="h2">Create Library</HeaderTitle>
+                                <HeaderSubtitle>
+                                    Build reusable components and utilities to share across projects.
+                                </HeaderSubtitle>
+                            </HeaderText>
+                        </HeaderRow>
                     </FormPanelHeader>
                     <FormBody>
                         <FormContent>

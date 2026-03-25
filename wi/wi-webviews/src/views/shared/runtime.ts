@@ -20,7 +20,8 @@ import type { WsClient } from "../../network-bridge/WsClient";
 
 export type WIRuntime = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 export type SampleSupportedRuntime = Exclude<WIRuntime, "WSO2: SI">;
-type ProfileKey = "bi" | "mi" | "si";
+type SelectedProfileValue = "Default" | "WSO2 Integrator: MI" | "WSO2 Integrator: SI";
+type LegacyProfileValue = "bi" | "mi" | "si";
 
 export const RUNTIME_PRIORITY: WIRuntime[] = [
 	"WSO2: BI",
@@ -51,14 +52,39 @@ const RUNTIME_CONFIG_SECTIONS: Record<WIRuntime, string> = {
 
 const PROFILE_CONFIG_SECTION = "integrator.selectedProfile";
 
-const PROFILE_RUNTIME_MAP: Record<ProfileKey, WIRuntime> = {
-	bi: "WSO2: BI",
-	mi: "WSO2: MI",
-	si: "WSO2: SI",
+const PROFILE_RUNTIME_MAP: Record<SelectedProfileValue, WIRuntime> = {
+	Default: "WSO2: BI",
+	"WSO2 Integrator: MI": "WSO2: MI",
+	"WSO2 Integrator: SI": "WSO2: SI",
 };
 
-function isProfileKey(value: unknown): value is ProfileKey {
+function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
+	return value === "Default"
+		|| value === "WSO2 Integrator: MI"
+		|| value === "WSO2 Integrator: SI";
+}
+
+function isLegacyProfileValue(value: unknown): value is LegacyProfileValue {
 	return value === "bi" || value === "mi" || value === "si";
+}
+
+function normalizeProfileValue(value: unknown): SelectedProfileValue | undefined {
+	if (isSelectedProfileValue(value)) {
+		return value;
+	}
+
+	if (!isLegacyProfileValue(value)) {
+		return undefined;
+	}
+
+	switch (value) {
+		case "bi":
+			return "Default";
+		case "mi":
+			return "WSO2 Integrator: MI";
+		case "si":
+			return "WSO2 Integrator: SI";
+	}
 }
 
 export async function loadEnabledRuntimes(
@@ -68,8 +94,9 @@ export async function loadEnabledRuntimes(
 		section: PROFILE_CONFIG_SECTION,
 	});
 
-	if (isProfileKey(selectedProfileResponse?.value)) {
-		return [PROFILE_RUNTIME_MAP[selectedProfileResponse.value]];
+	const normalizedProfile = normalizeProfileValue(selectedProfileResponse?.value);
+	if (normalizedProfile) {
+		return [PROFILE_RUNTIME_MAP[normalizedProfile]];
 	}
 
 	const runtimeResponses = await Promise.all(

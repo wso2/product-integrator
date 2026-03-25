@@ -38,6 +38,7 @@ import { useVisualizerContext } from "../../contexts";
 import { useCloudContext } from "../../providers";
 import { DownloadProgress, ImportIntegrationResponse, ImportIntegrationWsRequest, MigrationTool } from "@wso2/wi-core";
 import { MigrateRequest } from "@wso2/wi-core";
+import { FormPanelHeader, HeaderRow } from "../shared/FormPageLayout";
 
 export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
@@ -90,7 +91,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
             parameters: importParams.parameters,
         };
         wsClient
-            
+
             .importIntegration(params)
             .then((response) => {
                 setMigrationCompleted(true);
@@ -131,7 +132,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
 
     const getMigrationTools = () => {
         wsClient
-            
+
             .getMigrationTools()
             .then((response) => {
                 console.log("Available migration tools:", response.tools);
@@ -176,31 +177,33 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     return (
         <PageBackdrop>
             <PageContainer>
-                <TitleContainer>
-                    <IconButton type="button" onClick={onBack} title="Go back">
-                        <Icon
-                            name="arrow-left"
-                            isCodicon
-                            sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                            iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
-                        />
-                    </IconButton>
-                    <HeaderText>
-                        <Typography variant="h2" sx={{ margin: 0, fontWeight: 600 }}>
-                            Migrate External Integration
-                        </Typography>
-                        <HeaderSubtitle>
-                            Convert your MuleSoft or TIBCO project into a new integration project.
-                        </HeaderSubtitle>
-                    </HeaderText>
-                </TitleContainer>
                 <ContentPanel>
-                    <StepperWrapper>
-                        <StepperContainer>
-                            <Stepper alignment="flex-start" steps={defaultSteps} currentStep={step} />
-                        </StepperContainer>
-                    </StepperWrapper>
+                    <FormPanelHeader>
+                        <HeaderRow>
+                            <IconButton type="button" onClick={onBack} title="Go back">
+                                <Icon
+                                    name="arrow-left"
+                                    isCodicon
+                                    sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                                    iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
+                                />
+                            </IconButton>
+                            <HeaderText>
+                                <Typography variant="h2" sx={{ margin: 0, fontWeight: 600 }}>
+                                    Migrate External Integration
+                                </Typography>
+                                <HeaderSubtitle>
+                                    Convert your MuleSoft or TIBCO project into a new integration project.
+                                </HeaderSubtitle>
+                            </HeaderText>
+                        </HeaderRow>
+                    </FormPanelHeader>
                     <FormContainer>
+                        <StepperWrapper>
+                            <StepperContainer>
+                                <Stepper alignment="flex-start" steps={defaultSteps} currentStep={step} />
+                            </StepperContainer>
+                        </StepperWrapper>
                         {step === 0 && (
                             <ImportIntegrationForm
                                 selectedIntegration={selectedIntegration}

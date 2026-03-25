@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { useVisualizerContext } from "../../contexts/WsContext";
 import {
     BackButton,
+    FormPanelHeader,
     HeaderRow,
     HeaderSubtitle,
     HeaderText,
@@ -29,11 +30,11 @@ import {
     PageBackdrop,
 } from "../shared/FormPageLayout";
 import {
-	RUNTIME_DISPLAY_LABEL,
-	type WIRuntime,
-	getDefaultRuntime,
-	loadEnabledRuntimes,
-	supportsSamples,
+    RUNTIME_DISPLAY_LABEL,
+    type WIRuntime,
+    getDefaultRuntime,
+    loadEnabledRuntimes,
+    supportsSamples,
 } from "../shared/runtime";
 import { SamplesContainer } from "./SamplesContainer";
 
@@ -149,33 +150,35 @@ export function SamplesView({ onBack, runtime }: { onBack?: () => void; runtime?
     return (
         <PageBackdrop>
             <PageContainer>
-                <HeaderRow>
-                    <BackButton type="button" onClick={gotToWelcome} title="Go back">
-                        <Icon
-                            name="arrow-left"
-                            isCodicon
-                            sx={{
-                                width: "16px",
-                                height: "16px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                            }}
-                            iconSx={{
-                                color: "var(--vscode-foreground)",
-                                fontSize: "16px",
-                                lineHeight: 1,
-                            }}
-                        />
-                    </BackButton>
-                    <HeaderText>
-                        <HeaderTitle variant="h2">Browse Samples</HeaderTitle>
-                        <HeaderSubtitle>
-                            Start quickly by downloading a curated integration sample for your selected profile.
-                        </HeaderSubtitle>
-                    </HeaderText>
-                </HeaderRow>
                 <ContentPanel>
+                    <FormPanelHeader>
+                        <HeaderRow>
+                            <BackButton type="button" onClick={gotToWelcome} title="Go back">
+                                <Icon
+                                    name="arrow-left"
+                                    isCodicon
+                                    sx={{
+                                        width: "16px",
+                                        height: "16px",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                    }}
+                                    iconSx={{
+                                        color: "var(--vscode-foreground)",
+                                        fontSize: "16px",
+                                        lineHeight: 1,
+                                    }}
+                                />
+                            </BackButton>
+                            <HeaderText>
+                                <HeaderTitle variant="h2">Browse Samples</HeaderTitle>
+                                <HeaderSubtitle>
+                                    Start quickly by downloading a curated integration sample for your selected profile.
+                                </HeaderSubtitle>
+                            </HeaderText>
+                        </HeaderRow>
+                    </FormPanelHeader>
                     {projectType && supportsSamples(projectType) ? (
                         <SamplesContainer projectType={projectType} />
                     ) : (

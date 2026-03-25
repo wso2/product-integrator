@@ -37,7 +37,8 @@ export enum ProjectType {
     SI = 'WSO2: SI',
     NONE = 'NONE'
 }
-type ProfileKey = 'bi' | 'mi' | 'si';
+type SelectedProfileValue = 'Default' | 'WSO2 Integrator: MI' | 'WSO2 Integrator: SI';
+type LegacyProfileValue = 'bi' | 'mi' | 'si';
 
 interface MachineContext {
     projectUri: string;
@@ -59,20 +60,44 @@ const runtimeConfigKeyByProjectType: Partial<Record<ProjectType, string>> = {
     [ProjectType.MI]: 'enabledRuntimes.mi',
     [ProjectType.SI]: 'enabledRuntimes.si'
 };
-const profileKeyByProjectType: Partial<Record<ProjectType, ProfileKey>> = {
-    [ProjectType.BI_BALLERINA]: 'bi',
-    [ProjectType.MI]: 'mi',
-    [ProjectType.SI]: 'si'
+const profileValueByProjectType: Partial<Record<ProjectType, SelectedProfileValue>> = {
+    [ProjectType.BI_BALLERINA]: 'Default',
+    [ProjectType.MI]: 'WSO2 Integrator: MI',
+    [ProjectType.SI]: 'WSO2 Integrator: SI'
 };
 
-const projectTypeByProfileKey: Record<ProfileKey, ProjectType> = {
+const projectTypeBySelectedProfileValue: Record<SelectedProfileValue, ProjectType> = {
+    Default: ProjectType.BI_BALLERINA,
+    'WSO2 Integrator: MI': ProjectType.MI,
+    'WSO2 Integrator: SI': ProjectType.SI
+};
+
+const projectTypeByLegacyProfileValue: Record<LegacyProfileValue, ProjectType> = {
     bi: ProjectType.BI_BALLERINA,
     mi: ProjectType.MI,
     si: ProjectType.SI
 };
 
-function isProfileKey(value: unknown): value is ProfileKey {
+function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
+    return value === 'Default'
+        || value === 'WSO2 Integrator: MI'
+        || value === 'WSO2 Integrator: SI';
+}
+
+function isLegacyProfileValue(value: unknown): value is LegacyProfileValue {
     return value === 'bi' || value === 'mi' || value === 'si';
+}
+
+function normalizeProfileValue(value: unknown): SelectedProfileValue | undefined {
+    if (isSelectedProfileValue(value)) {
+        return value;
+    }
+
+    if (!isLegacyProfileValue(value)) {
+        return undefined;
+    }
+
+    return profileValueByProjectType[projectTypeByLegacyProfileValue[value]];
 }
 
 const extensionDependencyByProjectType: Partial<Record<ProjectType, string>> = {
@@ -104,7 +129,7 @@ async function enableDetectedRuntime(projectType: ProjectType): Promise<void> {
     const config = vscode.workspace.getConfiguration('integrator');
     const isEnabled = config.get<boolean>(runtimeConfigKey, false);
     const selectedProfile = config.get<string>('selectedProfile');
-    const expectedProfile = profileKeyByProjectType[projectType];
+    const expectedProfile = profileValueByProjectType[projectType];
 
     if (!isEnabled) {
         await config.update(
@@ -132,8 +157,16 @@ function getDefaultIntegratorMode(): ProjectType[] {
     const config = vscode.workspace.getConfiguration("integrator");
     const selectedProfile = config.get<string>('selectedProfile');
 
-    if (isProfileKey(selectedProfile)) {
-        return [projectTypeByProfileKey[selectedProfile]];
+    const normalizedProfile = normalizeProfileValue(selectedProfile);
+    if (normalizedProfile) {
+        if (selectedProfile !== normalizedProfile) {
+            config.update(
+                'integrator.selectedProfile',
+                normalizedProfile,
+                vscode.ConfigurationTarget.Global
+            );
+        }
+        return [projectTypeBySelectedProfileValue[normalizedProfile]];
     }
 
     const biEnabled = config.get<boolean>("enabledRuntimes.bi", true);
@@ -147,7 +180,7 @@ function getDefaultIntegratorMode(): ProjectType[] {
 
     if (enabled.length === 0) {
         vscode.window.showWarningMessage(
-            'WSO2 Integrator: A profile must be selected. Re-selecting Default profile.',
+            'WSO2 Integrator: A profile must be selected. Re-selecting Default.',
             'Open Settings'
         ).then((selection) => {
             if (selection === 'Open Settings') {
@@ -157,10 +190,10 @@ function getDefaultIntegratorMode(): ProjectType[] {
                 );
             }
         });
-        // Restore BI in settings so the checkbox reflects reality
+        // Restore the default profile in settings so the selection reflects reality.
         config.update(
             'integrator.selectedProfile',
-            'bi',
+            'Default',
             vscode.ConfigurationTarget.Global
         );
         config.update(
@@ -171,7 +204,7 @@ function getDefaultIntegratorMode(): ProjectType[] {
         return [ProjectType.BI_BALLERINA];
     }
 
-    const fallbackProfile = profileKeyByProjectType[enabled[0]];
+    const fallbackProfile = profileValueByProjectType[enabled[0]];
     if (fallbackProfile) {
         config.update(
             'integrator.selectedProfile',

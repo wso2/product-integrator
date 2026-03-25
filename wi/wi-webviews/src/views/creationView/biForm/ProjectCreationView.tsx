@@ -178,27 +178,24 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     return (
         <PageBackdrop>
             <PageContainer>
-                <HeaderRow>
-                    <BackButton type="button" onClick={onBack} title="Go back">
-                        <Icon
-                            name="arrow-left"
-                            isCodicon
-                            sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                            iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
-                        />
-                    </BackButton>
-                    <HeaderText>
-                        <HeaderTitle variant="h2">Create Project</HeaderTitle>
-                        <HeaderSubtitle>
-                            Set up a new multi-integration workspace project.
-                        </HeaderSubtitle>
-                    </HeaderText>
-                </HeaderRow>
-
                 <FormPanel>
                     <FormPanelHeader>
-                        <FormPanelTitle>Project Details</FormPanelTitle>
-                        <FormPanelSubtitle>Configure the name and location of your project.</FormPanelSubtitle>
+                        <HeaderRow>
+                            <BackButton type="button" onClick={onBack} title="Go back">
+                                <Icon
+                                    name="arrow-left"
+                                    isCodicon
+                                    sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                                    iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
+                                />
+                            </BackButton>
+                            <HeaderText>
+                                <HeaderTitle variant="h2">Create Project</HeaderTitle>
+                                <HeaderSubtitle>
+                                    Set up a new multi-integration workspace project.
+                                </HeaderSubtitle>
+                            </HeaderText>
+                        </HeaderRow>
                     </FormPanelHeader>
                     <FormBody>
                         <FormContent>

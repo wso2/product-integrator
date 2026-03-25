@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, rmSync } from "fs";
 import * as path from "path";
 import {
     type ComponentKind,
@@ -222,12 +222,12 @@ const getSelected = async (items: { [key: string]: ContextItemEnriched }, prevSe
                 } as ContextItemEnriched;
             }
         }
+    }
 
-        const globalCompId: string | null | undefined = ext.context.globalState.get("code-server-component-id");
-        if (globalCompId) {
-            await ext.context.globalState.update("code-server-component-id", null);
-            await ext.context.workspaceState.update("code-server-component-id", globalCompId);
-        }
+    const globalCompId: string | null | undefined = ext.context.globalState.get("SOURCE_COMPONENT_ID");
+    if (globalCompId) {
+        await ext.context.globalState.update("SOURCE_COMPONENT_ID", null);
+        await ext.context.workspaceState.update("SOURCE_COMPONENT_ID", globalCompId);
     }
 
     let selected: ContextItemEnriched | undefined = undefined;
@@ -335,8 +335,8 @@ const getComponentsInfo = async (selected?: ContextItemEnriched): Promise<Contex
 };
 
 const getFilteredComponents = (components: ComponentKind[]) => {
-    const workspaceCompId: string | null | undefined = ext.context.workspaceState.get("code-server-component-id") || process.env.SOURCE_COMPONENT_ID;
-    if (ext.isDevantCloudEditor && process.env.CLOUD_INITIAL_ORG_ID && process.env.CLOUD_INITIAL_PROJECT_ID && workspaceCompId) {
+    const workspaceCompId: string | null | undefined = process.env.SOURCE_COMPONENT_ID;
+    if (workspaceCompId) {
         const filteredComps = components.filter((item) => item.metadata?.id === workspaceCompId);
         if (filteredComps.length === 1) {
             return filteredComps;
@@ -375,6 +375,13 @@ const mapComponentList = async (components: ComponentKind[], selected?: ContextI
                                 existsSync(subPathDir) &&
                                 !comps.some((item) => item.component?.metadata?.id === componentItem.metadata?.id)
                             ) {
+                                if (componentItem.metadata?.isPrebuilt && ext.isDevantCloudEditor) {
+                                    // if its a prebuilt integration(we are in the samples repo), we will remove the .git directory 
+                                    // thus making sure that when user tries to deploy it, we will update associated repo
+                                    ext.context.workspaceState.update("SOURCE_COMPONENT_ID", componentItem?.metadata?.id);
+                                    rmSync(path.join(gitRoot, ".git"), { recursive: true, force: true });
+                                    continue;
+                                }
                                 comps.push({
                                     component: componentItem,
                                     workspaceName: item.workspaceName,

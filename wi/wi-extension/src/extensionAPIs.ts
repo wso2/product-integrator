@@ -127,8 +127,12 @@ export class ExtensionAPIs {
 	 */
 	public async activateExtension(extensionName: string): Promise<void> {
 		const extension = vscode.extensions.getExtension(extensionName);
-		if (extension && !extension.isActive) {
+		if (extension) {
 			try {
+				if (extension.isActive) {
+					ext.log(`Extension ${extensionName} is already active`);
+					return;
+				}
 				await extension.activate();
 				ext.log(`Extension ${extensionName} activated successfully`);
 

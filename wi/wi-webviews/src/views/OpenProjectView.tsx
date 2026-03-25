@@ -712,8 +712,8 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                     {cloneSuccess
                         ? "The project was cloned. Check the prompt in your editor to open it."
                         : cloningError
-                        ? "Something went wrong — you can try again below."
-                        : "Review and confirm before cloning"}
+                            ? "Something went wrong — you can try again below."
+                            : "Review and confirm before cloning"}
                 </FormPanelSubtitle>
             </FormPanelHeader>
             <FormBody>
@@ -983,8 +983,8 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         view === "landing"
             ? "Choose how you'd like to open a project."
             : selectedProject
-            ? "Review and confirm before cloning."
-            : "Select a cloud project to clone to your machine.";
+                ? "Review and confirm before cloning."
+                : "Select a cloud project to clone to your machine.";
     const panelTitle = selectedProject ? null : view === "cloud" ? "Cloud Projects" : null;
     const panelSubtitle = !selectedProject && view === "cloud" && org ? "Select a project to clone it to your local machine." : null;
 
@@ -1086,17 +1086,18 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     return (
         <PageBackdrop>
             <PageContainer>
-                <HeaderRow>
-                    <BackButton type="button" onClick={handleBack} title="Back">
-                        <Codicon name="arrow-left" iconSx={{ fontSize: "18px", color: "var(--vscode-foreground)" }} />
-                    </BackButton>
-                    <HeaderText>
-                        <HeaderTitle variant="h2">{headerTitle}</HeaderTitle>
-                        <HeaderSubtitle>{headerSubtitle}</HeaderSubtitle>
-                    </HeaderText>
-                </HeaderRow>
-
                 <FormPanel variant={view === "landing" ? "compact" : "default"}>
+                    <FormPanelHeader>
+                        <HeaderRow>
+                            <BackButton type="button" onClick={handleBack} title="Back">
+                                <Codicon name="arrow-left" iconSx={{ fontSize: "18px", color: "var(--vscode-foreground)" }} />
+                            </BackButton>
+                            <HeaderText>
+                                <HeaderTitle variant="h2">{headerTitle}</HeaderTitle>
+                                <HeaderSubtitle>{headerSubtitle}</HeaderSubtitle>
+                            </HeaderText>
+                        </HeaderRow>
+                    </FormPanelHeader>
                     {selectedProject ? (
                         renderConfirm(selectedProject)
                     ) : view === "landing" ? (
