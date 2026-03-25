@@ -435,11 +435,6 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                                 </RuntimeItem>
                             ))}
                         </RuntimeList>
-                        <Footer>
-                            <SecondaryButton type="button" onClick={() => wsClient.openSettings("integrator.selectedProfile")}>
-                                Open Advanced Settings
-                            </SecondaryButton>
-                        </Footer>
                     </PanelBody>
                 </FormPanel>
             </PageContainer>
