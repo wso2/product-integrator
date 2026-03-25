@@ -97,7 +97,7 @@ echo '{
       },
       {
         "name": "wso2.micro-integrator",
-        "version": "3.1.526031212"
+        "version": "3.1.526032514"
       },
       {
         "name": "wso2.wso2-integrator",
