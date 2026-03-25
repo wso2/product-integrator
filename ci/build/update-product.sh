@@ -93,7 +93,7 @@ echo '{
       },
       {
         "name": "wso2.ballerina",
-        "version": "5.9.26031318"
+        "version": "5.9.26032514"
       },
       {
         "name": "wso2.micro-integrator",
