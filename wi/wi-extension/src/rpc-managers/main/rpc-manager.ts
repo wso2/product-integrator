@@ -48,7 +48,10 @@ import {
     FetchSamplesRequest,
     SemanticVersion,
     ValidateProjectFormRequest,
-    ValidateProjectFormResponse
+    ValidateProjectFormResponse,
+    ProductUpdateCheckRequest,
+    ProductUpdateCheckResponse,
+    ExternalUrlRequest
 } from "@wso2/wi-core";
 import { commands, window, workspace, MarkdownString } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
@@ -61,10 +64,13 @@ import { MigrationReportWebview } from "../../migration-report/webview";
 import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi-core";
 import { StateMachine } from "../../stateMachine";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core/lib/rpc-types/migrate-integration/interfaces";
+import { ext } from "../../extensionVariables";
+import { ProductUpdateServiceClient } from "../../services/productUpdateServiceClient";
 const platform = getPlatform();
 
 export class MainRpcManager implements WIVisualizerAPI {
     private subProjectReports: Map<string, string> = new Map();
+    private readonly productUpdateService = new ProductUpdateServiceClient(ext.context);
     constructor(private projectUri?: string) { }
 
     async getWebviewContext(): Promise<WebviewContext> {
@@ -81,6 +87,14 @@ export class MainRpcManager implements WIVisualizerAPI {
                 }
             });
         });
+    }
+
+    async checkProductUpdates(params: ProductUpdateCheckRequest): Promise<ProductUpdateCheckResponse> {
+        return this.productUpdateService.checkForUpdates(params);
+    }
+
+    async openExternalUrl(params: ExternalUrlRequest): Promise<void> {
+        return this.productUpdateService.openExternalUrl(params);
     }
 
     async closeWebview(): Promise<void> {
@@ -397,5 +411,3 @@ export class MainRpcManager implements WIVisualizerAPI {
         }
     }
 }
-
-
