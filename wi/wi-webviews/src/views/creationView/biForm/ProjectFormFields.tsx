@@ -135,14 +135,14 @@ export function ProjectFormFields({
         }
     };
 
-    const handleSkipProjectToggle = (checked: boolean) => {
+    const handleCreateWithinProjectToggle = (checked: boolean) => {
         hasUserToggledCreateWithinProject.current = true;
         setPathTouched(false);
         if (checked) {
-            onFormDataChange({ createWithinProject: false, withinProjectName: "" });
-        } else {
             const projectName = formData.packageName ? formData.packageName + "_project" : "";
             onFormDataChange({ createWithinProject: true, withinProjectName: projectName });
+        } else {
+            onFormDataChange({ createWithinProject: false, withinProjectName: "" });
         }
     };
 
@@ -257,12 +257,12 @@ export function ProjectFormFields({
                     </ProjectFieldCollapse>
                     <SkipOptionRow>
                         <CheckBox
-                            label="Skip create within a project"
-                            checked={!formData.createWithinProject}
-                            onChange={handleSkipProjectToggle}
+                            label="Create within a project"
+                            checked={formData.createWithinProject}
+                            onChange={handleCreateWithinProjectToggle}
                         />
                         <Description style={{ marginTop: "6px" }}>
-                            Create the integration directly without a project. Use this for simple, single-purpose integrations that don't require project-level organization.
+                            Enable project mode to manage multiple integrations and libraries within a single repository.
                         </Description>
                     </SkipOptionRow>
                 </ProjectSectionContainer>
