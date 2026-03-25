@@ -34,13 +34,13 @@ export function BIProjectForm() {
     const { authState } = useCloudContext();
     const organizations = (authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined);
     const [formData, setFormData] = useState<ProjectFormData>({
-        integrationName: "untitled",
-        packageName: "untitled",
+        integrationName: "Untitled",
+        packageName: "Untitled",
         path: "",
         createAsWorkspace: false,
         workspaceName: "",
         createWithinProject: false,
-        withinProjectName: "untitled_project",
+        withinProjectName: "Default",
         orgName: "",
         version: "",
         isLibrary: false,

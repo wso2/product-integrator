@@ -115,9 +115,6 @@ export function ProjectFormFields({
         if (!packageNameTouched) {
             const sanitized = sanitizePackageName(value);
             updates.packageName = sanitized;
-            if (!withinProjectNameTouched) {
-                updates.withinProjectName = sanitized ? sanitized + "_project" : "";
-            }
         }
         onFormDataChange(updates);
     };
@@ -139,7 +136,7 @@ export function ProjectFormFields({
         hasUserToggledCreateWithinProject.current = true;
         setPathTouched(false);
         if (checked) {
-            const projectName = formData.packageName ? formData.packageName + "_project" : "";
+            const projectName = formData.withinProjectName || "Default";
             onFormDataChange({ createWithinProject: true, withinProjectName: projectName });
         } else {
             onFormDataChange({ createWithinProject: false, withinProjectName: "" });
@@ -181,8 +178,8 @@ export function ProjectFormFields({
             ) {
                 hasAutoInitializedProjectMode.current = true;
                 const updates: Partial<ProjectFormData> = { createWithinProject: true };
-                if (!formData.withinProjectName && formData.packageName) {
-                    updates.withinProjectName = formData.packageName + "_project";
+                if (!formData.withinProjectName) {
+                    updates.withinProjectName = "Default";
                 }
                 onFormDataChange(updates);
             }
@@ -305,8 +302,8 @@ export function ProjectFormFields({
                         if (packageNameError) setPackageNameError(null);
                         setPathTouched(false);
                         const updates: Partial<ProjectFormData> = { ...data };
-                        if (!withinProjectNameTouched) {
-                            updates.withinProjectName = data.packageName ? data.packageName + "_project" : "";
+                        if (!withinProjectNameTouched && !formData.withinProjectName) {
+                            updates.withinProjectName = "Default";
                         }
                         onFormDataChange(updates);
                         return;

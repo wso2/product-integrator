@@ -66,7 +66,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
     const [createWithinProject, setCreateWithinProject] = useState(false);
-    const [withinProjectName, setWithinProjectName] = useState("untitled_project");
+    const [withinProjectName, setWithinProjectName] = useState("Default");
     const [libraryNameError, setLibraryNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
@@ -74,8 +74,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
     const [formData, setFormData] = useState<LibraryFormData>({
-        libraryName: "untitled",
-        packageName: "untitled",
+        libraryName: "Untitled",
+        packageName: "Untitled",
         path: "",
         orgName: "",
         version: "",
@@ -143,8 +143,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             libraryName: value,
             packageName: packageNameTouched ? prev.packageName : sanitized,
         }));
-        if (!packageNameTouched && !withinProjectNameTouched) {
-            setWithinProjectName(sanitized ? sanitized + "_project" : "");
+        if (!packageNameTouched && !withinProjectNameTouched && !withinProjectName) {
+            setWithinProjectName("Default");
         }
     };
 
@@ -161,8 +161,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             setWithinProjectName("");
         } else {
             setCreateWithinProject(true);
-            if (!withinProjectName && formData.packageName) {
-                setWithinProjectName(formData.packageName + "_project");
+            if (!withinProjectName) {
+                setWithinProjectName("Default");
             }
         }
     };
@@ -347,8 +347,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                     if (data.packageName !== undefined) {
                                         setPackageNameTouched(data.packageName.length > 0);
                                         if (packageNameError) setPackageNameError(null);
-                                        if (!withinProjectNameTouched) {
-                                            setWithinProjectName(data.packageName ? data.packageName + "_project" : "");
+                                        if (!withinProjectNameTouched && !withinProjectName) {
+                                            setWithinProjectName("Default");
                                         }
                                     }
                                     setFormData(prev => ({ ...prev, ...data }));
