@@ -21,56 +21,45 @@ import styled from "@emotion/styled";
 import { useEffect, useState } from "react";
 import { useVisualizerContext } from "../../contexts/WsContext";
 import {
-    PageBackdrop,
     BackButton,
-    HeaderRow,
-    HeaderText,
-    HeaderTitle,
-    HeaderSubtitle,
+    FormBody,
     FormPanel,
     FormPanelHeader,
-    FormPanelTitle,
-    FormPanelSubtitle,
-    FormBody,
+    HeaderRow,
+    HeaderSubtitle,
+    HeaderText,
+    HeaderTitle,
+    PageBackdrop,
 } from "../shared/FormPageLayout";
 
-type RuntimeKey = "bi" | "mi" | "si";
+type SelectedProfileValue = "Default" | "WSO2 Integrator: MI" | "WSO2 Integrator: SI";
+type LegacyProfileValue = "bi" | "mi" | "si";
 const SELECTED_PROFILE_SECTION = "integrator.selectedProfile";
 
-interface RuntimeConfigState {
-    bi: boolean;
-    mi: boolean;
-    si: boolean;
-}
-
 interface EnableConfirmationState {
-    runtimeKey: RuntimeKey;
+    runtimeProfile: SelectedProfileValue;
     runtimeLabel: string;
     extensionName: string;
 }
 
 interface RuntimeDefinition {
-    key: RuntimeKey;
-    label: string;
+    profile: SelectedProfileValue;
     description?: string;
     extensionName: string;
 }
 
 const RUNTIME_DEFINITIONS: RuntimeDefinition[] = [
     {
-        key: "bi",
-        label: "WSO2 Integrator: Default Profile",
+        profile: "Default",
         extensionName: "Ballerina Integrator extension",
     },
     {
-        key: "mi",
-        label: "WSO2 Integrator: MI Profile",
+        profile: "WSO2 Integrator: MI",
         description: "Enable the Micro Integrator profile templates and samples.",
         extensionName: "WSO2 Micro Integrator extension",
     },
     {
-        key: "si",
-        label: "WSO2 Integrator: SI Profile",
+        profile: "WSO2 Integrator: SI",
         description: "Enable the Stream Integrator profile templates and samples.",
         extensionName: "WSO2 Stream Integrator extension",
     },
@@ -82,16 +71,46 @@ const RuntimeDescription = styled.p`
     color: var(--vscode-descriptionForeground);
 `;
 
-function isRuntimeKey(value: unknown): value is RuntimeKey {
+function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
+    return value === "Default"
+        || value === "WSO2 Integrator: MI"
+        || value === "WSO2 Integrator: SI";
+}
+
+function isLegacyProfileValue(value: unknown): value is LegacyProfileValue {
     return value === "bi" || value === "mi" || value === "si";
 }
 
-function getStateForSelectedProfile(selectedProfile: RuntimeKey): RuntimeConfigState {
-    return {
-        bi: selectedProfile === "bi",
-        mi: selectedProfile === "mi",
-        si: selectedProfile === "si",
-    };
+function normalizeProfileValue(profileValue: unknown): SelectedProfileValue | undefined {
+    if (isSelectedProfileValue(profileValue)) {
+        return profileValue;
+    }
+
+    if (!isLegacyProfileValue(profileValue)) {
+        return undefined;
+    }
+
+    switch (profileValue) {
+        case "bi":
+            return "Default";
+        case "mi":
+            return "WSO2 Integrator: MI";
+        case "si":
+            return "WSO2 Integrator: SI";
+    }
+}
+
+function getProfileForEnabledRuntimes(enabled: Record<LegacyProfileValue, boolean>): SelectedProfileValue {
+    if (enabled.bi) {
+        return "Default";
+    }
+    if (enabled.mi) {
+        return "WSO2 Integrator: MI";
+    }
+    if (enabled.si) {
+        return "WSO2 Integrator: SI";
+    }
+    return "Default";
 }
 
 const PageContainer = styled.div`
@@ -107,12 +126,6 @@ const PanelBody = styled(FormBody)`
     display: flex;
     flex-direction: column;
     gap: 12px;
-`;
-
-const InfoText = styled.p`
-    margin: 0;
-    font-size: 12px;
-    color: var(--vscode-descriptionForeground);
 `;
 
 const RuntimeList = styled.div`
@@ -145,14 +158,6 @@ const RuntimeOption = styled.label`
 
 const RuntimeRadio = styled.input`
     margin: 0;
-`;
-
-const RuntimeState = styled.span<{ enabled: boolean }>`
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    color: ${(props: { enabled: boolean }) =>
-        props.enabled ? "var(--wso2-brand-primary)" : "var(--vscode-descriptionForeground)"};
 `;
 
 const ErrorText = styled.div`
@@ -240,14 +245,14 @@ const ConfirmActions = styled.div`
 const ConfirmButton = styled.button<{ primary?: boolean }>`
     border: 1px solid
         ${(props: { primary?: boolean }) =>
-            props.primary
-                ? "color-mix(in srgb, var(--wso2-brand-primary) 55%, var(--vscode-button-border))"
-                : "color-mix(in srgb, var(--wso2-brand-accent) 30%, var(--vscode-button-border))"};
+        props.primary
+            ? "color-mix(in srgb, var(--wso2-brand-primary) 55%, var(--vscode-button-border))"
+            : "color-mix(in srgb, var(--wso2-brand-accent) 30%, var(--vscode-button-border))"};
     background:
         ${(props: { primary?: boolean }) =>
-            props.primary
-                ? "var(--wso2-brand-primary)"
-                : "color-mix(in srgb, var(--wso2-brand-accent) 10%, transparent)"};
+        props.primary
+            ? "var(--wso2-brand-primary)"
+            : "color-mix(in srgb, var(--wso2-brand-accent) 10%, transparent)"};
     color: ${(props: { primary?: boolean }) => (props.primary ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)")};
     border-radius: 8px;
     height: 30px;
@@ -263,16 +268,16 @@ const ConfirmButton = styled.button<{ primary?: boolean }>`
 
 export function SettingsView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
-    const [runtimeState, setRuntimeState] = useState<RuntimeConfigState>({ bi: true, mi: false, si: false });
+    const [selectedProfile, setSelectedProfile] = useState<SelectedProfileValue>("Default");
     const [isLoading, setIsLoading] = useState(true);
-    const [savingRuntime, setSavingRuntime] = useState<RuntimeKey | null>(null);
+    const [savingRuntime, setSavingRuntime] = useState<SelectedProfileValue | null>(null);
     const [pendingEnableConfirmation, setPendingEnableConfirmation] = useState<EnableConfirmationState | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const persistSelectedProfile = async (selectedProfile: RuntimeKey) => {
+    const persistSelectedProfile = async (profile: SelectedProfileValue) => {
         await wsClient.setConfiguration({
             section: SELECTED_PROFILE_SECTION,
-            value: selectedProfile,
+            value: profile,
         });
     };
 
@@ -283,8 +288,12 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                     section: SELECTED_PROFILE_SECTION,
                 });
 
-                if (isRuntimeKey(selectedProfileResponse?.value)) {
-                    setRuntimeState(getStateForSelectedProfile(selectedProfileResponse.value));
+                const normalizedProfile = normalizeProfileValue(selectedProfileResponse?.value);
+                if (normalizedProfile) {
+                    if (selectedProfileResponse?.value !== normalizedProfile) {
+                        await persistSelectedProfile(normalizedProfile);
+                    }
+                    setSelectedProfile(normalizedProfile);
                     return;
                 }
 
@@ -294,22 +303,19 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                     wsClient.getConfiguration({ section: "integrator.enabledRuntimes.si" }),
                 ]);
 
-                const currentState: RuntimeConfigState = {
+                const currentState: Record<LegacyProfileValue, boolean> = {
                     bi: biResp?.value === true,
                     mi: miResp?.value === true,
                     si: siResp?.value === true,
                 };
 
-                const selectedRuntime = (Object.keys(currentState) as RuntimeKey[]).find(
-                    (runtimeKey) => currentState[runtimeKey],
-                ) ?? "bi";
-
-                await persistSelectedProfile(selectedRuntime);
-                setRuntimeState(getStateForSelectedProfile(selectedRuntime));
+                const fallbackProfile = getProfileForEnabledRuntimes(currentState);
+                await persistSelectedProfile(fallbackProfile);
+                setSelectedProfile(fallbackProfile);
             } catch (loadError) {
                 console.error("Failed to load profile settings:", loadError);
                 setError("Failed to load settings. Showing defaults.");
-                setRuntimeState({ bi: true, mi: false, si: false });
+                setSelectedProfile("Default");
             } finally {
                 setIsLoading(false);
             }
@@ -318,59 +324,58 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
         loadRuntimeSettings();
     }, [wsClient]);
 
-    const applyRuntimeSelection = async (runtimeKey: RuntimeKey) => {
-        const runtimeDefinition = RUNTIME_DEFINITIONS.find((runtime) => runtime.key === runtimeKey);
+    const applyRuntimeSelection = async (runtimeProfile: SelectedProfileValue) => {
+        const runtimeDefinition = RUNTIME_DEFINITIONS.find((runtime) => runtime.profile === runtimeProfile);
         if (!runtimeDefinition) {
             return;
         }
 
-        if (runtimeState[runtimeKey]) {
+        if (selectedProfile === runtimeProfile) {
             return;
         }
 
         setError(null);
-        const previousState = runtimeState;
-        const nextState = getStateForSelectedProfile(runtimeKey);
+        const previousProfile = selectedProfile;
 
-        setRuntimeState(nextState);
-        setSavingRuntime(runtimeKey);
+        setSelectedProfile(runtimeProfile);
+        setSavingRuntime(runtimeProfile);
 
         try {
-            await persistSelectedProfile(runtimeKey);
+            await persistSelectedProfile(runtimeProfile);
         } catch (updateError) {
             console.error("Failed to update profile setting:", updateError);
-            setRuntimeState(previousState);
+            setSelectedProfile(previousProfile);
             setError("Failed to save the setting. Please try again.");
         } finally {
             setSavingRuntime(null);
         }
     };
 
-    const handleRuntimeSelect = (runtimeKey: RuntimeKey) => {
-        const runtimeDefinition = RUNTIME_DEFINITIONS.find((runtime) => runtime.key === runtimeKey);
+    const handleRuntimeSelect = (runtimeProfile: SelectedProfileValue) => {
+        const runtimeDefinition = RUNTIME_DEFINITIONS.find((runtime) => runtime.profile === runtimeProfile);
         if (!runtimeDefinition) {
             return;
         }
 
-        if (!runtimeState[runtimeKey]) {
+        if (selectedProfile !== runtimeProfile) {
             setPendingEnableConfirmation({
-                runtimeKey,
-                runtimeLabel: runtimeDefinition.label,
+                runtimeProfile,
+                runtimeLabel: runtimeDefinition.profile,
                 extensionName: runtimeDefinition.extensionName,
             });
             return;
         }
 
-        void applyRuntimeSelection(runtimeKey);
+        void applyRuntimeSelection(runtimeProfile);
     };
 
     const confirmEnableRuntime = async () => {
         if (!pendingEnableConfirmation) {
             return;
         }
-        const runtimeKey = pendingEnableConfirmation.runtimeKey;
+        const runtimeProfile = pendingEnableConfirmation.runtimeProfile;
         setPendingEnableConfirmation(null);
-        await applyRuntimeSelection(runtimeKey);
+        await applyRuntimeSelection(runtimeProfile);
     };
 
     if (isLoading) {
@@ -388,46 +393,43 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
     return (
         <PageBackdrop>
             <PageContainer>
-                <HeaderRow>
-                    <BackButton type="button" onClick={onBack} title="Go back">
-                        <Icon
-                            name="arrow-left"
-                            isCodicon
-                            sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                            iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
-                        />
-                    </BackButton>
-                    <HeaderText>
-                        <HeaderTitle variant="h2">Settings</HeaderTitle>
-                        <HeaderSubtitle>Settings related to WSO2 Integrator.</HeaderSubtitle>
-                    </HeaderText>
-                </HeaderRow>
+
                 <FormPanel>
                     <FormPanelHeader>
-                        <FormPanelTitle>Enabled Profile</FormPanelTitle>
-                        <FormPanelSubtitle>Select Integration Profile to be enabled.</FormPanelSubtitle>
+                        <HeaderRow>
+                            <BackButton type="button" onClick={onBack} title="Go back">
+                                <Icon
+                                    name="arrow-left"
+                                    isCodicon
+                                    sx={{ width: "16px", height: "16px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                                    iconSx={{ color: "var(--vscode-foreground)", fontSize: "16px", lineHeight: 1 }}
+                                />
+                            </BackButton>
+                            <HeaderText>
+                                <HeaderTitle variant="h2">Settings</HeaderTitle>
+                                <HeaderSubtitle>Settings related to WSO2 Integrator.</HeaderSubtitle>
+                            </HeaderText>
+                        </HeaderRow>
                     </FormPanelHeader>
                     <PanelBody>
+                        <div style={{ marginBottom: '5px'}}>Select your Integration Profile.</div>
                         {error && <ErrorText>{error}</ErrorText>}
                         <RuntimeList>
                             {RUNTIME_DEFINITIONS.map((runtime) => (
-                                <RuntimeItem key={runtime.key}>
+                                <RuntimeItem key={runtime.profile}>
                                     <RuntimeHeader>
                                         <RuntimeOption>
                                             <RuntimeRadio
                                                 type="radio"
                                                 name="selected-runtime"
-                                                checked={runtimeState[runtime.key]}
+                                                checked={selectedProfile === runtime.profile}
                                                 disabled={savingRuntime !== null}
                                                 onChange={() => {
-                                                    handleRuntimeSelect(runtime.key);
+                                                    handleRuntimeSelect(runtime.profile);
                                                 }}
                                             />
-                                            <span>{runtime.label}</span>
+                                            <span>{runtime.profile}</span>
                                         </RuntimeOption>
-                                    <RuntimeState enabled={runtimeState[runtime.key]}>
-                                            {runtimeState[runtime.key] ? "Selected" : "Not selected"}
-                                        </RuntimeState>
                                     </RuntimeHeader>
                                     {runtime.description && <RuntimeDescription>{runtime.description}</RuntimeDescription>}
                                 </RuntimeItem>

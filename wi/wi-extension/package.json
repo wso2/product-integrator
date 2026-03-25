@@ -33,11 +33,11 @@
         "integrator.selectedProfile": {
           "type": "string",
           "enum": [
-            "bi",
-            "mi",
-            "si"
+            "Default",
+            "WSO2 Integrator: MI",
+            "WSO2 Integrator: SI"
           ],
-          "default": "bi",
+          "default": "Default",
           "description": "Select the active WSO2 Integrator profile."
         },
         "integrator.enabledRuntimes.bi": {

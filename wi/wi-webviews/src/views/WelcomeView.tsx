@@ -1074,7 +1074,7 @@ export const WelcomeView: React.FC = () => {
 										</SecondaryActionRow>
 
 										<SecondaryActionRow onClick={handleProjectDirSelection}>
-											<SecondaryRowIcon bgColor="var(--welcome-open-project-accent)">
+											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 												<Codicon
 													name="root-folder-opened"
 													iconSx={{ fontSize: "16px" }}
