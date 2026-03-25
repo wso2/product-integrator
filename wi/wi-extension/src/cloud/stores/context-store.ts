@@ -375,7 +375,7 @@ const mapComponentList = async (components: ComponentKind[], selected?: ContextI
                                 existsSync(subPathDir) &&
                                 !comps.some((item) => item.component?.metadata?.id === componentItem.metadata?.id)
                             ) {
-                                if (componentItem.metadata?.isPrebuilt) {
+                                if (componentItem.metadata?.isPrebuilt && ext.isDevantCloudEditor) {
                                     // if its a prebuilt integration(we are in the samples repo), we will remove the .git directory 
                                     // thus making sure that when user tries to deploy it, we will update associated repo
                                     ext.context.workspaceState.update("SOURCE_COMPONENT_ID", componentItem?.metadata?.id);

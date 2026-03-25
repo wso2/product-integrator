@@ -242,6 +242,78 @@ const BackToListButton = styled.button`
     }
 `;
 
+// ── Landing choice card styles ────────────────────────────────────────────────
+
+const LandingWrapper = styled.div`
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    padding: 32px 24px;
+`;
+
+const ChoiceGrid = styled.div`
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    width: 100%;
+`;
+
+const ChoiceCard = styled.button`
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 120px 20px;
+    border-radius: 10px;
+    border: 1px solid var(--vscode-panel-border);
+    background: color-mix(in srgb, var(--vscode-foreground) 3%, transparent);
+    cursor: pointer;
+    text-align: center;
+    font-family: var(--vscode-font-family);
+    transition: background 0.15s ease, border-color 0.15s ease;
+
+    &:hover {
+        background: var(--vscode-list-hoverBackground);
+        border-color: color-mix(in srgb, var(--vscode-focusBorder) 55%, transparent);
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
+`;
+
+const ChoiceCardIconWrapper = styled.div`
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+    flex-shrink: 0;
+`;
+
+const ChoiceCardTitle = styled.span`
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    margin-bottom: 6px;
+    text-align: center;
+`;
+
+const ChoiceCardDesc = styled.span`
+    display: block;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+    line-height: 1.5;
+    text-align: center;
+`;
+
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
 const CenteredMessage = styled.div`
@@ -336,36 +408,6 @@ const SignInButton = styled.button`
     &:disabled {
         opacity: 0.7;
         cursor: not-allowed;
-    }
-
-    &:focus-visible {
-        outline: 1px solid var(--vscode-focusBorder);
-        outline-offset: 2px;
-    }
-`;
-
-const FooterBar = styled.div`
-    border-top: 1px solid color-mix(in srgb, var(--vscode-panel-border) 70%, transparent);
-    padding: 12px 16px;
-`;
-
-const OpenLocalButton = styled.button`
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    border-radius: 8px;
-    border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.3));
-    background: transparent;
-    color: var(--vscode-foreground);
-    font-size: 13px;
-    font-family: var(--vscode-font-family);
-    cursor: pointer;
-    transition: background 0.15s ease;
-
-    &:hover {
-        background: var(--vscode-list-hoverBackground);
-        border-color: color-mix(in srgb, var(--vscode-focusBorder) 55%, transparent);
     }
 
     &:focus-visible {
@@ -510,6 +552,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const [cloningError, setCloningError] = useState<string | null>(null);
     const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
     const [isSigningIn, setIsSigningIn] = useState(false);
+    const [view, setView] = useState<"landing" | "cloud">("landing");
     const signingInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const orgs = (authState?.userInfo?.organizations as Array<{ id: number | string; handle: string; name: string }> | undefined) ?? [];
@@ -930,89 +973,139 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
             setCloneStage(null);
             setCloneSuccess(false);
             setCloningError(null);
+        } else if (view === "cloud") {
+            setView("landing");
         } else {
             onBack();
         }
     };
 
     const headerTitle = "Open Project";
-    const headerSubtitle = "Clone a cloud project or open an existing local folder.";
+    const headerSubtitle =
+        view === "landing"
+            ? "Choose how you'd like to open a project."
+            : selectedProject
+                ? "Review and confirm before cloning."
+                : "Select a cloud project to clone to your machine.";
+    const panelTitle = selectedProject ? null : view === "cloud" ? "Cloud Projects" : null;
+    const panelSubtitle = !selectedProject && view === "cloud" && org ? "Select a project to clone it to your local machine." : null;
+
+    const renderLanding = () => (
+        <LandingWrapper>
+            <ChoiceGrid>
+                <ChoiceCard type="button" onClick={handleOpenLocal}>
+                    <ChoiceCardIconWrapper
+                        style={{
+                            background: "color-mix(in srgb, var(--vscode-foreground) 8%, transparent)",
+                            border: "1px solid color-mix(in srgb, var(--vscode-foreground) 12%, transparent)",
+                        }}
+                    >
+                        <Codicon
+                            name="folder-opened"
+                            iconSx={{ fontSize: "20px", color: "var(--vscode-foreground)" }}
+                            sx={{ width: "20px", height: "20px" }}
+                        />
+                    </ChoiceCardIconWrapper>
+                    <ChoiceCardTitle>Open Local Project</ChoiceCardTitle>
+                    <ChoiceCardDesc>Browse your computer and open an existing integration project folder.</ChoiceCardDesc>
+                </ChoiceCard>
+                <ChoiceCard type="button" onClick={() => setView("cloud")}>
+                    <ChoiceCardIconWrapper
+                        style={{
+                            background: "color-mix(in srgb, var(--vscode-foreground) 8%, transparent)",
+                            border: "1px solid color-mix(in srgb, var(--vscode-foreground) 12%, transparent)",
+                        }}
+                    >
+                        <Codicon
+                            name="cloud"
+                            iconSx={{ fontSize: "20px", color: "var(--vscode-foreground)" }}
+                            sx={{ width: "20px", height: "20px" }}
+                        />
+                    </ChoiceCardIconWrapper>
+                    <ChoiceCardTitle>Open Cloud Project</ChoiceCardTitle>
+                    <ChoiceCardDesc>Browse and clone a project from your WSO2 Cloud organization.</ChoiceCardDesc>
+                </ChoiceCard>
+            </ChoiceGrid>
+        </LandingWrapper>
+    );
+
+    const renderCloudView = () => (
+        <>
+            <FormPanelHeader>
+                <FormPanelHeaderRow>
+                    <div>
+                        <FormPanelTitle>{panelTitle}</FormPanelTitle>
+                        {panelSubtitle && <FormPanelSubtitle>{panelSubtitle}</FormPanelSubtitle>}
+                    </div>
+                    {orgs.length > 1 && (
+                        <OrgSwitcherWrapper ref={orgSwitcherRef}>
+                            <OrgTriggerButton
+                                type="button"
+                                open={orgDropdownOpen}
+                                onClick={() => setOrgDropdownOpen((v) => !v)}
+                                title="Switch organization"
+                            >
+                                <OrgAvatar>{org?.name?.charAt(0) ?? "?"}</OrgAvatar>
+                                <span>{org?.name}</span>
+                                <OrgChevron open={orgDropdownOpen}>
+                                    <Codicon name="chevron-down" iconSx={{ fontSize: "12px" }} />
+                                </OrgChevron>
+                            </OrgTriggerButton>
+                            {orgDropdownOpen && (
+                                <OrgDropdownPanel>
+                                    {orgs.map((o) => (
+                                        <OrgDropdownItem
+                                            key={o.id}
+                                            type="button"
+                                            active={String(o.id) === String(org?.id)}
+                                            onClick={() => {
+                                                setSelectedOrgId(String(o.id));
+                                                setOrgDropdownOpen(false);
+                                            }}
+                                        >
+                                            <OrgAvatar>{o.name.charAt(0)}</OrgAvatar>
+                                            <OrgDropdownItemName>{o.name}</OrgDropdownItemName>
+                                            {String(o.id) === String(org?.id) && (
+                                                <Codicon
+                                                    name="check"
+                                                    iconSx={{ fontSize: "12px", color: "var(--wso2-brand-primary)", flexShrink: 0 }}
+                                                />
+                                            )}
+                                        </OrgDropdownItem>
+                                    ))}
+                                </OrgDropdownPanel>
+                            )}
+                        </OrgSwitcherWrapper>
+                    )}
+                </FormPanelHeaderRow>
+            </FormPanelHeader>
+            <FormBody style={{ padding: 0 }}>
+                {renderList()}
+            </FormBody>
+        </>
+    );
 
     return (
         <PageBackdrop>
             <PageContainer>
                 <FormPanel>
+                    <FormPanelHeader>
+                        <HeaderRow>
+                            <BackButton type="button" onClick={handleBack} title="Back">
+                                <Codicon name="arrow-left" iconSx={{ fontSize: "18px", color: "var(--vscode-foreground)" }} />
+                            </BackButton>
+                            <HeaderText>
+                                <HeaderTitle variant="h2">{headerTitle}</HeaderTitle>
+                                <HeaderSubtitle>{headerSubtitle}</HeaderSubtitle>
+                            </HeaderText>
+                        </HeaderRow>
+                    </FormPanelHeader>
                     {selectedProject ? (
                         renderConfirm(selectedProject)
+                    ) : view === "landing" ? (
+                        renderLanding()
                     ) : (
-                        <>
-                            <FormPanelHeader>
-                                <FormPanelHeaderRow>
-                                    <HeaderRow>
-                                        <BackButton type="button" onClick={handleBack} title="Back">
-                                            <Codicon name="arrow-left" iconSx={{ fontSize: "18px", color: "var(--vscode-foreground)" }} />
-                                        </BackButton>
-                                        <HeaderText>
-                                            <HeaderTitle variant="h2">{headerTitle}</HeaderTitle>
-                                            <HeaderSubtitle>{headerSubtitle}</HeaderSubtitle>
-                                        </HeaderText>
-                                    </HeaderRow>
-                                    {orgs.length > 1 && (
-                                        <OrgSwitcherWrapper ref={orgSwitcherRef}>
-                                            <OrgTriggerButton
-                                                type="button"
-                                                open={orgDropdownOpen}
-                                                onClick={() => setOrgDropdownOpen((v) => !v)}
-                                                title="Switch organization"
-                                            >
-                                                <OrgAvatar>{org?.name?.charAt(0) ?? "?"}</OrgAvatar>
-                                                <span>{org?.name}</span>
-                                                <OrgChevron open={orgDropdownOpen}>
-                                                    <Codicon name="chevron-down" iconSx={{ fontSize: "12px" }} />
-                                                </OrgChevron>
-                                            </OrgTriggerButton>
-                                            {orgDropdownOpen && (
-                                                <OrgDropdownPanel>
-                                                    {orgs.map((o) => (
-                                                        <OrgDropdownItem
-                                                            key={o.id}
-                                                            type="button"
-                                                            active={String(o.id) === String(org?.id)}
-                                                            onClick={() => {
-                                                                setSelectedOrgId(String(o.id));
-                                                                setOrgDropdownOpen(false);
-                                                            }}
-                                                        >
-                                                            <OrgAvatar>{o.name.charAt(0)}</OrgAvatar>
-                                                            <OrgDropdownItemName>{o.name}</OrgDropdownItemName>
-                                                            {String(o.id) === String(org?.id) && (
-                                                                <Codicon
-                                                                    name="check"
-                                                                    iconSx={{ fontSize: "12px", color: "var(--wso2-brand-primary)", flexShrink: 0 }}
-                                                                />
-                                                            )}
-                                                        </OrgDropdownItem>
-                                                    ))}
-                                                </OrgDropdownPanel>
-                                            )}
-                                        </OrgSwitcherWrapper>
-                                    )}
-                                </FormPanelHeaderRow>
-                            </FormPanelHeader>
-                            <FormBody style={{ padding: 0 }}>
-                                {renderList()}
-                            </FormBody>
-                            <FooterBar>
-                                <OpenLocalButton type="button" onClick={handleOpenLocal}>
-                                    <Codicon
-                                        name="folder-opened"
-                                        iconSx={{ fontSize: "16px", color: "var(--vscode-foreground)" }}
-                                        sx={{ width: "16px", height: "16px" }}
-                                    />
-                                    Open Local Project
-                                </OpenLocalButton>
-                            </FooterBar>
-                        </>
+                        renderCloudView()
                     )}
                 </FormPanel>
             </PageContainer>
