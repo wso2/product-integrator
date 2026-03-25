@@ -239,46 +239,175 @@ function createWebSocketClientAdapter<TRequest, TResponse>(
   const serialize = options.serialize ?? ((message: TRequest) => JSON.stringify(message));
   const deserialize = options.deserialize ?? ((payload: string) => JSON.parse(payload) as TResponse);
   const WebSocketCtor = options.WebSocketImpl ?? WebSocket;
-
-  const ws = new WebSocketCtor(url);
   const listeners = new Set<(message: TResponse) => void>();
   const statusListeners = new Set<(status: ConnectionStatus) => void>();
-  const pendingRequests = new Map<string, (response: TResponse) => void>();
+  const pendingRequests = new Map<string, {
+    resolve: (response: TResponse) => void;
+    reject: (error: Error) => void;
+    state: 'queued' | 'sent';
+  }>();
+  const outboundQueue: Array<{ payload: string; requestId?: string }> = [];
+  const reconnectBaseDelayMs = 1000;
+  const reconnectMaxDelayMs = 10000;
 
-  const emitStatus = (status: ConnectionStatus) => statusListeners.forEach((listener) => listener(status));
+  let ws: InstanceType<typeof WebSocketCtor> | undefined;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let reconnectAttempts = 0;
+  let disposed = false;
+  let currentStatus: ConnectionStatus = 'connecting';
 
-  ws.addEventListener('open', () => emitStatus('open'));
-  ws.addEventListener('close', () => emitStatus('closed'));
-  ws.addEventListener('error', () => emitStatus('error'));
-  ws.addEventListener('message', (event) => {
-    const payload = typeof event.data === 'string' ? event.data : String(event.data);
-    const rpcResponse = tryParseRpcResponse(payload);
-    if (rpcResponse) {
-      const resolvePending = pendingRequests.get(rpcResponse.id);
-      if (resolvePending) {
-        pendingRequests.delete(rpcResponse.id);
-        resolvePending(deserialize(rpcResponse.payload));
+  const emitStatus = (status: ConnectionStatus) => {
+    currentStatus = status;
+    statusListeners.forEach((listener) => listener(status));
+  };
+
+  const rejectSentRequests = (message: string) => {
+    for (const [id, pending] of pendingRequests) {
+      if (pending.state === 'sent') {
+        pending.reject(new Error(message));
+        pendingRequests.delete(id);
       }
+    }
+  };
+
+  const flushOutboundQueue = () => {
+    if (!ws || ws.readyState !== WebSocketCtor.OPEN) {
       return;
     }
 
-    const parsed = deserialize(payload);
-    listeners.forEach((listener) => listener(parsed));
-  });
+    while (outboundQueue.length > 0) {
+      const next = outboundQueue.shift();
+      if (!next) {
+        break;
+      }
+
+      if (next.requestId) {
+        const pending = pendingRequests.get(next.requestId);
+        if (!pending) {
+          continue;
+        }
+        pending.state = 'sent';
+      }
+
+      ws.send(next.payload);
+    }
+  };
+
+  const scheduleReconnect = () => {
+    if (disposed || reconnectTimer !== undefined) {
+      return;
+    }
+
+    const delay = Math.min(reconnectBaseDelayMs * Math.pow(2, reconnectAttempts), reconnectMaxDelayMs);
+    reconnectAttempts += 1;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined;
+      connect();
+    }, delay);
+  };
+
+  const connect = () => {
+    if (disposed) {
+      return;
+    }
+
+    if (reconnectTimer !== undefined) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = undefined;
+    }
+
+    if (ws && (ws.readyState === WebSocketCtor.CONNECTING || ws.readyState === WebSocketCtor.OPEN)) {
+      return;
+    }
+
+    emitStatus('connecting');
+    const nextSocket = new WebSocketCtor(url);
+    ws = nextSocket;
+
+    nextSocket.addEventListener('open', () => {
+      if (ws !== nextSocket || disposed) {
+        nextSocket.close();
+        return;
+      }
+
+      reconnectAttempts = 0;
+      emitStatus('open');
+      flushOutboundQueue();
+    });
+
+    nextSocket.addEventListener('close', () => {
+      if (ws !== nextSocket) {
+        return;
+      }
+
+      ws = undefined;
+      emitStatus('closed');
+      rejectSentRequests('WebSocket connection closed before a response was received.');
+      scheduleReconnect();
+    });
+
+    nextSocket.addEventListener('error', () => {
+      if (ws !== nextSocket) {
+        return;
+      }
+
+      emitStatus('error');
+    });
+
+    nextSocket.addEventListener('message', (event) => {
+      if (ws !== nextSocket) {
+        return;
+      }
+
+      const payload = typeof event.data === 'string' ? event.data : String(event.data);
+      const rpcResponse = tryParseRpcResponse(payload);
+      if (rpcResponse) {
+        const resolvePending = pendingRequests.get(rpcResponse.id);
+        if (resolvePending) {
+          pendingRequests.delete(rpcResponse.id);
+          resolvePending.resolve(deserialize(rpcResponse.payload));
+        }
+        return;
+      }
+
+      const parsed = deserialize(payload);
+      listeners.forEach((listener) => listener(parsed));
+    });
+  };
+
+  const queueOrSend = (payload: string, requestId?: string) => {
+    if (disposed) {
+      return;
+    }
+
+    if (ws && ws.readyState === WebSocketCtor.OPEN) {
+      if (requestId) {
+        const pending = pendingRequests.get(requestId);
+        if (pending) {
+          pending.state = 'sent';
+        }
+      }
+      ws.send(payload);
+      return;
+    }
+
+    outboundQueue.push({ payload, requestId });
+
+    if (!ws || ws.readyState === WebSocketCtor.CLOSING || ws.readyState === WebSocketCtor.CLOSED) {
+      connect();
+    }
+  };
+
+  connect();
 
   return {
     send(message) {
-      const sendNow = () => ws.send(serialize(message));
-      if (ws.readyState === WebSocketCtor.OPEN) {
-        sendNow();
-      } else {
-        ws.addEventListener('open', sendNow, { once: true });
-      }
+      queueOrSend(serialize(message));
     },
     request(message) {
-      return new Promise<TResponse>((resolve) => {
+      return new Promise<TResponse>((resolve, reject) => {
         const id = nextRpcId();
-        pendingRequests.set(id, resolve);
+        pendingRequests.set(id, { resolve, reject, state: 'queued' });
 
         const envelope: RpcRequestEnvelope = {
           kind: 'rpc.request',
@@ -286,22 +415,28 @@ function createWebSocketClientAdapter<TRequest, TResponse>(
           payload: serialize(message)
         };
 
-        const sendNow = () => ws.send(JSON.stringify(envelope));
-        if (ws.readyState === WebSocketCtor.OPEN) {
-          sendNow();
-        } else {
-          ws.addEventListener('open', sendNow, { once: true });
-        }
+        queueOrSend(JSON.stringify(envelope), id);
       });
     },
     close() {
+      disposed = true;
+      if (reconnectTimer !== undefined) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
+      outboundQueue.length = 0;
+      rejectSentRequests('WebSocket transport was closed.');
+      for (const [, pending] of pendingRequests) {
+        pending.reject(new Error('WebSocket transport was closed.'));
+      }
       pendingRequests.clear();
-      ws.close();
+      ws?.close();
+      ws = undefined;
     },
     subscribe(listener, onStatus) {
       listeners.add(listener);
       statusListeners.add(onStatus);
-      onStatus(ws.readyState === WebSocketCtor.OPEN ? 'open' : 'connecting');
+      onStatus(currentStatus);
       return () => {
         listeners.delete(listener);
         statusListeners.delete(onStatus);
