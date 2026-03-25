@@ -245,11 +245,9 @@ const BackToListButton = styled.button`
 // ── Landing choice card styles ────────────────────────────────────────────────
 
 const LandingWrapper = styled.div`
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 400px;
     padding: 32px 24px;
 `;
 
@@ -266,7 +264,7 @@ const ChoiceCard = styled.button`
     align-items: center;
     justify-content: center;
     gap: 0;
-    padding: 120px 20px;
+    padding: 60px 20px;
     border-radius: 10px;
     border: 1px solid var(--vscode-panel-border);
     background: color-mix(in srgb, var(--vscode-foreground) 3%, transparent);
@@ -992,40 +990,40 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
 
     const renderLanding = () => (
         <LandingWrapper>
-        <ChoiceGrid>
-            <ChoiceCard type="button" onClick={handleOpenLocal}>
-                <ChoiceCardIconWrapper
-                    style={{
-                        background: "color-mix(in srgb, var(--vscode-foreground) 8%, transparent)",
-                        border: "1px solid color-mix(in srgb, var(--vscode-foreground) 12%, transparent)",
-                    }}
-                >
-                    <Codicon
-                        name="folder-opened"
-                        iconSx={{ fontSize: "20px", color: "var(--vscode-foreground)" }}
-                        sx={{ width: "20px", height: "20px" }}
-                    />
-                </ChoiceCardIconWrapper>
-                <ChoiceCardTitle>Open Local Project</ChoiceCardTitle>
-                <ChoiceCardDesc>Browse your computer and open an existing integration project folder.</ChoiceCardDesc>
-            </ChoiceCard>
-            <ChoiceCard type="button" onClick={() => setView("cloud")}>
-                <ChoiceCardIconWrapper
-                    style={{
-                        background: "color-mix(in srgb, var(--vscode-foreground) 8%, transparent)",
-                        border: "1px solid color-mix(in srgb, var(--vscode-foreground) 12%, transparent)",
-                    }}
-                >
-                    <Codicon
-                        name="cloud"
-                        iconSx={{ fontSize: "20px", color: "var(--vscode-foreground)" }}
-                        sx={{ width: "20px", height: "20px" }}
-                    />
-                </ChoiceCardIconWrapper>
-                <ChoiceCardTitle>Open Cloud Project</ChoiceCardTitle>
-                <ChoiceCardDesc>Browse and clone a project from your WSO2 Cloud organization.</ChoiceCardDesc>
-            </ChoiceCard>
-        </ChoiceGrid>
+            <ChoiceGrid>
+                <ChoiceCard type="button" onClick={handleOpenLocal}>
+                    <ChoiceCardIconWrapper
+                        style={{
+                            background: "color-mix(in srgb, var(--vscode-foreground) 8%, transparent)",
+                            border: "1px solid color-mix(in srgb, var(--vscode-foreground) 12%, transparent)",
+                        }}
+                    >
+                        <Codicon
+                            name="folder-opened"
+                            iconSx={{ fontSize: "20px", color: "var(--vscode-foreground)" }}
+                            sx={{ width: "20px", height: "20px" }}
+                        />
+                    </ChoiceCardIconWrapper>
+                    <ChoiceCardTitle>Open Local Project</ChoiceCardTitle>
+                    <ChoiceCardDesc>Browse your computer and open an existing integration project folder.</ChoiceCardDesc>
+                </ChoiceCard>
+                <ChoiceCard type="button" onClick={() => setView("cloud")}>
+                    <ChoiceCardIconWrapper
+                        style={{
+                            background: "color-mix(in srgb, var(--vscode-foreground) 8%, transparent)",
+                            border: "1px solid color-mix(in srgb, var(--vscode-foreground) 12%, transparent)",
+                        }}
+                    >
+                        <Codicon
+                            name="cloud"
+                            iconSx={{ fontSize: "20px", color: "var(--vscode-foreground)" }}
+                            sx={{ width: "20px", height: "20px" }}
+                        />
+                    </ChoiceCardIconWrapper>
+                    <ChoiceCardTitle>Open Cloud Project</ChoiceCardTitle>
+                    <ChoiceCardDesc>Browse and clone a project from your WSO2 Cloud organization.</ChoiceCardDesc>
+                </ChoiceCard>
+            </ChoiceGrid>
         </LandingWrapper>
     );
 
@@ -1098,7 +1096,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                     </HeaderText>
                 </HeaderRow>
 
-                <FormPanel>
+                <FormPanel style={view === "landing" ? { flex: "none" } : undefined}>
                     {selectedProject ? (
                         renderConfirm(selectedProject)
                     ) : view === "landing" ? (
