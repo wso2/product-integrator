@@ -56,10 +56,6 @@ func main() {
 		writeJSON(writer, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("/api/v1/product-updates/check", service.handleProductCheck)
-	mux.HandleFunc("/api/v1/ballerina-updates/check", service.handleBallerinaCheck)
-	mux.HandleFunc("/api/v1/bi-updates/check", service.handleBICheck)
-	mux.HandleFunc("/api/v1/mi-updates/check", service.handleMICheck)
-	mux.HandleFunc("/api/v1/icp-updates/check", service.handleICPCheck)
 
 	server := &http.Server{
 		Addr:              ":" + service.port,
@@ -74,13 +70,9 @@ func main() {
 }
 
 type updateService struct {
-	port             string
-	productSource    remoteSourceConfig
-	ballerinaSource  remoteSourceConfig
-	biSource         remoteSourceConfig
-	miSource         remoteSourceConfig
-	icpSource        remoteSourceConfig
-	httpClient       *http.Client
+	port          string
+	productSource remoteSourceConfig
+	httpClient    *http.Client
 }
 
 func newUpdateService() *updateService {
@@ -92,30 +84,6 @@ func newUpdateService() *updateService {
 			releasesPageURL: getEnv("RELEASES_PAGE_URL", "https://github.com/wso2/product-integrator/releases"),
 			resourceName:    "WSO2 Integrator",
 		},
-		ballerinaSource: remoteSourceConfig{
-			releaseAPIURL:   getEnv("BALLERINA_RELEASE_API_URL", "https://api.github.com/repos/ballerina-platform/ballerina-distribution/releases/latest"),
-			tagsAPIURL:      getEnv("BALLERINA_TAGS_API_URL", "https://api.github.com/repos/ballerina-platform/ballerina-distribution/tags?per_page=20"),
-			releasesPageURL: getEnv("BALLERINA_RELEASES_PAGE_URL", "https://github.com/ballerina-platform/ballerina-distribution/releases"),
-			resourceName:    "Ballerina",
-		},
-		biSource: remoteSourceConfig{
-			releaseAPIURL:   getEnv("BI_RELEASE_API_URL", "https://api.github.com/repos/wso2/product-ballerina-integrator/releases/latest"),
-			tagsAPIURL:      getEnv("BI_TAGS_API_URL", "https://api.github.com/repos/wso2/product-ballerina-integrator/tags?per_page=20"),
-			releasesPageURL: getEnv("BI_RELEASES_PAGE_URL", "https://github.com/wso2/product-ballerina-integrator/releases"),
-			resourceName:    "WSO2 Integrator: BI",
-		},
-		miSource: remoteSourceConfig{
-			releaseAPIURL:   getEnv("MI_RELEASE_API_URL", "https://api.github.com/repos/wso2/product-micro-integrator/releases/latest"),
-			tagsAPIURL:      getEnv("MI_TAGS_API_URL", "https://api.github.com/repos/wso2/product-micro-integrator/tags?per_page=20"),
-			releasesPageURL: getEnv("MI_RELEASES_PAGE_URL", "https://github.com/wso2/product-micro-integrator/releases"),
-			resourceName:    "WSO2 Integrator: MI",
-		},
-		icpSource: remoteSourceConfig{
-			releaseAPIURL:   getEnv("ICP_RELEASE_API_URL", "https://api.github.com/repos/wso2/integration-control-plane/releases/latest"),
-			tagsAPIURL:      getEnv("ICP_TAGS_API_URL", "https://api.github.com/repos/wso2/integration-control-plane/tags?per_page=20"),
-			releasesPageURL: getEnv("ICP_RELEASES_PAGE_URL", "https://github.com/wso2/integration-control-plane/releases"),
-			resourceName:    "WSO2 Integrator: ICP",
-		},
 		httpClient: &http.Client{
 			Timeout: 15 * time.Second,
 		},
@@ -124,22 +92,6 @@ func newUpdateService() *updateService {
 
 func (service *updateService) handleProductCheck(writer http.ResponseWriter, request *http.Request) {
 	service.handleCheck(writer, request, service.productSource)
-}
-
-func (service *updateService) handleBallerinaCheck(writer http.ResponseWriter, request *http.Request) {
-	service.handleCheck(writer, request, service.ballerinaSource)
-}
-
-func (service *updateService) handleBICheck(writer http.ResponseWriter, request *http.Request) {
-	service.handleCheck(writer, request, service.biSource)
-}
-
-func (service *updateService) handleMICheck(writer http.ResponseWriter, request *http.Request) {
-	service.handleCheck(writer, request, service.miSource)
-}
-
-func (service *updateService) handleICPCheck(writer http.ResponseWriter, request *http.Request) {
-	service.handleCheck(writer, request, service.icpSource)
 }
 
 func (service *updateService) handleCheck(writer http.ResponseWriter, request *http.Request, source remoteSourceConfig) {
