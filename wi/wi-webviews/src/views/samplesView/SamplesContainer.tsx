@@ -450,15 +450,6 @@ export function SamplesContainer(props: SamplesContainerProps) {
                         />
                     </SearchContainer>
                 </FiltersRow>
-                <MetaRow>
-                    <ResultCount>
-                        <Codicon name="list-selection" />
-                        Showing {filteredSamples.length} of {samples.length}
-                    </ResultCount>
-                    {selectedCategory !== "All" && (
-                        <ActiveFilter>{selectedCategory}</ActiveFilter>
-                    )}
-                </MetaRow>
             </Toolbar>
             <SamplesViewport>
                 {isLoading ? (
