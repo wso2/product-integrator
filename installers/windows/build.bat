@@ -1,4 +1,4 @@
-REM Accepts four arguments: ballerina.zip, integrator.zip, ICP.zip, and version
+REM Accepts three arguments: ballerina.zip, integrator.zip, and version
 REM Extracts the zip files to their respective payload directories and applies the version to Package.wxs before building the installer
 
 @echo off
@@ -6,26 +6,21 @@ setlocal
 
 REM Check for required arguments
 if "%~1"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<version^>
     exit /b 1
 )
 if "%~2"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<version^>
     exit /b 1
 )
 
 if "%~3"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<version^>
     exit /b 1
 )
 
 if "%~4"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
-    exit /b 1
-)
-
-if "%~5"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<version^>
     exit /b 1
 )
 
@@ -47,21 +42,6 @@ if errorlevel 1 (
     exit /b 1
 )
 
-@REM REM Extract ICP.zip
-powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~4', '.\temp_icp'); $icpDir = (Get-ChildItem '.\temp_icp' -Directory | Select-Object -First 1).FullName; $icpTarget = '.\WixPackage\payload\Integrator\components\icp'; New-Item -ItemType Directory -Force -Path $icpTarget | Out-Null; Copy-Item -Path \"$icpDir\*\" -Destination $icpTarget -Recurse -Force; Remove-Item -Recurse -Force '.\temp_icp' }"
-if errorlevel 1 (
-    echo ICP extraction failed
-    exit /b 1
-)
-
-REM Modify icp.bat to use the JDK from shared dependencies directory
-echo Modifying icp.bat to use JDK from dependencies
-if exist ".\WixPackage\payload\Integrator\components\icp\bin\icp.bat" (
-    powershell -nologo -noprofile -command "& { $icpScript = '.\WixPackage\payload\Integrator\components\icp\bin\icp.bat'; $jdkDir = (Get-ChildItem '.\WixPackage\payload\Integrator\components\dependencies' -Directory -ErrorAction SilentlyContinue | Select-Object -First 1).Name; if ($jdkDir) { $content = Get-Content $icpScript -Raw; $javaReplacement = '!SCRIPT_DIR!../../dependencies/' + $jdkDir + '/bin/java'; $newContent = $content -replace '\bjava\b', $javaReplacement; Set-Content -Path $icpScript -Value $newContent -NoNewline; Write-Host \"Updated icp.bat to use JDK: $jdkDir\" } else { Write-Host 'Warning: JDK folder not found in dependencies' } }"
-) else (
-    echo Warning: icp.bat not found in ICP bin directory
-)
-
 REM Copy balscript/bal to ballerina bin directory and replace version placeholder
 set "BAL_SRC=%~dp0WixPackage\balscript\bal.bat"
 set "BAL_TARGET=.\WixPackage\payload\Integrator\components\ballerina\bin\bal.bat"
@@ -76,7 +56,7 @@ if exist "%BAL_SRC%" (
 
 
 REM Extract numeric-only version for WiX ProductVersion (strip pre-release suffix like -m1, -beta1)
-for /f "delims=" %%v in ('powershell -nologo -noprofile -command "('%~5' -split '-')[0]"') do set "WIX_VERSION=%%v"
+for /f "delims=" %%v in ('powershell -nologo -noprofile -command "('%~4' -split '-')[0]"') do set "WIX_VERSION=%%v"
 
 REM Update version in Package.wxs
 powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%WIX_VERSION%' | Set-Content '.\WixPackage\Package.wxs'"
@@ -97,9 +77,9 @@ if errorlevel 1 (
 
 REM Rename MSI output to include version
 set "MSI_ORIG=WixPackage\bin\x64\Release\en-US\WSO2-Integrator.msi"
-set "MSI_NEW=WixPackage\bin\x64\Release\en-US\wso2-integrator-%~5.msi"
+set "MSI_NEW=WixPackage\bin\x64\Release\en-US\wso2-integrator-%~4.msi"
 if exist "%MSI_ORIG%" (
-    ren "%MSI_ORIG%" "wso2-integrator-%~5.msi"
+    ren "%MSI_ORIG%" "wso2-integrator-%~4.msi"
     echo Renamed MSI to %MSI_NEW%
 ) else (
     echo MSI file not found: %MSI_ORIG%

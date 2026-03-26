@@ -23,18 +23,17 @@ print_warning() {
 
 WORK_DIR=$(pwd)
 
-# Usage: ./build.sh <ballerina_zip> <ballerina_version> <wso2_zip> <icp_zip> <version> <arch>
-if [ "$#" -ne 6 ]; then
-    echo "Usage: $0 <ballerina_zip> <ballerina_version> <wso2_zip> <icp_zip> <version> <arch>"
+# Usage: ./build.sh <ballerina_zip> <ballerina_version> <wso2_zip> <version> <arch>
+if [ "$#" -ne 5 ]; then
+    echo "Usage: $0 <ballerina_zip> <ballerina_version> <wso2_zip> <version> <arch>"
     exit 1
 fi
 
 BALLERINA_ZIP="$1"
 BALLERINA_VERSION="$2"
 WSO2_ZIP="$3"
-ICP_ZIP="$4"
-VERSION="$5"
-ARCH="$6"
+VERSION="$4"
+ARCH="$5"
 
 OUTPUT_PKG="WSO2_Integrator.pkg"
 BUNDLE_IDENTIFIER="com.wso2.integrator"
@@ -107,28 +106,6 @@ sed -i '' "s/@BALLERINA_VERSION@/$BALLERINA_VERSION/g" "$BALLERINA_TARGET/bin/ba
 chmod +x "$BALLERINA_TARGET/bin"/*
 
 
-# Extract icp zip
-ICP_TARGET="$COMPONENTS_DIR/icp"
-rm -rf "$ICP_TARGET"
-mkdir -p "$ICP_TARGET"
-unzip -o "$ICP_ZIP" -d "$EXTRACTION_TARGET"
-ICP_UNZIPPED_FOLDER=$(unzip -Z1 "$ICP_ZIP" | head -1 | cut -d/ -f1)
-ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
-mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
-rm -rf "$ICP_UNZIPPED_PATH"
-chmod +x "$ICP_TARGET/bin"/*
-
-# Modify icp.sh to use the JDK from shared dependencies directory
-ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
-if [ -f "$ICP_SCRIPT" ]; then
-    print_info "Modifying icp.sh to use JDK from dependencies ($JDK_FOLDER)"
-    # Replace all java instances with the full path to the JDK java
-    sed -i '' "s|java|\"\$SCRIPT_DIR\"/../../dependencies/$JDK_FOLDER/bin/java|g" "$ICP_SCRIPT"
-fi
-
-
-
-
 # Build the component package
 pkgbuild --root "$EXTRACTION_TARGET" \
          --identifier "$BUNDLE_IDENTIFIER" \
@@ -160,7 +137,6 @@ fi
 
 # Cleanup
 rm -rf "${WSO2_TARGET:?}"/*
-rm -rf "${ICP_TARGET:?}"/*
 rm -rf "${BALLERINA_TARGET:?}"/*
 rm -rf "$EXTRACTION_TARGET/Library"
 rm -rf "$EXTRACTION_TARGET/Applications"

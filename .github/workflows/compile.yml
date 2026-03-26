@@ -10,16 +10,12 @@ on:
         default: 'codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}'
         type: string
       build_packed_installers:
-        description: 'Whether to build a Balleirna, ICP, and Integrator packed installers'
+        description: 'Whether to build Ballerina and Integrator packed installers'
         default: true
         required:  true
         type: boolean
       ballerina_version:
         description: 'Specify Ballerina version to use'
-        required: false
-        type: string
-      icp_version:
-        description: 'Specify ICP version to use'
         required: false
         type: string
       integrator_version:
@@ -39,8 +35,8 @@ jobs:
     steps:
       - name: Validate required inputs
         run: |
-          if [ -z "${{ inputs.ballerina_version }}" ] || [ -z "${{ inputs.icp_version }}" ] || [ -z "${{ inputs.integrator_version }}" ]; then
-            echo "Error: ballerina_version, icp_version, and integrator_version must not be empty."
+          if [ -z "${{ inputs.ballerina_version }}" ] || [ -z "${{ inputs.integrator_version }}" ]; then
+            echo "Error: ballerina_version and integrator_version must not be empty."
             exit 1
           else
             echo "All required version inputs are provided."
@@ -240,17 +236,10 @@ jobs:
           BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
-          ICP_VERSION="${{ github.event.inputs.icp_version }}"
-          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
-          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
-            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
-          fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
           cd ./installers/linux-deb
           wget -O ballerina.zip "$BALLERINA_URL"
-          wget -O icp.zip "$ICP_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
 
       - name: Upload Deb artifacts
@@ -272,17 +261,10 @@ jobs:
           BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
-          ICP_VERSION="${{ github.event.inputs.icp_version }}"
-          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
-          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
-            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
-          fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
           cd ./installers/linux-rpm
           wget -O ballerina.zip "$BALLERINA_URL"
-          wget -O icp.zip "$ICP_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       - name: Upload RPM artifacts
         if: ${{ inputs.build_packed_installers == true}}
@@ -302,17 +284,10 @@ jobs:
           BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
-          ICP_VERSION="${{ github.event.inputs.icp_version }}"
-          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
-          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
-            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
-          fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
           cd ./installers/linux-tar
           wget -O ballerina.zip "$BALLERINA_URL"
-          wget -O icp.zip "$ICP_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       - name: Upload TAR artifacts
         if: ${{ inputs.build_packed_installers == true}}
