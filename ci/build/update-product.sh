@@ -93,7 +93,7 @@ echo '{
       },
       {
         "name": "wso2.ballerina",
-        "version": "5.9.26032514"
+        "version": "5.9.326032720"
       },
       {
         "name": "wso2.micro-integrator",
@@ -101,8 +101,8 @@ echo '{
       },
       {
         "name": "wso2.wso2-integrator",
-        "vsix": "../../wi/wi-extension/wso2-integrator-0.2.1.vsix",
-        "version": "0.2.1"
+        "vsix": "../../wi/wi-extension/wso2-integrator-0.2.2.vsix",
+        "version": "0.2.2"
       }
 	  ],
     "runtimeEnv": {
