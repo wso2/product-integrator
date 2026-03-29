@@ -1,12 +1,12 @@
 # Product Update Service
 
-Hosted Go service for checking the latest WSO2 Integrator version from GitHub.
+Hosted Ballerina service for checking the latest WSO2 Integrator version.
 
 ## Run locally
 
 ```bash
 cd services/product-update-service
-go run .
+bal run
 ```
 
 ## API
@@ -33,9 +33,7 @@ Response:
 }
 ```
 
-## Environment variables
+## Notes
 
-- `PORT`
-- `RELEASE_API_URL`
-- `TAGS_API_URL`
-- `RELEASES_PAGE_URL`
+- The service currently returns a hardcoded latest version.
+- Default listener port is `8080`.
