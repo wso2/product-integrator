@@ -86,7 +86,7 @@ export interface ProjectRequest {
 
 export interface ConfigureProjectFormProps {
     isMultiProject: boolean;
-    onNext: (project: ProjectRequest) => void;
+    onNext: (project: ProjectRequest, aiFeatureUsed: boolean) => void;
     onBack: () => void;
     selectedOrgName?: string;
 }

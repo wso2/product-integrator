@@ -70,6 +70,7 @@ import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi
 import { StateMachine } from "../../stateMachine";
 import { ext } from "../../extensionVariables";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
+import { ballerinaContext } from "../../bi/ballerinaContext";
 const platform = getPlatform();
 
 export class MainWsManager implements WIVisualizerAPI {
@@ -480,6 +481,12 @@ export class MainWsManager implements WIVisualizerAPI {
         return new Promise(async (resolve, reject) => {
             try {
                 const result = await commands.executeCommand('BI.project.createBIProjectMigration', params);
+                if (params.aiFeatureUsed && params.sourcePath) {
+                    const projectRoot = typeof result === 'string' ? result : undefined;
+                    if (projectRoot) {
+                        ballerinaContext.migration?.setWizardProjectRoot(projectRoot, params.sourcePath);
+                    }
+                }
                 resolve();
             } catch (error) {
                 console.error("Error creating Ballerina project:", error);
@@ -585,5 +592,17 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async getDefaultCreationPath(): Promise<WorkspaceRootResponse> {
         return { path: getDefaultCreationPath() };
+    }
+
+    async wizardEnhancementReady(): Promise<void> {
+        await ballerinaContext.migration?.wizardEnhancementReady();
+    }
+
+    async openMigratedProject(): Promise<void> {
+        ballerinaContext.migration?.openMigratedProject();
+    }
+
+    async abortMigrationAgent(): Promise<void> {
+        ballerinaContext.migration?.abortAgent();
     }
 }

@@ -52,6 +52,7 @@ import {
     WebviewContext,
     WITransportBootstrap,
     CloneProgressStage,
+    WIChatNotify,
 } from "@wso2/wi-core";
 import type {
     AuthState,
@@ -69,6 +70,7 @@ import type {
 } from "@wso2/wi-core";
 import { MainWsManager } from "./ws-managers/main/ws-manager";
 import { CloudWsManager } from "./ws-managers/cloud/ws-manager";
+import { ballerinaContext } from "./bi/ballerinaContext";
 
 type TransportManager = ReturnType<typeof createExtensionTransportManager<WIBridgeRequest, WIBridgeResponse>>;
 type RequestRouter = ReturnType<typeof createRequestRouter<WIBridgeRequest, WIBridgeResponse>>;
@@ -172,6 +174,13 @@ export class BridgeLayer {
         });
     }
 
+    static notifyChatEvent(projectUri: string, event: WIChatNotify): void {
+        this.publish(projectUri, {
+            type: WI_BRIDGE_EVENTS.CHAT_NOTIFY,
+            event,
+        });
+    }
+
     static dispose(projectUri: string): void {
         const channel = this.channels.get(projectUri);
         if (!channel) {
@@ -206,6 +215,13 @@ export class BridgeLayer {
             (state) => this.notifyAuthStateChanged(projectUri, state),
             (state) => this.notifyContextStateChanged(projectUri, state),
         );
+
+        // Subscribe to AI migration streaming events from the Ballerina extension
+        if (ballerinaContext.migration?.onChatNotify) {
+            ballerinaContext.migration.onChatNotify((event) => {
+                this.notifyChatEvent(projectUri, event);
+            });
+        }
 
         return channel;
     }
@@ -304,6 +320,9 @@ export class BridgeLayer {
         registerRoute("clearWebviewCache", async (request) => wsManager.clearWebviewCache(request.params));
         registerRoute("getDefaultOrgName", async () => cloudManager.getDefaultOrgName());
         registerRoute("getDefaultCreationPath", async () => wsManager.getDefaultCreationPath());
+        registerRoute("wizardEnhancementReady", async () => wsManager.wizardEnhancementReady());
+        registerRoute("openMigratedProject", async () => wsManager.openMigratedProject());
+        registerRoute("abortMigrationAgent", async () => wsManager.abortMigrationAgent());
 
         // ── Cloud routes ──────────────────────────────────────────
         registerRoute("getCloudFormContext", async () => cloudManager.getCloudFormContext());

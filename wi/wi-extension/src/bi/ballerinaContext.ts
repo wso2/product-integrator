@@ -16,6 +16,18 @@
  * under the License.
  */
 
+import { Event } from 'vscode';
+import { WIChatNotify } from '@wso2/wi-core';
+
+/** Shape of the migration API exposed by the Ballerina extension's `activate()` return value. */
+export interface BallerinaExtMigrationAPI {
+    setWizardProjectRoot: (projectRoot: string, sourcePath?: string) => void;
+    wizardEnhancementReady: () => Promise<void>;
+    abortAgent: () => void;
+    openMigratedProject: () => void;
+    onChatNotify: Event<WIChatNotify>;
+}
+
 /**
  * Stores runtime context obtained from the Ballerina extension.
  * Used by WI's internal BI project explorer when the BI extension is not installed.
@@ -24,6 +36,7 @@ export class BallerinaContext {
     public biSupported: boolean = false;
     public isNPSupported: boolean = false;
     public isWorkspaceSupported: boolean = false;
+    public migration: BallerinaExtMigrationAPI | undefined;
 
     /**
      * Populate the context from the Ballerina extension's exports.
@@ -35,6 +48,9 @@ export class BallerinaContext {
             this.biSupported = instance.biSupported ?? false;
             this.isNPSupported = instance.isNPSupported ?? false;
             this.isWorkspaceSupported = instance.isWorkspaceSupported ?? false;
+        }
+        if (ballerinaExtExports?.migration) {
+            this.migration = ballerinaExtExports.migration as BallerinaExtMigrationAPI;
         }
     }
 }
