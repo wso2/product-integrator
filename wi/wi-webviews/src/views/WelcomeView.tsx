@@ -792,7 +792,9 @@ export const WelcomeView: React.FC = () => {
 	// Clear it once auth completes or after a short timeout (user cancelled).
 	useEffect(() => {
 		const unsubscribe = wsClient.onSignInInitiated(() => {
-			setIsSigningIn(true);
+			if (signingInTimeoutRef.current) {
+				clearTimeout(signingInTimeoutRef.current);
+			}
 			signingInTimeoutRef.current = setTimeout(() => {
 				setIsSigningIn(false);
 				signingInTimeoutRef.current = null;
@@ -818,7 +820,25 @@ export const WelcomeView: React.FC = () => {
 	}, []);
 
 	const handleSignIn = () => {
+		setIsSigningIn(true);
+		// Give the user 5 minutes to complete browser login before auto-resetting.
+		if (signingInTimeoutRef.current) {
+			clearTimeout(signingInTimeoutRef.current);
+		}
+		signingInTimeoutRef.current = setTimeout(() => {
+			setIsSigningIn(false);
+			signingInTimeoutRef.current = null;
+		}, 300000);
 		wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
+	};
+
+	const handleCancelSignIn = () => {
+		setIsSigningIn(false);
+		if (signingInTimeoutRef.current) {
+			clearTimeout(signingInTimeoutRef.current);
+			signingInTimeoutRef.current = null;
+		}
+		wsClient.runCommand({ command: WICommandIds.CancelSignIn, args: [] });
 	};
 
 	const renderCurrentView = () => {
@@ -875,19 +895,21 @@ export const WelcomeView: React.FC = () => {
 									</UserInitial>
 								)}
 							</UserAvatar>
+						) : isSigningIn ? (
+							<SigninBtn type="button" onClick={handleCancelSignIn} title="Cancel sign in">
+								<Codicon
+									name="loading"
+									iconSx={{ fontSize: 13, color: "var(--wso2-brand-white)", animation: "codicon-spin 1.5s steps(30) infinite" }}
+								/>
+								Signing in...
+								<Codicon
+									name="close"
+									iconSx={{ fontSize: 12, color: "var(--wso2-brand-white)", opacity: 0.8 }}
+								/>
+							</SigninBtn>
 						) : (
-							<SigninBtn type="button" onClick={handleSignIn} disabled={isSigningIn}>
-								{isSigningIn ? (
-									<>
-										<Codicon
-											name="loading"
-											iconSx={{ fontSize: 13, color: "var(--wso2-brand-white)", animation: "codicon-spin 1.5s steps(30) infinite" }}
-										/>
-										Signing in...
-									</>
-								) : (
-									"Sign In"
-								)}
+							<SigninBtn type="button" onClick={handleSignIn}>
+								Sign In
 							</SigninBtn>
 						)}
 						<ConfigureBtn type="button" onClick={goToSettings}>
