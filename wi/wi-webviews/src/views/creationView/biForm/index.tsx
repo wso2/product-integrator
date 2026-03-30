@@ -25,7 +25,7 @@ import {
 } from "./styles";
 import { ProjectFormFields } from "./ProjectFormFields";
 import { DEFAULT_INTEGRATION_NAME, DEFAULT_PROJECT_NAME, ProjectFormData } from "./types";
-import { validatePackageName } from "./utils";
+import { validatePackageName, validateProjectHandle } from "./utils";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { useCloudContext } from "../../../providers";
 
@@ -41,6 +41,7 @@ export function BIProjectForm() {
         workspaceName: "",
         createWithinProject: false,
         withinProjectName: DEFAULT_PROJECT_NAME,
+        projectHandle: "",
         orgName: "",
         version: "",
         isLibrary: false,
@@ -50,6 +51,7 @@ export function BIProjectForm() {
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameValidationError, setPackageNameValidationError] = useState<string | null>(null);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
+    const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
     const createActionLabel = "Create Integration";
 
 
@@ -76,6 +78,7 @@ export function BIProjectForm() {
         setPathError(null);
         setPackageNameValidationError(null);
         setProjectNameError(null);
+        setProjectHandleError(null);
 
         let hasError = false;
 
@@ -95,6 +98,14 @@ export function BIProjectForm() {
             }
         }
 
+        if (formData.createWithinProject) {
+            const hErr = validateProjectHandle(formData.projectHandle);
+            if (hErr) {
+                setProjectHandleError(hErr);
+                hasError = true;
+            }
+        }
+
         if (formData.path.length < 2) {
             setPathError("Please select a path for your integration");
             hasError = true;
@@ -107,7 +118,7 @@ export function BIProjectForm() {
 
         try {
             const targetNameForValidation = formData.createWithinProject
-                ? formData.withinProjectName
+                ? formData.projectHandle
                 : formData.packageName;
 
             const validationResult = await wsClient.validateProjectPath({
@@ -141,7 +152,8 @@ export function BIProjectForm() {
                 createAsWorkspace: formData.createWithinProject,
                 workspaceName: formData.createWithinProject ? formData.withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
-                version: formData.version || undefined
+                version: formData.version || undefined,
+                projectHandle: formData.createWithinProject ? formData.projectHandle : undefined,
             });
         } catch (error) {
             setPathError("An error occurred during validation");
@@ -159,6 +171,7 @@ export function BIProjectForm() {
                 pathError={pathError || undefined}
                 projectNameError={projectNameError || undefined}
                 packageNameValidationError={packageNameValidationError || undefined}
+                projectHandleError={projectHandleError || undefined}
                 organizations={organizations}
                 />
 

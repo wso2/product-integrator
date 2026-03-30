@@ -30,6 +30,7 @@ export interface PackageInfoData {
     packageName: string;
     orgName: string;
     version: string;
+    projectHandle?: string;
 }
 
 export interface Organization {
@@ -53,6 +54,8 @@ export interface PackageInfoSectionProps {
     orgNameError?: string | null;
     /** Error message for package name validation */
     packageNameError?: string | null;
+    /** Error message for project handle validation */
+    projectHandleError?: string | null;
     /** Organizations list — when provided, renders a dropdown instead of a free-text field */
     organizations?: Organization[];
 }
@@ -107,6 +110,7 @@ export function PackageInfoSection({
     isLibrary,
     orgNameError,
     packageNameError,
+    projectHandleError,
     organizations,
 }: PackageInfoSectionProps) {
     const { wsClient } = useVisualizerContext();
@@ -157,6 +161,17 @@ export function PackageInfoSection({
             <Note style={{ marginBottom: "16px" }}>
                 {`This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Specify the organization and version to be assigned. `}
             </Note>
+            {data.projectHandle !== undefined && (
+                <FieldGroup>
+                    <TextField
+                        onTextChange={(value) => onChange({ projectHandle: value })}
+                        value={data.projectHandle}
+                        label="Project Handle"
+                        description="Unique identifier for this project. Used as the folder name."
+                        errorMsg={projectHandleError || undefined}
+                    />
+                </FieldGroup>
+            )}
             <FieldGroup>
                 <TextField
                     onTextChange={(value) => onChange({ packageName: sanitizePackageName(value) })}

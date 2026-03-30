@@ -452,6 +452,14 @@ export class MainWsManager implements WIVisualizerAPI {
                         }
                     }
                 }
+                if (params.createAsWorkspace && params.projectHandle) {
+                    const displayName = params.workspaceName || 'Default';
+                    try {
+                        await this.writeLocalProjectYaml(projectRoot, displayName, params.projectHandle);
+                    } catch (yamlError) {
+                        console.warn("Failed to write local-project.yaml (non-critical):", yamlError);
+                    }
+                }
                 openInVSCode(projectRoot);
                 resolve();
             } catch (error) {
@@ -470,6 +478,14 @@ export class MainWsManager implements WIVisualizerAPI {
         const content = stringifyYaml(contextData);
         await fs.promises.mkdir(choreoDir, { recursive: true });
         await fs.promises.writeFile(contextFile, content, { encoding: 'utf8' });
+    }
+
+    private async writeLocalProjectYaml(projectRoot: string, projectName: string, projectHandle: string): Promise<void> {
+        const choreoDir = path.join(projectRoot, '.choreo');
+        const localProjectFile = path.join(choreoDir, 'local-project.yaml');
+        const content = `name: ${projectName}\nhandler: ${projectHandle}\n`;
+        await fs.promises.mkdir(choreoDir, { recursive: true });
+        await fs.promises.writeFile(localProjectFile, content, { encoding: 'utf8' });
     }
 
     async validateProjectPath(params: ValidateProjectFormRequest): Promise<ValidateProjectFormResponse> {

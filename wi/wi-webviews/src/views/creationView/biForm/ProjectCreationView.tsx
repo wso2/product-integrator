@@ -22,7 +22,8 @@ import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
 import { useCloudContext } from "../../../providers";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
-import { joinPath } from "./utils";
+import { joinPath, sanitizeProjectHandle, validateProjectHandle } from "./utils";
+import { CollapsibleSection } from "./components";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -34,8 +35,6 @@ import {
     HeaderSubtitle,
     FormPanel,
     FormPanelHeader,
-    FormPanelTitle,
-    FormPanelSubtitle,
     FormBody,
     FormContent,
     FormFooter,
@@ -69,9 +68,13 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const { authState } = useCloudContext();
     const organizations = authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined;
     const firstFieldRef = useRef<HTMLInputElement>(null);
+    const handleTouched = useRef(false);
     const [isValidating, setIsValidating] = useState(false);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
+    const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
+    const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
+    const [projectHandle, setProjectHandle] = useState(() => sanitizeProjectHandle(DEFAULT_PROJECT_NAME));
     const [defaultPath, setDefaultPath] = useState("");
     const [formData, setFormData] = useState({
         projectName: DEFAULT_PROJECT_NAME,
@@ -116,7 +119,19 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
         }
     }, [organizations, wsClient, formData.orgName]);
 
-    const resolvedPath = joinPath(formData.path || defaultPath, formData.projectName);
+    // Auto-derive handle from projectName unless manually edited
+    useEffect(() => {
+        if (handleTouched.current) return;
+        const derived = sanitizeProjectHandle(formData.projectName);
+        setProjectHandle(derived);
+    }, [formData.projectName]);
+
+    // Validate handle
+    useEffect(() => {
+        setProjectHandleError(validateProjectHandle(projectHandle));
+    }, [projectHandle]);
+
+    const resolvedPath = joinPath(formData.path || defaultPath, projectHandle);
 
     const handlePathSelection = async () => {
         try {
@@ -134,12 +149,20 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
         setIsValidating(true);
         setProjectNameError(null);
         setPathError(null);
+        setProjectHandleError(null);
 
         let hasError = false;
 
         const nameError = validateProjectName(formData.projectName);
         if (nameError) {
             setProjectNameError(nameError);
+            hasError = true;
+        }
+
+        const hErr = validateProjectHandle(projectHandle);
+        if (hErr) {
+            setProjectHandleError(hErr);
+            setIsAdvancedExpanded(true);
             hasError = true;
         }
 
@@ -156,7 +179,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
         try {
             const validationResult = await wsClient.validateProjectPath({
                 projectPath: formData.path,
-                projectName: formData.projectName,
+                projectName: projectHandle,
                 createDirectory: true,
                 createAsWorkspace: true,
             });
@@ -178,6 +201,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                 createAsWorkspace: true,
                 orgName: formData.orgName || undefined,
                 version: formData.version || undefined,
+                projectHandle: projectHandle,
             });
         } catch (error) {
             setPathError("An error occurred during validation");
@@ -243,6 +267,28 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                     <ResolvedPathText>Will be created at: {resolvedPath}</ResolvedPathText>
                                 )}
                             </FieldGroup>
+
+                            <CollapsibleSection
+                                isExpanded={isAdvancedExpanded}
+                                onToggle={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
+                                icon="gear"
+                                title="Advanced Configurations"
+                                subtitle={!isAdvancedExpanded ? projectHandle : undefined}
+                            >
+                                <FieldGroup>
+                                    <TextField
+                                        onTextChange={(value) => {
+                                            handleTouched.current = true;
+                                            if (projectHandleError) setProjectHandleError(null);
+                                            setProjectHandle(value);
+                                        }}
+                                        value={projectHandle}
+                                        label="Project Id"
+                                        description="Unique identifier for this project. Used as the folder name."
+                                        errorMsg={projectHandleError || ""}
+                                    />
+                                </FieldGroup>
+                            </CollapsibleSection>
 
                             <FormFooter>
                                 <Button

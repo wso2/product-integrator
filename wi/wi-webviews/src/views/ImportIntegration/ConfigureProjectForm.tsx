@@ -37,6 +37,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         workspaceName: "",
         createWithinProject: false,
         withinProjectName: "",
+        projectHandle: "",
         orgName: "",
         version: "",
         isLibrary: false,
@@ -131,7 +132,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         try {
             // Validate the project path
             const targetNameForValidation = singleIntegrationData.createWithinProject
-                ? singleIntegrationData.withinProjectName
+                ? singleIntegrationData.projectHandle
                 : singleIntegrationData.packageName;
 
             const validationResult = await wsClient.validateProjectPath({
@@ -173,6 +174,9 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                 orgName: singleIntegrationData.orgName || undefined,
                 version: singleIntegrationData.version || undefined,
                 isLibrary: singleIntegrationData.isLibrary,
+                projectHandle: singleIntegrationData.createWithinProject
+                    ? singleIntegrationData.projectHandle
+                    : undefined,
             };
             setIsValidating(false);
             onNext(payload);

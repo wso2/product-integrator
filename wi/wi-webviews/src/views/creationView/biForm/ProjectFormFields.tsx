@@ -33,7 +33,7 @@ import {
 } from "./styles";
 import { PackageInfoSection } from "./components";
 import { Organization } from "./components/PackageInfoSection";
-import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
+import { sanitizePackageName, validatePackageName, validateOrgName, joinPath, sanitizeProjectHandle, validateProjectHandle } from "./utils";
 import { DEFAULT_PROJECT_NAME, ProjectFormData } from "./types";
 
 // Re-export for backwards compatibility
@@ -63,6 +63,7 @@ export interface ProjectFormFieldsProps {
     pathError?: string;
     projectNameError?: string;
     packageNameValidationError?: string;
+    projectHandleError?: string;
     organizations?: Organization[];
 }
 
@@ -73,6 +74,7 @@ export function ProjectFormFields({
     pathError,
     projectNameError,
     packageNameValidationError,
+    projectHandleError,
     organizations,
 }: ProjectFormFieldsProps) {
     const { wsClient } = useVisualizerContext();
@@ -83,19 +85,21 @@ export function ProjectFormFields({
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
     const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
+    const [handleError, setHandleError] = useState<string | null>(null);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [defaultPath, setDefaultPath] = useState("");
     const [pathTouched, setPathTouched] = useState(false);
     const [editablePath, setEditablePath] = useState("");
     const hasUserToggledCreateWithinProject = useRef(false);
     const hasAutoInitializedProjectMode = useRef(false);
+    const handleTouched = useRef(false);
     const firstFieldRef = useRef<HTMLInputElement>(null);
 
     const computeDisplayedPath = (): string => {
         const base = editablePath || formData.path || defaultPath;
         if (formData.createWithinProject) {
-            const projectPath = formData.withinProjectName
-                ? joinPath(base, formData.withinProjectName)
+            const projectPath = formData.projectHandle
+                ? joinPath(base, formData.projectHandle)
                 : base;
             return formData.packageName ? joinPath(projectPath, formData.packageName) : projectPath;
         }
@@ -138,9 +142,11 @@ export function ProjectFormFields({
         setPathTouched(false);
         if (checked) {
             const projectName = formData.withinProjectName || DEFAULT_PROJECT_NAME;
-            onFormDataChange({ createWithinProject: true, withinProjectName: projectName });
+            const handle = handleTouched.current ? formData.projectHandle : sanitizeProjectHandle(projectName);
+            onFormDataChange({ createWithinProject: true, withinProjectName: projectName, projectHandle: handle });
         } else {
-            onFormDataChange({ createWithinProject: false, withinProjectName: "" });
+            handleTouched.current = false;
+            onFormDataChange({ createWithinProject: false, withinProjectName: "", projectHandle: "" });
         }
     };
 
@@ -218,6 +224,26 @@ export function ProjectFormFields({
             setWithinProjectNameError(null);
         }
     }, [formData.withinProjectName, formData.createWithinProject]);
+
+    // Auto-derive projectHandle from withinProjectName unless the user has manually edited it
+    useEffect(() => {
+        if (handleTouched.current) return;
+        if (formData.createWithinProject && formData.withinProjectName) {
+            const derived = sanitizeProjectHandle(formData.withinProjectName);
+            if (derived !== formData.projectHandle) {
+                onFormDataChange({ projectHandle: derived });
+            }
+        }
+    }, [formData.withinProjectName, formData.createWithinProject]);
+
+    // Validate handle whenever it changes
+    useEffect(() => {
+        if (formData.createWithinProject) {
+            setHandleError(validateProjectHandle(formData.projectHandle));
+        } else {
+            setHandleError(null);
+        }
+    }, [formData.projectHandle, formData.createWithinProject]);
 
     // Focus and select the first field on mount — VSCodeTextField is a web component,
     // so the real <input> is inside its shadow DOM and needs to be targeted directly.
@@ -306,8 +332,19 @@ export function ProjectFormFields({
             <PackageInfoSection
                 isExpanded={isPackageInfoExpanded}
                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
-                data={{ packageName: formData.packageName, orgName: formData.orgName, version: formData.version }}
+                data={{
+                    packageName: formData.packageName,
+                    orgName: formData.orgName,
+                    version: formData.version,
+                    projectHandle: formData.createWithinProject ? formData.projectHandle : undefined,
+                }}
                 onChange={(data) => {
+                    if (data.projectHandle !== undefined) {
+                        handleTouched.current = true;
+                        if (handleError) setHandleError(null);
+                        onFormDataChange({ projectHandle: data.projectHandle });
+                        return;
+                    }
                     if (data.packageName !== undefined) {
                         setPackageNameTouched(data.packageName.length > 0);
                         if (packageNameError) setPackageNameError(null);
@@ -323,6 +360,7 @@ export function ProjectFormFields({
                 }}
                 orgNameError={orgNameError}
                 packageNameError={packageNameValidationError || packageNameError}
+                projectHandleError={projectHandleError || handleError}
                 organizations={organizations}
             />
         </>

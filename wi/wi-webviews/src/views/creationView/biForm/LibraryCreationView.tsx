@@ -21,7 +21,7 @@ import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
 import { useCloudContext, useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
-import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
+import { sanitizePackageName, validatePackageName, validateOrgName, joinPath, sanitizeProjectHandle, validateProjectHandle } from "./utils";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { PackageInfoSection } from "./components";
 import { SectionDivider, Description, ResolvedPathText, ProjectSectionContainer, ProjectSectionLabel, ProjectFieldCollapse, SkipOptionRow } from "./styles";
@@ -36,8 +36,6 @@ import {
     HeaderSubtitle,
     FormPanel,
     FormPanelHeader,
-    FormPanelTitle,
-    FormPanelSubtitle,
     FormBody,
     FormContent,
     FormFooter,
@@ -63,17 +61,20 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const isProjectModeSupported = useProjectModeSupported();
     const { path: workspacePath, isReady: workspaceReady } = useWorkspaceRoot();
     const firstFieldRef = useRef<HTMLInputElement>(null);
+    const handleTouched = useRef(false);
     const [packageNameTouched, setPackageNameTouched] = useState(false);
     const [withinProjectNameTouched, setWithinProjectNameTouched] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
     const [createWithinProject, setCreateWithinProject] = useState(false);
     const [withinProjectName, setWithinProjectName] = useState(DEFAULT_PROJECT_NAME);
+    const [withinProjectHandle, setWithinProjectHandle] = useState(() => sanitizeProjectHandle(DEFAULT_PROJECT_NAME));
     const [libraryNameError, setLibraryNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
     const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
+    const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
     const [formData, setFormData] = useState<LibraryFormData>({
         libraryName: DEFAULT_LIBRARY_NAME,
@@ -124,6 +125,24 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         setOrgNameError(validateOrgName(formData.orgName));
     }, [formData.orgName]);
 
+    // Auto-derive handle from withinProjectName unless manually edited
+    useEffect(() => {
+        if (handleTouched.current) return;
+        if (createWithinProject && withinProjectName) {
+            const derived = sanitizeProjectHandle(withinProjectName);
+            setWithinProjectHandle(derived);
+        }
+    }, [withinProjectName, createWithinProject]);
+
+    // Validate handle
+    useEffect(() => {
+        if (createWithinProject) {
+            setProjectHandleError(validateProjectHandle(withinProjectHandle));
+        } else {
+            setProjectHandleError(null);
+        }
+    }, [withinProjectHandle, createWithinProject]);
+
     // Focus and select the first field on mount — VSCodeTextField is a web component,
     // so the real <input> is inside its shadow DOM and needs to be targeted directly.
     useEffect(() => {
@@ -137,8 +156,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const computeDisplayedPath = (): string => {
         const base = formData.path || defaultPath;
         if (createWithinProject) {
-            const projectPath = withinProjectName
-                ? joinPath(base, withinProjectName)
+            const projectPath = withinProjectHandle
+                ? joinPath(base, withinProjectHandle)
                 : base;
             return formData.packageName ? joinPath(projectPath, formData.packageName) : projectPath;
         }
@@ -172,10 +191,15 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             setCreateWithinProject(true);
             if (!withinProjectName) {
                 setWithinProjectName(DEFAULT_PROJECT_NAME);
+                if (!handleTouched.current) {
+                    setWithinProjectHandle(sanitizeProjectHandle(DEFAULT_PROJECT_NAME));
+                }
             }
         } else {
+            handleTouched.current = false;
             setCreateWithinProject(false);
             setWithinProjectName("");
+            setWithinProjectHandle("");
         }
     };
 
@@ -215,6 +239,14 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             hasError = true;
         }
 
+        if (createWithinProject) {
+            const hErr = validateProjectHandle(withinProjectHandle);
+            if (hErr) {
+                setProjectHandleError(hErr);
+                hasError = true;
+            }
+        }
+
         if (hasError) {
             setIsValidating(false);
             return;
@@ -223,7 +255,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         try {
             const validationResult = await wsClient.validateProjectPath({
                 projectPath: formData.path,
-                projectName: createWithinProject ? withinProjectName : formData.packageName,
+                projectName: createWithinProject ? withinProjectHandle : formData.packageName,
                 createDirectory: true,
                 createAsWorkspace: createWithinProject,
             });
@@ -252,6 +284,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 orgName: formData.orgName || undefined,
                 version: formData.version || undefined,
                 isLibrary: true,
+                projectHandle: createWithinProject ? withinProjectHandle : undefined,
             });
         } catch (error) {
             setPathError("An error occurred during validation");
@@ -352,8 +385,19 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                             <PackageInfoSection
                                 isExpanded={isPackageInfoExpanded}
                                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
-                                data={{ packageName: formData.packageName, orgName: formData.orgName, version: formData.version }}
+                                data={{
+                                    packageName: formData.packageName,
+                                    orgName: formData.orgName,
+                                    version: formData.version,
+                                    projectHandle: createWithinProject ? withinProjectHandle : undefined,
+                                }}
                                 onChange={(data) => {
+                                    if (data.projectHandle !== undefined) {
+                                        handleTouched.current = true;
+                                        if (projectHandleError) setProjectHandleError(null);
+                                        setWithinProjectHandle(data.projectHandle);
+                                        return;
+                                    }
                                     if (data.packageName !== undefined) {
                                         setPackageNameTouched(data.packageName.length > 0);
                                         if (packageNameError) setPackageNameError(null);
@@ -366,6 +410,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                 isLibrary={true}
                                 packageNameError={packageNameError}
                                 orgNameError={orgNameError}
+                                projectHandleError={projectHandleError}
                                 organizations={organizations}
                             />
 

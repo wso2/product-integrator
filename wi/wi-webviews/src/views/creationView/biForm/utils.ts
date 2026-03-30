@@ -116,6 +116,36 @@ export const sanitizePackageName = (name: string): string => {
         .replace(/_{2,}/g, "_"); // Convert multiple consecutive underscores to single underscore
 };
 
+/** Max length for a project handle, matching common identifier limits (e.g. Kubernetes labels). */
+const PROJECT_HANDLE_MAX_LENGTH = 63;
+
+/**
+ * Derives a valid project handle from a raw name.
+ * Rules: lowercase letters, digits, and hyphens only; no leading/trailing hyphens; max 63 chars.
+ */
+export const sanitizeProjectHandle = (name: string): string => {
+    return name
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "-")        // replace anything non-alphanumeric with hyphen
+        .replace(/-{2,}/g, "-")              // collapse consecutive hyphens
+        .replace(/^-+|-+$/g, "")            // trim leading/trailing hyphens
+        .slice(0, PROJECT_HANDLE_MAX_LENGTH);
+};
+
+/**
+ * Validates a project handle string.
+ * Returns an error message, or null if valid.
+ */
+export const validateProjectHandle = (handle: string): string | null => {
+    if (!handle || handle.length === 0) return "Project handle is required";
+    if (handle.length < 2) return "Project handle must be at least 2 characters";
+    if (handle.length > PROJECT_HANDLE_MAX_LENGTH) return `Project handle cannot exceed ${PROJECT_HANDLE_MAX_LENGTH} characters`;
+    if (!/^[a-z0-9-]+$/.test(handle)) return "Project handle can only contain lowercase letters, digits, or hyphens";
+    if (handle.startsWith("-")) return "Project handle cannot start with a hyphen";
+    if (handle.endsWith("-")) return "Project handle cannot end with a hyphen";
+    return null;
+};
+
 // Reserved organization names
 const RESERVED_ORG_NAMES = ["ballerina", "ballerinax", "wso2"];
 
