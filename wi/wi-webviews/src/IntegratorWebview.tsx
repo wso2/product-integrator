@@ -21,14 +21,15 @@ import { WelcomeView } from "./views/WelcomeView";
 import { CreationView } from "./views/creationView";
 import { ImportIntegration } from "./views/ImportIntegration";
 import { SamplesView } from "./views/samplesView";
+import { ComponentFormView } from "./views/componentFormView";
 import { useVisualizerContext } from "./contexts";
 import { ProgressIndicator } from "@wso2/ui-toolkit";
 
 function IntegratorWebview() {
-	const { rpcClient, webviewContext } = useVisualizerContext();
+	const { wsClient, webviewContext } = useVisualizerContext();
 
 	const goBackToWelcome = () => {
-		rpcClient.getMainRpcClient().closeWebview();
+		wsClient.closeWebview();
 	};
 
 	switch (webviewContext?.currentView) {
@@ -51,6 +52,8 @@ function IntegratorWebview() {
 			return (
 				<ImportIntegration onBack={goBackToWelcome} />
 			);
+		case ViewType.CREATE_CLOUD_INTEGRATION:
+			return <ComponentFormView />;
 		default:
 			return (
 				<div style={{ padding: "2rem", textAlign: "center" }}>

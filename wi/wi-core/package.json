@@ -20,7 +20,8 @@
   },
   "dependencies": {
     "vscode-messenger-common": "^0.5.1",
-    "vscode-messenger-webview": "^0.5.1"
+    "vscode-messenger-webview": "^0.5.1",
+    "@wso2/wso2-platform-core": "workspace:*"
   },
   "repository": {
     "type": "git",

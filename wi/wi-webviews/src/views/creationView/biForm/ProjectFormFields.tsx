@@ -16,142 +16,207 @@
  * under the License.
  */
 
-import { useEffect, useState } from "react";
-import { LocationSelector, TextField, CheckBox, LinkButton, ThemeColors, Codicon } from "@wso2/ui-toolkit";
-import styled from "@emotion/styled";
-import { useVisualizerContext } from "../../../contexts/RpcContext";
-import { sanitizePackageName, validatePackageName } from "./utils";
+import { useEffect, useState, useRef } from "react";
+import { TextField, CheckBox } from "@wso2/ui-toolkit";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
-import { CollapsibleSection, PackageInfoSection, ProjectTypeSelector } from "./components";
+import { useVisualizerContext } from "../../../contexts/WsContext";
+import { useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
+import {
+    FieldGroup,
+    Description,
+    SectionDivider,
+    ResolvedPathText,
+    ProjectSectionContainer,
+    ProjectSectionLabel,
+    ProjectFieldCollapse,
+    SkipOptionRow,
+} from "./styles";
+import { PackageInfoSection } from "./components";
+import { Organization } from "./components/PackageInfoSection";
+import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
+import { DEFAULT_PROJECT_NAME, ProjectFormData } from "./types";
 
-const FieldGroup = styled.div`
-    margin-bottom: 20px;
-`;
+// Re-export for backwards compatibility
+export type { ProjectFormData } from "./types";
 
-const CheckboxContainer = styled.div`
-    margin: 16px 0;
-`;
-
-const OptionalConfigRow = styled.div`
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    margin-bottom: 8px;
-`;
-
-const OptionalConfigButtonContainer = styled.div`
-    display: flex;
-    flex-direction: row;
-    flex-grow: 1;
-    justify-content: flex-end;
-`;
-
-const OptionalConfigContent = styled.div`
-    margin-top: 16px;
-`;
-
-const Description = styled.div`
-    color: var(--vscode-list-deemphasizedForeground);
-    margin-top: 4px;
-    text-align: left;
-`;
-
-export const SectionDivider = styled.div`
-    height: 1px;
-    background: var(--vscode-panel-border);
-    margin: 24px 0 20px 0;
-`;
-
-export const OptionalSectionsLabel = styled.div`
-    font-size: 11px;
-    letter-spacing: 0.5px;
-    color: var(--vscode-descriptionForeground);
-    margin-bottom: 12px;
-`;
-
-export interface BaseProjectFormData {
-    integrationName: string;
-    packageName: string;
-    orgName: string;
-    version: string;
-    isLibrary: boolean;
-}
-
-/**
- * Form data for the AddProject form (adding to existing workspace)
- */
-export interface AddProjectFormData extends BaseProjectFormData {
-    workspaceName?: string;
-}
-
-/**
- * Form data for the main Project form (creating new project)
- */
-export interface ProjectFormData extends BaseProjectFormData {
-    path: string;
-    createDirectory: boolean;
-    createAsWorkspace: boolean;
-    workspaceName: string;
-}
+const validateWithinProjectName = (name: string): string | null => {
+    if (!name || name.trim().length === 0) {
+        return "Project name is required";
+    }
+    if (!/^[a-zA-Z]/.test(name)) {
+        return "Project name must start with an alphabetic letter";
+    }
+    if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
+        return "Project name cannot contain special characters";
+    }
+    const letterCount = (name.match(/[a-zA-Z]/g) || []).length;
+    if (letterCount < 3) {
+        return "Project name must contain at least three letters";
+    }
+    return null;
+};
 
 export interface ProjectFormFieldsProps {
     formData: ProjectFormData;
     onFormDataChange: (data: Partial<ProjectFormData>) => void;
     integrationNameError?: string;
     pathError?: string;
+    projectNameError?: string;
     packageNameValidationError?: string;
+    organizations?: Organization[];
 }
 
-export function ProjectFormFields({ formData, onFormDataChange, integrationNameError, pathError, packageNameValidationError }: ProjectFormFieldsProps) {
-    const { rpcClient } = useVisualizerContext();
+export function ProjectFormFields({
+    formData,
+    onFormDataChange,
+    integrationNameError,
+    pathError,
+    projectNameError,
+    packageNameValidationError,
+    organizations,
+}: ProjectFormFieldsProps) {
+    const { wsClient } = useVisualizerContext();
+    const isProjectModeSupported = useProjectModeSupported();
+    const { path: workspacePath, isReady: workspaceReady } = useWorkspaceRoot();
     const [packageNameTouched, setPackageNameTouched] = useState(false);
+    const [withinProjectNameTouched, setWithinProjectNameTouched] = useState(false);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
-    const [isWorkspaceSupported, setIsWorkspaceSupported] = useState(false);
-    const [isProjectStructureExpanded, setIsProjectStructureExpanded] = useState(false);
+    const [orgNameError, setOrgNameError] = useState<string | null>(null);
+    const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
+    const [defaultPath, setDefaultPath] = useState("");
+    const [pathTouched, setPathTouched] = useState(false);
+    const [editablePath, setEditablePath] = useState("");
+    const hasUserToggledCreateWithinProject = useRef(false);
+    const hasAutoInitializedProjectMode = useRef(false);
 
-    const handleIntegrationName = (value: string) => {
-        onFormDataChange({ integrationName: value });
-        // Auto-populate package name if user hasn't manually edited it
-        if (!packageNameTouched) {
-            onFormDataChange({ packageName: sanitizePackageName(value) });
+    const computeDisplayedPath = (): string => {
+        const base = editablePath || formData.path || defaultPath;
+        if (formData.createWithinProject) {
+            const projectPath = formData.withinProjectName
+                ? joinPath(base, formData.withinProjectName)
+                : base;
+            return formData.packageName ? joinPath(projectPath, formData.packageName) : projectPath;
         }
+        return joinPath(base, formData.packageName);
     };
 
-    const handlePackageName = (value: string) => {
-        // Allow dots and other characters while typing
-        const sanitized = sanitizePackageName(value);
-        onFormDataChange({ packageName: sanitized });
-        setPackageNameTouched(value.length > 0);
+    const resolvedPath = computeDisplayedPath();
+
+    useEffect(() => {
+        if (!pathTouched) {
+            setEditablePath(formData.path || defaultPath);
+        }
+    }, [formData.path, defaultPath, pathTouched]);
+
+    const handleIntegrationName = (value: string) => {
+        setPathTouched(false);
+        const updates: Partial<ProjectFormData> = { integrationName: value };
+        if (!packageNameTouched) {
+            const sanitized = sanitizePackageName(value);
+            updates.packageName = sanitized;
+        }
+        onFormDataChange(updates);
     };
 
     const handleProjectDirSelection = async () => {
-        const projectDirectory = await rpcClient.getMainRpcClient().selectFileOrDirPath({});
-        onFormDataChange({ path: projectDirectory.path });
+        try {
+            const selectedDirectory = await wsClient.selectFileOrDirPath({ startPath: editablePath || formData.path || defaultPath });
+            if (!selectedDirectory.path) return;
+            setPathTouched(false);
+            setEditablePath(selectedDirectory.path);
+            onFormDataChange({ path: selectedDirectory.path });
+        } catch (error) {
+            console.error("Failed to select directory:", error);
+            return;
+        }
     };
 
-    const handleProjectStructureToggle = () => {
-        setIsProjectStructureExpanded(!isProjectStructureExpanded);
+    const handleCreateWithinProjectToggle = (checked: boolean) => {
+        hasUserToggledCreateWithinProject.current = true;
+        setPathTouched(false);
+        if (checked) {
+            const projectName = formData.withinProjectName || DEFAULT_PROJECT_NAME;
+            onFormDataChange({ createWithinProject: true, withinProjectName: projectName });
+        } else {
+            onFormDataChange({ createWithinProject: false, withinProjectName: "" });
+        }
     };
 
     useEffect(() => {
+        if (!workspaceReady) return;
         (async () => {
             if (!formData.path) {
-                const currentDir = await rpcClient.getMainRpcClient().getWorkspaceRoot();
-                onFormDataChange({ path: currentDir.path });
+                try {
+                    const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
+                    setDefaultPath(dp);
+                    onFormDataChange({ path: dp });
+                } catch (error) {
+                    console.error("Failed to fetch default creation path:", error);
+                    if (workspacePath) {
+                        setDefaultPath(workspacePath);
+                        onFormDataChange({ path: workspacePath });
+                    }
+                }
             }
-            const isWorkspaceSupported = await rpcClient
-                .getMainRpcClient()
-                .isSupportedSLVersion({ major: 2201, minor: 13, patch: 0 })
-                .catch((err) => {
-                    console.error("Failed to check workspace support:", err);
-                    return false;
-                });
-            setIsWorkspaceSupported(isWorkspaceSupported);
+            if (!formData.orgName) {
+                if (organizations && organizations.length > 0) {
+                    onFormDataChange({ orgName: organizations[0].handle });
+                } else {
+                    try {
+                        const { orgName } = await wsClient.getDefaultOrgName();
+                        onFormDataChange({ orgName });
+                    } catch (error) {
+                        console.error("Failed to fetch default org name:", error);
+                    }
+                }
+            }
+            if (
+                !hasAutoInitializedProjectMode.current &&
+                !hasUserToggledCreateWithinProject.current &&
+                isProjectModeSupported
+            ) {
+                hasAutoInitializedProjectMode.current = true;
+                const updates: Partial<ProjectFormData> = { createWithinProject: true };
+                if (!formData.withinProjectName) {
+                    updates.withinProjectName = DEFAULT_PROJECT_NAME;
+                }
+                onFormDataChange(updates);
+            }
         })();
-    }, []);
+    }, [
+        workspaceReady,
+        wsClient,
+        workspacePath,
+        isProjectModeSupported,
+        formData.path,
+        formData.orgName,
+        formData.packageName,
+        formData.withinProjectName,
+        formData.createWithinProject,
+        onFormDataChange,
+        organizations,
+    ]);
+
+    useEffect(() => {
+        const error = validatePackageName(formData.packageName, formData.integrationName);
+        setPackageNameError(error);
+    }, [formData.packageName, formData.integrationName]);
+
+    // Validation effect for org name
+    useEffect(() => {
+        const orgError = validateOrgName(formData.orgName);
+        setOrgNameError(orgError);
+    }, [formData.orgName]);
+
+    useEffect(() => {
+        if (formData.createWithinProject) {
+            const error = validateWithinProjectName(formData.withinProjectName);
+            setWithinProjectNameError(error);
+        } else {
+            setWithinProjectNameError(null);
+        }
+    }, [formData.withinProjectName, formData.createWithinProject]);
 
     return (
         <>
@@ -160,94 +225,94 @@ export function ProjectFormFields({ formData, onFormDataChange, integrationNameE
                 <TextField
                     onTextChange={handleIntegrationName}
                     value={formData.integrationName}
-                    label="Integration Name"
-                    placeholder="Enter an integration name"
+                    label={`Integration Name`}
+                    placeholder={`Enter an integration name`}
                     autoFocus={true}
                     required={true}
                     errorMsg={integrationNameError || ""}
                 />
             </FieldGroup>
 
-            <FieldGroup>
-                <TextField
-                    onTextChange={handlePackageName}
-                    value={formData.packageName}
-                    label="Package Name"
-                    description="This will be used as the Ballerina package name for the integration."
-                    errorMsg={packageNameValidationError || ""}
-                />
-            </FieldGroup>
+            {/* Project Name - shown by default when project mode is supported */}
+            {isProjectModeSupported && (
+                <ProjectSectionContainer>
+                    <ProjectSectionLabel>Project</ProjectSectionLabel>
+                    <ProjectFieldCollapse isVisible={formData.createWithinProject}>
+                        <TextField
+                            onTextChange={(value) => {
+                                setWithinProjectNameTouched(true);
+                                setPathTouched(false);
+                                if (withinProjectNameError) setWithinProjectNameError(null);
+                                onFormDataChange({ withinProjectName: value });
+                            }}
+                            value={formData.withinProjectName}
+                            label="Project Name"
+                            placeholder="Enter project name"
+                            required={true}
+                            errorMsg={projectNameError ?? (withinProjectNameTouched && withinProjectNameError ? withinProjectNameError : "")}
+                        />
+                    </ProjectFieldCollapse>
+                    <SkipOptionRow>
+                        <CheckBox
+                            label="Create within a project"
+                            checked={formData.createWithinProject}
+                            onChange={handleCreateWithinProjectToggle}
+                        />
+                        <Description style={{ marginTop: "6px" }}>
+                            Enable project mode to manage multiple integrations and libraries within a single repository.
+                        </Description>
+                    </SkipOptionRow>
+                </ProjectSectionContainer>
+            )}
 
             <FieldGroup>
                 <DirectorySelector
                     id="project-folder-selector"
                     label="Select Path"
-                    placeholder="Enter path or browse to select a folder..."
-                    selectedPath={formData.path}
+                    placeholder="Browse to select a folder..."
+                    selectedPath={editablePath}
                     required={true}
                     onSelect={handleProjectDirSelection}
-                    onChange={(value) => onFormDataChange({ path: value })}
+                    onChange={(value) => {
+                        setPathTouched(true);
+                        setEditablePath(value);
+                    }}
+                    onBlur={() => {
+                        if (pathTouched && editablePath !== formData.path) {
+                            onFormDataChange({ path: editablePath });
+                        }
+                    }}
                     errorMsg={pathError || undefined}
                 />
-
-                <CheckboxContainer>
-                    <CheckBox
-                        label={`Create a new folder using the ${formData.createAsWorkspace ? "workspace name" : "package name"}`}
-                        checked={formData.createDirectory}
-                        onChange={(checked) => onFormDataChange({ createDirectory: checked })}
-                    />
-                </CheckboxContainer>
+                {resolvedPath && resolvedPath !== editablePath && (
+                    <ResolvedPathText>Will be created at: {resolvedPath}</ResolvedPathText>
+                )}
             </FieldGroup>
 
             <SectionDivider />
-            <OptionalSectionsLabel>Optional Configurations</OptionalSectionsLabel>
 
-            {/* Project Structure Section */}
-            {isWorkspaceSupported && (
-                <CollapsibleSection
-                    isExpanded={isProjectStructureExpanded}
-                    onToggle={handleProjectStructureToggle}
-                    icon="folder"
-                    title="Project Structure"
-                >
-                    <CheckboxContainer>
-                        <CheckBox
-                            label="Create as workspace"
-                            checked={formData.createAsWorkspace}
-                            onChange={(checked) => onFormDataChange({ createAsWorkspace: checked })}
-                        />
-                        <Description>
-                            Include this integration in a new workspace for multi-project management.
-                        </Description>
-                    </CheckboxContainer>
-                    {formData.createAsWorkspace && (
-                        <>
-                            <FieldGroup>
-                                <TextField
-                                    onTextChange={(value) => onFormDataChange({ workspaceName: value })}
-                                    value={formData.workspaceName}
-                                    label="Workspace Name"
-                                    placeholder="Enter workspace name"
-                                    required={true}
-                                />
-                            </FieldGroup>
-
-                            <ProjectTypeSelector
-                                value={formData.isLibrary}
-                                onChange={(isLibrary) => onFormDataChange({ isLibrary })}
-                                note="This sets the type for your first project. You can add more projects or libraries to this workspace later."
-                            />
-                        </>
-                    )}
-                </CollapsibleSection>
-            )}
-
-            {/* Package Information Section */}
+            {/* Ballerina Package Section */}
             <PackageInfoSection
                 isExpanded={isPackageInfoExpanded}
                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
-                data={{ orgName: formData.orgName, version: formData.version }}
-                onChange={(data) => onFormDataChange(data)}
+                data={{ packageName: formData.packageName, orgName: formData.orgName, version: formData.version }}
+                onChange={(data) => {
+                    if (data.packageName !== undefined) {
+                        setPackageNameTouched(data.packageName.length > 0);
+                        if (packageNameError) setPackageNameError(null);
+                        setPathTouched(false);
+                        const updates: Partial<ProjectFormData> = { ...data };
+                        if (!withinProjectNameTouched && !formData.withinProjectName) {
+                            updates.withinProjectName = DEFAULT_PROJECT_NAME;
+                        }
+                        onFormDataChange(updates);
+                        return;
+                    }
+                    onFormDataChange(data);
+                }}
+                orgNameError={orgNameError}
+                packageNameError={packageNameValidationError || packageNameError}
+                organizations={organizations}
             />
         </>
     );

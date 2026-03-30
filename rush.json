@@ -22,14 +22,14 @@
             "shouldPublish": false
         },
         {
-            "packageName": "@wso2/wi-core",
-            "projectFolder": "wi/wi-core",
+            "packageName": "@wso2/wso2-platform-core",
+            "projectFolder": "external/wso2-vscode-extensions/workspaces/wso2-platform/wso2-platform-core",
             "reviewCategory": "production",
             "shouldPublish": false
         },
         {
-            "packageName": "@wso2/wi-rpc-client",
-            "projectFolder": "wi/wi-rpc-client",
+            "packageName": "@wso2/wi-core",
+            "projectFolder": "wi/wi-core",
             "reviewCategory": "production",
             "shouldPublish": false
         },
@@ -42,6 +42,12 @@
         {
             "packageName": "wso2-integrator",
             "projectFolder": "wi/wi-extension",
+            "reviewCategory": "production",
+            "shouldPublish": false
+        },
+        {
+            "packageName": "webview-giga-bridge",
+            "projectFolder": "wi/webview-giga-bridge",
             "reviewCategory": "production",
             "shouldPublish": false
         }

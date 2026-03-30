@@ -22,13 +22,12 @@ import { Codicon } from "@wso2/ui-toolkit";
 
 const SelectorContainer = styled.div`
     position: relative;
-    top: -35px;
     cursor: pointer;
     width: fit-content;
 `;
 
 const PropertyKey = styled.span`
-    color: var(--vscode-descriptionForeground);
+    color: var(--vscode-editor-foreground);
     font-weight: 500;
 `;
 
@@ -38,18 +37,31 @@ const PropertyValue = styled.span`
     font-family: var(--vscode-editor-font-family);
 `;
 
-const PropertyInline = styled.div`
+const PropertyInline = styled.div<{ active?: boolean }>`
     display: inline-flex;
     align-items: center;
     gap: 6px;
     padding: 3px 8px;
-    background: var(--vscode-input-background);
-    border: 1px solid var(--vscode-editorWidget-border);
+    background: ${({ active }: { active?: boolean }) =>
+        active ? 'var(--vscode-foreground)' : 'var(--vscode-sideBar-background)'};
+    border: 1px solid ${({ active }: { active?: boolean }) =>
+        active ? 'var(--vscode-foreground)' : 'var(--vscode-widget-border)'};
     border-radius: 4px;
     font-size: 11px;
     height: 24px;
-    pointer-events: none;
     width: fit-content;
+    transition: background 0.15s ease, border-color 0.15s ease;
+
+    span {
+        color: ${({ active }: { active?: boolean }) =>
+            active ? 'var(--vscode-editor-background)' : 'var(--vscode-disabledForeground)'};
+    }
+
+    &:hover {
+        background: ${({ active }: { active?: boolean }) =>
+            active ? 'var(--vscode-foreground)' : 'var(--vscode-toolbar-hoverBackground)'};
+        filter: ${({ active }: { active?: boolean }) => active ? 'brightness(0.9)' : 'none'};
+    }
 `;
 
 const DropdownMenu = styled.div`
@@ -97,11 +109,11 @@ export interface IntegrationTypeSelectorProps {
     onChange: (value: string) => void;
 }
 
-export function IntegrationTypeSelector({ 
-    label = "Type:", 
-    value, 
-    options, 
-    onChange 
+export function IntegrationTypeSelector({
+    label = "Type:",
+    value,
+    options,
+    onChange
 }: IntegrationTypeSelectorProps) {
     const [showDropdown, setShowDropdown] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -124,32 +136,17 @@ export function IntegrationTypeSelector({
     }, [showDropdown]);
 
     return (
-        <SelectorContainer ref={dropdownRef} onClick={() => setShowDropdown(!showDropdown)}>
-            <PropertyInline>
-                <PropertyKey>{label}</PropertyKey>
-                <PropertyValue>{value}</PropertyValue>
-                <Codicon
-                    name="chevron-down"
-                    sx={{ fontSize: 10, color: "var(--vscode-editor-foreground)" }}
-                />
-            </PropertyInline>
-            {showDropdown && (
-                <DropdownMenu>
-                    {options.map((option) => (
-                        <DropdownItem
-                            key={option.value}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onChange(option.value);
-                                setShowDropdown(false);
-                            }}
-                        >
-                            {option.label}
-                        </DropdownItem>
-                    ))}
-                </DropdownMenu>
-            )}
-        </SelectorContainer>
+        <div style={{ display: 'flex', flexDirection: 'row', gap: '8px', alignItems: 'center', position: 'relative', top: '-35px' }}>
+            <PropertyKey>{label}</PropertyKey>
+            {options.map((option) => (
+                <SelectorContainer key={option.value} ref={dropdownRef} onClick={() => onChange(option.value)}>
+                    <PropertyInline active={option.value === value}>
+                        <PropertyKey>{option.label}</PropertyKey>
+                    </PropertyInline>
+                </SelectorContainer>
+            ))}
+        </div>
+
     );
 }
 

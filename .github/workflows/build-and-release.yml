@@ -87,6 +87,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+          ref: ${{ github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -324,7 +325,7 @@ jobs:
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
+          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
           cd ./installers/mac
           wget -O ballerina.zip "$BALLERINA_URL"
@@ -401,6 +402,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+          ref: ${{ github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -641,7 +643,7 @@ jobs:
           if ($ICP_VERSION -ne $ICP_VERSION_FILENAME) {
             $ICP_VERSION_FILENAME = "${ICP_VERSION_FILENAME}-SNAPSHOT"
           }
-          $ICP_URL = "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integrator-icp-${ICP_VERSION}.zip"
+          $ICP_URL = "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           $INTEGRATOR_VERSION = "${{ github.event.inputs.integrator_version }}"
           cd .\installers\windows
           Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"

@@ -17,17 +17,55 @@
  */
 
 import * as vscode from "vscode";
+import path from "path";
+import { activateCloudFunctionality } from "./cloud/activate";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
+import { WICloudExtensionAPI } from "./cloud/cloud-ext-api";
+import { IWso2PlatformExtensionAPI } from "@wso2/wso2-platform-core";
+import { BridgeLayer } from "./BridgeLayer";
+import { ViewType } from "@wso2/wi-core";
+import { getPlatform } from "./ws-managers/main/utils";
+
+interface ExtensionExports {
+	cloudAPIs: IWso2PlatformExtensionAPI;
+}
+
+const EMBEDDED_WELCOME_PROJECT_URI = "__wso2_integrator_embedded_welcome__";
+const GET_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND = "wso2.integrator.getEmbeddedWelcomeBootstrap";
+
+function registerEmbeddedWelcomeBootstrapCommand(context: vscode.ExtensionContext): void {
+	context.subscriptions.push(
+		vscode.commands.registerCommand(GET_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND, async () => {
+			StateMachine.setCurrentView(ViewType.WELCOME);
+
+			const bootstrap = BridgeLayer.startWebSocketServer(EMBEDDED_WELCOME_PROJECT_URI);
+			BridgeLayer.notifyStateChanged(EMBEDDED_WELCOME_PROJECT_URI, {
+				currentView: ViewType.WELCOME,
+				projectUri: EMBEDDED_WELCOME_PROJECT_URI,
+				platform: getPlatform(),
+				pathSeparator: path.sep,
+				env: {
+					MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || "",
+					BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || "",
+				},
+			});
+
+			return bootstrap;
+		}),
+	);
+}
 
 /**
  * Activate the extension
  */
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
+export async function activate(context: vscode.ExtensionContext): Promise<ExtensionExports> {
 	ext.context = context;
 	ext.log("Activating WSO2 Integrator Extension");
 
 	try {
+		registerEmbeddedWelcomeBootstrapCommand(context);
+
 		// Initialize state machine - this will handle everything:
 		// 1. Project type detection
 		// 2. Extension activation based on project type
@@ -36,7 +74,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		// 5. Webview manager setup
 		StateMachine.initialize();
 
+		// Boot cloud/RPC/auth functionality
+		await activateCloudFunctionality(context);
+		const exports: ExtensionExports = { cloudAPIs: new WICloudExtensionAPI() };
 		ext.log("WSO2 Integrator Extension activated successfully");
+		return exports;
 	} catch (error) {
 		ext.logError("Failed to activate WSO2 Integrator Extension", error as Error);
 		vscode.window.showErrorMessage(

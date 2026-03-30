@@ -5,7 +5,7 @@ set -euo pipefail
 VERSION=${1:-"1.0.0"}
 
 echo '{
-    "commit": "'$VERSION'",
+    "wiversion": "'$VERSION'",
     "quality": "stable",
     "nameShort": "WSO2 Integrator",
     "nameLong": "WSO2 Integrator",
@@ -43,7 +43,8 @@ echo '{
       "https://console.devant.dev"
     ],
     "trustedExtensionProtocolHandlers": [
-      "wso2.wso2-platform"
+      "wso2.wso2-platform",
+      "wso2.wso2-integrator"
     ],
     "trustedExtensionAuthAccess": [
       "vscode.git", "vscode.github",
@@ -51,6 +52,7 @@ echo '{
       "github.copilot", "github.copilot-chat",
       "wso2.ballerina", "wso2.ballerina-integrator",
       "wso2.wso2-platform",
+      "wso2.wso2-integrator",
       "wso2.micro-integrator"
     ],
     "aiConfig": {
@@ -70,10 +72,6 @@ echo '{
     },
 	  "builtInExtensions": [
       {
-        "name": "wso2.wso2-platform",
-        "version": "1.0.23"
-      },
-      {
         "name": "redhat.vscode-yaml",
         "version": "latest"
       },
@@ -86,26 +84,30 @@ echo '{
         "version": "latest"
       },
       {
-        "name": "wso2.ballerina",
-        "version": "5.9.26031318"
+        "name": "wso2.wso2-platform",
+        "version": "1.0.23"
       },
       {
-        "name": "wso2.ballerina-integrator",
-        "version": "1.8.26031318"
+        "name": "wso2.hurl-client",
+        "version": "0.9.2"
+      },
+      {
+        "name": "wso2.ballerina",
+        "version": "5.9.326032720"
       },
       {
         "name": "wso2.micro-integrator",
-        "version": "3.1.526031212"
+        "version": "3.1.526032514"
       },
       {
         "name": "wso2.wso2-integrator",
-        "vsix": "../../wi/wi-extension/wso2-integrator-1.0.0.vsix",
-        "version": "latest"
+        "vsix": "../../wi/wi-extension/wso2-integrator-0.2.2.vsix",
+        "version": "0.2.2"
       }
 	  ],
     "runtimeEnv": {
       "common": {
-        "WSO2_INTEGRATOR_RUNTIME": "1"
+        "WSO2_INTEGRATOR_RUNTIME": "true"
       },
       "darwin": {
         "BALLERINA_HOME": "${APP_ROOT}/Contents/components/ballerina",

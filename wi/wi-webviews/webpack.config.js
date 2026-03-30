@@ -56,6 +56,10 @@ module.exports = {
     devServer: {
         allowedHosts: 'all',
         port: 3000,
+        static: {
+            directory: path.resolve(__dirname, "src"),
+            publicPath: "/",
+        },
         headers: {
             'Access-Control-Allow-Origin': '*',
         },
@@ -63,6 +67,9 @@ module.exports = {
             writeToDisk: true,
             mimeTypes: { 'text/css': ['css'] },
         },
+        open: process.env.WEB_VIEW_BROWSER_MODE === "true"
+            ? ['/browser.html?bridgeMode=websocket&wsServer=127.0.0.1&wsPort=8787']
+            : false,
         hot: true,
         compress: false, 
     },

@@ -22,7 +22,7 @@ import { ViewType } from "@wso2/wi-core";
 import { ext } from "./extensionVariables";
 import { WebviewManager } from "./webviewManager";
 import { ExtensionAPIs } from "./extensionAPIs";
-import { StateMachine } from "./stateMachine";
+import { StateMachine, getBIProjectExplorerProvider } from "./stateMachine";
 
 /**
  * Register all extension commands
@@ -129,17 +129,17 @@ export function registerCommands(
 	);
 
 	// Refresh explorer command
-	// Calls the BI and MI extensions' refresh commands to update their tree views
+	// Calls the BI and MI extensions' refresh commands to update their tree views.
 	ext.log(`Registering command: ${COMMANDS.REFRESH_EXPLORER}`);
 	context.subscriptions.push(
 		vscode.commands.registerCommand(COMMANDS.REFRESH_EXPLORER, () => {
 			ext.log("Refresh explorer command triggered");
-			// Trigger refresh for BI extension if available
-			if (extensionAPIs.isBIAvailable()) {
-				vscode.commands.executeCommand("BI.project-explorer.refresh").then(
-					() => ext.log("BI refresh completed"),
-					(error) => ext.logError("BI refresh failed", error)
-				);
+
+			// Refresh the internal BI project explorer
+			const internalBIProvider = getBIProjectExplorerProvider();
+			if (internalBIProvider) {
+				internalBIProvider.refresh();
+				ext.log("BI project explorer refresh triggered");
 			}
 			// Trigger refresh for MI extension if available
 			if (extensionAPIs.isMIAvailable()) {
