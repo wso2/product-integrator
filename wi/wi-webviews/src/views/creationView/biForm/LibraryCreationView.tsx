@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
@@ -62,6 +62,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const organizations = (authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined);
     const isProjectModeSupported = useProjectModeSupported();
     const { path: workspacePath, isReady: workspaceReady } = useWorkspaceRoot();
+    const firstFieldRef = useRef<HTMLInputElement>(null);
     const [packageNameTouched, setPackageNameTouched] = useState(false);
     const [withinProjectNameTouched, setWithinProjectNameTouched] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
@@ -122,6 +123,16 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     useEffect(() => {
         setOrgNameError(validateOrgName(formData.orgName));
     }, [formData.orgName]);
+
+    // Focus and select the first field on mount — VSCodeTextField is a web component,
+    // so the real <input> is inside its shadow DOM and needs to be targeted directly.
+    useEffect(() => {
+        setTimeout(() => {
+            const inner = (firstFieldRef.current as any)?.shadowRoot?.querySelector("input") as HTMLInputElement | null;
+            inner?.focus();
+            inner?.select();
+        }, 0);
+    }, []);
 
     const computeDisplayedPath = (): string => {
         const base = formData.path || defaultPath;
@@ -276,11 +287,11 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                         <FormContent>
                             <FieldGroup>
                                 <TextField
+                                    ref={firstFieldRef}
                                     onTextChange={handleLibraryName}
                                     value={formData.libraryName}
                                     label="Library Name"
                                     placeholder="Enter a library name"
-                                    autoFocus={true}
                                     required={true}
                                     errorMsg={libraryNameError || ""}
                                 />

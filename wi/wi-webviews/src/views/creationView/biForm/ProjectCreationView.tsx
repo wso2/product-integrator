@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button, Icon, TextField } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
@@ -68,6 +68,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
     const { authState } = useCloudContext();
     const organizations = authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined;
+    const firstFieldRef = useRef<HTMLInputElement>(null);
     const [isValidating, setIsValidating] = useState(false);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
@@ -91,6 +92,16 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
             }
         })();
     }, [wsClient]);
+
+    // Focus and select the first field on mount — VSCodeTextField is a web component,
+    // so the real <input> is inside its shadow DOM and needs to be targeted directly.
+    useEffect(() => {
+        setTimeout(() => {
+            const inner = (firstFieldRef.current as any)?.shadowRoot?.querySelector("input") as HTMLInputElement | null;
+            inner?.focus();
+            inner?.select();
+        }, 0);
+    }, []);
 
     useEffect(() => {
         if (formData.orgName) return;
@@ -201,6 +212,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                         <FormContent>
                             <FieldGroup>
                                 <TextField
+                                    ref={firstFieldRef}
                                     onTextChange={(value) => {
                                         if (projectNameError) setProjectNameError(null);
                                         setFormData(prev => ({ ...prev, projectName: value }));
@@ -208,7 +220,6 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                     value={formData.projectName}
                                     label="Project Name"
                                     placeholder="Enter a project name"
-                                    autoFocus={true}
                                     required={true}
                                     errorMsg={projectNameError || ""}
                                 />

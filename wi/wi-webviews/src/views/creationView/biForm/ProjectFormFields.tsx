@@ -89,6 +89,7 @@ export function ProjectFormFields({
     const [editablePath, setEditablePath] = useState("");
     const hasUserToggledCreateWithinProject = useRef(false);
     const hasAutoInitializedProjectMode = useRef(false);
+    const firstFieldRef = useRef<HTMLInputElement>(null);
 
     const computeDisplayedPath = (): string => {
         const base = editablePath || formData.path || defaultPath;
@@ -218,16 +219,26 @@ export function ProjectFormFields({
         }
     }, [formData.withinProjectName, formData.createWithinProject]);
 
+    // Focus and select the first field on mount — VSCodeTextField is a web component,
+    // so the real <input> is inside its shadow DOM and needs to be targeted directly.
+    useEffect(() => {
+        setTimeout(() => {
+            const inner = (firstFieldRef.current as any)?.shadowRoot?.querySelector("input") as HTMLInputElement | null;
+            inner?.focus();
+            inner?.select();
+        }, 0);
+    }, []);
+
     return (
         <>
             {/* Primary Fields - Always Visible */}
             <FieldGroup>
                 <TextField
+                    ref={firstFieldRef}
                     onTextChange={handleIntegrationName}
                     value={formData.integrationName}
                     label={`Integration Name`}
                     placeholder={`Enter an integration name`}
-                    autoFocus={true}
                     required={true}
                     errorMsg={integrationNameError || ""}
                 />
