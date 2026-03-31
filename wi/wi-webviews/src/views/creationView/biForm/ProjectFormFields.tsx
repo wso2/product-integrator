@@ -53,6 +53,7 @@ export interface ProjectFormFieldsProps {
     projectHandleError?: string;
     organizations?: Organization[];
     onCloudProjectNameError?: (error: string | null) => void;
+    onCloudProjectHandleError?: (error: string | null) => void;
 }
 
 export function ProjectFormFields({
@@ -65,6 +66,7 @@ export function ProjectFormFields({
     projectHandleError,
     organizations,
     onCloudProjectNameError,
+    onCloudProjectHandleError,
 }: ProjectFormFieldsProps) {
     const { wsClient } = useVisualizerContext();
     const { authState } = useCloudContext();
@@ -77,6 +79,7 @@ export function ProjectFormFields({
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
     const [handleError, setHandleError] = useState<string | null>(null);
     const [cloudProjectNameError, setCloudProjectNameError] = useState<string | null>(null);
+    const [cloudProjectHandleError, setCloudProjectHandleError] = useState<string | null>(null);
     const [matchedCloudProject, setMatchedCloudProject] = useState<{ project: any; org: any } | null>(null);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [defaultPath, setDefaultPath] = useState("");
@@ -274,6 +277,34 @@ export function ProjectFormFields({
         onCloudProjectNameError?.(cloudProjectNameError);
     }, [cloudProjectNameError]);
 
+    // Validate project handle against cached cloud project handles
+    useEffect(() => {
+        if (!cloudProjectsData?.projects || !formData.createWithinProject || !formData.projectHandle?.trim()) {
+            setCloudProjectHandleError(null);
+            return;
+        }
+        const handleToCheck = formData.projectHandle.trim().toLowerCase();
+        const matched = cloudProjectsData.projects.find(p => p.handle.toLowerCase() === handleToCheck);
+        if (matched) {
+            const suggested = suggestAvailableProjectName(
+                formData.projectHandle.trim(),
+                cloudProjectsData.projects.map(p => p.handle)
+            );
+            if (!handleTouched.current) {
+                onFormDataChange({ projectHandle: suggested });
+                setCloudProjectHandleError(null);
+            } else {
+                setCloudProjectHandleError("A project with this id already exists in cloud");
+            }
+        } else {
+            setCloudProjectHandleError(null);
+        }
+    }, [cloudProjectsData, formData.projectHandle, formData.createWithinProject]);
+
+    useEffect(() => {
+        onCloudProjectHandleError?.(cloudProjectHandleError);
+    }, [cloudProjectHandleError]);
+
     // Focus and select the first field on mount — VSCodeTextField is a web component,
     // so the real <input> is inside its shadow DOM and needs to be targeted directly.
     useEffect(() => {
@@ -403,7 +434,7 @@ export function ProjectFormFields({
                 }}
                 orgNameError={orgNameError}
                 packageNameError={packageNameValidationError || packageNameError}
-                projectHandleError={projectHandleError || handleError}
+                projectHandleError={projectHandleError || handleError || cloudProjectHandleError}
                 organizations={organizations}
             />
         </>

@@ -78,6 +78,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
     const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
     const [cloudProjectNameError, setCloudProjectNameError] = useState<string | null>(null);
+    const [cloudProjectHandleError, setCloudProjectHandleError] = useState<string | null>(null);
     const [matchedCloudProject, setMatchedCloudProject] = useState<{ project: any; org: any } | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
     const [formData, setFormData] = useState<LibraryFormData>({
@@ -188,6 +189,30 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         }
     }, [cloudProjectsData, withinProjectName, createWithinProject]);
 
+    // Validate project handle against cached cloud project handles
+    useEffect(() => {
+        if (!cloudProjectsData?.projects || !createWithinProject || !withinProjectHandle?.trim()) {
+            setCloudProjectHandleError(null);
+            return;
+        }
+        const handleToCheck = withinProjectHandle.trim().toLowerCase();
+        const matched = cloudProjectsData.projects.find(p => p.handle.toLowerCase() === handleToCheck);
+        if (matched) {
+            const suggested = suggestAvailableProjectName(
+                withinProjectHandle.trim(),
+                cloudProjectsData.projects.map(p => p.handle)
+            );
+            if (!handleTouched.current) {
+                setWithinProjectHandle(suggested);
+                setCloudProjectHandleError(null);
+            } else {
+                setCloudProjectHandleError("A project with this id already exists in cloud");
+            }
+        } else {
+            setCloudProjectHandleError(null);
+        }
+    }, [cloudProjectsData, withinProjectHandle, createWithinProject]);
+
     // Focus and select the first field on mount — VSCodeTextField is a web component,
     // so the real <input> is inside its shadow DOM and needs to be targeted directly.
     useEffect(() => {
@@ -295,6 +320,10 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         }
 
         if (cloudProjectNameError) {
+            hasError = true;
+        }
+
+        if (cloudProjectHandleError) {
             hasError = true;
         }
 
@@ -480,7 +509,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                 isLibrary={true}
                                 packageNameError={packageNameError}
                                 orgNameError={orgNameError}
-                                projectHandleError={projectHandleError}
+                                projectHandleError={projectHandleError || cloudProjectHandleError}
                                 organizations={organizations}
                             />
 

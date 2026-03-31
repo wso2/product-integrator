@@ -53,6 +53,7 @@ export function BIProjectForm() {
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
     const [cloudProjectNameError, setCloudProjectNameError] = useState<string | null>(null);
+    const [cloudProjectHandleError, setCloudProjectHandleError] = useState<string | null>(null);
     const createActionLabel = "Create Integration";
 
 
@@ -124,6 +125,10 @@ export function BIProjectForm() {
             hasError = true;
         }
 
+        if (cloudProjectHandleError) {
+            hasError = true;
+        }
+
         if (formData.path.length < 2) {
             setPathError("Please select a path for your integration");
             hasError = true;
@@ -192,6 +197,7 @@ export function BIProjectForm() {
                 projectHandleError={projectHandleError || undefined}
                 organizations={organizations}
                 onCloudProjectNameError={setCloudProjectNameError}
+                onCloudProjectHandleError={setCloudProjectHandleError}
                 />
 
             <ButtonWrapper>

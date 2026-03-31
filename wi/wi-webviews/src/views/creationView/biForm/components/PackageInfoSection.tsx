@@ -166,8 +166,8 @@ export function PackageInfoSection({
                     <TextField
                         onTextChange={(value) => onChange({ projectHandle: value })}
                         value={data.projectHandle}
-                        label="Project Handle"
-                        description="Unique identifier for this project. Used as the folder name."
+                        label="Project ID"
+                        description="A name to uniquely identify your project in various contexts. Editable only at the time you create the project, and cannot be changed after the project is created."
                         errorMsg={projectHandleError || undefined}
                     />
                 </FieldGroup>

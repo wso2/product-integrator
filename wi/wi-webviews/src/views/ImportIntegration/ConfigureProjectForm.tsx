@@ -58,6 +58,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
     const [singleIntegrationPackageNameError, setSingleIntegrationPackageNameError] = useState<string | null>(null);
     const [singleIntegrationProjectHandleError, setSingleIntegrationProjectHandleError] = useState<string | null>(null);
     const [singleIntegrationCloudProjectNameError, setSingleIntegrationCloudProjectNameError] = useState<string | null>(null);
+    const [singleIntegrationCloudProjectHandleError, setSingleIntegrationCloudProjectHandleError] = useState<string | null>(null);
     const selectedResourceTypeLabel = singleIntegrationData.isLibrary ? "Library" : "Integration";
 
     useEffect(() => {
@@ -147,6 +148,10 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         }
 
         if (singleIntegrationCloudProjectNameError) {
+            hasError = true;
+        }
+
+        if (singleIntegrationCloudProjectHandleError) {
             hasError = true;
         }
 
@@ -318,6 +323,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                         projectNameError={projectNameError || undefined}
                         projectHandleError={singleIntegrationProjectHandleError || undefined}
                         onCloudProjectNameError={setSingleIntegrationCloudProjectNameError}
+                        onCloudProjectHandleError={setSingleIntegrationCloudProjectHandleError}
                     />
 
                     <ButtonWrapper>

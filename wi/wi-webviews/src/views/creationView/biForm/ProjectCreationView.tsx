@@ -60,6 +60,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const [pathError, setPathError] = useState<string | null>(null);
     const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
     const [cloudProjectNameError, setCloudProjectNameError] = useState<string | null>(null);
+    const [cloudProjectHandleError, setCloudProjectHandleError] = useState<string | null>(null);
     const [matchedCloudProject, setMatchedCloudProject] = useState<{ project: any; org: any } | null>(null);
     const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
     const [projectHandle, setProjectHandle] = useState(() => sanitizeProjectHandle(DEFAULT_PROJECT_NAME));
@@ -95,6 +96,30 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
             }
         })();
     }, [wsClient]);
+
+    // Validate project handle against cached cloud project handles
+    useEffect(() => {
+        if (!cloudProjectsData?.projects || !projectHandle?.trim()) {
+            setCloudProjectHandleError(null);
+            return;
+        }
+        const handleToCheck = projectHandle.trim().toLowerCase();
+        const matched = cloudProjectsData.projects.find(p => p.handle.toLowerCase() === handleToCheck);
+        if (matched) {
+            const suggested = suggestAvailableProjectName(
+                projectHandle.trim(),
+                cloudProjectsData.projects.map(p => p.handle)
+            );
+            if (!handleTouched.current) {
+                setProjectHandle(suggested);
+                setCloudProjectHandleError(null);
+            } else {
+                setCloudProjectHandleError("A project with this id already exists in cloud");
+            }
+        } else {
+            setCloudProjectHandleError(null);
+        }
+    }, [cloudProjectsData, projectHandle]);
 
     // Focus and select the first field on mount — VSCodeTextField is a web component,
     // so the real <input> is inside its shadow DOM and needs to be targeted directly.
@@ -201,6 +226,10 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
         }
 
         if (cloudProjectNameError) {
+            hasError = true;
+        }
+
+        if (cloudProjectHandleError) {
             hasError = true;
         }
 
@@ -331,9 +360,9 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                             setProjectHandle(value);
                                         }}
                                         value={projectHandle}
-                                        label="Project Id"
-                                        description="Unique identifier for this project. Used as the folder name."
-                                        errorMsg={projectHandleError || ""}
+                                        label="Project ID"
+                                        description="A name to uniquely identify your project in various contexts. Editable only at the time you create the project, and cannot be changed after the project is created."
+                                        errorMsg={projectHandleError || cloudProjectHandleError || ""}
                                     />
                                 </FieldGroup>
                             </CollapsibleSection>
