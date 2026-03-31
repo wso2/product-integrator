@@ -22,7 +22,7 @@ import { useVisualizerContext } from "../../contexts";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { BodyText } from "./styles";
 import { ProjectFormData, ProjectFormFields } from "../creationView/biForm/ProjectFormFields";
-import { validatePackageName } from "../creationView/biForm/utils";
+import { validatePackageName, validateProjectName, validateProjectHandle, validateOrgName } from "../creationView/biForm/utils";
 import { MultiProjectFormData, MultiProjectFormFields } from "./components/MultiProjectFormFields";
 import { ButtonWrapper } from "./styles";
 import { ConfigureProjectFormProps } from "./types";
@@ -56,6 +56,8 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
     const [singleIntegrationPathError, setSingleIntegrationPathError] = useState<string | null>(null);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [singleIntegrationPackageNameError, setSingleIntegrationPackageNameError] = useState<string | null>(null);
+    const [singleIntegrationProjectHandleError, setSingleIntegrationProjectHandleError] = useState<string | null>(null);
+    const [singleIntegrationCloudProjectNameError, setSingleIntegrationCloudProjectNameError] = useState<string | null>(null);
     const selectedResourceTypeLabel = singleIntegrationData.isLibrary ? "Library" : "Integration";
 
     useEffect(() => {
@@ -80,6 +82,9 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         if (singleIntegrationPackageNameError) {
             setSingleIntegrationPackageNameError(null);
         }
+        if (singleIntegrationProjectHandleError) {
+            setSingleIntegrationProjectHandleError(null);
+        }
     };
 
     const handleMultiProjectFormChange = (data: Partial<MultiProjectFormData>) => {
@@ -99,6 +104,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         setSingleIntegrationPathError(null);
         setProjectNameError(null);
         setSingleIntegrationPackageNameError(null);
+        setSingleIntegrationProjectHandleError(null);
 
         // Validate required fields first
         let hasError = false;
@@ -117,6 +123,31 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                 setSingleIntegrationPackageNameError(packageNameError);
                 hasError = true;
             }
+        }
+
+        if (singleIntegrationData.createWithinProject) {
+            const projectNameErr = validateProjectName(singleIntegrationData.withinProjectName.trim());
+            if (projectNameErr) {
+                setProjectNameError(projectNameErr);
+                hasError = true;
+            }
+        }
+
+        if (singleIntegrationData.createWithinProject) {
+            const handleErr = validateProjectHandle(singleIntegrationData.projectHandle);
+            if (handleErr) {
+                setSingleIntegrationProjectHandleError(handleErr);
+                hasError = true;
+            }
+        }
+
+        const orgErr = validateOrgName(singleIntegrationData.orgName);
+        if (orgErr) {
+            hasError = true;
+        }
+
+        if (singleIntegrationCloudProjectNameError) {
+            hasError = true;
         }
 
         if (singleIntegrationData.path.trim().length < 2) {
@@ -285,6 +316,8 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                         pathError={singleIntegrationPathError || undefined}
                         packageNameValidationError={singleIntegrationPackageNameError || undefined}
                         projectNameError={projectNameError || undefined}
+                        projectHandleError={singleIntegrationProjectHandleError || undefined}
+                        onCloudProjectNameError={setSingleIntegrationCloudProjectNameError}
                     />
 
                     <ButtonWrapper>

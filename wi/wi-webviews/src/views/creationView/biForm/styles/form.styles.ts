@@ -51,7 +51,7 @@ export const ProjectSectionLabel = styled.div`
 `;
 
 export const ProjectFieldCollapse = styled.div<{ isVisible: boolean }>`
-    max-height: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? "120px" : "0")};
+    max-height: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? "200px" : "0")};
     opacity: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? 1 : 0)};
     overflow: hidden;
     transition: max-height 0.25s ease, opacity 0.2s ease;
@@ -311,4 +311,40 @@ export const ResolvedPathText = styled.div`
     color: var(--vscode-descriptionForeground);
     margin-top: 6px;
     word-break: break-all;
+`;
+
+// ========== Cloud Duplicate Error Action Row ==========
+
+export const CloudErrorActionRow = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 12px;
+    font-family: var(--vscode-font-family);
+`;
+
+export const ActionLink = styled.button`
+    padding: 0;
+    background: none;
+    border: none;
+    font-size: 12px;
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover {
+        color: var(--vscode-textLink-activeForeground);
+        text-decoration: underline;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
+`;
+
+export const ActionSeparator = styled.span`
+    color: var(--vscode-descriptionForeground);
 `;

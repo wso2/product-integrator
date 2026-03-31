@@ -16,15 +16,16 @@
  * under the License.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
-import { useCloudContext, useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
-import { sanitizePackageName, validatePackageName, validateOrgName, joinPath, sanitizeProjectHandle, validateProjectHandle } from "./utils";
+import { useCloudContext, useCloudProjects, useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
+import { sanitizePackageName, validatePackageName, validateOrgName, joinPath, sanitizeProjectHandle, validateProjectHandle, validateProjectName, suggestAvailableProjectName } from "./utils";
+import { WICommandIds } from "@wso2/wso2-platform-core";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { PackageInfoSection } from "./components";
-import { SectionDivider, Description, ResolvedPathText, ProjectSectionContainer, ProjectSectionLabel, ProjectFieldCollapse, SkipOptionRow } from "./styles";
+import { SectionDivider, Description, ResolvedPathText, ProjectSectionContainer, ProjectSectionLabel, ProjectFieldCollapse, SkipOptionRow, CloudErrorActionRow, ActionLink } from "./styles";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -62,6 +63,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const { path: workspacePath, isReady: workspaceReady } = useWorkspaceRoot();
     const firstFieldRef = useRef<HTMLInputElement>(null);
     const handleTouched = useRef(false);
+    const withinProjectNameTouchedRef = useRef(false);
     const [packageNameTouched, setPackageNameTouched] = useState(false);
     const [withinProjectNameTouched, setWithinProjectNameTouched] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
@@ -75,6 +77,8 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
     const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
     const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
+    const [cloudProjectNameError, setCloudProjectNameError] = useState<string | null>(null);
+    const [matchedCloudProject, setMatchedCloudProject] = useState<{ project: any; org: any } | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
     const [formData, setFormData] = useState<LibraryFormData>({
         libraryName: DEFAULT_LIBRARY_NAME,
@@ -83,6 +87,18 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         orgName: "",
         version: "",
     });
+
+    const resolvedOrg = useMemo(() => {
+        if (!organizations || organizations.length === 0) return undefined;
+        return formData.orgName
+            ? (organizations.find(o => o.handle === formData.orgName) ?? organizations[0])
+            : organizations[0];
+    }, [organizations, formData.orgName]);
+
+    const { data: cloudProjectsData } = useCloudProjects(
+        resolvedOrg?.id?.toString(),
+        resolvedOrg?.handle
+    );
 
     useEffect(() => {
         if (!workspaceReady) return;
@@ -142,6 +158,35 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             setProjectHandleError(null);
         }
     }, [withinProjectHandle, createWithinProject]);
+
+    // Validate project name against cached cloud projects — synchronous, no debounce needed.
+    useEffect(() => {
+        if (!cloudProjectsData?.projects || !createWithinProject || !withinProjectName?.trim()) {
+            setCloudProjectNameError(null);
+            setMatchedCloudProject(null);
+            return;
+        }
+        const nameToCheck = withinProjectName.trim().toLowerCase();
+        const matched = cloudProjectsData.projects.find(p => p.name.toLowerCase() === nameToCheck);
+        if (matched) {
+            const suggested = suggestAvailableProjectName(
+                withinProjectName.trim(),
+                cloudProjectsData.projects.map(p => p.name)
+            );
+            if (!withinProjectNameTouchedRef.current) {
+                // Default name conflicts — silently auto-rename
+                setWithinProjectName(suggested);
+                setCloudProjectNameError(null);
+                setMatchedCloudProject(null);
+            } else {
+                setCloudProjectNameError("A project with this name already exists in cloud");
+                setMatchedCloudProject({ project: matched, org: resolvedOrg });
+            }
+        } else {
+            setCloudProjectNameError(null);
+            setMatchedCloudProject(null);
+        }
+    }, [cloudProjectsData, withinProjectName, createWithinProject]);
 
     // Focus and select the first field on mount — VSCodeTextField is a web component,
     // so the real <input> is inside its shadow DOM and needs to be targeted directly.
@@ -233,10 +278,12 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             hasError = true;
         }
 
-        if (createWithinProject && withinProjectName.trim().length === 0) {
-            setWithinProjectNameError("Project name is required");
-            setWithinProjectNameTouched(true);
-            hasError = true;
+        if (createWithinProject) {
+            const projectNameErr = validateProjectName(withinProjectName.trim());
+            if (projectNameErr) {
+                setWithinProjectNameError(projectNameErr);
+                hasError = true;
+            }
         }
 
         if (createWithinProject) {
@@ -245,6 +292,14 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 setProjectHandleError(hErr);
                 hasError = true;
             }
+        }
+
+        if (cloudProjectNameError) {
+            hasError = true;
+        }
+
+        if (orgNameError) {
+            hasError = true;
         }
 
         if (hasError) {
@@ -338,6 +393,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                         <TextField
                                             onTextChange={(value) => {
                                                 setWithinProjectNameTouched(true);
+                                                withinProjectNameTouchedRef.current = true;
                                                 setWithinProjectName(value);
                                                 if (withinProjectNameError) setWithinProjectNameError(null);
                                             }}
@@ -345,8 +401,22 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                             label="Project Name"
                                             placeholder="Enter project name"
                                             required={true}
-                                            errorMsg={withinProjectNameTouched && withinProjectName.trim().length === 0 ? (withinProjectNameError || "Project name is required") : ""}
+                                            errorMsg={withinProjectNameError || cloudProjectNameError || ""}
                                         />
+                                        {cloudProjectNameError && (
+                                            <CloudErrorActionRow>
+                                                {matchedCloudProject && (
+                                                    <ActionLink type="button" onClick={() =>
+                                                        wsClient.runCommand({
+                                                            command: WICommandIds.CloneProject,
+                                                            args: [{ organization: matchedCloudProject.org, project: matchedCloudProject.project, integrationOnly: true }],
+                                                        })
+                                                    }>
+                                                        Open existing project
+                                                    </ActionLink>
+                                                )}
+                                            </CloudErrorActionRow>
+                                        )}
                                     </ProjectFieldCollapse>
                                     <SkipOptionRow>
                                         <CheckBox

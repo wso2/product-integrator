@@ -73,6 +73,27 @@ export const isFormValidAddProject = (formData: AddProjectFormData, isInProject:
 };
 
 /**
+ * Validates a project name string.
+ * Returns an error message, or null if valid.
+ */
+export const validateProjectName = (name: string): string | null => {
+    if (!name || name.length === 0) {
+        return "Project name is required";
+    }
+    if (!/^[a-zA-Z]/.test(name)) {
+        return "Project name must start with an alphabetic letter";
+    }
+    if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
+        return "Project name cannot contain special characters";
+    }
+    const letterCount = (name.match(/[a-zA-Z]/g) || []).length;
+    if (letterCount < 3) {
+        return "Project name must contain at least three letters";
+    }
+    return null;
+};
+
+/**
  * Cross-platform path joining for webview display.
  * Detects the path separator from the base string itself.
  */
@@ -155,6 +176,21 @@ const RESERVED_ORG_NAMES = ["ballerina", "ballerinax", "wso2"];
 // RestrictedFollowingChar := AsciiLetter | Digit
 // AsciiLetter := A .. Z | a .. z
 const RESTRICTED_IDENTIFIER_REGEX = /^[a-zA-Z][a-zA-Z0-9]*(_[a-zA-Z0-9]+)*$/;
+
+/**
+ * Suggests the next available project name by appending a numeric suffix.
+ * Tries base-2, base-3, ... until a name not in existingNames is found.
+ */
+export const suggestAvailableProjectName = (base: string, existingNames: string[]): string => {
+    const lower = existingNames.map(n => n.toLowerCase());
+    let i = 2;
+    let candidate = `${base}-${i}`;
+    while (lower.includes(candidate.toLowerCase())) {
+        i++;
+        candidate = `${base}-${i}`;
+    }
+    return candidate;
+};
 
 export const validateOrgName = (orgName: string): string | null => {
     // Empty org name is allowed (optional field)

@@ -25,7 +25,7 @@ import {
 } from "./styles";
 import { ProjectFormFields } from "./ProjectFormFields";
 import { DEFAULT_INTEGRATION_NAME, DEFAULT_PROJECT_NAME, ProjectFormData } from "./types";
-import { validatePackageName, validateProjectHandle } from "./utils";
+import { validatePackageName, validateProjectHandle, validateProjectName, validateOrgName } from "./utils";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { useCloudContext } from "../../../providers";
 
@@ -52,6 +52,7 @@ export function BIProjectForm() {
     const [packageNameValidationError, setPackageNameValidationError] = useState<string | null>(null);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
+    const [cloudProjectNameError, setCloudProjectNameError] = useState<string | null>(null);
     const createActionLabel = "Create Integration";
 
 
@@ -99,11 +100,28 @@ export function BIProjectForm() {
         }
 
         if (formData.createWithinProject) {
+            const projectNameErr = validateProjectName(formData.withinProjectName.trim());
+            if (projectNameErr) {
+                setProjectNameError(projectNameErr);
+                hasError = true;
+            }
+        }
+
+        if (formData.createWithinProject) {
             const hErr = validateProjectHandle(formData.projectHandle);
             if (hErr) {
                 setProjectHandleError(hErr);
                 hasError = true;
             }
+        }
+
+        const orgErr = validateOrgName(formData.orgName);
+        if (orgErr) {
+            hasError = true;
+        }
+
+        if (cloudProjectNameError) {
+            hasError = true;
         }
 
         if (formData.path.length < 2) {
@@ -173,6 +191,7 @@ export function BIProjectForm() {
                 packageNameValidationError={packageNameValidationError || undefined}
                 projectHandleError={projectHandleError || undefined}
                 organizations={organizations}
+                onCloudProjectNameError={setCloudProjectNameError}
                 />
 
             <ButtonWrapper>

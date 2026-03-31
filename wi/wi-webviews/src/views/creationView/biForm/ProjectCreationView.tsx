@@ -16,13 +16,14 @@
  * under the License.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button, Icon, TextField } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
-import { useCloudContext } from "../../../providers";
+import { useCloudContext, useCloudProjects } from "../../../providers";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
-import { joinPath, sanitizeProjectHandle, validateProjectHandle } from "./utils";
+import { joinPath, sanitizeProjectHandle, validateProjectHandle, validateProjectName, suggestAvailableProjectName } from "./utils";
+import { WICommandIds } from "@wso2/wso2-platform-core";
 import { CollapsibleSection } from "./components";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
@@ -39,29 +40,13 @@ import {
     FormContent,
     FormFooter,
 } from "../../shared/FormPageLayout";
-import { ResolvedPathText } from "../biForm/styles";
+import { ResolvedPathText, CloudErrorActionRow, ActionLink } from "../biForm/styles";
 import { DEFAULT_PROJECT_NAME } from "./types";
 
 const FieldGroup = styled.div`
     margin-bottom: 20px;
 `;
 
-const validateProjectName = (name: string): string | null => {
-    if (!name || name.length === 0) {
-        return "Project name is required";
-    }
-    if (!/^[a-zA-Z]/.test(name)) {
-        return "Project name must start with an alphabetic letter";
-    }
-    if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
-        return "Project name cannot contain special characters";
-    }
-    const letterCount = (name.match(/[a-zA-Z]/g) || []).length;
-    if (letterCount < 3) {
-        return "Project name must contain at least three letters";
-    }
-    return null;
-};
 
 export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
@@ -69,10 +54,13 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const organizations = authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined;
     const firstFieldRef = useRef<HTMLInputElement>(null);
     const handleTouched = useRef(false);
+    const projectNameTouchedRef = useRef(false);
     const [isValidating, setIsValidating] = useState(false);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
     const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
+    const [cloudProjectNameError, setCloudProjectNameError] = useState<string | null>(null);
+    const [matchedCloudProject, setMatchedCloudProject] = useState<{ project: any; org: any } | null>(null);
     const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
     const [projectHandle, setProjectHandle] = useState(() => sanitizeProjectHandle(DEFAULT_PROJECT_NAME));
     const [defaultPath, setDefaultPath] = useState("");
@@ -82,6 +70,18 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
         orgName: "",
         version: "",
     });
+
+    const resolvedOrg = useMemo(() => {
+        if (!organizations || organizations.length === 0) return undefined;
+        return formData.orgName
+            ? (organizations.find(o => o.handle === formData.orgName) ?? organizations[0])
+            : organizations[0];
+    }, [organizations, formData.orgName]);
+
+    const { data: cloudProjectsData } = useCloudProjects(
+        resolvedOrg?.id?.toString(),
+        resolvedOrg?.handle
+    );
 
     useEffect(() => {
         (async () => {
@@ -131,6 +131,35 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
         setProjectHandleError(validateProjectHandle(projectHandle));
     }, [projectHandle]);
 
+    // Validate project name against cached cloud projects — synchronous, no debounce needed.
+    useEffect(() => {
+        if (!cloudProjectsData?.projects || !formData.projectName?.trim()) {
+            setCloudProjectNameError(null);
+            setMatchedCloudProject(null);
+            return;
+        }
+        const nameToCheck = formData.projectName.trim().toLowerCase();
+        const matched = cloudProjectsData.projects.find(p => p.name.toLowerCase() === nameToCheck);
+        if (matched) {
+            const suggested = suggestAvailableProjectName(
+                formData.projectName.trim(),
+                cloudProjectsData.projects.map(p => p.name)
+            );
+            if (!projectNameTouchedRef.current) {
+                // Default name conflicts — silently auto-rename
+                setFormData(prev => ({ ...prev, projectName: suggested }));
+                setCloudProjectNameError(null);
+                setMatchedCloudProject(null);
+            } else {
+                setCloudProjectNameError("A project with this name already exists in cloud");
+                setMatchedCloudProject({ project: matched, org: resolvedOrg });
+            }
+        } else {
+            setCloudProjectNameError(null);
+            setMatchedCloudProject(null);
+        }
+    }, [cloudProjectsData, formData.projectName]);
+
     const resolvedPath = joinPath(formData.path || defaultPath, projectHandle);
 
     const handlePathSelection = async () => {
@@ -168,6 +197,10 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
 
         if (formData.path.length < 2) {
             setPathError("Please select a path for your project");
+            hasError = true;
+        }
+
+        if (cloudProjectNameError) {
             hasError = true;
         }
 
@@ -238,6 +271,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                 <TextField
                                     ref={firstFieldRef}
                                     onTextChange={(value) => {
+                                        projectNameTouchedRef.current = true;
                                         if (projectNameError) setProjectNameError(null);
                                         setFormData(prev => ({ ...prev, projectName: value }));
                                     }}
@@ -245,8 +279,22 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                     label="Project Name"
                                     placeholder="Enter a project name"
                                     required={true}
-                                    errorMsg={projectNameError || ""}
+                                    errorMsg={projectNameError || cloudProjectNameError || ""}
                                 />
+                                {cloudProjectNameError && (
+                                    <CloudErrorActionRow>
+                                        {matchedCloudProject && (
+                                            <ActionLink type="button" onClick={() =>
+                                                wsClient.runCommand({
+                                                    command: WICommandIds.CloneProject,
+                                                    args: [{ organization: matchedCloudProject.org, project: matchedCloudProject.project, integrationOnly: true }],
+                                                })
+                                            }>
+                                                Open existing project
+                                            </ActionLink>
+                                        )}
+                                    </CloudErrorActionRow>
+                                )}
                             </FieldGroup>
 
                             <FieldGroup>
