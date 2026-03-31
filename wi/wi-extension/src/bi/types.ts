@@ -110,6 +110,9 @@ export interface ProjectStructure {
 }
 
 export interface ProjectStructureResponse {
+    workspaceName?: string;
+    workspaceTitle?: string;
+    workspacePath?: string;
     projects: ProjectStructure[];
 }
 
