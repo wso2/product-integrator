@@ -141,16 +141,23 @@ export const sanitizePackageName = (name: string): string => {
 const PROJECT_HANDLE_MAX_LENGTH = 63;
 
 /**
- * Derives a valid project handle from a raw name.
- * Rules: lowercase letters, digits, and hyphens only; no leading/trailing hyphens; max 63 chars.
+ * Sanitizes a string into a valid project handle.
+ * Rules: lowercase letters, digits, and hyphens only; no leading hyphens; max 63 chars.
+ * Pass `trimTrailing: true` (default) to also strip trailing hyphens — use this when
+ * deriving a handle programmatically. Pass `false` for live keystroke input so that a
+ * typed space is immediately visible as '-' while the user is mid-word.
  */
-export const sanitizeProjectHandle = (name: string): string => {
-    return name
+export const sanitizeProjectHandle = (name: string, { trimTrailing = true } = {}): string => {
+    let result = name
         .toLowerCase()
-        .replace(/[^a-z0-9]/g, "-")        // replace anything non-alphanumeric with hyphen
+        .replace(/[^a-z0-9-]/g, "-")        // replace anything non-alphanumeric with hyphen
         .replace(/-{2,}/g, "-")              // collapse consecutive hyphens
-        .replace(/^-+|-+$/g, "")            // trim leading/trailing hyphens
+        .replace(/^-+/, "")                  // trim leading hyphens
         .slice(0, PROJECT_HANDLE_MAX_LENGTH);
+    if (trimTrailing) {
+        result = result.replace(/-+$/, "");
+    }
+    return result;
 };
 
 /**

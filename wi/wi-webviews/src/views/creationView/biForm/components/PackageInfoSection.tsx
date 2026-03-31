@@ -22,7 +22,7 @@ import { Codicon, Dropdown, TextField } from "@wso2/ui-toolkit";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { FieldGroup, Note } from "../styles";
 import { CollapsibleSection } from "./CollapsibleSection";
-import { sanitizePackageName } from "../utils";
+import { sanitizePackageName, sanitizeProjectHandle } from "../utils";
 import { useVisualizerContext } from "../../../../contexts";
 import { useCloudContext } from "../../../../providers";
 
@@ -164,7 +164,7 @@ export function PackageInfoSection({
             {data.projectHandle !== undefined && (
                 <FieldGroup>
                     <TextField
-                        onTextChange={(value) => onChange({ projectHandle: value })}
+                        onTextChange={(value) => onChange({ projectHandle: sanitizeProjectHandle(value, { trimTrailing: false }) })}
                         value={data.projectHandle}
                         label="Project ID"
                         description="A name to uniquely identify your project in various contexts. Editable only at the time you create the project, and cannot be changed after the project is created."

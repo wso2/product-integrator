@@ -357,7 +357,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                         onTextChange={(value) => {
                                             handleTouched.current = true;
                                             if (projectHandleError) setProjectHandleError(null);
-                                            setProjectHandle(value);
+                                            setProjectHandle(sanitizeProjectHandle(value, { trimTrailing: false }));
                                         }}
                                         value={projectHandle}
                                         label="Project ID"
