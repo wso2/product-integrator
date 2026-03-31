@@ -72,6 +72,9 @@ export function BIProjectForm() {
         if (projectNameError) {
             setProjectNameError(null);
         }
+        if (projectHandleError) {
+            setProjectHandleError(null);
+        }
     };
 
     const handleCreateProject = async () => {
