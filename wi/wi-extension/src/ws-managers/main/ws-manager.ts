@@ -483,7 +483,7 @@ export class MainWsManager implements WIVisualizerAPI {
     private async writeLocalProjectYaml(projectRoot: string, projectName: string, projectHandle: string): Promise<void> {
         const choreoDir = path.join(projectRoot, '.choreo');
         const localProjectFile = path.join(choreoDir, 'local-project.yaml');
-        const content = `name: ${projectName}\nhandler: ${projectHandle}\n`;
+        const content = stringifyYaml({ name: projectName, handle: projectHandle });
         await fs.promises.mkdir(choreoDir, { recursive: true });
         await fs.promises.writeFile(localProjectFile, content, { encoding: 'utf8' });
     }
