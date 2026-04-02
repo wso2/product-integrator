@@ -317,6 +317,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             const hErr = validateProjectHandle(withinProjectHandle);
             if (hErr) {
                 setProjectHandleError(hErr);
+                setIsPackageInfoExpanded(true);
                 hasError = true;
             }
         }
@@ -330,6 +331,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         }
 
         if (orgNameError) {
+            setIsPackageInfoExpanded(true);
             hasError = true;
         }
 
@@ -513,7 +515,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                 orgNameError={orgNameError}
                                 projectHandleError={projectHandleError || cloudProjectHandleError}
                                 organizations={organizations}
-                                hasError={!!(packageNameError || orgNameError)}
+                                hasError={!!(packageNameError || orgNameError || projectHandleError || cloudProjectHandleError)}
                             />
 
                             <FormFooter>

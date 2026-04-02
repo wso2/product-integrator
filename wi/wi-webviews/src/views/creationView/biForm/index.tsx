@@ -118,12 +118,14 @@ export function BIProjectForm() {
             const hErr = validateProjectHandle(formData.projectHandle);
             if (hErr) {
                 setProjectHandleError(hErr);
+                setExpandAdvancedTrigger(t => t + 1);
                 hasError = true;
             }
         }
 
         const orgErr = validateOrgName(formData.orgName);
         if (orgErr) {
+            setExpandAdvancedTrigger(t => t + 1);
             hasError = true;
         }
 

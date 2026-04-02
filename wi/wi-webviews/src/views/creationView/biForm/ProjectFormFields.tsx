@@ -452,7 +452,7 @@ export function ProjectFormFields({
                 packageNameError={packageNameValidationError || packageNameError}
                 projectHandleError={projectHandleError || handleError || cloudProjectHandleError}
                 organizations={organizations}
-                hasError={!!(packageNameValidationError || packageNameError || orgNameError)}
+                hasError={!!(packageNameValidationError || packageNameError || orgNameError || projectHandleError || handleError || cloudProjectHandleError)}
             />
         </>
     );

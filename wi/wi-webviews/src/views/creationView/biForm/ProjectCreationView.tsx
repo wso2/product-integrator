@@ -345,6 +345,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                 onToggle={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
                                 icon="gear"
                                 title="Advanced Configurations"
+                                hasError={!!(projectHandleError || cloudProjectHandleError)}
                             >
                                 <FieldGroup>
                                     <TextField
