@@ -36,7 +36,7 @@ on:
         required: false
         type: string
       ballerina_extension_version:
-        description: 'Specify the archived Ballerina VSIX version to bundle from wso2/product-integrator GitHub releases'
+        description: 'Specify the archived Ballerina VSIX version to bundle from wso2/ballerina-vscode GitHub releases'
         required: true
         type: string
       icp_version:

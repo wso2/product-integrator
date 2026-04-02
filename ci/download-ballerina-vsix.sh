@@ -7,7 +7,7 @@ VSCODE_DIR="${ROOT_DIR}/lib/vscode"
 VSIX_DIR="${VSCODE_DIR}/.build/vsix"
 VSIX_NAME="ballerina-${VERSION}.vsix"
 VSIX_RELATIVE_PATH=".build/vsix/${VSIX_NAME}"
-VSIX_URL="https://github.com/wso2/product-integrator/releases/download/v${VERSION}/${VSIX_NAME}"
+VSIX_URL="https://github.com/wso2/ballerina-vscode/releases/download/v${VERSION}/${VSIX_NAME}"
 
 mkdir -p "${VSIX_DIR}"
 
