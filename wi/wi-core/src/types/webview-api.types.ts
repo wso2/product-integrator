@@ -134,14 +134,36 @@ export interface GettingStartedCategory {
     icon: string;
 }
 
+export interface PrebuiltIntegration {
+    displayName: string;
+    description: string;
+    componentType: string;
+    buildPack: string;
+    repositoryUrl: string;
+    branch: string;
+    subDirectory: string;
+    componentPath: string;
+    thumbnailPath: string;
+    documentationPath: string;
+    applications: string[];
+    imageVersion: string;
+    tags?: string[];
+    imageUrl?: string;
+    defaultPackage?: string;
+    bidirectional: boolean;
+}
+
 export interface GettingStartedData {
     categories: GettingStartedCategory[];
     samples: GettingStartedSample[];
+    prebuiltIntegrations?: PrebuiltIntegration[];
 }
 
 export interface SampleDownloadRequest {
-    zipFileName: string;
     runtime: "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
+    zipFileName?: string;
+    itemType?: "sample" | "prebuilt";
+    prebuiltIntegration?: PrebuiltIntegration;
 }
 
 export interface BIProjectRequest {
