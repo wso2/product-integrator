@@ -164,11 +164,13 @@ export function BIProjectForm() {
                     setPathError(validationResult.errorMessage || "Invalid integration path");
                 } else if (validationResult.errorField === ValidateProjectFormErrorField.NAME) {
                     if (formData.createWithinProject) {
-                        setProjectNameError(validationResult.errorMessage || "Invalid project name");
+                        setProjectHandleError(validationResult.errorMessage || "Invalid project ID");
+                        setExpandAdvancedTrigger(t => t + 1);
                     } else {
                         setPackageNameValidationError(
                             validationResult.errorMessage || "Invalid integration name"
                         );
+                        setExpandAdvancedTrigger(t => t + 1);
                     }
                 }
                 setIsValidating(false);

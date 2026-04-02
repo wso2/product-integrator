@@ -353,9 +353,11 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                     setPathError(validationResult.errorMessage || "Invalid library path");
                 } else if (validationResult.errorField === ValidateProjectFormErrorField.NAME) {
                     if (createWithinProject) {
-                        setWithinProjectNameError(validationResult.errorMessage || "Invalid project name");
+                        setProjectHandleError(validationResult.errorMessage || "Invalid project ID");
+                        setIsPackageInfoExpanded(true);
                     } else {
                         setPackageNameError(validationResult.errorMessage || "Invalid package name");
+                        setIsPackageInfoExpanded(true);
                     }
                 }
                 setIsValidating(false);
