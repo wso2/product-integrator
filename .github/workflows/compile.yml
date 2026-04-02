@@ -18,6 +18,10 @@ on:
         description: 'Specify Ballerina version to use'
         required: false
         type: string
+      ballerina_extension_version:
+        description: 'Specify the archived Ballerina VSIX version to bundle from wso2/product-integrator GitHub releases'
+        required: true
+        type: string
       icp_version:
         description: 'Specify ICP version to use'
         required: false
@@ -92,7 +96,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-ballerina-vsix.sh', 'lib/vscode/package.json') }}
 
       - name: Cache Rust toolchain
         uses: actions/cache@v4
@@ -147,6 +151,15 @@ jobs:
         with:
           path: lib/vscode-reh-web-*
           key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+
+      - name: Download archived Ballerina VSIX
+        shell: bash
+        working-directory: .
+        run: |
+          chmod +x ./ci/download-ballerina-vsix.sh
+          BALLERINA_VSIX_PATH=$(./ci/download-ballerina-vsix.sh "${{ inputs.ballerina_extension_version }}" "$PWD")
+          echo "BALLERINA_EXTENSION_VERSION=${{ inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
+          echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
   
       - name: Update product.json and branding
         working-directory: .

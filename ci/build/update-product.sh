@@ -3,9 +3,12 @@ set -euo pipefail
 
 # Accept version as first arg, default to 1.0.0
 VERSION=${1:-"1.0.0"}
+BALLERINA_EXTENSION_VERSION=${BALLERINA_EXTENSION_VERSION:-"5.9.326032720"}
+BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH:-""}
 
-echo '{
-    "commit": "'$VERSION'",
+cat > lib/vscode/product.json <<EOF
+{
+    "wiversion": "${VERSION}",
     "quality": "stable",
     "nameShort": "WSO2 Integrator",
     "nameLong": "WSO2 Integrator",
@@ -28,7 +31,7 @@ echo '{
     "darwinBundleIdentifier": "com.wso2.integrator",
     "linuxIconName": "com.wso2.integrator",
     "urlProtocol": "wso2-integrator",
-	  "licenseFileName": "LICENSE.txt",
+    "licenseFileName": "LICENSE.txt",
     "reportIssueUrl": "https://github.com/wso2/vscode-extensions/issues/new",
     "documentationUrl": "https://go.microsoft.com/fwlink/?LinkID=533484#vscode",
     "keyboardShortcutsUrlMac": "https://go.microsoft.com/fwlink/?linkid=832143",
@@ -68,7 +71,7 @@ echo '{
         "clsid": "{D5A1C07C-A03F-4c26-B1FC-3D1444FDD444}"
       }
     },
-	  "builtInExtensions": [
+    "builtInExtensions": [
       {
         "name": "wso2.wso2-platform",
         "version": "1.0.23"
@@ -86,13 +89,29 @@ echo '{
         "version": "latest"
       },
       {
-        "name": "wso2.ballerina",
-        "version": "5.9.26031318"
+        "name": "wso2.wso2-platform",
+        "version": "1.0.23"
       },
       {
-        "name": "wso2.ballerina-integrator",
-        "version": "1.8.26031318"
+        "name": "wso2.hurl-client",
+        "version": "0.9.2"
       },
+$(if [ -n "${BALLERINA_VSIX_PATH}" ]; then
+cat <<BALLERINA_VSIX_ENTRY
+      {
+        "name": "wso2.ballerina",
+        "vsix": "${BALLERINA_VSIX_PATH}",
+        "version": "${BALLERINA_EXTENSION_VERSION}"
+      },
+BALLERINA_VSIX_ENTRY
+else
+cat <<BALLERINA_MARKETPLACE_ENTRY
+      {
+        "name": "wso2.ballerina",
+        "version": "${BALLERINA_EXTENSION_VERSION}"
+      },
+BALLERINA_MARKETPLACE_ENTRY
+fi)
       {
         "name": "wso2.micro-integrator",
         "version": "3.1.526031212"
@@ -102,7 +121,7 @@ echo '{
         "vsix": "../../wi/wi-extension/wso2-integrator-1.0.0.vsix",
         "version": "latest"
       }
-	  ],
+    ],
     "runtimeEnv": {
       "common": {
         "WSO2_INTEGRATOR_RUNTIME": "1"
@@ -118,10 +137,10 @@ echo '{
       "win32": {
         "BALLERINA_HOME": "${APP_ROOT}\\\\components\\\\ballerina",
         "PATH": "${APP_ROOT}\\\\components\\\\ballerina\\\\bin;$PATH"
-      }  
+      }
     }
 }
-' > lib/vscode/product.json
+EOF
 
 # copy resources
 # from resources folder with relative path in lib folder. also replace existing resources using rsync
