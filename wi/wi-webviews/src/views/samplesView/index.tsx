@@ -16,81 +16,118 @@
  * under the License.
  */
 
-import { useState, useEffect } from "react";
-import {
-    Icon,
-    Typography,
-    Dropdown,
-    ProgressIndicator,
-} from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
-// import { BIProjectForm } from "./biForm";
-import { useVisualizerContext } from "../../contexts/RpcContext";
+import { Icon, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
+import { useEffect, useState } from "react";
+import { useVisualizerContext } from "../../contexts/WsContext";
+import {
+    BackButton,
+    FormPanelHeader,
+    HeaderRow,
+    HeaderSubtitle,
+    HeaderText,
+    HeaderTitle,
+    PageBackdrop,
+} from "../shared/FormPageLayout";
+import {
+    RUNTIME_DISPLAY_LABEL,
+    type WIRuntime,
+    getDefaultRuntime,
+    loadEnabledRuntimes,
+    supportsSamples,
+} from "../shared/runtime";
 import { SamplesContainer } from "./SamplesContainer";
-import { IntegrationTypeSelector } from "../../components/IntegrationTypeSelector";
 
-const FormContainer = styled.div`
+const PageContainer = styled.div`
+    max-width: 1180px;
+    margin: 0 auto;
     display: flex;
     flex-direction: column;
-    margin: 80px 120px;
+    gap: 16px;
+    min-height: calc(100vh - 52px);
 `;
 
-const TitleContainer = styled.div`
+const ContentPanel = styled.section`
+    flex: 1;
+    min-height: 0;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 16%, var(--vscode-panel-border));
+    background: var(--vscode-editor-background);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--wso2-brand-neutral-900) 16%, transparent);
+    overflow: hidden;
+`;
+
+const Loader = styled.div`
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 320px;
+`;
+
+const EmptyState = styled.div`
+    margin-top: calc(50vh - 150px);
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 32px;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    color: var(--vscode-descriptionForeground);
 `;
 
-const IconButton = styled.div`
-    cursor: pointer;
-    border-radius: 4px;
-    width: 20px;
-    height: 20px;
-    font-size: 20px;
-    &:hover {
-        background-color: var(--vscode-toolbar-hoverBackground);
-    }
+const EmptyStateContent = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    max-width: 420px;
 `;
 
-const DropdownContainer = styled.div`
-    margin-bottom: 20px;
+const EmptyStateMessage = styled(Typography)`
+    margin: 0;
 `;
 
-export type ProjectType = "WSO2: BI" | "WSO2: MI";
+export function SamplesView({ onBack, runtime }: { onBack?: () => void; runtime?: WIRuntime }) {
+    const [projectType, setProjectType] = useState<WIRuntime | null>(runtime ?? null);
+    const [isLoading, setIsLoading] = useState(runtime === undefined);
+    const { wsClient } = useVisualizerContext();
 
-export function SamplesView({ onBack }: { onBack?: () => void }) {
-    const [defaultType, setDefaultType] = useState<ProjectType>("WSO2: BI");
-    const [projectType, setProjectType] = useState<ProjectType>(defaultType);
-    const [isLoading, setIsLoading] = useState(true);
-    const { rpcClient } = useVisualizerContext();
-
-    const projectTypeOptions = [
-        { label: "WSO2: BI", value: "WSO2: BI" },
-        { label: "WSO2: MI", value: "WSO2: MI" }
-    ];
-
-    // Load default runtime from VS Code configuration
     useEffect(() => {
-        const loadDefaultRuntime = async () => {
-            try {
-                const configResponse = await rpcClient.getMainRpcClient().getConfiguration({
-                    section: "integrator.defaultRuntime"
-                });
+        if (runtime) {
+            setProjectType(runtime);
+            setIsLoading(false);
+            return;
+        }
 
-                if (configResponse?.value) {
-                    setDefaultType(configResponse.value);
-                    setProjectType(configResponse.value);
+        let disposed = false;
+
+        const resolveRuntime = async () => {
+            setIsLoading(true);
+            try {
+                const enabledRuntimes = await loadEnabledRuntimes(wsClient);
+                if (!disposed) {
+                    setProjectType(getDefaultRuntime(enabledRuntimes));
                 }
             } catch (error) {
-                console.warn("Failed to load default integrator config, using fallback:", error);
+                console.warn(
+                    "Failed to load default integrator config, using fallback:",
+                    error,
+                );
+                if (!disposed) {
+                    setProjectType("WSO2: BI");
+                }
             } finally {
-                setIsLoading(false);
+                if (!disposed) {
+                    setIsLoading(false);
+                }
             }
         };
 
-        loadDefaultRuntime();
-    }, []);
+        resolveRuntime();
+
+        return () => {
+            disposed = true;
+        };
+    }, [runtime, wsClient]);
 
     const gotToWelcome = () => {
         if (onBack) {
@@ -98,33 +135,83 @@ export function SamplesView({ onBack }: { onBack?: () => void }) {
         }
     };
 
-    // Show loading while fetching configuration
     if (isLoading) {
         return (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100px' }}>
-                <ProgressIndicator />
-            </div>
+            <PageBackdrop>
+                <PageContainer>
+                    <Loader>
+                        <ProgressIndicator />
+                    </Loader>
+                </PageContainer>
+            </PageBackdrop>
         );
     }
 
     return (
-        <div style={{ position: 'absolute', background: 'var(--vscode-editor-background)', height: '100%', width: '100%' }} >
-            <FormContainer>
-                <TitleContainer>
-                    <IconButton onClick={gotToWelcome}>
-                        <Icon name="bi-arrow-back" iconSx={{ color: "var(--vscode-foreground)" }} />
-                    </IconButton>
-                    <Typography variant="h2">Create using samples</Typography>
-                </TitleContainer>
-                {defaultType === "WSO2: MI" && (
-                    <IntegrationTypeSelector
-                        value={projectType}
-                        options={projectTypeOptions}
-                        onChange={(value) => setProjectType(value as ProjectType)}
-                    />
-                )}
-                <SamplesContainer projectType={projectType} />
-            </FormContainer>
-        </div>
+        <PageBackdrop>
+            <PageContainer>
+                <ContentPanel>
+                    <FormPanelHeader>
+                        <HeaderRow>
+                            <BackButton type="button" onClick={gotToWelcome} title="Go back">
+                                <Icon
+                                    name="arrow-left"
+                                    isCodicon
+                                    sx={{
+                                        width: "16px",
+                                        height: "16px",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                    }}
+                                    iconSx={{
+                                        color: "var(--vscode-foreground)",
+                                        fontSize: "16px",
+                                        lineHeight: 1,
+                                    }}
+                                />
+                            </BackButton>
+                            <HeaderText>
+                                <HeaderTitle variant="h2">Browse Samples</HeaderTitle>
+                                <HeaderSubtitle>
+                                    Start quickly by downloading a curated integration sample for your selected profile.
+                                </HeaderSubtitle>
+                            </HeaderText>
+                        </HeaderRow>
+                    </FormPanelHeader>
+                    {projectType && supportsSamples(projectType) ? (
+                        <SamplesContainer projectType={projectType} />
+                    ) : (
+                        <EmptyState>
+                            <EmptyStateContent>
+                                <EmptyStateMessage variant="body2">
+                                    Samples for{" "}
+                                    {projectType
+                                        ? RUNTIME_DISPLAY_LABEL[projectType]
+                                        : "this profile"}{" "}
+                                    are not available yet.
+                                </EmptyStateMessage>
+                                <Icon
+                                    name="info"
+                                    isCodicon
+                                    sx={{
+                                        width: "28px",
+                                        height: "28px",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                    }}
+                                    iconSx={{
+                                        color: "var(--vscode-descriptionForeground)",
+                                        fontSize: "24px",
+                                        lineHeight: 1,
+                                    }}
+                                />
+                            </EmptyStateContent>
+                        </EmptyState>
+                    )}
+                </ContentPanel>
+            </PageContainer>
+        </PageBackdrop>
     );
 }

@@ -28,6 +28,7 @@ export const EXTENSION_PUBLISHER = "wso2";
  */
 export const COMMANDS = {
 	OPEN_WELCOME: "wso2.integrator.openWelcome",
+	GET_EMBEDDED_WELCOME_BOOTSTRAP: "wso2.integrator.getEmbeddedWelcomeBootstrap",
 	REFRESH_VIEW: "wso2.integrator.refreshView",
 	REFRESH_EXPLORER: "wso2-integrator.explorer.refresh",
 	OPEN_BI_INTEGRATION: "wso2.integrator.openBIIntegration",
@@ -49,7 +50,7 @@ export const VIEWS = {
  * Context keys
  */
 export const CONTEXT_KEYS = {
-	BI_AVAILABLE: "wso2-integrator.bi.available",
+	BALLERINA_AVAILABLE: "wso2-integrator.ballerina.available",
 	MI_AVAILABLE: "wso2-integrator.mi.available",
 };
 
@@ -57,6 +58,7 @@ export const CONTEXT_KEYS = {
  * Extension dependencies
  */
 export const EXTENSION_DEPENDENCIES = {
-	BI: "wso2.ballerina-integrator",
+	BALLERINA: "wso2.ballerina",
 	MI: "wso2.micro-integrator",
+	SI: "WSO2.streaming-integrator"
 };

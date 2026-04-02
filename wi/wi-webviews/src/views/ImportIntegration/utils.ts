@@ -17,7 +17,7 @@
  */
 import { ImportIntegrationResponse } from "@wso2/wi-core";
 import { CoverageLevel, MigrationDisplayState, ProjectMigrationResult } from "./types";
-import { RpcClient } from "@wso2/wi-rpc-client";
+import { WsClient } from "../../network-bridge/WsClient";
 
 export const SELECTION_TEXT = "To begin, choose a source platform from the options above.";
 
@@ -83,7 +83,7 @@ export const getMigrationDisplayState = (
 export const handleMultiProjectReportOpening = (
     migrationResponse: ImportIntegrationResponse,
     projects: Array<ProjectMigrationResult>,
-    rpcClient: RpcClient
+    wsClient: WsClient
 ) => {
     // Build a map of project reports from the projects array
     const subProjectReports: { [projectName: string]: string } = {};
@@ -94,10 +94,10 @@ export const handleMultiProjectReportOpening = (
         }
     });
 
-    // Store the sub-project reports via RPC so they can be retrieved on link clicks
+    // Store the sub-project reports via bridge requests so they can be retrieved on link clicks
     if (Object.keys(subProjectReports).length > 0) {
         try {
-            rpcClient.getMainRpcClient().storeSubProjectReports({
+            wsClient.storeSubProjectReports({
                 reports: subProjectReports
             });
             console.log("Stored sub-project reports:", Object.keys(subProjectReports));

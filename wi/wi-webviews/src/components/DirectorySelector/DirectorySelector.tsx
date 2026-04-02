@@ -32,6 +32,7 @@ export interface DirectorySelectorProps {
     'data-testid'?: string;
     onSelect: () => void;
     onChange?: (value: string) => void;
+    onBlur?: () => void;
 }
 
 interface ContainerProps {
@@ -116,23 +117,30 @@ const BrowseButton = styled(VSCodeButton)`
 `;
 
 export const DirectorySelector: React.FC<DirectorySelectorProps> = props => {
-    const { 
-        id, 
-        label, 
-        placeholder = "Enter or browse to select a folder...", 
-        selectedPath, 
-        required, 
+    const {
+        id,
+        label,
+        placeholder = "Enter or browse to select a folder...",
+        selectedPath,
+        required,
         description,
-        errorMsg, 
+        errorMsg,
         sx,
         'data-testid': dataTestId,
         onSelect,
-        onChange 
+        onChange,
+        onBlur,
     } = props;
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (onChange) {
             onChange(e.target.value);
+        }
+    };
+
+    const handleInputBlur = () => {
+        if (onBlur) {
+            onBlur();
         }
     };
 
@@ -153,6 +161,7 @@ export const DirectorySelector: React.FC<DirectorySelectorProps> = props => {
                         value={selectedPath || ''}
                         placeholder={placeholder}
                         onChange={handleInputChange}
+                        onBlur={handleInputBlur}
                     />
                 </InputWrapper>
                 <BrowseButton 

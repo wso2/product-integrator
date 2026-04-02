@@ -47,7 +47,8 @@ cat > lib/vscode/product.json <<EOF
       "https://console.devant.dev"
     ],
     "trustedExtensionProtocolHandlers": [
-      "wso2.wso2-platform"
+      "wso2.wso2-platform",
+      "wso2.wso2-integrator"
     ],
     "trustedExtensionAuthAccess": [
       "vscode.git", "vscode.github",
@@ -55,6 +56,7 @@ cat > lib/vscode/product.json <<EOF
       "github.copilot", "github.copilot-chat",
       "wso2.ballerina", "wso2.ballerina-integrator",
       "wso2.wso2-platform",
+      "wso2.wso2-integrator",
       "wso2.micro-integrator"
     ],
     "aiConfig": {
@@ -72,7 +74,7 @@ cat > lib/vscode/product.json <<EOF
         "clsid": "{D5A1C07C-A03F-4c26-B1FC-3D1444FDD444}"
       }
     },
-    "builtInExtensions": [
+	  "builtInExtensions": [
       {
         "name": "redhat.vscode-yaml",
         "version": "latest"
@@ -111,7 +113,7 @@ BALLERINA_MARKETPLACE_ENTRY
 fi)
       {
         "name": "wso2.micro-integrator",
-        "version": "3.1.526031212"
+        "version": "3.1.526032514"
       },
       {
         "name": "wso2.wso2-integrator",
@@ -121,7 +123,7 @@ fi)
     ],
     "runtimeEnv": {
       "common": {
-        "WSO2_INTEGRATOR_RUNTIME": "1"
+        "WSO2_INTEGRATOR_RUNTIME": "true"
       },
       "darwin": {
         "BALLERINA_HOME": "${APP_ROOT}/Contents/components/ballerina",

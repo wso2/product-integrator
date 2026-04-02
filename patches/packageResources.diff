@@ -1,0 +1,16 @@
+Index: product-integrator/lib/vscode/build/gulpfile.vscode.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/build/gulpfile.vscode.ts
++++ product-integrator/lib/vscode/build/gulpfile.vscode.ts
+@@ -71,8 +71,9 @@ const vscodeResourceIncludes = [
+ 	// Node Scripts
+ 	'out-build/vs/base/node/{terminateProcess.sh,cpuUsage.sh,ps.sh}',
+ 
+-	// Touchbar
+-	'out-build/vs/workbench/browser/parts/editor/media/*.png',
++	// Workbench media assets copied in from product resources
++	'out-build/vs/workbench/browser/media/*.{png,svg}',
++	'out-build/vs/workbench/browser/parts/editor/media/*.{png,svg}',
+ 	'out-build/vs/workbench/contrib/debug/browser/media/*.png',
+ 
+ 	// External Terminal
