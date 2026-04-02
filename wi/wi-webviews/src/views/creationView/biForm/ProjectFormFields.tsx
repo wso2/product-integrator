@@ -63,6 +63,7 @@ export interface ProjectFormFieldsProps {
     pathError?: string;
     projectNameError?: string;
     packageNameValidationError?: string;
+    expandAdvancedTrigger?: number;
     organizations?: Organization[];
 }
 
@@ -73,6 +74,7 @@ export function ProjectFormFields({
     pathError,
     projectNameError,
     packageNameValidationError,
+    expandAdvancedTrigger,
     organizations,
 }: ProjectFormFieldsProps) {
     const { wsClient } = useVisualizerContext();
@@ -204,6 +206,12 @@ export function ProjectFormFields({
         setPackageNameError(error);
     }, [formData.packageName, formData.integrationName]);
 
+    useEffect(() => {
+        if (expandAdvancedTrigger) {
+            setIsPackageInfoExpanded(true);
+        }
+    }, [expandAdvancedTrigger]);
+
     // Validation effect for org name
     useEffect(() => {
         const orgError = validateOrgName(formData.orgName);
@@ -324,6 +332,7 @@ export function ProjectFormFields({
                 orgNameError={orgNameError}
                 packageNameError={packageNameValidationError || packageNameError}
                 organizations={organizations}
+                hasError={!!(packageNameValidationError || packageNameError || orgNameError)}
             />
         </>
     );

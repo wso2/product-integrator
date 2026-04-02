@@ -55,6 +55,8 @@ export interface PackageInfoSectionProps {
     packageNameError?: string | null;
     /** Organizations list — when provided, renders a dropdown instead of a free-text field */
     organizations?: Organization[];
+    /** Whether the section contains validation errors */
+    hasError?: boolean;
 }
 
 // ── Sign-in hint styles ────────────────────────────────────────────────────────
@@ -108,6 +110,7 @@ export function PackageInfoSection({
     orgNameError,
     packageNameError,
     organizations,
+    hasError,
 }: PackageInfoSectionProps) {
     const { wsClient } = useVisualizerContext();
     const { authState } = useCloudContext();
@@ -153,6 +156,7 @@ export function PackageInfoSection({
             onToggle={onToggle}
             icon="gear"
             title="Advanced Configurations"
+            hasError={hasError}
         >
             <Note style={{ marginBottom: "16px" }}>
                 {`This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Specify the organization and version to be assigned. `}

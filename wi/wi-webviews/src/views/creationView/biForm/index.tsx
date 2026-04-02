@@ -50,6 +50,7 @@ export function BIProjectForm() {
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameValidationError, setPackageNameValidationError] = useState<string | null>(null);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
+    const [expandAdvancedTrigger, setExpandAdvancedTrigger] = useState(0);
     const createActionLabel = "Create Integration";
 
 
@@ -86,11 +87,13 @@ export function BIProjectForm() {
 
         if (formData.packageName.length < 2) {
             setPackageNameValidationError("Package name must be at least 2 characters");
+            setExpandAdvancedTrigger(t => t + 1);
             hasError = true;
         } else {
             const packageNameError = validatePackageName(formData.packageName, formData.integrationName);
             if (packageNameError) {
                 setPackageNameValidationError(packageNameError);
+                setExpandAdvancedTrigger(t => t + 1);
                 hasError = true;
             }
         }
@@ -159,6 +162,7 @@ export function BIProjectForm() {
                 pathError={pathError || undefined}
                 projectNameError={projectNameError || undefined}
                 packageNameValidationError={packageNameValidationError || undefined}
+                expandAdvancedTrigger={expandAdvancedTrigger}
                 organizations={organizations}
                 />
 

@@ -195,11 +195,13 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
         if (formData.packageName.length < 2) {
             setPackageNameError("Package name must be at least 2 characters");
+            setIsPackageInfoExpanded(true);
             hasError = true;
         } else {
             const pkgError = validatePackageName(formData.packageName, formData.libraryName);
             if (pkgError) {
                 setPackageNameError(pkgError);
+                setIsPackageInfoExpanded(true);
                 hasError = true;
             }
         }
@@ -367,6 +369,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                 packageNameError={packageNameError}
                                 orgNameError={orgNameError}
                                 organizations={organizations}
+                                hasError={!!(packageNameError || orgNameError)}
                             />
 
                             <FormFooter>
