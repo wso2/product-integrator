@@ -18,7 +18,6 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Button, Icon, TextField } from "@wso2/ui-toolkit";
-import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
 import { useCloudContext, useCloudProjects } from "../../../providers";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
@@ -40,12 +39,8 @@ import {
     FormContent,
     FormFooter,
 } from "../../shared/FormPageLayout";
-import { ResolvedPathText, CloudErrorActionRow, ActionLink } from "../biForm/styles";
+import { ResolvedPathText, CloudErrorActionRow, ActionLink, Description, FieldGroup } from "../biForm/styles";
 import { DEFAULT_PROJECT_NAME } from "./types";
-
-const FieldGroup = styled.div`
-    margin-bottom: 20px;
-`;
 
 
 export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
@@ -350,7 +345,6 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                 onToggle={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
                                 icon="gear"
                                 title="Advanced Configurations"
-                                subtitle={!isAdvancedExpanded ? projectHandle : undefined}
                             >
                                 <FieldGroup>
                                     <TextField
@@ -361,9 +355,9 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                         }}
                                         value={projectHandle}
                                         label="Project ID"
-                                        description="A name to uniquely identify your project in various contexts. Editable only at the time you create the project, and cannot be changed after the project is created."
                                         errorMsg={projectHandleError || cloudProjectHandleError || ""}
                                     />
+                                    <Description>Unique identifier for your project in various contexts. Cannot be changed after creation.</Description>
                                 </FieldGroup>
                             </CollapsibleSection>
 
