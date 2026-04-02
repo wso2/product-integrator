@@ -5,6 +5,7 @@ set -euo pipefail
 VERSION=${1:-"1.0.0"}
 BALLERINA_EXTENSION_VERSION=${BALLERINA_EXTENSION_VERSION:-"5.9.326032720"}
 BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH:-""}
+WI_EXTENSION_VERSION=$(node -p "require('./wi/wi-extension/package.json').version")
 
 cat > lib/vscode/product.json <<EOF
 {
@@ -73,10 +74,6 @@ cat > lib/vscode/product.json <<EOF
     },
     "builtInExtensions": [
       {
-        "name": "wso2.wso2-platform",
-        "version": "1.0.23"
-      },
-      {
         "name": "redhat.vscode-yaml",
         "version": "latest"
       },
@@ -118,8 +115,8 @@ fi)
       },
       {
         "name": "wso2.wso2-integrator",
-        "vsix": "../../wi/wi-extension/wso2-integrator-1.0.0.vsix",
-        "version": "latest"
+        "vsix": "../../wi/wi-extension/wso2-integrator-${WI_EXTENSION_VERSION}.vsix",
+        "version": "${WI_EXTENSION_VERSION}"
       }
     ],
     "runtimeEnv": {
