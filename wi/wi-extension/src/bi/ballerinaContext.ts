@@ -16,8 +16,8 @@
  * under the License.
  */
 
-import { Event } from 'vscode';
-import { WIChatNotify } from '@wso2/wi-core';
+import { Event, extensions } from 'vscode';
+import { EXTENSION_DEPENDENCIES, WIChatNotify } from '@wso2/wi-core';
 
 /** Shape of the migration API exposed by the Ballerina extension's `activate()` return value. */
 export interface BallerinaExtMigrationAPI {
@@ -52,6 +52,30 @@ export class BallerinaContext {
         if (ballerinaExtExports?.migration) {
             this.migration = ballerinaExtExports.migration as BallerinaExtMigrationAPI;
         }
+    }
+    /**
+     * Ensures the migration API is available by lazily initializing from the
+     * Ballerina extension's exports if not already set.  This covers the case
+     * where the migration wizard runs before a project is opened (so the
+     * normal `init()` path in `extensionAPIs.initialize()` was never reached).
+     */
+    public async ensureMigrationAPI(): Promise<BallerinaExtMigrationAPI | undefined> {
+        if (this.migration) {
+            return this.migration;
+        }
+
+        const ext = extensions.getExtension(EXTENSION_DEPENDENCIES.BALLERINA);
+        if (!ext) {
+            return undefined;
+        }
+
+        if (!ext.isActive) {
+            await ext.activate();
+        }
+
+        // Re-init from the (now active) extension's exports
+        this.init(ext.exports);
+        return this.migration;
     }
 }
 

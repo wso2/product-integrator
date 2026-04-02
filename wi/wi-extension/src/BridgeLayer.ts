@@ -82,6 +82,7 @@ interface BridgeChannel {
 
 export class BridgeLayer {
     private static channels: Map<string, BridgeChannel> = new Map();
+    private static migrationSubscribed = false;
 
     static create(webViewPanel: WebviewPanel, projectUri: string): void {
         const channel = this.getOrCreateChannel(projectUri);
@@ -217,13 +218,25 @@ export class BridgeLayer {
         );
 
         // Subscribe to AI migration streaming events from the Ballerina extension
+        this.setupMigrationSubscription(projectUri);
+
+        return channel;
+    }
+
+    /**
+     * Subscribe to AI migration streaming events from the Ballerina extension.
+     * Safe to call multiple times — only the first call with a valid API sets up the listener.
+     */
+    static setupMigrationSubscription(projectUri: string): void {
+        if (this.migrationSubscribed) {
+            return;
+        }
         if (ballerinaContext.migration?.onChatNotify) {
+            this.migrationSubscribed = true;
             ballerinaContext.migration.onChatNotify((event) => {
                 this.notifyChatEvent(projectUri, event);
             });
         }
-
-        return channel;
     }
 
     private static createRouter(wsManager: MainWsManager, cloudManager: CloudWsManager): RequestRouter {

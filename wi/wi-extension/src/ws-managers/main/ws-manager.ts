@@ -480,11 +480,17 @@ export class MainWsManager implements WIVisualizerAPI {
     async migrateProject(params: MigrateRequest): Promise<void> {
         return new Promise(async (resolve, reject) => {
             try {
+                console.log('[WI migrateProject] Starting. aiFeatureUsed:', params.aiFeatureUsed, 'sourcePath:', params.sourcePath);
                 const result = await commands.executeCommand('BI.project.createBIProjectMigration', params);
+                console.log('[WI migrateProject] createBIProjectMigration returned:', typeof result, result);
                 if (params.aiFeatureUsed && params.sourcePath) {
                     const projectRoot = typeof result === 'string' ? result : undefined;
                     if (projectRoot) {
-                        ballerinaContext.migration?.setWizardProjectRoot(projectRoot, params.sourcePath);
+                        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+                        console.log('[WI migrateProject] AI path. projectRoot:', projectRoot, 'migration API available:', !!migrationAPI);
+                        migrationAPI?.setWizardProjectRoot(projectRoot, params.sourcePath);
+                        // Ensure the BridgeLayer forwards chat events now that the API is available
+                        BridgeLayer.setupMigrationSubscription(this.projectUri ?? 'global');
                     }
                 }
                 resolve();
@@ -595,14 +601,19 @@ export class MainWsManager implements WIVisualizerAPI {
     }
 
     async wizardEnhancementReady(): Promise<void> {
-        await ballerinaContext.migration?.wizardEnhancementReady();
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        console.log('[WI wizardEnhancementReady] Called. migration API available:', !!migrationAPI);
+        await migrationAPI?.wizardEnhancementReady();
+        console.log('[WI wizardEnhancementReady] Returned.');
     }
 
     async openMigratedProject(): Promise<void> {
-        ballerinaContext.migration?.openMigratedProject();
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        migrationAPI?.openMigratedProject();
     }
 
     async abortMigrationAgent(): Promise<void> {
-        ballerinaContext.migration?.abortAgent();
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        migrationAPI?.abortAgent();
     }
 }
