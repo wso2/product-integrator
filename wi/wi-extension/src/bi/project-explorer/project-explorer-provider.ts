@@ -276,6 +276,11 @@ async function getProjectStructureData(): Promise<{ entries: ProjectExplorerEntr
             const projectStructure = stateContext.projectStructure as ProjectStructureResponse;
             const projects = projectStructure.projects;
 
+            if (projectStructure.workspaceTitle || projectStructure.workspaceName) {
+                // Multi-project workspace: use workspace-level title
+                projectName = projectStructure.workspaceTitle || projectStructure.workspaceName;
+            }
+
             // Filter projects to avoid duplicates - only include unique project paths
             const uniqueProjects = new Map<string, typeof projects[0]>();
             for (const project of projects) {

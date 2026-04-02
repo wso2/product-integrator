@@ -53,4 +53,6 @@ export interface ProjectFormData extends BaseProjectFormData {
     createWithinProject: boolean;
     // The auto-derived (or manually set) project folder name when createWithinProject is true.
     withinProjectName: string;
+    // Sanitized identifier derived from withinProjectName; used as the actual folder name.
+    projectHandle: string;
 }
