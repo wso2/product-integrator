@@ -57,6 +57,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [singleIntegrationPackageNameError, setSingleIntegrationPackageNameError] = useState<string | null>(null);
     const [singleIntegrationProjectHandleError, setSingleIntegrationProjectHandleError] = useState<string | null>(null);
+    const [orgNameError, setOrgNameError] = useState<string | null>(null);
     const [singleIntegrationCloudProjectNameError, setSingleIntegrationCloudProjectNameError] = useState<string | null>(null);
     const [singleIntegrationCloudProjectHandleError, setSingleIntegrationCloudProjectHandleError] = useState<string | null>(null);
     const selectedResourceTypeLabel = singleIntegrationData.isLibrary ? "Library" : "Integration";
@@ -73,6 +74,9 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         // Clear validation errors when form data changes
         if (singleIntegrationNameError) {
             setSingleIntegrationNameError(null);
+        }
+        if (orgNameError && data.orgName !== undefined) {
+            setOrgNameError(null);
         }
         if (singleIntegrationPathError) {
             setSingleIntegrationPathError(null);
@@ -106,6 +110,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         setProjectNameError(null);
         setSingleIntegrationPackageNameError(null);
         setSingleIntegrationProjectHandleError(null);
+        setOrgNameError(null);
 
         // Validate required fields first
         let hasError = false;
@@ -144,7 +149,10 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
 
         const orgErr = validateOrgName(singleIntegrationData.orgName);
         if (orgErr) {
+            setOrgNameError(orgErr);
             hasError = true;
+        } else {
+            setOrgNameError(null);
         }
 
         if (singleIntegrationCloudProjectNameError) {
@@ -322,6 +330,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                         packageNameValidationError={singleIntegrationPackageNameError || undefined}
                         projectNameError={projectNameError || undefined}
                         projectHandleError={singleIntegrationProjectHandleError || undefined}
+                        orgNameError={orgNameError ?? undefined}
                         onCloudProjectNameError={setSingleIntegrationCloudProjectNameError}
                         onCloudProjectHandleError={setSingleIntegrationCloudProjectHandleError}
                     />

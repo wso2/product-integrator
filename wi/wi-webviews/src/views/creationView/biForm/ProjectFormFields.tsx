@@ -51,6 +51,7 @@ export interface ProjectFormFieldsProps {
     projectNameError?: string;
     packageNameValidationError?: string;
     projectHandleError?: string;
+    orgNameError?: string | null;
     organizations?: Organization[];
     onCloudProjectNameError?: (error: string | null) => void;
     onCloudProjectHandleError?: (error: string | null) => void;
@@ -64,6 +65,7 @@ export function ProjectFormFields({
     projectNameError,
     packageNameValidationError,
     projectHandleError,
+    orgNameError: orgNameErrorOverride,
     organizations,
     onCloudProjectNameError,
     onCloudProjectHandleError,
@@ -220,9 +222,15 @@ export function ProjectFormFields({
 
     // Validation effect for org name
     useEffect(() => {
-        const orgError = validateOrgName(formData.orgName);
-        setOrgNameError(orgError);
-    }, [formData.orgName]);
+        // If the parent provided an explicit org name error, show it immediately.
+        // Otherwise, validate locally as the user edits.
+        if (orgNameErrorOverride !== undefined) {
+            setOrgNameError(orgNameErrorOverride);
+            return;
+        }
+
+        setOrgNameError(validateOrgName(formData.orgName));
+    }, [formData.orgName, orgNameErrorOverride]);
 
     // Auto-derive projectHandle from withinProjectName unless the user has manually edited it
     useEffect(() => {
