@@ -442,20 +442,16 @@ export class MainWsManager implements WIVisualizerAPI {
         return new Promise(async (resolve, reject) => {
             try {
                 const projectRoot: string = await commands.executeCommand('BI.project.createBIProjectPure', params);
-                if (ext.authProvider?.getUserInfo() && params.orgName && projectRoot) {
-                    const projectName = params.workspaceName || params.packageName || params.projectName;
-                    if (projectName) {
-                        try {
-                            await this.writeChoreoContext(projectRoot, params.orgName, projectName);
-                        } catch (contextError) {
-                            console.warn("Failed to write Choreo context file (non-critical):", contextError);
-                        }
-                    }
-                }
                 if (params.createAsWorkspace && params.projectHandle) {
                     const displayName = params.workspaceName || 'Default';
                     try {
-                        await this.writeLocalProjectYaml(projectRoot, displayName, params.projectHandle);
+                        const loggedInUser = ext.authProvider?.getUserInfo();
+                        await this.writeLocalProjectYaml(
+                            projectRoot,
+                            displayName,
+                            params.projectHandle,
+                            loggedInUser ? params.orgName : undefined
+                        );
                     } catch (yamlError) {
                         console.warn("Failed to write local-project.yaml (non-critical):", yamlError);
                     }
@@ -471,19 +467,17 @@ export class MainWsManager implements WIVisualizerAPI {
         });
     }
 
-    private async writeChoreoContext(projectRoot: string, orgName: string, projectName: string): Promise<void> {
-        const choreoDir = path.join(projectRoot, '.choreo');
-        const contextFile = path.join(choreoDir, 'context.yaml');
-        const contextData = [{ org: orgName, project: projectName }];
-        const content = stringifyYaml(contextData);
-        await fs.promises.mkdir(choreoDir, { recursive: true });
-        await fs.promises.writeFile(contextFile, content, { encoding: 'utf8' });
-    }
-
-    private async writeLocalProjectYaml(projectRoot: string, projectName: string, projectHandle: string): Promise<void> {
+    private async writeLocalProjectYaml(
+        projectRoot: string,
+        projectName: string,
+        projectHandle: string,
+        orgName?: string
+    ): Promise<void> {
         const choreoDir = path.join(projectRoot, '.choreo');
         const localProjectFile = path.join(choreoDir, 'local-project.yaml');
-        const content = stringifyYaml({ name: projectName, handle: projectHandle });
+        const content = orgName
+            ? stringifyYaml({ org: orgName, name: projectName, handle: projectHandle })
+            : stringifyYaml({ name: projectName, handle: projectHandle });
         await fs.promises.mkdir(choreoDir, { recursive: true });
         await fs.promises.writeFile(localProjectFile, content, { encoding: 'utf8' });
     }
