@@ -1,20 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO=${1:?Usage: ./ci/download-vsix.sh <owner/repo> <extension-version> [vsix-name] [root-dir]}
-VERSION=${2:?Usage: ./ci/download-vsix.sh <owner/repo> <extension-version> [vsix-name] [root-dir]}
+REPO=${1:?Usage: ./ci/download-vsix.sh <owner/repo> <extension-version> [root-dir]}
+VERSION=${2:?Usage: ./ci/download-vsix.sh <owner/repo> <extension-version> [root-dir]}
 
 # Normalize an optional leading "v" in tags and reject path-like values.
 VERSION="${VERSION#v}"
-VSIX_NAME=${3:-"ballerina-${VERSION}.vsix"}
-ROOT_DIR=${4:-$(pwd)}
+ROOT_DIR=${3:-$(pwd)}
+VSIX_NAME="ballerina-${VERSION}.vsix"
 
 if [[ "${VERSION}" == *"/"* || "${VERSION}" == *".."* ]]; then
   echo "Invalid extension version: ${VERSION}" >&2
-  exit 1
-fi
-if [[ "${VSIX_NAME}" == *"/"* || "${VSIX_NAME}" == *".."* ]]; then
-  echo "Invalid VSIX file name: ${VSIX_NAME}" >&2
   exit 1
 fi
 
