@@ -18,9 +18,14 @@ on:
         description: 'Specify Ballerina version to use'
         required: false
         type: string
+      ballerina_extension_source:
+        description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
+        default: 'marketplace'
+        required: false
+        type: string
       ballerina_extension_version:
-        description: 'Specify the archived Ballerina VSIX version to bundle from wso2/ballerina-vscode GitHub releases'
-        required: true
+        description: 'Specify the Ballerina extension version to use for GitHub VSIX or marketplace flow'
+        required: false
         type: string
       icp_version:
         description: 'Specify ICP version to use'
@@ -45,6 +50,9 @@ jobs:
         run: |
           if [ -z "${{ inputs.ballerina_version }}" ] || [ -z "${{ inputs.icp_version }}" ] || [ -z "${{ inputs.integrator_version }}" ]; then
             echo "Error: ballerina_version, icp_version, and integrator_version must not be empty."
+            exit 1
+          elif [ "${{ inputs.ballerina_extension_source }}" = "github" ] && [ -z "${{ inputs.ballerina_extension_version }}" ]; then
+            echo "Error: ballerina_extension_version must not be empty when ballerina_extension_source is set to github."
             exit 1
           else
             echo "All required version inputs are provided."
@@ -96,7 +104,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-ballerina-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-ballerina-vsix.sh', 'lib/vscode/package.json') }}
 
       - name: Cache Rust toolchain
         uses: actions/cache@v4
@@ -152,13 +160,20 @@ jobs:
           path: lib/vscode-reh-web-*
           key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
 
+      - name: Set Ballerina extension version
+        if: ${{ inputs.ballerina_extension_version != '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          echo "BALLERINA_EXTENSION_VERSION=${{ inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
+
       - name: Download archived Ballerina VSIX
+        if: ${{ inputs.ballerina_extension_source == 'github' }}
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/download-ballerina-vsix.sh
           BALLERINA_VSIX_PATH=$(./ci/download-ballerina-vsix.sh "${{ inputs.ballerina_extension_version }}" "$PWD")
-          echo "BALLERINA_EXTENSION_VERSION=${{ inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
   
       - name: Update product.json and branding

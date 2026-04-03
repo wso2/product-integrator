@@ -35,9 +35,17 @@ on:
         description: 'Specify Ballerina version to use'
         required: false
         type: string
-      ballerina_extension_version:
-        description: 'Specify the archived Ballerina VSIX version to bundle from wso2/ballerina-vscode GitHub releases'
+      ballerina_extension_source:
+        description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
         required: true
+        default: 'marketplace'
+        type: choice
+        options:
+          - marketplace
+          - github
+      ballerina_extension_version:
+        description: 'Specify the Ballerina extension version to use for GitHub VSIX or marketplace flow'
+        required: false
         type: string
       icp_version:
         description: 'Specify ICP version to use'
@@ -70,6 +78,7 @@ jobs:
     with:
       runOnAWS: ${{ github.event.inputs.runner == 'codebuild' }}
       ballerina_version: ${{ github.event.inputs.ballerina_version }}
+      ballerina_extension_source: ${{ github.event.inputs.ballerina_extension_source }}
       ballerina_extension_version: ${{ github.event.inputs.ballerina_extension_version }}
       icp_version: ${{ github.event.inputs.icp_version }}
       integrator_version: ${{ github.event.inputs.integrator_version }}
@@ -142,7 +151,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ github.event.inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-ballerina-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ github.event.inputs.ballerina_extension_source }}-${{ github.event.inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-ballerina-vsix.sh', 'lib/vscode/package.json') }}
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -166,13 +175,20 @@ jobs:
       - name: Apply patches (macOS)
         run: quilt push -a
 
+      - name: Set Ballerina extension version
+        if: ${{ github.event.inputs.ballerina_extension_version != '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          echo "BALLERINA_EXTENSION_VERSION=${{ github.event.inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
+
       - name: Download archived Ballerina VSIX
+        if: ${{ github.event.inputs.ballerina_extension_source == 'github' }}
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/download-ballerina-vsix.sh
           BALLERINA_VSIX_PATH=$(./ci/download-ballerina-vsix.sh "${{ github.event.inputs.ballerina_extension_version }}" "$PWD")
-          echo "BALLERINA_EXTENSION_VERSION=${{ github.event.inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Update product.json and branding
@@ -464,7 +480,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ github.event.inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-ballerina-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ github.event.inputs.ballerina_extension_source }}-${{ github.event.inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-ballerina-vsix.sh', 'lib/vscode/package.json') }}
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -503,13 +519,20 @@ jobs:
             (echo "Warning: Failed to apply patch $patch" && exit 1)
           done < patches/series
 
+      - name: Set Ballerina extension version
+        if: ${{ github.event.inputs.ballerina_extension_version != '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          echo "BALLERINA_EXTENSION_VERSION=${{ github.event.inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
+
       - name: Download archived Ballerina VSIX
+        if: ${{ github.event.inputs.ballerina_extension_source == 'github' }}
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/download-ballerina-vsix.sh
           BALLERINA_VSIX_PATH=$(./ci/download-ballerina-vsix.sh "${{ github.event.inputs.ballerina_extension_version }}" "$PWD")
-          echo "BALLERINA_EXTENSION_VERSION=${{ github.event.inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Update product.json and branding
