@@ -64,6 +64,7 @@ import {
     WITransportBootstrap,
     WorkspaceRootResponse,
     CloneProgressStage,
+    WIChatNotify,
 } from "@wso2/wi-core";
 import type {
     AuthState,
@@ -142,6 +143,7 @@ export class WsClient {
     private readonly authStateChangedListeners = new Set<(state: AuthState) => void>();
     private readonly contextStateChangedListeners = new Set<(state: ContextStoreState) => void>();
     private readonly cloneProgressListeners = new Set<(stage: CloneProgressStage) => void>();
+    private readonly chatNotifyListeners = new Set<(event: WIChatNotify) => void>();
 
     constructor() {
         this.transport.subscribe(
@@ -418,6 +420,23 @@ export class WsClient {
         return () => this.cloneProgressListeners.delete(callback);
     }
 
+    public onChatNotify(callback: (event: WIChatNotify) => void): () => void {
+        this.chatNotifyListeners.add(callback);
+        return () => this.chatNotifyListeners.delete(callback);
+    }
+
+    public async wizardEnhancementReady(): Promise<void> {
+        await this.request("wizardEnhancementReady");
+    }
+
+    public async openMigratedProject(): Promise<void> {
+        await this.request("openMigratedProject");
+    }
+
+    public async abortMigrationAgent(): Promise<void> {
+        await this.request("abortMigrationAgent");
+    }
+
     public async request<TAction extends WIWsMethod>(
         action: TAction,
         ...args: WIWsMethodParamsMap[TAction] extends void ? [] : [WIWsMethodParamsMap[TAction]]
@@ -488,6 +507,9 @@ export class WsClient {
                 return;
             case WI_BRIDGE_EVENTS.CLONE_PROGRESS:
                 this.cloneProgressListeners.forEach((listener) => listener(message.stage));
+                return;
+            case WI_BRIDGE_EVENTS.CHAT_NOTIFY:
+                this.chatNotifyListeners.forEach((listener) => listener(message.event));
                 return;
             case WI_BRIDGE_EVENTS.WS_RESPONSE:
             default:

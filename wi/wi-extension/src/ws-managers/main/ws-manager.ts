@@ -70,6 +70,7 @@ import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi
 import { StateMachine } from "../../stateMachine";
 import { ext } from "../../extensionVariables";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
+import { ballerinaContext } from "../../bi/ballerinaContext";
 const platform = getPlatform();
 
 export class MainWsManager implements WIVisualizerAPI {
@@ -489,7 +490,19 @@ export class MainWsManager implements WIVisualizerAPI {
     async migrateProject(params: MigrateRequest): Promise<void> {
         return new Promise(async (resolve, reject) => {
             try {
+                console.log('[WI migrateProject] Starting. aiFeatureUsed:', params.aiFeatureUsed, 'sourcePath:', params.sourcePath);
                 const result = await commands.executeCommand('BI.project.createBIProjectMigration', params);
+                console.log('[WI migrateProject] createBIProjectMigration returned:', typeof result, result);
+                if (params.aiFeatureUsed && params.sourcePath) {
+                    const projectRoot = typeof result === 'string' ? result : undefined;
+                    if (projectRoot) {
+                        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+                        console.log('[WI migrateProject] AI path. projectRoot:', projectRoot, 'migration API available:', !!migrationAPI);
+                        migrationAPI?.setWizardProjectRoot(projectRoot, params.sourcePath);
+                        // Ensure the BridgeLayer forwards chat events now that the API is available
+                        BridgeLayer.setupMigrationSubscription(this.projectUri ?? 'global');
+                    }
+                }
                 resolve();
             } catch (error) {
                 console.error("Error creating Ballerina project:", error);
@@ -595,5 +608,22 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async getDefaultCreationPath(): Promise<WorkspaceRootResponse> {
         return { path: getDefaultCreationPath() };
+    }
+
+    async wizardEnhancementReady(): Promise<void> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        console.log('[WI wizardEnhancementReady] Called. migration API available:', !!migrationAPI);
+        await migrationAPI?.wizardEnhancementReady();
+        console.log('[WI wizardEnhancementReady] Returned.');
+    }
+
+    async openMigratedProject(): Promise<void> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        migrationAPI?.openMigratedProject();
+    }
+
+    async abortMigrationAgent(): Promise<void> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        migrationAPI?.abortAgent();
     }
 }
