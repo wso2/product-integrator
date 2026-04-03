@@ -52,6 +52,7 @@ export interface ProjectFormFieldsProps {
     packageNameValidationError?: string;
     projectHandleError?: string;
     orgNameError?: string | null;
+    expandAdvancedTrigger?: number;
     organizations?: Organization[];
     onCloudProjectNameError?: (error: string | null) => void;
     onCloudProjectHandleError?: (error: string | null) => void;
@@ -66,6 +67,7 @@ export function ProjectFormFields({
     packageNameValidationError,
     projectHandleError,
     orgNameError: orgNameErrorOverride,
+    expandAdvancedTrigger,
     organizations,
     onCloudProjectNameError,
     onCloudProjectHandleError,
@@ -219,6 +221,12 @@ export function ProjectFormFields({
         const error = validatePackageName(formData.packageName, formData.integrationName);
         setPackageNameError(error);
     }, [formData.packageName, formData.integrationName]);
+
+    useEffect(() => {
+        if (expandAdvancedTrigger) {
+            setIsPackageInfoExpanded(true);
+        }
+    }, [expandAdvancedTrigger]);
 
     // Validation effect for org name
     useEffect(() => {
@@ -444,6 +452,7 @@ export function ProjectFormFields({
                 packageNameError={packageNameValidationError || packageNameError}
                 projectHandleError={projectHandleError || handleError || cloudProjectHandleError}
                 organizations={organizations}
+                hasError={!!(packageNameValidationError || packageNameError || orgNameError || projectHandleError || handleError || cloudProjectHandleError)}
             />
         </>
     );

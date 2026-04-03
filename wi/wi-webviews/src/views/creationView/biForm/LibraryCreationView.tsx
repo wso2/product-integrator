@@ -289,11 +289,13 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
         if (formData.packageName.length < 2) {
             setPackageNameError("Package name must be at least 2 characters");
+            setIsPackageInfoExpanded(true);
             hasError = true;
         } else {
             const pkgError = validatePackageName(formData.packageName, formData.libraryName);
             if (pkgError) {
                 setPackageNameError(pkgError);
+                setIsPackageInfoExpanded(true);
                 hasError = true;
             }
         }
@@ -315,6 +317,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             const hErr = validateProjectHandle(withinProjectHandle);
             if (hErr) {
                 setProjectHandleError(hErr);
+                setIsPackageInfoExpanded(true);
                 hasError = true;
             }
         }
@@ -328,6 +331,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         }
 
         if (orgNameError) {
+            setIsPackageInfoExpanded(true);
             hasError = true;
         }
 
@@ -349,9 +353,11 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                     setPathError(validationResult.errorMessage || "Invalid library path");
                 } else if (validationResult.errorField === ValidateProjectFormErrorField.NAME) {
                     if (createWithinProject) {
-                        setWithinProjectNameError(validationResult.errorMessage || "Invalid project name");
+                        setProjectHandleError(validationResult.errorMessage || "Invalid project ID");
+                        setIsPackageInfoExpanded(true);
                     } else {
                         setPackageNameError(validationResult.errorMessage || "Invalid package name");
+                        setIsPackageInfoExpanded(true);
                     }
                 }
                 setIsValidating(false);
@@ -511,6 +517,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                 orgNameError={orgNameError}
                                 projectHandleError={projectHandleError || cloudProjectHandleError}
                                 organizations={organizations}
+                                hasError={!!(packageNameError || orgNameError || projectHandleError || cloudProjectHandleError)}
                             />
 
                             <FormFooter>

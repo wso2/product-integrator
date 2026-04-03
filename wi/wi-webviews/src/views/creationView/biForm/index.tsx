@@ -54,6 +54,7 @@ export function BIProjectForm() {
     const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
     const [cloudProjectNameError, setCloudProjectNameError] = useState<string | null>(null);
     const [cloudProjectHandleError, setCloudProjectHandleError] = useState<string | null>(null);
+    const [expandAdvancedTrigger, setExpandAdvancedTrigger] = useState(0);
     const createActionLabel = "Create Integration";
 
 
@@ -94,11 +95,13 @@ export function BIProjectForm() {
 
         if (formData.packageName.length < 2) {
             setPackageNameValidationError("Package name must be at least 2 characters");
+            setExpandAdvancedTrigger(t => t + 1);
             hasError = true;
         } else {
             const packageNameError = validatePackageName(formData.packageName, formData.integrationName);
             if (packageNameError) {
                 setPackageNameValidationError(packageNameError);
+                setExpandAdvancedTrigger(t => t + 1);
                 hasError = true;
             }
         }
@@ -115,12 +118,14 @@ export function BIProjectForm() {
             const hErr = validateProjectHandle(formData.projectHandle);
             if (hErr) {
                 setProjectHandleError(hErr);
+                setExpandAdvancedTrigger(t => t + 1);
                 hasError = true;
             }
         }
 
         const orgErr = validateOrgName(formData.orgName);
         if (orgErr) {
+            setExpandAdvancedTrigger(t => t + 1);
             hasError = true;
         }
 
@@ -159,11 +164,13 @@ export function BIProjectForm() {
                     setPathError(validationResult.errorMessage || "Invalid integration path");
                 } else if (validationResult.errorField === ValidateProjectFormErrorField.NAME) {
                     if (formData.createWithinProject) {
-                        setProjectNameError(validationResult.errorMessage || "Invalid project name");
+                        setProjectHandleError(validationResult.errorMessage || "Invalid project ID");
+                        setExpandAdvancedTrigger(t => t + 1);
                     } else {
                         setPackageNameValidationError(
                             validationResult.errorMessage || "Invalid integration name"
                         );
+                        setExpandAdvancedTrigger(t => t + 1);
                     }
                 }
                 setIsValidating(false);
@@ -198,6 +205,7 @@ export function BIProjectForm() {
                 projectNameError={projectNameError || undefined}
                 packageNameValidationError={packageNameValidationError || undefined}
                 projectHandleError={projectHandleError || undefined}
+                expandAdvancedTrigger={expandAdvancedTrigger}
                 organizations={organizations}
                 onCloudProjectNameError={setCloudProjectNameError}
                 onCloudProjectHandleError={setCloudProjectHandleError}

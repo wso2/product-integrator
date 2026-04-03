@@ -245,7 +245,8 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                 if (validationResult.errorField === ValidateProjectFormErrorField.PATH) {
                     setPathError(validationResult.errorMessage || "Invalid project path");
                 } else if (validationResult.errorField === ValidateProjectFormErrorField.NAME) {
-                    setProjectNameError(validationResult.errorMessage || "Invalid project name");
+                    setProjectHandleError(validationResult.errorMessage || "Invalid project ID");
+                    setIsAdvancedExpanded(true);
                 }
                 setIsValidating(false);
                 return;
@@ -345,6 +346,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                 onToggle={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
                                 icon="gear"
                                 title="Advanced Configurations"
+                                hasError={!!(projectHandleError || cloudProjectHandleError)}
                             >
                                 <FieldGroup>
                                     <TextField
