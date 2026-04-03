@@ -18,6 +18,15 @@ on:
         description: 'Specify Ballerina version to use'
         required: false
         type: string
+      ballerina_extension_source:
+        description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
+        default: 'marketplace'
+        required: false
+        type: string
+      ballerina_extension_version:
+        description: 'Specify the Ballerina extension version to use for GitHub VSIX or marketplace flow'
+        required: false
+        type: string
       icp_version:
         description: 'Specify ICP version to use'
         required: false
@@ -42,6 +51,9 @@ jobs:
           if [ -z "${{ inputs.ballerina_version }}" ] || [ -z "${{ inputs.icp_version }}" ] || [ -z "${{ inputs.integrator_version }}" ]; then
             echo "Error: ballerina_version, icp_version, and integrator_version must not be empty."
             exit 1
+          elif [ "${{ inputs.ballerina_extension_source }}" = "github" ] && [ -z "${{ inputs.ballerina_extension_version }}" ]; then
+            echo "Error: ballerina_extension_version must not be empty when ballerina_extension_source is set to github."
+            exit 1
           else
             echo "All required version inputs are provided."
           fi
@@ -58,6 +70,14 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+
+      - name: Validate GitHub VSIX input contract
+        if: ${{ inputs.ballerina_extension_source == 'github' && inputs.ballerina_extension_version == '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          echo "Error: ballerina_extension_version is required when ballerina_extension_source=github."
+          exit 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -92,7 +112,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
 
       - name: Cache Rust toolchain
         uses: actions/cache@v4
@@ -147,6 +167,22 @@ jobs:
         with:
           path: lib/vscode-reh-web-*
           key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
+
+      - name: Set Ballerina extension version
+        if: ${{ inputs.ballerina_extension_version != '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          echo "BALLERINA_EXTENSION_VERSION=${{ inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
+
+      - name: Download archived Ballerina VSIX
+        if: ${{ inputs.ballerina_extension_source == 'github' && inputs.ballerina_extension_version != '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          chmod +x ./ci/download-vsix.sh
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${{ inputs.ballerina_extension_version }}" "ballerina-${{ inputs.ballerina_extension_version }}.vsix" "$PWD")
+          echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
   
       - name: Update product.json and branding
         working-directory: .
@@ -237,16 +273,16 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
-          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION="${{ inputs.ballerina_version }}"
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
-          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION="${{ inputs.icp_version }}"
           ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
           cd ./installers/linux-deb
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
@@ -269,16 +305,16 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
-          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION="${{ inputs.ballerina_version }}"
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
-          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION="${{ inputs.icp_version }}"
           ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
           cd ./installers/linux-rpm
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
@@ -299,16 +335,16 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
-          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION="${{ inputs.ballerina_version }}"
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
-          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION="${{ inputs.icp_version }}"
           ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
           cd ./installers/linux-tar
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
@@ -330,7 +366,7 @@ jobs:
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
           if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
             RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
             RPM_VERSION="${INTEGRATOR_VERSION%-*}"
@@ -344,7 +380,7 @@ jobs:
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
           if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
             RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
             RPM_VERSION="${INTEGRATOR_VERSION%-*}"
@@ -359,7 +395,7 @@ jobs:
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
           if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
             RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
             RPM_VERSION="${INTEGRATOR_VERSION%-*}"
@@ -495,7 +531,7 @@ jobs:
           aws-region: us-east-1
       
       - name: Upload linux artifacts to S3
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         working-directory: .
         run: |
           S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
