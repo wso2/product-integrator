@@ -447,6 +447,7 @@ export const RadioInput = styled.input`
     margin-top: 2px;
     accent-color: var(--vscode-focusBorder);
     flex-shrink: 0;
+    outline: none;
 `;
 
 export const RadioContent = styled.div`

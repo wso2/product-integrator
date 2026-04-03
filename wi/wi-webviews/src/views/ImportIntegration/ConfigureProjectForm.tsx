@@ -273,7 +273,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                                 <RadioInput type="radio" checked={aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(true)} />
                                 <RadioContent>
                                     <RadioTitle>Enable AI Enhancement</RadioTitle>
-                                    <RadioDescription>AI will automatically resolve unmapped elements, fix build errors, and refine tests.</RadioDescription>
+                                    <RadioDescription>AI will automatically resolve unmapped elements, fix build errors, and improve the quality of the migration.</RadioDescription>
                                 </RadioContent>
                             </RadioOption>
                             <RadioOption selected={!aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(false)}>
@@ -331,7 +331,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                                 <RadioInput type="radio" checked={aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(true)} />
                                 <RadioContent>
                                     <RadioTitle>Enable AI Enhancement</RadioTitle>
-                                    <RadioDescription>AI will automatically resolve unmapped elements, fix build errors, and refine tests.</RadioDescription>
+                                    <RadioDescription>AI will automatically resolve unmapped elements, fix build errors, and improve the quality of the migration.</RadioDescription>
                                 </RadioContent>
                             </RadioOption>
                             <RadioOption selected={!aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(false)}>

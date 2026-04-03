@@ -498,9 +498,13 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                     </ActionButton>
                 )}
                 {isRunning && (
-                    <ActionButton variant="secondary" onClick={handleSkipAndOpen}>
-                        <span className="codicon codicon-debug-step-over" />
-                        Pause and Open
+                    <ActionButton
+                        variant="secondary"
+                        onClick={handleSkipAndOpen}
+                        title="Pause AI enhancement and open the integration project. Your current progress is saved and can be resumed later from the BI Chat."
+                    >
+                        <span className="codicon codicon-debug-pause" />
+                        Pause and Open Integration
                     </ActionButton>
                 )}
             </ButtonRow>
