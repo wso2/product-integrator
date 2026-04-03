@@ -106,6 +106,7 @@ import type {
 	ToggleAutoBuildReq,
 	ToggleAutoBuildResp,
 	UpdateCodeServerReq,
+	UpdateProjectReq,
 	UserInfo,
 } from "@wso2/wso2-platform-core";
 import { type MessageConnection, Trace, type Tracer } from "vscode-jsonrpc";
@@ -211,6 +212,14 @@ export class ChoreoRPCClient implements IChoreoRPCClient {
 			throw new Error("RPC client is not initialized");
 		}
 		const resp = await this.client.sendRequest<{ project: Project }>("project/create", params);
+		return resp.project;
+	}
+
+	async updateProject(params: UpdateProjectReq): Promise<Project> {
+		if (!this.client) {
+			throw new Error("RPC client is not initialized");
+		}
+		const resp = await this.client.sendRequest<{ project: Project }>("project/update", params);
 		return resp.project;
 	}
 

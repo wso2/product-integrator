@@ -18,7 +18,7 @@
 
 import React from "react";
 import { CheckBox } from "@wso2/ui-toolkit";
-import { ICreateNewIntegrationCmdIntegrations, Project } from "@wso2/wso2-platform-core";
+import { getIntegrationScopeText, ICreateNewIntegrationCmdIntegrations, Project } from "@wso2/wso2-platform-core";
 import {
 	CheckboxCell,
 	ComponentInfo,
@@ -87,7 +87,7 @@ export function ComponentList({
 	const { wsClient } = useVisualizerContext();
 	const { consoleUrl } = useCloudContext();
 
-	const projectLink = <VSCodeLinkForeground onClick={() => {
+	const projectLink = <VSCodeLinkForeground title="View project in console" onClick={() => {
 		wsClient.openExternal(`${consoleUrl}/organizations/${org?.handle}/projects/${project?.handler}`)
 	}}>{project?.name}</VSCodeLinkForeground>
 
@@ -167,7 +167,7 @@ export function ComponentList({
 							{entry.supportedIntegrationTypes?.length > 0 && (
 								<TypeBadge isSelected={isSelected}>
 									{entry.supportedIntegrationTypes.length === 1 ? (
-										<span>{entry.supportedIntegrationTypes[0]}</span>
+										<span>{getIntegrationScopeText(entry.supportedIntegrationTypes[0])}</span>
 									) : (
 										<select
 											value={state?.selectedIntegrationType ?? ""}
@@ -184,7 +184,7 @@ export function ComponentList({
 											}}
 										>
 											{entry.supportedIntegrationTypes.map((type) => (
-												<option key={type} value={type}>{type}</option>
+												<option key={type} value={type}>{getIntegrationScopeText(type)}</option>
 											))}
 										</select>
 									)}
