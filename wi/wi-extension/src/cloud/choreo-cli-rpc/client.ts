@@ -161,9 +161,9 @@ export class RPCClient {
 		try {
 			return await withTimeout(() => this._conn!.sendRequest<T>(method, params), method, timeout);
 		} catch (e: any) {
+			ext.logError(`Error in RPC request: ${method} with params ${JSON.stringify(params)}`, e as Error);
 			// TODO: have a better way to check if connection is closed
 			if ((e.message?.includes("Connection is closed") || e.message?.includes(`Function ${method} timed out`)) && !isRetry) {
-				await this.init();
 				return this.sendRequest(method, params, timeout, true);
 			}
 			handlerError(e);
@@ -750,7 +750,7 @@ export class ChoreoRPCClient implements IChoreoRPCClient {
 		if (!this.client) {
 			throw new Error("RPC client is not initialized");
 		}
-		const response: GetCliRpcResp = await this.client.sendRequest("auth/getConfigs", {}, 2000);
+		const response: GetCliRpcResp = await this.client.sendRequest("auth/getConfigs", {}, 5000);
 		return response;
 	}
 
