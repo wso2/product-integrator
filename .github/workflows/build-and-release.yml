@@ -183,7 +183,7 @@ jobs:
           echo "BALLERINA_EXTENSION_VERSION=${{ github.event.inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
 
       - name: Download archived Ballerina VSIX
-        if: ${{ github.event.inputs.ballerina_extension_source == 'github' }}
+        if: ${{ github.event.inputs.ballerina_extension_source == 'github' && github.event.inputs.ballerina_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
@@ -527,7 +527,7 @@ jobs:
           echo "BALLERINA_EXTENSION_VERSION=${{ github.event.inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
 
       - name: Download archived Ballerina VSIX
-        if: ${{ github.event.inputs.ballerina_extension_source == 'github' }}
+        if: ${{ github.event.inputs.ballerina_extension_source == 'github' && github.event.inputs.ballerina_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |

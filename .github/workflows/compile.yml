@@ -71,6 +71,14 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Validate GitHub VSIX input contract
+        if: ${{ inputs.ballerina_extension_source == 'github' && inputs.ballerina_extension_version == '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          echo "Error: ballerina_extension_version is required when ballerina_extension_source=github."
+          exit 1
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -168,7 +176,7 @@ jobs:
           echo "BALLERINA_EXTENSION_VERSION=${{ inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
 
       - name: Download archived Ballerina VSIX
-        if: ${{ inputs.ballerina_extension_source == 'github' }}
+        if: ${{ inputs.ballerina_extension_source == 'github' && inputs.ballerina_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
