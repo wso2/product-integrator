@@ -188,7 +188,7 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${{ github.event.inputs.ballerina_extension_version }}" "ballerina-${{ github.event.inputs.ballerina_extension_version }}.vsix" "$PWD")
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ github.event.inputs.ballerina_extension_version }}" "ballerina-${{ github.event.inputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Update product.json and branding
@@ -532,7 +532,7 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${{ github.event.inputs.ballerina_extension_version }}" "ballerina-${{ github.event.inputs.ballerina_extension_version }}.vsix" "$PWD")
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ github.event.inputs.ballerina_extension_version }}" "ballerina-${{ github.event.inputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Update product.json and branding
