@@ -19,7 +19,7 @@
 import { existsSync, mkdirSync } from "fs";
 import * as os from "os";
 import * as path from "path";
-import { Uri, commands, window } from "vscode";
+import { Uri, commands, window, workspace } from "vscode";
 
 
 export const getNormalizedPath = (filePath: string): string => {
@@ -101,7 +101,12 @@ export async function openDirectory(openingPath: string, message: string, onSele
         onSelect();
     }
     if (openInCurrentWorkspace === "Current Window") {
-        await commands.executeCommand("vscode.openFolder", Uri.file(openingPath), { forceNewWindow: false });
+        const currentFolder = workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (currentFolder && isSamePath(currentFolder, openingPath)) {
+            await commands.executeCommand("workbench.action.reloadWindow");
+        } else {
+            await commands.executeCommand("vscode.openFolder", Uri.file(openingPath), { forceNewWindow: false });
+        }
         await commands.executeCommand("workbench.explorer.fileView.focus");
     } else if (openInCurrentWorkspace === "New Window") {
         await commands.executeCommand("vscode.openFolder", Uri.file(openingPath), { forceNewWindow: true });

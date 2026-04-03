@@ -35,8 +35,12 @@ import {
 	NameStatic,
 	SelectionCount,
 	TypeBadge,
+	VSCodeLinkForeground,
 	WarningBanner,
 } from "./styles";
+import { useCloudContext } from "../../providers";
+import { useVisualizerContext } from "../../contexts";
+import { Organization } from "../creationView/biForm/components/PackageInfoSection";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,7 +53,8 @@ export interface EntryFormState {
 }
 
 interface ComponentListProps {
-	project?: Project;
+	org: Organization;
+	project: Project;
 	integrations: ICreateNewIntegrationCmdIntegrations[];
 	formState: EntryFormState[];
 	isBatch: boolean;
@@ -65,6 +70,7 @@ interface ComponentListProps {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ComponentList({
+	org,
 	project,
 	integrations,
 	formState,
@@ -78,11 +84,17 @@ export function ComponentList({
 	onEditStart,
 }: ComponentListProps) {
 	const hasSelected = selectedCount > 0;
+	const { wsClient } = useVisualizerContext();
+	const { consoleUrl } = useCloudContext();
+
+	const projectLink = <VSCodeLinkForeground onClick={() => {
+		wsClient.openExternal(`${consoleUrl}/organizations/${org?.handle}/projects/${project?.handler}`)
+	}}>{project?.name}</VSCodeLinkForeground>
 
 	return (
 		<ComponentListSection>
 			<ComponentListHeader>
-				<ComponentListLabel>{isBatch ? `Select Integrations to Deploy in WSO2 Cloud project '${project?.name}'` : `Deploy integration in WSO2 Cloud project '${project?.name}'`}</ComponentListLabel>
+				<ComponentListLabel>{isBatch ? <>Select Integrations to Deploy to {projectLink} in WSO2 Cloud</> : <>Deploy integration to {projectLink} in WSO2 Cloud</>}</ComponentListLabel>
 				{isBatch && <SelectionCount>{selectedCount} of {integrations.length} selected</SelectionCount>}
 			</ComponentListHeader>
 

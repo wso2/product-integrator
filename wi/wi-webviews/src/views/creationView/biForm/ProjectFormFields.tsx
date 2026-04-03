@@ -292,11 +292,11 @@ export function ProjectFormFields({
             return;
         }
         const handleToCheck = formData.projectHandle.trim().toLowerCase();
-        const matched = cloudProjectsData.projects.find(p => p.handle.toLowerCase() === handleToCheck);
+        const matched = cloudProjectsData.projects.find(p => p.handler.toLowerCase() === handleToCheck);
         if (matched) {
             const suggested = suggestAvailableProjectName(
                 formData.projectHandle.trim(),
-                cloudProjectsData.projects.map(p => p.handle)
+                cloudProjectsData.projects.map(p => p.handler)
             );
             if (!handleTouched.current) {
                 onFormDataChange({ projectHandle: suggested });

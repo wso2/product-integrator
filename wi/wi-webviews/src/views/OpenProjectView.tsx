@@ -19,7 +19,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import styled from "@emotion/styled";
 import { Codicon, ProgressRing, ThemeColors } from "@wso2/ui-toolkit";
-import { WICommandIds } from "@wso2/wso2-platform-core";
+import { Project, WICommandIds } from "@wso2/wso2-platform-core";
 import {
     BackButton,
     FormBody,
@@ -36,9 +36,7 @@ import {
 } from "./shared/FormPageLayout";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
-import { CloneProgressStage, GetCloudProjectsResp } from "@wso2/wi-core";
-
-type CloudProject = GetCloudProjectsResp["projects"][number];
+import { CloneProgressStage } from "@wso2/wi-core";
 
 // ── Project list styles ───────────────────────────────────────────────────────
 
@@ -540,10 +538,10 @@ interface OpenProjectViewProps {
 export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const { wsClient } = useVisualizerContext();
     const { authState, authStateLoading } = useCloudContext();
-    const [projects, setProjects] = useState<CloudProject[]>([]);
+    const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedProject, setSelectedProject] = useState<CloudProject | null>(null);
+    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
     const [cloning, setCloning] = useState(false);
     const [cloneStage, setCloneStage] = useState<CloneProgressStage | null>(null);
     const [cloneSuccess, setCloneSuccess] = useState(false);
@@ -704,7 +702,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
 
     // ── Confirmation panel ────────────────────────────────────────────────────
 
-    const renderConfirm = (project: CloudProject) => (
+    const renderConfirm = (project: Project) => (
         <>
             <FormPanelHeader>
                 <FormPanelTitle>{cloneSuccess ? "All done!" : "Clone Project"}</FormPanelTitle>
