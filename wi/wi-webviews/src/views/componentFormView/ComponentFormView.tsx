@@ -297,6 +297,7 @@ function ComponentForm() {
 
 						{/* Component list */}
 						<ComponentList
+							org={params?.org}
 							project={params?.project}
 							integrations={params?.integrations ?? []}
 							formState={formState}
