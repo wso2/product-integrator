@@ -151,7 +151,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ github.event.inputs.ballerina_extension_source }}-${{ github.event.inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-ballerina-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ github.event.inputs.ballerina_extension_source }}-${{ github.event.inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -187,8 +187,8 @@ jobs:
         shell: bash
         working-directory: .
         run: |
-          chmod +x ./ci/download-ballerina-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-ballerina-vsix.sh "${{ github.event.inputs.ballerina_extension_version }}" "$PWD")
+          chmod +x ./ci/download-vsix.sh
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${{ github.event.inputs.ballerina_extension_version }}" "ballerina-${{ github.event.inputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Update product.json and branding
@@ -480,7 +480,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ github.event.inputs.ballerina_extension_source }}-${{ github.event.inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-ballerina-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ github.event.inputs.ballerina_extension_source }}-${{ github.event.inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -531,8 +531,8 @@ jobs:
         shell: bash
         working-directory: .
         run: |
-          chmod +x ./ci/download-ballerina-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-ballerina-vsix.sh "${{ github.event.inputs.ballerina_extension_version }}" "$PWD")
+          chmod +x ./ci/download-vsix.sh
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${{ github.event.inputs.ballerina_extension_version }}" "ballerina-${{ github.event.inputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Update product.json and branding
