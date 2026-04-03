@@ -126,16 +126,16 @@ fi)
         "WSO2_INTEGRATOR_RUNTIME": "true"
       },
       "darwin": {
-        "BALLERINA_HOME": "${APP_ROOT}/Contents/components/ballerina",
-        "PATH": "${APP_ROOT}/Contents/components/ballerina/bin:$PATH"
+        "BALLERINA_HOME": "\${APP_ROOT}/Contents/components/ballerina",
+        "PATH": "\${APP_ROOT}/Contents/components/ballerina/bin:\$PATH"
       },
       "linux": {
-        "BALLERINA_HOME": "${APP_ROOT}/components/ballerina",
-        "PATH": "${APP_ROOT}/components/ballerina/bin:$PATH"
+        "BALLERINA_HOME": "\${APP_ROOT}/components/ballerina",
+        "PATH": "\${APP_ROOT}/components/ballerina/bin:\$PATH"
       },
       "win32": {
-        "BALLERINA_HOME": "${APP_ROOT}\\\\components\\\\ballerina",
-        "PATH": "${APP_ROOT}\\\\components\\\\ballerina\\\\bin;$PATH"
+        "BALLERINA_HOME": "\${APP_ROOT}\\\\components\\\\ballerina",
+        "PATH": "\${APP_ROOT}\\\\components\\\\ballerina\\\\bin;\$PATH"
       }
     }
 }

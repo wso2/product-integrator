@@ -11,7 +11,7 @@ VSIX_URL="https://github.com/wso2/ballerina-vscode/releases/download/v${VERSION}
 
 mkdir -p "${VSIX_DIR}"
 
-echo "Downloading ${VSIX_NAME} from ${VSIX_URL}"
+echo "Downloading ${VSIX_NAME} from ${VSIX_URL}" >&2
 if ! curl -fL --retry 3 --retry-delay 2 -o "${VSIX_DIR}/${VSIX_NAME}" "${VSIX_URL}"; then
   echo "Failed to download ${VSIX_NAME}." >&2
   echo "Make sure the GitHub release tag v${VERSION} exists in wso2/ballerina-vscode and includes the asset ${VSIX_NAME}." >&2
