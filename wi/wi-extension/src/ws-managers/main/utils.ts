@@ -22,7 +22,7 @@ import path from "path";
 import * as fs from 'fs';
 import * as unzipper from 'unzipper';
 import axios from "axios";
-import { DownloadProgress, Platform, SemanticVersion, ValidateProjectFormErrorField } from "@wso2/wi-core";
+import { DownloadProgress, Platform, PrebuiltIntegration, SemanticVersion, ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { BridgeLayer } from "../../BridgeLayer";
 
 interface ProgressMessage {
@@ -90,15 +90,9 @@ export async function handleOpenFile(projectUri: string, sampleName: string, rep
             location: ProgressLocation.Notification,
             title: 'Downloading file',
             cancellable: true
-        }, async (progress, cancellationToken) => {
-
-            let cancelled: boolean = false;
-            cancellationToken.onCancellationRequested(async () => {
-                cancelled = true;
-            });
-
+        }, async (progress) => {
             try {
-                await handleDownloadFile(projectUri, rawFileLink, filePath, progress, cancelled);
+                await handleDownloadFile(projectUri, rawFileLink, filePath, progress);
                 console.log('Download completed');
                 isSuccess = true;
                 return;
@@ -111,10 +105,10 @@ export async function handleOpenFile(projectUri: string, sampleName: string, rep
     if (isSuccess) {
         const successMsg = `The Integration sample file has been downloaded successfully to the following directory: ${filePath}.`;
         const zipReadStream = fs.createReadStream(filePath);
-        if (fs.existsSync(path.join(selectedPath, sampleName))) {
+        const extractedProjectPath = path.join(selectedPath, sampleName);
+        if (fs.existsSync(extractedProjectPath)) {
             // already extracted
-            let uri = Uri.file(path.join(selectedPath, sampleName));
-            commands.executeCommand("vscode.openFolder", uri, true);
+            await openDownloadedProject(extractedProjectPath, true);
             return;
         }
         zipReadStream.pipe(unzipper.Parse()).on("entry", function (entry) {
@@ -127,27 +121,94 @@ export async function handleOpenFile(projectUri: string, sampleName: string, rep
             if (!isDir) {
                 entry.pipe(fs.createWriteStream(fullpath));
             }
-        }).on("close", () => {
+        }).on("close", async () => {
             console.log("Extraction complete!");
-            window.showInformationMessage('Where would you like to open the project?',
-                { modal: true },
-                'Current Window',
-                'New Window'
-            ).then(selection => {
-                if (selection === "Current Window") {
-                    const folderUri = Uri.file(path.join(selectedPath, sampleName));
-                    const workspaceFolders = workspace.workspaceFolders || [];
-                    if (!workspaceFolders.some(folder => folder.uri.fsPath === folderUri.fsPath)) {
-                        workspace.updateWorkspaceFolders(workspaceFolders.length, 0, { uri: folderUri });
-                    }
-                } else if (selection === "New Window") {
-                    commands.executeCommand('vscode.openFolder', Uri.file(path.join(selectedPath, sampleName)));
-                }
-            });
+            await openDownloadedProject(extractedProjectPath);
         });
         window.showInformationMessage(
             successMsg,
         );
+    }
+}
+
+export async function handleOpenPrebuiltIntegration(
+    projectUri: string,
+    prebuiltIntegration: PrebuiltIntegration,
+) {
+    const selectedPath = await selectFileDownloadPath();
+    if (selectedPath === "") {
+        return;
+    }
+
+    const trimSlashes = (value: string) => value.replace(/^[\\/]+|[\\/]+$/g, '');
+    const componentPath = trimSlashes(prebuiltIntegration.componentPath);
+    const componentName = componentPath.split(/[\\/]/).pop();
+    const integrationFolderName = componentName && componentName.length > 0
+        ? componentName
+        : sanitizeName(prebuiltIntegration.displayName);
+    const extractedProjectPath = path.join(selectedPath, integrationFolderName);
+
+    if (fs.existsSync(extractedProjectPath)) {
+        await openDownloadedProject(extractedProjectPath, true);
+        return;
+    }
+
+    const archiveFilePath = path.join(os.tmpdir(), `${integrationFolderName}-${Date.now()}.zip`);
+    const archiveExtractPath = path.join(os.tmpdir(), `${integrationFolderName}-extract-${Date.now()}`);
+    const archiveUrl = `${prebuiltIntegration.repositoryUrl.replace(/\/+$/, '')}/archive/refs/heads/${prebuiltIntegration.branch}.zip`;
+
+    try {
+        await window.withProgress({
+            location: ProgressLocation.Notification,
+            title: 'Downloading file',
+            cancellable: true
+        }, async (progress) => {
+            await handleDownloadFile(projectUri, archiveUrl, archiveFilePath, progress);
+        });
+    } catch (error) {
+        window.showErrorMessage(`Error while downloading the file: ${error}`);
+        return;
+    }
+
+    try {
+        await fs.promises.mkdir(archiveExtractPath, { recursive: true });
+
+        await new Promise<void>((resolve, reject) => {
+            fs.createReadStream(archiveFilePath)
+                .on('error', reject)
+                .pipe(unzipper.Extract({ path: archiveExtractPath }))
+                .on('close', resolve)
+                .on('error', reject);
+        });
+
+        const archiveRootDir = fs.readdirSync(archiveExtractPath)[0];
+        if (!archiveRootDir) {
+            throw new Error('Failed to extract the pre-built integration archive.');
+        }
+
+        const sourcePath = path.join(
+            archiveExtractPath,
+            archiveRootDir,
+            trimSlashes(prebuiltIntegration.subDirectory),
+            componentPath,
+        );
+
+        if (!fs.existsSync(sourcePath)) {
+            throw new Error('Pre-built integration source files were not found in the downloaded archive.');
+        }
+
+        fs.cpSync(sourcePath, extractedProjectPath, { recursive: true });
+        window.showInformationMessage(
+            `The pre-built integration has been downloaded successfully to the following directory: ${extractedProjectPath}.`,
+        );
+        await openDownloadedProject(extractedProjectPath);
+    } catch (error) {
+        window.showErrorMessage(`Failed to prepare the pre-built integration: ${error}`);
+    } finally {
+        await Promise.allSettled([
+            fs.promises.unlink(archiveFilePath),
+            fs.promises.rm(archiveExtractPath, { recursive: true, force: true }),
+        ]);
     }
 }
 
@@ -160,7 +221,7 @@ async function selectFileDownloadPath(): Promise<string> {
     return "";
 }
 
-async function handleDownloadFile(projectUri: string, rawFileLink: string, defaultDownloadsPath: string, progress: Progress<ProgressMessage>, cancelled: boolean) {
+async function handleDownloadFile(projectUri: string, rawFileLink: string, defaultDownloadsPath: string, progress: Progress<ProgressMessage>) {
     const handleProgress = (progressPercentage: any) => {
         progress.report({ message: "Downloading file...", increment: progressPercentage });
     };
@@ -170,6 +231,33 @@ async function handleDownloadFile(projectUri: string, rawFileLink: string, defau
         window.showErrorMessage(`Failed to download file: ${error}`);
     }
     progress.report({ message: "Download finished" });
+}
+
+async function openDownloadedProject(projectPath: string, openInNewWindowDirectly = false): Promise<void> {
+    if (openInNewWindowDirectly) {
+        await commands.executeCommand('vscode.openFolder', Uri.file(projectPath), true);
+        return;
+    }
+
+    const selection = await window.showInformationMessage(
+        'Where would you like to open the project?',
+        { modal: true },
+        'Current Window',
+        'New Window'
+    );
+
+    if (selection === "Current Window") {
+        const folderUri = Uri.file(projectPath);
+        const workspaceFolders = workspace.workspaceFolders || [];
+        if (!workspaceFolders.some(folder => folder.uri.fsPath === folderUri.fsPath)) {
+            workspace.updateWorkspaceFolders(workspaceFolders.length, 0, { uri: folderUri });
+        }
+        return;
+    }
+
+    if (selection === "New Window") {
+        await commands.executeCommand('vscode.openFolder', Uri.file(projectPath));
+    }
 }
 
 async function downloadFile(projectUri: string, url: string, filePath: string, progressCallback?: (downloadProgress: DownloadProgress) => void) {
