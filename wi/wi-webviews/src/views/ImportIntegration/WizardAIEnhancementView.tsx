@@ -36,7 +36,9 @@ type EnhancementStatus = "running" | "completed" | "error" | "aborted";
 // ──────────────────────────────────────────────────────────────────────────────
 
 function formatFileNameForDisplay(filePath: string): string {
-    let displayName = filePath.replace(/\.bal$/, "");
+    // Normalize Windows backslashes to forward slashes
+    const normalized = filePath.replace(/\\/g, "/");
+    let displayName = normalized.replace(/\.bal$/, "");
     const lastSlashIndex = displayName.lastIndexOf("/");
     if (lastSlashIndex !== -1) {
         const directory = displayName.substring(0, lastSlashIndex + 1);
@@ -197,15 +199,18 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
     // ── Chat event handler ──────────────────────────────────────────────────
     const handleChatEvent = useCallback(
         (event: WIChatNotify) => {
+            if (event.type === "start") {
+                terminalRef.current = false;
+                setStatus("running");
+                setContent("");
+                return;
+            }
+
             if (terminalRef.current) {
                 return;
             }
 
             switch (event.type) {
-                case "start":
-                    setStatus("running");
-                    setContent("");
-                    break;
 
                 case "content_block":
                     updateContent((prev) => prev + event.content);
@@ -227,12 +232,12 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                     } else if (toolName === "LibraryGetTool") {
                         updateContent((prev) => prev + `\n\n<toolcall id="${toolCallId}" tool="${toolName}">Fetching library details...</toolcall>`);
                     } else if (toolName === "HealthcareLibraryProviderTool") {
-                        updateContent((prev) => prev + `\n\n<toolcall tool="${toolName}">Analyzing request & selecting healthcare libraries...</toolcall>`);
+                        updateContent((prev) => prev + `\n\n<toolcall id="${toolCallId}" tool="${toolName}">Analyzing request & selecting healthcare libraries...</toolcall>`);
                     } else if (["file_write", "file_edit", "file_batch_edit"].includes(toolName)) {
                         const fileName = toolInput?.fileName || "file";
                         const displayName = formatFileNameForDisplay(fileName);
                         const msg = toolName === "file_write" ? `Creating ${displayName}...` : `Updating ${displayName}...`;
-                        updateContent((prev) => prev + `\n\n<toolcall tool="${toolName}">${msg}</toolcall>`);
+                        updateContent((prev) => prev + `\n\n<toolcall id="${toolCallId}" tool="${toolName}">${msg}</toolcall>`);
                     } else if (toolName === "getCompilationErrors") {
                         updateContent((prev) => prev + `\n\n<toolcall tool="${toolName}">Checking for errors...</toolcall>`);
                     } else if (toolName === "runTests") {
@@ -252,19 +257,21 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                         const doneMsg = desc
                             ? `${desc.charAt(0).toUpperCase() + desc.slice(1)} search completed`
                             : "Library search completed";
+                        const failedAttrLS = event.failed ? ` failed="true"` : "";
                         updateContent((prev) =>
                             prev.replace(
                                 `<toolcall id="${toolCallId}" tool="${toolName}">${origMsg}</toolcall>`,
-                                `<toolresult id="${toolCallId}" tool="${toolName}">${doneMsg}</toolresult>`
+                                `<toolresult id="${toolCallId}" tool="${toolName}"${failedAttrLS}>${doneMsg}</toolresult>`
                             )
                         );
                     } else if (toolName === "LibraryGetTool") {
                         const libs = toolOutput || [];
                         const resultMsg = libs.length === 0 ? "No relevant libraries found" : `Fetched libraries: [${libs.join(", ")}]`;
+                        const failedAttrLG = event.failed ? ` failed="true"` : "";
                         updateContent((prev) =>
                             prev.replace(
                                 `<toolcall id="${toolCallId}" tool="${toolName}">Fetching library details...</toolcall>`,
-                                `<toolresult id="${toolCallId}" tool="${toolName}">${resultMsg}</toolresult>`
+                                `<toolresult id="${toolCallId}" tool="${toolName}"${failedAttrLG}>${resultMsg}</toolresult>`
                             )
                         );
                     } else if (toolName === "HealthcareLibraryProviderTool") {
@@ -272,39 +279,44 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                         const resultMsg = libs.length === 0
                             ? "No relevant healthcare libraries found."
                             : `Fetched healthcare libraries: [${libs.join(", ")}]`;
-                        updateContent((prev) =>
-                            prev.replace(
-                                `<toolcall tool="${toolName}">Analyzing request & selecting healthcare libraries...</toolcall>`,
-                                `<toolresult tool="${toolName}">${resultMsg}</toolresult>`
-                            )
-                        );
+                        const failedAttrHL = event.failed ? ` failed="true"` : "";
+                        if (toolCallId) {
+                            updateContent((prev) =>
+                                prev.replace(
+                                    `<toolcall id="${toolCallId}" tool="${toolName}">Analyzing request & selecting healthcare libraries...</toolcall>`,
+                                    `<toolresult id="${toolCallId}" tool="${toolName}"${failedAttrHL}>${resultMsg}</toolresult>`
+                                )
+                            );
+                        }
                     } else if (["file_write", "file_edit", "file_batch_edit"].includes(toolName)) {
+                        const failedAttrF = event.failed ? ` failed="true"` : "";
                         updateContent((prev) => {
-                            const creatingPattern = /<toolcall tool="([^"]+)">Creating (.+?)\.\.\.<\/toolcall>/;
-                            const updatingPattern = /<toolcall tool="([^"]+)">Updating (.+?)\.\.\.<\/toolcall>/;
-                            if (creatingPattern.test(prev)) {
-                                const action = toolOutput?.action;
-                                const resultText = action === "updated" ? "Updated" : "Created";
-                                return prev.replace(creatingPattern, (_m, tn, fn) => `<toolresult tool="${tn}">${resultText} ${fn}</toolresult>`);
+                            if (!toolCallId) {
+                                return prev;
                             }
-                            if (updatingPattern.test(prev)) {
-                                return prev.replace(updatingPattern, (_m, tn, fn) => `<toolresult tool="${tn}">Updated ${fn}</toolresult>`);
-                            }
-                            return prev;
+                            const toolCallPattern = new RegExp(
+                                `<toolcall id="${toolCallId}" tool="${toolName}">(Creating|Updating) (.+?)\\.\\.\\.<\\/toolcall>`
+                            );
+                            return prev.replace(toolCallPattern, (_m, actionLabel, fileName) => {
+                                const resultText = actionLabel === "Updating" || toolOutput?.action === "updated" ? "Updated" : "Created";
+                                return `<toolresult id="${toolCallId}" tool="${toolName}"${failedAttrF}>${resultText} ${fileName}</toolresult>`;
+                            });
                         });
                     } else if (toolName === "getCompilationErrors") {
                         const errors = toolOutput?.diagnostics || [];
                         const errorCount = errors.length;
                         const msg = errorCount === 0 ? "No errors found" : `Found ${errorCount} error${errorCount > 1 ? "s" : ""}`;
+                        const failedAttrCE = event.failed ? ` failed="true"` : "";
                         const pattern = new RegExp(`<toolcall tool="${toolName}">Checking for errors\\.\\.\\.<\\/toolcall>`);
-                        updateContent((prev) => prev.replace(pattern, `<toolresult tool="${toolName}">${msg}</toolresult>`));
+                        updateContent((prev) => prev.replace(pattern, `<toolresult tool="${toolName}"${failedAttrCE}>${msg}</toolresult>`));
                     } else if (toolName === "runTests") {
                         if (toolCallId) {
                             const resultMsg = toolOutput?.summary ?? "Tests completed";
+                            const failedAttrRT = event.failed ? ` failed="true"` : "";
                             updateContent((prev) =>
                                 prev.replace(
                                     `<toolcall id="${toolCallId}" tool="${toolName}">Running tests...</toolcall>`,
-                                    `<toolresult id="${toolCallId}" tool="${toolName}">${resultMsg}</toolresult>`
+                                    `<toolresult id="${toolCallId}" tool="${toolName}"${failedAttrRT}>${resultMsg}</toolresult>`
                                 )
                             );
                         }

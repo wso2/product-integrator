@@ -83,6 +83,7 @@ interface BridgeChannel {
 export class BridgeLayer {
     private static channels: Map<string, BridgeChannel> = new Map();
     private static migrationSubscribed = false;
+    private static migrationSubscriptionDisposable: { dispose(): void } | undefined;
 
     static create(webViewPanel: WebviewPanel, projectUri: string): void {
         const channel = this.getOrCreateChannel(projectUri);
@@ -190,6 +191,11 @@ export class BridgeLayer {
         channel.registration?.dispose();
         channel.transport.dispose();
         this.channels.delete(projectUri);
+        if (this.channels.size === 0) {
+            this.migrationSubscriptionDisposable?.dispose();
+            this.migrationSubscriptionDisposable = undefined;
+            this.migrationSubscribed = false;
+        }
     }
 
     private static getOrCreateChannel(projectUri: string): BridgeChannel {
@@ -226,15 +232,18 @@ export class BridgeLayer {
     /**
      * Subscribe to AI migration streaming events from the Ballerina extension.
      * Safe to call multiple times — only the first call with a valid API sets up the listener.
+     * Broadcasts to all active channels so that any open webview receives events.
      */
-    static setupMigrationSubscription(projectUri: string): void {
+    static setupMigrationSubscription(_projectUri: string): void {
         if (this.migrationSubscribed) {
             return;
         }
         if (ballerinaContext.migration?.onChatNotify) {
             this.migrationSubscribed = true;
-            ballerinaContext.migration.onChatNotify((event) => {
-                this.notifyChatEvent(projectUri, event);
+            this.migrationSubscriptionDisposable = ballerinaContext.migration.onChatNotify((event) => {
+                this.channels.forEach((_channel, uri) => {
+                    this.notifyChatEvent(uri, event);
+                });
             });
         }
     }

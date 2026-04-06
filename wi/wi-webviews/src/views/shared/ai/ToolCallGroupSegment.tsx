@@ -177,6 +177,7 @@ const ToolCallGroupSegment: React.FC<ToolCallGroupSegmentProps> = ({ segments })
     const isAnyLoading = segments.some((s) => s.loading);
     const [isExpanded, setIsExpanded] = useState<boolean>(isAnyLoading);
     const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const bodyId = useRef(`tool-group-body-${Math.random().toString(36).slice(2)}`);
 
     useEffect(() => {
         if (isAnyLoading) {
@@ -209,14 +210,27 @@ const ToolCallGroupSegment: React.FC<ToolCallGroupSegmentProps> = ({ segments })
 
     return (
         <GroupContainer>
-            <GroupHeader interactive={!isAnyLoading} onClick={toggleExpanded}>
+            <GroupHeader
+                interactive={!isAnyLoading}
+                onClick={toggleExpanded}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleExpanded();
+                    }
+                }}
+                aria-expanded={isExpanded}
+                aria-controls={bodyId.current}
+            >
                 <ChevronIcon expanded={isExpanded}>
                     <span className="codicon codicon-chevron-right" />
                 </ChevronIcon>
                 {isAnyLoading ? (
-                    <Spinner className="codicon codicon-loading spin" role="img" />
+                    <Spinner className="codicon codicon-loading spin" role="img" aria-label="Running" />
                 ) : (
-                    <StatusIcon className="codicon codicon-check" role="img" />
+                    <StatusIcon className="codicon codicon-check" role="img" aria-label="Completed" />
                 )}
                 <HeaderLabel>
                     {isAnyLoading ? category.running : category.done}
@@ -225,10 +239,10 @@ const ToolCallGroupSegment: React.FC<ToolCallGroupSegmentProps> = ({ segments })
                     <LastToolHint>&gt; {activeItem.text}</LastToolHint>
                 )}
             </GroupHeader>
-            <GroupBodyOuter expanded={isExpanded}>
+            <GroupBodyOuter expanded={isExpanded} id={bodyId.current}>
                 <GroupBody>
-                    {segments.map((item, idx) => (
-                        <ToolCallItemWrapper key={idx}>
+                    {segments.map((item) => (
+                        <ToolCallItemWrapper key={`${item.toolName ?? "unknown"}_${item.text}`}>
                             <ToolCallSegment
                                 text={item.text}
                                 loading={item.loading}

@@ -316,16 +316,16 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                             <Codicon name="sparkle" sx={{ fontSize: "14px", color: "var(--wso2-brand-accent)" }} />
                             AI Enhancement
                         </AIEnhancementTitle>
-                        <RadioGroup>
+                        <RadioGroup role="radiogroup" aria-label="AI Enhancement mode">
                             <RadioOption selected={aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(true)}>
-                                <RadioInput type="radio" checked={aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(true)} />
+                                <RadioInput type="radio" name="ai-enhancement-mode-multi" checked={aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(true)} />
                                 <RadioContent>
                                     <RadioTitle>Enable AI Enhancement</RadioTitle>
                                     <RadioDescription>AI will automatically resolve unmapped elements, fix build errors, and improve the quality of the migration.</RadioDescription>
                                 </RadioContent>
                             </RadioOption>
                             <RadioOption selected={!aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(false)}>
-                                <RadioInput type="radio" checked={!aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(false)} />
+                                <RadioInput type="radio" name="ai-enhancement-mode-multi" checked={!aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(false)} />
                                 <RadioContent>
                                     <RadioTitle>Skip for Now – Enhance Later</RadioTitle>
                                     <RadioDescription>Open the project as-is. You can trigger AI enhancement later from the BI Copilot.</RadioDescription>
@@ -378,16 +378,16 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                             <Codicon name="sparkle" sx={{ fontSize: "14px", color: "var(--wso2-brand-accent)" }} />
                             AI Enhancement
                         </AIEnhancementTitle>
-                        <RadioGroup>
+                        <RadioGroup role="radiogroup" aria-label="AI Enhancement mode">
                             <RadioOption selected={aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(true)}>
-                                <RadioInput type="radio" checked={aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(true)} />
+                                <RadioInput type="radio" name="ai-enhancement-mode-single" checked={aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(true)} />
                                 <RadioContent>
                                     <RadioTitle>Enable AI Enhancement</RadioTitle>
                                     <RadioDescription>AI will automatically resolve unmapped elements, fix build errors, and improve the quality of the migration.</RadioDescription>
                                 </RadioContent>
                             </RadioOption>
                             <RadioOption selected={!aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(false)}>
-                                <RadioInput type="radio" checked={!aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(false)} />
+                                <RadioInput type="radio" name="ai-enhancement-mode-single" checked={!aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(false)} />
                                 <RadioContent>
                                     <RadioTitle>Skip for Now – Enhance Later</RadioTitle>
                                     <RadioDescription>Open the project as-is. You can trigger AI enhancement later from the BI Copilot.</RadioDescription>

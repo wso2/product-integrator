@@ -67,11 +67,12 @@ const ToolCallSegment: React.FC<ToolCallSegmentProps> = ({ text, loading, failed
         <ToolCallContainer>
             <ToolCallLine>
                 {loading ? (
-                    <Spinner className="codicon codicon-loading spin" role="img" />
+                    <Spinner className="codicon codicon-loading spin" role="img" aria-label="Running" />
                 ) : (
                     <CheckIcon
                         className={`codicon ${failed ? "codicon-chrome-close" : "codicon-check"}`}
                         role="img"
+                        aria-label={failed ? "Failed" : "Succeeded"}
                     />
                 )}
                 <span>{text}</span>
