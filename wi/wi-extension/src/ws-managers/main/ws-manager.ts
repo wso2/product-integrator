@@ -425,7 +425,7 @@ export class MainWsManager implements WIVisualizerAPI {
                 resolve({
                     categories: [],
                     samples: [],
-                    prebuiltIntegrations: [],
+                    prebuiltIntegrations: params.runtime === "WSO2: BI" ? BI_PREBUILT_INTEGRATIONS : [],
                 });
             }
         });
