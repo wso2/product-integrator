@@ -18,6 +18,14 @@
 
 import styled from "@emotion/styled";
 import {
+    DEFAULT_PROFILE,
+    MI_PROFILE,
+    SELECTED_PROFILE_CONFIG_SECTION,
+    SELECTED_PROFILE_VALUES,
+    SI_PROFILE,
+    type SelectedProfileValue,
+} from "@wso2/wi-core";
+import {
     Dropdown,
     Icon,
     type OptionProps,
@@ -37,64 +45,28 @@ import {
     PageBackdrop,
 } from "../shared/FormPageLayout";
 
-type SelectedProfileValue = "WSO2 Integrator: Default" | "WSO2 Integrator: MI" | "WSO2 Integrator: SI";
-type LegacyProfileValue = "bi" | "mi" | "si";
-const SELECTED_PROFILE_SECTION = "integrator.selectedProfile";
-
-const PROFILES: SelectedProfileValue[] = [
-    "WSO2 Integrator: Default",
-    "WSO2 Integrator: MI",
-    "WSO2 Integrator: SI",
-];
-
-const PROFILE_OPTIONS: OptionProps[] = PROFILES.map((profile) => ({
+const PROFILE_OPTIONS: OptionProps[] = SELECTED_PROFILE_VALUES.map((profile) => ({
     id: profile,
     value: profile,
     content: profile,
 }));
 
 function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
-    return (
-        value === "WSO2 Integrator: Default" ||
-        value === "WSO2 Integrator: MI" ||
-        value === "WSO2 Integrator: SI"
-    );
+    return typeof value === "string"
+        && (SELECTED_PROFILE_VALUES as readonly string[]).includes(value);
 }
 
-function isLegacyProfileValue(value: unknown): value is LegacyProfileValue {
-    return value === "bi" || value === "mi" || value === "si";
-}
-
-function normalizeProfileValue(profileValue: unknown): SelectedProfileValue | undefined {
-    if (isSelectedProfileValue(profileValue)) {
-        return profileValue;
-    }
-
-    if (!isLegacyProfileValue(profileValue)) {
-        return undefined;
-    }
-
-    switch (profileValue) {
-        case "bi":
-            return "WSO2 Integrator: Default";
-        case "mi":
-            return "WSO2 Integrator: MI";
-        case "si":
-            return "WSO2 Integrator: SI";
-    }
-}
-
-function getProfileForEnabledRuntimes(enabled: Record<LegacyProfileValue, boolean>): SelectedProfileValue {
+function getProfileForEnabledRuntimes(enabled: Record<"bi" | "mi" | "si", boolean>): SelectedProfileValue {
     if (enabled.bi) {
-        return "WSO2 Integrator: Default";
+        return DEFAULT_PROFILE;
     }
     if (enabled.mi) {
-        return "WSO2 Integrator: MI";
+        return MI_PROFILE;
     }
     if (enabled.si) {
-        return "WSO2 Integrator: SI";
+        return SI_PROFILE;
     }
-    return "WSO2 Integrator: Default";
+    return DEFAULT_PROFILE;
 }
 
 const PageContainer = styled.div`
@@ -156,14 +128,14 @@ const Loader = styled.div`
 
 export function SettingsView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
-    const [selectedProfile, setSelectedProfile] = useState<SelectedProfileValue>("WSO2 Integrator: Default");
+    const [selectedProfile, setSelectedProfile] = useState<SelectedProfileValue>(DEFAULT_PROFILE);
     const [isLoading, setIsLoading] = useState(true);
     const [savingRuntime, setSavingRuntime] = useState<SelectedProfileValue | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const persistSelectedProfile = async (profile: SelectedProfileValue) => {
         await wsClient.setConfiguration({
-            section: SELECTED_PROFILE_SECTION,
+            section: SELECTED_PROFILE_CONFIG_SECTION,
             value: profile,
         });
     };
@@ -172,15 +144,11 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
         const loadRuntimeSettings = async () => {
             try {
                 const selectedProfileResponse = await wsClient.getConfiguration({
-                    section: SELECTED_PROFILE_SECTION,
+                    section: SELECTED_PROFILE_CONFIG_SECTION,
                 });
 
-                const normalizedProfile = normalizeProfileValue(selectedProfileResponse?.value);
-                if (normalizedProfile) {
-                    if (selectedProfileResponse?.value !== normalizedProfile) {
-                        await persistSelectedProfile(normalizedProfile);
-                    }
-                    setSelectedProfile(normalizedProfile);
+                if (isSelectedProfileValue(selectedProfileResponse?.value)) {
+                    setSelectedProfile(selectedProfileResponse.value);
                     return;
                 }
 
@@ -190,7 +158,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                     wsClient.getConfiguration({ section: "integrator.enabledRuntimes.si" }),
                 ]);
 
-                const currentState: Record<LegacyProfileValue, boolean> = {
+                const currentState: Record<"bi" | "mi" | "si", boolean> = {
                     bi: biResp?.value === true,
                     mi: miResp?.value === true,
                     si: siResp?.value === true,
@@ -202,7 +170,7 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
             } catch (loadError) {
                 console.error("Failed to load profile settings:", loadError);
                 setError("Failed to load settings. Showing defaults.");
-                setSelectedProfile("WSO2 Integrator: Default");
+                setSelectedProfile(DEFAULT_PROFILE);
             } finally {
                 setIsLoading(false);
             }
