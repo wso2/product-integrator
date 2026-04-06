@@ -29,7 +29,7 @@ Key Capabilities
 
 - 📊 Observability & Management – Monitor, trace, and manage integrations in production
 
-To learn more about WSO2 Integrator, please visit [WSO2 Integrator](https://wso2.com/integrator).
+To learn more about WSO2 Integrator, please visit [WSO2 Integrator](https://wso2.com/integration-platform/integrator/).
 
 ## Get started
 
