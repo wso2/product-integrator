@@ -228,8 +228,8 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                                 />
                             </BackButton>
                             <HeaderText>
-                                <HeaderTitle variant="h2">Settings</HeaderTitle>
-                                <HeaderSubtitle>Settings related to WSO2 Integrator.</HeaderSubtitle>
+                                <HeaderTitle variant="h2">Configurations</HeaderTitle>
+                                <HeaderSubtitle>Configurations related to WSO2 Integrator.</HeaderSubtitle>
                             </HeaderText>
                         </HeaderRow>
                     </FormPanelHeader>
