@@ -953,7 +953,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
 											onClick={() => downloadItem(item)}
 											buttonSx={{ width: "100%" }}
 										>
-											Download
+											Use this
 										</Button>
 									</DownloadAction>
 								</CardFooter>
