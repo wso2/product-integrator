@@ -16,6 +16,19 @@
  * under the License.
  */
 
+import type { Event } from "vscode";
+import { extensions } from "vscode";
+import { EXTENSION_DEPENDENCIES, WIChatNotify } from "@wso2/wi-core";
+
+/** Shape of the migration API exposed by the Ballerina extension's `activate()` return value. */
+export interface BallerinaExtMigrationAPI {
+    setWizardProjectRoot: (projectRoot: string, sourcePath?: string) => void;
+    wizardEnhancementReady: () => Promise<void>;
+    abortAgent: () => void;
+    openMigratedProject: () => void;
+    onChatNotify: Event<WIChatNotify>;
+}
+
 /**
  * Stores runtime context obtained from the Ballerina extension.
  * Used by WI's internal BI project explorer when the BI extension is not installed.
@@ -24,6 +37,7 @@ export class BallerinaContext {
     public biSupported: boolean = false;
     public isNPSupported: boolean = false;
     public isWorkspaceSupported: boolean = false;
+    public migration: BallerinaExtMigrationAPI | undefined;
 
     /**
      * Populate the context from the Ballerina extension's exports.
@@ -36,6 +50,33 @@ export class BallerinaContext {
             this.isNPSupported = instance.isNPSupported ?? false;
             this.isWorkspaceSupported = instance.isWorkspaceSupported ?? false;
         }
+        if (ballerinaExtExports?.migration) {
+            this.migration = ballerinaExtExports.migration as BallerinaExtMigrationAPI;
+        }
+    }
+    /**
+     * Ensures the migration API is available by lazily initializing from the
+     * Ballerina extension's exports if not already set.  This covers the case
+     * where the migration wizard runs before a project is opened (so the
+     * normal `init()` path in `extensionAPIs.initialize()` was never reached).
+     */
+    public async ensureMigrationAPI(): Promise<BallerinaExtMigrationAPI | undefined> {
+        if (this.migration) {
+            return this.migration;
+        }
+
+        const ext = extensions.getExtension(EXTENSION_DEPENDENCIES.BALLERINA);
+        if (!ext) {
+            return undefined;
+        }
+
+        if (!ext.isActive) {
+            await ext.activate();
+        }
+
+        // Re-init from the (now active) extension's exports
+        this.init(ext.exports);
+        return this.migration;
     }
 }
 
