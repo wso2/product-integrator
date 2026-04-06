@@ -200,9 +200,8 @@ export const suggestAvailableProjectName = (base: string, existingNames: string[
 };
 
 export const validateOrgName = (orgName: string): string | null => {
-    // Empty org name is allowed (optional field)
     if (!orgName || orgName.length === 0) {
-        return null;
+        return "Organization name is required";
     }
 
     // Check for reserved org names (case-insensitive)

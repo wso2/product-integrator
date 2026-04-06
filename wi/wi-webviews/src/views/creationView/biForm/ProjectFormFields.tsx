@@ -93,6 +93,7 @@ export function ProjectFormFields({
     const hasAutoInitializedProjectMode = useRef(false);
     const handleTouched = useRef(false);
     const firstFieldRef = useRef<HTMLInputElement>(null);
+    const orgNameInitialized = useRef(false);
 
     const loggedInOrgs = authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined;
     const resolvedOrg = useMemo(() => {
@@ -178,7 +179,8 @@ export function ProjectFormFields({
                     }
                 }
             }
-            if (!formData.orgName) {
+            if (!orgNameInitialized.current) {
+                orgNameInitialized.current = true;
                 if (organizations && organizations.length > 0) {
                     onFormDataChange({ orgName: organizations[0].handle });
                 } else {
@@ -209,7 +211,6 @@ export function ProjectFormFields({
         workspacePath,
         isProjectModeSupported,
         formData.path,
-        formData.orgName,
         formData.packageName,
         formData.withinProjectName,
         formData.createWithinProject,

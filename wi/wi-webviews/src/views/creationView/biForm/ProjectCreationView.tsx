@@ -50,6 +50,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const firstFieldRef = useRef<HTMLInputElement>(null);
     const handleTouched = useRef(false);
     const projectNameTouchedRef = useRef(false);
+    const orgNameInitialized = useRef(false);
     const [isValidating, setIsValidating] = useState(false);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
@@ -127,17 +128,20 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     }, []);
 
     useEffect(() => {
-        if (formData.orgName) return;
+        if (orgNameInitialized.current) return;
+        orgNameInitialized.current = true;
+        let mounted = true;
         if (organizations && organizations.length > 0) {
             setFormData(prev => ({ ...prev, orgName: organizations[0].handle }));
         } else {
             wsClient.getDefaultOrgName().then(({ orgName }) => {
-                setFormData(prev => ({ ...prev, orgName }));
+                if (mounted) setFormData(prev => ({ ...prev, orgName }));
             }).catch((error) => {
                 console.error("Failed to fetch default organization name:", error);
             });
         }
-    }, [organizations, wsClient, formData.orgName]);
+        return () => { mounted = false; };
+    }, [organizations, wsClient]);
 
     // Auto-derive handle from projectName unless manually edited
     useEffect(() => {
