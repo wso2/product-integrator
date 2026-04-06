@@ -16,9 +16,7 @@
  * under the License.
  */
 
-import { useEffect, useRef, useState } from "react";
 import { Codicon, Dropdown, TextField } from "@wso2/ui-toolkit";
-import { WICommandIds } from "@wso2/wso2-platform-core";
 import {
     Description,
     FieldGroup,
@@ -30,8 +28,7 @@ import {
 } from "../styles";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { sanitizePackageName, sanitizeProjectHandle } from "../utils";
-import { useVisualizerContext } from "../../../../contexts";
-import { useCloudContext } from "../../../../providers";
+import { useSignIn } from "../../../../hooks/useSignIn";
 
 export interface PackageInfoData {
     packageName: string;
@@ -83,43 +80,9 @@ export function PackageInfoSection({
     organizations,
     hasError,
 }: PackageInfoSectionProps) {
-    const { wsClient } = useVisualizerContext();
-    const { authState } = useCloudContext();
-    const [isSigningIn, setIsSigningIn] = useState(false);
-    const signingInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const { isSigningIn, handleSignIn, handleCancelSignIn } = useSignIn();
 
     const hasOrgs = organizations && organizations.length > 0;
-
-    useEffect(() => {
-        const unsubscribe = wsClient.onSignInInitiated(() => {
-            setIsSigningIn(true);
-            signingInTimeoutRef.current = setTimeout(() => {
-                setIsSigningIn(false);
-                signingInTimeoutRef.current = null;
-            }, 15000);
-        });
-        return unsubscribe;
-    }, [wsClient]);
-
-    useEffect(() => {
-        if (authState?.userInfo && isSigningIn) {
-            setIsSigningIn(false);
-            if (signingInTimeoutRef.current) {
-                clearTimeout(signingInTimeoutRef.current);
-                signingInTimeoutRef.current = null;
-            }
-        }
-    }, [authState?.userInfo, isSigningIn]);
-
-    useEffect(() => {
-        return () => {
-            if (signingInTimeoutRef.current) clearTimeout(signingInTimeoutRef.current);
-        };
-    }, []);
-
-    const handleSignIn = () => {
-        wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
-    };
 
     return (
         <CollapsibleSection
@@ -184,7 +147,7 @@ export function PackageInfoSection({
                                 sx={{ display: "flex" }}
                             />
                             <span>Sign in to pick from your organizations —</span>
-                            <SignInHintButton type="button" onClick={handleSignIn} disabled={isSigningIn}>
+                            <SignInHintButton type="button" onClick={isSigningIn ? handleCancelSignIn : handleSignIn}>
                                 {isSigningIn ? (
                                     <>
                                         <Codicon
@@ -192,6 +155,10 @@ export function PackageInfoSection({
                                             iconSx={{ fontSize: "11px", animation: "codicon-spin 1.5s steps(30) infinite" }}
                                         />
                                         Signing in...
+                                        <Codicon
+                                            name="close"
+                                            iconSx={{ fontSize: "10px" }}
+                                        />
                                     </>
                                 ) : (
                                     "Sign In"

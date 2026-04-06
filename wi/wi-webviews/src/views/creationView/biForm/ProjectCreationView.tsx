@@ -20,6 +20,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { Button, Codicon, Dropdown, Icon, TextField } from "@wso2/ui-toolkit";
 import { useVisualizerContext } from "../../../contexts";
 import { useCloudContext, useCloudProjects } from "../../../providers";
+import { useSignIn } from "../../../hooks/useSignIn";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import {
     joinPath,
@@ -74,8 +75,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const [cloudProjectHandleError, setCloudProjectHandleError] = useState<string | null>(null);
     const [matchedCloudProject, setMatchedCloudProject] = useState<{ project: any; org: any } | null>(null);
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
-    const [isSigningIn, setIsSigningIn] = useState(false);
-    const signingInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const { isSigningIn, handleSignIn, handleCancelSignIn } = useSignIn();
     const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
     const [projectHandle, setProjectHandle] = useState(() => sanitizeProjectHandle(DEFAULT_PROJECT_NAME));
     const [defaultPath, setDefaultPath] = useState("");
@@ -99,37 +99,6 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     );
 
     const hasOrgs = !!organizations && organizations.length > 0;
-
-    useEffect(() => {
-        const unsubscribe = wsClient.onSignInInitiated(() => {
-            setIsSigningIn(true);
-            signingInTimeoutRef.current = setTimeout(() => {
-                setIsSigningIn(false);
-                signingInTimeoutRef.current = null;
-            }, 15000);
-        });
-        return unsubscribe;
-    }, [wsClient]);
-
-    useEffect(() => {
-        if (authState?.userInfo && isSigningIn) {
-            setIsSigningIn(false);
-            if (signingInTimeoutRef.current) {
-                clearTimeout(signingInTimeoutRef.current);
-                signingInTimeoutRef.current = null;
-            }
-        }
-    }, [authState?.userInfo, isSigningIn]);
-
-    useEffect(() => {
-        return () => {
-            if (signingInTimeoutRef.current) clearTimeout(signingInTimeoutRef.current);
-        };
-    }, []);
-
-    const handleSignIn = () => {
-        wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
-    };
 
     useEffect(() => {
         let mounted = true;
@@ -445,7 +414,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                                     sx={{ display: "flex" }}
                                                 />
                                                 <span>Sign in to pick from your organizations —</span>
-                                                <SignInHintButton type="button" onClick={handleSignIn} disabled={isSigningIn}>
+                                                <SignInHintButton type="button" onClick={isSigningIn ? handleCancelSignIn : handleSignIn}>
                                                     {isSigningIn ? (
                                                         <>
                                                             <Codicon
@@ -453,6 +422,10 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                                                 iconSx={{ fontSize: "11px", animation: "codicon-spin 1.5s steps(30) infinite" }}
                                                             />
                                                             Signing in...
+                                                            <Codicon
+                                                                name="close"
+                                                                iconSx={{ fontSize: "10px" }}
+                                                            />
                                                         </>
                                                     ) : (
                                                         "Sign In"

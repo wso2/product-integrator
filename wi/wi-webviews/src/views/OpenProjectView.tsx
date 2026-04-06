@@ -36,6 +36,7 @@ import {
 } from "./shared/FormPageLayout";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
+import { useSignIn } from "../hooks/useSignIn";
 import { CloneProgressStage } from "@wso2/wi-core";
 
 // ── Project list styles ───────────────────────────────────────────────────────
@@ -547,9 +548,8 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const [cloneSuccess, setCloneSuccess] = useState(false);
     const [cloningError, setCloningError] = useState<string | null>(null);
     const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
-    const [isSigningIn, setIsSigningIn] = useState(false);
+    const { isSigningIn, handleSignIn, handleCancelSignIn } = useSignIn();
     const [view, setView] = useState<"landing" | "cloud">("landing");
-    const signingInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const orgs = (authState?.userInfo?.organizations as Array<{ id: number | string; handle: string; name: string }> | undefined) ?? [];
     const org = (selectedOrgId ? orgs.find((o) => String(o.id) === selectedOrgId) : null) ?? orgs[0];
@@ -576,33 +576,6 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         document.addEventListener("mousedown", handleMouseDown);
         return () => document.removeEventListener("mousedown", handleMouseDown);
     }, [orgDropdownOpen]);
-
-    useEffect(() => {
-        const unsubscribe = wsClient.onSignInInitiated(() => {
-            setIsSigningIn(true);
-            signingInTimeoutRef.current = setTimeout(() => {
-                setIsSigningIn(false);
-                signingInTimeoutRef.current = null;
-            }, 15000);
-        });
-        return unsubscribe;
-    }, [wsClient]);
-
-    useEffect(() => {
-        if (authState?.userInfo && isSigningIn) {
-            setIsSigningIn(false);
-            if (signingInTimeoutRef.current) {
-                clearTimeout(signingInTimeoutRef.current);
-                signingInTimeoutRef.current = null;
-            }
-        }
-    }, [authState?.userInfo]);
-
-    useEffect(() => {
-        return () => {
-            if (signingInTimeoutRef.current) clearTimeout(signingInTimeoutRef.current);
-        };
-    }, []);
 
     const fetchProjects = () => {
         if (!org) {
@@ -680,10 +653,6 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                 }
                 setCloningError(msg || "Cloning failed. Please try again.");
             });
-    };
-
-    const handleSignIn = () => {
-        wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
     };
 
     const handleOpenLocal = async () => {
@@ -879,7 +848,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                     <SignInDescription>
                         Connect your WSO2 account to clone and open projects directly from the cloud.
                     </SignInDescription>
-                    <SignInButton type="button" onClick={handleSignIn} disabled={isSigningIn}>
+                    <SignInButton type="button" onClick={isSigningIn ? handleCancelSignIn : handleSignIn}>
                         {isSigningIn ? (
                             <>
                                 <Codicon
@@ -888,6 +857,11 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                                     sx={{ width: "14px", height: "14px" }}
                                 />
                                 Signing in...
+                                <Codicon
+                                    name="close"
+                                    iconSx={{ fontSize: "12px", color: "var(--vscode-button-foreground)", opacity: 0.8 }}
+                                    sx={{ width: "12px", height: "12px" }}
+                                />
                             </>
                         ) : (
                             <>
