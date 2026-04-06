@@ -37,7 +37,7 @@ export enum ProjectType {
     SI = 'WSO2: SI',
     NONE = 'NONE'
 }
-type SelectedProfileValue = 'Default' | 'WSO2 Integrator: MI' | 'WSO2 Integrator: SI';
+type SelectedProfileValue = 'WSO2 Integrator: Default' | 'WSO2 Integrator: MI' | 'WSO2 Integrator: SI';
 type LegacyProfileValue = 'bi' | 'mi' | 'si';
 
 interface MachineContext {
@@ -61,13 +61,13 @@ const runtimeConfigKeyByProjectType: Partial<Record<ProjectType, string>> = {
     [ProjectType.SI]: 'enabledRuntimes.si'
 };
 const profileValueByProjectType: Partial<Record<ProjectType, SelectedProfileValue>> = {
-    [ProjectType.BI_BALLERINA]: 'Default',
+    [ProjectType.BI_BALLERINA]: 'WSO2 Integrator: Default',
     [ProjectType.MI]: 'WSO2 Integrator: MI',
     [ProjectType.SI]: 'WSO2 Integrator: SI'
 };
 
 const projectTypeBySelectedProfileValue: Record<SelectedProfileValue, ProjectType> = {
-    Default: ProjectType.BI_BALLERINA,
+    'WSO2 Integrator: Default': ProjectType.BI_BALLERINA,
     'WSO2 Integrator: MI': ProjectType.MI,
     'WSO2 Integrator: SI': ProjectType.SI
 };
@@ -79,7 +79,7 @@ const projectTypeByLegacyProfileValue: Record<LegacyProfileValue, ProjectType> =
 };
 
 function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
-    return value === 'Default'
+    return value === 'WSO2 Integrator: Default'
         || value === 'WSO2 Integrator: MI'
         || value === 'WSO2 Integrator: SI';
 }
@@ -180,7 +180,7 @@ function getDefaultIntegratorMode(): ProjectType[] {
 
     if (enabled.length === 0) {
         vscode.window.showWarningMessage(
-            'WSO2 Integrator: A profile must be selected. Re-selecting Default.',
+            'WSO2 Integrator: A profile must be selected. Re-selecting WSO2 Integrator: Default.',
             'Open Settings'
         ).then((selection) => {
             if (selection === 'Open Settings') {
@@ -193,7 +193,7 @@ function getDefaultIntegratorMode(): ProjectType[] {
         // Restore the default profile in settings so the selection reflects reality.
         config.update(
             'integrator.selectedProfile',
-            'Default',
+            'WSO2 Integrator: Default',
             vscode.ConfigurationTarget.Global
         );
         config.update(

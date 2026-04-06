@@ -20,7 +20,7 @@ import type { WsClient } from "../../network-bridge/WsClient";
 
 export type WIRuntime = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 export type SampleSupportedRuntime = Exclude<WIRuntime, "WSO2: SI">;
-type SelectedProfileValue = "Default" | "WSO2 Integrator: MI" | "WSO2 Integrator: SI";
+type SelectedProfileValue = "WSO2 Integrator: Default" | "WSO2 Integrator: MI" | "WSO2 Integrator: SI";
 type LegacyProfileValue = "bi" | "mi" | "si";
 
 export const RUNTIME_PRIORITY: WIRuntime[] = [
@@ -30,7 +30,7 @@ export const RUNTIME_PRIORITY: WIRuntime[] = [
 ];
 
 export const RUNTIME_DISPLAY_LABEL: Record<WIRuntime, string> = {
-	"WSO2: BI": "Default",
+	"WSO2: BI": "WSO2 Integrator: Default",
 	"WSO2: MI": "WSO2 Integrator: MI",
 	"WSO2: SI": "WSO2 Integrator: SI",
 };
@@ -53,13 +53,13 @@ const RUNTIME_CONFIG_SECTIONS: Record<WIRuntime, string> = {
 const PROFILE_CONFIG_SECTION = "integrator.selectedProfile";
 
 const PROFILE_RUNTIME_MAP: Record<SelectedProfileValue, WIRuntime> = {
-	Default: "WSO2: BI",
+	"WSO2 Integrator: Default": "WSO2: BI",
 	"WSO2 Integrator: MI": "WSO2: MI",
 	"WSO2 Integrator: SI": "WSO2: SI",
 };
 
 function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
-	return value === "Default"
+	return value === "WSO2 Integrator: Default"
 		|| value === "WSO2 Integrator: MI"
 		|| value === "WSO2 Integrator: SI";
 }
@@ -79,7 +79,7 @@ function normalizeProfileValue(value: unknown): SelectedProfileValue | undefined
 
 	switch (value) {
 		case "bi":
-			return "Default";
+			return "WSO2 Integrator: Default";
 		case "mi":
 			return "WSO2 Integrator: MI";
 		case "si":
