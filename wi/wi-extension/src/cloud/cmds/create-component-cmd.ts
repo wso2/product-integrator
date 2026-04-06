@@ -46,7 +46,7 @@ import { updateContextFile } from "./create-directory-context-cmd";
 import { WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 import { ProjectType, StateMachine, stateService } from "../../stateMachine";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "fs";
 import * as yaml from "js-yaml";
 
 
@@ -70,8 +70,8 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					let selectedProject = selected?.project;
 					let selectedOrg = selected?.org;
 
-					if (!selectedOrg || !selectedOrg) {
-						const contextFileEntry = await createProjectFromContext(userInfo, params?.workspaceDir);
+					if (params?.workspaceDir && (!selectedOrg || !selectedProject)) {
+						const contextFileEntry = await createProjectFromLocalMetadata(userInfo, params?.workspaceDir);
 						selectedOrg = contextFileEntry?.org;
 						selectedProject = contextFileEntry?.project;
 					}
@@ -556,58 +556,57 @@ const clearCodeServerLocalStorage = async () => {
 	}
 }
 
-/** If project in context.yaml doesn't exist, create it automatically */
-const createProjectFromContext = async (userInfo: UserInfo, workspacePath?: string): Promise<{ org?: Organization; project?: Project }> => {
+/** If project in local-project.yaml exist, create project from its data, automatically */
+const createProjectFromLocalMetadata = async (userInfo: UserInfo, workspacePath?: string): Promise<{ org?: Organization; project?: Project }> => {
 	try {
-		const contextFilePath = path.join(workspacePath || "", ".choreo", "context.yaml");
-		if (existsSync(contextFilePath)) {
-			let parsedData: ContextItem[] = yaml.load(readFileSync(contextFilePath, "utf8")) as any;
-			if (!Array.isArray(parsedData) && (parsedData as any)?.org && (parsedData as any)?.project) {
-				parsedData = [{ org: (parsedData as any).org, project: (parsedData as any).project }];
-			}
-
-			if (!parsedData || parsedData.length !== 1) {
+		const localMetadataFilePath = path.join(workspacePath, ".choreo", "local-project.yaml");
+		const contextFilePath = path.join(workspacePath, ".choreo", "context.yaml");
+		if (existsSync(localMetadataFilePath)) {
+			let parsedData: { org?: string; name: string; handle: string } = yaml.load(readFileSync(localMetadataFilePath, "utf8")) as any;
+			if (!parsedData || !parsedData?.name || !parsedData?.handle) {
 				return;
 			}
 
-			const newContextItem = parsedData[0];
-			const matchingOrg = userInfo.organizations.find((org) => org.handle === newContextItem.org);
-			if (!matchingOrg) {
-				return;
+			let selectedOrg = userInfo.organizations.find((org) => org.handle === parsedData.org);
+			if (!selectedOrg) {
+				selectedOrg = await selectOrg(userInfo, "Select organization");
 			}
 
 			const projects = await window.withProgress(
 				{
-					title: `Fetching cloud projects of organization ${matchingOrg.name}...`,
+					title: `Fetching cloud projects of organization ${selectedOrg.name}...`,
 					location: ProgressLocation.Notification,
 				},
-				() => ext.clients.rpcClient.getProjects(matchingOrg.id.toString()),
+				() => ext.clients.rpcClient.getProjects(selectedOrg.id.toString()),
 			);
-			dataCacheStore.getState().setProjects(matchingOrg.handle, projects);
+			dataCacheStore.getState().setProjects(selectedOrg.handle, projects);
 
-			let projectName = newContextItem.project;
-			let suffix = 1;
-			while (projects.some((project) => project.handler === projectName || project.name === projectName)) {
-				projectName = `${newContextItem.project}-${suffix}`;
-				suffix++;
+			const matchingProject = projects.find((project) => project.handler === parsedData.handle);
+			if (matchingProject) {
+				const newList: ContextItem[] = [{ org: selectedOrg.handle, project: matchingProject.handler }];
+				writeFileSync(contextFilePath, yaml.dump(newList));
+				rmSync(localMetadataFilePath);
+				return { org: selectedOrg, project: matchingProject };
 			}
 
 			const createdProject = await window.withProgress(
 				{
-					title: `Creating new cloud project ${matchingOrg.name}...`,
+					title: `Creating new cloud project ${selectedOrg.name}...`,
 					location: ProgressLocation.Notification,
 				},
 				() => ext.clients.rpcClient.createProject({
-					orgId: matchingOrg.id.toString(),
-					orgHandler: matchingOrg.handle,
-					projectName: projectName,
+					orgId: selectedOrg.id.toString(),
+					orgHandler: selectedOrg.handle,
+					projectName: parsedData?.name,
+					projectHandler: parsedData?.handle,
 					region: ext.authProvider?.getState().state.region || "US"
 				}),
 			);
 
-			const newList: ContextItem[] = [{ org: matchingOrg.handle, project: createdProject.handler }];
+			const newList: ContextItem[] = [{ org: selectedOrg.handle, project: createdProject.handler }];
 			writeFileSync(contextFilePath, yaml.dump(newList));
-			return { org: matchingOrg, project: createdProject };
+			rmSync(localMetadataFilePath);
+			return { org: selectedOrg, project: createdProject };
 		}
 	} catch (err) {
 		ext.logError(`Failed to get context file entry`, err as Error);

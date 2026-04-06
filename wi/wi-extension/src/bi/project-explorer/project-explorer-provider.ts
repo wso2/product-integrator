@@ -276,6 +276,11 @@ async function getProjectStructureData(): Promise<{ entries: ProjectExplorerEntr
             const projectStructure = stateContext.projectStructure as ProjectStructureResponse;
             const projects = projectStructure.projects;
 
+            if (projectStructure.workspaceTitle || projectStructure.workspaceName) {
+                // Multi-project workspace: use workspace-level title
+                projectName = projectStructure.workspaceTitle || projectStructure.workspaceName;
+            }
+
             // Filter projects to avoid duplicates - only include unique project paths
             const uniqueProjects = new Map<string, typeof projects[0]>();
             for (const project of projects) {
@@ -430,35 +435,31 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
 
     // ---------- Workflows ----------
     const workflowChildren = getComponents(project.directoryMap[DIRECTORY_MAP.WORKFLOW] ?? [], DIRECTORY_MAP.WORKFLOW, projectPath);
-    if (workflowChildren.length > 0) {
-        const workflows = new ProjectExplorerEntry(
-            'Workflows',
-            vscode.TreeItemCollapsibleState.Expanded,
-            null,
-            'workflow',
-            false
-        );
-        workflows.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-        workflows.contextValue = 'workflows';
-        workflows.children = workflowChildren;
-        entries.push(workflows);
-    }
+    const workflows = new ProjectExplorerEntry(
+        'Workflows',
+        workflowChildren.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
+        null,
+        'workflow',
+        false
+    );
+    workflows.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+    workflows.contextValue = 'workflows';
+    workflows.children = workflowChildren;
+    entries.push(workflows);
 
     // ---------- Workflow Activities ----------
     const activityChildren = getComponents(project.directoryMap[DIRECTORY_MAP.ACTIVITY] ?? [], DIRECTORY_MAP.ACTIVITY, projectPath);
-    if (activityChildren.length > 0) {
-        const workflowActivities = new ProjectExplorerEntry(
-            'Workflow Activities',
-            vscode.TreeItemCollapsibleState.Expanded,
-            null,
-            'task',
-            false
-        );
-        workflowActivities.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-        workflowActivities.contextValue = 'workflowActivities';
-        workflowActivities.children = activityChildren;
-        entries.push(workflowActivities);
-    }
+    const workflowActivities = new ProjectExplorerEntry(
+        'Workflow Activities',
+        activityChildren.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
+        null,
+        'task',
+        false
+    );
+    workflowActivities.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+    workflowActivities.contextValue = 'workflowActivities';
+    workflowActivities.children = activityChildren;
+    entries.push(workflowActivities);
 
     // ---------- Configurations ----------
     const configs = new ProjectExplorerEntry(
