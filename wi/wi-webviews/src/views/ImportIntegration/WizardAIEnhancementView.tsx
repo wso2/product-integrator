@@ -239,7 +239,7 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                         const msg = toolName === "file_write" ? `Creating ${displayName}...` : `Updating ${displayName}...`;
                         updateContent((prev) => prev + `\n\n<toolcall id="${toolCallId}" tool="${toolName}">${msg}</toolcall>`);
                     } else if (toolName === "getCompilationErrors") {
-                        updateContent((prev) => prev + `\n\n<toolcall tool="${toolName}">Checking for errors...</toolcall>`);
+                        updateContent((prev) => prev + `\n\n<toolcall id="${toolCallId}" tool="${toolName}">Checking for errors...</toolcall>`);
                     } else if (toolName === "runTests") {
                         updateContent((prev) => prev + `\n\n<toolcall id="${toolCallId}" tool="${toolName}">Running tests...</toolcall>`);
                     }
@@ -307,8 +307,14 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                         const errorCount = errors.length;
                         const msg = errorCount === 0 ? "No errors found" : `Found ${errorCount} error${errorCount > 1 ? "s" : ""}`;
                         const failedAttrCE = event.failed ? ` failed="true"` : "";
-                        const pattern = new RegExp(`<toolcall tool="${toolName}">Checking for errors\\.\\.\\.<\\/toolcall>`);
-                        updateContent((prev) => prev.replace(pattern, `<toolresult tool="${toolName}"${failedAttrCE}>${msg}</toolresult>`));
+                        if (toolCallId) {
+                            updateContent((prev) =>
+                                prev.replace(
+                                    `<toolcall id="${toolCallId}" tool="${toolName}">Checking for errors...</toolcall>`,
+                                    `<toolresult id="${toolCallId}" tool="${toolName}"${failedAttrCE}>${msg}</toolresult>`
+                                )
+                            );
+                        }
                     } else if (toolName === "runTests") {
                         if (toolCallId) {
                             const resultMsg = toolOutput?.summary ?? "Tests completed";

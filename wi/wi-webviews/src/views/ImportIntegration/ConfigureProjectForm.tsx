@@ -233,10 +233,10 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                     ? singleIntegrationData.projectHandle
                     : undefined,
             };
-            setIsValidating(false);
-            onNext(payload, aiEnhancementEnabled);
+            await onNext(payload, aiEnhancementEnabled);
         } catch (error) {
             setSingleIntegrationPathError("An error occurred during validation");
+        } finally {
             setIsValidating(false);
         }
     };
@@ -284,7 +284,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
             }
 
             // If validation passes, proceed
-            onNext({
+            await onNext({
                 projectName: multiProjectData.rootFolderName,
                 packageName: multiProjectData.rootFolderName,
                 projectPath: multiProjectData.path,
@@ -293,6 +293,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
             }, aiEnhancementEnabled);
         } catch (error) {
             setPathError("An error occurred during validation");
+        } finally {
             setIsValidating(false);
         }
     };

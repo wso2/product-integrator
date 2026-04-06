@@ -490,17 +490,14 @@ export class MainWsManager implements WIVisualizerAPI {
     async migrateProject(params: MigrateRequest): Promise<void> {
         return new Promise(async (resolve, reject) => {
             try {
-                console.log('[WI migrateProject] Starting. aiFeatureUsed:', params.aiFeatureUsed, 'sourcePath:', params.sourcePath);
-                const result = await commands.executeCommand('BI.project.createBIProjectMigration', params);
-                console.log('[WI migrateProject] createBIProjectMigration returned:', typeof result, result);
+                const result = await commands.executeCommand("BI.project.createBIProjectMigration", params);
                 if (params.aiFeatureUsed && params.sourcePath) {
-                    const projectRoot = typeof result === 'string' ? result : undefined;
+                    const projectRoot = typeof result === "string" ? result : undefined;
                     if (projectRoot) {
                         const migrationAPI = await ballerinaContext.ensureMigrationAPI();
-                        console.log('[WI migrateProject] AI path. projectRoot:', projectRoot, 'migration API available:', !!migrationAPI);
                         migrationAPI?.setWizardProjectRoot(projectRoot, params.sourcePath);
                         // Ensure the BridgeLayer forwards chat events now that the API is available
-                        BridgeLayer.setupMigrationSubscription(this.projectUri ?? 'global');
+                        BridgeLayer.setupMigrationSubscription(this.projectUri ?? "global");
                     }
                 }
                 resolve();
@@ -612,9 +609,7 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async wizardEnhancementReady(): Promise<void> {
         const migrationAPI = await ballerinaContext.ensureMigrationAPI();
-        console.log('[WI wizardEnhancementReady] Called. migration API available:', !!migrationAPI);
         await migrationAPI?.wizardEnhancementReady();
-        console.log('[WI wizardEnhancementReady] Returned.');
     }
 
     async openMigratedProject(): Promise<void> {

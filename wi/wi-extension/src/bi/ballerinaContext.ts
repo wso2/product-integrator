@@ -16,8 +16,9 @@
  * under the License.
  */
 
-import { Event, extensions } from 'vscode';
-import { EXTENSION_DEPENDENCIES, WIChatNotify } from '@wso2/wi-core';
+import type { Event } from "vscode";
+import { extensions } from "vscode";
+import { EXTENSION_DEPENDENCIES, WIChatNotify } from "@wso2/wi-core";
 
 /** Shape of the migration API exposed by the Ballerina extension's `activate()` return value. */
 export interface BallerinaExtMigrationAPI {

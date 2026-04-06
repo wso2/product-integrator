@@ -208,21 +208,28 @@ const ToolCallGroupSegment: React.FC<ToolCallGroupSegmentProps> = ({ segments })
     const activeItem = segments.find((s) => s.loading);
     const category = getGroupCategory(segments.map((s) => s.toolName));
 
+    const isInteractive = !isAnyLoading;
+
     return (
         <GroupContainer>
             <GroupHeader
-                interactive={!isAnyLoading}
-                onClick={toggleExpanded}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e: React.KeyboardEvent) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        toggleExpanded();
-                    }
-                }}
-                aria-expanded={isExpanded}
-                aria-controls={bodyId.current}
+                interactive={isInteractive}
+                onClick={isInteractive ? toggleExpanded : undefined}
+                role={isInteractive ? "button" : undefined}
+                tabIndex={isInteractive ? 0 : -1}
+                onKeyDown={
+                    isInteractive
+                        ? (e: React.KeyboardEvent) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                toggleExpanded();
+                            }
+                        }
+                        : undefined
+                }
+                aria-expanded={isInteractive ? isExpanded : undefined}
+                aria-controls={isInteractive ? bodyId.current : undefined}
+                aria-disabled={!isInteractive}
             >
                 <ChevronIcon expanded={isExpanded}>
                     <span className="codicon codicon-chevron-right" />
