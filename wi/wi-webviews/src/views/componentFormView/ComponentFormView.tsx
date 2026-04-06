@@ -296,20 +296,22 @@ function ComponentForm() {
 						)}
 
 						{/* Component list */}
-						<ComponentList
-							org={params?.org}
-							project={params?.project}
-							integrations={params?.integrations ?? []}
-							formState={formState}
-							isBatch={isBatch}
-							selectedCount={selectedCount}
-							editingIndex={editingIndex}
-							onToggle={handleToggle}
-							onNameChange={handleNameChange}
-							onNameCommit={handleNameCommit}
-							onIntegrationTypeChange={handleIntegrationTypeChange}
-							onEditStart={(index) => setEditingIndex(index)}
-						/>
+						{params?.org && params?.project && (
+							<ComponentList
+								org={params.org}
+								project={params.project}
+								integrations={params?.integrations ?? []}
+								formState={formState}
+								isBatch={isBatch}
+								selectedCount={selectedCount}
+								editingIndex={editingIndex}
+								onToggle={handleToggle}
+								onNameChange={handleNameChange}
+								onNameCommit={handleNameCommit}
+								onIntegrationTypeChange={handleIntegrationTypeChange}
+								onEditStart={(index) => setEditingIndex(index)}
+							/>
+						)}
 
 						{/* Git configuration — switch between existing repo and new repo init */}
 						{params && !isNewCodeServerComp && (

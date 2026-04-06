@@ -70,7 +70,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					let selectedProject = selected?.project;
 					let selectedOrg = selected?.org;
 
-					if (!selectedOrg || !selectedOrg) {
+					if (params?.workspaceDir && (!selectedOrg || !selectedProject)) {
 						const contextFileEntry = await createProjectFromLocalMetadata(userInfo, params?.workspaceDir);
 						selectedOrg = contextFileEntry?.org;
 						selectedProject = contextFileEntry?.project;
@@ -559,8 +559,8 @@ const clearCodeServerLocalStorage = async () => {
 /** If project in local-project.yaml exist, create project from its data, automatically */
 const createProjectFromLocalMetadata = async (userInfo: UserInfo, workspacePath?: string): Promise<{ org?: Organization; project?: Project }> => {
 	try {
-		const localMetadataFilePath = path.join(workspacePath || "", ".choreo", "local-project.yaml");
-		const contextFilePath = path.join(workspacePath || "", ".choreo", "context.yaml");
+		const localMetadataFilePath = path.join(workspacePath, ".choreo", "local-project.yaml");
+		const contextFilePath = path.join(workspacePath, ".choreo", "context.yaml");
 		if (existsSync(localMetadataFilePath)) {
 			let parsedData: { org?: string; name: string; handle: string } = yaml.load(readFileSync(localMetadataFilePath, "utf8")) as any;
 			if (!parsedData || !parsedData?.name || !parsedData?.handle) {
