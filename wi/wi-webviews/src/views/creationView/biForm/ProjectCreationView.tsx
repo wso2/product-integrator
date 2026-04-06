@@ -17,11 +17,19 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Button, Icon, TextField } from "@wso2/ui-toolkit";
+import { Button, Codicon, Dropdown, Icon, TextField } from "@wso2/ui-toolkit";
 import { useVisualizerContext } from "../../../contexts";
 import { useCloudContext, useCloudProjects } from "../../../providers";
+import { useSignIn } from "../../../hooks/useSignIn";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
-import { joinPath, sanitizeProjectHandle, validateProjectHandle, validateProjectName, suggestAvailableProjectName } from "./utils";
+import {
+    joinPath,
+    sanitizeProjectHandle,
+    validateProjectHandle,
+    validateProjectName,
+    validateOrgName,
+    suggestAvailableProjectName
+} from "./utils";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { CollapsibleSection } from "./components";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
@@ -39,7 +47,15 @@ import {
     FormContent,
     FormFooter,
 } from "../../shared/FormPageLayout";
-import { ResolvedPathText, CloudErrorActionRow, ActionLink, Description, FieldGroup } from "../biForm/styles";
+import {
+    ResolvedPathText,
+    CloudErrorActionRow,
+    ActionLink,
+    Description,
+    FieldGroup,
+    SignInHint,
+    SignInHintButton
+} from "../biForm/styles";
 import { DEFAULT_PROJECT_NAME } from "./types";
 
 
@@ -50,6 +66,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const firstFieldRef = useRef<HTMLInputElement>(null);
     const handleTouched = useRef(false);
     const projectNameTouchedRef = useRef(false);
+    const orgNameInitialized = useRef(false);
     const [isValidating, setIsValidating] = useState(false);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
@@ -57,6 +74,8 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const [cloudProjectNameError, setCloudProjectNameError] = useState<string | null>(null);
     const [cloudProjectHandleError, setCloudProjectHandleError] = useState<string | null>(null);
     const [matchedCloudProject, setMatchedCloudProject] = useState<{ project: any; org: any } | null>(null);
+    const [orgNameError, setOrgNameError] = useState<string | null>(null);
+    const { isSigningIn, handleSignIn, handleCancelSignIn } = useSignIn();
     const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
     const [projectHandle, setProjectHandle] = useState(() => sanitizeProjectHandle(DEFAULT_PROJECT_NAME));
     const [defaultPath, setDefaultPath] = useState("");
@@ -79,18 +98,38 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
         resolvedOrg?.handle
     );
 
+    const hasOrgs = !!organizations && organizations.length > 0;
+
     useEffect(() => {
+        let mounted = true;
         (async () => {
             try {
                 const { path: workspacePath } = await wsClient.getWorkspaceRoot();
+                if (!mounted) return;
                 const dp = workspacePath || (await wsClient.getDefaultCreationPath()).path;
+                if (!mounted) return;
                 setDefaultPath(dp);
                 setFormData(prev => ({ ...prev, path: dp }));
             } catch (error) {
                 console.error("Failed to fetch default path:", error);
             }
+
+            if (!orgNameInitialized.current) {
+                orgNameInitialized.current = true;
+                if (organizations && organizations.length > 0) {
+                    if (mounted) setFormData(prev => ({ ...prev, orgName: organizations[0].handle }));
+                } else {
+                    try {
+                        const { orgName } = await wsClient.getDefaultOrgName();
+                        if (mounted) setFormData(prev => ({ ...prev, orgName }));
+                    } catch (error) {
+                        console.error("Failed to fetch default organization name:", error);
+                    }
+                }
+            }
         })();
-    }, [wsClient]);
+        return () => { mounted = false; };
+    }, [organizations, wsClient]);
 
     // Validate project handle against cached cloud project handles
     useEffect(() => {
@@ -125,19 +164,6 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
             inner?.select();
         }, 0);
     }, []);
-
-    useEffect(() => {
-        if (formData.orgName) return;
-        if (organizations && organizations.length > 0) {
-            setFormData(prev => ({ ...prev, orgName: organizations[0].handle }));
-        } else {
-            wsClient.getDefaultOrgName().then(({ orgName }) => {
-                setFormData(prev => ({ ...prev, orgName }));
-            }).catch((error) => {
-                console.error("Failed to fetch default organization name:", error);
-            });
-        }
-    }, [organizations, wsClient, formData.orgName]);
 
     // Auto-derive handle from projectName unless manually edited
     useEffect(() => {
@@ -217,6 +243,13 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
 
         if (formData.path.length < 2) {
             setPathError("Please select a path for your project");
+            hasError = true;
+        }
+
+        const orgErr = validateOrgName(formData.orgName);
+        if (orgErr) {
+            setOrgNameError(orgErr);
+            setIsAdvancedExpanded(true);
             hasError = true;
         }
 
@@ -346,8 +379,62 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                 onToggle={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
                                 icon="gear"
                                 title="Advanced Configurations"
-                                hasError={!!(projectHandleError || cloudProjectHandleError)}
+                                hasError={!!(orgNameError || projectHandleError || cloudProjectHandleError)}
                             >
+                                <FieldGroup>
+                                    {hasOrgs ? (
+                                        <>
+                                            <Dropdown
+                                                id="org-name-dropdown"
+                                                label="Organization Name"
+                                                items={organizations!.map((org) => ({ value: org.handle, content: org.name }))}
+                                                value={formData.orgName}
+                                                onValueChange={(value: string) => {
+                                                    if (orgNameError) setOrgNameError(null);
+                                                    setFormData(prev => ({ ...prev, orgName: value }));
+                                                }}
+                                            />
+                                            <Description>The organization that owns this project.</Description>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <TextField
+                                                onTextChange={(value) => {
+                                                    if (orgNameError) setOrgNameError(null);
+                                                    setFormData(prev => ({ ...prev, orgName: value }));
+                                                }}
+                                                value={formData.orgName}
+                                                label="Organization Name"
+                                                errorMsg={orgNameError || undefined}
+                                            />
+                                            <SignInHint>
+                                                <Codicon
+                                                    name="account"
+                                                    iconSx={{ color: "var(--vscode-descriptionForeground)" }}
+                                                    sx={{ display: "flex" }}
+                                                />
+                                                <span>Sign in to pick from your organizations —</span>
+                                                <SignInHintButton type="button" onClick={isSigningIn ? handleCancelSignIn : handleSignIn}>
+                                                    {isSigningIn ? (
+                                                        <>
+                                                            <Codicon
+                                                                name="loading"
+                                                                iconSx={{ fontSize: "11px", animation: "codicon-spin 1.5s steps(30) infinite" }}
+                                                            />
+                                                            Signing in...
+                                                            <Codicon
+                                                                name="close"
+                                                                iconSx={{ fontSize: "10px" }}
+                                                            />
+                                                        </>
+                                                    ) : (
+                                                        "Sign In"
+                                                    )}
+                                                </SignInHintButton>
+                                            </SignInHint>
+                                        </>
+                                    )}
+                                </FieldGroup>
                                 <FieldGroup>
                                     <TextField
                                         onTextChange={(value) => {

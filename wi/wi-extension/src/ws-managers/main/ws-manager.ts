@@ -446,12 +446,11 @@ export class MainWsManager implements WIVisualizerAPI {
                 if (params.createAsWorkspace && params.projectHandle) {
                     const displayName = params.workspaceName || 'Default';
                     try {
-                        const loggedInUser = ext.authProvider?.getUserInfo();
                         await this.writeLocalProjectYaml(
                             projectRoot,
                             displayName,
                             params.projectHandle,
-                            loggedInUser ? params.orgName : undefined
+                            params.orgName
                         );
                     } catch (yamlError) {
                         console.warn("Failed to write local-project.yaml (non-critical):", yamlError);
@@ -472,13 +471,11 @@ export class MainWsManager implements WIVisualizerAPI {
         projectRoot: string,
         projectName: string,
         projectHandle: string,
-        orgName?: string
+        orgName: string
     ): Promise<void> {
         const choreoDir = path.join(projectRoot, '.choreo');
         const localProjectFile = path.join(choreoDir, 'local-project.yaml');
-        const content = orgName
-            ? stringifyYaml({ org: orgName, name: projectName, handle: projectHandle })
-            : stringifyYaml({ name: projectName, handle: projectHandle });
+        const content = stringifyYaml({ org: orgName, name: projectName, handle: projectHandle });
         await fs.promises.mkdir(choreoDir, { recursive: true });
         await fs.promises.writeFile(localProjectFile, content, { encoding: 'utf8' });
     }

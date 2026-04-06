@@ -64,6 +64,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const firstFieldRef = useRef<HTMLInputElement>(null);
     const handleTouched = useRef(false);
     const withinProjectNameTouchedRef = useRef(false);
+    const orgNameInitialized = useRef(false);
     const [packageNameTouched, setPackageNameTouched] = useState(false);
     const [withinProjectNameTouched, setWithinProjectNameTouched] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
@@ -110,19 +111,6 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             setDefaultPath(dp);
             setFormData(prev => ({ ...prev, path: dp }));
 
-            if (organizations && organizations.length > 0) {
-                if (!mounted) return;
-                setFormData(prev => ({ ...prev, orgName: organizations[0].handle }));
-            } else {
-                try {
-                    const { orgName } = await wsClient.getDefaultOrgName();
-                    if (!mounted) return;
-                    setFormData(prev => ({ ...prev, orgName }));
-                } catch (error) {
-                    console.error("Failed to fetch default org name:", error);
-                }
-            }
-
             if (isProjectModeSupported) {
                 if (!mounted) return;
                 setCreateWithinProject(true);
@@ -131,7 +119,20 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         return () => {
             mounted = false;
         };
-    }, [workspaceReady, wsClient, workspacePath, isProjectModeSupported, organizations]);
+    }, [workspaceReady, wsClient, workspacePath, isProjectModeSupported]);
+
+    // Initialize org name independently of workspace readiness.
+    useEffect(() => {
+        if (orgNameInitialized.current) return;
+        orgNameInitialized.current = true;
+        if (organizations && organizations.length > 0) {
+            setFormData(prev => ({ ...prev, orgName: organizations[0].handle }));
+        } else {
+            wsClient.getDefaultOrgName()
+                .then(({ orgName }) => setFormData(prev => ({ ...prev, orgName })))
+                .catch((error) => console.error("Failed to fetch default org name:", error));
+        }
+    }, [organizations, wsClient]);
 
     useEffect(() => {
         const error = validatePackageName(formData.packageName, formData.libraryName);
