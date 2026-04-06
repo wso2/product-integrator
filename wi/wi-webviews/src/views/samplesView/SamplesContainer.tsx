@@ -42,6 +42,7 @@ interface BrowseItem {
 	primaryCategory: string;
 	categoryValues: string[];
 	imageUrl?: string;
+	connectorIconUrls?: string[];
 	fallbackArtwork?: string;
 	searchText: string;
 	priority: number;
@@ -283,6 +284,39 @@ const CategoryImage = styled.img`
     object-fit: contain;
 `;
 
+const ConnectorIconGroup = styled.div`
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	width: 100%;
+`;
+
+const ConnectorFlowArrow = styled.div`
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--vscode-descriptionForeground);
+`;
+
+const ConnectorIconTile = styled.div`
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 52px;
+	height: 52px;
+	border-radius: 14px;
+	border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border));
+	background: var(--vscode-editor-background);
+	box-shadow: 0 1px 4px color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+`;
+
+const ConnectorIconImage = styled.img`
+	width: 30px;
+	height: 30px;
+	object-fit: contain;
+`;
+
 const ArtworkText = styled.span`
     text-align: center;
     font-size: 12px;
@@ -365,16 +399,55 @@ const EmptyText = styled.p`
 
 type CategoryArtworkProps = {
 	imageUrl?: string;
+	iconUrls?: string[];
 	label: string;
 	fallbackText?: string;
 };
 
 function CategoryArtwork({
 	imageUrl,
+	iconUrls,
 	label,
 	fallbackText,
 }: CategoryArtworkProps) {
 	const [loadError, setLoadError] = useState(false);
+	const [failedIconUrls, setFailedIconUrls] = useState<string[]>([]);
+
+	const visibleIconUrls = (iconUrls ?? []).filter(
+		(iconUrl) => !failedIconUrls.includes(iconUrl),
+	);
+
+	if (visibleIconUrls.length > 0) {
+		return (
+			<ConnectorIconGroup>
+				{visibleIconUrls.map((iconUrl, index) => (
+					<div
+						key={iconUrl}
+						style={{ display: "flex", alignItems: "center", gap: "10px" }}
+					>
+						{index > 0 && (
+							<ConnectorFlowArrow>
+								<Codicon name="arrow-right" iconSx={{ fontSize: 16 }} />
+							</ConnectorFlowArrow>
+						)}
+						<ConnectorIconTile>
+							<ConnectorIconImage
+								src={iconUrl}
+								alt={`${label} connector ${index + 1}`}
+								onError={() =>
+									setFailedIconUrls((currentUrls) =>
+										currentUrls.includes(iconUrl)
+											? currentUrls
+											: [...currentUrls, iconUrl],
+									)
+								}
+							/>
+						</ConnectorIconTile>
+					</div>
+				))}
+			</ConnectorIconGroup>
+		);
+	}
 
 	if (!imageUrl || loadError) {
 		if (fallbackText) {
@@ -402,8 +475,28 @@ export interface SamplesContainerProps {
 	projectType: SampleSupportedRuntime;
 }
 
+const CONNECTOR_ICON_BASE_URL =
+	"https://devant-cdn.wso2.com/console/connector-icons/v1";
+
+const CONNECTOR_ICON_NAMES: Record<string, string> = {
+	googlechat: "GoogleChat",
+	googlesheets: "GoogleSheets",
+	stripe: "Stripe",
+	shopify: "Shopify",
+	quickbooks: "QuickBooks",
+	jira: "Jira",
+	salesforce: "Salesforce",
+	mailchimp: "Mailchimp",
+	slack: "Slack",
+	github: "GitHub",
+};
+
 function normalizeCategoryValue(value: string): string {
 	return value.trim();
+}
+
+function normalizeConnectorName(value: string): string {
+	return value.replace(/[\s_-]+/g, "").toLowerCase();
 }
 
 function formatComponentType(componentType: string): string {
@@ -446,6 +539,16 @@ function getPrebuiltArtworkText(
 		.filter(Boolean)
 		.slice(0, 2);
 	return applications.length > 0 ? applications.join(" + ") : undefined;
+}
+
+function getPrebuiltConnectorIconUrls(
+	prebuiltIntegration: PrebuiltIntegration,
+): string[] {
+	return (prebuiltIntegration.applications ?? [])
+		.map((application) => CONNECTOR_ICON_NAMES[normalizeConnectorName(application)])
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((iconName) => `${CONNECTOR_ICON_BASE_URL}/${iconName}.svg`);
 }
 
 function resolvePrebuiltImageUrl(
@@ -506,6 +609,7 @@ function createPrebuiltItem(
 		primaryCategory: getPrebuiltPrimaryCategory(prebuiltIntegration),
 		categoryValues,
 		imageUrl: resolvePrebuiltImageUrl(prebuiltIntegration),
+		connectorIconUrls: getPrebuiltConnectorIconUrls(prebuiltIntegration),
 		fallbackArtwork: getPrebuiltArtworkText(prebuiltIntegration),
 		searchText: [
 			prebuiltIntegration.displayName,
@@ -835,6 +939,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
 								<IconFrame>
 									<CategoryArtwork
 										imageUrl={item.imageUrl}
+										iconUrls={item.connectorIconUrls}
 										label={item.primaryCategory}
 										fallbackText={item.fallbackArtwork}
 									/>
