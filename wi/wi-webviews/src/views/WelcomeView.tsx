@@ -65,26 +65,12 @@ const TopSection = styled.div`
     --welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-white) 36%, transparent);
     --welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent);
     --welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent-soft) 52%, transparent);
-    background:
-        radial-gradient(circle at 82% 14%, color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent) 0%, transparent 34%),
-        radial-gradient(circle at 12% 100%, color-mix(in srgb, var(--wso2-brand-neutral-900) 46%, transparent) 0%, transparent 52%),
-        linear-gradient(115deg, #050a14 0%, var(--wso2-brand-ink) 42%, var(--wso2-brand-ink-alt) 100%);
+    background: linear-gradient(180deg, var(--wso2-brand-hero-start) 0%, var(--wso2-brand-hero-end) 100%);
     padding: 40px 60px 80px;
     position: relative;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-
-    body.vscode-light & {
-        --welcome-hero-foreground: var(--wso2-brand-ink);
-        --welcome-hero-muted: color-mix(in srgb, var(--wso2-brand-ink) 76%, var(--wso2-brand-white));
-        --welcome-hero-surface: color-mix(in srgb, var(--wso2-brand-white) 70%, transparent);
-        --welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
-        --welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
-        --welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent) 34%, transparent);
-        background:
-            linear-gradient(110deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-soft) 100%);
-    }
 `;
 
 const TopControlsSection = styled.div`
@@ -895,7 +881,7 @@ export const WelcomeView: React.FC = () => {
 								name="settings-gear"
 								iconSx={{ fontSize: 16 }}
 							/>
-							<span>Settings</span>
+							<span>Configure</span>
 						</ConfigureBtn>
 					</TopBtnSection>
 				</TopControlsSection>
