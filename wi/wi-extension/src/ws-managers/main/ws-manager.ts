@@ -72,6 +72,7 @@ import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi
 import { StateMachine } from "../../stateMachine";
 import { ext } from "../../extensionVariables";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
+import { ballerinaContext } from "../../bi/ballerinaContext";
 const platform = getPlatform();
 const MI_SAMPLES_INFO_URL = 'https://mi-connectors.wso2.com/samples/info.json';
 const BI_SAMPLES_INFO_URL = 'https://devant-cdn.wso2.com/bi-samples/v1/info.json';
@@ -472,14 +473,17 @@ export class MainWsManager implements WIVisualizerAPI {
         return new Promise(async (resolve, reject) => {
             try {
                 const projectRoot: string = await commands.executeCommand('BI.project.createBIProjectPure', params);
-                if (ext.authProvider?.getUserInfo() && params.orgName && projectRoot) {
-                    const projectName = params.workspaceName || params.packageName || params.projectName;
-                    if (projectName) {
-                        try {
-                            await this.writeChoreoContext(projectRoot, params.orgName, projectName);
-                        } catch (contextError) {
-                            console.warn("Failed to write Choreo context file (non-critical):", contextError);
-                        }
+                if (params.createAsWorkspace && params.projectHandle) {
+                    const displayName = params.workspaceName || 'Default';
+                    try {
+                        await this.writeLocalProjectYaml(
+                            projectRoot,
+                            displayName,
+                            params.projectHandle,
+                            params.orgName
+                        );
+                    } catch (yamlError) {
+                        console.warn("Failed to write local-project.yaml (non-critical):", yamlError);
                     }
                 }
                 openInVSCode(projectRoot);
@@ -493,13 +497,17 @@ export class MainWsManager implements WIVisualizerAPI {
         });
     }
 
-    private async writeChoreoContext(projectRoot: string, orgName: string, projectName: string): Promise<void> {
+    private async writeLocalProjectYaml(
+        projectRoot: string,
+        projectName: string,
+        projectHandle: string,
+        orgName: string
+    ): Promise<void> {
         const choreoDir = path.join(projectRoot, '.choreo');
-        const contextFile = path.join(choreoDir, 'context.yaml');
-        const contextData = [{ org: orgName, project: projectName }];
-        const content = stringifyYaml(contextData);
+        const localProjectFile = path.join(choreoDir, 'local-project.yaml');
+        const content = stringifyYaml({ org: orgName, name: projectName, handle: projectHandle });
         await fs.promises.mkdir(choreoDir, { recursive: true });
-        await fs.promises.writeFile(contextFile, content, { encoding: 'utf8' });
+        await fs.promises.writeFile(localProjectFile, content, { encoding: 'utf8' });
     }
 
     async validateProjectPath(params: ValidateProjectFormRequest): Promise<ValidateProjectFormResponse> {
@@ -509,7 +517,16 @@ export class MainWsManager implements WIVisualizerAPI {
     async migrateProject(params: MigrateRequest): Promise<void> {
         return new Promise(async (resolve, reject) => {
             try {
-                const result = await commands.executeCommand('BI.project.createBIProjectMigration', params);
+                const result = await commands.executeCommand("BI.project.createBIProjectMigration", params);
+                if (params.aiFeatureUsed && params.sourcePath) {
+                    const projectRoot = typeof result === "string" ? result : undefined;
+                    if (projectRoot) {
+                        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+                        migrationAPI?.setWizardProjectRoot(projectRoot, params.sourcePath);
+                        // Ensure the BridgeLayer forwards chat events now that the API is available
+                        BridgeLayer.setupMigrationSubscription(this.projectUri ?? "global");
+                    }
+                }
                 resolve();
             } catch (error) {
                 console.error("Error creating Ballerina project:", error);
@@ -615,5 +632,35 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async getDefaultCreationPath(): Promise<WorkspaceRootResponse> {
         return { path: getDefaultCreationPath() };
+    }
+
+    async wizardEnhancementReady(): Promise<void> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        await migrationAPI?.wizardEnhancementReady();
+    }
+
+    async openMigratedProject(): Promise<void> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        migrationAPI?.openMigratedProject();
+    }
+
+    async abortMigrationAgent(): Promise<void> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        migrationAPI?.abortAgent();
+    }
+
+    async checkAIAuth(): Promise<boolean> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        const result = migrationAPI?.isAIAuthenticated() ?? false;
+        console.log('[ws-manager] checkAIAuth: migrationAPI available:', !!migrationAPI, 'result:', result);
+        return result;
+    }
+
+    async triggerAICopilotSignIn(): Promise<{ success: boolean; error?: string }> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        console.log('[ws-manager] triggerAICopilotSignIn: migrationAPI available:', !!migrationAPI);
+        const result = await (migrationAPI?.signInForAI() ?? Promise.resolve({ success: false, error: "Migration API not available." }));
+        console.log('[ws-manager] triggerAICopilotSignIn: result:', JSON.stringify(result));
+        return result;
     }
 }

@@ -16,13 +16,23 @@
  * under the License.
  */
 
-import { ActionButtons, Typography } from "@wso2/ui-toolkit";
+import { ActionButtons, Codicon, Typography } from "@wso2/ui-toolkit";
 import { useEffect, useState } from "react";
 import { useVisualizerContext } from "../../contexts";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { BodyText } from "./styles";
+import {
+    AIEnhancementSection,
+    AIEnhancementTitle,
+    RadioGroup,
+    RadioOption,
+    RadioInput,
+    RadioContent,
+    RadioTitle,
+    RadioDescription,
+} from "./styles";
 import { ProjectFormData, ProjectFormFields } from "../creationView/biForm/ProjectFormFields";
-import { validatePackageName } from "../creationView/biForm/utils";
+import { validatePackageName, validateProjectName, validateProjectHandle, validateOrgName } from "../creationView/biForm/utils";
 import { MultiProjectFormData, MultiProjectFormFields } from "./components/MultiProjectFormFields";
 import { ButtonWrapper } from "./styles";
 import { ConfigureProjectFormProps } from "./types";
@@ -37,6 +47,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         workspaceName: "",
         createWithinProject: false,
         withinProjectName: "",
+        projectHandle: "",
         orgName: "",
         version: "",
         isLibrary: false,
@@ -49,12 +60,17 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
     });
 
     const [isValidating, setIsValidating] = useState(false);
+    const [aiEnhancementEnabled, setAiEnhancementEnabled] = useState(true);
     const [pathError, setPathError] = useState<string | null>(null);
     const [folderNameError, setFolderNameError] = useState<string | null>(null);
     const [singleIntegrationNameError, setSingleIntegrationNameError] = useState<string | null>(null);
     const [singleIntegrationPathError, setSingleIntegrationPathError] = useState<string | null>(null);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [singleIntegrationPackageNameError, setSingleIntegrationPackageNameError] = useState<string | null>(null);
+    const [singleIntegrationProjectHandleError, setSingleIntegrationProjectHandleError] = useState<string | null>(null);
+    const [orgNameError, setOrgNameError] = useState<string | null>(null);
+    const [singleIntegrationCloudProjectNameError, setSingleIntegrationCloudProjectNameError] = useState<string | null>(null);
+    const [singleIntegrationCloudProjectHandleError, setSingleIntegrationCloudProjectHandleError] = useState<string | null>(null);
     const selectedResourceTypeLabel = singleIntegrationData.isLibrary ? "Library" : "Integration";
 
     useEffect(() => {
@@ -70,6 +86,9 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         if (singleIntegrationNameError) {
             setSingleIntegrationNameError(null);
         }
+        if (orgNameError && data.orgName !== undefined) {
+            setOrgNameError(null);
+        }
         if (singleIntegrationPathError) {
             setSingleIntegrationPathError(null);
         }
@@ -78,6 +97,9 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         }
         if (singleIntegrationPackageNameError) {
             setSingleIntegrationPackageNameError(null);
+        }
+        if (singleIntegrationProjectHandleError) {
+            setSingleIntegrationProjectHandleError(null);
         }
     };
 
@@ -98,6 +120,8 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         setSingleIntegrationPathError(null);
         setProjectNameError(null);
         setSingleIntegrationPackageNameError(null);
+        setSingleIntegrationProjectHandleError(null);
+        setOrgNameError(null);
 
         // Validate required fields first
         let hasError = false;
@@ -118,6 +142,38 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
             }
         }
 
+        if (singleIntegrationData.createWithinProject) {
+            const projectNameErr = validateProjectName(singleIntegrationData.withinProjectName.trim());
+            if (projectNameErr) {
+                setProjectNameError(projectNameErr);
+                hasError = true;
+            }
+        }
+
+        if (singleIntegrationData.createWithinProject) {
+            const handleErr = validateProjectHandle(singleIntegrationData.projectHandle);
+            if (handleErr) {
+                setSingleIntegrationProjectHandleError(handleErr);
+                hasError = true;
+            }
+        }
+
+        const orgErr = validateOrgName(singleIntegrationData.orgName);
+        if (orgErr) {
+            setOrgNameError(orgErr);
+            hasError = true;
+        } else {
+            setOrgNameError(null);
+        }
+
+        if (singleIntegrationCloudProjectNameError) {
+            hasError = true;
+        }
+
+        if (singleIntegrationCloudProjectHandleError) {
+            hasError = true;
+        }
+
         if (singleIntegrationData.path.trim().length < 2) {
             setSingleIntegrationPathError(`Please select a path for your ${selectedResourceTypeLabel.toLowerCase()}`);
             hasError = true;
@@ -131,7 +187,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         try {
             // Validate the project path
             const targetNameForValidation = singleIntegrationData.createWithinProject
-                ? singleIntegrationData.withinProjectName
+                ? singleIntegrationData.projectHandle
                 : singleIntegrationData.packageName;
 
             const validationResult = await wsClient.validateProjectPath({
@@ -173,11 +229,14 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                 orgName: singleIntegrationData.orgName || undefined,
                 version: singleIntegrationData.version || undefined,
                 isLibrary: singleIntegrationData.isLibrary,
+                projectHandle: singleIntegrationData.createWithinProject
+                    ? singleIntegrationData.projectHandle
+                    : undefined,
             };
-            setIsValidating(false);
-            onNext(payload);
+            await onNext(payload, aiEnhancementEnabled);
         } catch (error) {
             setSingleIntegrationPathError("An error occurred during validation");
+        } finally {
             setIsValidating(false);
         }
     };
@@ -225,15 +284,16 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
             }
 
             // If validation passes, proceed
-            onNext({
+            await onNext({
                 projectName: multiProjectData.rootFolderName,
                 packageName: multiProjectData.rootFolderName,
                 projectPath: multiProjectData.path,
                 createDirectory: multiProjectData.createDirectory,
                 createAsWorkspace: false,
-            });
+            }, aiEnhancementEnabled);
         } catch (error) {
             setPathError("An error occurred during validation");
+        } finally {
             setIsValidating(false);
         }
     };
@@ -252,10 +312,37 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                         folderNameError={folderNameError || undefined}
                     />
 
+                    <AIEnhancementSection>
+                        <AIEnhancementTitle>
+                            <Codicon name="sparkle" sx={{ fontSize: "14px", color: "var(--wso2-brand-accent)" }} />
+                            AI Enhancement
+                        </AIEnhancementTitle>
+                        <RadioGroup role="radiogroup" aria-label="AI Enhancement mode">
+                            <RadioOption selected={aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(true)}>
+                                <RadioInput type="radio" name="ai-enhancement-mode-multi" checked={aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(true)} />
+                                <RadioContent>
+                                    <RadioTitle>Enable AI Enhancement</RadioTitle>
+                                    <RadioDescription>AI will automatically resolve unmapped elements, fix build errors, and improve the quality of the migration.</RadioDescription>
+                                </RadioContent>
+                            </RadioOption>
+                            <RadioOption selected={!aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(false)}>
+                                <RadioInput type="radio" name="ai-enhancement-mode-multi" checked={!aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(false)} />
+                                <RadioContent>
+                                    <RadioTitle>Skip for Now – Enhance Later</RadioTitle>
+                                    <RadioDescription>Open the project as-is. You can trigger AI enhancement later from the BI Copilot.</RadioDescription>
+                                </RadioContent>
+                            </RadioOption>
+                        </RadioGroup>
+                    </AIEnhancementSection>
+
                     <ButtonWrapper>
                         <ActionButtons
                             primaryButton={{
-                                text: isValidating ? "Validating..." : "Create and Open Project",
+                                text: isValidating
+                                    ? "Validating..."
+                                    : aiEnhancementEnabled
+                                        ? "Create and Start AI Enhancement"
+                                        : "Create and Open Project",
                                 onClick: handleCreateMultiProject,
                                 disabled: isValidating
                             }}
@@ -281,14 +368,43 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                         pathError={singleIntegrationPathError || undefined}
                         packageNameValidationError={singleIntegrationPackageNameError || undefined}
                         projectNameError={projectNameError || undefined}
+                        projectHandleError={singleIntegrationProjectHandleError || undefined}
+                        orgNameError={orgNameError ?? undefined}
+                        onCloudProjectNameError={setSingleIntegrationCloudProjectNameError}
+                        onCloudProjectHandleError={setSingleIntegrationCloudProjectHandleError}
                     />
+
+                    <AIEnhancementSection>
+                        <AIEnhancementTitle>
+                            <Codicon name="sparkle" sx={{ fontSize: "14px", color: "var(--wso2-brand-accent)" }} />
+                            AI Enhancement
+                        </AIEnhancementTitle>
+                        <RadioGroup role="radiogroup" aria-label="AI Enhancement mode">
+                            <RadioOption selected={aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(true)}>
+                                <RadioInput type="radio" name="ai-enhancement-mode-single" checked={aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(true)} />
+                                <RadioContent>
+                                    <RadioTitle>Enable AI Enhancement</RadioTitle>
+                                    <RadioDescription>AI will automatically resolve unmapped elements, fix build errors, and improve the quality of the migration.</RadioDescription>
+                                </RadioContent>
+                            </RadioOption>
+                            <RadioOption selected={!aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(false)}>
+                                <RadioInput type="radio" name="ai-enhancement-mode-single" checked={!aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(false)} />
+                                <RadioContent>
+                                    <RadioTitle>Skip for Now – Enhance Later</RadioTitle>
+                                    <RadioDescription>Open the project as-is. You can trigger AI enhancement later from the BI Copilot.</RadioDescription>
+                                </RadioContent>
+                            </RadioOption>
+                        </RadioGroup>
+                    </AIEnhancementSection>
 
                     <ButtonWrapper>
                         <ActionButtons
                             primaryButton={{
                                 text: isValidating
                                     ? "Validating..."
-                                    : `Create and Open ${selectedResourceTypeLabel}`,
+                                    : aiEnhancementEnabled
+                                        ? "Create and Start AI Enhancement"
+                                        : `Create and Open ${selectedResourceTypeLabel}`,
                                 onClick: handleCreateSingleProject,
                                 disabled: isValidating
                             }}

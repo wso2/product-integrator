@@ -18,7 +18,7 @@
 
 import styled from "@emotion/styled";
 import { VSCodeLink } from "@vscode/webview-ui-toolkit/react";
-import { Button, Typography } from "@wso2/ui-toolkit";
+import { Button, ThemeColors, Typography } from "@wso2/ui-toolkit";
 
 export const PageBackdrop = styled.div`
     min-height: 100vh;
@@ -484,4 +484,9 @@ export const SmVSCodeLink = styled(VSCodeLink)`
 export const SmVSCodeLinks = styled.div`
     display: flex;
     gap: 10px
+`
+
+export const VSCodeLinkForeground = styled(VSCodeLink)`
+    color: ${ThemeColors.OUTLINE};
+    font-weight: 500;
 `

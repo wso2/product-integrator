@@ -3,7 +3,7 @@
   "displayName": "WSO2 Integrator (Alpha)",
   "description": "Integration development environment for WSO2 Integrator",
   "version": "0.2.2",
-  "cliVersion": "v1.2.212603241600",
+  "cliVersion": "v1.2.212604031530",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
   "license": "Apache-2.0",
@@ -317,6 +317,18 @@
         "title": "Add Custom Connector",
         "icon": "$(add)",
         "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-workflow",
+        "title": "Add Workflow",
+        "icon": "$(add)",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-workflow-activity",
+        "title": "Add Workflow Activity",
+        "icon": "$(add)",
+        "category": "WSO2 Integrator"
       }
     ],
     "menus": {
@@ -380,6 +392,14 @@
         {
           "command": "BI.project-explorer.add-custom-connector",
           "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-workflow",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-workflow-activity",
+          "when": "false"
         }
       ],
       "view/item/context": [
@@ -400,7 +420,7 @@
         },
         {
           "command": "BI.project-explorer.delete",
-          "when": "view == wso2-integrator.explorer && viewItem == CONNECTION || viewItem == SERVICE || viewItem == FUNCTION || viewItem == AUTOMATION || viewItem == TYPE || viewItem == CONFIGURABLE || viewItem == DATA_MAPPER || viewItem == NP_FUNCTION || viewItem == localConnector",
+          "when": "view == wso2-integrator.explorer && viewItem == CONNECTION || viewItem == SERVICE || viewItem == FUNCTION || viewItem == AUTOMATION || viewItem == TYPE || viewItem == CONFIGURABLE || viewItem == DATA_MAPPER || viewItem == NP_FUNCTION || viewItem == localConnector || viewItem == WORKFLOW || viewItem == ACTIVITY",
           "group": "inline"
         },
         {
@@ -446,6 +466,16 @@
         {
           "command": "BI.project-explorer.add-custom-connector",
           "when": "view == wso2-integrator.explorer && viewItem == localConnectors",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.add-workflow",
+          "when": "view == wso2-integrator.explorer && viewItem == workflows",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.add-workflow-activity",
+          "when": "view == wso2-integrator.explorer && viewItem == workflowActivities",
           "group": "inline"
         }
       ],
