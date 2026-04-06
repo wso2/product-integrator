@@ -82,6 +82,11 @@ import type {
     GetCloudProjectsResp,
 } from "./cloud.types";
 
+export interface SignInResult {
+    success: boolean;
+    error?: string;
+}
+
 export const WI_BRIDGE_EVENTS = {
     WS_RESPONSE: "wi.ws.response",
     STATE_CHANGED: "wi.event.stateChanged",
@@ -141,8 +146,8 @@ export interface WIWsMethodParamsMap {
     getDefaultCreationPath: void;
     wizardEnhancementReady: void;
     openMigratedProject: void;
-    abortMigrationAgent: void;
-
+    abortMigrationAgent: void; checkAIAuth: void;
+    triggerAICopilotSignIn: void;
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: void;
     submitComponents: WICloudSubmitComponentsReq;
@@ -206,8 +211,8 @@ export interface WIWsMethodResultMap {
     getDefaultCreationPath: WorkspaceRootResponse;
     wizardEnhancementReady: void;
     openMigratedProject: void;
-    abortMigrationAgent: void;
-
+    abortMigrationAgent: void; checkAIAuth: boolean;
+    triggerAICopilotSignIn: SignInResult;
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: WICloudFormContext;
     submitComponents: WICloudSubmitComponentsResp;

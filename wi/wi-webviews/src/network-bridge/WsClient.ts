@@ -65,6 +65,7 @@ import {
     WorkspaceRootResponse,
     CloneProgressStage,
     WIChatNotify,
+    SignInResult,
 } from "@wso2/wi-core";
 import type {
     AuthState,
@@ -435,6 +436,14 @@ export class WsClient {
 
     public async abortMigrationAgent(): Promise<void> {
         await this.request("abortMigrationAgent");
+    }
+
+    public async checkAIAuth(): Promise<boolean> {
+        return this.request("checkAIAuth");
+    }
+
+    public async triggerAICopilotSignIn(): Promise<SignInResult> {
+        return this.request("triggerAICopilotSignIn");
     }
 
     public async request<TAction extends WIWsMethod>(

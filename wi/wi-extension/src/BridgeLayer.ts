@@ -345,6 +345,8 @@ export class BridgeLayer {
         registerRoute("wizardEnhancementReady", async () => wsManager.wizardEnhancementReady());
         registerRoute("openMigratedProject", async () => wsManager.openMigratedProject());
         registerRoute("abortMigrationAgent", async () => wsManager.abortMigrationAgent());
+        registerRoute("checkAIAuth", async () => wsManager.checkAIAuth());
+        registerRoute("triggerAICopilotSignIn", async () => wsManager.triggerAICopilotSignIn());
 
         // ── Cloud routes ──────────────────────────────────────────
         registerRoute("getCloudFormContext", async () => cloudManager.getCloudFormContext());

@@ -17,6 +17,7 @@
  */
 
 import { ViewType, Platform } from "../enums";
+import type { SignInResult } from "./network-bridge.types";
 
 export interface WebviewContext {
     currentView: ViewType;
@@ -369,4 +370,6 @@ export interface WIVisualizerAPI {
     wizardEnhancementReady: () => Promise<void>;
     openMigratedProject: () => Promise<void>;
     abortMigrationAgent: () => Promise<void>;
+    checkAIAuth: () => Promise<boolean>;
+    triggerAICopilotSignIn: () => Promise<SignInResult>;
 }

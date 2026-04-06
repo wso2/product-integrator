@@ -29,7 +29,7 @@ import ToolCallGroupSegment, { ToolCallItem } from "../shared/ai/ToolCallGroupSe
 // Types
 // ──────────────────────────────────────────────────────────────────────────────
 
-type EnhancementStatus = "running" | "completed" | "error" | "aborted";
+type EnhancementStatus = "checking_auth" | "sign_in_required" | "signing_in" | "running" | "completed" | "error" | "aborted";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -153,6 +153,29 @@ const SubText = styled.span`
     margin-top: 1px;
 `;
 
+const SignInPanel = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+    background-color: var(--vscode-editor-background);
+`;
+
+const SignInMessage = styled.p`
+    margin: 0;
+    font-size: 12px;
+    color: var(--vscode-editor-foreground);
+    line-height: 1.5;
+`;
+
+const SignInErrorText = styled.p`
+    margin: 0;
+    font-size: 11px;
+    color: var(--vscode-errorForeground);
+`;
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Component
 // ──────────────────────────────────────────────────────────────────────────────
@@ -165,9 +188,10 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
     const scrollRef = useRef<HTMLDivElement>(null);
     const enhancementTriggered = useRef(false);
 
-    const [status, setStatus] = useState<EnhancementStatus>("running");
+    const [status, setStatus] = useState<EnhancementStatus>("checking_auth");
     const [content, setContent] = useState("");
     const [elapsed, setElapsed] = useState(0);
+    const [signInError, setSignInError] = useState<string | undefined>();
 
     const terminalRef = useRef(false);
 
@@ -368,10 +392,19 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
         }
         enhancementTriggered.current = true;
 
-        wsClient.wizardEnhancementReady().catch((err: unknown) => {
-            console.error("[WizardAIEnhancementView] wizardEnhancementReady failed:", err);
-            setStatus("error");
-        });
+        wsClient.checkAIAuth()
+            .then((isAuthenticated) => {
+                if (isAuthenticated) {
+                    setStatus("running");
+                    return wsClient.wizardEnhancementReady();
+                } else {
+                    setStatus("sign_in_required");
+                }
+            })
+            .catch((err: unknown) => {
+                console.error("[WizardAIEnhancementView] checkAIAuth failed:", err);
+                setStatus("error");
+            });
     }, [wsClient]);
 
     // ── Auto-scroll ─────────────────────────────────────────────────────────
@@ -399,13 +432,51 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
         });
     }, [wsClient]);
 
+    const handleSignIn = useCallback(() => {
+        setSignInError(undefined);
+        setStatus("signing_in");
+        wsClient.triggerAICopilotSignIn()
+            .then((result) => {
+                if (result.success) {
+                    setStatus("running");
+                    return wsClient.wizardEnhancementReady();
+                } else {
+                    setSignInError(result.error || "Sign-in was cancelled. Please try again.");
+                    setStatus("sign_in_required");
+                }
+            })
+            .catch(() => {
+                setSignInError("Sign-in failed. Please try again.");
+                setStatus("sign_in_required");
+            });
+    }, [wsClient]);
+
     // ── Render ───────────────────────────────────────────────────────────────
     const isRunning = status === "running";
     const isDone = status === "completed" || status === "error" || status === "aborted";
+    const isAuthPhase = status === "checking_auth" || status === "sign_in_required" || status === "signing_in";
 
     return (
         <Container>
             <HeaderRow>
+                {status === "checking_auth" && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <SpinnerIcon className="codicon codicon-sync" />
+                        <StatusText variant="running">Checking authentication…</StatusText>
+                    </div>
+                )}
+                {status === "sign_in_required" && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span className="codicon codicon-account" />
+                        <StatusText>Sign in required</StatusText>
+                    </div>
+                )}
+                {status === "signing_in" && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <SpinnerIcon className="codicon codicon-sync" />
+                        <StatusText variant="running">Signing in…</StatusText>
+                    </div>
+                )}
                 {isRunning && (
                     <>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -438,7 +509,33 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                 )}
             </HeaderRow>
 
-            <StreamArea ref={scrollRef}>
+            {status === "sign_in_required" && (
+                <SignInPanel>
+                    <SignInMessage>
+                        Sign in to WSO2 Integrator Copilot to use AI Enhancement. A browser window will open for authentication.
+                    </SignInMessage>
+                    {signInError && <SignInErrorText>{signInError}</SignInErrorText>}
+                    <div style={{ display: "flex", gap: "8px" }}>
+                        <ActionButton variant="primary" onClick={handleSignIn}>
+                            <span className="codicon codicon-account" />
+                            Sign in to Copilot
+                        </ActionButton>
+                        <ActionButton variant="secondary" onClick={handleSkipAndOpen}>
+                            Skip and open project
+                        </ActionButton>
+                    </div>
+                </SignInPanel>
+            )}
+
+            {status === "signing_in" && (
+                <SignInPanel>
+                    <SignInMessage>
+                        Complete sign-in in the browser window that opened. Return here when done.
+                    </SignInMessage>
+                </SignInPanel>
+            )}
+
+            {!isAuthPhase && <StreamArea ref={scrollRef}>
                 {segments.map((segment, i) => {
                     if (segment.type === SegmentType.Text) {
                         if (!segment.text.trim()) {
@@ -506,9 +603,9 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                 {isRunning && segments.length === 0 && (
                     <StatusText variant="running">Starting AI enhancement agent…</StatusText>
                 )}
-            </StreamArea>
+            </StreamArea>}
 
-            <ButtonRow>
+            {!isAuthPhase && <ButtonRow>
                 {isDone && (
                     <ActionButton variant="primary" onClick={handleOpenProject}>
                         <span className="codicon codicon-folder-opened" />
@@ -525,7 +622,7 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                         Pause and Open Integration
                     </ActionButton>
                 )}
-            </ButtonRow>
+            </ButtonRow>}
         </Container>
     );
 }

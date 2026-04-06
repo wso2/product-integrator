@@ -621,4 +621,19 @@ export class MainWsManager implements WIVisualizerAPI {
         const migrationAPI = await ballerinaContext.ensureMigrationAPI();
         migrationAPI?.abortAgent();
     }
+
+    async checkAIAuth(): Promise<boolean> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        const result = migrationAPI?.isAIAuthenticated() ?? false;
+        console.log('[ws-manager] checkAIAuth: migrationAPI available:', !!migrationAPI, 'result:', result);
+        return result;
+    }
+
+    async triggerAICopilotSignIn(): Promise<{ success: boolean; error?: string }> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        console.log('[ws-manager] triggerAICopilotSignIn: migrationAPI available:', !!migrationAPI);
+        const result = await (migrationAPI?.signInForAI() ?? Promise.resolve({ success: false, error: "Migration API not available." }));
+        console.log('[ws-manager] triggerAICopilotSignIn: result:', JSON.stringify(result));
+        return result;
+    }
 }
