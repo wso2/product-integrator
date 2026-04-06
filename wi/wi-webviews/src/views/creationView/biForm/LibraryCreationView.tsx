@@ -196,11 +196,11 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             return;
         }
         const handleToCheck = withinProjectHandle.trim().toLowerCase();
-        const matched = cloudProjectsData.projects.find(p => p.handle.toLowerCase() === handleToCheck);
+        const matched = cloudProjectsData.projects.find(p => p.handler.toLowerCase() === handleToCheck);
         if (matched) {
             const suggested = suggestAvailableProjectName(
                 withinProjectHandle.trim(),
-                cloudProjectsData.projects.map(p => p.handle)
+                cloudProjectsData.projects.map(p => p.handler)
             );
             if (!handleTouched.current) {
                 setWithinProjectHandle(suggested);
