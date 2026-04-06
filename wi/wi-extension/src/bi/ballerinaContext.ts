@@ -27,6 +27,8 @@ export interface BallerinaExtMigrationAPI {
     abortAgent: () => void;
     openMigratedProject: () => void;
     onChatNotify: Event<WIChatNotify>;
+    isAIAuthenticated: () => boolean;
+    signInForAI: () => Promise<{ success: boolean; error?: string }>;
 }
 
 /**
