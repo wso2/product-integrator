@@ -48,6 +48,11 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public isLoggedIn = (): boolean => !!ext.authProvider?.getState().state?.userInfo;
 	public getStsToken = (): Promise<string> => ext.clients.rpcClient.getStsToken();
 
+	// Project
+	public getProjects = (orgId: string) => ext.clients.rpcClient.getProjects(orgId);
+	public updateProject = (params: Parameters<IWso2PlatformExtensionAPI["updateProject"]>[0]) =>
+		ext.clients.rpcClient.updateProject(params);
+
 	// Context
 	public getDirectoryComponents = (fsPath: string): ComponentKind[] =>
 		this.getComponentsOfDir(fsPath, contextStore.getState().state?.components);
