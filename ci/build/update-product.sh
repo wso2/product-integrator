@@ -95,6 +95,10 @@ cat > lib/vscode/product.json <<EOF
         "name": "wso2.hurl-client",
         "version": "0.9.2"
       },
+      {
+        "name": "wso2.mcp-server-inspector",
+        "version": "0.7.2"
+      },
 $(if [ -n "${BALLERINA_VSIX_PATH}" ]; then
 cat <<BALLERINA_VSIX_ENTRY
       {
