@@ -59,7 +59,7 @@ import {
 import { commands, window, workspace, MarkdownString, Uri, env, ConfigurationTarget } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { getDefaultCreationPath } from "../../utils/pathUtils";
-import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, handleOpenPrebuiltIntegration, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
+import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, handleOpenRepositoryArchiveSource, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import { BI_PREBUILT_INTEGRATIONS } from "./prebuilt-integrations";
 import * as fs from "fs";
 import * as path from "path";
@@ -75,6 +75,9 @@ import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
 const platform = getPlatform();
 const MI_SAMPLES_INFO_URL = 'https://mi-connectors.wso2.com/samples/info.json';
 const BI_SAMPLES_INFO_URL = 'https://devant-cdn.wso2.com/bi-samples/v1/info.json';
+const BI_SAMPLES_REPOSITORY_URL = 'https://github.com/wso2/integration-samples/';
+const BI_SAMPLES_REPOSITORY_BRANCH = 'main';
+const BI_SAMPLES_REPOSITORY_SUBDIRECTORY = '/ballerina-integrator';
 // BI pre-built integrations CDN endpoint:
 // const BI_PREBUILT_INTEGRATIONS_URL = "http://console.devant.dev/public/prebuilt-integrations.json";
 
@@ -431,12 +434,32 @@ export class MainWsManager implements WIVisualizerAPI {
         });
     }
 
-    downloadSelectedSampleFromGithub(params: SampleDownloadRequest): void {
+    async downloadSelectedSampleFromGithub(params: SampleDownloadRequest): Promise<void> {
         const workspaceFolders = workspace.workspaceFolders;
         const projectUri = this.projectUri ?? (workspaceFolders ? workspaceFolders[0].uri.fsPath : "");
 
-        if (params.itemType === "prebuilt" && params.prebuiltIntegration) {
-            handleOpenPrebuiltIntegration(projectUri, params.prebuiltIntegration);
+        if (params.runtime === "WSO2: BI") {
+            const componentPath = params.prebuiltIntegration?.componentPath ?? params.zipFileName;
+            const displayName = params.prebuiltIntegration?.displayName ?? params.zipFileName;
+            const isPrebuilt = params.itemType === "prebuilt";
+
+            if (!componentPath || !displayName) {
+                await window.showErrorMessage("Sample download details are missing.");
+                return;
+            }
+
+            await handleOpenRepositoryArchiveSource(projectUri, {
+                repositoryUrl: BI_SAMPLES_REPOSITORY_URL,
+                branch: BI_SAMPLES_REPOSITORY_BRANCH,
+                subDirectory: BI_SAMPLES_REPOSITORY_SUBDIRECTORY,
+                componentPath,
+                displayName,
+                sourceLabel: isPrebuilt ? "pre-built integration" : "integration sample",
+                missingSourceError: isPrebuilt
+                    ? "Pre-built integration source files were not found in the downloaded archive."
+                    : "Integration sample source files were not found in the downloaded archive.",
+                preparationErrorLabel: isPrebuilt ? "pre-built integration" : "integration sample",
+            });
             return;
         }
 
@@ -445,11 +468,11 @@ export class MainWsManager implements WIVisualizerAPI {
             return;
         }
 
-        let url = 'https://devant-cdn.wso2.com/bi-samples/v1';
         if (params.runtime === "WSO2: MI") {
-            url = `https://mi-connectors.wso2.com/samples/samples/${params.zipFileName}`;
+            const url = `https://mi-connectors.wso2.com/samples/samples/${params.zipFileName}`;
+            handleOpenFile(projectUri, params.zipFileName, url);
         }
-        handleOpenFile(projectUri, params.zipFileName, url);
+
     }
 
     private async getLangClient() {
