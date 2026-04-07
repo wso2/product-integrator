@@ -91,6 +91,15 @@ jobs:
         with:
           pnpm: 10.11.0
 
+      - name: Resolve Ballerina extension version
+        id: resolve-ballerina-extension-version
+        shell: bash
+        working-directory: .
+        run: |
+          RESOLVED_VERSION=$(bash ./ci/build/resolve-ballerina-extension-version.sh "${{ inputs.ballerina_extension_source }}" "${{ inputs.ballerina_extension_version }}")
+          echo "version=${RESOLVED_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "BALLERINA_EXTENSION_VERSION=${RESOLVED_VERSION}" >> "$GITHUB_ENV"
+
       # TODO: Enable TypeScript cache when stable    
       # - name: Cache TypeScript compilation
       #   id: cache-typescript
@@ -112,7 +121,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ steps.resolve-ballerina-extension-version.outputs.version }}-${{ hashFiles('patches/*.diff', 'ci/build/resolve-ballerina-extension-version.sh', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
 
       - name: Cache Rust toolchain
         uses: actions/cache@v4
@@ -168,20 +177,14 @@ jobs:
           path: lib/vscode-reh-web-*
           key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
 
-      - name: Set Ballerina extension version
-        if: ${{ inputs.ballerina_extension_version != '' }}
-        shell: bash
-        working-directory: .
-        run: |
-          echo "BALLERINA_EXTENSION_VERSION=${{ inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
-
       - name: Download archived Ballerina VSIX
-        if: ${{ inputs.ballerina_extension_source == 'github' && inputs.ballerina_extension_version != '' }}
+        if: ${{ inputs.ballerina_extension_source == 'github' }}
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ inputs.ballerina_extension_version }}" "ballerina-${{ inputs.ballerina_extension_version }}.vsix" "$PWD")
+          BALLERINA_VERSION="${{ steps.resolve-ballerina-extension-version.outputs.version }}"
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${BALLERINA_VERSION}" "ballerina-${BALLERINA_VERSION}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
   
       - name: Update product.json and branding
