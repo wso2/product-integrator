@@ -105,7 +105,8 @@
         {
           "id": "wso2-integrator.explorer",
           "name": "Integrations",
-          "contextualTitle": "WSO2 Integrator"
+          "contextualTitle": "WSO2 Integrator",
+          "when": "!WI.projectType || WI.projectType != 'si'"
         }
       ]
     },
@@ -114,11 +115,6 @@
         "view": "wso2-integrator.explorer",
         "contents": "$(loadingspin) Loading WSO2 Integrator...",
         "when": "!WI.projectType"
-      },
-      {
-        "view": "wso2-integrator.explorer",
-        "contents": "$(info) SI project detected.\n\nSI tree view is not available yet. Use File Explorer to browse your project files.",
-        "when": "WI.projectType == 'si'"
       },
       {
         "view": "wso2-integrator.explorer",
