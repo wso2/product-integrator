@@ -142,7 +142,7 @@ export async function handleOpenFile(projectUri: string, sampleName: string, rep
     }
 }
 
-export async function handleOpenRepositoryArchiveSource(
+export async function handleOpenBISamplesIntegrations(
     projectUri: string,
     repositorySource: RepositoryArchiveSource,
 ) {

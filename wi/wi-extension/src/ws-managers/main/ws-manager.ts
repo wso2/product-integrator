@@ -59,7 +59,7 @@ import {
 import { commands, window, workspace, MarkdownString, Uri, env, ConfigurationTarget } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { getDefaultCreationPath } from "../../utils/pathUtils";
-import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, handleOpenRepositoryArchiveSource, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
+import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenBISamplesIntegrations, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import { BI_PREBUILT_INTEGRATIONS } from "./prebuilt-integrations";
 import * as fs from "fs";
 import * as path from "path";
@@ -448,7 +448,7 @@ export class MainWsManager implements WIVisualizerAPI {
                 return;
             }
 
-            await handleOpenRepositoryArchiveSource(projectUri, {
+            await handleOpenBISamplesIntegrations(projectUri, {
                 repositoryUrl: BI_SAMPLES_REPOSITORY_URL,
                 branch: BI_SAMPLES_REPOSITORY_BRANCH,
                 subDirectory: BI_SAMPLES_REPOSITORY_SUBDIRECTORY,
