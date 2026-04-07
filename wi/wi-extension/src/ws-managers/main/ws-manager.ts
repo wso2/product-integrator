@@ -345,9 +345,10 @@ export class MainWsManager implements WIVisualizerAPI {
             try {
                 const projectPath = path.join(params.directory, params.name);
                 const mainSiddhiPath = path.join(projectPath, "main.siddhi");
+                const mainSiddhiContent = '@App:name("APP_NAME")\n@App:description("APP_DESCRIPTION")\n\ndefine stream InputStream (attribute1 string,attribute2 int);\n';
 
                 await fs.promises.mkdir(projectPath, { recursive: false });
-                await fs.promises.writeFile(mainSiddhiPath, "", { encoding: "utf8", flag: "wx" });
+                await fs.promises.writeFile(mainSiddhiPath, mainSiddhiContent, { encoding: "utf8", flag: "wx" });
 
                 if (params.open) {
                     await commands.executeCommand("vscode.openFolder", Uri.file(projectPath));
