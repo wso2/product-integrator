@@ -475,16 +475,14 @@ export class MainWsManager implements WIVisualizerAPI {
             try {
                 const projectRoot: string = await commands.executeCommand('BI.project.createBIProjectPure', params);
                 if (params.createAsWorkspace && params.projectHandle) {
-                    const displayName = params.workspaceName || 'Default';
                     try {
-                        await this.writeLocalProjectYaml(
+                        await this.writeLocalContextYaml(
                             projectRoot,
-                            displayName,
+                            params.orgHandle,
                             params.projectHandle,
-                            params.orgName
                         );
                     } catch (yamlError) {
-                        console.warn("Failed to write local-project.yaml (non-critical):", yamlError);
+                        console.warn("Failed to write context.yaml (non-critical):", yamlError);
                     }
                 }
                 openInVSCode(projectRoot);
@@ -498,15 +496,14 @@ export class MainWsManager implements WIVisualizerAPI {
         });
     }
 
-    private async writeLocalProjectYaml(
+    private async writeLocalContextYaml(
         projectRoot: string,
-        projectName: string,
+        orgHandle: string,
         projectHandle: string,
-        orgName: string
     ): Promise<void> {
         const choreoDir = path.join(projectRoot, '.choreo');
-        const localProjectFile = path.join(choreoDir, 'local-project.yaml');
-        const content = stringifyYaml({ org: orgName, name: projectName, handle: projectHandle });
+        const localProjectFile = path.join(choreoDir, 'context.yaml');
+        const content = stringifyYaml([{ org: orgHandle, project: projectHandle, local: true }]);
         await fs.promises.mkdir(choreoDir, { recursive: true });
         await fs.promises.writeFile(localProjectFile, content, { encoding: 'utf8' });
     }

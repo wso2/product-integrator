@@ -175,6 +175,7 @@ export interface BIProjectRequest {
     createAsWorkspace?: boolean;
     workspaceName?: string;
     orgName?: string;
+    orgHandle?: string;
     version?: string;
     isLibrary?: boolean;
     projectHandle?: string;

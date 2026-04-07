@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@wso2/ui-toolkit";
 import { useVisualizerContext } from "../../../contexts";
 import {
@@ -57,6 +57,12 @@ export function BIProjectForm() {
     const [expandAdvancedTrigger, setExpandAdvancedTrigger] = useState(0);
     const createActionLabel = "Create Integration";
 
+    const resolvedOrg = useMemo(() => {
+        if (!organizations || organizations.length === 0) return undefined;
+        return formData.orgName
+            ? (organizations.find(o => o.name === formData.orgName) ?? organizations[0])
+            : organizations[0];
+    }, [organizations, formData.orgName]);
 
     const handleFormDataChange = (data: Partial<ProjectFormData>) => {
         setFormData(prev => ({ ...prev, ...data }));
@@ -185,6 +191,7 @@ export function BIProjectForm() {
                 createAsWorkspace: formData.createWithinProject,
                 workspaceName: formData.createWithinProject ? formData.withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
+                orgHandle: resolvedOrg?.handle || formData.orgName,
                 version: formData.version || undefined,
                 projectHandle: formData.createWithinProject ? formData.projectHandle : undefined,
             });

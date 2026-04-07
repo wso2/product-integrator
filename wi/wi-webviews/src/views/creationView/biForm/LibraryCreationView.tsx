@@ -93,7 +93,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const resolvedOrg = useMemo(() => {
         if (!organizations || organizations.length === 0) return undefined;
         return formData.orgName
-            ? (organizations.find(o => o.handle === formData.orgName) ?? organizations[0])
+            ? (organizations.find(o => o.name === formData.orgName) ?? organizations[0])
             : organizations[0];
     }, [organizations, formData.orgName]);
 
@@ -373,6 +373,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 createAsWorkspace: createWithinProject,
                 workspaceName: createWithinProject ? withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
+                orgHandle: resolvedOrg?.handle || formData.orgName,
                 version: formData.version || undefined,
                 isLibrary: true,
                 projectHandle: createWithinProject ? withinProjectHandle : undefined,
