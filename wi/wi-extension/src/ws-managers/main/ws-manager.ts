@@ -60,7 +60,6 @@ import { commands, window, workspace, MarkdownString, Uri, env, ConfigurationTar
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { getDefaultCreationPath } from "../../utils/pathUtils";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenBISamplesIntegrations, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
-import { BI_PREBUILT_INTEGRATIONS } from "./prebuilt-integrations";
 import * as fs from "fs";
 import * as path from "path";
 import axios from "axios";
@@ -78,8 +77,7 @@ const BI_SAMPLES_INFO_URL = 'https://devant-cdn.wso2.com/bi-samples/v1/info.json
 const BI_SAMPLES_REPOSITORY_URL = 'https://github.com/wso2/integration-samples/';
 const BI_SAMPLES_REPOSITORY_BRANCH = 'main';
 const BI_SAMPLES_REPOSITORY_SUBDIRECTORY = '/ballerina-integrator';
-// BI pre-built integrations CDN endpoint:
-// const BI_PREBUILT_INTEGRATIONS_URL = "http://console.devant.dev/public/prebuilt-integrations.json";
+const BI_PREBUILT_INTEGRATIONS_URL = 'https://raw.githubusercontent.com/wso2/integration-samples/main/.metadata/prebuilt-integrations.json';
 
 export class MainWsManager implements WIVisualizerAPI {
     private subProjectReports: Map<string, string> = new Map();
@@ -375,6 +373,9 @@ export class MainWsManager implements WIVisualizerAPI {
     async fetchSamplesFromGithub(params: FetchSamplesRequest): Promise<GettingStartedData> {
         return new Promise(async (resolve) => {
             const url = params.runtime === "WSO2: MI" ? MI_SAMPLES_INFO_URL : BI_SAMPLES_INFO_URL;
+            const prebuiltIntegrations = params.runtime === "WSO2: BI"
+                ? await this.fetchBiPrebuiltIntegrations()
+                : [];
             try {
                 const { data } = await axios.get(url);
                 console.log('Fetched samples data:', data);
@@ -404,18 +405,6 @@ export class MainWsManager implements WIVisualizerAPI {
                     sampleList.push(sample);
                 }
 
-                let prebuiltIntegrations: PrebuiltIntegration[] = [];
-                if (params.runtime === "WSO2: BI") {
-                    // Temporary approach: keep BI pre-built integrations bundled locally until the CDN is ready.
-                    prebuiltIntegrations = BI_PREBUILT_INTEGRATIONS;
-
-                    // When the CDN is available, replace the local constant with:
-                    // const { data: prebuiltData } = await axios.get(BI_PREBUILT_INTEGRATIONS_URL);
-                    // prebuiltIntegrations = Array.isArray(prebuiltData?.prebuiltIntegrations)
-                    //     ? prebuiltData.prebuiltIntegrations
-                    //     : [];
-                }
-
                 const gettingStartedData: GettingStartedData = {
                     categories: categoriesList,
                     samples: sampleList,
@@ -428,10 +417,20 @@ export class MainWsManager implements WIVisualizerAPI {
                 resolve({
                     categories: [],
                     samples: [],
-                    prebuiltIntegrations: params.runtime === "WSO2: BI" ? BI_PREBUILT_INTEGRATIONS : [],
+                    prebuiltIntegrations,
                 });
             }
         });
+    }
+
+    async fetchBiPrebuiltIntegrations(): Promise<PrebuiltIntegration[]> {
+        try {
+            const { data } = await axios.get(BI_PREBUILT_INTEGRATIONS_URL);
+            return data.prebuiltIntegrations as PrebuiltIntegration[];
+        } catch (error) {
+            console.error("Error fetching BI prebuilt integrations:", error);
+            return [];
+        }
     }
 
     async downloadSelectedSampleFromGithub(params: SampleDownloadRequest): Promise<void> {
