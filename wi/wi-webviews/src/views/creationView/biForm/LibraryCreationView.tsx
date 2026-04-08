@@ -21,7 +21,7 @@ import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
 import { useCloudContext, useCloudProjects, useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
-import { sanitizePackageName, validatePackageName, validateOrgName, joinPath, sanitizeProjectHandle, validateProjectHandle, validateProjectName, suggestAvailableProjectName } from "./utils";
+import { sanitizePackageName, validateComponentName, validatePackageName, validateOrgName, joinPath, sanitizeProjectHandle, validateProjectHandle, validateProjectName, suggestAvailableProjectName } from "./utils";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { PackageInfoSection } from "./components";
@@ -283,8 +283,9 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
         let hasError = false;
 
-        if (formData.libraryName.length < 2) {
-            setLibraryNameError("Library name must be at least 2 characters");
+        const libraryNameErr = validateComponentName(formData.libraryName);
+        if (libraryNameErr) {
+            setLibraryNameError(libraryNameErr);
             hasError = true;
         }
 
