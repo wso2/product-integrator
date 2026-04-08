@@ -3,8 +3,17 @@ set -euo pipefail
 
 # Accept version as first arg, default to 1.0.0
 VERSION=${1:-"1.0.0"}
-BALLERINA_EXTENSION_VERSION=${BALLERINA_EXTENSION_VERSION:-"5.9.326032720"}
 BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH:-""}
+BALLERINA_EXTENSION_VERSION=${BALLERINA_EXTENSION_VERSION:-""}
+
+if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
+  echo "Error: BALLERINA_EXTENSION_VERSION must be provided without a leading v. Example: 4.5.0" >&2
+  exit 1
+fi
+
+if [ -z "${BALLERINA_EXTENSION_VERSION}" ] && [ -z "${BALLERINA_VSIX_PATH}" ]; then
+  BALLERINA_EXTENSION_VERSION="latest"
+fi
 WI_EXTENSION_VERSION=$(node -p "require('./wi/wi-extension/package.json').version")
 
 cat > lib/vscode/product.json <<EOF
