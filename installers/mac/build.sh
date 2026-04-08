@@ -23,18 +23,19 @@ print_warning() {
 
 WORK_DIR=$(pwd)
 
-# Usage: ./build.sh <ballerina_zip> <ballerina_version> <wso2_zip> <icp_zip> <version> <arch>
-if [ "$#" -ne 6 ]; then
-    echo "Usage: $0 <ballerina_zip> <ballerina_version> <wso2_zip> <icp_zip> <version> <arch>"
+# Usage: ./build.sh <integrator_dist_zip> <wso2_zip> <icp_zip> <version> <arch>
+if [ "$#" -ne 5 ]; then
+    echo "Usage: $0 <integrator_dist_zip> <wso2_zip> <icp_zip> <version> <arch>"
     exit 1
 fi
 
-BALLERINA_ZIP="$1"
-BALLERINA_VERSION="$2"
-WSO2_ZIP="$3"
-ICP_ZIP="$4"
-VERSION="$5"
-ARCH="$6"
+INTEGRATOR_DIST_ZIP="$1"
+WSO2_ZIP="$2"
+ICP_ZIP="$3"
+VERSION="$4"
+ARCH="$5"
+JDK_FOLDER=""
+BALLERINA_VERSION=""
 
 OUTPUT_PKG="WSO2_Integrator.pkg"
 BUNDLE_IDENTIFIER="com.wso2.integrator"
@@ -54,45 +55,75 @@ xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
 
 rm -rf "$EXTRACTION_TARGET/__MACOSX"
 
-# Extract Ballerina zip
+detect_ballerina_version() {
+    local extracted_root="$1"
+    local dist_dir
+    local jar_path
+
+    dist_dir=$(find "$extracted_root/distributions" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -1)
+    if [ -n "$dist_dir" ]; then
+        basename "$dist_dir" | sed 's/^ballerina-//'
+        return 0
+    fi
+
+    jar_path=$(find "$extracted_root/bre/lib" -maxdepth 1 -type f -name 'ballerina-lang-*.jar' 2>/dev/null | head -1)
+    if [ -n "$jar_path" ]; then
+        basename "$jar_path" | sed -E 's/^ballerina-lang-(.*)\.jar$/\1/'
+        return 0
+    fi
+
+    return 1
+}
+
+# Extract Integrator distro zip
 print_info "Extracting Ballerina to package resources"
 COMPONENTS_DIR="$WORK_DIR/payload/Applications/WSO2 Integrator.app/Contents/components"
 BALLERINA_TARGET="$COMPONENTS_DIR/ballerina"
 rm -rf "$BALLERINA_TARGET"
 mkdir -p "$BALLERINA_TARGET"
-unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
-BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$BALLERINA_ZIP" | head -1 | cut -d/ -f1)
+unzip -o "$INTEGRATOR_DIST_ZIP" -d "$EXTRACTION_TARGET"
+BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$INTEGRATOR_DIST_ZIP" | head -1 | cut -d/ -f1)
 BALLERINA_UNZIPPED_PATH="$EXTRACTION_TARGET/$BALLERINA_UNZIPPED_FOLDER"
+BALLERINA_VERSION=$(detect_ballerina_version "$BALLERINA_UNZIPPED_PATH") || {
+    print_error "Failed to detect Ballerina version from Integrator distribution"
+    exit 1
+}
+print_info "Detected Ballerina version: $BALLERINA_VERSION"
 
 # Create a temp directory for consolidation
 BALLERINA_TEMP="$WORK_DIR/ballerina_temp"
 rm -rf "$BALLERINA_TEMP"
 mkdir -p "$BALLERINA_TEMP"
 
-# Move distributions contents to temp
-print_info "Consolidating Ballerina distributions"
+# Support both the legacy split layout and the newer flat distro layout.
 if [ -d "$BALLERINA_UNZIPPED_PATH/distributions" ]; then
+    print_info "Detected split Ballerina layout. Consolidating distributions"
     DIST_FOLDER=$(ls "$BALLERINA_UNZIPPED_PATH/distributions" | head -1)
     if [ -n "$DIST_FOLDER" ]; then
         cp -r "$BALLERINA_UNZIPPED_PATH/distributions/$DIST_FOLDER"/* "$BALLERINA_TEMP/"
     fi
+else
+    print_info "Detected flat Ballerina distro layout. Copying runtime directly"
+    cp -r "$BALLERINA_UNZIPPED_PATH"/* "$BALLERINA_TEMP/"
 fi
 
-# Move distributions contents to target (without JDK)
+# Move runtime contents to target
 mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
 
-# Move JDK to shared dependencies directory
-print_info "Moving JDK to shared dependencies directory"
+# Move JDK to shared dependencies directory when the source archive provides one
 DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
 rm -rf "$DEPENDENCIES_DIR"
-mkdir -p "$DEPENDENCIES_DIR"
 if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
+    print_info "Moving JDK to shared dependencies directory"
+    mkdir -p "$DEPENDENCIES_DIR"
     for jdk_folder in "$BALLERINA_UNZIPPED_PATH/dependencies"/*; do
         if [ -d "$jdk_folder" ]; then
             JDK_FOLDER=$(basename "$jdk_folder")
             cp -r "$jdk_folder" "$DEPENDENCIES_DIR/"
         fi
     done
+else
+    print_warning "No shared dependencies directory found in Ballerina distribution. Skipping JDK copy."
 fi
 
 
@@ -118,12 +149,14 @@ mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
 
-# Modify icp.sh to use the JDK from shared dependencies directory
+# Modify icp.sh to use the JDK from shared dependencies directory when available
 ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
-if [ -f "$ICP_SCRIPT" ]; then
+if [ -f "$ICP_SCRIPT" ] && [ -n "$JDK_FOLDER" ]; then
     print_info "Modifying icp.sh to use JDK from dependencies ($JDK_FOLDER)"
     # Replace all java instances with the full path to the JDK java
     sed -i '' "s|java|\"\$SCRIPT_DIR\"/../../dependencies/$JDK_FOLDER/bin/java|g" "$ICP_SCRIPT"
+elif [ -f "$ICP_SCRIPT" ]; then
+    print_warning "No packaged JDK found for ICP. Leaving icp.sh Java resolution unchanged."
 fi
 
 

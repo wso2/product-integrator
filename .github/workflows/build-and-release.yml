@@ -31,10 +31,6 @@ on:
         default: true
         required:  true
         type: boolean
-      ballerina_version:
-        description: 'Specify Ballerina version to use'
-        required: false
-        type: string
       ballerina_extension_source:
         description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
         required: true
@@ -77,7 +73,6 @@ jobs:
     secrets: inherit  
     with:
       runOnAWS: ${{ github.event.inputs.runner == 'codebuild' }}
-      ballerina_version: ${{ github.event.inputs.ballerina_version }}
       ballerina_extension_source: ${{ github.event.inputs.ballerina_extension_source }}
       ballerina_extension_version: ${{ github.event.inputs.ballerina_extension_version }}
       icp_version: ${{ github.event.inputs.icp_version }}
@@ -342,14 +337,11 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
-          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
-          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-          BALLERINA_ARCH="macos-arm"
+          INTEGRATOR_DIST_VARIANT="macos-arm"
           else
-          BALLERINA_ARCH="macos"
+          INTEGRATOR_DIST_VARIANT="macos"
           fi
-          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-${BALLERINA_ARCH}.zip"
           ICP_VERSION="${{ github.event.inputs.icp_version }}"
           ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
@@ -357,10 +349,11 @@ jobs:
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          INTEGRATOR_DIST_URL="https://github.com/${{ github.repository }}/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-${INTEGRATOR_DIST_VARIANT}-${INTEGRATOR_VERSION}.zip"
           cd ./installers/mac
-          wget -O ballerina.zip "$BALLERINA_URL"
+          wget -O integrator-dist.zip "$INTEGRATOR_DIST_URL"
           wget -O icp.zip "$ICP_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
+          ./build.sh integrator-dist.zip VSCode-darwin-${{ matrix.arch }}.zip icp.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
 
       - name: Login to AWS
@@ -681,9 +674,6 @@ jobs:
           cd ..\..
           $ROOT_DIR = Get-Location
           Write-Host "Root dir: $ROOT_DIR"
-          $BALLERINA_VERSION = "${{ github.event.inputs.ballerina_version }}"
-          $BALLERINA_VERSION_FILENAME = $BALLERINA_VERSION -replace '-.*$', ''
-          $BALLERINA_URL = "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-windows.zip"
           $ICP_VERSION = "${{ github.event.inputs.icp_version }}"
           $ICP_VERSION_FILENAME = $ICP_VERSION -replace '-.*$', ''
           if ($ICP_VERSION -ne $ICP_VERSION_FILENAME) {
@@ -691,10 +681,11 @@ jobs:
           }
           $ICP_URL = "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           $INTEGRATOR_VERSION = "${{ github.event.inputs.integrator_version }}"
+          $INTEGRATOR_DIST_URL = "https://github.com/${{ github.repository }}/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-windows-${INTEGRATOR_VERSION}.zip"
           cd .\installers\windows
-          Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
+          Invoke-WebRequest -Uri $INTEGRATOR_DIST_URL -OutFile "integrator-dist.zip"
           Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
-          .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip $INTEGRATOR_VERSION
+          .\build.bat .\integrator-dist.zip .\VSCode-win32-x64.zip .\icp.zip $INTEGRATOR_VERSION
 
       - name: Login to AWS
         uses: aws-actions/configure-aws-credentials@v5
