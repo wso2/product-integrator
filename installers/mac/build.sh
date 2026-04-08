@@ -158,6 +158,87 @@ else
     exit 1
 fi
 
+# -------------------------------------------------------------------
+# Build the DMG
+# -------------------------------------------------------------------
+
+APP_NAME="WSO2 Integrator"
+DMG_NAME="wso2-integrator-$VERSION-$ARCH.dmg"
+DMG_STAGING="$WORK_DIR/dmg_staging"
+
+print_info "Preparing DMG staging directory"
+rm -rf "$DMG_STAGING"
+mkdir -p "$DMG_STAGING"
+
+# The .app is still fully assembled in WSO2_TARGET — reuse it directly
+cp -r "$WSO2_TARGET/$APP_NAME.app" "$DMG_STAGING/"
+
+print_info "Creating temporary writable DMG (auto-sized)"
+TEMP_DMG="$WORK_DIR/tmp_rw_$VERSION.dmg"
+hdiutil create \
+    -srcfolder "$DMG_STAGING" \
+    -volname "$APP_NAME" \
+    -fs HFS+ \
+    -fsargs "-c c=64,a=16,b=16" \
+    -format UDRW \
+    "$TEMP_DMG"
+
+print_info "Mounting temporary DMG for customisation"
+MOUNT_DIR="/Volumes/$APP_NAME"
+# Detach any leftover mount from a previous run
+if hdiutil info | grep -q "$MOUNT_DIR"; then
+    print_warning "Leftover mount detected at $MOUNT_DIR, detaching..."
+    hdiutil detach "$MOUNT_DIR" -force -quiet 2>/dev/null || true
+    sleep 2
+fi
+hdiutil attach "$TEMP_DMG" -quiet
+sleep 5
+
+print_info "Configuring DMG window layout"
+osascript <<APPLESCRIPT
+tell application "Finder"
+    set dmgDisk to disk "$APP_NAME"
+    set appsAlias to make new alias file at dmgDisk to folder "Applications" of startup disk
+    set name of appsAlias to "Applications"
+    tell dmgDisk
+        open
+        set current view of container window to icon view
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        set the bounds of container window to {400, 100, 840, 480}
+        set viewOptions to the icon view options of container window
+        set arrangement of viewOptions to not arranged
+        set icon size of viewOptions to 100
+        set position of item "$APP_NAME.app" of container window to {130, 170}
+        set position of item "Applications" of container window to {310, 170}
+        close
+        open
+        update without registering applications
+        delay 2
+    end tell
+end tell
+APPLESCRIPT
+
+print_info "Finalising DMG"
+sync
+sleep 3
+hdiutil detach "$MOUNT_DIR" -force -quiet
+hdiutil convert "$TEMP_DMG" \
+    -format UDZO \
+    -imagekey zlib-level=9 \
+    -o "$WORK_DIR/$DMG_NAME"
+
+if [ -f "$WORK_DIR/$DMG_NAME" ]; then
+    print_info "Successfully created: $DMG_NAME"
+    print_info "Package size: $(du -h "$WORK_DIR/$DMG_NAME" | cut -f1)"
+else
+    print_error "Failed to create DMG package"
+    exit 1
+fi
+
+rm -f "$TEMP_DMG"
+rm -rf "$DMG_STAGING"
+
 # Cleanup
 rm -rf "${WSO2_TARGET:?}"/*
 rm -rf "${ICP_TARGET:?}"/*
