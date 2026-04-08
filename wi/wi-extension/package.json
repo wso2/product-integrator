@@ -317,18 +317,6 @@
         "title": "Add Custom Connector",
         "icon": "$(add)",
         "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-workflow",
-        "title": "Add Workflow",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-workflow-activity",
-        "title": "Add Workflow Activity",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
       }
     ],
     "menus": {
@@ -392,14 +380,6 @@
         {
           "command": "BI.project-explorer.add-custom-connector",
           "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-workflow",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-workflow-activity",
-          "when": "false"
         }
       ],
       "view/item/context": [
@@ -420,7 +400,7 @@
         },
         {
           "command": "BI.project-explorer.delete",
-          "when": "view == wso2-integrator.explorer && viewItem == CONNECTION || viewItem == SERVICE || viewItem == FUNCTION || viewItem == AUTOMATION || viewItem == TYPE || viewItem == CONFIGURABLE || viewItem == DATA_MAPPER || viewItem == NP_FUNCTION || viewItem == localConnector || viewItem == WORKFLOW || viewItem == ACTIVITY",
+          "when": "view == wso2-integrator.explorer && viewItem == CONNECTION || viewItem == SERVICE || viewItem == FUNCTION || viewItem == AUTOMATION || viewItem == TYPE || viewItem == CONFIGURABLE || viewItem == DATA_MAPPER || viewItem == NP_FUNCTION || viewItem == localConnector",
           "group": "inline"
         },
         {
@@ -466,16 +446,6 @@
         {
           "command": "BI.project-explorer.add-custom-connector",
           "when": "view == wso2-integrator.explorer && viewItem == localConnectors",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-workflow",
-          "when": "view == wso2-integrator.explorer && viewItem == workflows",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-workflow-activity",
-          "when": "view == wso2-integrator.explorer && viewItem == workflowActivities",
           "group": "inline"
         }
       ],
