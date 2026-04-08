@@ -447,7 +447,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                         label="Project ID"
                                         errorMsg={projectHandleError || cloudProjectHandleError || ""}
                                     />
-                                    <Description>Unique identifier for your project in various contexts. Cannot be changed after creation.</Description>
+                                    <Description>Unique identifier for your project in various contexts.</Description>
                                 </FieldGroup>
                             </CollapsibleSection>
 

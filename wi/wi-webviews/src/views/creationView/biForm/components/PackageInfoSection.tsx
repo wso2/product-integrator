@@ -102,7 +102,7 @@ export function PackageInfoSection({
                                 label="Project ID"
                                 errorMsg={projectHandleError || undefined}
                             />
-                            <Description>Unique identifier for your project in various contexts. Cannot be changed after creation.</Description>
+                            <Description>Unique identifier for your project in various contexts.</Description>
                         </FieldGroup>
                     <SubSectionDivider />
                 </>
