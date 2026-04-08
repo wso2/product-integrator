@@ -276,7 +276,7 @@ jobs:
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
-          INTEGRATOR_DIST_URL="https://github.com/${{ github.repository }}/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-linux-${INTEGRATOR_VERSION}.zip"
+          INTEGRATOR_DIST_URL="https://github.com/wso2-enterprise/support-ballerina-distribution/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-linux-${INTEGRATOR_VERSION}.zip"
           cd ./installers/linux-deb
           wget -O integrator-dist.zip "$INTEGRATOR_DIST_URL"
           wget -O icp.zip "$ICP_URL"
@@ -306,7 +306,7 @@ jobs:
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
-          INTEGRATOR_DIST_URL="https://github.com/${{ github.repository }}/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-linux-${INTEGRATOR_VERSION}.zip"
+          INTEGRATOR_DIST_URL="https://github.com/wso2-enterprise/support-ballerina-distribution/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-linux-${INTEGRATOR_VERSION}.zip"
           cd ./installers/linux-rpm
           wget -O integrator-dist.zip "$INTEGRATOR_DIST_URL"
           wget -O icp.zip "$ICP_URL"
@@ -334,7 +334,7 @@ jobs:
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
-          INTEGRATOR_DIST_URL="https://github.com/${{ github.repository }}/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-linux-${INTEGRATOR_VERSION}.zip"
+          INTEGRATOR_DIST_URL="https://github.com/wso2-enterprise/support-ballerina-distribution/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-linux-${INTEGRATOR_VERSION}.zip"
           cd ./installers/linux-tar
           wget -O integrator-dist.zip "$INTEGRATOR_DIST_URL"
           wget -O icp.zip "$ICP_URL"
