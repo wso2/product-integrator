@@ -25,7 +25,7 @@ import {
 } from "./styles";
 import { ProjectFormFields } from "./ProjectFormFields";
 import { DEFAULT_INTEGRATION_NAME, DEFAULT_PROJECT_NAME, ProjectFormData } from "./types";
-import { validatePackageName, validateProjectHandle, validateProjectName, validateOrgName } from "./utils";
+import { validateComponentName, validatePackageName, validateProjectHandle, validateProjectName, validateOrgName } from "./utils";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { useCloudContext } from "../../../providers";
 
@@ -94,8 +94,9 @@ export function BIProjectForm() {
 
         let hasError = false;
 
-        if (formData.integrationName.length < 2) {
-            setIntegrationNameError(`Integration name must be at least 2 characters`);
+        const integrationNameErr = validateComponentName(formData.integrationName);
+        if (integrationNameErr) {
+            setIntegrationNameError(integrationNameErr);
             hasError = true;
         }
 
@@ -184,7 +185,7 @@ export function BIProjectForm() {
             }
 
             await wsClient.createBIProject({
-                projectName: formData.integrationName,
+                projectName: formData.integrationName.trim(),
                 packageName: formData.packageName,
                 projectPath: formData.path,
                 createDirectory: true,
