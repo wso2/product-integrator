@@ -30,6 +30,17 @@ interface ProgressMessage {
     increment?: number;
 }
 
+interface RepositoryArchiveSource {
+    repositoryUrl: string;
+    branch: string;
+    subDirectory: string;
+    componentPath: string;
+    displayName: string;
+    sourceLabel: string;
+    missingSourceError: string;
+    preparationErrorLabel: string;
+}
+
 export enum VERSION {
     BETA = 'beta',
     ALPHA = 'alpha',
@@ -131,9 +142,9 @@ export async function handleOpenFile(projectUri: string, sampleName: string, rep
     }
 }
 
-export async function handleOpenPrebuiltIntegration(
+export async function handleOpenBISamplesIntegrations(
     projectUri: string,
-    prebuiltIntegration: PrebuiltIntegration,
+    repositorySource: RepositoryArchiveSource,
 ) {
     const selectedPath = await selectFileDownloadPath();
     if (selectedPath === "") {
@@ -141,11 +152,11 @@ export async function handleOpenPrebuiltIntegration(
     }
 
     const trimSlashes = (value: string) => value.replace(/^[\\/]+|[\\/]+$/g, '');
-    const componentPath = trimSlashes(prebuiltIntegration.componentPath);
+    const componentPath = trimSlashes(repositorySource.componentPath);
     const componentName = componentPath.split(/[\\/]/).pop();
     const integrationFolderName = componentName && componentName.length > 0
         ? componentName
-        : sanitizeName(prebuiltIntegration.displayName);
+        : sanitizeName(repositorySource.displayName);
     const extractedProjectPath = path.join(selectedPath, integrationFolderName);
 
     if (fs.existsSync(extractedProjectPath)) {
@@ -155,7 +166,7 @@ export async function handleOpenPrebuiltIntegration(
 
     const archiveFilePath = path.join(os.tmpdir(), `${integrationFolderName}-${Date.now()}.zip`);
     const archiveExtractPath = path.join(os.tmpdir(), `${integrationFolderName}-extract-${Date.now()}`);
-    const archiveUrl = `${prebuiltIntegration.repositoryUrl.replace(/\/+$/, '')}/archive/refs/heads/${prebuiltIntegration.branch}.zip`;
+    const archiveUrl = `${repositorySource.repositoryUrl.replace(/\/+$/, '')}/archive/refs/heads/${repositorySource.branch}.zip`;
 
     try {
         await window.withProgress({
@@ -189,21 +200,21 @@ export async function handleOpenPrebuiltIntegration(
         const sourcePath = path.join(
             archiveExtractPath,
             archiveRootDir,
-            trimSlashes(prebuiltIntegration.subDirectory),
+            trimSlashes(repositorySource.subDirectory),
             componentPath,
         );
 
         if (!fs.existsSync(sourcePath)) {
-            throw new Error('Pre-built integration source files were not found in the downloaded archive.');
+            throw new Error(repositorySource.missingSourceError);
         }
 
         fs.cpSync(sourcePath, extractedProjectPath, { recursive: true });
         window.showInformationMessage(
-            `The pre-built integration has been downloaded successfully to the following directory: ${extractedProjectPath}.`,
+            `The ${repositorySource.sourceLabel} has been downloaded successfully to the following directory: ${extractedProjectPath}.`,
         );
         await openDownloadedProject(extractedProjectPath);
     } catch (error) {
-        window.showErrorMessage(`Failed to prepare the pre-built integration: ${error}`);
+        window.showErrorMessage(`Failed to prepare the ${repositorySource.preparationErrorLabel}: ${error}`);
     } finally {
         await Promise.allSettled([
             fs.promises.unlink(archiveFilePath),

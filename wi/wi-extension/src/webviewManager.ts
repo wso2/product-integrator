@@ -118,8 +118,12 @@ export class WebviewManager {
 				pathSeparator: path.sep,
 				env: {
 					MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
-					BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || ''
-				}
+					BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
+					MI_SAMPLES_INFO_URL: process.env.MI_SAMPLES_INFO_URL || '',
+					BI_SAMPLES_INFO_URL: process.env.BI_SAMPLES_INFO_URL || '',
+					BI_SAMPLES_REPOSITORY_URL: process.env.BI_SAMPLES_REPOSITORY_URL || '',
+					BI_PREBUILT_INTEGRATIONS_URL: process.env.BI_PREBUILT_INTEGRATIONS_URL || '',
+				},
 			});
 		});
 	}
