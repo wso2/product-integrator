@@ -21,7 +21,17 @@ import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
 import { useCloudContext, useCloudProjects, useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
-import { sanitizePackageName, validatePackageName, validateOrgName, joinPath, sanitizeProjectHandle, validateProjectHandle, validateProjectName, suggestAvailableProjectName } from "./utils";
+import {
+    sanitizePackageName,
+    validatePackageName,
+    validateOrgName,
+    joinPath,
+    sanitizeProjectHandle,
+    sanitizeOrgHandle,
+    validateProjectHandle,
+    validateProjectName,
+    suggestAvailableProjectName
+} from "./utils";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
 import { AdvancedConfigurationSection } from "./components";
@@ -365,6 +375,9 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 return;
             }
 
+            const orgHandle = organizations?.find(o => o.handle === formData.orgName)?.handle ||
+                sanitizeOrgHandle(formData.orgName)
+
             await wsClient.createBIProject({
                 projectName: formData.libraryName,
                 packageName: formData.packageName,
@@ -373,7 +386,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 createAsWorkspace: createWithinProject,
                 workspaceName: createWithinProject ? withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
-                orgHandle: organizations?.find(o => o.handle === formData.orgName)?.handle || formData.orgName,
+                orgHandle: orgHandle,
                 version: formData.version || undefined,
                 isLibrary: true,
                 projectHandle: createWithinProject ? withinProjectHandle : undefined,

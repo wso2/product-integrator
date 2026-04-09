@@ -25,7 +25,13 @@ import {
 } from "./styles";
 import { ProjectFormFields } from "./ProjectFormFields";
 import { DEFAULT_INTEGRATION_NAME, DEFAULT_PROJECT_NAME, ProjectFormData } from "./types";
-import { validatePackageName, validateProjectHandle, validateProjectName, validateOrgName } from "./utils";
+import {
+    validatePackageName,
+    validateProjectHandle,
+    validateProjectName,
+    validateOrgName,
+    sanitizeOrgHandle
+} from "./utils";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { useCloudContext } from "../../../providers";
 
@@ -183,6 +189,9 @@ export function BIProjectForm() {
                 return;
             }
 
+            const orgHandle = organizations?.find(o => o.handle === formData.orgName)?.handle ||
+                sanitizeOrgHandle(formData.orgName);
+
             await wsClient.createBIProject({
                 projectName: formData.integrationName,
                 packageName: formData.packageName,
@@ -191,7 +200,7 @@ export function BIProjectForm() {
                 createAsWorkspace: formData.createWithinProject,
                 workspaceName: formData.createWithinProject ? formData.withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
-                orgHandle: organizations?.find(o => o.handle === formData.orgName)?.handle || formData.orgName,
+                orgHandle: orgHandle,
                 version: formData.version || undefined,
                 projectHandle: formData.createWithinProject ? formData.projectHandle : undefined,
             });

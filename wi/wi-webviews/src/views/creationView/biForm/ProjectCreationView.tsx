@@ -25,6 +25,7 @@ import { DirectorySelector } from "../../../components/DirectorySelector/Directo
 import {
     joinPath,
     sanitizeProjectHandle,
+    sanitizeOrgHandle,
     validateProjectHandle,
     validateProjectName,
     validateOrgName,
@@ -281,13 +282,16 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                 return;
             }
 
+            const orgHandle = organizations?.find(o => o.handle === formData.orgName)?.handle
+                || sanitizeOrgHandle(formData.orgName);
+
             await wsClient.createBIProject({
                 workspaceName: formData.projectName,
                 projectPath: formData.path,
                 createDirectory: true,
                 createAsWorkspace: true,
                 orgName: formData.orgName || undefined,
-                orgHandle: organizations?.find(o => o.handle === formData.orgName)?.handle || formData.orgName,
+                orgHandle: orgHandle,
                 version: formData.version || undefined,
                 projectHandle: projectHandle,
             });

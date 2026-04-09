@@ -18,6 +18,9 @@
 
 import { AddProjectFormData } from "./types";
 
+/** Max length for an org handle — must be less than 30 characters. */
+const ORG_HANDLE_MAX_LENGTH = 29;
+
 export const isValidPackageName = (name: string): boolean => {
     return /^[a-z0-9_.]+$/.test(name);
 };
@@ -158,6 +161,20 @@ export const sanitizeProjectHandle = (name: string, { trimTrailing = true } = {}
         result = result.replace(/-+$/, "");
     }
     return result;
+};
+
+/**
+ * Sanitizes a string into a valid org handle.
+ * Rules: lowercase alphanumeric only (no hyphens, underscores, or spaces);
+ * cannot start with a digit; max 29 characters.
+ */
+export const sanitizeOrgHandle = (name: string): string => {
+    const stripped = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")          // keep only lowercase letters and digits
+        .replace(/^[0-9]+/, "")             // strip leading digits
+        .slice(0, ORG_HANDLE_MAX_LENGTH);
+    return stripped;
 };
 
 /**
