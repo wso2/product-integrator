@@ -18,8 +18,8 @@
 
 import { AddProjectFormData } from "./types";
 
-/** Max length for an org handle — must be less than 30 characters. */
-const ORG_HANDLE_MAX_LENGTH = 29;
+/** Max length for an org name — must be less than 30 characters. */
+const ORG_NAME_MAX_LENGTH = 30;
 
 export const isValidPackageName = (name: string): boolean => {
     return /^[a-z0-9_.]+$/.test(name);
@@ -172,8 +172,7 @@ export const sanitizeOrgHandle = (name: string): string => {
     const stripped = name
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "")          // keep only lowercase letters and digits
-        .replace(/^[0-9]+/, "")             // strip leading digits
-        .slice(0, ORG_HANDLE_MAX_LENGTH);
+        .replace(/^[0-9]+/, "");            // strip leading digits
     return stripped;
 };
 
@@ -239,6 +238,9 @@ export const validateOrgName = (orgName: string): string | null => {
         }
         if (/_[^a-zA-Z0-9]/.test(orgName)) {
             return "Underscore must be followed by at least one letter or digit";
+        }
+        if (orgName.length > ORG_NAME_MAX_LENGTH) {
+            return `Organization name cannot exceed ${ORG_NAME_MAX_LENGTH} characters`;
         }
         return "Organization name can only contain letters (a-z, A-Z), digits (0-9), and underscores";
     }
