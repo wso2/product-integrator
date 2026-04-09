@@ -105,16 +105,17 @@ export const validateComponentName = (name: string): string | null => {
     if (!name || name.length === 0) {
         return `Name is required`;
     }
-    if (!/^[a-zA-Z]/.test(name)) {
+    const trimmed = name.trim();
+    if (!/^[a-zA-Z]/.test(trimmed)) {
         return `Name must start with an alphabetic letter`;
     }
-    if (!/^[a-zA-Z0-9 _-]+$/.test(name)) {
+    if (!/^[a-zA-Z0-9 _-]+$/.test(trimmed)) {
         return `Name cannot contain special characters`;
     }
-    if (name.length < 3) {
+    if (trimmed.length < 3) {
         return `Name must be least 3 characters`;
     }
-    if (name.length > COMPONENT_NAME_MAX_LENGTH) {
+    if (trimmed.length > COMPONENT_NAME_MAX_LENGTH) {
         return `Name cannot exceed ${COMPONENT_NAME_MAX_LENGTH} characters`;
     }
     return null;

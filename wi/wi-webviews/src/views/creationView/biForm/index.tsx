@@ -185,7 +185,7 @@ export function BIProjectForm() {
             }
 
             await wsClient.createBIProject({
-                projectName: formData.integrationName,
+                projectName: formData.integrationName.trim(),
                 packageName: formData.packageName,
                 projectPath: formData.path,
                 createDirectory: true,

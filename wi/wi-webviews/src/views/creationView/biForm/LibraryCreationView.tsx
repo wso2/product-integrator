@@ -367,7 +367,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             }
 
             await wsClient.createBIProject({
-                projectName: formData.libraryName,
+                projectName: formData.libraryName.trim(),
                 packageName: formData.packageName,
                 projectPath: formData.path,
                 createDirectory: true,
