@@ -72,8 +72,8 @@ import { StateMachine } from "../../stateMachine";
 import { ext } from "../../extensionVariables";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
 const platform = getPlatform();
-const MI_SAMPLES_INFO_URL = 'https://mi-connectors.wso2.com/samples/info.json';
-const BI_SAMPLES_INFO_URL = 'https://devant-cdn.wso2.com/bi-samples/v1/info.json';
+const MI_SAMPLES_INFO_URL = process.env.MI_SAMPLES_INFO_URL;
+const BI_SAMPLES_INFO_URL = process.env.BI_SAMPLES_INFO_URL;
 const BI_SAMPLES_REPOSITORY_URL = process.env.BI_SAMPLES_REPOSITORY_URL;
 const BI_SAMPLES_REPOSITORY_BRANCH = 'main';
 const BI_SAMPLES_REPOSITORY_SUBDIRECTORY = '/ballerina-integrator';
@@ -94,6 +94,8 @@ export class MainWsManager implements WIVisualizerAPI {
                 env: {
                     MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
                     BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
+                    MI_SAMPLES_INFO_URL: process.env.MI_SAMPLES_INFO_URL || '',
+                    BI_SAMPLES_INFO_URL: process.env.BI_SAMPLES_INFO_URL || '',
                     BI_SAMPLES_REPOSITORY_URL: process.env.BI_SAMPLES_REPOSITORY_URL || '',
                     BI_PREBUILT_INTEGRATIONS_URL: process.env.BI_PREBUILT_INTEGRATIONS_URL || ''
                 }

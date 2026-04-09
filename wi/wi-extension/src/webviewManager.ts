@@ -111,19 +111,21 @@ export class WebviewManager {
 		// Subscribe to state machine changes
 		this.stateSubscription = StateMachine.subscribe(() => {
 			const context = StateMachine.getContext();
-				BridgeLayer.notifyStateChanged(this.projectUri, {
-					currentView: context.currentView,
-					projectUri: this.projectUri,
-					platform: getPlatform(),
-					pathSeparator: path.sep,
-					env: {
-						MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
-						BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
-						BI_SAMPLES_REPOSITORY_URL: process.env.BI_SAMPLES_REPOSITORY_URL || '',
-						BI_PREBUILT_INTEGRATIONS_URL: process.env.BI_PREBUILT_INTEGRATIONS_URL || '',
-					},
-				});
+			BridgeLayer.notifyStateChanged(this.projectUri, {
+				currentView: context.currentView,
+				projectUri: this.projectUri,
+				platform: getPlatform(),
+				pathSeparator: path.sep,
+				env: {
+					MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
+					BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
+					MI_SAMPLES_INFO_URL: process.env.MI_SAMPLES_INFO_URL || '',
+					BI_SAMPLES_INFO_URL: process.env.BI_SAMPLES_INFO_URL || '',
+					BI_SAMPLES_REPOSITORY_URL: process.env.BI_SAMPLES_REPOSITORY_URL || '',
+					BI_PREBUILT_INTEGRATIONS_URL: process.env.BI_PREBUILT_INTEGRATIONS_URL || '',
+				},
 			});
+		});
 	}
 
 	/**
