@@ -13,3 +13,4 @@ disableVsixChecksumCheck.diff
 disableWorkspaceTrust.diff
 disableThirdPartyExtNotifications.diff
 injectEnvs.diff
+integratorMenus.diff
