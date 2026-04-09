@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { commands, window as w } from "vscode";
+import { commands, ConfigurationTarget, window as w, workspace } from "vscode";
 import { ResponseError } from "vscode-jsonrpc";
 import { ext } from "../../extensionVariables";
 import { webviewStateStore } from "../stores/webview-state-store";
@@ -42,6 +42,7 @@ export enum ErrorCode {
 	InvalidSubPath = -32012,
 	NoOrgsAvailable = -32013,
 	NoAccountAvailable = -32014,
+	KeyringAccessError = -32015,
 }
 
 export function handlerError(err: any) {
@@ -156,6 +157,18 @@ export function handlerError(err: any) {
 				).then((res) => {
 					if (res === `Open ${extensionName} Console`) {
 						commands.executeCommand("vscode.open", extensionName === "Devant" ? ext.config?.devantConsoleUrl : ext.config?.choreoConsoleUrl);
+					}
+				});
+				break;
+			case ErrorCode.KeyringAccessError:
+				w.showErrorMessage(
+					`Failed to access system keyring for storing authentication tokens. Please retry signing in after skipping keyring usage and reloading window`,
+					`Skip keyring usage`,
+				).then((res) => {
+					if (res === `Skip keyring usage`) {
+						workspace.getConfiguration().update("integrator.advanced.skipKeyring", true, ConfigurationTarget.Workspace).then(() => {
+							commands.executeCommand("workbench.action.reloadWindow");
+						});
 					}
 				});
 				break;
