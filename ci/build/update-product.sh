@@ -129,6 +129,10 @@ fi)
         "version": "3.1.526032514"
       },
       {
+        "name": "wso2.streaming-integrator",
+        "version": "0.1.1"
+      },
+      {
         "name": "wso2.wso2-integrator",
         "vsix": "../../wi/wi-extension/wso2-integrator-${WI_EXTENSION_VERSION}.vsix",
         "version": "${WI_EXTENSION_VERSION}"
