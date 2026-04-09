@@ -102,7 +102,7 @@ cat > lib/vscode/product.json <<EOF
       },
       {
         "name": "wso2.hurl-client",
-        "version": "latest"
+        "version": "0.9.3"
       },
       {
         "name": "wso2.mcp-server-inspector",
