@@ -335,6 +335,18 @@
         "title": "Add Custom Connector",
         "icon": "$(add)",
         "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-workflow",
+        "title": "Add Workflow",
+        "icon": "$(add)",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-workflow-activity",
+        "title": "Add Workflow Activity",
+        "icon": "$(add)",
+        "category": "WSO2 Integrator"
       }
     ],
     "menus": {
@@ -397,6 +409,14 @@
         },
         {
           "command": "BI.project-explorer.add-custom-connector",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-workflow",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-workflow-activity",
           "when": "false"
         }
       ],
