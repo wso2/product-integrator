@@ -54,6 +54,9 @@ jobs:
           elif [ "${{ inputs.ballerina_extension_source }}" = "github" ] && [ -z "${{ inputs.ballerina_extension_version }}" ]; then
             echo "Error: ballerina_extension_version must not be empty when ballerina_extension_source is set to github."
             exit 1
+          elif [ -n "${{ inputs.ballerina_extension_version }}" ] && [[ "${{ inputs.ballerina_extension_version }}" =~ ^[vV] ]]; then
+            echo "Error: ballerina_extension_version must be provided without a leading v. Example: 4.5.0"
+            exit 1
           else
             echo "All required version inputs are provided."
           fi
@@ -71,13 +74,19 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Validate GitHub VSIX input contract
-        if: ${{ inputs.ballerina_extension_source == 'github' && inputs.ballerina_extension_version == '' }}
+      - name: Validate Ballerina extension input contract
         shell: bash
         working-directory: .
         run: |
-          echo "Error: ballerina_extension_version is required when ballerina_extension_source=github."
-          exit 1
+          if [ "${{ inputs.ballerina_extension_source }}" = "github" ] && [ -z "${{ inputs.ballerina_extension_version }}" ]; then
+            echo "Error: ballerina_extension_version is required when ballerina_extension_source=github."
+            exit 1
+          fi
+
+          if [[ -n "${{ inputs.ballerina_extension_version }}" && "${{ inputs.ballerina_extension_version }}" =~ ^[vV] ]]; then
+            echo "Error: ballerina_extension_version must be provided without a leading v. Example: 4.5.0"
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
