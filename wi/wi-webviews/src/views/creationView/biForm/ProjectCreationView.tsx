@@ -89,7 +89,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const resolvedOrg = useMemo(() => {
         if (!organizations || organizations.length === 0) return undefined;
         return formData.orgName
-            ? (organizations.find(o => o.name === formData.orgName) ?? organizations[0])
+            ? (organizations.find(o => o.handle === formData.orgName) ?? organizations[0])
             : organizations[0];
     }, [organizations, formData.orgName]);
 

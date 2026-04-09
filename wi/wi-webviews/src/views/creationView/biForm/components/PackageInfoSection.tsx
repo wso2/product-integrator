@@ -78,11 +78,12 @@ export function PackageInfoSection({
     packageNameError,
     projectHandleError,
     organizations,
-    hasError,
+    hasError
 }: PackageInfoSectionProps) {
     const { isSigningIn, handleSignIn, handleCancelSignIn } = useSignIn();
 
     const hasOrgs = organizations && organizations.length > 0;
+    const createWithinProject = data.projectHandle !== undefined;
 
     return (
         <CollapsibleSection
@@ -92,24 +93,75 @@ export function PackageInfoSection({
             title="Advanced Configurations"
             hasError={hasError}
         >
-            {data.projectHandle !== undefined && (
+            {createWithinProject && (
                 <>
                     <SubSectionLabel>Project</SubSectionLabel>
-                        <FieldGroup>
-                            <TextField
-                                onTextChange={(value) => onChange({ projectHandle: sanitizeProjectHandle(value, { trimTrailing: false }) })}
-                                value={data.projectHandle}
-                                label="Project ID"
-                                errorMsg={projectHandleError || undefined}
-                            />
-                            <Description>Unique identifier for your project in various contexts. Cannot be changed after creation.</Description>
-                        </FieldGroup>
+                    <FieldGroup>
+                    {hasOrgs ? (
+                            <>
+                                <Dropdown
+                                    id="org-name-dropdown"
+                                    label="Organization Name"
+                                    items={organizations.map((org) => ({ value: org.handle, content: org.name }))}
+                                    value={data.orgName}
+                                    onValueChange={(value: string) => onChange({ orgName: value })}
+                                />
+                                <Description>The organization that owns this project.</Description>
+                            </>
+                        ) : (
+                            <>
+                                <TextField
+                                    onTextChange={(value) => onChange({ orgName: value })}
+                                    value={data.orgName}
+                                    label="Organization Name"
+                                    errorMsg={orgNameError || undefined}
+                                />
+                                <SignInHint>
+                                    <Codicon
+                                        name="account"
+                                        iconSx={{ color: "var(--vscode-descriptionForeground)" }}
+                                        sx={{ display: "flex" }}
+                                    />
+                                    <span>Sign in to pick from your organizations —</span>
+                                    <SignInHintButton type="button" onClick={isSigningIn ? handleCancelSignIn : handleSignIn}>
+                                        {isSigningIn ? (
+                                            <>
+                                                <Codicon
+                                                    name="loading"
+                                                    iconSx={{ fontSize: "11px", animation: "codicon-spin 1.5s steps(30) infinite" }}
+                                                />
+                                                Signing in...
+                                                <Codicon
+                                                    name="close"
+                                                    iconSx={{ fontSize: "10px" }}
+                                                />
+                                            </>
+                                        ) : (
+                                            "Sign In"
+                                        )}
+                                    </SignInHintButton>
+                                </SignInHint>
+                            </>
+                        )
+                    }
+                </FieldGroup>
+                    <FieldGroup>
+                        <TextField
+                            onTextChange={(value) => onChange({ projectHandle: sanitizeProjectHandle(value, { trimTrailing: false }) })}
+                            value={data.projectHandle}
+                            label="Project ID"
+                            errorMsg={projectHandleError || undefined}
+                        />
+                        <Description>Unique identifier for your project in various contexts. Cannot be changed after creation.</Description>
+                    </FieldGroup>
                     <SubSectionDivider />
                 </>
             )}
             <SubSectionLabel>Ballerina Package</SubSectionLabel>
             <Note style={{ marginBottom: "16px" }}>
-                {`This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Specify the organization, package name and version to be assigned.`}
+                {createWithinProject
+                    ? `This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Specify the package name and version to be assigned.`
+                    : `This ${isLibrary ? "library" : "integration"} is generated as a Ballerina package. Specify the organization, package name and version to be assigned.`}
             </Note>
             <FieldGroup>
                 <TextField
@@ -120,54 +172,56 @@ export function PackageInfoSection({
                 />
                 <Description>Specify the package name.</Description>
             </FieldGroup>
-            <FieldGroup>
-                {hasOrgs ? (
-                    <>
-                        <Dropdown
-                            id="org-name-dropdown"
-                            label="Organization Name"
-                            items={organizations.map((org) => ({ value: org.handle, content: org.name }))}
-                            value={data.orgName}
-                            onValueChange={(value: string) => onChange({ orgName: value })}
-                        />
-                        <Description>The organization that owns this package.</Description>
-                    </>
-                ) : (
-                    <>
-                        <TextField
-                            onTextChange={(value) => onChange({ orgName: value })}
-                            value={data.orgName}
-                            label="Organization Name"
-                            errorMsg={orgNameError || undefined}
-                        />
-                        <SignInHint>
-                            <Codicon
-                                name="account"
-                                iconSx={{ color: "var(--vscode-descriptionForeground)" }}
-                                sx={{ display: "flex" }}
+            {!createWithinProject && (
+                <FieldGroup>
+                    {hasOrgs ? (
+                        <>
+                            <Dropdown
+                                id="org-name-dropdown"
+                                label="Organization Name"
+                                items={organizations.map((org) => ({ value: org.handle, content: org.name }))}
+                                value={data.orgName}
+                                onValueChange={(value: string) => onChange({ orgName: value })}
                             />
-                            <span>Sign in to pick from your organizations —</span>
-                            <SignInHintButton type="button" onClick={isSigningIn ? handleCancelSignIn : handleSignIn}>
-                                {isSigningIn ? (
-                                    <>
-                                        <Codicon
-                                            name="loading"
-                                            iconSx={{ fontSize: "11px", animation: "codicon-spin 1.5s steps(30) infinite" }}
-                                        />
-                                        Signing in...
-                                        <Codicon
-                                            name="close"
-                                            iconSx={{ fontSize: "10px" }}
-                                        />
-                                    </>
-                                ) : (
-                                    "Sign In"
-                                )}
-                            </SignInHintButton>
-                        </SignInHint>
-                    </>
-                )}
-            </FieldGroup>
+                            <Description>The organization that owns this package.</Description>
+                        </>
+                    ) : (
+                        <>
+                            <TextField
+                                onTextChange={(value) => onChange({ orgName: value })}
+                                value={data.orgName}
+                                label="Organization Name"
+                                errorMsg={orgNameError || undefined}
+                            />
+                            <SignInHint>
+                                <Codicon
+                                    name="account"
+                                    iconSx={{ color: "var(--vscode-descriptionForeground)" }}
+                                    sx={{ display: "flex" }}
+                                />
+                                <span>Sign in to pick from your organizations —</span>
+                                <SignInHintButton type="button" onClick={isSigningIn ? handleCancelSignIn : handleSignIn}>
+                                    {isSigningIn ? (
+                                        <>
+                                            <Codicon
+                                                name="loading"
+                                                iconSx={{ fontSize: "11px", animation: "codicon-spin 1.5s steps(30) infinite" }}
+                                            />
+                                            Signing in...
+                                            <Codicon
+                                                name="close"
+                                                iconSx={{ fontSize: "10px" }}
+                                            />
+                                        </>
+                                    ) : (
+                                        "Sign In"
+                                    )}
+                                </SignInHintButton>
+                            </SignInHint>
+                        </>
+                    )}
+                </FieldGroup>
+            )}
             <FieldGroup>
                 <TextField
                     onTextChange={(value) => onChange({ version: value })}
