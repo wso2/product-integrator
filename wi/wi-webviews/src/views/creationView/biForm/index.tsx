@@ -191,7 +191,7 @@ export function BIProjectForm() {
                 createAsWorkspace: formData.createWithinProject,
                 workspaceName: formData.createWithinProject ? formData.withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
-                orgHandle: resolvedOrg?.handle || formData.orgName,
+                orgHandle: organizations?.find(o => o.handle === formData.orgName)?.handle || formData.orgName,
                 version: formData.version || undefined,
                 projectHandle: formData.createWithinProject ? formData.projectHandle : undefined,
             });

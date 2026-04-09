@@ -17,7 +17,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Button, Codicon, Dropdown, Icon, TextField } from "@wso2/ui-toolkit";
+import { Button, Icon, TextField } from "@wso2/ui-toolkit";
 import { useVisualizerContext } from "../../../contexts";
 import { useCloudContext, useCloudProjects } from "../../../providers";
 import { useSignIn } from "../../../hooks/useSignIn";
@@ -31,7 +31,7 @@ import {
     suggestAvailableProjectName
 } from "./utils";
 import { WICommandIds } from "@wso2/wso2-platform-core";
-import { CollapsibleSection } from "./components";
+import { CollapsibleSection, OrgField, Organization } from "./components";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -53,8 +53,6 @@ import {
     ActionLink,
     Description,
     FieldGroup,
-    SignInHint,
-    SignInHintButton
 } from "../biForm/styles";
 import { DEFAULT_PROJECT_NAME } from "./types";
 
@@ -62,7 +60,7 @@ import { DEFAULT_PROJECT_NAME } from "./types";
 export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
     const { wsClient } = useVisualizerContext();
     const { authState } = useCloudContext();
-    const organizations = authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined;
+    const organizations = authState?.userInfo?.organizations as Organization[] | undefined;
     const firstFieldRef = useRef<HTMLInputElement>(null);
     const handleTouched = useRef(false);
     const projectNameTouchedRef = useRef(false);
@@ -97,8 +95,6 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
         resolvedOrg?.id?.toString(),
         resolvedOrg?.handle
     );
-
-    const hasOrgs = !!organizations && organizations.length > 0;
 
     useEffect(() => {
         let mounted = true;
@@ -204,7 +200,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
             setCloudProjectNameError(null);
             setMatchedCloudProject(null);
         }
-    }, [cloudProjectsData, formData.projectName]);
+    }, [cloudProjectsData, formData.projectName, resolvedOrg]);
 
     const resolvedPath = joinPath(formData.path || defaultPath, projectHandle);
 
@@ -291,7 +287,7 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                 createDirectory: true,
                 createAsWorkspace: true,
                 orgName: formData.orgName || undefined,
-                orgHandle: resolvedOrg?.handle || formData.orgName,
+                orgHandle: organizations?.find(o => o.handle === formData.orgName)?.handle || formData.orgName,
                 version: formData.version || undefined,
                 projectHandle: projectHandle,
             });
@@ -340,18 +336,16 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                     required={true}
                                     errorMsg={projectNameError || cloudProjectNameError || ""}
                                 />
-                                {cloudProjectNameError && (
+                                {cloudProjectNameError && matchedCloudProject && (
                                     <CloudErrorActionRow>
-                                        {matchedCloudProject && (
-                                            <ActionLink type="button" onClick={() =>
-                                                wsClient.runCommand({
-                                                    command: WICommandIds.CloneProject,
-                                                    args: [{ organization: matchedCloudProject.org, project: matchedCloudProject.project, integrationOnly: true }],
-                                                })
-                                            }>
-                                                Open existing project
-                                            </ActionLink>
-                                        )}
+                                        <ActionLink type="button" onClick={() =>
+                                            wsClient.runCommand({
+                                                command: WICommandIds.CloneProject,
+                                                args: [{ organization: matchedCloudProject.org, project: matchedCloudProject.project, integrationOnly: true }],
+                                            })
+                                        }>
+                                            Open existing project
+                                        </ActionLink>
                                     </CloudErrorActionRow>
                                 )}
                             </FieldGroup>
@@ -383,58 +377,19 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                                 hasError={!!(orgNameError || projectHandleError || cloudProjectHandleError)}
                             >
                                 <FieldGroup>
-                                    {hasOrgs ? (
-                                        <>
-                                            <Dropdown
-                                                id="org-name-dropdown"
-                                                label="Organization Name"
-                                                items={organizations!.map((org) => ({ value: org.handle, content: org.name }))}
-                                                value={formData.orgName}
-                                                onValueChange={(value: string) => {
-                                                    if (orgNameError) setOrgNameError(null);
-                                                    setFormData(prev => ({ ...prev, orgName: value }));
-                                                }}
-                                            />
-                                            <Description>The organization that owns this project.</Description>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <TextField
-                                                onTextChange={(value) => {
-                                                    if (orgNameError) setOrgNameError(null);
-                                                    setFormData(prev => ({ ...prev, orgName: value }));
-                                                }}
-                                                value={formData.orgName}
-                                                label="Organization Name"
-                                                errorMsg={orgNameError || undefined}
-                                            />
-                                            <SignInHint>
-                                                <Codicon
-                                                    name="account"
-                                                    iconSx={{ color: "var(--vscode-descriptionForeground)" }}
-                                                    sx={{ display: "flex" }}
-                                                />
-                                                <span>Sign in to pick from your organizations —</span>
-                                                <SignInHintButton type="button" onClick={isSigningIn ? handleCancelSignIn : handleSignIn}>
-                                                    {isSigningIn ? (
-                                                        <>
-                                                            <Codicon
-                                                                name="loading"
-                                                                iconSx={{ fontSize: "11px", animation: "codicon-spin 1.5s steps(30) infinite" }}
-                                                            />
-                                                            Signing in...
-                                                            <Codicon
-                                                                name="close"
-                                                                iconSx={{ fontSize: "10px" }}
-                                                            />
-                                                        </>
-                                                    ) : (
-                                                        "Sign In"
-                                                    )}
-                                                </SignInHintButton>
-                                            </SignInHint>
-                                        </>
-                                    )}
+                                    <OrgField
+                                        organizations={organizations}
+                                        orgName={formData.orgName}
+                                        orgNameError={orgNameError}
+                                        description="The organization that owns this project."
+                                        isSigningIn={isSigningIn}
+                                        onOrgChange={(value) => {
+                                            if (orgNameError) setOrgNameError(null);
+                                            setFormData(prev => ({ ...prev, orgName: value }));
+                                        }}
+                                        onSignIn={handleSignIn}
+                                        onCancelSignIn={handleCancelSignIn}
+                                    />
                                 </FieldGroup>
                                 <FieldGroup>
                                     <TextField

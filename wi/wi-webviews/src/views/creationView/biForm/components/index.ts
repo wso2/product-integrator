@@ -19,5 +19,10 @@
 export { CollapsibleSection } from "./CollapsibleSection";
 export type { CollapsibleSectionProps } from "./CollapsibleSection";
 
-export { AdvancedConfigurationSection } from "./AdvancedConfigurationSection";
-export type { AdvancedConfigurationSectionProps, ConfigurationData } from "./AdvancedConfigurationSection";
+export { AdvancedConfigurationSection, OrgField } from "./AdvancedConfigurationSection";
+export type {
+    AdvancedConfigurationSectionProps,
+    ConfigurationData,
+    OrgFieldProps,
+    Organization
+} from "./AdvancedConfigurationSection";

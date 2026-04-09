@@ -373,7 +373,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 createAsWorkspace: createWithinProject,
                 workspaceName: createWithinProject ? withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
-                orgHandle: resolvedOrg?.handle || formData.orgName,
+                orgHandle: organizations?.find(o => o.handle === formData.orgName)?.handle || formData.orgName,
                 version: formData.version || undefined,
                 isLibrary: true,
                 projectHandle: createWithinProject ? withinProjectHandle : undefined,
