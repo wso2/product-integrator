@@ -24,7 +24,7 @@ import { useCloudContext, useCloudProjects, useProjectModeSupported, useWorkspac
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath, sanitizeProjectHandle, validateProjectHandle, validateProjectName, suggestAvailableProjectName } from "./utils";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
-import { PackageInfoSection } from "./components";
+import { AdvancedConfigurationSection } from "./components";
 import { SectionDivider, Description, ResolvedPathText, ProjectSectionContainer, ProjectSectionLabel, ProjectFieldCollapse, SkipOptionRow, CloudErrorActionRow, ActionLink } from "./styles";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
@@ -489,7 +489,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
                             <SectionDivider />
 
-                            <PackageInfoSection
+                            <AdvancedConfigurationSection
                                 isExpanded={isPackageInfoExpanded}
                                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
                                 data={{
