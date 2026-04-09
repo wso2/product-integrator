@@ -30,6 +30,10 @@ export const BI_COMMANDS = {
     REFRESH_COMMAND: 'BI.project-explorer.refresh',
     PROJECT_EXPLORER: 'BI.project-explorer',
     SHOW_OVERVIEW: 'BI.project-explorer.overview',
+    ADD_DATA_MAPPER: 'BI.project-explorer.add-data-mapper',
+    ADD_NATURAL_FUNCTION: 'BI.project-explorer.add-natural-function',
+    ADD_WORKFLOW: 'BI.project-explorer.add-workflow',
+    ADD_WORKFLOW_ACTIVITY: 'BI.project-explorer.add-workflow-activity',
     NOTIFY_PROJECT_EXPLORER: 'BI.project-explorer.notify',
 };
 
