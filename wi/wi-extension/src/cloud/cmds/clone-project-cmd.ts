@@ -103,11 +103,6 @@ export function cloneRepoCommand(context: ExtensionContext) {
 						);
 					}
 
-					// clone single or multiple repos
-					if (components.length === 0) {
-						throw new Error(`No ${ext.terminologies?.componentTermPlural} found within ${selectedProject.name}.`);
-					}
-
 					const repoSet = new Set<string>();
 					for (const component of components) {
 						const repo = getComponentKindRepoSource(component.spec.source).repo;

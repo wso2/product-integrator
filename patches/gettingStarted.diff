@@ -1502,7 +1502,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		formTitle.textContent = 'Get Started';
 +
 +		const formSubtitle = append(formContainer, $('p.form-subtitle'));
-+		formSubtitle.textContent = 'Sign in to access AI features and for seamless deployment to Devant';
++		formSubtitle.textContent = 'Sign in to access AI features and for seamless deployment to WSO2 Cloud';
 +
 +		// Loader container (shown initially while checking login status)
 +		const loaderContainer = append(formContainer, $('.loader-container'));

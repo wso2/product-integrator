@@ -48,8 +48,6 @@ export const BI_COMMANDS = {
     SHOW_OVERVIEW: 'BI.project-explorer.overview',
     ADD_DATA_MAPPER: 'BI.project-explorer.add-data-mapper',
     ADD_NATURAL_FUNCTION: 'BI.project-explorer.add-natural-function',
-    ADD_WORKFLOW: 'BI.project-explorer.add-workflow',
-    ADD_WORKFLOW_ACTIVITY: 'BI.project-explorer.add-workflow-activity',
     NOTIFY_PROJECT_EXPLORER: 'BI.project-explorer.notify',
 };
 
@@ -71,8 +69,6 @@ export enum DIRECTORY_MAP {
     CONNECTOR = 'CONNECTOR',
     RESOURCE = 'RESOURCE',
     REMOTE = 'REMOTE',
-    WORKFLOW = 'WORKFLOW',
-    ACTIVITY = 'ACTIVITY',
 }
 
 export enum MACHINE_VIEW {

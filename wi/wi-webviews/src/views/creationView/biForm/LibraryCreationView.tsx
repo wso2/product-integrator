@@ -23,6 +23,7 @@ import { useVisualizerContext } from "../../../contexts";
 import { useCloudContext, useCloudProjects, useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
 import {
     sanitizePackageName,
+    validateComponentName,
     validatePackageName,
     validateOrgName,
     joinPath,
@@ -293,8 +294,9 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
         let hasError = false;
 
-        if (formData.libraryName.length < 2) {
-            setLibraryNameError("Library name must be at least 2 characters");
+        const libraryNameErr = validateComponentName(formData.libraryName);
+        if (libraryNameErr) {
+            setLibraryNameError(libraryNameErr);
             hasError = true;
         }
 
@@ -379,7 +381,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 sanitizeOrgHandle(formData.orgName)
 
             await wsClient.createBIProject({
-                projectName: formData.libraryName,
+                projectName: formData.libraryName.trim(),
                 packageName: formData.packageName,
                 projectPath: formData.path,
                 createDirectory: true,
