@@ -166,6 +166,21 @@ APP_NAME="WSO2 Integrator"
 DMG_NAME="wso2-integrator-$VERSION-$ARCH.dmg"
 DMG_STAGING="$WORK_DIR/dmg_staging"
 
+# Fix #4: include $ARCH in temp filename to avoid collisions across architectures
+TEMP_DMG="$WORK_DIR/tmp_rw_$VERSION-$ARCH.dmg"
+
+# Fix #3: cleanup trap — detach mounted image and remove temp artifacts on any exit
+DMG_MOUNT_DIR=""
+dmg_cleanup() {
+    if [ -n "$DMG_MOUNT_DIR" ] && hdiutil info | grep -q "$DMG_MOUNT_DIR"; then
+        print_warning "Trap: detaching leftover DMG mount at $DMG_MOUNT_DIR"
+        hdiutil detach "$DMG_MOUNT_DIR" -force -quiet 2>/dev/null || true
+    fi
+    rm -f "$TEMP_DMG"
+    rm -rf "$DMG_STAGING"
+}
+trap dmg_cleanup EXIT
+
 print_info "Preparing DMG staging directory"
 rm -rf "$DMG_STAGING"
 mkdir -p "$DMG_STAGING"
@@ -173,8 +188,10 @@ mkdir -p "$DMG_STAGING"
 # The .app is still fully assembled in WSO2_TARGET — reuse it directly
 cp -r "$WSO2_TARGET/$APP_NAME.app" "$DMG_STAGING/"
 
+# Fix #5: remove any leftover temp DMG before creation to avoid "File exists" error
+rm -f "$TEMP_DMG"
+
 print_info "Creating temporary writable DMG (auto-sized)"
-TEMP_DMG="$WORK_DIR/tmp_rw_$VERSION.dmg"
 hdiutil create \
     -srcfolder "$DMG_STAGING" \
     -volname "$APP_NAME" \
@@ -184,22 +201,34 @@ hdiutil create \
     "$TEMP_DMG"
 
 print_info "Mounting temporary DMG for customisation"
-MOUNT_DIR="/Volumes/$APP_NAME"
-# Detach any leftover mount from a previous run
-if hdiutil info | grep -q "$MOUNT_DIR"; then
-    print_warning "Leftover mount detected at $MOUNT_DIR, detaching..."
-    hdiutil detach "$MOUNT_DIR" -force -quiet 2>/dev/null || true
-    sleep 2
-fi
-hdiutil attach "$TEMP_DMG" -quiet
-sleep 5
+# Fix #1: capture actual mountpoint from hdiutil attach output via -plist
+# Note: -quiet suppresses plist output, so redirect stderr instead
+ATTACH_PLIST=$(hdiutil attach "$TEMP_DMG" -plist 2>/dev/null)
+DMG_MOUNT_DIR=$(echo "$ATTACH_PLIST" | python3 -c "
+import sys, plistlib
+pl = plistlib.loads(sys.stdin.buffer.read())
+for e in pl.get('system-entities', []):
+    mp = e.get('mount-point', '')
+    if mp.startswith('/Volumes/'):
+        print(mp)
+        break
+")
 
-print_info "Configuring DMG window layout"
-osascript <<APPLESCRIPT
+if [ -z "$DMG_MOUNT_DIR" ]; then
+    print_error "Failed to determine DMG mount point"
+    exit 1
+fi
+print_info "DMG mounted at: $DMG_MOUNT_DIR"
+sleep 3
+
+# Fix #2: create a POSIX symlink as fallback (works in CI without Finder)
+ln -sf /Applications "$DMG_MOUNT_DIR/Applications"
+
+# Fix #2: attempt Finder window layout but treat it as best-effort (non-fatal)
+print_info "Configuring DMG window layout (best-effort)"
+osascript <<APPLESCRIPT 2>/dev/null || print_warning "Finder AppleScript layout skipped (restricted environment)"
 tell application "Finder"
-    set dmgDisk to disk "$APP_NAME"
-    set appsAlias to make new alias file at dmgDisk to folder "Applications" of startup disk
-    set name of appsAlias to "Applications"
+    set dmgDisk to disk "$(basename "$DMG_MOUNT_DIR")"
     tell dmgDisk
         open
         set current view of container window to icon view
@@ -222,7 +251,8 @@ APPLESCRIPT
 print_info "Finalising DMG"
 sync
 sleep 3
-hdiutil detach "$MOUNT_DIR" -force -quiet
+hdiutil detach "$DMG_MOUNT_DIR" -force -quiet
+DMG_MOUNT_DIR=""  # Clear so trap doesn't attempt a second detach
 hdiutil convert "$TEMP_DMG" \
     -format UDZO \
     -imagekey zlib-level=9 \
@@ -236,8 +266,9 @@ else
     exit 1
 fi
 
-rm -f "$TEMP_DMG"
-rm -rf "$DMG_STAGING"
+# Temp files cleaned by the EXIT trap
+trap - EXIT
+dmg_cleanup
 
 # Cleanup
 rm -rf "${WSO2_TARGET:?}"/*
