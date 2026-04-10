@@ -465,9 +465,9 @@ export class MainWsManager implements WIVisualizerAPI {
             }
 
             await handleOpenBISamplesIntegrations(projectUri, {
-                repositoryUrl: BI_SAMPLES_REPOSITORY_URL,
-                branch: BI_SAMPLES_REPOSITORY_BRANCH,
-                subDirectory: BI_SAMPLES_REPOSITORY_SUBDIRECTORY,
+                repositoryUrl: params?.prebuiltIntegration?.repositoryUrl ?? BI_SAMPLES_REPOSITORY_URL,
+                branch: params?.prebuiltIntegration?.branch ?? BI_SAMPLES_REPOSITORY_BRANCH,
+                subDirectory: params?.prebuiltIntegration?.subDirectory ?? BI_SAMPLES_REPOSITORY_SUBDIRECTORY,
                 componentPath,
                 displayName,
                 sourceLabel: isPrebuilt ? "pre-built integration" : "integration sample",

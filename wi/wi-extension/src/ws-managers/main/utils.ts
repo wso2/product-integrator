@@ -197,11 +197,13 @@ export async function handleOpenBISamplesIntegrations(
             throw new Error('Failed to extract the pre-built integration archive.');
         }
 
+        const normalizedSubDirectory = trimSlashes(repositorySource.subDirectory);
         const sourcePath = path.join(
             archiveExtractPath,
             archiveRootDir,
-            trimSlashes(repositorySource.subDirectory),
-            componentPath,
+            componentPath.startsWith(normalizedSubDirectory)
+                ? componentPath
+                : path.join(normalizedSubDirectory, componentPath),
         );
 
         if (!fs.existsSync(sourcePath)) {
