@@ -33,8 +33,8 @@ import {
     CloudErrorActionRow,
     ActionLink,
 } from "./styles";
-import { PackageInfoSection } from "./components";
-import { Organization } from "./components/PackageInfoSection";
+import { AdvancedConfigurationSection } from "./components";
+import { Organization } from "./components/AdvancedConfigurationSection";
 import { sanitizePackageName, validatePackageName, validateOrgName, joinPath, sanitizeProjectHandle, validateProjectHandle, suggestAvailableProjectName } from "./utils";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { DEFAULT_PROJECT_NAME, ProjectFormData } from "./types";
@@ -419,8 +419,7 @@ export function ProjectFormFields({
 
             <SectionDivider />
 
-            {/* Ballerina Package Section */}
-            <PackageInfoSection
+            <AdvancedConfigurationSection
                 isExpanded={isPackageInfoExpanded}
                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
                 data={{

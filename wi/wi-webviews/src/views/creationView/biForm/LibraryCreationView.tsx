@@ -21,10 +21,21 @@ import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
 import { useCloudContext, useCloudProjects, useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
-import { sanitizePackageName, validateComponentName, validatePackageName, validateOrgName, joinPath, sanitizeProjectHandle, validateProjectHandle, validateProjectName, suggestAvailableProjectName } from "./utils";
+import {
+    sanitizePackageName,
+    validateComponentName,
+    validatePackageName,
+    validateOrgName,
+    joinPath,
+    sanitizeProjectHandle,
+    sanitizeOrgHandle,
+    validateProjectHandle,
+    validateProjectName,
+    suggestAvailableProjectName
+} from "./utils";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
-import { PackageInfoSection } from "./components";
+import { AdvancedConfigurationSection } from "./components";
 import { SectionDivider, Description, ResolvedPathText, ProjectSectionContainer, ProjectSectionLabel, ProjectFieldCollapse, SkipOptionRow, CloudErrorActionRow, ActionLink } from "./styles";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
@@ -93,7 +104,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
     const resolvedOrg = useMemo(() => {
         if (!organizations || organizations.length === 0) return undefined;
         return formData.orgName
-            ? (organizations.find(o => o.name === formData.orgName) ?? organizations[0])
+            ? (organizations.find(o => o.handle === formData.orgName) ?? organizations[0])
             : organizations[0];
     }, [organizations, formData.orgName]);
 
@@ -366,6 +377,9 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 return;
             }
 
+            const orgHandle = organizations?.find(o => o.handle === formData.orgName)?.handle ||
+                sanitizeOrgHandle(formData.orgName)
+
             await wsClient.createBIProject({
                 projectName: formData.libraryName.trim(),
                 packageName: formData.packageName,
@@ -374,7 +388,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                 createAsWorkspace: createWithinProject,
                 workspaceName: createWithinProject ? withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
-                orgHandle: resolvedOrg?.handle || formData.orgName,
+                orgHandle: orgHandle,
                 version: formData.version || undefined,
                 isLibrary: true,
                 projectHandle: createWithinProject ? withinProjectHandle : undefined,
@@ -490,7 +504,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
                             <SectionDivider />
 
-                            <PackageInfoSection
+                            <AdvancedConfigurationSection
                                 isExpanded={isPackageInfoExpanded}
                                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
                                 data={{
