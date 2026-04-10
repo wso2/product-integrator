@@ -22,7 +22,7 @@ import path from "path";
 import * as fs from 'fs';
 import * as unzipper from 'unzipper';
 import axios from "axios";
-import { DownloadProgress, Platform, PrebuiltIntegration, SemanticVersion, ValidateProjectFormErrorField } from "@wso2/wi-core";
+import { DownloadProgress, Platform, SemanticVersion, ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { BridgeLayer } from "../../BridgeLayer";
 
 interface ProgressMessage {
@@ -82,67 +82,7 @@ export async function askFileOrFolderPath() {
     });
 }
 
-export async function handleOpenFile(projectUri: string, sampleName: string, repoUrl: string) {
-    const rawFileLink = repoUrl + '/' + sampleName + '.zip';
-    const defaultDownloadsPath = path.join(os.homedir(), 'Downloads'); // Construct the default downloads path
-    const pathFromDialog = await selectFileDownloadPath();
-    if (pathFromDialog === "") {
-        return;
-    }
-    const selectedPath = pathFromDialog === "" ? defaultDownloadsPath : pathFromDialog;
-    const filePath = path.join(selectedPath, sampleName + '.zip');
-    let isSuccess = false;
-
-    if (fs.existsSync(filePath)) {
-        // already downloaded
-        isSuccess = true;
-    } else {
-        await window.withProgress({
-            location: ProgressLocation.Notification,
-            title: 'Downloading file',
-            cancellable: true
-        }, async (progress) => {
-            try {
-                await handleDownloadFile(projectUri, rawFileLink, filePath, progress);
-                console.log('Download completed');
-                isSuccess = true;
-                return;
-            } catch (error) {
-                window.showErrorMessage(`Error while downloading the file: ${error}`);
-            }
-        });
-    }
-
-    if (isSuccess) {
-        const successMsg = `The Integration sample file has been downloaded successfully to the following directory: ${filePath}.`;
-        const zipReadStream = fs.createReadStream(filePath);
-        const extractedProjectPath = path.join(selectedPath, sampleName);
-        if (fs.existsSync(extractedProjectPath)) {
-            // already extracted
-            await openDownloadedProject(extractedProjectPath, true);
-            return;
-        }
-        zipReadStream.pipe(unzipper.Parse()).on("entry", function (entry) {
-            var isDir = entry.type === "Directory";
-            var fullpath = path.join(selectedPath, entry.path);
-            var directory = isDir ? fullpath : path.dirname(fullpath);
-            if (!fs.existsSync(directory)) {
-                fs.mkdirSync(directory, { recursive: true });
-            }
-            if (!isDir) {
-                entry.pipe(fs.createWriteStream(fullpath));
-            }
-        }).on("close", async () => {
-            console.log("Extraction complete!");
-            await openDownloadedProject(extractedProjectPath);
-        });
-        window.showInformationMessage(
-            successMsg,
-        );
-    }
-}
-
-export async function handleOpenBISamplesIntegrations(
+export async function handleOpenSamples(
     projectUri: string,
     repositorySource: RepositoryArchiveSource,
 ) {
@@ -197,11 +137,18 @@ export async function handleOpenBISamplesIntegrations(
             throw new Error('Failed to extract the pre-built integration archive.');
         }
 
+        const trimmedSubDir = trimSlashes(repositorySource.subDirectory);
+        const trimmedComponentPath = componentPath.startsWith(trimmedSubDir + '/')
+            ? componentPath.slice(trimmedSubDir.length + 1)
+            : componentPath.startsWith(trimmedSubDir)
+                ? componentPath.slice(trimmedSubDir.length)
+                : componentPath;
+
         const sourcePath = path.join(
             archiveExtractPath,
             archiveRootDir,
-            trimSlashes(repositorySource.subDirectory),
-            componentPath,
+            trimmedSubDir,
+            trimmedComponentPath,
         );
 
         if (!fs.existsSync(sourcePath)) {

@@ -21,11 +21,11 @@ import { VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react";
 import { Button, Codicon, Dropdown, SearchBox } from "@wso2/ui-toolkit";
 import {
 	GettingStartedCategory,
-	GettingStartedSample,
-	PrebuiltIntegration,
+	SampleItem,
 	SampleDownloadRequest,
 } from "@wso2/wi-core";
 import { useEffect, useMemo, useState } from "react";
+import { getLocalSvg } from "../../assets/icons";
 import { useVisualizerContext } from "../../contexts/WsContext";
 import type { SampleSupportedRuntime } from "../shared/runtime";
 
@@ -39,15 +39,15 @@ interface BrowseItem {
 	itemType: BrowseItemType;
 	title: string;
 	description: string;
-	primaryCategory: string;
+	componentType: string;
 	categoryValues: string[];
 	imageUrl?: string;
 	connectorIconUrls?: string[];
 	fallbackArtwork?: string;
+	localIcon?: string;
 	searchText: string;
 	priority: number;
-	sample?: GettingStartedSample;
-	prebuiltIntegration?: PrebuiltIntegration;
+	prebuiltIntegration?: SampleItem;
 }
 
 const SamplesRoot = styled.div`
@@ -240,6 +240,7 @@ const CardHeader = styled.div`
     align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
+	min-height: 45px;
 `;
 
 const CardTitle = styled.h3`
@@ -402,6 +403,7 @@ type CategoryArtworkProps = {
 	iconUrls?: string[];
 	label: string;
 	fallbackText?: string;
+	localIcon?: string;
 };
 
 function CategoryArtwork({
@@ -409,6 +411,7 @@ function CategoryArtwork({
 	iconUrls,
 	label,
 	fallbackText,
+	localIcon,
 }: CategoryArtworkProps) {
 	const [loadError, setLoadError] = useState(false);
 	const [failedIconUrls, setFailedIconUrls] = useState<string[]>([]);
@@ -449,11 +452,19 @@ function CategoryArtwork({
 		);
 	}
 
+	if (localIcon && getLocalSvg(localIcon)) {
+		return (
+			<CategoryImage
+				src={getLocalSvg(localIcon)!}
+				alt={`${label} icon`}
+			/>
+		);
+	}
+
 	if (!imageUrl || loadError) {
 		if (fallbackText) {
 			return <ArtworkText>{fallbackText}</ArtworkText>;
-		}
-
+		}		
 		return (
 			<Codicon
 				name="symbol-class"
@@ -499,17 +510,9 @@ function normalizeConnectorName(value: string): string {
 	return value.replace(/[\s_-]+/g, "").toLowerCase();
 }
 
-function formatComponentType(componentType: string): string {
-	return componentType
-		.split(/[-_]/g)
-		.filter(Boolean)
-		.map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-		.join(" ");
-}
-
-function getPrebuiltCategoryValues(prebuiltIntegration: PrebuiltIntegration): string[] {
+function getPrebuiltCategoryValues(prebuiltIntegration: SampleItem): string[] {
 	const values = [
-		formatComponentType(prebuiltIntegration.componentType),
+		prebuiltIntegration.componentType,
 		...(prebuiltIntegration.tags ?? []).map((tag) =>
 			normalizeCategoryValue(tag),
 		),
@@ -518,22 +521,8 @@ function getPrebuiltCategoryValues(prebuiltIntegration: PrebuiltIntegration): st
 	return Array.from(new Set(values));
 }
 
-function getPrebuiltPrimaryCategory(
-	prebuiltIntegration: PrebuiltIntegration,
-): string {
-	const firstTag = (prebuiltIntegration.tags ?? [])
-		.map((tag) => normalizeCategoryValue(tag))
-		.find(Boolean);
-
-	return (
-		firstTag ||
-		formatComponentType(prebuiltIntegration.componentType) ||
-		"Pre-built Integration"
-	);
-}
-
 function getPrebuiltArtworkText(
-	prebuiltIntegration: PrebuiltIntegration,
+	prebuiltIntegration: SampleItem,
 ): string | undefined {
 	const applications = (prebuiltIntegration.applications ?? [])
 		.filter(Boolean)
@@ -542,7 +531,7 @@ function getPrebuiltArtworkText(
 }
 
 function getPrebuiltConnectorIconUrls(
-	prebuiltIntegration: PrebuiltIntegration,
+	prebuiltIntegration: SampleItem,
 ): string[] {
 	return (prebuiltIntegration.applications ?? [])
 		.map((application) => CONNECTOR_ICON_NAMES[normalizeConnectorName(application)])
@@ -551,13 +540,20 @@ function getPrebuiltConnectorIconUrls(
 		.map((iconName) => `${CONNECTOR_ICON_BASE_URL}/${iconName}.svg`);
 }
 
-function resolvePrebuiltImageUrl(
-	prebuiltIntegration: PrebuiltIntegration,
-): string | undefined {
-	const thumbnailPath = prebuiltIntegration.thumbnailPath?.trim();
-	return thumbnailPath && /^https?:\/\//.test(thumbnailPath)
-		? thumbnailPath
+function getImageUrl( thumbnailPath: string ): string | undefined {
+	const trimmedPath = thumbnailPath?.trim();
+	return trimmedPath && /^https?:\/\//.test(trimmedPath)
+		? trimmedPath
 		: undefined;
+}
+
+function getLocalIcon( thumbnailPath: string ): string | undefined {
+	const trimmedPath = thumbnailPath?.trim();
+	if (!trimmedPath || /^https?:\/\//.test(trimmedPath)) {
+		return undefined;
+	}
+	const filename = thumbnailPath.replace(/^\//, "");
+	return getLocalSvg(filename) !== undefined ? filename : undefined;
 }
 
 function compareBrowseItems(left: BrowseItem, right: BrowseItem): number {
@@ -574,43 +570,22 @@ function compareBrowseItems(left: BrowseItem, right: BrowseItem): number {
 	return left.title.localeCompare(right.title);
 }
 
-function createSampleItem(
-	sample: GettingStartedSample,
-	categoryTitleById: Record<number, string>,
-	imagesByCategory: Record<number, string>,
-): BrowseItem {
-	const categoryName = categoryTitleById[sample.category] || "Sample";
-
-	return {
-		id: `sample:${sample.category}:${sample.zipFileName}`,
-		itemType: "sample",
-		title: sample.title,
-		description: sample.description,
-		primaryCategory: categoryName,
-		categoryValues: [categoryName],
-		imageUrl: imagesByCategory[sample.category],
-		searchText:
-			`${sample.title} ${sample.description} ${categoryName}`.toLowerCase(),
-		priority: sample.priority,
-		sample,
-	};
-}
-
 function createPrebuiltItem(
-	prebuiltIntegration: PrebuiltIntegration,
+	prebuiltIntegration: SampleItem,
 ): BrowseItem {
 	const categoryValues = getPrebuiltCategoryValues(prebuiltIntegration);
 
 	return {
-		id: `prebuilt:${prebuiltIntegration.branch}:${prebuiltIntegration.componentPath}`,
+		id: `prebuilt:${prebuiltIntegration.branch ?? ""}:${prebuiltIntegration.componentPath}`,
 		itemType: "prebuilt",
 		title: prebuiltIntegration.displayName,
 		description: prebuiltIntegration.description,
-		primaryCategory: getPrebuiltPrimaryCategory(prebuiltIntegration),
+		componentType: prebuiltIntegration.componentType || "Integration",
 		categoryValues,
-		imageUrl: resolvePrebuiltImageUrl(prebuiltIntegration),
+		imageUrl: getImageUrl(prebuiltIntegration.thumbnailPath),
 		connectorIconUrls: getPrebuiltConnectorIconUrls(prebuiltIntegration),
 		fallbackArtwork: getPrebuiltArtworkText(prebuiltIntegration),
+		localIcon: getLocalIcon(prebuiltIntegration.thumbnailPath),
 		searchText: [
 			prebuiltIntegration.displayName,
 			prebuiltIntegration.description,
@@ -625,9 +600,39 @@ function createPrebuiltItem(
 	};
 }
 
+function createSampleItem(
+	prebuiltIntegration: SampleItem,
+): BrowseItem {
+	const categoryValues = getPrebuiltCategoryValues(prebuiltIntegration);
+
+	return {
+		id: `sample:${prebuiltIntegration.componentPath}`,
+		itemType: "sample",
+		title: prebuiltIntegration.displayName,
+		description: prebuiltIntegration.description,
+		componentType: prebuiltIntegration.componentType || "Integration",
+		categoryValues,
+		imageUrl: getImageUrl(prebuiltIntegration.thumbnailPath),
+		connectorIconUrls: getPrebuiltConnectorIconUrls(prebuiltIntegration),
+		fallbackArtwork: getPrebuiltArtworkText(prebuiltIntegration),
+		localIcon: getLocalIcon(prebuiltIntegration.thumbnailPath),
+		searchText: [
+			prebuiltIntegration.displayName,
+			prebuiltIntegration.description,
+			prebuiltIntegration.componentType,
+			...categoryValues,
+		]
+			.join(" ")
+			.toLowerCase(),
+		priority: Number.MAX_SAFE_INTEGER,
+		prebuiltIntegration,
+	};
+}
+
 function createCategoryOptions(
 	categories: GettingStartedCategory[],
-	prebuiltIntegrations: PrebuiltIntegration[],
+	samples: SampleItem[],
+	prebuiltIntegrations: SampleItem[],
 	includePrebuiltCategories: boolean,
 ): CategoryOption[] {
 	const options: CategoryOption[] = [
@@ -648,24 +653,23 @@ function createCategoryOptions(
 		});
 	}
 
+	for (const sample of samples) {
+		const categoryValue = sample.componentType;
+		if (categoryValue && !addedCategoryValues.has(categoryValue)) {
+			addedCategoryValues.add(categoryValue);
+			options.push({ key: categoryValue, content: categoryValue, value: categoryValue });
+		}
+	}
+
 	if (!includePrebuiltCategories) {
 		return options;
 	}
 
 	for (const prebuiltIntegration of prebuiltIntegrations) {
-		for (const categoryValue of getPrebuiltCategoryValues(
-			prebuiltIntegration,
-		)) {
-			if (addedCategoryValues.has(categoryValue)) {
-				continue;
-			}
-
+		const categoryValue = prebuiltIntegration.componentType;
+		if (categoryValue && !addedCategoryValues.has(categoryValue)) {
 			addedCategoryValues.add(categoryValue);
-			options.push({
-				key: categoryValue,
-				content: categoryValue,
-				value: categoryValue,
-			});
+			options.push({ key: categoryValue, content: categoryValue, value: categoryValue });
 		}
 	}
 
@@ -691,10 +695,9 @@ function matchesFilters(
 
 export function SamplesContainer(props: SamplesContainerProps) {
 	const { wsClient, webviewContext } = useVisualizerContext();
-	const [samples, setSamples] = useState<GettingStartedSample[]>([]);
+	const [samples, setSamples] = useState<SampleItem[]>([]);
 	const [categories, setCategories] = useState<GettingStartedCategory[]>([]);
-	const [prebuiltIntegrations, setPrebuiltIntegrations] = useState<PrebuiltIntegration[]>([]);
-	const [imagesByCategory, setImagesByCategory] = useState<Record<number, string>>({});
+	const [prebuiltIntegrations, setPrebuiltIntegrations] = useState<SampleItem[]>([]);
 	const [searchText, setSearchText] = useState<string>("");
 	const [selectedCategory, setSelectedCategory] =useState<string>(ALL_CATEGORY_VALUE);
 	const [selectedType, setSelectedType] = useState<BrowseItemType | "all">(
@@ -717,30 +720,16 @@ export function SamplesContainer(props: SamplesContainerProps) {
 					return;
 				}
 
-				const nextSamples = response?.samples ?? [];
-				const nextCategories = [{ id: 0, title: "All", icon: "" }, ...(response?.categories ?? []),
-				];
+				const nextSamples = (response?.samples ?? []) as SampleItem[];
+				const nextCategories = [{ id: 0, title: "All", icon: "" }, ...(response?.categories ?? [])];
 				const nextPrebuiltIntegrations =
 					props.projectType === "WSO2: BI"
 						? (response?.prebuiltIntegrations ?? [])
 						: [];
-				const sampleIconBaseUrl =
-					props.projectType === "WSO2: MI"
-						? (webviewContext?.env?.MI_SAMPLE_ICONS_GITHUB_URL ?? "")
-						: (webviewContext?.env?.BI_SAMPLE_ICONS_GITHUB_URL ?? "");
-
-				const nextCategoryImages: Record<number, string> = {};
-				for (const category of nextCategories) {
-					if (category.icon) {
-						nextCategoryImages[category.id] =
-							`${sampleIconBaseUrl}${category.icon}`;
-					}
-				}
 
 				setSamples(nextSamples);
 				setCategories(nextCategories);
 				setPrebuiltIntegrations(nextPrebuiltIntegrations);
-				setImagesByCategory(nextCategoryImages);
 			})
 			.catch((error) => {
 				console.warn("Failed to load sample data from GitHub:", error);
@@ -748,7 +737,6 @@ export function SamplesContainer(props: SamplesContainerProps) {
 					setSamples([]);
 					setCategories([{ id: 0, title: "All", icon: "" }]);
 					setPrebuiltIntegrations([]);
-					setImagesByCategory({});
 				}
 			})
 			.finally(() => {
@@ -763,22 +751,10 @@ export function SamplesContainer(props: SamplesContainerProps) {
 	}, [
 		props.projectType,
 		wsClient,
-		webviewContext?.env?.BI_SAMPLE_ICONS_GITHUB_URL,
-		webviewContext?.env?.MI_SAMPLE_ICONS_GITHUB_URL,
 	]);
 
-	const categoryTitleById = useMemo(() => {
-		const titleMap: Record<number, string> = {};
-		for (const category of categories) {
-			titleMap[category.id] = category.title;
-		}
-		return titleMap;
-	}, [categories]);
-
 	const allItems = useMemo(() => {
-		const items = samples.map((sample) =>
-			createSampleItem(sample, categoryTitleById, imagesByCategory),
-		);
+		const items = samples.map((sample) => createSampleItem(sample));
 
 		if (showsTypeFilter) {
 			items.push(
@@ -789,21 +765,16 @@ export function SamplesContainer(props: SamplesContainerProps) {
 		}
 
 		return items.sort(compareBrowseItems);
-	}, [
-		categoryTitleById,
-		imagesByCategory,
-		prebuiltIntegrations,
-		samples,
-		showsTypeFilter,
-	]);
+	}, [prebuiltIntegrations, samples, showsTypeFilter]);
 
 	const categoryItems = useMemo(() => {
 		return createCategoryOptions(
 			categories,
+			samples,
 			prebuiltIntegrations,
 			showsTypeFilter,
 		);
-	}, [categories, prebuiltIntegrations, showsTypeFilter]);
+	}, [categories, samples, prebuiltIntegrations, showsTypeFilter]);
 
 	const filteredItems = useMemo(() => {
 		return allItems.filter((item) =>
@@ -823,24 +794,17 @@ export function SamplesContainer(props: SamplesContainerProps) {
 	}
 
 	function downloadItem(item: BrowseItem) {
-		if (item.itemType === "sample" && item.sample) {
-			const request: SampleDownloadRequest = {
-				runtime: props.projectType,
-				itemType: "sample",
-				zipFileName: item.sample.zipFileName,
-			};
-
-			wsClient.downloadSelectedSampleFromGithub(request);
+		if (!item.prebuiltIntegration) {
 			return;
-		} else if (item.itemType === "prebuilt" && item.prebuiltIntegration) {
-			const request: SampleDownloadRequest = {
-				runtime: props.projectType,
-				itemType: "prebuilt",
-				prebuiltIntegration: item.prebuiltIntegration,
-			};
-
-			wsClient.downloadSelectedSampleFromGithub(request);
 		}
+
+		const request: SampleDownloadRequest = {
+			runtime: props.projectType,
+			itemType: item.itemType,
+			sampleItem: item.prebuiltIntegration,
+		};
+
+		wsClient.downloadSelectedSampleFromGithub(request);
 	}
 
 	function getEmptyMessage() {
@@ -934,14 +898,15 @@ export function SamplesContainer(props: SamplesContainerProps) {
 							<SampleCard key={item.id} className="sample-card">
 								<CardHeader>
 									<CardTitle>{item.title}</CardTitle>
-									<CategoryLabel>{item.primaryCategory}</CategoryLabel>
+									<CategoryLabel>{item.componentType}</CategoryLabel>
 								</CardHeader>
 								<IconFrame>
 									<CategoryArtwork
 										imageUrl={item.imageUrl}
 										iconUrls={item.connectorIconUrls}
-										label={item.primaryCategory}
+										label={item.componentType}
 										fallbackText={item.fallbackArtwork}
+										localIcon={item.localIcon}
 									/>
 								</IconFrame>
 								<Description>{item.description}</Description>
