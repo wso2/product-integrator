@@ -595,11 +595,20 @@ const createProjectFromLocalMetadata = async (userInfo: UserInfo, workspacePath?
 			return { org: selectedOrg, project: matchingProject };
 		}
 
-		// Derive a human-readable name from the handler (e.g. "e-commerce-saga" -> "E Commerce Saga").
-		const projectName = localEntry.project
-			.split("-")
-			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-			.join(" ");
+		// Derive a human-readable name from Ballerina.toml [workspace].title, falling back to the handler.
+		let projectName: string | undefined;
+		const ballerinaTomlPath = path.join(workspacePath, "Ballerina.toml");
+		if (existsSync(ballerinaTomlPath)) {
+			const tomlContent = readFileSync(ballerinaTomlPath, "utf8");
+			const titleMatch = tomlContent.match(/^\[workspace\][^\[]*title\s*=\s*"([^"]+)"/ms);
+			projectName = titleMatch?.[1];
+		}
+		if (!projectName) {
+			projectName = localEntry.project
+				.split("-")
+				.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+				.join(" ");
+		}
 
 		const createdProject = await window.withProgress(
 			{
