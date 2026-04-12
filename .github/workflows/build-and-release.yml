@@ -686,6 +686,11 @@ jobs:
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
+      - name: Exclude build workspace from Windows Defender
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE"
       - name: Build Windows installer packages
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         shell: pwsh

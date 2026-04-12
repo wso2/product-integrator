@@ -78,13 +78,6 @@ if exist "%BAL_SRC%" (
 REM Extract numeric-only version for WiX ProductVersion (strip pre-release suffix like -m1, -beta1)
 for /f "delims=" %%v in ('powershell -nologo -noprofile -command "('%~5' -split '-')[0]"') do set "WIX_VERSION=%%v"
 
-REM Generate settings.json in the payload directory (required by WixPackage.wixproj CheckPayloadExists target)
-if not exist ".\WixPackage\payload" mkdir ".\WixPackage\payload"
-powershell -nologo -noprofile -command "Set-Content -Encoding UTF8 -Path '.\WixPackage\payload\settings.json' -Value '{}'"
-if errorlevel 1 (
-    echo Failed to create settings.json
-    exit /b 1
-)
 
 REM Update version in Package.wxs
 powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%WIX_VERSION%' | Set-Content '.\WixPackage\Package.wxs'"
@@ -96,7 +89,7 @@ if errorlevel 1 (
     powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
-dotnet build .\WixPackage\WixPackage.wixproj -p:Platform=x64 -p:Configuration=Release
+dotnet build .\WixPackage\WixPackage.wixproj -p:Platform=x64 -p:Configuration=Release -maxcpucount:1
 if errorlevel 1 (
     echo WixPackage build failed
     powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
