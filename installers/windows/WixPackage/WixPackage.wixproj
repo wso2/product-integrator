@@ -9,4 +9,9 @@
     <PackageReference Include="WixToolset.UI.wixext" Version="5.0.2" />
     <PackageReference Include="WixToolset.Util.wixext" Version="5.0.2" />
   </ItemGroup>
+
+  <Target Name="CheckPayloadExists" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)payload\settings.json')"
+           Text="Missing required payload file: $(MSBuildThisFileDirectory)payload\settings.json. Ensure the packaging step has produced this file before building the WiX project." />
+  </Target>
 </Project>

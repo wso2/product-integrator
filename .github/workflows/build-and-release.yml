@@ -554,10 +554,22 @@ jobs:
       - name: Install OpenSSL (Windows)
         shell: pwsh
         run: |
-          # Install vcpkg and OpenSSL
-          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
-          cd C:\vcpkg
-          .\bootstrap-vcpkg.bat
+          # Install vcpkg if not already present, otherwise update it
+          if (Test-Path "C:\vcpkg\.git") {
+            Write-Host "vcpkg already cloned, fetching latest..."
+            cd C:\vcpkg
+            git fetch origin
+            git pull origin master
+          } else {
+            Write-Host "Cloning vcpkg..."
+            git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+            cd C:\vcpkg
+          }
+          # Bootstrap vcpkg (idempotent)
+          if (-not (Test-Path "C:\vcpkg\vcpkg.exe")) {
+            .\bootstrap-vcpkg.bat
+          }
+          # Install OpenSSL (vcpkg skips if already installed)
           .\vcpkg.exe install openssl:x64-windows-static
           # Set environment variables for OpenSSL
           $env:VCPKG_ROOT = "C:\vcpkg"
