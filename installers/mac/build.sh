@@ -196,7 +196,6 @@ hdiutil create \
     -srcfolder "$DMG_STAGING" \
     -volname "$APP_NAME" \
     -fs HFS+ \
-    -fsargs "-c c=64,a=16,b=16" \
     -format UDRW \
     "$TEMP_DMG"
 
