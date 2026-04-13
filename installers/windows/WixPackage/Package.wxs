@@ -11,7 +11,7 @@
   >
 
     <MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" />
-    <MediaTemplate EmbedCab="yes" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="none" MaximumUncompressedMediaSize="400" />
 
     <ui:WixUI Id="WixUI_InstallDir_Custom" InstallDirectory="INSTALLFOLDER" />
 
