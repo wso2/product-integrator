@@ -381,9 +381,17 @@ jobs:
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: Product-Integrator-Darwin-${{ matrix.arch }}
+          name: Product-Integrator-Darwin-PKG-${{ matrix.arch }}
           path: |
             installers/mac/*.pkg
+          if-no-files-found: error
+
+      - name: Upload macOS DMG artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-Darwin-DMG-${{ matrix.arch }}
+          path: |
             installers/mac/*.dmg
           if-no-files-found: error
 
@@ -885,7 +893,14 @@ jobs:
       - name: Download macOS PKG artifacts
         uses: actions/download-artifact@v4
         with:
-          name: Product-Integrator-Darwin-arm64
+          name: Product-Integrator-Darwin-PKG-arm64
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download macOS DMG artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-Darwin-DMG-arm64
           path: release-files/
         continue-on-error: true
 
