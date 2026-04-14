@@ -30,7 +30,8 @@ interface UpdateCheckConfig {
 	requestTimeoutMs: number;
 }
 
-const DEFAULT_SERVICE_URL = "http://localhost:8080/api/v1/product-updates/check";
+const DEFAULT_SERVICE_URL =
+	"https://bc594c9c-e5f7-4bd4-8b83-3bdea4d32b49-prod.e1-us-east-azure.choreoapis.dev/product-integrator/product-update-service/v1.0";
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 
 const LAST_CHECKED_AT_KEY = "wso2-integrator.updates.lastCheckedAt";
