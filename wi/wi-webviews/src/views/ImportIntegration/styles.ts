@@ -426,7 +426,7 @@ export const RadioOption = styled.label<{ selected: boolean }>`
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 12px;
     border-radius: 8px;
     cursor: pointer;
     border: 1px solid ${(props: { selected: boolean }) =>

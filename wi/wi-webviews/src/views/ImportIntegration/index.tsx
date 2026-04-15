@@ -18,7 +18,7 @@
 
 import { Icon, Typography } from "@wso2/ui-toolkit";
 import { Stepper, StepperContainer } from "@wso2/ui-toolkit/lib/components/Stepper/Stepper";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ConfigureProjectForm } from "./ConfigureProjectForm";
 import { ImportIntegrationForm } from "./ImportIntegrationForm";
 import { MigrationProgressView } from "./MigrationProgressView";
@@ -60,12 +60,18 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const [migrationSuccessful, setMigrationSuccessful] = useState(false);
     const [migrationResponse, setMigrationResponse] = useState<ImportIntegrationResponse | null>(null);
     const [aiEnhancementActive, setAiEnhancementActive] = useState(false);
+    const [storedProjectRequest, setStoredProjectRequest] = useState<ProjectRequest | null>(null);
+    const migrationStartedRef = useRef(false);
 
     const defaultSteps = aiEnhancementActive
-        ? ["Select Source Project", "Static Migration Progress", "Configure Project", "AI Enhancement"]
-        : ["Select Source Project", "Static Migration Progress", "Configure Project"];
+        ? ["Configure Source", "Configure New Integration", "Static Migration Status", "AI Enhancement"]
+        : ["Configure Source", "Configure New Integration", "Static Migration Status"];
 
-    const isMultiProject = migratedProjects.length! > 0;
+    // isMultiProject for ConfigureProjectForm is derived from the source config (step 0 selection)
+    const boolParamKey = selectedIntegration?.parameters.find(p => p.valueType === "boolean")?.key;
+    const isMultiProjectFromConfig = boolParamKey ? importParams?.parameters?.[boolParamKey] === true : false;
+    // isMultiProject for MigrationProgressView is derived from actual dry-run results
+    const isMultiProject = migratedProjects.length > 0;
 
     const pullIntegrationTool = (commandName: string, version: string) => {
         setPullingTool(true);
@@ -75,60 +81,50 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
         });
     };
 
-    // Handler to begin the import and switch to the migration progress view
-    const handleStartImport = (
-        importParams: FinalIntegrationParams,
-        selectedIntegration: MigrationTool,
-        toolPullProgress: DownloadProgress
+    // Runs the static CLI migration (importIntegration) and stores the report.
+    // migrateProject (file writing + folder open) is deferred to the user's choice at step 2.
+    const handleStartImport = async (
+        params: FinalIntegrationParams,
+        integration: MigrationTool,
+        project: ProjectRequest
     ) => {
-        if (selectedIntegration.needToPull && toolPullProgress && toolPullProgress.step === -1) {
+        if (integration.needToPull && toolPullProgress && toolPullProgress.step === -1) {
             console.error("Cannot start import, tool download failed.");
+            return;
         }
-        setStep(1);
-        console.log("Starting import with params:", importParams);
+        console.log("Starting import with params:", params);
 
-        const params: ImportIntegrationWsRequest = {
+        const wsParams: ImportIntegrationWsRequest = {
             packageName: "",
-            commandName: selectedIntegration.commandName,
-            sourcePath: importParams.importSourcePath,
+            commandName: integration.commandName,
+            sourcePath: params.importSourcePath,
             orgName: selectedOrgName,
-            parameters: importParams.parameters,
+            parameters: params.parameters,
         };
-        wsClient
-
-            .importIntegration(params)
-            .then((response) => {
-                setMigrationCompleted(true);
-                setMigrationResponse(response);
-                if (!response.error) {
-                    setMigrationSuccessful(true);
-                }
-            })
-            .catch((error) => {
-                console.error("Error during TIBCO import:", error);
-            });
+        try {
+            const response = await wsClient.importIntegration(wsParams);
+            setMigrationCompleted(true);
+            setMigrationResponse(response);
+            if (!response.error) {
+                setMigrationSuccessful(true);
+            }
+        } catch (error) {
+            console.error("Error during migration:", error);
+            setMigrationCompleted(true);
+            setMigrationSuccessful(false);
+        }
     };
 
-    const handleCreateIntegrationFiles = async (project: ProjectRequest, aiFeatureUsed: boolean) => {
-        console.log("Creating integration files with params:", importParams);
-        if (migrationResponse) {
-            const params: MigrateRequest = {
-                project: project,
-                textEdits: migrationResponse.textEdits,
-                projects: migratedProjects,
-                aiFeatureUsed: aiFeatureUsed,
-                sourcePath: importParams?.importSourcePath,
-            };
-            await wsClient.migrateProject(params);
-            if (aiFeatureUsed) {
-                setAiEnhancementActive(true);
-                setStep(3);
-            }
-        }
+    const handleConfigureDestinationDone = (project: ProjectRequest, _aiFeatureUsed: boolean) => {
+        if (!importParams || !selectedIntegration) return;
+        setStoredProjectRequest(project);
+        // Advance to migration step; import starts automatically when step 2 renders.
+        setStep(2);
     };
 
     const handleStepBack = () => {
-        if (step === 1) {
+        if (step === 2) {
+            migrationStartedRef.current = false;
             setMigrationToolState(null);
             setMigrationToolLogs([]);
             setMigrationCompleted(false);
@@ -138,6 +134,44 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
         }
 
         setStep(step - 1);
+    };
+
+    const handleAIEnhancement = async () => {
+        if (!importParams || !storedProjectRequest || !migrationResponse) return;
+        await wsClient.migrateProject({
+            project: storedProjectRequest,
+            textEdits: migrationResponse.textEdits,
+            projects: migratedProjects,
+            aiFeatureUsed: true,
+            sourcePath: importParams.importSourcePath,
+        });
+        setAiEnhancementActive(true);
+        setStep(3);
+    };
+
+    const handleOpenProject = async () => {
+        if (!importParams || !storedProjectRequest || !migrationResponse) return;
+        // aiFeatureUsed: false → extension calls vscode.openFolder immediately (VS Code reloads)
+        await wsClient.migrateProject({
+            project: storedProjectRequest,
+            textEdits: migrationResponse.textEdits,
+            projects: migratedProjects,
+            aiFeatureUsed: false,
+            sourcePath: importParams.importSourcePath,
+        });
+    };
+
+    const handleDone = async () => {
+        if (!importParams || !storedProjectRequest || !migrationResponse) return;
+        // aiFeatureUsed: true → project created but folder not opened; user can enhance later
+        await wsClient.migrateProject({
+            project: storedProjectRequest,
+            textEdits: migrationResponse.textEdits,
+            projects: migratedProjects,
+            aiFeatureUsed: true,
+            sourcePath: importParams.importSourcePath,
+        });
+        onBack?.();
     };
 
     const getMigrationTools = () => {
@@ -179,10 +213,20 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     }, [wsClient]);
 
     useEffect(() => {
-        if (selectedIntegration?.needToPull && toolPullProgress && toolPullProgress.success && importParams) {
-            handleStartImport(importParams, selectedIntegration, toolPullProgress);
+        // Start the static migration when step 2 is reached and the tool (if needToPull) is ready.
+        // migrationStartedRef prevents a double-start if multiple deps fire simultaneously.
+        if (
+            step === 2 &&
+            !migrationStartedRef.current &&
+            importParams &&
+            selectedIntegration &&
+            storedProjectRequest &&
+            (!selectedIntegration.needToPull || toolPullProgress?.success)
+        ) {
+            migrationStartedRef.current = true;
+            handleStartImport(importParams, selectedIntegration, storedProjectRequest);
         }
-    }, [toolPullProgress, importParams, selectedIntegration]);
+    }, [step, toolPullProgress?.success, storedProjectRequest]);
 
     return (
         <PageBackdrop>
@@ -203,7 +247,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                     Migrate External Integration
                                 </Typography>
                                 <HeaderSubtitle>
-                                    Convert your MuleSoft or TIBCO project into a new integration project.
+                                    Convert your MuleSoft or TIBCO projects into new WSO2 Integrator projects.
                                 </HeaderSubtitle>
                             </HeaderText>
                         </HeaderRow>
@@ -223,11 +267,19 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                 pullingTool={pullingTool}
                                 toolPullProgress={toolPullProgress}
                                 onSelectIntegration={setSelectedIntegration}
-                                handleStartImport={handleStartImport}
+                                onNext={() => setStep(1)}
                                 onBack={onBack}
                             />
                         )}
                         {step === 1 && (
+                            <ConfigureProjectForm
+                                isMultiProject={isMultiProjectFromConfig}
+                                onNext={handleConfigureDestinationDone}
+                                onBack={handleStepBack}
+                                selectedOrgName={selectedOrgName}
+                            />
+                        )}
+                        {step === 2 && (
                             <MigrationProgressView
                                 migrationState={migrationToolState}
                                 migrationLogs={migrationToolLogs}
@@ -236,20 +288,18 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                 migrationResponse={migrationResponse}
                                 projects={migratedProjects}
                                 isMultiProject={isMultiProject}
-                                onNext={() => setStep(2)}
+                                onStartAIEnhancement={handleAIEnhancement}
+                                onDone={handleDone}
+                                onOpenProject={handleOpenProject}
                                 onBack={handleStepBack}
-                            />
-                        )}
-                        {step === 2 && (
-                            <ConfigureProjectForm
-                                isMultiProject={isMultiProject}
-                                onNext={handleCreateIntegrationFiles}
-                                onBack={handleStepBack}
-                                selectedOrgName={selectedOrgName}
                             />
                         )}
                         {step === 3 && (
-                            <WizardAIEnhancementView wsClient={wsClient} />
+                            <WizardAIEnhancementView
+                                wsClient={wsClient}
+                                projectCount={migratedProjects.length}
+                                onFinish={onBack ?? (() => { })}
+                            />
                         )}
                     </FormContainer>
                 </ContentPanel>

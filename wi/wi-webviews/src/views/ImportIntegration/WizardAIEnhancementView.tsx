@@ -29,25 +29,15 @@ import ToolCallGroupSegment, { ToolCallItem } from "../shared/ai/ToolCallGroupSe
 // Types
 // ──────────────────────────────────────────────────────────────────────────────
 
-type EnhancementStatus = "checking_auth" | "sign_in_required" | "signing_in" | "running" | "completed" | "error" | "aborted";
+type EnhancementStatus = "checking_auth" | "sign_in_required" | "signing_in" | "running" | "paused" | "completed" | "error" | "aborted";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
 
 function formatFileNameForDisplay(filePath: string): string {
-    // Normalize Windows backslashes to forward slashes
-    const normalized = filePath.replace(/\\/g, "/");
-    let displayName = normalized.replace(/\.bal$/, "");
-    const lastSlashIndex = displayName.lastIndexOf("/");
-    if (lastSlashIndex !== -1) {
-        const directory = displayName.substring(0, lastSlashIndex + 1);
-        const fileName = displayName.substring(lastSlashIndex + 1);
-        displayName = directory + fileName.replace(/[_-]/g, " ");
-    } else {
-        displayName = displayName.replace(/[_-]/g, " ");
-    }
-    return displayName;
+    // Normalize Windows backslashes to forward slashes; preserve full path including extension
+    return filePath.replace(/\\/g, "/");
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -102,6 +92,7 @@ const ButtonRow = styled.div`
     display: flex;
     gap: 8px;
     align-items: center;
+    justify-content: flex-end;
 `;
 
 const ActionButton = styled.button<{ variant?: "primary" | "secondary" }>`
@@ -182,9 +173,11 @@ const SignInErrorText = styled.p`
 
 interface WizardAIEnhancementViewProps {
     wsClient: WsClient;
+    projectCount: number;
+    onFinish: () => void;
 }
 
-export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewProps) {
+export function WizardAIEnhancementView({ wsClient, projectCount, onFinish }: WizardAIEnhancementViewProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const enhancementTriggered = useRef(false);
 
@@ -194,15 +187,38 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
     const [signInError, setSignInError] = useState<string | undefined>();
 
     const terminalRef = useRef(false);
+    const userPausedRef = useRef(false);
+    // Accumulates total elapsed seconds across multiple run segments (pause/resume cycles)
+    const accumulatedRef = useRef(0);
+    const segmentStartRef = useRef<number | null>(null);
+    // Tracks exact tool-call message text keyed by effectiveId (for file tools)
+    const toolCallMessagesRef = useRef<Map<string, string>>(new Map());
+    // Queue of synthetic IDs for file tools that don't emit a real toolCallId
+    const pendingFileToolIdsRef = useRef<string[]>([]);
+    // Queue of synthetic IDs for getCompilationErrors which also lacks a real toolCallId
+    const pendingDiagToolIdsRef = useRef<string[]>([]);
 
     // ── Uptime counter ──────────────────────────────────────────────────────
     useEffect(() => {
         if (status !== "running") {
             return;
         }
-        setElapsed(0);
-        const id = setInterval(() => setElapsed((s) => s + 1), 1000);
-        return () => clearInterval(id);
+        // Record start of this run segment; do NOT reset accumulated total.
+        segmentStartRef.current = Date.now();
+        const id = setInterval(() => {
+            const segmentElapsed = segmentStartRef.current
+                ? Math.floor((Date.now() - segmentStartRef.current) / 1000)
+                : 0;
+            setElapsed(accumulatedRef.current + segmentElapsed);
+        }, 1000);
+        return () => {
+            clearInterval(id);
+            // Persist elapsed time for the segment that just ended.
+            if (segmentStartRef.current) {
+                accumulatedRef.current += Math.floor((Date.now() - segmentStartRef.current) / 1000);
+                segmentStartRef.current = null;
+            }
+        };
     }, [status]);
 
     function formatElapsed(seconds: number): string {
@@ -227,6 +243,9 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                 terminalRef.current = false;
                 setStatus("running");
                 setContent("");
+                toolCallMessagesRef.current.clear();
+                pendingFileToolIdsRef.current = [];
+                pendingDiagToolIdsRef.current = [];
                 return;
             }
 
@@ -241,7 +260,16 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                     break;
 
                 case "content_replace":
-                    setContent(event.content);
+                    setContent((prev) => {
+                        const callEnd = prev.lastIndexOf("</toolcall>");
+                        const resultEnd = prev.lastIndexOf("</toolresult>");
+                        const lastAnnotationEnd = Math.max(
+                            callEnd !== -1 ? callEnd + "</toolcall>".length : -1,
+                            resultEnd !== -1 ? resultEnd + "</toolresult>".length : -1,
+                        );
+                        if (lastAnnotationEnd <= 0) { return event.content; }
+                        return prev.substring(0, lastAnnotationEnd) + event.content;
+                    });
                     break;
 
                 case "tool_call": {
@@ -260,10 +288,17 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                     } else if (["file_write", "file_edit", "file_batch_edit"].includes(toolName)) {
                         const fileName = toolInput?.fileName || "file";
                         const displayName = formatFileNameForDisplay(fileName);
-                        const msg = toolName === "file_write" ? `Creating ${displayName}...` : `Updating ${displayName}...`;
-                        updateContent((prev) => prev + `\n\n<toolcall id="${toolCallId}" tool="${toolName}">${msg}</toolcall>`);
+                        const msg = toolName === "file_write" ? `Creating ${displayName}` : `Updating ${displayName}`;
+                        // Use the real toolCallId if present; otherwise generate a synthetic one so the
+                        // matching tool_result can still find and replace the <toolcall> tag.
+                        const effectiveId = toolCallId ?? `__file_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                        toolCallMessagesRef.current.set(effectiveId, msg);
+                        if (!toolCallId) { pendingFileToolIdsRef.current.push(effectiveId); }
+                        updateContent((prev) => prev + `\n\n<toolcall id="${effectiveId}" tool="${toolName}">${msg}</toolcall>`);
                     } else if (toolName === "getCompilationErrors") {
-                        updateContent((prev) => prev + `\n\n<toolcall id="${toolCallId}" tool="${toolName}">Checking for errors...</toolcall>`);
+                        const diagId = toolCallId ?? `__diag_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                        if (!toolCallId) { pendingDiagToolIdsRef.current.push(diagId); }
+                        updateContent((prev) => prev + `\n\n<toolcall id="${diagId}" tool="${toolName}">Checking for errors...</toolcall>`);
                     } else if (toolName === "runTests") {
                         updateContent((prev) => prev + `\n\n<toolcall id="${toolCallId}" tool="${toolName}">Running tests...</toolcall>`);
                     }
@@ -314,30 +349,40 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                         }
                     } else if (["file_write", "file_edit", "file_batch_edit"].includes(toolName)) {
                         const failedAttrF = event.failed ? ` failed="true"` : "";
-                        updateContent((prev) => {
-                            if (!toolCallId) {
-                                return prev;
-                            }
-                            const toolCallPattern = new RegExp(
-                                `<toolcall id="${toolCallId}" tool="${toolName}">(Creating|Updating) (.+?)\\.\\.\\.<\\/toolcall>`
-                            );
-                            return prev.replace(toolCallPattern, (_m, actionLabel, fileName) => {
-                                const resultText = actionLabel === "Updating" || toolOutput?.action === "updated" ? "Updated" : "Created";
-                                return `<toolresult id="${toolCallId}" tool="${toolName}"${failedAttrF}>${resultText} ${fileName}</toolresult>`;
-                            });
-                        });
+                        // Prefer the real toolCallId; fall back to the oldest pending synthetic ID
+                        const effectiveId = toolCallId ?? pendingFileToolIdsRef.current.shift();
+                        if (effectiveId) {
+                            const origMsg = toolCallMessagesRef.current.get(effectiveId) ?? "";
+                            toolCallMessagesRef.current.delete(effectiveId);
+                            const isCreating = origMsg.startsWith("Creating ");
+                            const displayText = origMsg.replace(/^(Creating|Updating) /, "");
+                            const resultText = !isCreating || toolOutput?.action === "updated" ? "Updated" : "Created";
+                            // Defer the replacement to the next task so React renders the in-progress
+                            // <toolcall> (spinner) state first before replacing it with <toolresult> (tick).
+                            setTimeout(() => {
+                                updateContent((prev) =>
+                                    prev.replace(
+                                        `<toolcall id="${effectiveId}" tool="${toolName}">${origMsg}</toolcall>`,
+                                        `<toolresult id="${effectiveId}" tool="${toolName}"${failedAttrF}>${resultText} ${displayText}</toolresult>`,
+                                    )
+                                );
+                            }, 0);
+                        }
                     } else if (toolName === "getCompilationErrors") {
                         const errors = toolOutput?.diagnostics || [];
                         const errorCount = errors.length;
                         const msg = errorCount === 0 ? "No errors found" : `Found ${errorCount} error${errorCount > 1 ? "s" : ""}`;
                         const failedAttrCE = event.failed ? ` failed="true"` : "";
-                        if (toolCallId) {
-                            updateContent((prev) =>
-                                prev.replace(
-                                    `<toolcall id="${toolCallId}" tool="${toolName}">Checking for errors...</toolcall>`,
-                                    `<toolresult id="${toolCallId}" tool="${toolName}"${failedAttrCE}>${msg}</toolresult>`
-                                )
-                            );
+                        const diagResultId = toolCallId ?? pendingDiagToolIdsRef.current.shift();
+                        if (diagResultId) {
+                            setTimeout(() => {
+                                updateContent((prev) =>
+                                    prev.replace(
+                                        `<toolcall id="${diagResultId}" tool="${toolName}">Checking for errors...</toolcall>`,
+                                        `<toolresult id="${diagResultId}" tool="${toolName}"${failedAttrCE}>${msg}</toolresult>`
+                                    )
+                                );
+                            }, 0);
                         }
                     } else if (toolName === "runTests") {
                         if (toolCallId) {
@@ -367,7 +412,10 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
 
                 case "abort":
                     terminalRef.current = true;
-                    setStatus("aborted");
+                    // Only mark as aborted if the user didn't pause manually.
+                    if (!userPausedRef.current) {
+                        setStatus("aborted");
+                    }
                     break;
 
                 default:
@@ -407,12 +455,28 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
             });
     }, [wsClient]);
 
-    // ── Auto-scroll ─────────────────────────────────────────────────────────
+    // ── Auto-scroll (pauses when user scrolls up; resumes once back at bottom) ─
+    const isUserScrolledUpRef = useRef(false);
+
     useEffect(() => {
-        scrollRef.current?.scrollTo({
-            top: scrollRef.current.scrollHeight,
-            behavior: "smooth",
-        });
+        const el = scrollRef.current;
+        if (!el) return;
+        const onScroll = () => {
+            const threshold = 60; // px — within this from the bottom counts as "at bottom"
+            const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
+            isUserScrolledUpRef.current = !atBottom;
+        };
+        el.addEventListener("scroll", onScroll, { passive: true });
+        return () => el.removeEventListener("scroll", onScroll);
+    }, []);
+
+    useEffect(() => {
+        if (!isUserScrolledUpRef.current) {
+            scrollRef.current?.scrollTo({
+                top: scrollRef.current.scrollHeight,
+                behavior: "smooth",
+            });
+        }
     }, [content]);
 
     // ── Parse content into segments ─────────────────────────────────────────
@@ -425,12 +489,24 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
         });
     }, [wsClient]);
 
-    const handleSkipAndOpen = useCallback(() => {
+    const handlePause = useCallback(() => {
+        userPausedRef.current = true;
+        setStatus("paused");
         wsClient.abortMigrationAgent().catch(() => { /* best effort */ });
-        wsClient.openMigratedProject().catch((err: unknown) => {
-            console.error("[WizardAIEnhancementView] openMigratedProject (skip) failed:", err);
+    }, [wsClient]);
+
+    const handleResume = useCallback(() => {
+        userPausedRef.current = false;
+        terminalRef.current = false;
+        setStatus("running");
+        wsClient.wizardEnhancementReady().catch((err: unknown) => {
+            console.error("[WizardAIEnhancementView] wizardEnhancementReady (resume) failed:", err);
         });
     }, [wsClient]);
+
+    const handleDone = useCallback(() => {
+        onFinish();
+    }, [onFinish]);
 
     const handleSignIn = useCallback(() => {
         setSignInError(undefined);
@@ -453,8 +529,10 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
 
     // ── Render ───────────────────────────────────────────────────────────────
     const isRunning = status === "running";
+    const isPaused = status === "paused";
     const isDone = status === "completed" || status === "error" || status === "aborted";
     const isAuthPhase = status === "checking_auth" || status === "sign_in_required" || status === "signing_in";
+    const openProjectDisabled = projectCount > 15;
 
     return (
         <Container>
@@ -507,6 +585,15 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                         <StatusText>AI Enhancement was skipped</StatusText>
                     </div>
                 )}
+                {isPaused && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span className="codicon codicon-debug-pause" style={{ color: "var(--vscode-descriptionForeground)" }} />
+                        <StatusText>AI Enhancement paused</StatusText>
+                        <span style={{ fontSize: "11px", color: "var(--vscode-descriptionForeground)", fontVariantNumeric: "tabular-nums" }}>
+                            [{formatElapsed(elapsed)}]
+                        </span>
+                    </div>
+                )}
             </HeaderRow>
 
             {status === "sign_in_required" && (
@@ -520,8 +607,8 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                             <span className="codicon codicon-account" />
                             Sign in to Copilot
                         </ActionButton>
-                        <ActionButton variant="secondary" onClick={handleSkipAndOpen}>
-                            Skip and open project
+                        <ActionButton variant="secondary" onClick={onFinish}>
+                            Skip
                         </ActionButton>
                     </div>
                 </SignInPanel>
@@ -606,22 +693,52 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
             </StreamArea>}
 
             {!isAuthPhase && <ButtonRow>
-                {isDone && (
-                    <ActionButton variant="primary" onClick={handleOpenProject}>
+                {isRunning && (
+                    <ActionButton variant="primary" onClick={handlePause}>
+                        <span className="codicon codicon-debug-pause" />
+                        Pause
+                    </ActionButton>
+                )}
+                {isPaused && (
+                    <ActionButton variant="primary" onClick={handleResume}>
+                        <span className="codicon codicon-debug-start" />
+                        Resume
+                    </ActionButton>
+                )}
+
+                {/* Open Project — disabled while running (agent active), guarded by project count when paused/done */}
+                <span
+                    style={{ display: "inline-block" }}
+                    title={
+                        isRunning
+                            ? "AI enhancement is in progress. Pause first to open the project."
+                            : openProjectDisabled
+                                ? `Opening ${projectCount} projects simultaneously may cause VS Code to become unresponsive. Navigate to the destination path to open them manually.`
+                                : undefined
+                    }
+                >
+                    <ActionButton
+                        variant="secondary"
+                        onClick={handleOpenProject}
+                        disabled={isRunning || openProjectDisabled}
+                    >
                         <span className="codicon codicon-folder-opened" />
                         Open Project
                     </ActionButton>
-                )}
-                {isRunning && (
+                </span>
+                {/* Done — always visible like Open Project, disabled while running */}
+                <span
+                    style={{ display: "inline-block" }}
+                    title={isRunning ? "AI enhancement is in progress. Pause first." : undefined}
+                >
                     <ActionButton
-                        variant="secondary"
-                        onClick={handleSkipAndOpen}
-                        title="Pause AI enhancement and open the integration project. Your current progress is saved and can be resumed later from the BI Chat."
+                        variant={isPaused || isRunning ? "secondary" : "primary"}
+                        onClick={handleDone}
+                        disabled={isRunning}
                     >
-                        <span className="codicon codicon-debug-pause" />
-                        Pause and Open Integration
+                        Done
                     </ActionButton>
-                )}
+                </span>
             </ButtonRow>}
         </Container>
     );
