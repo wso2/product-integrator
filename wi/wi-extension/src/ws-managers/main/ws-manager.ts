@@ -254,7 +254,13 @@ export class MainWsManager implements WIVisualizerAPI {
                 resolve({ path: "" });
             } else {
                 const fileOrFolderPath = selectedFileOrFolder[0].fsPath;
-                resolve({ path: fileOrFolderPath });
+                let isDirectory = false;
+                try {
+                    isDirectory = fs.statSync(fileOrFolderPath).isDirectory();
+                } catch {
+                    // ignore stat error
+                }
+                resolve({ path: fileOrFolderPath, isDirectory });
             }
         });
     }

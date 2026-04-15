@@ -16,21 +16,11 @@
  * under the License.
  */
 
-import { ActionButtons, Codicon, Typography } from "@wso2/ui-toolkit";
+import { ActionButtons, Typography } from "@wso2/ui-toolkit";
 import { useEffect, useState } from "react";
 import { useVisualizerContext } from "../../contexts";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { BodyText } from "./styles";
-import {
-    AIEnhancementSection,
-    AIEnhancementTitle,
-    RadioGroup,
-    RadioOption,
-    RadioInput,
-    RadioContent,
-    RadioTitle,
-    RadioDescription,
-} from "./styles";
 import { ProjectFormData, ProjectFormFields } from "../creationView/biForm/ProjectFormFields";
 import { validatePackageName, validateProjectName, validateProjectHandle, validateOrgName } from "../creationView/biForm/utils";
 import { MultiProjectFormData, MultiProjectFormFields } from "./components/MultiProjectFormFields";
@@ -60,7 +50,6 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
     });
 
     const [isValidating, setIsValidating] = useState(false);
-    const [aiEnhancementEnabled, setAiEnhancementEnabled] = useState(true);
     const [pathError, setPathError] = useState<string | null>(null);
     const [folderNameError, setFolderNameError] = useState<string | null>(null);
     const [singleIntegrationNameError, setSingleIntegrationNameError] = useState<string | null>(null);
@@ -233,7 +222,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                     ? singleIntegrationData.projectHandle
                     : undefined,
             };
-            await onNext(payload, aiEnhancementEnabled);
+            await onNext(payload, false);
         } catch (error) {
             setSingleIntegrationPathError("An error occurred during validation");
         } finally {
@@ -290,7 +279,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                 projectPath: multiProjectData.path,
                 createDirectory: multiProjectData.createDirectory,
                 createAsWorkspace: false,
-            }, aiEnhancementEnabled);
+            }, false);
         } catch (error) {
             setPathError("An error occurred during validation");
         } finally {
@@ -312,37 +301,10 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                         folderNameError={folderNameError || undefined}
                     />
 
-                    <AIEnhancementSection>
-                        <AIEnhancementTitle>
-                            <Codicon name="sparkle" sx={{ fontSize: "14px", color: "var(--wso2-brand-accent)" }} />
-                            AI Enhancement
-                        </AIEnhancementTitle>
-                        <RadioGroup role="radiogroup" aria-label="AI Enhancement mode">
-                            <RadioOption selected={aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(true)}>
-                                <RadioInput type="radio" name="ai-enhancement-mode-multi" checked={aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(true)} />
-                                <RadioContent>
-                                    <RadioTitle>Enable AI Enhancement</RadioTitle>
-                                    <RadioDescription>AI will automatically resolve unmapped elements, fix build errors, and improve the quality of the migration.</RadioDescription>
-                                </RadioContent>
-                            </RadioOption>
-                            <RadioOption selected={!aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(false)}>
-                                <RadioInput type="radio" name="ai-enhancement-mode-multi" checked={!aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(false)} />
-                                <RadioContent>
-                                    <RadioTitle>Skip for Now – Enhance Later</RadioTitle>
-                                    <RadioDescription>Open the project as-is. You can trigger AI enhancement later from the BI Copilot.</RadioDescription>
-                                </RadioContent>
-                            </RadioOption>
-                        </RadioGroup>
-                    </AIEnhancementSection>
-
                     <ButtonWrapper>
                         <ActionButtons
                             primaryButton={{
-                                text: isValidating
-                                    ? "Validating..."
-                                    : aiEnhancementEnabled
-                                        ? "Create and Start AI Enhancement"
-                                        : "Create and Open Project",
+                                text: isValidating ? "Validating..." : "Start Migration",
                                 onClick: handleCreateMultiProject,
                                 disabled: isValidating
                             }}
@@ -374,37 +336,10 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                         onCloudProjectHandleError={setSingleIntegrationCloudProjectHandleError}
                     />
 
-                    <AIEnhancementSection>
-                        <AIEnhancementTitle>
-                            <Codicon name="sparkle" sx={{ fontSize: "14px", color: "var(--wso2-brand-accent)" }} />
-                            AI Enhancement
-                        </AIEnhancementTitle>
-                        <RadioGroup role="radiogroup" aria-label="AI Enhancement mode">
-                            <RadioOption selected={aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(true)}>
-                                <RadioInput type="radio" name="ai-enhancement-mode-single" checked={aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(true)} />
-                                <RadioContent>
-                                    <RadioTitle>Enable AI Enhancement</RadioTitle>
-                                    <RadioDescription>AI will automatically resolve unmapped elements, fix build errors, and improve the quality of the migration.</RadioDescription>
-                                </RadioContent>
-                            </RadioOption>
-                            <RadioOption selected={!aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(false)}>
-                                <RadioInput type="radio" name="ai-enhancement-mode-single" checked={!aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(false)} />
-                                <RadioContent>
-                                    <RadioTitle>Skip for Now – Enhance Later</RadioTitle>
-                                    <RadioDescription>Open the project as-is. You can trigger AI enhancement later from the BI Copilot.</RadioDescription>
-                                </RadioContent>
-                            </RadioOption>
-                        </RadioGroup>
-                    </AIEnhancementSection>
-
                     <ButtonWrapper>
                         <ActionButtons
                             primaryButton={{
-                                text: isValidating
-                                    ? "Validating..."
-                                    : aiEnhancementEnabled
-                                        ? "Create and Start AI Enhancement"
-                                        : `Create and Open ${selectedResourceTypeLabel}`,
+                                text: isValidating ? "Validating..." : "Start Migration",
                                 onClick: handleCreateSingleProject,
                                 disabled: isValidating
                             }}

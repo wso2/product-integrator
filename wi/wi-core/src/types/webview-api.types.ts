@@ -53,6 +53,7 @@ export interface GetRecentProjectsResponse {
 
 export interface FileOrDirResponse {
     path: string;
+    isDirectory?: boolean;
 }
 
 export interface FileOrDirRequest {

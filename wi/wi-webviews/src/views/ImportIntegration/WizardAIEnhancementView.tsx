@@ -29,7 +29,7 @@ import ToolCallGroupSegment, { ToolCallItem } from "../shared/ai/ToolCallGroupSe
 // Types
 // ──────────────────────────────────────────────────────────────────────────────
 
-type EnhancementStatus = "checking_auth" | "sign_in_required" | "signing_in" | "running" | "completed" | "error" | "aborted";
+type EnhancementStatus = "checking_auth" | "sign_in_required" | "signing_in" | "running" | "paused" | "completed" | "error" | "aborted";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -102,6 +102,7 @@ const ButtonRow = styled.div`
     display: flex;
     gap: 8px;
     align-items: center;
+    justify-content: flex-end;
 `;
 
 const ActionButton = styled.button<{ variant?: "primary" | "secondary" }>`
@@ -182,9 +183,11 @@ const SignInErrorText = styled.p`
 
 interface WizardAIEnhancementViewProps {
     wsClient: WsClient;
+    projectCount: number;
+    onFinish: () => void;
 }
 
-export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewProps) {
+export function WizardAIEnhancementView({ wsClient, projectCount, onFinish }: WizardAIEnhancementViewProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const enhancementTriggered = useRef(false);
 
@@ -194,15 +197,32 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
     const [signInError, setSignInError] = useState<string | undefined>();
 
     const terminalRef = useRef(false);
+    const userPausedRef = useRef(false);
+    // Accumulates total elapsed seconds across multiple run segments (pause/resume cycles)
+    const accumulatedRef = useRef(0);
+    const segmentStartRef = useRef<number | null>(null);
 
     // ── Uptime counter ──────────────────────────────────────────────────────
     useEffect(() => {
         if (status !== "running") {
             return;
         }
-        setElapsed(0);
-        const id = setInterval(() => setElapsed((s) => s + 1), 1000);
-        return () => clearInterval(id);
+        // Record start of this run segment; do NOT reset accumulated total.
+        segmentStartRef.current = Date.now();
+        const id = setInterval(() => {
+            const segmentElapsed = segmentStartRef.current
+                ? Math.floor((Date.now() - segmentStartRef.current) / 1000)
+                : 0;
+            setElapsed(accumulatedRef.current + segmentElapsed);
+        }, 1000);
+        return () => {
+            clearInterval(id);
+            // Persist elapsed time for the segment that just ended.
+            if (segmentStartRef.current) {
+                accumulatedRef.current += Math.floor((Date.now() - segmentStartRef.current) / 1000);
+                segmentStartRef.current = null;
+            }
+        };
     }, [status]);
 
     function formatElapsed(seconds: number): string {
@@ -367,7 +387,10 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
 
                 case "abort":
                     terminalRef.current = true;
-                    setStatus("aborted");
+                    // Only mark as aborted if the user didn't pause manually.
+                    if (!userPausedRef.current) {
+                        setStatus("aborted");
+                    }
                     break;
 
                 default:
@@ -425,12 +448,24 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
         });
     }, [wsClient]);
 
-    const handleSkipAndOpen = useCallback(() => {
+    const handlePause = useCallback(() => {
+        userPausedRef.current = true;
+        setStatus("paused");
         wsClient.abortMigrationAgent().catch(() => { /* best effort */ });
-        wsClient.openMigratedProject().catch((err: unknown) => {
-            console.error("[WizardAIEnhancementView] openMigratedProject (skip) failed:", err);
+    }, [wsClient]);
+
+    const handleResume = useCallback(() => {
+        userPausedRef.current = false;
+        terminalRef.current = false;
+        setStatus("running");
+        wsClient.wizardEnhancementReady().catch((err: unknown) => {
+            console.error("[WizardAIEnhancementView] wizardEnhancementReady (resume) failed:", err);
         });
     }, [wsClient]);
+
+    const handleDone = useCallback(() => {
+        onFinish();
+    }, [onFinish]);
 
     const handleSignIn = useCallback(() => {
         setSignInError(undefined);
@@ -453,8 +488,10 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
 
     // ── Render ───────────────────────────────────────────────────────────────
     const isRunning = status === "running";
+    const isPaused = status === "paused";
     const isDone = status === "completed" || status === "error" || status === "aborted";
     const isAuthPhase = status === "checking_auth" || status === "sign_in_required" || status === "signing_in";
+    const openProjectDisabled = projectCount > 15;
 
     return (
         <Container>
@@ -507,6 +544,15 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                         <StatusText>AI Enhancement was skipped</StatusText>
                     </div>
                 )}
+                {isPaused && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span className="codicon codicon-debug-pause" style={{ color: "var(--vscode-descriptionForeground)" }} />
+                        <StatusText>AI Enhancement paused</StatusText>
+                        <span style={{ fontSize: "11px", color: "var(--vscode-descriptionForeground)", fontVariantNumeric: "tabular-nums" }}>
+                            [{formatElapsed(elapsed)}]
+                        </span>
+                    </div>
+                )}
             </HeaderRow>
 
             {status === "sign_in_required" && (
@@ -520,8 +566,8 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
                             <span className="codicon codicon-account" />
                             Sign in to Copilot
                         </ActionButton>
-                        <ActionButton variant="secondary" onClick={handleSkipAndOpen}>
-                            Skip and open project
+                        <ActionButton variant="secondary" onClick={onFinish}>
+                            Skip
                         </ActionButton>
                     </div>
                 </SignInPanel>
@@ -606,20 +652,42 @@ export function WizardAIEnhancementView({ wsClient }: WizardAIEnhancementViewPro
             </StreamArea>}
 
             {!isAuthPhase && <ButtonRow>
-                {isDone && (
-                    <ActionButton variant="primary" onClick={handleOpenProject}>
+                {/* Open Project — disabled while running (agent active), guarded by project count when paused/done */}
+                <span
+                    style={{ display: "inline-block" }}
+                    title={
+                        isRunning
+                            ? "AI enhancement is in progress. Pause first to open the project."
+                            : openProjectDisabled
+                                ? `Opening ${projectCount} projects simultaneously may cause VS Code to become unresponsive. Navigate to the destination path to open them manually.`
+                                : undefined
+                    }
+                >
+                    <ActionButton
+                        variant="secondary"
+                        onClick={handleOpenProject}
+                        disabled={isRunning || openProjectDisabled}
+                    >
                         <span className="codicon codicon-folder-opened" />
                         Open Project
                     </ActionButton>
-                )}
+                </span>
+
                 {isRunning && (
-                    <ActionButton
-                        variant="secondary"
-                        onClick={handleSkipAndOpen}
-                        title="Pause AI enhancement and open the integration project. Your current progress is saved and can be resumed later from the BI Chat."
-                    >
+                    <ActionButton variant="primary" onClick={handlePause}>
                         <span className="codicon codicon-debug-pause" />
-                        Pause and Open Integration
+                        Pause
+                    </ActionButton>
+                )}
+                {isPaused && (
+                    <ActionButton variant="primary" onClick={handleResume}>
+                        <span className="codicon codicon-debug-start" />
+                        Resume
+                    </ActionButton>
+                )}
+                {isDone && (
+                    <ActionButton variant="primary" onClick={handleDone}>
+                        Done
                     </ActionButton>
                 )}
             </ButtonRow>}
