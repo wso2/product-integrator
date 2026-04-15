@@ -28,6 +28,10 @@ on:
         required: false
         default: true
         type: boolean
+      ballerina_version:
+        description: 'Specify Ballerina version to use'
+        required: true
+        type: string
       icp_version:
         description: 'Specify ICP version to use'
         required: true
@@ -199,10 +203,12 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           ICP_VERSION="${{ github.event.inputs.icp_version }}"
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
-          INTEGRATOR_DIST_URL="https://github.com/wso2-enterprise/support-ballerina-distribution/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-linux-${INTEGRATOR_VERSION}.zip"
+          INTEGRATOR_DIST_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
           cd ./installers/linux-deb
           wget -O integrator-dist.zip "$INTEGRATOR_DIST_URL"
           wget -O icp.zip "$ICP_URL"
@@ -223,10 +229,12 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           ICP_VERSION="${{ github.event.inputs.icp_version }}"
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
-          INTEGRATOR_DIST_URL="https://github.com/wso2-enterprise/support-ballerina-distribution/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-linux-${INTEGRATOR_VERSION}.zip"
+          INTEGRATOR_DIST_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
           cd ./installers/linux-rpm
           wget -O integrator-dist.zip "$INTEGRATOR_DIST_URL"
           wget -O icp.zip "$ICP_URL"
@@ -511,6 +519,8 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
+          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           if [ "${{ matrix.arch }}" = "arm64" ]; then
           INTEGRATOR_DIST_VARIANT="macos-arm"
           else
@@ -519,7 +529,7 @@ jobs:
           ICP_VERSION="${{ github.event.inputs.icp_version }}"
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
-          INTEGRATOR_DIST_URL="https://github.com/wso2-enterprise/support-ballerina-distribution/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-${INTEGRATOR_DIST_VARIANT}-${INTEGRATOR_VERSION}.zip"
+          INTEGRATOR_DIST_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-${INTEGRATOR_DIST_VARIANT}.zip"
           cd ./installers/mac
           wget -O integrator-dist.zip "$INTEGRATOR_DIST_URL"
           wget -O icp.zip "$ICP_URL"
@@ -776,10 +786,12 @@ jobs:
           cd ..\..
           $ROOT_DIR = Get-Location
           Write-Host "Root dir: $ROOT_DIR"
+          set BALLERINA_VERSION "${{ github.event.inputs.ballerina_version }}"
+          set BALLERINA_VERSION_FILENAME "${BALLERINA_VERSION}"
           set ICP_VERSION "${{ github.event.inputs.icp_version }}"
           set ICP_URL "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
           set INTEGRATOR_VERSION "${{ github.event.inputs.integrator_version }}"
-          set INTEGRATOR_DIST_URL "https://github.com/wso2-enterprise/support-ballerina-distribution/releases/download/v${INTEGRATOR_VERSION}/wso2-integrator-dist-windows-${INTEGRATOR_VERSION}.zip"
+          set INTEGRATOR_DIST_URL "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-windows.zip"
           cd .\installers\windows
           Invoke-WebRequest -Uri $INTEGRATOR_DIST_URL -OutFile "integrator-dist.zip"
           Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
