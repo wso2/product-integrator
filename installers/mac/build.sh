@@ -204,7 +204,6 @@ hdiutil create \
 
 print_info "Mounting temporary DMG for customisation"
 # Fix #1: capture actual mountpoint from hdiutil attach output via -plist
-# Note: -quiet suppresses plist output, so redirect stderr instead
 ATTACH_PLIST=$(hdiutil attach "$TEMP_DMG" -plist)
 if [ -z "$ATTACH_PLIST" ]; then
     print_error "hdiutil attach returned empty output"
@@ -264,8 +263,11 @@ for _retry in 1 2 3; do
     fi
     [ "$_retry" -lt 3 ] && { print_info "Detach attempt $_retry failed, retrying in 2s..."; sleep 2; }
 done
-[ "$_detach_ok" -eq 0 ] && print_warning "Could not unmount $DMG_MOUNT_DIR after 3 attempts; continuing"
-DMG_MOUNT_DIR=""  # Clear so trap doesn't attempt a second detach
+if [ "$_detach_ok" -eq 0 ]; then
+    print_error "Could not unmount $DMG_MOUNT_DIR after 3 attempts; aborting before DMG conversion"
+    exit 1
+fi
+DMG_MOUNT_DIR=""  # Clear only after successful detach so the trap can still retry on failure
 hdiutil convert "$TEMP_DMG" \
     -format UDZO \
     -imagekey zlib-level=9 \
