@@ -186,7 +186,7 @@ rm -rf "$DMG_STAGING"
 mkdir -p "$DMG_STAGING"
 
 # The .app is still fully assembled in WSO2_TARGET — reuse it directly
-cp -r "$WSO2_TARGET/$APP_NAME.app" "$DMG_STAGING/"
+ditto "$WSO2_TARGET/$APP_NAME.app" "$DMG_STAGING/$APP_NAME.app"   
 
 # Fix #5: remove any leftover temp DMG before creation to avoid "File exists" error
 rm -f "$TEMP_DMG"
