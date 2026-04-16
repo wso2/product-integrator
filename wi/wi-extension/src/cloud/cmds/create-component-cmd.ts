@@ -56,6 +56,7 @@ const allIntegrationTypes = [
 	DevantScopes.INTEGRATION_AS_API,
 	DevantScopes.EVENT_INTEGRATION,
 	DevantScopes.FILE_INTEGRATION,
+	DevantScopes.MCP,
 ];
 
 export function createNewComponentCommand(context: ExtensionContext) {
