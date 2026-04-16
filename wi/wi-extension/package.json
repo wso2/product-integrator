@@ -106,7 +106,7 @@
           "id": "wso2-integrator.explorer",
           "name": "Integrations",
           "contextualTitle": "WSO2 Integrator",
-          "when": "!WI.projectType || WI.projectType != 'si'"
+          "when": "!WI.projectType || (WI.projectType !== 'si' && WI.projectType !== 'mi')"
         }
       ]
     },
