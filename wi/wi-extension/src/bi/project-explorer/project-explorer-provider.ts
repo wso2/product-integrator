@@ -276,6 +276,11 @@ async function getProjectStructureData(): Promise<{ entries: ProjectExplorerEntr
             const projectStructure = stateContext.projectStructure as ProjectStructureResponse;
             const projects = projectStructure.projects;
 
+            if (projectStructure.workspaceTitle || projectStructure.workspaceName) {
+                // Multi-project workspace: use workspace-level title
+                projectName = projectStructure.workspaceTitle || projectStructure.workspaceName;
+            }
+
             // Filter projects to avoid duplicates - only include unique project paths
             const uniqueProjects = new Map<string, typeof projects[0]>();
             for (const project of projects) {
@@ -348,20 +353,20 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
 
     // ---------- Listeners ----------
     if (!isLibrary) {
-        const listenerChildren = getComponents(project.directoryMap[DIRECTORY_MAP.LISTENER], DIRECTORY_MAP.LISTENER, projectPath);
-        if (listenerChildren.length > 0) {
-            const listeners = new ProjectExplorerEntry(
-                'Listeners',
-                vscode.TreeItemCollapsibleState.Expanded,
-                null,
-                'radio',
-                false
-            );
-            listeners.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-            listeners.contextValue = 'listeners';
-            listeners.children = listenerChildren;
-            entries.push(listeners);
+        const listeners = new ProjectExplorerEntry(
+            'Listeners',
+            vscode.TreeItemCollapsibleState.Expanded,
+            null,
+            'radio',
+            false
+        );
+        listeners.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+        listeners.contextValue = 'listeners';
+        listeners.children = getComponents(project.directoryMap[DIRECTORY_MAP.LISTENER], DIRECTORY_MAP.LISTENER, projectPath);
+        if (listeners.children.length > 0) {
+            listeners.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
         }
+        entries.push(listeners);
     }
 
     // ---------- Connections ----------
@@ -428,38 +433,6 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     }
     entries.push(dataMappers);
 
-    // ---------- Workflows ----------
-    const workflowChildren = getComponents(project.directoryMap[DIRECTORY_MAP.WORKFLOW] ?? [], DIRECTORY_MAP.WORKFLOW, projectPath);
-    if (workflowChildren.length > 0) {
-        const workflows = new ProjectExplorerEntry(
-            'Workflows',
-            vscode.TreeItemCollapsibleState.Expanded,
-            null,
-            'workflow',
-            false
-        );
-        workflows.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-        workflows.contextValue = 'workflows';
-        workflows.children = workflowChildren;
-        entries.push(workflows);
-    }
-
-    // ---------- Workflow Activities ----------
-    const activityChildren = getComponents(project.directoryMap[DIRECTORY_MAP.ACTIVITY] ?? [], DIRECTORY_MAP.ACTIVITY, projectPath);
-    if (activityChildren.length > 0) {
-        const workflowActivities = new ProjectExplorerEntry(
-            'Workflow Activities',
-            vscode.TreeItemCollapsibleState.Expanded,
-            null,
-            'task',
-            false
-        );
-        workflowActivities.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-        workflowActivities.contextValue = 'workflowActivities';
-        workflowActivities.children = activityChildren;
-        entries.push(workflowActivities);
-    }
-
     // ---------- Configurations ----------
     const configs = new ProjectExplorerEntry(
         'Configurations',
@@ -507,16 +480,11 @@ function getComponents(
         if (comp.type !== itemType) {
             continue;
         }
-        const entryIcon = itemType === DIRECTORY_MAP.WORKFLOW
-            ? 'workflow'
-            : itemType === DIRECTORY_MAP.ACTIVITY
-                ? 'task'
-                : comp.icon;
         const fileEntry = new ProjectExplorerEntry(
             comp.name,
             vscode.TreeItemCollapsibleState.None,
             comp.path,
-            entryIcon,
+            comp.icon,
             false,
             comp.position
         );

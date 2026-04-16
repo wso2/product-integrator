@@ -3,7 +3,7 @@
   "displayName": "WSO2 Integrator (Alpha)",
   "description": "Integration development environment for WSO2 Integrator",
   "version": "0.2.2",
-  "cliVersion": "v1.2.212603241600",
+  "cliVersion": "v1.2.212604091715",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
   "license": "Apache-2.0",
@@ -33,11 +33,11 @@
         "integrator.selectedProfile": {
           "type": "string",
           "enum": [
-            "Default",
+            "WSO2 Integrator: Default",
             "WSO2 Integrator: MI",
             "WSO2 Integrator: SI"
           ],
-          "default": "Default",
+          "default": "WSO2 Integrator: Default",
           "description": "Select the active WSO2 Integrator profile."
         },
         "integrator.enabledRuntimes.bi": {
@@ -105,7 +105,8 @@
         {
           "id": "wso2-integrator.explorer",
           "name": "Integrations",
-          "contextualTitle": "WSO2 Integrator"
+          "contextualTitle": "WSO2 Integrator",
+          "when": "!WI.projectType || WI.projectType != 'si'"
         }
       ]
     },
@@ -114,11 +115,6 @@
         "view": "wso2-integrator.explorer",
         "contents": "$(loadingspin) Loading WSO2 Integrator...",
         "when": "!WI.projectType"
-      },
-      {
-        "view": "wso2-integrator.explorer",
-        "contents": "$(info) SI project detected.\n\nSI tree view is not available yet. Use File Explorer to browse your project files.",
-        "when": "WI.projectType == 'si'"
       },
       {
         "view": "wso2-integrator.explorer",

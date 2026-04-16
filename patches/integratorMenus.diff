@@ -1,0 +1,297 @@
+Index: product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/platform/product/common/product.ts
++++ product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
+@@ -67,10 +67,11 @@ else {
+ 			applicationName: 'wso2-integrator',
+ 			dataFolderName: '.wso2-integrator',
+ 			urlProtocol: 'wso2-integrator',
+-			reportIssueUrl: 'https://github.com/wso2/product-integrator/issues/new',
++			reportIssueUrl: 'https://github.com/wso2/product-integrator/issues',
++			documentationUrl: 'https://wso2.github.io/docs-integrator/',
+ 			licenseName: 'MIT',
+-			licenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt',
+-			serverLicenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt'
++			licenseUrl: 'https://wso2.com/licenses/',
++			serverLicenseUrl: 'https://wso2.com/licenses/'
+ 		});
+ 	}
+ }
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/helpActions.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/browser/actions/helpActions.ts
++++ product-integrator/lib/vscode/src/vs/workbench/browser/actions/helpActions.ts
+@@ -73,7 +73,8 @@ class OpenIntroductoryVideosUrlAction ex
+ 			menu: {
+ 				id: MenuId.MenubarHelpMenu,
+ 				group: '2_reference',
+-				order: 2
++				order: 2,
++				when: ContextKeyExpr.false()
+ 			}
+ 		});
+ 	}
+@@ -105,7 +106,8 @@ class OpenTipsAndTricksUrlAction extends
+ 			menu: {
+ 				id: MenuId.MenubarHelpMenu,
+ 				group: '2_reference',
+-				order: 3
++				order: 3,
++				when: ContextKeyExpr.false()
+ 			}
+ 		});
+ 	}
+@@ -248,8 +250,8 @@ class OpenLicenseUrlAction extends Actio
+ 		super({
+ 			id: OpenLicenseUrlAction.ID,
+ 			title: {
+-				...localize2('openLicenseUrl', "View License"),
+-				mnemonicTitle: localize({ key: 'miLicense', comment: ['&& denotes a mnemonic'] }, "View &&License"),
++				...localize2('openLicenseUrl', "View Licence"),
++				mnemonicTitle: localize({ key: 'miLicense', comment: ['&& denotes a mnemonic'] }, "View &&Licence"),
+ 			},
+ 			category: Categories.Help,
+ 			f1: true,
+@@ -358,7 +360,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 	},
+ 	order: 7,
+ 	group: '1_welcome',
+-	when: ContextKeyExpr.equals('chatSetupHidden', false)
++	when: ContextKeyExpr.false()
+ });
+ 
+ // --- Actions Registration
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/workspaceActions.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/browser/actions/workspaceActions.ts
++++ product-integrator/lib/vscode/src/vs/workbench/browser/actions/workspaceActions.ts
+@@ -350,7 +350,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 	group: '2_open',
+ 	command: {
+ 		id: OpenFolderAction.ID,
+-		title: localize({ key: 'miOpenFolder', comment: ['&& denotes a mnemonic'] }, "Open &&Folder...")
++		title: localize({ key: 'miOpenFolder', comment: ['&& denotes a mnemonic'] }, "Open &&Integration...")
+ 	},
+ 	order: 2,
+ 	when: OpenFolderWorkspaceSupportContext
+@@ -360,7 +360,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 	group: '2_open',
+ 	command: {
+ 		id: OpenFolderViaWorkspaceAction.ID,
+-		title: localize({ key: 'miOpenFolder', comment: ['&& denotes a mnemonic'] }, "Open &&Folder...")
++		title: localize({ key: 'miOpenFolder', comment: ['&& denotes a mnemonic'] }, "Open &&Integration...")
+ 	},
+ 	order: 2,
+ 	when: ContextKeyExpr.and(OpenFolderWorkspaceSupportContext.toNegated(), WorkbenchStateContext.isEqualTo('workspace'))
+@@ -373,7 +373,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 		title: localize({ key: 'miOpen', comment: ['&& denotes a mnemonic'] }, "&&Open...")
+ 	},
+ 	order: 1,
+-	when: ContextKeyExpr.and(IsMacNativeContext, OpenFolderWorkspaceSupportContext)
++	when: ContextKeyExpr.false()
+ });
+ 
+ MenuRegistry.appendMenuItem(MenuId.MenubarFileMenu, {
+@@ -383,7 +383,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 		title: localize({ key: 'miOpenWorkspace', comment: ['&& denotes a mnemonic'] }, "Open Wor&&kspace from File...")
+ 	},
+ 	order: 3,
+-	when: EnterMultiRootWorkspaceSupportContext
++	when: ContextKeyExpr.false()
+ });
+ 
+ MenuRegistry.appendMenuItem(MenuId.MenubarFileMenu, {
+@@ -392,7 +392,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 		id: ADD_ROOT_FOLDER_COMMAND_ID,
+ 		title: localize({ key: 'miAddFolderToWorkspace', comment: ['&& denotes a mnemonic'] }, "A&&dd Folder to Workspace...")
+ 	},
+-	when: ContextKeyExpr.or(EnterMultiRootWorkspaceSupportContext, WorkbenchStateContext.isEqualTo('workspace')),
++	when: ContextKeyExpr.false(),
+ 	order: 1
+ });
+ 
+@@ -403,7 +403,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 		title: localize('miSaveWorkspaceAs', "Save Workspace As...")
+ 	},
+ 	order: 2,
+-	when: EnterMultiRootWorkspaceSupportContext
++	when: ContextKeyExpr.false()
+ });
+ 
+ MenuRegistry.appendMenuItem(MenuId.MenubarFileMenu, {
+@@ -413,14 +413,14 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 		title: localize('duplicateWorkspace', "Duplicate Workspace")
+ 	},
+ 	order: 3,
+-	when: EnterMultiRootWorkspaceSupportContext
++	when: ContextKeyExpr.false()
+ });
+ 
+ MenuRegistry.appendMenuItem(MenuId.MenubarFileMenu, {
+ 	group: '6_close',
+ 	command: {
+ 		id: CloseWorkspaceAction.ID,
+-		title: localize({ key: 'miCloseFolder', comment: ['&& denotes a mnemonic'] }, "Close &&Folder")
++		title: localize({ key: 'miCloseFolder', comment: ['&& denotes a mnemonic'] }, "Close &&Integration")
+ 	},
+ 	order: 3,
+ 	when: ContextKeyExpr.and(WorkbenchStateContext.isEqualTo('folder'), EmptyWorkspaceSupportContext)
+Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editor.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/editor/editor.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editor.contribution.ts
+@@ -682,6 +682,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 	submenu: MenuId.MenubarShare,
+ 	group: '45_share',
+ 	order: 1,
++	when: ContextKeyExpr.false(),
+ });
+ 
+ // Layout menu
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
+@@ -272,8 +272,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarDebugMenu, {
+ 		id: DEBUG_START_COMMAND_ID,
+ 		title: nls.localize({ key: 'miStartDebugging', comment: ['&& denotes a mnemonic'] }, "&&Start Debugging")
+ 	},
+-	order: 1,
+-	when: CONTEXT_DEBUGGERS_AVAILABLE
++	order: 1,
+ });
+ 
+ MenuRegistry.appendMenuItem(MenuId.MenubarDebugMenu, {
+@@ -282,8 +281,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarDebugMenu, {
+ 		id: DEBUG_RUN_COMMAND_ID,
+ 		title: nls.localize({ key: 'miRun', comment: ['&& denotes a mnemonic'] }, "Run &&Without Debugging")
+ 	},
+-	order: 2,
+-	when: CONTEXT_DEBUGGERS_AVAILABLE
++	order: 2,
+ });
+ 
+ MenuRegistry.appendMenuItem(MenuId.MenubarDebugMenu, {
+@@ -416,6 +414,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 		id: 'debug.installAdditionalDebuggers',
+ 		title: nls.localize({ key: 'miInstallAdditionalDebuggers', comment: ['&& denotes a mnemonic'] }, "&&Install Additional Debuggers...")
+ 	},
++	when: ContextKeyExpr.false(),
+ 	order: 1
+ });
+ 
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/files/browser/fileActions.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/files/browser/fileActions.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/files/browser/fileActions.contribution.ts
+@@ -681,6 +681,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 		id: NEW_UNTITLED_FILE_COMMAND_ID,
+ 		title: nls.localize({ key: 'miNewFile', comment: ['&& denotes a mnemonic'] }, "&&New Text File")
+ 	},
++	when: ContextKeyExpr.false(),
+ 	order: 1
+ });
+ 
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/issue/common/issue.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/issue/common/issue.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/issue/common/issue.contribution.ts
+@@ -4,6 +4,7 @@
+  *--------------------------------------------------------------------------------------------*/
+ 
+ import { Disposable } from '../../../../base/common/lifecycle.js';
++import { URI } from '../../../../base/common/uri.js';
+ import { localize, localize2 } from '../../../../nls.js';
+ import { ICommandAction } from '../../../../platform/action/common/action.js';
+ import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
+@@ -11,11 +12,13 @@ import { MenuId, MenuRegistry } from '..
+ import { CommandsRegistry, ICommandMetadata } from '../../../../platform/commands/common/commands.js';
+ import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+ import { INotificationService } from '../../../../platform/notification/common/notification.js';
++import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+ import { IProductService } from '../../../../platform/product/common/productService.js';
+ import { IWorkbenchContribution } from '../../../common/contributions.js';
+ import { IssueReporterData, IWorkbenchIssueService } from './issue.js';
+ 
+ const OpenIssueReporterActionId = 'workbench.action.openIssueReporter';
++const OpenReportIssueUrlActionId = 'workbench.action.openReportIssueUrl';
+ const OpenIssueReporterApiId = 'vscode.openIssueReporter';
+ 
+ const OpenIssueReporterCommandMetadata: ICommandMetadata = {
+@@ -112,6 +115,11 @@ export class BaseIssueContribution exten
+ 			metadata: OpenIssueReporterCommandMetadata
+ 		}));
+ 
++		this._register(CommandsRegistry.registerCommand({
++			id: OpenReportIssueUrlActionId,
++			handler: accessor => accessor.get(IOpenerService).open(URI.parse(productService.reportIssueUrl!))
++		}));
++
+ 		const reportIssue: ICommandAction = {
+ 			id: OpenIssueReporterActionId,
+ 			title: localize2({ key: 'reportIssueInEnglish', comment: ['Translate this to "Report Issue in English" in all languages please!'] }, "Report Issue..."),
+@@ -123,8 +131,8 @@ export class BaseIssueContribution exten
+ 		this._register(MenuRegistry.appendMenuItem(MenuId.MenubarHelpMenu, {
+ 			group: '3_feedback',
+ 			command: {
+-				id: OpenIssueReporterActionId,
+-				title: localize({ key: 'miReportIssue', comment: ['&& denotes a mnemonic', 'Translate this to "Report Issue in English" in all languages please!'] }, "Report &&Issue")
++				id: OpenReportIssueUrlActionId,
++				title: localize({ key: 'miReportIssue', comment: ['&& denotes a mnemonic', 'Translate this to "Report Issues in English" in all languages please!'] }, "Report &&Issues")
+ 			},
+ 			order: 3
+ 		}));
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/userDataProfile/browser/userDataProfile.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/userDataProfile/browser/userDataProfile.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/userDataProfile/browser/userDataProfile.ts
+@@ -169,6 +169,7 @@ export class UserDataProfilesWorkbenchCo
+ 			submenu: OpenProfileMenu,
+ 			group: '1_new',
+ 			order: 4,
++			when: ContextKeyExpr.false(),
+ 		});
+ 	}
+ 
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeViews/common/newFile.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/welcomeViews/common/newFile.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeViews/common/newFile.contribution.ts
+@@ -11,7 +11,7 @@ import { localize, localize2 } from '../
+ import { ILocalizedString } from '../../../../platform/action/common/action.js';
+ import { Action2, IMenuService, MenuId, registerAction2, IMenu, MenuRegistry, MenuItemAction } from '../../../../platform/actions/common/actions.js';
+ import { ICommandService } from '../../../../platform/commands/common/commands.js';
+-import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
++import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+ import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+ import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+ import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+@@ -37,7 +37,8 @@ registerAction2(class extends Action2 {
+ 			menu: {
+ 				id: MenuId.MenubarFileMenu,
+ 				group: '1_new',
+-				order: 2
++				order: 2,
++				when: ContextKeyExpr.false()
+ 			}
+ 		});
+ 	}
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeWalkthrough/browser/walkThrough.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/welcomeWalkthrough/browser/walkThrough.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeWalkthrough/browser/walkThrough.contribution.ts
+@@ -11,6 +11,7 @@ import { WalkThroughSnippetContentProvid
+ import { EditorWalkThroughAction, EditorWalkThroughInputSerializer } from './editor/editorWalkThrough.js';
+ import { Registry } from '../../../../platform/registry/common/platform.js';
+ import { EditorExtensions, IEditorFactoryRegistry } from '../../../common/editor.js';
++import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+ import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+ import { MenuRegistry, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+ import { registerWorkbenchContribution2 } from '../../../common/contributions.js';
+@@ -45,5 +46,6 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+ 		id: 'workbench.action.showInteractivePlayground',
+ 		title: localize({ key: 'miPlayground', comment: ['&& denotes a mnemonic'] }, "Editor Playgrou&&nd")
+ 	},
++	when: ContextKeyExpr.false(),
+ 	order: 3
+ });

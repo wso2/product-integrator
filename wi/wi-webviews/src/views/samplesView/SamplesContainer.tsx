@@ -22,11 +22,33 @@ import { Button, Codicon, Dropdown, SearchBox } from "@wso2/ui-toolkit";
 import {
 	GettingStartedCategory,
 	GettingStartedSample,
+	PrebuiltIntegration,
 	SampleDownloadRequest,
 } from "@wso2/wi-core";
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useVisualizerContext } from "../../contexts/WsContext";
 import type { SampleSupportedRuntime } from "../shared/runtime";
+
+const ALL_CATEGORY_VALUE = "__all__";
+
+type BrowseItemType = "sample" | "prebuilt";
+type CategoryOption = { key: string; content: string; value: string };
+
+interface BrowseItem {
+	id: string;
+	itemType: BrowseItemType;
+	title: string;
+	description: string;
+	primaryCategory: string;
+	categoryValues: string[];
+	imageUrl?: string;
+	connectorIconUrls?: string[];
+	fallbackArtwork?: string;
+	searchText: string;
+	priority: number;
+	sample?: GettingStartedSample;
+	prebuiltIntegration?: PrebuiltIntegration;
+}
 
 const SamplesRoot = styled.div`
     display: flex;
@@ -38,56 +60,128 @@ const SamplesRoot = styled.div`
 const Toolbar = styled.div`
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 14px;
     padding: 16px 18px 14px;
     background: linear-gradient(
         180deg,
         color-mix(in srgb, var(--wso2-brand-accent) 4%, var(--vscode-editor-background)) 0%,
         var(--vscode-editor-background) 100%
     );
+    border-bottom: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 10%, transparent);
 `;
 
-const ToolbarTitleRow = styled.div`
+const SearchRow = styled.div`
+    width: 100%;
+`;
+
+const FilterBar = styled.div`
     display: flex;
-    flex-direction: column;
-    gap: 3px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px 18px;
 `;
 
-const ToolbarTitle = styled.h3`
-    margin: 0;
-    font-size: 15px;
+const FilterGroup = styled.div`
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+`;
+
+const FilterTitle = styled.span`
+    font-size: 13px;
     font-weight: 600;
     color: var(--vscode-foreground);
 `;
 
-const ToolbarSubtitle = styled.p`
-    margin: 0;
-    font-size: 12px;
-    color: var(--vscode-descriptionForeground);
+const TypeFilters = styled.div`
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
 `;
 
-const FiltersRow = styled.div`
-    display: grid;
-    grid-template-columns: minmax(260px, 300px) minmax(260px, 420px);
-    gap: 10px;
-    align-items: center;
+const TypePill = styled("button", {
+	shouldForwardProp: (prop) => prop !== "active",
+}) <{ active: boolean }>`
+    height: 30px;
+    border-radius: 999px;
+    border: 1px solid
+        ${(props: { active: boolean }) =>
+		props.active
+			? "var(--vscode-button-background)"
+			: "var(--vscode-dropdown-border, var(--vscode-input-border))"};
+    background: ${(props: { active: boolean }) =>
+		props.active
+			? "var(--vscode-button-background)"
+			: "var(--vscode-dropdown-background)"};
+    color: ${(props: { active: boolean }) =>
+		props.active
+			? "var(--vscode-button-foreground)"
+			: "var(--vscode-dropdown-foreground, var(--vscode-foreground))"};
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 
-    @media (max-width: 1080px) {
-        grid-template-columns: 1fr;
+    &:hover {
+        border-color: var(--vscode-focusBorder);
     }
 `;
 
-const FilterLabel = styled.span`
-    font-size: 11px;
-    color: var(--vscode-descriptionForeground);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 6px;
+const CategoryFilterWrap = styled.div`
+    min-width: 200px;
+
+    @media (max-width: 720px) {
+        min-width: 180px;
+        width: 100%;
+    }
 `;
 
-const SearchContainer = styled.div`
-    justify-self: start;
-    width: 100%;
+const categoryDropdownContainerSx = {
+	position: "relative",
+	"& vscode-dropdown": {
+		width: "100%",
+	},
+	"& vscode-dropdown::part(control)": {
+		minHeight: "30px",
+		borderRadius: "999px",
+		border: "1px solid var(--vscode-dropdown-border, var(--vscode-input-border))",
+		background: "var(--vscode-dropdown-background)",
+		color: "var(--vscode-dropdown-foreground, var(--vscode-foreground))",
+	},
+	"& vscode-dropdown:hover::part(control), & vscode-dropdown:focus-within::part(control)":
+	{
+		borderColor: "var(--vscode-focusBorder)",
+	},
+	"& vscode-dropdown::part(indicator)": {
+		color: "var(--vscode-dropdown-foreground, var(--vscode-foreground))",
+	},
+};
+
+const ClearFiltersButton = styled.button`
+    margin-left: auto;
+    border: none;
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+
+    &:hover:not(:disabled) {
+        color: var(--vscode-foreground);
+        text-decoration: underline;
+    }
+
+    &:disabled {
+        cursor: default;
+        opacity: 0.5;
+    }
+
+    @media (max-width: 720px) {
+        margin-left: 0;
+    }
 `;
 
 const MetaRow = styled.div`
@@ -98,28 +192,8 @@ const MetaRow = styled.div`
 `;
 
 const ResultCount = styled.span`
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    border-radius: 999px;
-    padding: 3px 10px;
-    font-size: 11px;
-    font-weight: 500;
+    font-size: 13px;
     color: var(--vscode-descriptionForeground);
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 34%, transparent);
-    background: color-mix(in srgb, var(--wso2-brand-accent) 12%, transparent);
-`;
-
-const ActiveFilter = styled.span`
-    display: inline-flex;
-    align-items: center;
-    border-radius: 999px;
-    padding: 2px 10px;
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--vscode-foreground);
-    border: 1px solid color-mix(in srgb, var(--wso2-brand-primary) 40%, transparent);
-    background: color-mix(in srgb, var(--wso2-brand-primary) 12%, transparent);
 `;
 
 const SamplesViewport = styled.div`
@@ -201,12 +275,54 @@ const IconFrame = styled.div`
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 12px;
 `;
 
 const CategoryImage = styled.img`
     max-height: 64px;
     max-width: 70%;
     object-fit: contain;
+`;
+
+const ConnectorIconGroup = styled.div`
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	width: 100%;
+`;
+
+const ConnectorFlowArrow = styled.div`
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--vscode-descriptionForeground);
+`;
+
+const ConnectorIconTile = styled.div`
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 52px;
+	height: 52px;
+	border-radius: 14px;
+	border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border));
+	background: var(--vscode-editor-background);
+	box-shadow: 0 1px 4px color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+`;
+
+const ConnectorIconImage = styled.img`
+	width: 30px;
+	height: 30px;
+	object-fit: contain;
+`;
+
+const ArtworkText = styled.span`
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.4;
+    font-weight: 500;
+    color: var(--vscode-descriptionForeground);
 `;
 
 const Description = styled.p`
@@ -282,225 +398,577 @@ const EmptyText = styled.p`
 `;
 
 type CategoryArtworkProps = {
-    imageUrl?: string;
-    label: string;
+	imageUrl?: string;
+	iconUrls?: string[];
+	label: string;
+	fallbackText?: string;
 };
 
-function CategoryArtwork({ imageUrl, label }: CategoryArtworkProps) {
-    const [loadError, setLoadError] = useState(false);
+function CategoryArtwork({
+	imageUrl,
+	iconUrls,
+	label,
+	fallbackText,
+}: CategoryArtworkProps) {
+	const [loadError, setLoadError] = useState(false);
+	const [failedIconUrls, setFailedIconUrls] = useState<string[]>([]);
 
-    if (!imageUrl || loadError) {
-        return <Codicon name="symbol-class" iconSx={{ color: "var(--wso2-brand-accent)", fontSize: 28 }} />;
-    }
+	const visibleIconUrls = (iconUrls ?? []).filter(
+		(iconUrl) => !failedIconUrls.includes(iconUrl),
+	);
 
-    return (
-        <CategoryImage
-            src={imageUrl}
-            alt={`${label} sample icon`}
-            onError={() => setLoadError(true)}
-        />
-    );
+	if (visibleIconUrls.length > 0) {
+		return (
+			<ConnectorIconGroup>
+				{visibleIconUrls.map((iconUrl, index) => (
+					<div
+						key={iconUrl}
+						style={{ display: "flex", alignItems: "center", gap: "10px" }}
+					>
+						{index > 0 && (
+							<ConnectorFlowArrow>
+								<Codicon name="arrow-right" iconSx={{ fontSize: 16 }} />
+							</ConnectorFlowArrow>
+						)}
+						<ConnectorIconTile>
+							<ConnectorIconImage
+								src={iconUrl}
+								alt={`${label} connector ${index + 1}`}
+								onError={() =>
+									setFailedIconUrls((currentUrls) =>
+										currentUrls.includes(iconUrl)
+											? currentUrls
+											: [...currentUrls, iconUrl],
+									)
+								}
+							/>
+						</ConnectorIconTile>
+					</div>
+				))}
+			</ConnectorIconGroup>
+		);
+	}
+
+	if (!imageUrl || loadError) {
+		if (fallbackText) {
+			return <ArtworkText>{fallbackText}</ArtworkText>;
+		}
+
+		return (
+			<Codicon
+				name="symbol-class"
+				iconSx={{ color: "var(--wso2-brand-accent)", fontSize: 28 }}
+			/>
+		);
+	}
+
+	return (
+		<CategoryImage
+			src={imageUrl}
+			alt={`${label} sample icon`}
+			onError={() => setLoadError(true)}
+		/>
+	);
 }
 
 export interface SamplesContainerProps {
-    projectType: SampleSupportedRuntime;
+	projectType: SampleSupportedRuntime;
+}
+
+const CONNECTOR_ICON_BASE_URL =
+	"https://devant-cdn.wso2.com/console/connector-icons/v1";
+
+const CONNECTOR_ICON_NAMES: Record<string, string> = {
+	googlechat: "GoogleChat",
+	googlesheets: "GoogleSheets",
+	stripe: "Stripe",
+	shopify: "Shopify",
+	quickbooks: "QuickBooks",
+	jira: "Jira",
+	salesforce: "Salesforce",
+	mailchimp: "Mailchimp",
+	slack: "Slack",
+	github: "GitHub",
+};
+
+function normalizeCategoryValue(value: string): string {
+	return value.trim();
+}
+
+function normalizeConnectorName(value: string): string {
+	return value.replace(/[\s_-]+/g, "").toLowerCase();
+}
+
+function formatComponentType(componentType: string): string {
+	return componentType
+		.split(/[-_]/g)
+		.filter(Boolean)
+		.map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+		.join(" ");
+}
+
+function getPrebuiltCategoryValues(prebuiltIntegration: PrebuiltIntegration): string[] {
+	const values = [
+		formatComponentType(prebuiltIntegration.componentType),
+		...(prebuiltIntegration.tags ?? []).map((tag) =>
+			normalizeCategoryValue(tag),
+		),
+	].filter(Boolean);
+
+	return Array.from(new Set(values));
+}
+
+function getPrebuiltPrimaryCategory(
+	prebuiltIntegration: PrebuiltIntegration,
+): string {
+	const firstTag = (prebuiltIntegration.tags ?? [])
+		.map((tag) => normalizeCategoryValue(tag))
+		.find(Boolean);
+
+	return (
+		firstTag ||
+		formatComponentType(prebuiltIntegration.componentType) ||
+		"Pre-built Integration"
+	);
+}
+
+function getPrebuiltArtworkText(
+	prebuiltIntegration: PrebuiltIntegration,
+): string | undefined {
+	const applications = (prebuiltIntegration.applications ?? [])
+		.filter(Boolean)
+		.slice(0, 2);
+	return applications.length > 0 ? applications.join(" + ") : undefined;
+}
+
+function getPrebuiltConnectorIconUrls(
+	prebuiltIntegration: PrebuiltIntegration,
+): string[] {
+	return (prebuiltIntegration.applications ?? [])
+		.map((application) => CONNECTOR_ICON_NAMES[normalizeConnectorName(application)])
+		.filter(Boolean)
+		.slice(0, 2)
+		.map((iconName) => `${CONNECTOR_ICON_BASE_URL}/${iconName}.svg`);
+}
+
+function resolvePrebuiltImageUrl(
+	prebuiltIntegration: PrebuiltIntegration,
+): string | undefined {
+	const thumbnailPath = prebuiltIntegration.thumbnailPath?.trim();
+	return thumbnailPath && /^https?:\/\//.test(thumbnailPath)
+		? thumbnailPath
+		: undefined;
+}
+
+function compareBrowseItems(left: BrowseItem, right: BrowseItem): number {
+	if (left.itemType !== right.itemType) {
+		return left.itemType === "sample" ? -1 : 1;
+	}
+
+	if (left.itemType === "sample" && right.itemType === "sample") {
+		return (
+			left.priority - right.priority || left.title.localeCompare(right.title)
+		);
+	}
+
+	return left.title.localeCompare(right.title);
+}
+
+function createSampleItem(
+	sample: GettingStartedSample,
+	categoryTitleById: Record<number, string>,
+	imagesByCategory: Record<number, string>,
+): BrowseItem {
+	const categoryName = categoryTitleById[sample.category] || "Sample";
+
+	return {
+		id: `sample:${sample.category}:${sample.zipFileName}`,
+		itemType: "sample",
+		title: sample.title,
+		description: sample.description,
+		primaryCategory: categoryName,
+		categoryValues: [categoryName],
+		imageUrl: imagesByCategory[sample.category],
+		searchText:
+			`${sample.title} ${sample.description} ${categoryName}`.toLowerCase(),
+		priority: sample.priority,
+		sample,
+	};
+}
+
+function createPrebuiltItem(
+	prebuiltIntegration: PrebuiltIntegration,
+): BrowseItem {
+	const categoryValues = getPrebuiltCategoryValues(prebuiltIntegration);
+
+	return {
+		id: `prebuilt:${prebuiltIntegration.branch}:${prebuiltIntegration.componentPath}`,
+		itemType: "prebuilt",
+		title: prebuiltIntegration.displayName,
+		description: prebuiltIntegration.description,
+		primaryCategory: getPrebuiltPrimaryCategory(prebuiltIntegration),
+		categoryValues,
+		imageUrl: resolvePrebuiltImageUrl(prebuiltIntegration),
+		connectorIconUrls: getPrebuiltConnectorIconUrls(prebuiltIntegration),
+		fallbackArtwork: getPrebuiltArtworkText(prebuiltIntegration),
+		searchText: [
+			prebuiltIntegration.displayName,
+			prebuiltIntegration.description,
+			prebuiltIntegration.componentType,
+			...categoryValues,
+			...(prebuiltIntegration.applications ?? []),
+		]
+			.join(" ")
+			.toLowerCase(),
+		priority: Number.MAX_SAFE_INTEGER,
+		prebuiltIntegration,
+	};
+}
+
+function createCategoryOptions(
+	categories: GettingStartedCategory[],
+	prebuiltIntegrations: PrebuiltIntegration[],
+	includePrebuiltCategories: boolean,
+): CategoryOption[] {
+	const options: CategoryOption[] = [
+		{ key: ALL_CATEGORY_VALUE, content: "All", value: ALL_CATEGORY_VALUE },
+	];
+	const addedCategoryValues = new Set<string>([ALL_CATEGORY_VALUE]);
+
+	for (const category of categories) {
+		if (category.id === 0 || addedCategoryValues.has(category.title)) {
+			continue;
+		}
+
+		addedCategoryValues.add(category.title);
+		options.push({
+			key: category.title,
+			content: category.title,
+			value: category.title,
+		});
+	}
+
+	if (!includePrebuiltCategories) {
+		return options;
+	}
+
+	for (const prebuiltIntegration of prebuiltIntegrations) {
+		for (const categoryValue of getPrebuiltCategoryValues(
+			prebuiltIntegration,
+		)) {
+			if (addedCategoryValues.has(categoryValue)) {
+				continue;
+			}
+
+			addedCategoryValues.add(categoryValue);
+			options.push({
+				key: categoryValue,
+				content: categoryValue,
+				value: categoryValue,
+			});
+		}
+	}
+
+	return options;
+}
+
+function matchesFilters(
+	item: BrowseItem,
+	selectedType: BrowseItemType | "all",
+	selectedCategory: string,
+	searchText: string,
+): boolean {
+	const normalizedSearch = searchText.trim().toLowerCase();
+	const matchesType = selectedType === "all" || item.itemType === selectedType;
+	const matchesCategory =
+		selectedCategory === ALL_CATEGORY_VALUE ||
+		item.categoryValues.includes(selectedCategory);
+	const matchesSearch =
+		!normalizedSearch || item.searchText.includes(normalizedSearch);
+
+	return matchesType && matchesCategory && matchesSearch;
 }
 
 export function SamplesContainer(props: SamplesContainerProps) {
-    const { wsClient, webviewContext } = useVisualizerContext();
-    const [samples, setSamples] = useState<GettingStartedSample[]>([]);
-    const [categories, setCategories] = useState<GettingStartedCategory[]>([]);
-    const [imagesByCategory, setImagesByCategory] = useState<Record<number, string>>({});
-    const [searchText, setSearchText] = useState<string>("");
-    const [selectedCategory, setSelectedCategory] = useState<string>("All");
-    const [isLoading, setIsLoading] = useState<boolean>(true);
+	const { wsClient, webviewContext } = useVisualizerContext();
+	const [samples, setSamples] = useState<GettingStartedSample[]>([]);
+	const [categories, setCategories] = useState<GettingStartedCategory[]>([]);
+	const [prebuiltIntegrations, setPrebuiltIntegrations] = useState<PrebuiltIntegration[]>([]);
+	const [imagesByCategory, setImagesByCategory] = useState<Record<number, string>>({});
+	const [searchText, setSearchText] = useState<string>("");
+	const [selectedCategory, setSelectedCategory] =useState<string>(ALL_CATEGORY_VALUE);
+	const [selectedType, setSelectedType] = useState<BrowseItemType | "all">(
+		props.projectType === "WSO2: BI" ? "all" : "sample",
+	);
+	const [isLoading, setIsLoading] = useState<boolean>(true);
+	const showsTypeFilter = props.projectType === "WSO2: BI";
 
-    useEffect(() => {
-        let cancelled = false;
-        setIsLoading(true);
-        setSearchText("");
-        setSelectedCategory("All");
+	useEffect(() => {
+		let cancelled = false;
+		setIsLoading(true);
+		setSearchText("");
+		setSelectedCategory(ALL_CATEGORY_VALUE);
+		setSelectedType(props.projectType === "WSO2: BI" ? "all" : "sample");
 
-        wsClient
-            .fetchSamplesFromGithub({ runtime: props.projectType })
-            .then((response) => {
-                if (cancelled) {
-                    return;
-                }
+		wsClient
+			.fetchSamplesFromGithub({ runtime: props.projectType })
+			.then((response) => {
+				if (cancelled) {
+					return;
+				}
 
-                const nextSamples = response?.samples ?? [];
-                const nextCategories = [{ id: 0, title: "All", icon: "" }, ...(response?.categories ?? [])];
-                const sampleIconBaseUrl =
-                    props.projectType === "WSO2: MI"
-                        ? (webviewContext?.env?.MI_SAMPLE_ICONS_GITHUB_URL ?? "")
-                        : (webviewContext?.env?.BI_SAMPLE_ICONS_GITHUB_URL ?? "");
+				const nextSamples = response?.samples ?? [];
+				const nextCategories = [{ id: 0, title: "All", icon: "" }, ...(response?.categories ?? []),
+				];
+				const nextPrebuiltIntegrations =
+					props.projectType === "WSO2: BI"
+						? (response?.prebuiltIntegrations ?? [])
+						: [];
+				const sampleIconBaseUrl =
+					props.projectType === "WSO2: MI"
+						? (webviewContext?.env?.MI_SAMPLE_ICONS_GITHUB_URL ?? "")
+						: (webviewContext?.env?.BI_SAMPLE_ICONS_GITHUB_URL ?? "");
 
-                const nextCategoryImages: Record<number, string> = {};
-                for (const category of nextCategories) {
-                    if (category.icon) {
-                        nextCategoryImages[category.id] = `${sampleIconBaseUrl}${category.icon}`;
-                    }
-                }
+				const nextCategoryImages: Record<number, string> = {};
+				for (const category of nextCategories) {
+					if (category.icon) {
+						nextCategoryImages[category.id] =
+							`${sampleIconBaseUrl}${category.icon}`;
+					}
+				}
 
-                setSamples(nextSamples);
-                setCategories(nextCategories);
-                setImagesByCategory(nextCategoryImages);
-            })
-            .catch((error) => {
-                console.warn("Failed to load sample data from GitHub:", error);
-                if (!cancelled) {
-                    setSamples([]);
-                    setCategories([{ id: 0, title: "All", icon: "" }]);
-                    setImagesByCategory({});
-                }
-            })
-            .finally(() => {
-                if (!cancelled) {
-                    setIsLoading(false);
-                }
-            });
+				setSamples(nextSamples);
+				setCategories(nextCategories);
+				setPrebuiltIntegrations(nextPrebuiltIntegrations);
+				setImagesByCategory(nextCategoryImages);
+			})
+			.catch((error) => {
+				console.warn("Failed to load sample data from GitHub:", error);
+				if (!cancelled) {
+					setSamples([]);
+					setCategories([{ id: 0, title: "All", icon: "" }]);
+					setPrebuiltIntegrations([]);
+					setImagesByCategory({});
+				}
+			})
+			.finally(() => {
+				if (!cancelled) {
+					setIsLoading(false);
+				}
+			});
 
-        return () => {
-            cancelled = true;
-        };
-    }, [
-        props.projectType,
-        wsClient,
-        webviewContext?.env?.BI_SAMPLE_ICONS_GITHUB_URL,
-        webviewContext?.env?.MI_SAMPLE_ICONS_GITHUB_URL,
-    ]);
+		return () => {
+			cancelled = true;
+		};
+	}, [
+		props.projectType,
+		wsClient,
+		webviewContext?.env?.BI_SAMPLE_ICONS_GITHUB_URL,
+		webviewContext?.env?.MI_SAMPLE_ICONS_GITHUB_URL,
+	]);
 
-    const selectedCategoryId = useMemo(() => {
-        return (categories.find((category) => category.title === selectedCategory)?.id ?? 0);
-    }, [categories, selectedCategory]);
+	const categoryTitleById = useMemo(() => {
+		const titleMap: Record<number, string> = {};
+		for (const category of categories) {
+			titleMap[category.id] = category.title;
+		}
+		return titleMap;
+	}, [categories]);
 
-    const categoryTitleById = useMemo(() => {
-        const titleMap: Record<number, string> = {};
-        for (const category of categories) {
-            titleMap[category.id] = category.title;
-        }
-        return titleMap;
-    }, [categories]);
+	const allItems = useMemo(() => {
+		const items = samples.map((sample) =>
+			createSampleItem(sample, categoryTitleById, imagesByCategory),
+		);
 
-    const filteredSamples = useMemo(() => {
-        const categoryScoped =
-            selectedCategoryId === 0
-                ? samples
-                : samples.filter((sample) => sample.category === selectedCategoryId);
-        const normalizedSearch = searchText.trim().toLowerCase();
-        const searchScoped = normalizedSearch
-            ? categoryScoped.filter((sample) => {
-                return (
-                    sample.title.toLowerCase().includes(normalizedSearch) ||
-                    sample.description.toLowerCase().includes(normalizedSearch)
-                );
-            })
-            : categoryScoped;
+		if (showsTypeFilter) {
+			items.push(
+				...prebuiltIntegrations.map((prebuiltIntegration) =>
+					createPrebuiltItem(prebuiltIntegration),
+				),
+			);
+		}
 
-        return [...searchScoped].sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title));
-    }, [samples, selectedCategoryId, searchText]);
+		return items.sort(compareBrowseItems);
+	}, [
+		categoryTitleById,
+		imagesByCategory,
+		prebuiltIntegrations,
+		samples,
+		showsTypeFilter,
+	]);
 
-    const categoryItems = useMemo(() => {
-        return categories.map((category) => ({
-            key: category.id,
-            text: category.title,
-            value: category.title,
-        }));
-    }, [categories]);
+	const categoryItems = useMemo(() => {
+		return createCategoryOptions(
+			categories,
+			prebuiltIntegrations,
+			showsTypeFilter,
+		);
+	}, [categories, prebuiltIntegrations, showsTypeFilter]);
 
-    function downloadSample(sampleName: string) {
-        const request: SampleDownloadRequest = {
-            zipFileName: sampleName,
-            runtime: props.projectType,
-        };
-        wsClient.downloadSelectedSampleFromGithub(request);
-    }
+	const filteredItems = useMemo(() => {
+		return allItems.filter((item) =>
+			matchesFilters(item, selectedType, selectedCategory, searchText),
+		);
+	}, [allItems, searchText, selectedCategory, selectedType]);
 
-    function getEmptyMessage() {
-        if (searchText.trim()) {
-            return "Try a different keyword or clear the search filter.";
-        }
-        if (selectedCategory !== "All") {
-            return `No samples available in "${selectedCategory}" right now.`;
-        }
-        return "No samples are available at the moment.";
-    }
+	const hasActiveFilters =
+		searchText.trim().length > 0 ||
+		selectedCategory !== ALL_CATEGORY_VALUE ||
+		(showsTypeFilter && selectedType !== "all");
 
-    return (
-        <SamplesRoot>
-            <Toolbar>
-                <FiltersRow>
-                    <div>
-                        <FilterLabel>Category</FilterLabel>
-                        <Dropdown
-                            id="drop-down"
-                            items={categoryItems}
-                            onValueChange={(value: string) => setSelectedCategory(value || "All")}
-                            value={selectedCategory}
-                            sx={{ width: "100%" }}
-                        />
-                    </div>
-                    <SearchContainer>
-                        <FilterLabel>Search</FilterLabel>
-                        <SearchBox
-                            value={searchText}
-                            autoFocus
-                            type="text"
-                            onChange={(value: string) => setSearchText(value)}
-                        />
-                    </SearchContainer>
-                </FiltersRow>
-            </Toolbar>
-            <SamplesViewport>
-                {isLoading ? (
-                    <LoaderWrapper>
-                        <ProgressRing />
-                    </LoaderWrapper>
-                ) : filteredSamples.length > 0 ? (
-                    <SampleGrid>
-                        {filteredSamples.map((sample) => {
-                            const categoryName = categoryTitleById[sample.category] || "Sample";
-                            return (
-                                <SampleCard
-                                    key={`${sample.category}-${sample.zipFileName}`}
-                                    className="sample-card"
-                                >
-                                    <CardHeader>
-                                        <CardTitle>{sample.title}</CardTitle>
-                                        <CategoryLabel>{categoryName}</CategoryLabel>
-                                    </CardHeader>
-                                    <IconFrame>
-                                        <CategoryArtwork
-                                            imageUrl={imagesByCategory[sample.category]}
-                                            label={categoryName}
-                                        />
-                                    </IconFrame>
-                                    <Description>{sample.description}</Description>
-                                    <CardFooter>
-                                        <DownloadAction>
-                                            <Button
-                                                appearance="primary"
-                                                sx={{ width: "100%" }}
-                                                onClick={() => downloadSample(sample.zipFileName)}
-                                                buttonSx={{ width: "100%" }}
-                                            >
-                                                Download
-                                            </Button>
-                                        </DownloadAction>
-                                    </CardFooter>
-                                </SampleCard>
-                            );
-                        })}
-                    </SampleGrid>
-                ) : (
-                    <EmptyState>
-                        <div>
-                            <EmptyTitle>No matching samples found</EmptyTitle>
-                            <EmptyText>{getEmptyMessage()}</EmptyText>
-                        </div>
-                    </EmptyState>
-                )}
-            </SamplesViewport>
-        </SamplesRoot>
-    );
+	function resetFilters() {
+		setSearchText("");
+		setSelectedCategory(ALL_CATEGORY_VALUE);
+		setSelectedType(showsTypeFilter ? "all" : "sample");
+	}
+
+	function downloadItem(item: BrowseItem) {
+		if (item.itemType === "sample" && item.sample) {
+			const request: SampleDownloadRequest = {
+				runtime: props.projectType,
+				itemType: "sample",
+				zipFileName: item.sample.zipFileName,
+			};
+
+			wsClient.downloadSelectedSampleFromGithub(request);
+			return;
+		} else if (item.itemType === "prebuilt" && item.prebuiltIntegration) {
+			const request: SampleDownloadRequest = {
+				runtime: props.projectType,
+				itemType: "prebuilt",
+				prebuiltIntegration: item.prebuiltIntegration,
+			};
+
+			wsClient.downloadSelectedSampleFromGithub(request);
+		}
+	}
+
+	function getEmptyMessage() {
+		if (hasActiveFilters) {
+			return "Try a different keyword or clear the active filters.";
+		}
+
+		return showsTypeFilter
+			? "No samples or pre-built integrations are available at the moment."
+			: "No samples are available at the moment.";
+	}
+
+	return (
+		<SamplesRoot>
+			<Toolbar>
+				<SearchRow>
+					<SearchBox
+						value={searchText}
+						autoFocus
+						type="text"
+						placeholder="Search by name, description, application, or category"
+						onChange={(value: string) => setSearchText(value)}
+					/>
+				</SearchRow>
+				<FilterBar>
+					{showsTypeFilter && (
+						<FilterGroup>
+							<FilterTitle>Type</FilterTitle>
+							<TypeFilters>
+								<TypePill
+									type="button"
+									active={selectedType === "all"}
+									onClick={() => setSelectedType("all")}
+								>
+									All
+								</TypePill>
+								<TypePill
+									type="button"
+									active={selectedType === "sample"}
+									onClick={() => setSelectedType("sample")}
+								>
+									Sample
+								</TypePill>
+								<TypePill
+									type="button"
+									active={selectedType === "prebuilt"}
+									onClick={() => setSelectedType("prebuilt")}
+								>
+									Pre-built Integrations
+								</TypePill>
+							</TypeFilters>
+						</FilterGroup>
+					)}
+					<FilterGroup>
+						<FilterTitle>Category</FilterTitle>
+						<CategoryFilterWrap>
+							<Dropdown
+								id="sample-category-filter"
+								items={categoryItems}
+								onValueChange={(value: string) =>
+									setSelectedCategory(value || ALL_CATEGORY_VALUE)
+								}
+								value={selectedCategory}
+								sx={{ width: "100%" }}
+								dropdownContainerSx={categoryDropdownContainerSx}
+							/>
+						</CategoryFilterWrap>
+					</FilterGroup>
+					<ClearFiltersButton
+						type="button"
+						onClick={resetFilters}
+						disabled={!hasActiveFilters}
+					>
+						clear all filters
+					</ClearFiltersButton>
+				</FilterBar>
+				<MetaRow>
+					<ResultCount>
+						{filteredItems.length} result{filteredItems.length === 1 ? "" : "s"}
+					</ResultCount>
+				</MetaRow>
+			</Toolbar>
+			<SamplesViewport>
+				{isLoading ? (
+					<LoaderWrapper>
+						<ProgressRing />
+					</LoaderWrapper>
+				) : filteredItems.length > 0 ? (
+					<SampleGrid>
+						{filteredItems.map((item) => (
+							<SampleCard key={item.id} className="sample-card">
+								<CardHeader>
+									<CardTitle>{item.title}</CardTitle>
+									<CategoryLabel>{item.primaryCategory}</CategoryLabel>
+								</CardHeader>
+								<IconFrame>
+									<CategoryArtwork
+										imageUrl={item.imageUrl}
+										iconUrls={item.connectorIconUrls}
+										label={item.primaryCategory}
+										fallbackText={item.fallbackArtwork}
+									/>
+								</IconFrame>
+								<Description>{item.description}</Description>
+								<CardFooter>
+									<DownloadAction>
+										<Button
+											appearance="primary"
+											sx={{ width: "100%" }}
+											onClick={() => downloadItem(item)}
+											buttonSx={{ width: "100%" }}
+										>
+											Use this
+										</Button>
+									</DownloadAction>
+								</CardFooter>
+							</SampleCard>
+						))}
+					</SampleGrid>
+				) : (
+					<EmptyState>
+						<div>
+							<EmptyTitle>No matching results found</EmptyTitle>
+							<EmptyText>{getEmptyMessage()}</EmptyText>
+						</div>
+					</EmptyState>
+				)}
+			</SamplesViewport>
+		</SamplesRoot>
+	);
 }

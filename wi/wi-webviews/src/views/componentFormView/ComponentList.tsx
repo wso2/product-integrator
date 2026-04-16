@@ -18,7 +18,7 @@
 
 import React from "react";
 import { CheckBox } from "@wso2/ui-toolkit";
-import { ICreateNewIntegrationCmdIntegrations, Project } from "@wso2/wso2-platform-core";
+import { getIntegrationScopeText, ICreateNewIntegrationCmdIntegrations, Project } from "@wso2/wso2-platform-core";
 import {
 	CheckboxCell,
 	ComponentInfo,
@@ -35,8 +35,12 @@ import {
 	NameStatic,
 	SelectionCount,
 	TypeBadge,
+	VSCodeLinkForeground,
 	WarningBanner,
 } from "./styles";
+import { useCloudContext } from "../../providers";
+import { useVisualizerContext } from "../../contexts";
+import { Organization } from "../creationView/biForm/components/AdvancedConfigurationSection";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,7 +53,8 @@ export interface EntryFormState {
 }
 
 interface ComponentListProps {
-	project?: Project;
+	org: Organization;
+	project: Project;
 	integrations: ICreateNewIntegrationCmdIntegrations[];
 	formState: EntryFormState[];
 	isBatch: boolean;
@@ -65,6 +70,7 @@ interface ComponentListProps {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ComponentList({
+	org,
 	project,
 	integrations,
 	formState,
@@ -78,11 +84,17 @@ export function ComponentList({
 	onEditStart,
 }: ComponentListProps) {
 	const hasSelected = selectedCount > 0;
+	const { wsClient } = useVisualizerContext();
+	const { consoleUrl } = useCloudContext();
+
+	const projectLink = <VSCodeLinkForeground title="View project in console" onClick={() => {
+		wsClient.openExternal(`${consoleUrl}/organizations/${org?.handle}/projects/${project?.handler}`)
+	}}>{project?.name}</VSCodeLinkForeground>
 
 	return (
 		<ComponentListSection>
 			<ComponentListHeader>
-				<ComponentListLabel>{isBatch ? `Select Integrations to Deploy in WSO2 Cloud project '${project?.name}'` : `Deploy integration in WSO2 Cloud project '${project?.name}'`}</ComponentListLabel>
+				<ComponentListLabel>{isBatch ? <>Select Integrations to Deploy to {projectLink} in WSO2 Cloud</> : <>Deploy integration to {projectLink} in WSO2 Cloud</>}</ComponentListLabel>
 				{isBatch && <SelectionCount>{selectedCount} of {integrations.length} selected</SelectionCount>}
 			</ComponentListHeader>
 
@@ -155,7 +167,7 @@ export function ComponentList({
 							{entry.supportedIntegrationTypes?.length > 0 && (
 								<TypeBadge isSelected={isSelected}>
 									{entry.supportedIntegrationTypes.length === 1 ? (
-										<span>{entry.supportedIntegrationTypes[0]}</span>
+										<span>{getIntegrationScopeText(entry.supportedIntegrationTypes[0])}</span>
 									) : (
 										<select
 											value={state?.selectedIntegrationType ?? ""}
@@ -172,7 +184,7 @@ export function ComponentList({
 											}}
 										>
 											{entry.supportedIntegrationTypes.map((type) => (
-												<option key={type} value={type}>{type}</option>
+												<option key={type} value={type}>{getIntegrationScopeText(type)}</option>
 											))}
 										</select>
 									)}

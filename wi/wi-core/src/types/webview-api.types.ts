@@ -17,6 +17,7 @@
  */
 
 import { ViewType, Platform } from "../enums";
+import type { SignInResult } from "./network-bridge.types";
 
 export interface WebviewContext {
     currentView: ViewType;
@@ -134,14 +135,36 @@ export interface GettingStartedCategory {
     icon: string;
 }
 
+export interface PrebuiltIntegration {
+    displayName: string;
+    description: string;
+    componentType: string;
+    buildPack: string;
+    repositoryUrl: string;
+    branch: string;
+    subDirectory: string;
+    componentPath: string;
+    thumbnailPath: string;
+    documentationPath: string;
+    applications: string[];
+    imageVersion: string;
+    tags?: string[];
+    imageUrl?: string;
+    defaultPackage?: string;
+    bidirectional: boolean;
+}
+
 export interface GettingStartedData {
     categories: GettingStartedCategory[];
     samples: GettingStartedSample[];
+    prebuiltIntegrations?: PrebuiltIntegration[];
 }
 
 export interface SampleDownloadRequest {
-    zipFileName: string;
     runtime: "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
+    zipFileName?: string;
+    itemType?: "sample" | "prebuilt";
+    prebuiltIntegration?: PrebuiltIntegration;
 }
 
 export interface BIProjectRequest {
@@ -152,8 +175,10 @@ export interface BIProjectRequest {
     createAsWorkspace?: boolean;
     workspaceName?: string;
     orgName?: string;
+    orgHandle?: string;
     version?: string;
     isLibrary?: boolean;
+    projectHandle?: string;
 }
 
 export interface SemanticVersion {
@@ -207,6 +232,8 @@ export interface MigrateRequest {
         [key: string]: string;
     };
     projects?: ProjectMigrationResult[];
+    aiFeatureUsed?: boolean;
+    sourcePath?: string;
 }
 
 export interface PullMigrationToolRequest {
@@ -305,6 +332,26 @@ export interface DefaultOrgNameResponse {
     orgName: string;
 }
 
+// ── AI migration streaming event types (wizard) ──────────────────────────────
+export interface WIChatStart { type: "start"; }
+export interface WIChatContent { type: "content_block"; content: string; }
+export interface WIChatReplace { type: "content_replace"; content: string; }
+export interface WIChatStop { type: "stop"; }
+export interface WIChatAbort { type: "abort"; }
+export interface WIChatError { type: "error"; content: string; }
+export interface WIToolCall { type: "tool_call"; toolName: string; toolInput?: Record<string, any>; toolCallId?: string; }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface WIToolResult { type: "tool_result"; toolName: string; toolOutput?: any; toolCallId?: string; failed?: boolean; }
+export type WIChatNotify =
+    | WIChatStart
+    | WIChatContent
+    | WIChatReplace
+    | WIToolCall
+    | WIToolResult
+    | WIChatStop
+    | WIChatAbort
+    | WIChatError;
+
 export interface WIVisualizerAPI {
     getWebviewContext: () => Promise<WebviewContext>;
     getRecentProjects: () => Promise<GetRecentProjectsResponse>;
@@ -343,4 +390,9 @@ export interface WIVisualizerAPI {
     clearWebviewCache: (cacheKey: string) => Promise<void>;
     getDefaultOrgName: () => Promise<DefaultOrgNameResponse>;
     getDefaultCreationPath: () => Promise<WorkspaceRootResponse>;
+    wizardEnhancementReady: () => Promise<void>;
+    openMigratedProject: () => Promise<void>;
+    abortMigrationAgent: () => Promise<void>;
+    checkAIAuth: () => Promise<boolean>;
+    triggerAICopilotSignIn: () => Promise<SignInResult>;
 }

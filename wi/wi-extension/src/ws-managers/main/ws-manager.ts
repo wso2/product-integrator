@@ -35,6 +35,7 @@ import {
     CreateMiProjectResponse,
     CreateSiProjectRequest,
     CreateSiProjectResponse,
+    PrebuiltIntegration,
     GettingStartedData,
     GettingStartedCategory,
     GettingStartedSample,
@@ -58,7 +59,7 @@ import {
 import { commands, window, workspace, MarkdownString, Uri, env, ConfigurationTarget } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { getDefaultCreationPath } from "../../utils/pathUtils";
-import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
+import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenBISamplesIntegrations, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import * as fs from "fs";
 import * as path from "path";
 import axios from "axios";
@@ -70,7 +71,18 @@ import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi
 import { StateMachine } from "../../stateMachine";
 import { ext } from "../../extensionVariables";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
+import { ballerinaContext } from "../../bi/ballerinaContext";
 const platform = getPlatform();
+const MI_SAMPLES_INFO_URL = process.env.MI_SAMPLES_INFO_URL;
+const BI_SAMPLES_INFO_URL = process.env.BI_SAMPLES_INFO_URL;
+const BI_SAMPLES_REPOSITORY_URL = process.env.BI_SAMPLES_REPOSITORY_URL;
+const BI_SAMPLES_REPOSITORY_BRANCH = 'main';
+const BI_SAMPLES_REPOSITORY_SUBDIRECTORY = '/ballerina-integrator';
+const BI_PREBUILT_INTEGRATIONS_URL = process.env.BI_PREBUILT_INTEGRATIONS_URL;
+const BI_HIDDEN_SAMPLE_IDS = new Set([
+    "shipment-processor",
+    "real-time-error-notifier",
+]);
 
 export class MainWsManager implements WIVisualizerAPI {
     private subProjectReports: Map<string, string> = new Map();
@@ -86,7 +98,11 @@ export class MainWsManager implements WIVisualizerAPI {
                 pathSeparator: path.sep,
                 env: {
                     MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
-                    BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || ''
+                    BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
+                    MI_SAMPLES_INFO_URL: process.env.MI_SAMPLES_INFO_URL || '',
+                    BI_SAMPLES_INFO_URL: process.env.BI_SAMPLES_INFO_URL || '',
+                    BI_SAMPLES_REPOSITORY_URL: process.env.BI_SAMPLES_REPOSITORY_URL || '',
+                    BI_PREBUILT_INTEGRATIONS_URL: process.env.BI_PREBUILT_INTEGRATIONS_URL || ''
                 }
             });
         });
@@ -345,9 +361,10 @@ export class MainWsManager implements WIVisualizerAPI {
             try {
                 const projectPath = path.join(params.directory, params.name);
                 const mainSiddhiPath = path.join(projectPath, "main.siddhi");
+                const mainSiddhiContent = '@App:name("APP_NAME")\n@App:description("APP_DESCRIPTION")\n\ndefine stream InputStream (attribute1 string,attribute2 int);\n';
 
                 await fs.promises.mkdir(projectPath, { recursive: false });
-                await fs.promises.writeFile(mainSiddhiPath, "", { encoding: "utf8", flag: "wx" });
+                await fs.promises.writeFile(mainSiddhiPath, mainSiddhiContent, { encoding: "utf8", flag: "wx" });
 
                 if (params.open) {
                     await commands.executeCommand("vscode.openFolder", Uri.file(projectPath));
@@ -365,9 +382,10 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async fetchSamplesFromGithub(params: FetchSamplesRequest): Promise<GettingStartedData> {
         return new Promise(async (resolve) => {
-            const url = params.runtime === "WSO2: MI" ?
-                'https://mi-connectors.wso2.com/samples/info.json' :
-                'https://devant-cdn.wso2.com/bi-samples/v1/info.json';
+            const url = params.runtime === "WSO2: MI" ? MI_SAMPLES_INFO_URL : BI_SAMPLES_INFO_URL;
+            const prebuiltIntegrations = params.runtime === "WSO2: BI"
+                ? await this.fetchBiPrebuiltIntegrations()
+                : [];
             try {
                 const { data } = await axios.get(url);
                 console.log('Fetched samples data:', data);
@@ -394,11 +412,20 @@ export class MainWsManager implements WIVisualizerAPI {
                         zipFileName: samples[i][4],
                         isAvailable: samples[i][5]
                     };
+
+                    // Hide BI samples that are currently not working in WSO2 Integrator
+                    // until their runtime issues are resolved.
+                    if (params.runtime === "WSO2: BI" && BI_HIDDEN_SAMPLE_IDS.has(sample.zipFileName)) {
+                        continue;
+                    }
+
                     sampleList.push(sample);
                 }
+
                 const gettingStartedData: GettingStartedData = {
                     categories: categoriesList,
-                    samples: sampleList
+                    samples: sampleList,
+                    prebuiltIntegrations,
                 };
                 resolve(gettingStartedData);
 
@@ -406,20 +433,62 @@ export class MainWsManager implements WIVisualizerAPI {
                 console.error('Error fetching samples:', error);
                 resolve({
                     categories: [],
-                    samples: []
+                    samples: [],
+                    prebuiltIntegrations,
                 });
             }
         });
     }
 
-    downloadSelectedSampleFromGithub(params: SampleDownloadRequest): void {
-        let url = 'https://devant-cdn.wso2.com/bi-samples/v1';
-        if (params.runtime === "WSO2: MI") {
-            url = `https://mi-connectors.wso2.com/samples/samples/${params.zipFileName}`;
+    async fetchBiPrebuiltIntegrations(): Promise<PrebuiltIntegration[]> {
+        try {
+            const { data } = await axios.get(BI_PREBUILT_INTEGRATIONS_URL);
+            return data.prebuiltIntegrations as PrebuiltIntegration[];
+        } catch (error) {
+            console.error("Error fetching BI prebuilt integrations:", error);
+            return [];
         }
+    }
+
+    async downloadSelectedSampleFromGithub(params: SampleDownloadRequest): Promise<void> {
         const workspaceFolders = workspace.workspaceFolders;
         const projectUri = this.projectUri ?? (workspaceFolders ? workspaceFolders[0].uri.fsPath : "");
-        handleOpenFile(projectUri, params.zipFileName, url);
+
+        if (params.runtime === "WSO2: BI") {
+            const componentPath = params.prebuiltIntegration?.componentPath ?? params.zipFileName;
+            const displayName = params.prebuiltIntegration?.displayName ?? params.zipFileName;
+            const isPrebuilt = params.itemType === "prebuilt";
+
+            if (!componentPath || !displayName) {
+                await window.showErrorMessage("Sample download details are missing.");
+                return;
+            }
+
+            await handleOpenBISamplesIntegrations(projectUri, {
+                repositoryUrl: params?.prebuiltIntegration?.repositoryUrl ?? BI_SAMPLES_REPOSITORY_URL,
+                branch: params?.prebuiltIntegration?.branch ?? BI_SAMPLES_REPOSITORY_BRANCH,
+                subDirectory: params?.prebuiltIntegration?.subDirectory ?? BI_SAMPLES_REPOSITORY_SUBDIRECTORY,
+                componentPath,
+                displayName,
+                sourceLabel: isPrebuilt ? "pre-built integration" : "integration sample",
+                missingSourceError: isPrebuilt
+                    ? "Pre-built integration source files were not found in the downloaded archive."
+                    : "Integration sample source files were not found in the downloaded archive.",
+                preparationErrorLabel: isPrebuilt ? "pre-built integration" : "integration sample",
+            });
+            return;
+        }
+
+        if (!params.zipFileName) {
+            void window.showErrorMessage("Sample download details are missing.");
+            return;
+        }
+
+        if (params.runtime === "WSO2: MI") {
+            const url = `https://mi-connectors.wso2.com/samples/samples/${params.zipFileName}`;
+            handleOpenFile(projectUri, params.zipFileName, url);
+        }
+
     }
 
     private async getLangClient() {
@@ -442,14 +511,15 @@ export class MainWsManager implements WIVisualizerAPI {
         return new Promise(async (resolve, reject) => {
             try {
                 const projectRoot: string = await commands.executeCommand('BI.project.createBIProjectPure', params);
-                if (ext.authProvider?.getUserInfo() && params.orgName && projectRoot) {
-                    const projectName = params.workspaceName || params.packageName || params.projectName;
-                    if (projectName) {
-                        try {
-                            await this.writeChoreoContext(projectRoot, params.orgName, projectName);
-                        } catch (contextError) {
-                            console.warn("Failed to write Choreo context file (non-critical):", contextError);
-                        }
+                if (params.createAsWorkspace && params.projectHandle) {
+                    try {
+                        await this.writeLocalContextYaml(
+                            projectRoot,
+                            params.orgHandle,
+                            params.projectHandle,
+                        );
+                    } catch (yamlError) {
+                        console.warn("Failed to write context.yaml (non-critical):", yamlError);
                     }
                 }
                 openInVSCode(projectRoot);
@@ -463,13 +533,16 @@ export class MainWsManager implements WIVisualizerAPI {
         });
     }
 
-    private async writeChoreoContext(projectRoot: string, orgName: string, projectName: string): Promise<void> {
+    private async writeLocalContextYaml(
+        projectRoot: string,
+        orgHandle: string,
+        projectHandle: string,
+    ): Promise<void> {
         const choreoDir = path.join(projectRoot, '.choreo');
-        const contextFile = path.join(choreoDir, 'context.yaml');
-        const contextData = [{ org: orgName, project: projectName }];
-        const content = stringifyYaml(contextData);
+        const localProjectFile = path.join(choreoDir, 'context.yaml');
+        const content = stringifyYaml([{ org: orgHandle, project: projectHandle, local: true }]);
         await fs.promises.mkdir(choreoDir, { recursive: true });
-        await fs.promises.writeFile(contextFile, content, { encoding: 'utf8' });
+        await fs.promises.writeFile(localProjectFile, content, { encoding: 'utf8' });
     }
 
     async validateProjectPath(params: ValidateProjectFormRequest): Promise<ValidateProjectFormResponse> {
@@ -479,7 +552,16 @@ export class MainWsManager implements WIVisualizerAPI {
     async migrateProject(params: MigrateRequest): Promise<void> {
         return new Promise(async (resolve, reject) => {
             try {
-                const result = await commands.executeCommand('BI.project.createBIProjectMigration', params);
+                const result = await commands.executeCommand("BI.project.createBIProjectMigration", params);
+                if (params.aiFeatureUsed && params.sourcePath) {
+                    const projectRoot = typeof result === "string" ? result : undefined;
+                    if (projectRoot) {
+                        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+                        migrationAPI?.setWizardProjectRoot(projectRoot, params.sourcePath);
+                        // Ensure the BridgeLayer forwards chat events now that the API is available
+                        BridgeLayer.setupMigrationSubscription(this.projectUri ?? "global");
+                    }
+                }
                 resolve();
             } catch (error) {
                 console.error("Error creating Ballerina project:", error);
@@ -585,5 +667,35 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async getDefaultCreationPath(): Promise<WorkspaceRootResponse> {
         return { path: getDefaultCreationPath() };
+    }
+
+    async wizardEnhancementReady(): Promise<void> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        await migrationAPI?.wizardEnhancementReady();
+    }
+
+    async openMigratedProject(): Promise<void> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        migrationAPI?.openMigratedProject();
+    }
+
+    async abortMigrationAgent(): Promise<void> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        migrationAPI?.abortAgent();
+    }
+
+    async checkAIAuth(): Promise<boolean> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        const result = migrationAPI?.isAIAuthenticated() ?? false;
+        console.log('[ws-manager] checkAIAuth: migrationAPI available:', !!migrationAPI, 'result:', result);
+        return result;
+    }
+
+    async triggerAICopilotSignIn(): Promise<{ success: boolean; error?: string }> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        console.log('[ws-manager] triggerAICopilotSignIn: migrationAPI available:', !!migrationAPI);
+        const result = await (migrationAPI?.signInForAI() ?? Promise.resolve({ success: false, error: "Migration API not available." }));
+        console.log('[ws-manager] triggerAICopilotSignIn: result:', JSON.stringify(result));
+        return result;
     }
 }

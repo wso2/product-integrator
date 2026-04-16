@@ -69,8 +69,6 @@ export enum DIRECTORY_MAP {
     CONNECTOR = 'CONNECTOR',
     RESOURCE = 'RESOURCE',
     REMOTE = 'REMOTE',
-    WORKFLOW = 'WORKFLOW',
-    ACTIVITY = 'ACTIVITY',
 }
 
 export enum MACHINE_VIEW {
@@ -110,6 +108,9 @@ export interface ProjectStructure {
 }
 
 export interface ProjectStructureResponse {
+    workspaceName?: string;
+    workspaceTitle?: string;
+    workspacePath?: string;
     projects: ProjectStructure[];
 }
 

@@ -65,26 +65,12 @@ const TopSection = styled.div`
     --welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-white) 36%, transparent);
     --welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent);
     --welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent-soft) 52%, transparent);
-    background:
-        radial-gradient(circle at 82% 14%, color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent) 0%, transparent 34%),
-        radial-gradient(circle at 12% 100%, color-mix(in srgb, var(--wso2-brand-neutral-900) 46%, transparent) 0%, transparent 52%),
-        linear-gradient(115deg, #050a14 0%, var(--wso2-brand-ink) 42%, var(--wso2-brand-ink-alt) 100%);
+    background: linear-gradient(180deg, var(--wso2-brand-hero-start) 0%, var(--wso2-brand-hero-end) 100%);
     padding: 40px 60px 80px;
     position: relative;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-
-    body.vscode-light & {
-        --welcome-hero-foreground: var(--wso2-brand-ink);
-        --welcome-hero-muted: color-mix(in srgb, var(--wso2-brand-ink) 76%, var(--wso2-brand-white));
-        --welcome-hero-surface: color-mix(in srgb, var(--wso2-brand-white) 70%, transparent);
-        --welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
-        --welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
-        --welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent) 34%, transparent);
-        background:
-            linear-gradient(110deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-soft) 100%);
-    }
 `;
 
 const TopControlsSection = styled.div`
@@ -792,7 +778,9 @@ export const WelcomeView: React.FC = () => {
 	// Clear it once auth completes or after a short timeout (user cancelled).
 	useEffect(() => {
 		const unsubscribe = wsClient.onSignInInitiated(() => {
-			setIsSigningIn(true);
+			if (signingInTimeoutRef.current) {
+				clearTimeout(signingInTimeoutRef.current);
+			}
 			signingInTimeoutRef.current = setTimeout(() => {
 				setIsSigningIn(false);
 				signingInTimeoutRef.current = null;
@@ -818,7 +806,25 @@ export const WelcomeView: React.FC = () => {
 	}, []);
 
 	const handleSignIn = () => {
+		setIsSigningIn(true);
+		// Give the user 5 minutes to complete browser login before auto-resetting.
+		if (signingInTimeoutRef.current) {
+			clearTimeout(signingInTimeoutRef.current);
+		}
+		signingInTimeoutRef.current = setTimeout(() => {
+			setIsSigningIn(false);
+			signingInTimeoutRef.current = null;
+		}, 300000);
 		wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
+	};
+
+	const handleCancelSignIn = () => {
+		setIsSigningIn(false);
+		if (signingInTimeoutRef.current) {
+			clearTimeout(signingInTimeoutRef.current);
+			signingInTimeoutRef.current = null;
+		}
+		wsClient.runCommand({ command: WICommandIds.CancelSignIn, args: [] });
 	};
 
 	const renderCurrentView = () => {
@@ -875,19 +881,21 @@ export const WelcomeView: React.FC = () => {
 									</UserInitial>
 								)}
 							</UserAvatar>
+						) : isSigningIn ? (
+							<SigninBtn type="button" onClick={handleCancelSignIn} title="Cancel sign in">
+								<Codicon
+									name="loading"
+									iconSx={{ fontSize: 13, color: "var(--wso2-brand-white)", animation: "codicon-spin 1.5s steps(30) infinite" }}
+								/>
+								Signing in...
+								<Codicon
+									name="close"
+									iconSx={{ fontSize: 12, color: "var(--wso2-brand-white)", opacity: 0.8 }}
+								/>
+							</SigninBtn>
 						) : (
-							<SigninBtn type="button" onClick={handleSignIn} disabled={isSigningIn}>
-								{isSigningIn ? (
-									<>
-										<Codicon
-											name="loading"
-											iconSx={{ fontSize: 13, color: "var(--wso2-brand-white)", animation: "codicon-spin 1.5s steps(30) infinite" }}
-										/>
-										Signing in...
-									</>
-								) : (
-									"Sign In"
-								)}
+							<SigninBtn type="button" onClick={handleSignIn}>
+								Sign In
 							</SigninBtn>
 						)}
 						<ConfigureBtn type="button" onClick={goToSettings}>
@@ -895,7 +903,7 @@ export const WelcomeView: React.FC = () => {
 								name="settings-gear"
 								iconSx={{ fontSize: 16 }}
 							/>
-							<span>Settings</span>
+							<span>Configure</span>
 						</ConfigureBtn>
 					</TopBtnSection>
 				</TopControlsSection>

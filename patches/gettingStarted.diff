@@ -1488,7 +1488,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		headline.textContent = 'Welcome to WSO2 Integrator';
 +
 +		const caption = append(leftSection, $('p.login-caption'));
-+		caption.textContent = 'Connect any system across your business, build AI agents, and orchestrate AI-enabled workflows with the 100% open source and AI-native WSO2 Integrator.';
++		caption.textContent = 'Connect AI agents, APIs, data, and events across cloud, on-prem, and hybrid environments. Build any type of integration and AI agent with the 100% open source WSO2 Integrator.';
 +
 +		// Right section with login form
 +		const rightSection = append(wrapper, $('.login-right-section'));
@@ -1502,7 +1502,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		formTitle.textContent = 'Get Started';
 +
 +		const formSubtitle = append(formContainer, $('p.form-subtitle'));
-+		formSubtitle.textContent = 'Sign in to access AI features and for seamless deployment to Devant';
++		formSubtitle.textContent = 'Sign in to access AI features and for seamless deployment to WSO2 Cloud';
 +
 +		// Loader container (shown initially while checking login status)
 +		const loaderContainer = append(formContainer, $('.loader-container'));

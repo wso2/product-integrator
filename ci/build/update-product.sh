@@ -3,8 +3,17 @@ set -euo pipefail
 
 # Accept version as first arg, default to 1.0.0
 VERSION=${1:-"1.0.0"}
-BALLERINA_EXTENSION_VERSION=${BALLERINA_EXTENSION_VERSION:-"5.9.326032720"}
 BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH:-""}
+BALLERINA_EXTENSION_VERSION=${BALLERINA_EXTENSION_VERSION:-""}
+
+if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
+  echo "Error: BALLERINA_EXTENSION_VERSION must be provided without a leading v. Example: 4.5.0" >&2
+  exit 1
+fi
+
+if [ -z "${BALLERINA_EXTENSION_VERSION}" ] && [ -z "${BALLERINA_VSIX_PATH}" ]; then
+  BALLERINA_EXTENSION_VERSION="latest"
+fi
 WI_EXTENSION_VERSION=$(node -p "require('./wi/wi-extension/package.json').version")
 
 cat > lib/vscode/product.json <<EOF
@@ -17,8 +26,8 @@ cat > lib/vscode/product.json <<EOF
     "dataFolderName": ".wso2-integrator",
     "win32MutexName": "wso2-integrator",
     "licenseName": "MIT",
-    "licenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
-    "serverLicenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
+    "licenseUrl": "https://wso2.com/licenses/",
+    "serverLicenseUrl": "https://wso2.com/licenses/",
     "serverGreeting": [],
     "serverLicense": [],
     "serverLicensePrompt": "",
@@ -33,8 +42,8 @@ cat > lib/vscode/product.json <<EOF
     "linuxIconName": "com.wso2.integrator",
     "urlProtocol": "wso2-integrator",
     "licenseFileName": "LICENSE.txt",
-    "reportIssueUrl": "https://github.com/wso2/vscode-extensions/issues/new",
-    "documentationUrl": "https://go.microsoft.com/fwlink/?LinkID=533484#vscode",
+    "reportIssueUrl": "https://github.com/wso2/product-integrator/issues",
+    "documentationUrl": "https://wso2.github.io/docs-integrator/",
     "keyboardShortcutsUrlMac": "https://go.microsoft.com/fwlink/?linkid=832143",
     "keyboardShortcutsUrlLinux": "https://go.microsoft.com/fwlink/?linkid=832144",
     "keyboardShortcutsUrlWin": "https://go.microsoft.com/fwlink/?linkid=832145",
@@ -93,7 +102,11 @@ cat > lib/vscode/product.json <<EOF
       },
       {
         "name": "wso2.hurl-client",
-        "version": "0.9.2"
+        "version": "0.9.3"
+      },
+      {
+        "name": "wso2.mcp-server-inspector",
+        "version": "0.7.2"
       },
 $(if [ -n "${BALLERINA_VSIX_PATH}" ]; then
 cat <<BALLERINA_VSIX_ENTRY
@@ -113,7 +126,11 @@ BALLERINA_MARKETPLACE_ENTRY
 fi)
       {
         "name": "wso2.micro-integrator",
-        "version": "3.1.526032514"
+        "version": "3.1.526041009"
+      },
+      {
+        "name": "wso2.streaming-integrator",
+        "version": "0.1.1"
       },
       {
         "name": "wso2.wso2-integrator",

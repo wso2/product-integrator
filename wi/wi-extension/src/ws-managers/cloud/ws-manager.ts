@@ -106,22 +106,22 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	async changeOrgContext(orgId: string): Promise<void> {
 		try {
 			await ext.clients.rpcClient.changeOrgContext(orgId);
-			
+
 			const userInfo = await ext.clients.rpcClient.getUserInfo();
 			if (!userInfo) {
 				throw new Error("Failed to retrieve user info after org context change");
 			}
-			
+
 			const region = await ext.clients.rpcClient.getCurrentRegion();
-			
+
 			if (!region || (region !== "US" && region !== "EU")) {
 				throw new Error("Region is not available or invalid. Expected 'US' or 'EU'.");
 			}
-			
+
 			if (!ext.authProvider) {
 				throw new Error("Auth provider is not available");
 			}
-			
+
 			await ext.context.globalState.update("selectedOrgId", orgId);
 
 			await ext.authProvider.getState().loginSuccess(userInfo, region);
@@ -343,14 +343,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 	async getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
 		const projects = await ext.clients.rpcClient.getProjects(params.orgId);
-		return {
-			projects: (projects ?? []).map((p) => ({
-				id: p.id,
-				name: p.name,
-				handle: p.handler,
-				description: p.description ?? "",
-			})),
-		};
+		return { projects };
 	}
 
 	async getDefaultOrgName(): Promise<DefaultOrgNameResponse> {

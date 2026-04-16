@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 import { ConfigureProjectForm } from "./ConfigureProjectForm";
 import { ImportIntegrationForm } from "./ImportIntegrationForm";
 import { MigrationProgressView } from "./MigrationProgressView";
+import { WizardAIEnhancementView } from "./WizardAIEnhancementView";
 import {
     ContentPanel,
     FormContainer,
@@ -58,8 +59,11 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const [migrationCompleted, setMigrationCompleted] = useState(false);
     const [migrationSuccessful, setMigrationSuccessful] = useState(false);
     const [migrationResponse, setMigrationResponse] = useState<ImportIntegrationResponse | null>(null);
+    const [aiEnhancementActive, setAiEnhancementActive] = useState(false);
 
-    const defaultSteps = ["Select Source Project", "Migration Status", "Create and Open Project"];
+    const defaultSteps = aiEnhancementActive
+        ? ["Select Source Project", "Static Migration Progress", "Configure Project", "AI Enhancement"]
+        : ["Select Source Project", "Static Migration Progress", "Configure Project"];
 
     const isMultiProject = migratedProjects.length! > 0;
 
@@ -105,15 +109,21 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
             });
     };
 
-    const handleCreateIntegrationFiles = (project: ProjectRequest) => {
+    const handleCreateIntegrationFiles = async (project: ProjectRequest, aiFeatureUsed: boolean) => {
         console.log("Creating integration files with params:", importParams);
         if (migrationResponse) {
             const params: MigrateRequest = {
                 project: project,
                 textEdits: migrationResponse.textEdits,
                 projects: migratedProjects,
+                aiFeatureUsed: aiFeatureUsed,
+                sourcePath: importParams?.importSourcePath,
             };
-            wsClient.migrateProject(params);
+            await wsClient.migrateProject(params);
+            if (aiFeatureUsed) {
+                setAiEnhancementActive(true);
+                setStep(3);
+            }
         }
     };
 
@@ -237,6 +247,9 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                 onBack={handleStepBack}
                                 selectedOrgName={selectedOrgName}
                             />
+                        )}
+                        {step === 3 && (
+                            <WizardAIEnhancementView wsClient={wsClient} />
                         )}
                     </FormContainer>
                 </ContentPanel>
