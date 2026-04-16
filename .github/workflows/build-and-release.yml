@@ -375,15 +375,24 @@ jobs:
         working-directory: .
         run: |
           S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
-          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.pkg"
+          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.pkg" --include "*.dmg"
       
       - name: Upload macOS artifacts
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: Product-Integrator-Darwin-${{ matrix.arch }}
+          name: Product-Integrator-Darwin-PKG-${{ matrix.arch }}
           path: |
             installers/mac/*.pkg
+          if-no-files-found: error
+
+      - name: Upload macOS DMG artifacts
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Product-Integrator-Darwin-DMG-${{ matrix.arch }}
+          path: |
+            installers/mac/*.dmg
           if-no-files-found: error
 
       - name: cosign-installer
@@ -407,11 +416,29 @@ jobs:
           cd ../..
           openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sha256 installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg
 
-      - name: Upload Signatures and Hashes for pkg installer
+      - name: Sign the dmg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          cosign sign-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg --output-certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --output-signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --yes
+
+      - name: Verify signature of the dmg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          cosign verify-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg --certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+
+      - name: Generate Hashes for dmg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg.sha256 installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.dmg
+
+      - name: Upload Signatures and Hashes for mac installers
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: Signatures-and-Hashes-PKG
+          name: Signatures-and-Hashes-MAC
           path: |
             installers/mac/*.pem
             installers/mac/*.sig
@@ -686,6 +713,16 @@ jobs:
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
+      - name: Exclude build workspace from Windows Defender
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE"
+      - name: Enable long paths (Windows)
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        shell: pwsh
+        run: |
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
       - name: Build Windows installer packages
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         shell: pwsh
@@ -856,14 +893,21 @@ jobs:
       - name: Download macOS PKG artifacts
         uses: actions/download-artifact@v4
         with:
-          name: Product-Integrator-Darwin-arm64
+          name: Product-Integrator-Darwin-PKG-arm64
           path: release-files/
         continue-on-error: true
 
-      - name: Download Signatures and Hashes (PKG)
+      - name: Download macOS DMG artifacts
         uses: actions/download-artifact@v4
         with:
-          name: Signatures-and-Hashes-PKG
+          name: Product-Integrator-Darwin-DMG-arm64
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Signatures and Hashes (MAC)
+        uses: actions/download-artifact@v4
+        with:
+          name: Signatures-and-Hashes-MAC
           path: release-files/
         continue-on-error: true
 
