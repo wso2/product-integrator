@@ -189,7 +189,7 @@ rm -rf "$DMG_STAGING"
 mkdir -p "$DMG_STAGING"
 
 # The .app is still fully assembled in WSO2_TARGET — reuse it directly
-cp -r "$WSO2_TARGET/$APP_NAME.app" "$DMG_STAGING/"
+ditto "$WSO2_TARGET/$APP_NAME.app" "$DMG_STAGING/$APP_NAME.app" 
 
 # Fix #5: remove any leftover temp DMG before creation to avoid "File exists" error
 rm -f "$TEMP_DMG"
@@ -205,7 +205,11 @@ hdiutil create \
 print_info "Mounting temporary DMG for customisation"
 # Fix #1: capture actual mountpoint from hdiutil attach output via -plist
 # Note: -quiet suppresses plist output, so redirect stderr instead
-ATTACH_PLIST=$(hdiutil attach "$TEMP_DMG" -plist 2>/dev/null)
+ATTACH_PLIST=$(hdiutil attach "$TEMP_DMG" -plist)
+if [ -z "$ATTACH_PLIST" ]; then
+    print_error "hdiutil attach returned empty output"
+    exit 1
+fi
 DMG_MOUNT_DIR=$(echo "$ATTACH_PLIST" | python3 -c "
 import sys, plistlib
 pl = plistlib.loads(sys.stdin.buffer.read())
@@ -253,7 +257,14 @@ APPLESCRIPT
 print_info "Finalising DMG"
 sync
 sleep 3
-hdiutil detach "$DMG_MOUNT_DIR" -force -quiet
+_detach_ok=0
+for _retry in 1 2 3; do
+    if hdiutil detach "$DMG_MOUNT_DIR" -force -quiet; then
+        _detach_ok=1; break
+    fi
+    [ "$_retry" -lt 3 ] && { print_info "Detach attempt $_retry failed, retrying in 2s..."; sleep 2; }
+done
+[ "$_detach_ok" -eq 0 ] && print_warning "Could not unmount $DMG_MOUNT_DIR after 3 attempts; continuing"
 DMG_MOUNT_DIR=""  # Clear so trap doesn't attempt a second detach
 hdiutil convert "$TEMP_DMG" \
     -format UDZO \

@@ -102,14 +102,31 @@ REM Map build directory to a short drive letter to keep file paths under 260 cha
 REM wixnative.exe lacks a longPathAware manifest, so it crashes on paths > 260 chars.
 set "SCRIPT_DIR=%~dp0"
 set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
-subst W: "%SCRIPT_DIR%"
-pushd W:\
+
+REM Find an unused drive letter (W, X, Y, Z) and map it via subst.
+set "BUILD_DRIVE="
+for %%L in (W X Y Z) do (
+    if not defined BUILD_DRIVE if not exist %%L:\ (
+        subst %%L: "%SCRIPT_DIR%" >nul 2>&1
+        if not errorlevel 1 set "BUILD_DRIVE=%%L"
+    )
+)
+if not defined BUILD_DRIVE (
+    echo ERROR: No available drive letter found ^(W-Z all in use or subst failed^)
+    exit /b 1
+)
+pushd %BUILD_DRIVE%:\
+if errorlevel 1 (
+    echo ERROR: pushd into %BUILD_DRIVE%:\ failed
+    subst %BUILD_DRIVE%: /D >nul 2>&1
+    exit /b 1
+)
 
 dotnet build .\CustomAction1\CustomAction1.csproj -c Release
 if errorlevel 1 (
     echo CustomAction1 build failed
     popd
-    subst W: /D
+    subst %BUILD_DRIVE%: /D
     powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
@@ -117,13 +134,13 @@ dotnet build .\WixPackage\WixPackage.wixproj -p:Platform=x64 -p:Configuration=Re
 if errorlevel 1 (
     echo WixPackage build failed
     popd
-    subst W: /D
+    subst %BUILD_DRIVE%: /D
     powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
 
 popd
-subst W: /D
+subst %BUILD_DRIVE%: /D
 
 REM Rename MSI output to include version
 set "MSI_ORIG=WixPackage\bin\x64\Release\en-US\WSO2-Integrator.msi"
