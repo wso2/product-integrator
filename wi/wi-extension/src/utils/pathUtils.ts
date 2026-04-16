@@ -89,7 +89,7 @@ export const createDirectory = (basePath: string, dirName: string): { dirName: s
 };
 
 export const getDefaultCreationPath = (): string => {
-    const defaultPath = path.join(os.homedir(), "wso2integrator", "projects");
+    const defaultPath = path.join(os.homedir(), "WSO2Integrator");
     if (!existsSync(defaultPath)) {
         mkdirSync(defaultPath, { recursive: true });
     }

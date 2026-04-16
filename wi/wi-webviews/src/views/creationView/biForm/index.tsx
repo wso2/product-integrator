@@ -25,7 +25,14 @@ import {
 } from "./styles";
 import { ProjectFormFields } from "./ProjectFormFields";
 import { DEFAULT_INTEGRATION_NAME, DEFAULT_PROJECT_NAME, ProjectFormData } from "./types";
-import { validatePackageName, validateProjectHandle, validateProjectName, validateOrgName } from "./utils";
+import {
+    sanitizeOrgHandle,
+    validateComponentName,
+    validateOrgName,
+    validatePackageName,
+    validateProjectHandle,
+    validateProjectName
+} from "./utils";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { useCloudContext } from "../../../providers";
 
@@ -60,7 +67,7 @@ export function BIProjectForm() {
     const resolvedOrg = useMemo(() => {
         if (!organizations || organizations.length === 0) return undefined;
         return formData.orgName
-            ? (organizations.find(o => o.name === formData.orgName) ?? organizations[0])
+            ? (organizations.find(o => o.handle === formData.orgName) ?? organizations[0])
             : organizations[0];
     }, [organizations, formData.orgName]);
 
@@ -94,8 +101,9 @@ export function BIProjectForm() {
 
         let hasError = false;
 
-        if (formData.integrationName.length < 2) {
-            setIntegrationNameError(`Integration name must be at least 2 characters`);
+        const integrationNameErr = validateComponentName(formData.integrationName);
+        if (integrationNameErr) {
+            setIntegrationNameError(integrationNameErr);
             hasError = true;
         }
 
@@ -183,15 +191,18 @@ export function BIProjectForm() {
                 return;
             }
 
+            const orgHandle = organizations?.find(o => o.handle === formData.orgName)?.handle ||
+                sanitizeOrgHandle(formData.orgName);
+
             await wsClient.createBIProject({
-                projectName: formData.integrationName,
+                projectName: formData.integrationName.trim(),
                 packageName: formData.packageName,
                 projectPath: formData.path,
                 createDirectory: true,
                 createAsWorkspace: formData.createWithinProject,
                 workspaceName: formData.createWithinProject ? formData.withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
-                orgHandle: resolvedOrg?.handle || formData.orgName,
+                orgHandle: orgHandle,
                 version: formData.version || undefined,
                 projectHandle: formData.createWithinProject ? formData.projectHandle : undefined,
             });

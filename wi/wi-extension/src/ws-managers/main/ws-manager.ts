@@ -79,6 +79,10 @@ const BI_SAMPLES_REPOSITORY_URL = process.env.BI_SAMPLES_REPOSITORY_URL;
 const BI_SAMPLES_REPOSITORY_BRANCH = 'main';
 const BI_SAMPLES_REPOSITORY_SUBDIRECTORY = '/ballerina-integrator';
 const BI_PREBUILT_INTEGRATIONS_URL = process.env.BI_PREBUILT_INTEGRATIONS_URL;
+const BI_HIDDEN_SAMPLE_IDS = new Set([
+    "shipment-processor",
+    "real-time-error-notifier",
+]);
 
 export class MainWsManager implements WIVisualizerAPI {
     private subProjectReports: Map<string, string> = new Map();
@@ -408,6 +412,13 @@ export class MainWsManager implements WIVisualizerAPI {
                         zipFileName: samples[i][4],
                         isAvailable: samples[i][5]
                     };
+
+                    // Hide BI samples that are currently not working in WSO2 Integrator
+                    // until their runtime issues are resolved.
+                    if (params.runtime === "WSO2: BI" && BI_HIDDEN_SAMPLE_IDS.has(sample.zipFileName)) {
+                        continue;
+                    }
+
                     sampleList.push(sample);
                 }
 
@@ -454,9 +465,9 @@ export class MainWsManager implements WIVisualizerAPI {
             }
 
             await handleOpenBISamplesIntegrations(projectUri, {
-                repositoryUrl: BI_SAMPLES_REPOSITORY_URL,
-                branch: BI_SAMPLES_REPOSITORY_BRANCH,
-                subDirectory: BI_SAMPLES_REPOSITORY_SUBDIRECTORY,
+                repositoryUrl: params?.prebuiltIntegration?.repositoryUrl ?? BI_SAMPLES_REPOSITORY_URL,
+                branch: params?.prebuiltIntegration?.branch ?? BI_SAMPLES_REPOSITORY_BRANCH,
+                subDirectory: params?.prebuiltIntegration?.subDirectory ?? BI_SAMPLES_REPOSITORY_SUBDIRECTORY,
                 componentPath,
                 displayName,
                 sourceLabel: isPrebuilt ? "pre-built integration" : "integration sample",

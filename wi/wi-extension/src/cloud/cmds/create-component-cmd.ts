@@ -46,7 +46,7 @@ import { updateContextFile } from "./create-directory-context-cmd";
 import { WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 import { ProjectType, StateMachine, stateService } from "../../stateMachine";
-import { existsSync, readFileSync, realpath, realpathSync, rmSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import * as yaml from "js-yaml";
 
 
@@ -557,58 +557,76 @@ const clearCodeServerLocalStorage = async () => {
 	}
 }
 
-/** If project in local-project.yaml exist, create project from its data, automatically */
+/** If the context.yaml exists with `local: true`, create project from its data, automatically  */
 const createProjectFromLocalMetadata = async (userInfo: UserInfo, workspacePath?: string): Promise<{ org?: Organization; project?: Project }> => {
 	try {
-		const localMetadataFilePath = path.join(workspacePath, ".choreo", "local-project.yaml");
 		const contextFilePath = path.join(workspacePath, ".choreo", "context.yaml");
-		if (existsSync(localMetadataFilePath)) {
-			let parsedData: { org?: string; name: string; handle: string } = yaml.load(readFileSync(localMetadataFilePath, "utf8")) as any;
-			if (!parsedData || !parsedData?.name || !parsedData?.handle) {
-				return;
-			}
-
-			let selectedOrg = userInfo.organizations.find((org) => org.handle === parsedData.org);
-			if (!selectedOrg) {
-				selectedOrg = await selectOrg(userInfo, "Select organization");
-			}
-
-			const projects = await window.withProgress(
-				{
-					title: `Fetching cloud projects of organization ${selectedOrg.name}...`,
-					location: ProgressLocation.Notification,
-				},
-				() => ext.clients.rpcClient.getProjects(selectedOrg.id.toString()),
-			);
-			dataCacheStore.getState().setProjects(selectedOrg.handle, projects);
-
-			const matchingProject = projects.find((project) => project.handler === parsedData.handle);
-			if (matchingProject) {
-				const newList: ContextItem[] = [{ org: selectedOrg.handle, project: matchingProject.handler }];
-				writeFileSync(contextFilePath, yaml.dump(newList));
-				rmSync(localMetadataFilePath);
-				return { org: selectedOrg, project: matchingProject };
-			}
-
-			const createdProject = await window.withProgress(
-				{
-					title: `Creating new cloud project ${selectedOrg.name}...`,
-					location: ProgressLocation.Notification,
-				},
-				() => ext.clients.rpcClient.createProject({
-					orgId: selectedOrg.id.toString(),
-					orgHandler: selectedOrg.handle,
-					projectName: parsedData?.name,
-					projectHandler: parsedData?.handle,
-					region: ext.authProvider?.getState().state.region || "US"
-				}),
-			);
-
-			const newList: ContextItem[] = [{ org: selectedOrg.handle, project: createdProject.handler }];
-			writeFileSync(contextFilePath, yaml.dump(newList));
-			rmSync(localMetadataFilePath);
-			return { org: selectedOrg, project: createdProject };
+		if (!existsSync(contextFilePath)) {
+			return undefined;
 		}
+
+		type LocalContextItem = ContextItem & { local?: boolean };
+		const contextList: LocalContextItem[] = (yaml.load(readFileSync(contextFilePath, "utf8")) as LocalContextItem[]) ?? [];
+		const localEntry = contextList.find((entry) => entry.local === true);
+		if (!localEntry) {
+			return undefined;
+		}
+
+		let selectedOrg = userInfo.organizations.find((org) => org.handle === localEntry.org);
+		if (!selectedOrg) {
+			selectedOrg = await selectOrg(userInfo, "Select organization");
+		}
+
+		const projects = await window.withProgress(
+			{
+				title: `Fetching cloud projects of organization ${selectedOrg.name}...`,
+				location: ProgressLocation.Notification,
+			},
+			() => ext.clients.rpcClient.getProjects(selectedOrg.id.toString()),
+		);
+		dataCacheStore.getState().setProjects(selectedOrg.handle, projects);
+
+		// Strip the `local` flag from the matched entry and write the updated list back in-place.
+		const stripLocalFlag = (list: LocalContextItem[]): ContextItem[] =>
+			list.map(({ local: _local, ...rest }) => rest);
+
+		const matchingProject = projects.find((project) => project.handler === localEntry.project);
+		if (matchingProject) {
+			writeFileSync(contextFilePath, yaml.dump(stripLocalFlag(contextList)));
+			return { org: selectedOrg, project: matchingProject };
+		}
+
+		// Derive a human-readable name from Ballerina.toml [workspace].title, falling back to the handler.
+		let projectName: string | undefined;
+		const ballerinaTomlPath = path.join(workspacePath, "Ballerina.toml");
+		if (existsSync(ballerinaTomlPath)) {
+			const tomlContent = readFileSync(ballerinaTomlPath, "utf8");
+			const titleMatch = tomlContent.match(/^\[workspace\][^\[]*title\s*=\s*"([^"]+)"/ms);
+			projectName = titleMatch?.[1];
+		}
+		if (!projectName) {
+			projectName = localEntry.project
+				.split("-")
+				.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+				.join(" ");
+		}
+
+		const createdProject = await window.withProgress(
+			{
+				title: `Creating new cloud project ${selectedOrg.name}...`,
+				location: ProgressLocation.Notification,
+			},
+			() => ext.clients.rpcClient.createProject({
+				orgId: selectedOrg.id.toString(),
+				orgHandler: selectedOrg.handle,
+				projectName,
+				projectHandler: localEntry.project,
+				region: ext.authProvider?.getState().state.region || "US"
+			}),
+		);
+
+		writeFileSync(contextFilePath, yaml.dump(stripLocalFlag(contextList)));
+		return { org: selectedOrg, project: createdProject };
 	} catch (err) {
 		ext.logError(`Failed to get context file entry`, err as Error);
 		return

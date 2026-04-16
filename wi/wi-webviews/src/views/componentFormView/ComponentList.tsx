@@ -40,7 +40,7 @@ import {
 } from "./styles";
 import { useCloudContext } from "../../providers";
 import { useVisualizerContext } from "../../contexts";
-import { Organization } from "../creationView/biForm/components/PackageInfoSection";
+import { Organization } from "../creationView/biForm/components/AdvancedConfigurationSection";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
