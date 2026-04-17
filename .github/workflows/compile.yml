@@ -14,29 +14,9 @@ on:
         default: true
         required:  true
         type: boolean
-      ballerina_version:
-        description: 'Specify Ballerina version to use'
-        required: false
-        type: string
       ballerina_extension_source:
         description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
         default: 'marketplace'
-        required: false
-        type: string
-      ballerina_extension_version:
-        description: 'Specify the Ballerina extension version to use for GitHub VSIX or marketplace flow'
-        required: false
-        type: string
-      icp_version:
-        description: 'Specify ICP version to use'
-        required: false
-        type: string
-      integrator_version:
-        description: 'Specify Integrator version to use'
-        required: false
-        type: string
-      ballerina_jre_version:
-        description: 'Specify Ballerina JRE version to use'
         required: false
         type: string
 
@@ -45,26 +25,75 @@ permissions:
   contents: write     
 
 jobs:
+  resolve-versions:
+    name: Resolve Component Versions
+    runs-on: ubuntu-latest
+    outputs:
+      ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
+      ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
+      icp_version: ${{ steps.read-versions.outputs.icp_version }}
+      integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read versions file
+        id: read-versions
+        shell: bash
+        run: |
+          VERSIONS_FILE="ci/build/component-versions.properties"
+          if [ ! -f "${VERSIONS_FILE}" ]; then
+            echo "Error: ${VERSIONS_FILE} does not exist." >&2
+            exit 1
+          fi
+
+          read_property() {
+            local key="$1"
+            awk -F= -v property_key="$key" '$1 == property_key { print substr($0, index($0, "=") + 1); exit }' "${VERSIONS_FILE}" | tr -d '\r'
+          }
+
+          BALLERINA_VERSION=$(read_property "ballerina.version")
+          BALLERINA_EXTENSION_VERSION=$(read_property "ballerina.extension.version")
+          ICP_VERSION=$(read_property "icp.version")
+          INTEGRATOR_VERSION=$(read_property "integrator.version")
+
+          if [ -z "${BALLERINA_VERSION}" ] || [ -z "${ICP_VERSION}" ] || [ -z "${INTEGRATOR_VERSION}" ]; then
+            echo "Error: ballerina.version, icp.version, and integrator.version must be set in ${VERSIONS_FILE}." >&2
+            exit 1
+          fi
+
+          if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
+            echo "Error: ballerina.extension.version must be provided without a leading v." >&2
+            exit 1
+          fi
+
+          echo "ballerina_version=${BALLERINA_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "ballerina_extension_version=${BALLERINA_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "icp_version=${ICP_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "integrator_version=${INTEGRATOR_VERSION}" >> "$GITHUB_OUTPUT"
+
   validate-Inputs:
+    needs: resolve-versions
     if: ${{ inputs.build_packed_installers == true }}
     name: Validate Inputs
     runs-on: ubuntu-latest
     steps:
       - name: Validate required inputs
         run: |
-          if [ -z "${{ inputs.ballerina_version }}" ] || [ -z "${{ inputs.icp_version }}" ] || [ -z "${{ inputs.integrator_version }}" ] || [ -z "${{ inputs.ballerina_jre_version }}" ]; then
-            echo "Error: ballerina_version, icp_version, integrator_version, and ballerina_jre_version must not be empty."
+          if [ -z "${{ needs.resolve-versions.outputs.ballerina_version }}" ] || [ -z "${{ needs.resolve-versions.outputs.icp_version }}" ] || [ -z "${{ needs.resolve-versions.outputs.integrator_version }}" ]; then
+            echo "Error: ballerina_version, icp_version, and integrator_version must not be empty."
             exit 1
-          elif [ "${{ inputs.ballerina_extension_source }}" = "github" ] && [ -z "${{ inputs.ballerina_extension_version }}" ]; then
+          elif [ "${{ inputs.ballerina_extension_source }}" = "github" ] && [ -z "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" ]; then
             echo "Error: ballerina_extension_version must not be empty when ballerina_extension_source is set to github."
             exit 1
-          elif [ -n "${{ inputs.ballerina_extension_version }}" ] && [[ "${{ inputs.ballerina_extension_version }}" =~ ^[vV] ]]; then
+          elif [ -n "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" ] && [[ "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" =~ ^[vV] ]]; then
             echo "Error: ballerina_extension_version must be provided without a leading v. Example: 4.5.0"
             exit 1
           else
-            echo "All required version inputs are provided."
+            echo "All required versions from component-versions.properties are available."
           fi
   compile:
+    needs: resolve-versions
     name: Build repo
     timeout-minutes: 45
     runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
@@ -82,12 +111,12 @@ jobs:
         shell: bash
         working-directory: .
         run: |
-          if [ "${{ inputs.ballerina_extension_source }}" = "github" ] && [ -z "${{ inputs.ballerina_extension_version }}" ]; then
+          if [ "${{ inputs.ballerina_extension_source }}" = "github" ] && [ -z "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" ]; then
             echo "Error: ballerina_extension_version is required when ballerina_extension_source=github."
             exit 1
           fi
 
-          if [[ -n "${{ inputs.ballerina_extension_version }}" && "${{ inputs.ballerina_extension_version }}" =~ ^[vV] ]]; then
+          if [[ -n "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" && "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" =~ ^[vV] ]]; then
             echo "Error: ballerina_extension_version must be provided without a leading v. Example: 4.5.0"
             exit 1
           fi
@@ -125,7 +154,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
 
       - name: Cache Rust toolchain
         uses: actions/cache@v4
@@ -182,26 +211,26 @@ jobs:
           key: vscode-reh-package-v1-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
 
       - name: Set Ballerina extension version
-        if: ${{ inputs.ballerina_extension_version != '' }}
+        if: ${{ needs.resolve-versions.outputs.ballerina_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
-          echo "BALLERINA_EXTENSION_VERSION=${{ inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
+          echo "BALLERINA_EXTENSION_VERSION=${{ needs.resolve-versions.outputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
 
       - name: Download archived Ballerina VSIX
-        if: ${{ inputs.ballerina_extension_source == 'github' && inputs.ballerina_extension_version != '' }}
+        if: ${{ inputs.ballerina_extension_source == 'github' && needs.resolve-versions.outputs.ballerina_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ inputs.ballerina_extension_version }}" "ballerina-${{ inputs.ballerina_extension_version }}.vsix" "$PWD")
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
   
       - name: Update product.json and branding
         working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh "${{ inputs.integrator_version }}"
+          ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
 
       - name: Copy .env.example to .env
         shell: bash
@@ -286,23 +315,20 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
-          BALLERINA_VERSION="${{ inputs.ballerina_version }}"
+          BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
-          ICP_VERSION="${{ inputs.icp_version }}"
+          ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
           ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          JRE_VERSION="${{ inputs.ballerina_jre_version }}"
-          JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
-          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-deb
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
-          wget -O jre.zip "$JRE_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
 
       - name: Upload Deb artifacts
@@ -321,23 +347,20 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
-          BALLERINA_VERSION="${{ inputs.ballerina_version }}"
+          BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
-          ICP_VERSION="${{ inputs.icp_version }}"
+          ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
           ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          JRE_VERSION="${{ inputs.ballerina_jre_version }}"
-          JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
-          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-rpm
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
-          wget -O jre.zip "$JRE_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       - name: Upload RPM artifacts
         if: ${{ inputs.build_packed_installers == true}}
@@ -354,23 +377,20 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
-          BALLERINA_VERSION="${{ inputs.ballerina_version }}"
+          BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
-          ICP_VERSION="${{ inputs.icp_version }}"
+          ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
           ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          JRE_VERSION="${{ inputs.ballerina_jre_version }}"
-          JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
-          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-tar
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
-          wget -O jre.zip "$JRE_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       - name: Upload TAR artifacts
         if: ${{ inputs.build_packed_installers == true}}
@@ -388,7 +408,7 @@ jobs:
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
             RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
             RPM_VERSION="${INTEGRATOR_VERSION%-*}"
@@ -402,7 +422,7 @@ jobs:
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
             RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
             RPM_VERSION="${INTEGRATOR_VERSION%-*}"
@@ -417,7 +437,7 @@ jobs:
         if: ${{ inputs.build_packed_installers == true}}
         run: |
           cd ../..
-          INTEGRATOR_VERSION="${{ inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           if [[ "$INTEGRATOR_VERSION" == *"-"* ]]; then
             RPM_RELEASE="${INTEGRATOR_VERSION#*-}"
             RPM_VERSION="${INTEGRATOR_VERSION%-*}"
