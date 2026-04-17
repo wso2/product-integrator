@@ -17,6 +17,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:wso2.integrator.getEmbeddedWelcomeBootstrap",
     "workspaceContains:**/Ballerina.toml",
     "onLanguage:SynapseXml",
@@ -88,6 +89,38 @@
           "default": false,
           "description": "Enable only if your system does not support keyring.",
           "scope": "window"
+        },
+        "updates.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Enable WSO2 Integrator product update checks."
+        },
+        "updates.checkOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Check for a newer WSO2 Integrator version when the product starts."
+        },
+        "updates.checkIntervalHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "scope": "application",
+          "description": "Minimum number of hours between automatic WSO2 Integrator update checks."
+        },
+        "updates.serviceUrl": {
+          "type": "string",
+          "default": "https://bc594c9c-e5f7-4bd4-8b83-3bdea4d32b49-prod.e1-us-east-azure.choreoapis.dev/product-integrator/product-update-service/v1.0",
+          "scope": "application",
+          "description": "Hosted product update service endpoint used by WSO2 Integrator."
+        },
+        "updates.requestTimeoutMs": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 1000,
+          "scope": "application",
+          "description": "Timeout in milliseconds for calls to the hosted product update service."
         }
       }
     },
@@ -148,6 +181,11 @@
       {
         "command": "wso2.integrator.openMIIntegration",
         "title": "Open MI Integration",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "wso2.integrator.checkForUpdates",
+        "title": "Check for Updates",
         "category": "WSO2 Integrator"
       },
       {
