@@ -25,7 +25,6 @@ import {
 	parseGitURL,
 	GitProvider,
 	ICreateNewIntegrationCmdParams,
-	makeURLSafe,
 	ContextItem,
 	UserInfo,
 	Organization,
@@ -208,7 +207,6 @@ export function createNewComponentCommand(context: ExtensionContext) {
 
 					for (const integration of integrations) {
 						let compInitialName = integration?.name || path.basename(integration.fsPath);
-						compInitialName = makeURLSafe(compInitialName);
 						const existingNames = components.map((c) => c.metadata?.name?.toLowerCase?.());
 						const baseIntName = compInitialName;
 						let counter = 1;
