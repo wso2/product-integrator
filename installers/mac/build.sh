@@ -135,6 +135,7 @@ pkgbuild --root "$EXTRACTION_TARGET" \
          --version "$VERSION" \
          --install-location "/" \
          --ownership preserve \
+         --component-plist "$WORK_DIR/component.plist" \
          "$WORK_DIR/WSO2 Integrator.pkg"
 
 sed -i '' "s/version=\"__VERSION__\"/version=\"$VERSION\"/g" "$WORK_DIR/Distribution.xml"
