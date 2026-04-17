@@ -64,14 +64,14 @@ if errorlevel 1 (
 
 REM Extract JRE zip into shared dependencies directory
 echo Extracting JRE to shared dependencies directory
-powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $dependenciesTarget = '.\WixPackage\payload\Integrator\components\dependencies'; New-Item -ItemType Directory -Force -Path $dependenciesTarget | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~5', $dependenciesTarget); }"
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $dependenciesTarget = '.\WixPackage\payload\Integrator\components\dependencies'; if (Test-Path $dependenciesTarget) { Remove-Item -Recurse -Force $dependenciesTarget }; New-Item -ItemType Directory -Force -Path $dependenciesTarget | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~5', $dependenciesTarget); }"
 if errorlevel 1 (
     echo JRE extraction failed
     exit /b 1
 )
 
-REM Modify icp.bat to use the JDK from shared dependencies directory
-echo Modifying icp.bat to use JDK from dependencies
+REM Modify icp.bat to use the JRE from shared dependencies directory
+echo Modifying icp.bat to use JRE from dependencies
 if exist ".\WixPackage\payload\Integrator\components\icp\bin\icp.bat" (
     powershell -nologo -noprofile -command "& { $icpScript = '.\WixPackage\payload\Integrator\components\icp\bin\icp.bat'; $jdkDir = (Get-ChildItem '.\WixPackage\payload\Integrator\components\dependencies' -Directory -ErrorAction SilentlyContinue | Select-Object -First 1).Name; if ($jdkDir) { $content = Get-Content $icpScript -Raw; $javaReplacement = '!SCRIPT_DIR!../../dependencies/' + $jdkDir + '/bin/java'; $newContent = $content -replace '\bjava\b', $javaReplacement; Set-Content -Path $icpScript -Value $newContent -NoNewline; Write-Host \"Updated icp.bat to use JDK: $jdkDir\" } else { Write-Host 'Warning: JDK folder not found in dependencies' } }"
 ) else (

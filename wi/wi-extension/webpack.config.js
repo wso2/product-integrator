@@ -1,7 +1,7 @@
 const path = require("path");
 const fs = require("fs");
-const dotenv = require('dotenv');
-const webpack = require('webpack');
+const dotenv = require("dotenv");
+const webpack = require("webpack");
 const CopyPlugin = require("copy-webpack-plugin");
 const PermissionsOutputPlugin = require("webpack-permissions-plugin");
 const { createEnvDefinePlugin } = require("../../external/wso2-vscode-extensions/common/scripts/env-webpack-helper");

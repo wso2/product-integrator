@@ -107,7 +107,11 @@ print_info "Extracting JRE to shared dependencies directory"
 rm -rf "$DEPENDENCIES_DIR"
 mkdir -p "$DEPENDENCIES_DIR"
 unzip -o "$JRE_ZIP" -d "$DEPENDENCIES_DIR"
-JRE_FOLDER=$(unzip -Z1 "$JRE_ZIP" | head -1 | cut -d/ -f1)
+JRE_FOLDER=$(unzip -Z1 "$JRE_ZIP" | awk -F/ '{print $1}' | sort -u | grep -v '^$' | head -1)
+if [ -z "$JRE_FOLDER" ]; then
+    print_error "Could not determine JRE folder from zip"
+    exit 1
+fi
 
 rm -rf "$BALLERINA_UNZIPPED_PATH"
 rm -rf "$BALLERINA_TEMP"
@@ -128,11 +132,12 @@ mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
 
-# Modify icp.sh to use the JDK from shared dependencies directory
+# Modify icp.sh to use the JRE from shared dependencies directory
 ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
 if [ -f "$ICP_SCRIPT" ]; then
     print_info "Modifying icp.sh to use JRE from dependencies ($JRE_FOLDER)"
-    sed -i "s|java|\"\$SCRIPT_DIR\"/../../dependencies/$JRE_FOLDER/bin/java|g" "$ICP_SCRIPT"
+    # Replace standalone 'java' invocations with the full path to the JRE java (word-boundary match)
+    sed -i "s|\bjava\b|\"\$SCRIPT_DIR\"/../../dependencies/$JRE_FOLDER/bin/java|g" "$ICP_SCRIPT"
 fi
 
 # # Update dashboard.sh to set JAVA_HOME to point to shared JDK

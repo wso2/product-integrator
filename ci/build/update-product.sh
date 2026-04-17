@@ -30,6 +30,13 @@ if [ -z "${VERSION}" ]; then
   exit 1
 fi
 
+for var_name in WSO2_PLATFORM_EXTENSION_VERSION WSO2_HURL_CLIENT_EXTENSION_VERSION WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION WSO2_MICRO_INTEGRATOR_EXTENSION_VERSION WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION; do
+  if [ -z "${!var_name}" ]; then
+    echo "Error: ${var_name} is empty — check the corresponding key in ${VERSIONS_FILE}" >&2
+    exit 1
+  fi
+done
+
 if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
   echo "Error: BALLERINA_EXTENSION_VERSION must be provided without a leading v. Example: 4.5.0" >&2
   exit 1
