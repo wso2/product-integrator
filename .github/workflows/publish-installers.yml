@@ -28,25 +28,53 @@ on:
         required: false
         default: true
         type: boolean
-      ballerina_version:
-        description: 'Specify Ballerina version to use'
-        required: true
-        type: string
-      icp_version:
-        description: 'Specify ICP version to use'
-        required: true
-        type: string
-      integrator_version:
-        description: 'Specify Integrator version to use'
-        required: true
-        type: string
 
 permissions:
   id-token: write
   contents: write        
         
 jobs:
+  resolve-versions:
+    name: Resolve Component Versions
+    runs-on: ubuntu-latest
+    outputs:
+      ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
+      icp_version: ${{ steps.read-versions.outputs.icp_version }}
+      integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read versions file
+        id: read-versions
+        shell: bash
+        run: |
+          VERSIONS_FILE="ci/build/component-versions.properties"
+          if [ ! -f "${VERSIONS_FILE}" ]; then
+            echo "Error: ${VERSIONS_FILE} does not exist." >&2
+            exit 1
+          fi
+
+          read_property() {
+            local key="$1"
+            awk -F= -v property_key="$key" '$1 == property_key { print substr($0, index($0, "=") + 1); exit }' "${VERSIONS_FILE}" | tr -d '\r'
+          }
+
+          BALLERINA_VERSION=$(read_property "ballerina.version")
+          ICP_VERSION=$(read_property "icp.version")
+          INTEGRATOR_VERSION=$(read_property "integrator.version")
+
+          if [ -z "${BALLERINA_VERSION}" ] || [ -z "${ICP_VERSION}" ] || [ -z "${INTEGRATOR_VERSION}" ]; then
+            echo "Error: ballerina.version, icp.version, and integrator.version must be set in ${VERSIONS_FILE}." >&2
+            exit 1
+          fi
+
+          echo "ballerina_version=${BALLERINA_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "icp_version=${ICP_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "integrator_version=${INTEGRATOR_VERSION}" >> "$GITHUB_OUTPUT"
+
   compile:
+    needs: resolve-versions
     name: Compile
     runs-on: ${{ github.event.inputs.runner == 'codebuild' && 'codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}' || 'ubuntu-latest' }}
     defaults:
@@ -147,7 +175,7 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh "${{ github.event.inputs.integrator_version }}"
+          ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
       - name: Install dependencies
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
@@ -203,11 +231,11 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
-          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-linux.zip"
-          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-deb
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
@@ -228,11 +256,11 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
-          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-linux.zip"
-          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-rpm
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
@@ -258,19 +286,19 @@ jobs:
       - name: Sign the deb, rpm installers
         run: |
           cd ../..
-          cosign sign-blob installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb --output-certificate installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.pem --output-signature installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sig --yes
-          cosign sign-blob installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm --output-certificate installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.pem --output-signature installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sig --yes
+          cosign sign-blob installers/linux-deb/wso2-integrator_${{ needs.resolve-versions.outputs.integrator_version }}_amd64.deb --output-certificate installers/linux-deb/wso2-integrator_${{ needs.resolve-versions.outputs.integrator_version }}_amd64.deb.pem --output-signature installers/linux-deb/wso2-integrator_${{ needs.resolve-versions.outputs.integrator_version }}_amd64.deb.sig --yes
+          cosign sign-blob installers/linux-rpm/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-1.x86_64.rpm --output-certificate installers/linux-rpm/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-1.x86_64.rpm.pem --output-signature installers/linux-rpm/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-1.x86_64.rpm.sig --yes
       - name: Verify signature of the deb, rpm installers
         run: |
           cd ../..
-          cosign verify-blob installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb --certificate installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.pem --signature installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-          cosign verify-blob installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm --certificate installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.pem --signature installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/linux-deb/wso2-integrator_${{ needs.resolve-versions.outputs.integrator_version }}_amd64.deb --certificate installers/linux-deb/wso2-integrator_${{ needs.resolve-versions.outputs.integrator_version }}_amd64.deb.pem --signature installers/linux-deb/wso2-integrator_${{ needs.resolve-versions.outputs.integrator_version }}_amd64.deb.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/linux-rpm/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-1.x86_64.rpm --certificate installers/linux-rpm/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-1.x86_64.rpm.pem --signature installers/linux-rpm/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-1.x86_64.rpm.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           
       - name: Generate Hashes for deb, rpm installers
         run: |
           cd ../..
-          openssl dgst -sha256 -out installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb.sha256 installers/linux-deb/wso2-integrator_${{ github.event.inputs.integrator_version }}_amd64.deb
-          openssl dgst -sha256 -out installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm.sha256 installers/linux-rpm/wso2-integrator-${{ github.event.inputs.integrator_version }}-1.x86_64.rpm
+          openssl dgst -sha256 -out installers/linux-deb/wso2-integrator_${{ needs.resolve-versions.outputs.integrator_version }}_amd64.deb.sha256 installers/linux-deb/wso2-integrator_${{ needs.resolve-versions.outputs.integrator_version }}_amd64.deb
+          openssl dgst -sha256 -out installers/linux-rpm/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-1.x86_64.rpm.sha256 installers/linux-rpm/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-1.x86_64.rpm
 
       - name: Upload Signatures and Hashes for deb installer
         uses: actions/upload-artifact@v4
@@ -298,7 +326,7 @@ jobs:
     if: ${{ github.event.inputs.build_macos == 'true' }}
     name: Build (macOS)
     runs-on: macos-latest
-    needs: compile
+    needs: [resolve-versions, compile]
     defaults:
       run:
         working-directory: lib/vscode
@@ -382,7 +410,7 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh "${{ github.event.inputs.integrator_version }}"
+          ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
 
       - name: Validate Xcode tools (macOS)
         run: |
@@ -517,16 +545,16 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
-          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
           if [ "${{ matrix.arch }}" = "arm64" ]; then
           BALLERINA_ARCH="macos-arm"
           else
           BALLERINA_ARCH="macos"
           fi
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-${BALLERINA_ARCH}.zip"
-          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/mac
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
@@ -547,17 +575,17 @@ jobs:
       - name: Sign the pkg installer
         run: |
           cd ../..
-          cosign sign-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --output-certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --output-signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --yes
+          cosign sign-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg --output-certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --output-signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --yes
 
       - name: Verify signature of the pkg installer
         run: |
           cd ../..
-          cosign verify-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg --certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           
       - name: Generate Hashes for pkg installer
         run: |
           cd ../..
-          openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sha256 installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg
+          openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg.sha256 installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg
 
       - name: Upload Signatures and Hashes for pkg installer
         uses: actions/upload-artifact@v4
@@ -575,7 +603,7 @@ jobs:
     if: ${{ github.event.inputs.build_windows == 'true' }}
     name: Build (Windows)
     runs-on: windows-latest
-    needs: compile
+    needs: [resolve-versions, compile]
     defaults:
       run:
         working-directory: lib/vscode
@@ -654,7 +682,7 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh "${{ github.event.inputs.integrator_version }}"
+          ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
 
       - name: Install Rust toolchain (Windows)
         shell: pwsh
@@ -783,11 +811,11 @@ jobs:
           cd ..\..
           $ROOT_DIR = Get-Location
           Write-Host "Root dir: $ROOT_DIR"
-          set BALLERINA_VERSION "${{ github.event.inputs.ballerina_version }}"
+          set BALLERINA_VERSION "${{ needs.resolve-versions.outputs.ballerina_version }}"
           set BALLERINA_URL "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION}-swan-lake-windows.zip"
-          set ICP_VERSION "${{ github.event.inputs.icp_version }}"
+          set ICP_VERSION "${{ needs.resolve-versions.outputs.icp_version }}"
           set ICP_URL "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          set INTEGRATOR_VERSION "${{ github.event.inputs.integrator_version }}"
+          set INTEGRATOR_VERSION "${{ needs.resolve-versions.outputs.integrator_version }}"
           cd .\installers\windows
           Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
           Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
@@ -806,17 +834,17 @@ jobs:
       - name: Sign the msi installer
         run: |
           cd ../..
-          cosign sign-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --output-certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --output-signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --yes
+          cosign sign-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi --output-certificate installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.pem --output-signature installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sig --yes
       - name: Verify signature of the msi installer
         run: |
           cd ../..
-          cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release-installers.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 
           
       - name: Generate Hashes for msi installer
         run: |
           cd ../..
-          openssl dgst -sha256 -out installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sha256 installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi 
+          openssl dgst -sha256 -out installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sha256 installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi 
 
       - name: Upload Signatures and Hashes for msi installer
         uses: actions/upload-artifact@v4
