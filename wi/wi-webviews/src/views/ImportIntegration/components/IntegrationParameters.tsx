@@ -16,37 +16,12 @@
  * under the License.
  */
 
-import { CheckBox, Dropdown, OptionProps, TextField, Typography } from "@wso2/ui-toolkit";
-import React from "react";
+import { Dropdown, OptionProps, TextField } from "@wso2/ui-toolkit";
+import React, { useState } from "react";
 import { BodyText, ParameterItem, ParametersSection } from "../styles";
+import { CollapsibleSection } from "../../../views/creationView/biForm/components/CollapsibleSection";
 import styled from "@emotion/styled";
 import { MigrationTool } from "@wso2/wi-core";
-
-const Label = styled.div`
-    font-family: var(--font-family);
-    color: var(--vscode-editor-foreground);
-    text-align: left;
-    text-transform: capitalize;
-`;
-
-const Description = styled.div`
-    font-family: var(--font-family);
-    color: var(--vscode-list-deemphasizedForeground);
-    text-align: left;
-`;
-
-const LabelGroup = styled.div`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-`;
-
-const BoxGroup = styled.div`
-    display: flex;
-    flex-direction: row;
-    width: 100%;
-    align-items: flex-start;
-`;
 
 const ParametersContainer = styled.div`
     display: flex;
@@ -66,70 +41,57 @@ export const IntegrationParameters: React.FC<IntegrationParametersProps> = ({
     integrationParams,
     onParameterChange,
 }) => {
-    if (!selectedIntegration || !selectedIntegration.parameters.length) return null;
-
-    const getBooleanValue = (value: any): boolean => {
-        if (typeof value === "string") {
-            return value === "true";
-        }
-        return value === true;
-    };
+    const [isExpanded, setIsExpanded] = useState(false);
+    const nonBoolParams = selectedIntegration?.parameters.filter(p => p.valueType !== "boolean") ?? [];
+    if (!selectedIntegration || !nonBoolParams.length) return null;
 
     return (
         <ParametersSection>
-            <Typography variant="h3" sx={{ marginBottom: 12 }}>
-                Configure {selectedIntegration.title} Settings
-            </Typography>
-            <BodyText>{`Configure additional settings for ${selectedIntegration.title} migration.`}</BodyText>
-            <ParametersContainer>
-                {selectedIntegration.parameters.map((param) => (
-                    <ParameterItem key={param.key}>
-                        {param.valueType === "boolean" ? (
-                            <BoxGroup>
-                                <CheckBox
-                                    checked={getBooleanValue(integrationParams[param.key])}
-                                    onChange={(checked) => onParameterChange(param.key, checked)}
-                                    label=""
+            <CollapsibleSection
+                isExpanded={isExpanded}
+                onToggle={() => setIsExpanded(v => !v)}
+                icon="gear"
+                title={`Configure ${selectedIntegration.title} Settings`}
+            >
+                <BodyText>{`Configure additional settings for ${selectedIntegration.title} migration.`}</BodyText>
+                <ParametersContainer>
+                    {nonBoolParams.map((param) => (
+                        <ParameterItem key={param.key}>
+                            {param.valueType === "enum" && param.options ? (
+                                <Dropdown
+                                    id={`${param.key}-dropdown`}
+                                    label={param.label}
+                                    description={param.description}
+                                    value={integrationParams[param.key] || param.defaultValue || param.options[0]}
+                                    items={param.options.map(option => ({
+                                        id: option,
+                                        content: option
+                                    } as OptionProps))}
+                                    onChange={(e) => onParameterChange(param.key, e.target.value)}
+                                    containerSx={{
+                                        position: 'relative',
+                                        '& vscode-dropdown::part(listbox)': {
+                                            position: 'absolute !important',
+                                            top: '100% !important',
+                                            bottom: 'auto !important',
+                                            transform: 'none !important',
+                                            marginTop: '2px !important'
+                                        }
+                                    }}
                                 />
-                                <LabelGroup>
-                                    <Label>{param.label}</Label>
-                                    {param.description && <Description>{param.description}</Description>}
-                                </LabelGroup>
-                            </BoxGroup>
-                        ) : param.valueType === "enum" && param.options ? (
-                            <Dropdown
-                                id={`${param.key}-dropdown`}
-                                label={param.label}
-                                description={param.description}
-                                value={integrationParams[param.key] || param.defaultValue || param.options[0]}
-                                items={param.options.map(option => ({
-                                    id: option,
-                                    content: option
-                                } as OptionProps))}
-                                onChange={(e) => onParameterChange(param.key, e.target.value)}
-                                containerSx={{
-                                    position: 'relative',
-                                    '& vscode-dropdown::part(listbox)': {
-                                        position: 'absolute !important',
-                                        top: '100% !important',
-                                        bottom: 'auto !important',
-                                        transform: 'none !important',
-                                        marginTop: '2px !important'
-                                    }
-                                }}
-                            />
-                        ) : (
-                            <TextField
-                                value={integrationParams[param.key] || ""}
-                                description={param.description}
-                                onTextChange={(value) => onParameterChange(param.key, value)}
-                                label={param.label}
-                                placeholder={`Enter ${param.label.toLowerCase()}`}
-                            />
-                        )}
-                    </ParameterItem>
-                ))}
-            </ParametersContainer>
+                            ) : (
+                                <TextField
+                                    value={integrationParams[param.key] || ""}
+                                    description={param.description}
+                                    onTextChange={(value) => onParameterChange(param.key, value)}
+                                    label={param.label}
+                                    placeholder={`Enter ${param.label.toLowerCase()}`}
+                                />
+                            )}
+                        </ParameterItem>
+                    ))}
+                </ParametersContainer>
+            </CollapsibleSection>
         </ParametersSection>
     );
 };

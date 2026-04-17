@@ -16,11 +16,23 @@
  * under the License.
  */
 
-import { ActionButtons, Typography } from "@wso2/ui-toolkit";
+import { ActionButtons, Button, Codicon, Typography } from "@wso2/ui-toolkit";
 import { useEffect, useMemo, useState } from "react";
 import { MigrationLogs } from "./components/MigrationLogs";
 import { MigrationStatusContent } from "./components/MigrationStatusContent";
-import { BodyText, ButtonWrapper, NextButtonWrapper, StepWrapper } from "./styles";
+import {
+    AIEnhancementSection,
+    AIEnhancementTitle,
+    BodyText,
+    ButtonWrapper,
+    RadioContent,
+    RadioDescription,
+    RadioGroup,
+    RadioInput,
+    RadioOption,
+    RadioTitle,
+    StepWrapper,
+} from "./styles";
 import { MigrationProgressProps, MigrationReportJSON } from "./types";
 import { getMigrationDisplayState, getMigrationProgressHeaderData, handleMultiProjectReportOpening } from "./utils";
 import { useVisualizerContext } from "../../contexts";
@@ -33,10 +45,13 @@ export function MigrationProgressView({
     migrationResponse,
     projects,
     isMultiProject,
-    onNext,
+    onStartAIEnhancement,
+    onDone,
+    onOpenProject,
     onBack,
 }: MigrationProgressProps) {
     const [isLogsOpen, setIsLogsOpen] = useState(false);
+    const [aiEnhancementEnabled, setAiEnhancementEnabled] = useState(false);
     const { wsClient } = useVisualizerContext();
 
     // Parse migration report JSON when available
@@ -138,22 +153,7 @@ export function MigrationProgressView({
                     onSaveReport={handleSaveReport}
                     isMultiProject={isMultiProject}
                 />
-                {displayState.showButtonsInStep && (
-                    <NextButtonWrapper>
-                        <ActionButtons
-                            primaryButton={{
-                                text: "Next",
-                                onClick: onNext,
-                                disabled: !migrationCompleted || !migrationSuccessful
-                            }}
-                            secondaryButton={{
-                                text: "Back",
-                                onClick: onBack,
-                                disabled: false
-                            }}
-                        />
-                    </NextButtonWrapper>
-                )}
+
             </StepWrapper>
 
             <MigrationLogs
@@ -170,7 +170,7 @@ export function MigrationProgressView({
                     <ActionButtons
                         primaryButton={{
                             text: "Next",
-                            onClick: onNext,
+                            onClick: onDone,
                             disabled: !migrationCompleted || !migrationSuccessful
                         }}
                         secondaryButton={{
@@ -180,6 +180,44 @@ export function MigrationProgressView({
                         }}
                     />
                 </ButtonWrapper>
+            )}
+
+            {/* Show AI enhancement options and action buttons after successful migration */}
+            {displayState.isSuccess && (
+                <>
+                    <AIEnhancementSection>
+                        <AIEnhancementTitle>
+                            <Codicon name="sparkle" sx={{ fontSize: "14px", color: "var(--wso2-brand-accent)" }} />
+                            AI Enhancement
+                        </AIEnhancementTitle>
+                        <RadioGroup role="radiogroup" aria-label="AI Enhancement mode">
+                            <RadioOption selected={aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(true)}>
+                                <RadioInput type="radio" name="ai-enhancement-mode-report" checked={aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(true)} />
+                                <RadioContent>
+                                    <RadioTitle>Enhance with AI</RadioTitle>
+                                    <RadioDescription>AI will automatically resolve unmapped elements, fix build errors, and improve migration quality.</RadioDescription>
+                                </RadioContent>
+                            </RadioOption>
+                            <RadioOption selected={!aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(false)}>
+                                <RadioInput type="radio" name="ai-enhancement-mode-report" checked={!aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(false)} />
+                                <RadioContent>
+                                    <RadioTitle>Skip for Now – Enhance Later</RadioTitle>
+                                    <RadioDescription>Open the project as-is. You can trigger AI enhancement later from the BI Copilot.</RadioDescription>
+                                </RadioContent>
+                            </RadioOption>
+                        </RadioGroup>
+                    </AIEnhancementSection>
+                    <ButtonWrapper>
+                        {aiEnhancementEnabled ? (
+                            <Button appearance="primary" onClick={onStartAIEnhancement}>Start AI Enhancement</Button>
+                        ) : (
+                            <ActionButtons
+                                primaryButton={{ text: "Open Project", onClick: onOpenProject }}
+                                secondaryButton={{ text: "Done", onClick: onDone, disabled: false }}
+                            />
+                        )}
+                    </ButtonWrapper>
+                </>
             )}
         </>
     );
