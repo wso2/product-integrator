@@ -36,7 +36,7 @@ import { ProgressLocation, window, workspace } from "vscode";
 import { createStore } from "zustand";
 import { persist } from "zustand/middleware";
 import { ext } from '../../extensionVariables';
-import { getGitRemotes, getGitRoot } from "../git/util";
+import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
 import { isSamePath, isSubpath } from '../../utils';
 import { dataCacheStore } from "./data-cache-store";
 import { locationStore } from "./location-store";
@@ -386,7 +386,7 @@ const mapComponentList = async (components: ComponentKind[], selected?: ContextI
                                     component: componentItem,
                                     workspaceName: item.workspaceName,
                                     componentFsPath: subPathDir,
-                                    componentRelativePath: path.relative(item.dirFsPath, subPathDir),
+                                    componentRelativePath: relativePath(item.dirFsPath, subPathDir),
                                 });
                             }
                         }

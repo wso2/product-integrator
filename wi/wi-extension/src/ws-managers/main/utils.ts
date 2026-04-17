@@ -137,18 +137,13 @@ export async function handleOpenSamples(
             throw new Error('Failed to extract the pre-built integration archive.');
         }
 
-        const trimmedSubDir = trimSlashes(repositorySource.subDirectory);
-        const trimmedComponentPath = componentPath.startsWith(trimmedSubDir + '/')
-            ? componentPath.slice(trimmedSubDir.length + 1)
-            : componentPath.startsWith(trimmedSubDir)
-                ? componentPath.slice(trimmedSubDir.length)
-                : componentPath;
-
+        const normalizedSubDirectory = trimSlashes(repositorySource.subDirectory);
         const sourcePath = path.join(
             archiveExtractPath,
             archiveRootDir,
-            trimmedSubDir,
-            trimmedComponentPath,
+            componentPath.startsWith(normalizedSubDirectory)
+                ? componentPath
+                : path.join(normalizedSubDirectory, componentPath),
         );
 
         if (!fs.existsSync(sourcePath)) {

@@ -11,7 +11,7 @@
   >
 
     <MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" />
-    <MediaTemplate EmbedCab="yes" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" MaximumUncompressedMediaSize="400" />
 
     <ui:WixUI Id="WixUI_InstallDir_Custom" InstallDirectory="INSTALLFOLDER" />
 
@@ -23,7 +23,6 @@
       <ComponentGroupRef Id="IntegratorComponents" />
       <ComponentRef Id="IntegratorShortcutComponent" />
       <ComponentRef Id="CleanupFoldersComponent" />
-      <!-- <ComponentGroupRef Id="SettingsComponents" /> -->
     </Feature>
 
   </Package>

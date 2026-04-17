@@ -126,11 +126,11 @@ BALLERINA_MARKETPLACE_ENTRY
 fi)
       {
         "name": "wso2.micro-integrator",
-        "version": "3.1.526032514"
+        "version": "3.1.526041009"
       },
       {
         "name": "wso2.streaming-integrator",
-        "version": "0.1.1"
+        "version": "0.1.29596915"
       },
       {
         "name": "wso2.wso2-integrator",

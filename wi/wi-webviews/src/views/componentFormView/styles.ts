@@ -487,6 +487,5 @@ export const SmVSCodeLinks = styled.div`
 `
 
 export const VSCodeLinkForeground = styled(VSCodeLink)`
-    color: ${ThemeColors.OUTLINE};
     font-weight: 500;
 `

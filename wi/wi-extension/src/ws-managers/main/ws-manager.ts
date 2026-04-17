@@ -330,7 +330,9 @@ export class MainWsManager implements WIVisualizerAPI {
                     path: path.join(params.directory, params.name),
                     scope: "user",
                     open: params.open,
-                    miVersion: params.miVersion
+                    miVersion: params.miVersion,
+                    isConsolidatedProject: params.isConsolidatedProject ?? false,
+                    subProjects: params.subProjects ?? []
                 };
 
                 const result = await commands.executeCommand("MI.project-explorer.create-project", miCommandParams);

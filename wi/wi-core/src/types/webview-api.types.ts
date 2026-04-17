@@ -104,6 +104,8 @@ export interface CreateMiProjectRequest {
     artifactID?: string;
     version?: string;
     miVersion: string;
+    isConsolidatedProject?: boolean;
+    subProjects?: string[];
 }
 
 export interface CreateMiProjectResponse {
