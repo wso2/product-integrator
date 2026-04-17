@@ -6,26 +6,31 @@ setlocal
 
 REM Check for required arguments
 if "%~1"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<path-to-jre.zip^> ^<version^>
     exit /b 1
 )
 if "%~2"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<path-to-jre.zip^> ^<version^>
     exit /b 1
 )
 
 if "%~3"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<path-to-jre.zip^> ^<version^>
     exit /b 1
 )
 
 if "%~4"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<path-to-jre.zip^> ^<version^>
     exit /b 1
 )
 
 if "%~5"=="" (
-    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<version^>
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<path-to-jre.zip^> ^<version^>
+    exit /b 1
+)
+
+if "%~6"=="" (
+    echo Usage: build.bat ^<path-to-ballerina.zip^> ^<ballerina-version^> ^<path-to-integrator.zip^> ^<path-to-ICP.zip^> ^<path-to-jre.zip^> ^<version^>
     exit /b 1
 )
 
@@ -44,7 +49,7 @@ REM Extract ballerina.zip
 echo Extracting Ballerina to payload
 REM Extract distributions directory (actual Ballerina runtime) to components\ballerina
 REM and move dependencies (JDK) to shared components\dependencies directory
-powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $extractDir = 'C:\tmp_bal'; Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path $extractDir | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', $extractDir); $unzippedFolder = (Get-ChildItem $extractDir -Directory | Select-Object -First 1).FullName; $ballerinaTarget = '.\WixPackage\payload\Integrator\components\ballerina'; New-Item -ItemType Directory -Force -Path $ballerinaTarget | Out-Null; $distDir = Join-Path $unzippedFolder 'distributions'; if (Test-Path $distDir) { $distFolder = (Get-ChildItem $distDir -Directory | Select-Object -First 1).FullName; if ($distFolder) { Copy-Item -Path \"$distFolder\*\" -Destination $ballerinaTarget -Recurse -Force } }; $dependenciesTarget = '.\WixPackage\payload\Integrator\components\dependencies'; New-Item -ItemType Directory -Force -Path $dependenciesTarget | Out-Null; $depsDir = Join-Path $unzippedFolder 'dependencies'; if (Test-Path $depsDir) { Get-ChildItem $depsDir -Directory | ForEach-Object { Copy-Item -Path $_.FullName -Destination $dependenciesTarget -Recurse -Force } }; Remove-Item -Recurse -Force $extractDir }"
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $extractDir = 'C:\tmp_bal'; Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path $extractDir | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', $extractDir); $unzippedFolder = (Get-ChildItem $extractDir -Directory | Select-Object -First 1).FullName; $ballerinaTarget = '.\WixPackage\payload\Integrator\components\ballerina'; New-Item -ItemType Directory -Force -Path $ballerinaTarget | Out-Null; $distDir = Join-Path $unzippedFolder 'distributions'; if (Test-Path $distDir) { $distFolder = (Get-ChildItem $distDir -Directory | Select-Object -First 1).FullName; if ($distFolder) { Copy-Item -Path \"$distFolder\*\" -Destination $ballerinaTarget -Recurse -Force } }; Remove-Item -Recurse -Force (Join-Path $ballerinaTarget 'docs') -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force (Join-Path $ballerinaTarget 'examples') -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force $extractDir }"
 if errorlevel 1 (
     echo Ballerina extraction failed
     exit /b 1
@@ -54,6 +59,14 @@ if errorlevel 1 (
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~4', '.\temp_icp'); $icpDir = (Get-ChildItem '.\temp_icp' -Directory | Select-Object -First 1).FullName; $icpTarget = '.\WixPackage\payload\Integrator\components\icp'; New-Item -ItemType Directory -Force -Path $icpTarget | Out-Null; Copy-Item -Path \"$icpDir\*\" -Destination $icpTarget -Recurse -Force; Remove-Item -Recurse -Force '.\temp_icp' }"
 if errorlevel 1 (
     echo ICP extraction failed
+    exit /b 1
+)
+
+REM Extract JRE zip into shared dependencies directory
+echo Extracting JRE to shared dependencies directory
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $dependenciesTarget = '.\WixPackage\payload\Integrator\components\dependencies'; New-Item -ItemType Directory -Force -Path $dependenciesTarget | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~5', $dependenciesTarget); }"
+if errorlevel 1 (
+    echo JRE extraction failed
     exit /b 1
 )
 
@@ -79,7 +92,7 @@ if exist "%BAL_SRC%" (
 
 
 REM Extract numeric-only version for WiX ProductVersion (strip pre-release suffix like -m1, -beta1)
-for /f "delims=" %%v in ('powershell -nologo -noprofile -command "('%~5' -split '-')[0]"') do set "WIX_VERSION=%%v"
+for /f "delims=" %%v in ('powershell -nologo -noprofile -command "('%~6' -split '-')[0]"') do set "WIX_VERSION=%%v"
 
 
 REM Update version in Package.wxs
@@ -135,9 +148,9 @@ subst %BUILD_DRIVE%: /D
 
 REM Rename MSI output to include version
 set "MSI_ORIG=WixPackage\bin\x64\Release\en-US\WSO2-Integrator.msi"
-set "MSI_NEW=WixPackage\bin\x64\Release\en-US\wso2-integrator-%~5.msi"
+set "MSI_NEW=WixPackage\bin\x64\Release\en-US\wso2-integrator-%~6.msi"
 if exist "%MSI_ORIG%" (
-    ren "%MSI_ORIG%" "wso2-integrator-%~5.msi"
+    ren "%MSI_ORIG%" "wso2-integrator-%~6.msi"
     echo Renamed MSI to %MSI_NEW%
 ) else (
     echo MSI file not found: %MSI_ORIG%

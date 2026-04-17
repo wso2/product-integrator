@@ -55,6 +55,10 @@ on:
         description: 'Specify Integrator version to use'
         required: false
         type: string
+      ballerina_jre_version:
+        description: 'Specify Ballerina JRE version to use'
+        required: false
+        type: string
       delivery_mode:
         description: 'Select delivery mode: archive artifacts as workflow artifacts or publish as a GitHub Release'
         required: true
@@ -82,6 +86,7 @@ jobs:
       ballerina_extension_version: ${{ github.event.inputs.ballerina_extension_version }}
       icp_version: ${{ github.event.inputs.icp_version }}
       integrator_version: ${{ github.event.inputs.integrator_version }}
+      ballerina_jre_version: ${{ github.event.inputs.ballerina_jre_version }}
       build_packed_installers: ${{ github.event.inputs.build_packed_installers == 'true' }}
 
   build-macos:
@@ -346,8 +351,10 @@ jobs:
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           if [ "${{ matrix.arch }}" = "arm64" ]; then
           BALLERINA_ARCH="macos-arm"
+          JRE_PLATFORM="macos-arm-64"
           else
           BALLERINA_ARCH="macos"
+          JRE_PLATFORM="macos-64"
           fi
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-${BALLERINA_ARCH}.zip"
           ICP_VERSION="${{ github.event.inputs.icp_version }}"
@@ -356,11 +363,14 @@ jobs:
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          JRE_VERSION="${{ github.event.inputs.ballerina_jre_version }}"
+          JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-${JRE_PLATFORM}-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
           cd ./installers/mac
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
+          wget -O jre.zip "$JRE_URL"
+          ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
 
       - name: Login to AWS
@@ -741,11 +751,14 @@ jobs:
             $ICP_VERSION_FILENAME = "${ICP_VERSION_FILENAME}-SNAPSHOT"
           }
           $ICP_URL = "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          $JRE_VERSION = "${{ github.event.inputs.ballerina_jre_version }}"
+          $JRE_URL = "https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-win-64-${JRE_VERSION}.zip"
           $INTEGRATOR_VERSION = "${{ github.event.inputs.integrator_version }}"
           cd .\installers\windows
           Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
           Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
-          .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip $INTEGRATOR_VERSION
+          Invoke-WebRequest -Uri $JRE_URL -OutFile "jre.zip"
+          .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
 
       - name: Login to AWS
         uses: aws-actions/configure-aws-credentials@v5
