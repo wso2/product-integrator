@@ -72,11 +72,11 @@ import { ext } from "../../extensionVariables";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
 import { ballerinaContext } from "../../bi/ballerinaContext";
 const platform = getPlatform();
-const SAMPLES_INFO_URL = process.env.BI_SAMPLES_INFO_URL;
-const SAMPLES_REPOSITORY_URL = process.env.BI_SAMPLES_REPOSITORY_URL;
+const SAMPLES_INFO_URL = process.env.SAMPLES_INFO_URL;
+const SAMPLES_REPOSITORY_URL = process.env.SAMPLES_REPOSITORY_URL;
 const SAMPLES_REPOSITORY_BRANCH = 'main';
 const SAMPLES_REPOSITORY_SUBDIRECTORY = '/ballerina-integrator';
-const PREBUILT_INTEGRATIONS_URL = process.env.BI_PREBUILT_INTEGRATIONS_URL;
+const PREBUILT_INTEGRATIONS_URL = process.env.PREBUILT_INTEGRATIONS_URL;
 
 export class MainWsManager implements WIVisualizerAPI {
     private subProjectReports: Map<string, string> = new Map();
@@ -93,9 +93,9 @@ export class MainWsManager implements WIVisualizerAPI {
                 env: {
                     MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
                     BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
-                    SAMPLES_INFO_URL: process.env.BI_SAMPLES_INFO_URL || '',
-                    SAMPLES_REPOSITORY_URL: process.env.BI_SAMPLES_REPOSITORY_URL || '',
-                    PREBUILT_INTEGRATIONS_URL: process.env.BI_PREBUILT_INTEGRATIONS_URL || ''
+                    SAMPLES_INFO_URL: process.env.SAMPLES_INFO_URL || '',
+                    SAMPLES_REPOSITORY_URL: process.env.SAMPLES_REPOSITORY_URL || '',
+                    PREBUILT_INTEGRATIONS_URL: process.env.PREBUILT_INTEGRATIONS_URL || ''
                 }
             });
         });
