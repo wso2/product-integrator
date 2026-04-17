@@ -102,7 +102,7 @@ export function registerCommands(
 	context.subscriptions.push(
 		vscode.commands.registerCommand(COMMANDS.OPEN_MI_INTEGRATION, () => {
 			if (extensionAPIs.isMIAvailable()) {
-				vscode.commands.executeCommand("workbench.view.extension.micro-integrator");
+				vscode.commands.executeCommand("MI.project-explorer.focus");
 			} else {
 				vscode.window.showInformationMessage(
 					"MI Extension is not available. Please install the Micro Integrator extension.",
