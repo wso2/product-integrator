@@ -25,7 +25,6 @@ import {
 	SampleDownloadRequest,
 } from "@wso2/wi-core";
 import { useEffect, useMemo, useState } from "react";
-import { getLocalSvg } from "../../assets/icons";
 import { useVisualizerContext } from "../../contexts/WsContext";
 import type { SampleSupportedRuntime } from "../shared/runtime";
 
@@ -44,7 +43,6 @@ interface BrowseItem {
 	imageUrl?: string;
 	connectorIconUrls?: string[];
 	fallbackArtwork?: string;
-	localIcon?: string;
 	searchText: string;
 	priority: number;
 	prebuiltIntegration?: SampleItem;
@@ -403,7 +401,6 @@ type CategoryArtworkProps = {
 	iconUrls?: string[];
 	label: string;
 	fallbackText?: string;
-	localIcon?: string;
 };
 
 function CategoryArtwork({
@@ -411,7 +408,6 @@ function CategoryArtwork({
 	iconUrls,
 	label,
 	fallbackText,
-	localIcon,
 }: CategoryArtworkProps) {
 	const [loadError, setLoadError] = useState(false);
 	const [failedIconUrls, setFailedIconUrls] = useState<string[]>([]);
@@ -449,15 +445,6 @@ function CategoryArtwork({
 					</div>
 				))}
 			</ConnectorIconGroup>
-		);
-	}
-
-	if (localIcon && getLocalSvg(localIcon)) {
-		return (
-			<CategoryImage
-				src={getLocalSvg(localIcon)!}
-				alt={`${label} icon`}
-			/>
 		);
 	}
 
@@ -547,15 +534,6 @@ function getImageUrl( thumbnailPath: string ): string | undefined {
 		: undefined;
 }
 
-function getLocalIcon( thumbnailPath: string ): string | undefined {
-	const trimmedPath = thumbnailPath?.trim();
-	if (!trimmedPath || /^https?:\/\//.test(trimmedPath)) {
-		return undefined;
-	}
-	const filename = thumbnailPath.replace(/^\//, "");
-	return getLocalSvg(filename) !== undefined ? filename : undefined;
-}
-
 function compareBrowseItems(left: BrowseItem, right: BrowseItem): number {
 	if (left.itemType !== right.itemType) {
 		return left.itemType === "sample" ? -1 : 1;
@@ -585,7 +563,6 @@ function createPrebuiltItem(
 		imageUrl: getImageUrl(prebuiltIntegration.thumbnailPath),
 		connectorIconUrls: getPrebuiltConnectorIconUrls(prebuiltIntegration),
 		fallbackArtwork: getPrebuiltArtworkText(prebuiltIntegration),
-		localIcon: getLocalIcon(prebuiltIntegration.thumbnailPath),
 		searchText: [
 			prebuiltIntegration.displayName,
 			prebuiltIntegration.description,
@@ -615,7 +592,6 @@ function createSampleItem(
 		imageUrl: getImageUrl(prebuiltIntegration.thumbnailPath),
 		connectorIconUrls: getPrebuiltConnectorIconUrls(prebuiltIntegration),
 		fallbackArtwork: getPrebuiltArtworkText(prebuiltIntegration),
-		localIcon: getLocalIcon(prebuiltIntegration.thumbnailPath),
 		searchText: [
 			prebuiltIntegration.displayName,
 			prebuiltIntegration.description,
@@ -906,7 +882,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
 										iconUrls={item.connectorIconUrls}
 										label={item.componentType}
 										fallbackText={item.fallbackArtwork}
-										localIcon={item.localIcon}
+
 									/>
 								</IconFrame>
 								<Description>{item.description}</Description>
