@@ -84,6 +84,13 @@ jobs:
       integrator_version: ${{ github.event.inputs.integrator_version }}
       build_packed_installers: ${{ github.event.inputs.build_packed_installers == 'true' }}
 
+  smoke-test:
+    if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+    needs: compile
+    uses: ./.github/workflows/smoke-test.yml
+    with:
+      artifact_name: Product-Integrator-TAR
+
   build-macos:
     if: ${{ github.event.inputs.build_macos == 'true' }}
     name: Build (macOS)
@@ -804,8 +811,8 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [compile, build-macos, build-windows]
-    if: always() && (needs.compile.result == 'success') && (github.event.inputs.build_packed_installers == 'false') && (github.event.inputs.delivery_mode == 'archive')
+    needs: [compile, build-macos, build-windows, smoke-test]
+    if: always() && (needs.compile.result == 'success') && (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') && (github.event.inputs.build_packed_installers == 'false') && (github.event.inputs.delivery_mode == 'archive')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -848,10 +855,11 @@ jobs:
   publish-github-release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: [compile, build-macos, build-windows]
+    needs: [compile, build-macos, build-windows, smoke-test]
     if: |
       always() &&
       (needs.compile.result == 'success') &&
+      (needs.smoke-test.result == 'success') &&
       (github.event.inputs.delivery_mode == 'github-release') &&
       (github.event.inputs.build_packed_installers == 'true')
     steps:
