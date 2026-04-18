@@ -211,7 +211,8 @@ jobs:
         working-directory: .
         run: |
           if [ ! -d "lib/vscode" ]; then
-            echo "::error::lib/vscode is missing after checkout. This usually indicates a submodule initialization failure; verify actions/checkout completed successfully with recursive submodules."
+            echo "::error::lib/vscode is missing after checkout. This usually indicates a submodule initialization failure."
+            echo "::error::Verify .gitmodules is present and ensure checkout network access can fetch https://github.com/microsoft/vscode.git."
             exit 1
           fi
 
@@ -219,6 +220,7 @@ jobs:
             echo "rev=$rev" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::Unable to resolve lib/vscode gitlink from HEAD; falling back to submodule HEAD for cache key."
+            echo "::warning::This may reduce cache hit rate for prebuilt Code packages, but avoids hard-failing the build."
             echo "rev=$(git -C lib/vscode rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           fi
   

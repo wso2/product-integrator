@@ -19,7 +19,7 @@ Index: product-integrator/lib/vscode/build/lib/extensions.ts
 +					throw new Error(`Checksum mismatch for ${vsixPath} (expected ${sha256}, actual ${checksum}))`);
 +				}
 +			} else {
-+				fancyLog(ansiColors.yellow(`[vsix-checksum] Missing expected checksum for ${vsixPath}; skipping checksum validation.`));
++				fancyLog(ansiColors.yellow(`[vsix-checksum] Missing expected checksum for ${vsixPath}; skipping checksum validation. If unexpected, add the extension sha256 in builtInExtensions metadata.`));
  			}
  			return f;
  		}))
