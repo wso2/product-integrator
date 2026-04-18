@@ -25,10 +25,25 @@ WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION=$(read_version "wso2.mcp-server-insp
 WSO2_MICRO_INTEGRATOR_EXTENSION_VERSION=$(read_version "wso2.micro-integrator.extension.version")
 WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION=$(read_version "wso2.streaming-integrator.extension.version")
 
+require_non_empty() {
+  local value="$1"
+  local key="$2"
+  if [ -z "${value}" ]; then
+    echo "Error: ${key} must be defined in ${VERSIONS_FILE}" >&2
+    exit 1
+  fi
+}
+
 if [ -z "${VERSION}" ]; then
   echo "Error: integrator.version must be defined in ${VERSIONS_FILE}" >&2
   exit 1
 fi
+
+require_non_empty "${WSO2_PLATFORM_EXTENSION_VERSION}" "wso2.platform.extension.version"
+require_non_empty "${WSO2_HURL_CLIENT_EXTENSION_VERSION}" "wso2.hurl-client.extension.version"
+require_non_empty "${WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION}" "wso2.mcp-server-inspector.extension.version"
+require_non_empty "${WSO2_MICRO_INTEGRATOR_EXTENSION_VERSION}" "wso2.micro-integrator.extension.version"
+require_non_empty "${WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION}" "wso2.streaming-integrator.extension.version"
 
 if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
   echo "Error: BALLERINA_EXTENSION_VERSION must be provided without a leading v. Example: 4.5.0" >&2
