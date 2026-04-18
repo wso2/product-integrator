@@ -37,6 +37,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
 
       - name: Read versions file
         id: read-versions
@@ -204,7 +207,26 @@ jobs:
   
       - name: Get latest lib/vscode rev
         id: vscode-rev
-        run: echo "rev=$(git rev-parse HEAD:./lib/vscode)" >> $GITHUB_OUTPUT
+        shell: bash
+        working-directory: .
+        run: |
+          if [ ! -d "lib/vscode" ]; then
+            echo "::error::lib/vscode is missing after checkout. This usually indicates a submodule initialization failure."
+            echo "::error::Verify .gitmodules is present and ensure checkout network access can fetch https://github.com/microsoft/vscode.git."
+            exit 1
+          fi
+
+          if rev=$(git rev-parse HEAD:./lib/vscode 2>/dev/null); then
+            echo "rev=$rev" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Unable to resolve lib/vscode gitlink from HEAD; falling back to submodule HEAD for cache key."
+            echo "::warning::This may reduce cache hit rate for prebuilt Code packages, but avoids hard-failing the build."
+            if ! git -C lib/vscode rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+              echo "::error::lib/vscode is not a valid git checkout; unable to resolve fallback revision."
+              exit 1
+            fi
+            echo "rev=$(git -C lib/vscode rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          fi
   
       - name: Fetch prebuilt Code package from cache
         id: cache-vscode
@@ -260,7 +282,25 @@ jobs:
         run: |
           npm ci
 
+      - name: Apply VSIX checksum handling patch
+        shell: bash
+        working-directory: .
+        run: |
+          PATCH_NAME="disableVsixChecksumCheck.diff"
+          PATCH_PATH="patches/${PATCH_NAME}"
+          if [ ! -f "${PATCH_PATH}" ]; then
+            echo "::error::Required patch ${PATCH_PATH} was not found."
+            exit 1
+          fi
+          export QUILT_PATCHES=patches
+          if ! quilt push "${PATCH_NAME}"; then
+            echo "::error::Failed to apply ${PATCH_PATH}. This can happen if the patch is already applied or if patch context no longer matches lib/vscode/build/lib/extensions.ts."
+            exit 1
+          fi
+
       - name: Mixin distro modules
+        env:
+          VSCODE_QUALITY: stable
         run: |
           node build/azure-pipelines/distro/mixin-npm.ts || true
           node build/azure-pipelines/distro/mixin-quality.ts || true
