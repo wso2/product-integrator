@@ -211,7 +211,7 @@ jobs:
         working-directory: .
         run: |
           if [ ! -d "lib/vscode" ]; then
-            echo "::error::lib/vscode is missing. Ensure checkout uses submodules: recursive before cache key resolution."
+            echo "::error::lib/vscode is missing. Ensure actions/checkout fetches recursive submodules before cache key resolution."
             exit 1
           fi
 
@@ -280,6 +280,10 @@ jobs:
         shell: bash
         working-directory: .
         run: |
+          if [ ! -f "patches/disableVsixChecksumCheck.diff" ]; then
+            echo "::error::Required patch patches/disableVsixChecksumCheck.diff was not found."
+            exit 1
+          fi
           export QUILT_PATCHES=patches
           quilt push disableVsixChecksumCheck.diff
 
