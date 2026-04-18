@@ -221,6 +221,10 @@ jobs:
           else
             echo "::warning::Unable to resolve lib/vscode gitlink from HEAD; falling back to submodule HEAD for cache key."
             echo "::warning::This may reduce cache hit rate for prebuilt Code packages, but avoids hard-failing the build."
+            if [ ! -d "lib/vscode/.git" ] && [ ! -f "lib/vscode/.git" ]; then
+              echo "::error::lib/vscode is not a valid git submodule checkout; unable to resolve fallback revision."
+              exit 1
+            fi
             echo "rev=$(git -C lib/vscode rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           fi
   
@@ -289,7 +293,10 @@ jobs:
             exit 1
           fi
           export QUILT_PATCHES=patches
-          quilt push "${PATCH_NAME}"
+          if ! quilt push "${PATCH_NAME}"; then
+            echo "::error::Failed to apply ${PATCH_PATH}. Ensure patch context matches lib/vscode/build/lib/extensions.ts."
+            exit 1
+          fi
 
       - name: Mixin distro modules
         env:
