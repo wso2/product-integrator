@@ -1,9 +1,13 @@
 const path = require("path");
-const dotenv = require('dotenv');
-const webpack = require('webpack');
+const fs = require("fs");
+const dotenv = require("dotenv");
+const webpack = require("webpack");
 const CopyPlugin = require("copy-webpack-plugin");
 const PermissionsOutputPlugin = require("webpack-permissions-plugin");
 const { createEnvDefinePlugin } = require("../../external/wso2-vscode-extensions/common/scripts/env-webpack-helper");
+
+const distPath = path.resolve(__dirname, "dist");
+fs.mkdirSync(distPath, { recursive: true });
 
 const envPath = path.resolve(__dirname, '.env');
 const env = dotenv.config({ path: envPath }).parsed;
@@ -25,7 +29,7 @@ const config = {
 		"askpass-main": "./src/cloud/git/askpass-main.ts",
     },
 	output: {
-		path: path.resolve(__dirname, "dist"),
+		path: distPath,
 		filename: "[name].js",
 		libraryTarget: "commonjs2",
 		devtoolModuleFilenameTemplate: "../[resource-path]",
@@ -64,7 +68,7 @@ const config = {
 				patterns: [{ from: "src/cloud/git/*.sh", to: "[name][ext]" }],
 		}),
 		new PermissionsOutputPlugin({
-				buildFolders: [path.resolve(__dirname, "dist/")],
+				buildFolders: [distPath],
 		}),
     ],
 };
