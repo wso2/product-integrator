@@ -211,7 +211,7 @@ jobs:
         working-directory: .
         run: |
           if [ ! -d "lib/vscode" ]; then
-            echo "::error::lib/vscode is missing. Ensure actions/checkout fetches recursive submodules before cache key resolution."
+            echo "::error::lib/vscode is missing after checkout. This usually indicates a submodule initialization failure; verify actions/checkout completed successfully with recursive submodules."
             exit 1
           fi
 
@@ -280,12 +280,14 @@ jobs:
         shell: bash
         working-directory: .
         run: |
-          if [ ! -f "patches/disableVsixChecksumCheck.diff" ]; then
-            echo "::error::Required patch patches/disableVsixChecksumCheck.diff was not found."
+          PATCH_NAME="disableVsixChecksumCheck.diff"
+          PATCH_PATH="patches/${PATCH_NAME}"
+          if [ ! -f "${PATCH_PATH}" ]; then
+            echo "::error::Required patch ${PATCH_PATH} was not found."
             exit 1
           fi
           export QUILT_PATCHES=patches
-          quilt push disableVsixChecksumCheck.diff
+          quilt push "${PATCH_NAME}"
 
       - name: Mixin distro modules
         env:
