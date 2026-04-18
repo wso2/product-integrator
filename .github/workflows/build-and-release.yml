@@ -68,6 +68,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
 
       - name: Read versions file
         id: read-versions
@@ -253,6 +256,8 @@ jobs:
           npm ci
 
       - name: Mixin distro modules
+        env:
+          VSCODE_QUALITY: stable
         run: |
           node build/azure-pipelines/distro/mixin-npm.ts || true
           node build/azure-pipelines/distro/mixin-quality.ts || true
@@ -652,6 +657,8 @@ jobs:
           npm ci
 
       - name: Mixin distro modules
+        env:
+          VSCODE_QUALITY: stable
         run: |
           node build/azure-pipelines/distro/mixin-npm.ts || true
           node build/azure-pipelines/distro/mixin-quality.ts || true
