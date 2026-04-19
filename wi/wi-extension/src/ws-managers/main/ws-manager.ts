@@ -603,6 +603,7 @@ export class MainWsManager implements WIVisualizerAPI {
             packageName: sanitizeName(params.packageName),
             sourcePath: params.sourcePath,
             parameters: params.parameters,
+            dryRun: params.dryRun,
         };
         const langClient = await this.getLangClient();
         langClient.registerMigrationToolCallbacks();

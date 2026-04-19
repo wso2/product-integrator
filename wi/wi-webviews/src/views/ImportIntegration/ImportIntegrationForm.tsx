@@ -252,7 +252,7 @@ export function ImportIntegrationForm({
             <ButtonWrapper>
                 <ActionButtons
                     primaryButton={{
-                        text: "Next",
+                        text: "Generate Report",
                         onClick: handleImportIntegration,
                         disabled: isImportDisabled
                     }}

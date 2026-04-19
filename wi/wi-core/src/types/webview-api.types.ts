@@ -250,6 +250,7 @@ export interface ImportIntegrationWsRequest {
     sourcePath: string;
     orgName?: string;
     parameters?: Record<string, any>;
+    dryRun?: boolean;
 }
 
 export interface ImportIntegrationRequest {
@@ -257,6 +258,7 @@ export interface ImportIntegrationRequest {
     orgName: string;
     sourcePath: string;
     parameters?: Record<string, any>;
+    dryRun?: boolean;
 }
 
 export interface ShowErrorMessageRequest {

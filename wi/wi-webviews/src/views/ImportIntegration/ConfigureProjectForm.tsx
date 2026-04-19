@@ -318,7 +318,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                 </>
             ) : (
                 <>
-                    <Typography variant="h2">Configure Your {selectedResourceTypeLabel}</Typography>
+                    <Typography variant="h2">Configure Your New {selectedResourceTypeLabel}</Typography>
                     <BodyText>
                         Please provide the necessary details to create your {selectedResourceTypeLabel.toLowerCase()}.
                     </BodyText>

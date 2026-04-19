@@ -70,6 +70,18 @@ export interface MigrationProgressProps {
     onBack: () => void;
 }
 
+export interface DryRunViewProps {
+    migrationState: string | null;
+    migrationLogs: string[];
+    migrationCompleted: boolean;
+    migrationSuccessful: boolean;
+    migrationResponse: ImportIntegrationResponse | null;
+    projects: ProjectMigrationResult[];
+    isMultiProject: boolean;
+    onNext: () => void;
+    onDone: () => void;
+}
+
 export interface ProjectRequest {
     projectName: string;
     packageName: string;

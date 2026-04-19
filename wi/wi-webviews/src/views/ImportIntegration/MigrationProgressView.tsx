@@ -16,10 +16,10 @@
  * under the License.
  */
 
-import { ActionButtons, Button, Codicon, Typography } from "@wso2/ui-toolkit";
-import { useEffect, useMemo, useState } from "react";
+import { ActionButtons, Button, Codicon, ProgressRing, Typography } from "@wso2/ui-toolkit";
+import styled from "@emotion/styled";
+import { useEffect, useState } from "react";
 import { MigrationLogs } from "./components/MigrationLogs";
-import { MigrationStatusContent } from "./components/MigrationStatusContent";
 import {
     AIEnhancementSection,
     AIEnhancementTitle,
@@ -31,11 +31,24 @@ import {
     RadioInput,
     RadioOption,
     RadioTitle,
-    StepWrapper,
 } from "./styles";
-import { MigrationProgressProps, MigrationReportJSON } from "./types";
-import { getMigrationDisplayState, getMigrationProgressHeaderData, handleMultiProjectReportOpening } from "./utils";
+import { MigrationProgressProps } from "./types";
+import { getMigrationDisplayState, getMigrationProgressHeaderData } from "./utils";
 import { useVisualizerContext } from "../../contexts";
+
+const StatusRow = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 20%, var(--vscode-widget-border));
+    background: color-mix(in srgb, var(--wso2-brand-accent) 6%, transparent);
+    padding: 10px 12px;
+`;
+
+const StatusText = styled.span`
+    color: var(--vscode-foreground);
+`;
 
 export function MigrationProgressView({
     migrationState,
@@ -54,19 +67,6 @@ export function MigrationProgressView({
     const [aiEnhancementEnabled, setAiEnhancementEnabled] = useState(false);
     const { wsClient } = useVisualizerContext();
 
-    // Parse migration report JSON when available
-    const parsedReportData = useMemo(() => {
-        if (!migrationResponse?.jsonReport) return null;
-        try {
-            const reportData = typeof migrationResponse.jsonReport === "string"
-                ? JSON.parse(migrationResponse.jsonReport)
-                : migrationResponse.jsonReport;
-            return reportData as MigrationReportJSON;
-        } catch (error) {
-            console.error("Failed to parse migration report JSON:", error);
-        }
-    }, [migrationResponse?.jsonReport]);
-
     // Auto-open logs during migration and auto-collapse when completed
     useEffect(() => {
         if (!migrationCompleted && migrationLogs.length > 0) {
@@ -78,63 +78,7 @@ export function MigrationProgressView({
         }
     }, [migrationCompleted, migrationLogs.length]);
 
-    const handleViewReport = async () => {
-        console.log("View report clicked", { migrationResponse });
-        try {
-            if (migrationResponse?.report) {
-                handleMultiProjectReportOpening(migrationResponse, projects, wsClient);
-                console.log("Report found, opening via bridge request...");
-                wsClient.openMigrationReport({
-                    reportContent: migrationResponse.report,
-                    fileName: "migration-report.html",
-                });
-            }
-        } catch (error) {
-            console.error("Failed to open migration report:", error);
-        }
-    };
-
-    const handleSaveReport = async () => {
-        console.log("Save report clicked", { migrationResponse, isMultiProject, projects });
-        try {
-            if (!migrationResponse?.report) {
-                console.error("No report content available to save");
-                return;
-            }
-
-            // Check if this is a multi-project migration
-            const hasMultipleProjects = isMultiProject && projects && projects.length > 0;
-
-            if (hasMultipleProjects) {
-                // For multi-project scenarios, extract reports from projects array
-                const projectReports: { [projectName: string]: string } = {};
-
-                projects.forEach((project) => {
-                    if (project.projectName && project.report) {
-                        projectReports[project.projectName] = project.report;
-                    }
-                });
-
-                console.log("Saving multi-project reports via VSCode folder dialog...", { projectReports });
-                wsClient.saveMigrationReport({
-                    reportContent: migrationResponse.report,
-                    defaultFileName: "aggregate_migration_report.html",
-                    projectReports: projectReports,
-                });
-            } else {
-                // Single project - use simple save dialog
-                console.log("Saving single project report via VSCode save dialog...");
-                wsClient.saveMigrationReport({
-                    reportContent: migrationResponse.report,
-                    defaultFileName: "migration-report.html",
-                });
-            }
-        } catch (error) {
-            console.error("Failed to save migration report:", error);
-        }
-    };
-
-    const displayState = getMigrationDisplayState(migrationCompleted, migrationSuccessful, !!parsedReportData);
+    const displayState = getMigrationDisplayState(migrationCompleted, migrationSuccessful, false);
     const { headerText, headerDesc } = getMigrationProgressHeaderData(displayState, isMultiProject);
 
     return (
@@ -143,19 +87,12 @@ export function MigrationProgressView({
                 <Typography variant="h2">{headerText}</Typography>
                 <BodyText>{headerDesc}</BodyText>
             </div>
-            <StepWrapper>
-                <MigrationStatusContent
-                    state={displayState}
-                    migrationState={migrationState}
-                    migrationResponse={migrationResponse}
-                    parsedReportData={parsedReportData}
-                    onViewReport={handleViewReport}
-                    onSaveReport={handleSaveReport}
-                    isMultiProject={isMultiProject}
-                />
-
-            </StepWrapper>
-
+            {displayState.isInProgress && (
+                <StatusRow>
+                    <ProgressRing sx={{ width: 14, height: 14 }} color="var(--vscode-foreground)" />
+                    <StatusText>{migrationState || "Starting migration..."}</StatusText>
+                </StatusRow>
+            )}
             <MigrationLogs
                 migrationLogs={migrationLogs}
                 migrationCompleted={migrationCompleted}
@@ -188,7 +125,7 @@ export function MigrationProgressView({
                     <AIEnhancementSection>
                         <AIEnhancementTitle>
                             <Codicon name="sparkle" sx={{ fontSize: "14px", color: "var(--wso2-brand-accent)" }} />
-                            AI Enhancement
+                            AI Enhancement (Recommended)
                         </AIEnhancementTitle>
                         <RadioGroup role="radiogroup" aria-label="AI Enhancement mode">
                             <RadioOption selected={aiEnhancementEnabled} onClick={() => setAiEnhancementEnabled(true)}>
@@ -202,7 +139,7 @@ export function MigrationProgressView({
                                 <RadioInput type="radio" name="ai-enhancement-mode-report" checked={!aiEnhancementEnabled} onChange={() => setAiEnhancementEnabled(false)} />
                                 <RadioContent>
                                     <RadioTitle>Skip for Now – Enhance Later</RadioTitle>
-                                    <RadioDescription>Open the project as-is. You can trigger AI enhancement later from the BI Copilot.</RadioDescription>
+                                    <RadioDescription>Keep the project as-is. You can trigger AI enhancement later from the WSO2 Integrator Copilot.</RadioDescription>
                                 </RadioContent>
                             </RadioOption>
                         </RadioGroup>
