@@ -33,6 +33,7 @@ jobs:
       ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
       icp_version: ${{ steps.read-versions.outputs.icp_version }}
       integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
+      ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,9 +57,10 @@ jobs:
           BALLERINA_EXTENSION_VERSION=$(read_property "ballerina.extension.version")
           ICP_VERSION=$(read_property "icp.version")
           INTEGRATOR_VERSION=$(read_property "integrator.version")
+          BALLERINA_JRE_VERSION=$(read_property "ballerina.jre.version")
 
-          if [ -z "${BALLERINA_VERSION}" ] || [ -z "${ICP_VERSION}" ] || [ -z "${INTEGRATOR_VERSION}" ]; then
-            echo "Error: ballerina.version, icp.version, and integrator.version must be set in ${VERSIONS_FILE}." >&2
+          if [ -z "${BALLERINA_VERSION}" ] || [ -z "${ICP_VERSION}" ] || [ -z "${INTEGRATOR_VERSION}" ] || [ -z "${BALLERINA_JRE_VERSION}" ]; then
+            echo "Error: ballerina.version, icp.version, integrator.version, and ballerina.jre.version must be set in ${VERSIONS_FILE}." >&2
             exit 1
           fi
 
@@ -71,6 +73,7 @@ jobs:
           echo "ballerina_extension_version=${BALLERINA_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
           echo "icp_version=${ICP_VERSION}" >> "$GITHUB_OUTPUT"
           echo "integrator_version=${INTEGRATOR_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "ballerina_jre_version=${BALLERINA_JRE_VERSION}" >> "$GITHUB_OUTPUT"
 
   validate-Inputs:
     needs: resolve-versions
@@ -80,8 +83,8 @@ jobs:
     steps:
       - name: Validate required inputs
         run: |
-          if [ -z "${{ needs.resolve-versions.outputs.ballerina_version }}" ] || [ -z "${{ needs.resolve-versions.outputs.icp_version }}" ] || [ -z "${{ needs.resolve-versions.outputs.integrator_version }}" ]; then
-            echo "Error: ballerina_version, icp_version, and integrator_version must not be empty."
+          if [ -z "${{ needs.resolve-versions.outputs.ballerina_version }}" ] || [ -z "${{ needs.resolve-versions.outputs.icp_version }}" ] || [ -z "${{ needs.resolve-versions.outputs.integrator_version }}" ] || [ -z "${{ needs.resolve-versions.outputs.ballerina_jre_version }}" ]; then
+            echo "Error: ballerina_version, icp_version, integrator_version, and ballerina_jre_version must not be empty."
             exit 1
           elif [ "${{ inputs.ballerina_extension_source }}" = "github" ] && [ -z "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" ]; then
             echo "Error: ballerina_extension_version must not be empty when ballerina_extension_source is set to github."
@@ -324,11 +327,14 @@ jobs:
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          JRE_VERSION="${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
+          JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-deb
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          wget -O jre.zip "$JRE_URL"
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
 
       - name: Upload Deb artifacts
@@ -356,11 +362,14 @@ jobs:
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          JRE_VERSION="${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
+          JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-rpm
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          wget -O jre.zip "$JRE_URL"
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       - name: Upload RPM artifacts
         if: ${{ inputs.build_packed_installers == true}}
@@ -386,11 +395,14 @@ jobs:
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          JRE_VERSION="${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
+          JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-tar
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip $INTEGRATOR_VERSION
+          wget -O jre.zip "$JRE_URL"
+          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       - name: Upload TAR artifacts
         if: ${{ inputs.build_packed_installers == true}}

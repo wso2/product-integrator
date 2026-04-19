@@ -23,9 +23,9 @@ print_warning() {
 
 WORK_DIR=$(pwd)
 
-# Usage: ./build.sh <ballerina_zip> <ballerina_version> <wso2_zip> <icp_zip> <version> <arch>
-if [ "$#" -ne 6 ]; then
-    echo "Usage: $0 <ballerina_zip> <ballerina_version> <wso2_zip> <icp_zip> <version> <arch>"
+# Usage: ./build.sh <ballerina_zip> <ballerina_version> <wso2_zip> <icp_zip> <jre_zip> <version> <arch>
+if [ "$#" -ne 7 ]; then
+    echo "Usage: $0 <ballerina_zip> <ballerina_version> <wso2_zip> <icp_zip> <jre_zip> <version> <arch>"
     exit 1
 fi
 
@@ -33,8 +33,9 @@ BALLERINA_ZIP="$1"
 BALLERINA_VERSION="$2"
 WSO2_ZIP="$3"
 ICP_ZIP="$4"
-VERSION="$5"
-ARCH="$6"
+JRE_ZIP="$5"
+VERSION="$6"
+ARCH="$7"
 
 OUTPUT_PKG="WSO2_Integrator.pkg"
 BUNDLE_IDENTIFIER="com.wso2.integrator"
@@ -81,20 +82,21 @@ fi
 # Move distributions contents to target (without JDK)
 mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
 
-# Move JDK to shared dependencies directory
-print_info "Moving JDK to shared dependencies directory"
+# Remove unwanted Ballerina folders
+rm -rf "$BALLERINA_TARGET/docs"
+rm -rf "$BALLERINA_TARGET/examples"
+
+# Extract JRE zip into shared dependencies directory
+print_info "Extracting JRE to shared dependencies directory"
 DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
 rm -rf "$DEPENDENCIES_DIR"
 mkdir -p "$DEPENDENCIES_DIR"
-if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
-    for jdk_folder in "$BALLERINA_UNZIPPED_PATH/dependencies"/*; do
-        if [ -d "$jdk_folder" ]; then
-            JDK_FOLDER=$(basename "$jdk_folder")
-            cp -r "$jdk_folder" "$DEPENDENCIES_DIR/"
-        fi
-    done
+unzip -o "$JRE_ZIP" -d "$DEPENDENCIES_DIR"
+JRE_FOLDER=$(unzip -Z1 "$JRE_ZIP" | awk -F/ '{print $1}' | sort -u | grep -v '^$' | head -1)
+if [ -z "$JRE_FOLDER" ]; then
+    print_error "Could not determine JRE folder from zip"
+    exit 1
 fi
-
 
 rm -rf "$BALLERINA_UNZIPPED_PATH"
 rm -rf "$BALLERINA_TEMP"
@@ -118,12 +120,12 @@ mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
 
-# Modify icp.sh to use the JDK from shared dependencies directory
+# Modify icp.sh to use the JRE from shared dependencies directory
 ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
 if [ -f "$ICP_SCRIPT" ]; then
-    print_info "Modifying icp.sh to use JDK from dependencies ($JDK_FOLDER)"
-    # Replace all java instances with the full path to the JDK java
-    sed -i '' "s|java|\"\$SCRIPT_DIR\"/../../dependencies/$JDK_FOLDER/bin/java|g" "$ICP_SCRIPT"
+    print_info "Modifying icp.sh to use JRE from dependencies ($JRE_FOLDER)"
+    # Replace standalone 'java' invocations with the full path to the JRE java (word-boundary match)
+    sed -i '' -E "s|[[:<:]]java[[:>:]]|\"\$SCRIPT_DIR\"/../../dependencies/$JRE_FOLDER/bin/java|g" "$ICP_SCRIPT"
 fi
 
 
