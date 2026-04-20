@@ -220,7 +220,7 @@ export function MiProjectWizard() {
                                 labelAdornment={consolidatedHelpTip}
                             />
                             {isConsolidatedProject &&
-                                <ParamManager paramConfigs={subProjects} onChange={handleSubProjectsOnChange} addParamText="Add Module" />
+                                <ParamManager paramConfigs={subProjects} onChange={handleSubProjectsOnChange} />
                             }
                         </FormGroup>
                         <TextField
