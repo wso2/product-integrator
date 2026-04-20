@@ -1,0 +1,253 @@
+Index: product-integrator/lib/vscode/extensions/github-authentication/src/extension.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/extensions/github-authentication/src/extension.ts
++++ product-integrator/lib/vscode/extensions/github-authentication/src/extension.ts
+@@ -5,6 +5,7 @@
+ 
+ import * as vscode from 'vscode';
+ import { GitHubAuthenticationProvider, UriEventHandler } from './github';
++import { LazyAuthenticationProvider } from './lazyAuthenticationProvider';
+ 
+ const settingNotSent = '"github-enterprise.uri" not set';
+ const settingInvalid = '"github-enterprise.uri" invalid';
+@@ -36,6 +37,23 @@
+ 	}
+ }
+ 
++function registerLazyProvider(
++	context: vscode.ExtensionContext,
++	id: string,
++	label: string,
++	supportedAuthorizationServers: readonly vscode.Uri[],
++	factory: () => vscode.AuthenticationProvider & vscode.Disposable
++): vscode.Disposable {
++	const provider = new LazyAuthenticationProvider(factory);
++	return vscode.Disposable.from(
++		provider,
++		vscode.authentication.registerAuthenticationProvider(id, label, provider, {
++			supportsMultipleAccounts: true,
++			supportedAuthorizationServers
++		})
++	);
++}
++
+ function initGHES(context: vscode.ExtensionContext, uriHandler: UriEventHandler): vscode.Disposable {
+ 	const settingValue = vscode.workspace.getConfiguration().get<string>('github-enterprise.uri');
+ 	if (!settingValue) {
+@@ -55,8 +73,12 @@
+ 		return provider;
+ 	}
+ 
+-	const githubEnterpriseAuthProvider = new GitHubAuthenticationProvider(context, uriHandler, uri);
+-	context.subscriptions.push(githubEnterpriseAuthProvider);
++	const githubEnterpriseAuthProvider = registerLazyProvider(
++		context,
++		'github-enterprise',
++		'GitHub Enterprise',
++		[vscode.Uri.joinPath(uri, '/login/oauth')],
++		() => new GitHubAuthenticationProvider(context, uriHandler, uri, false));
+ 	return githubEnterpriseAuthProvider;
+ }
+ 
+@@ -65,7 +87,14 @@
+ 	context.subscriptions.push(uriHandler);
+ 	context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
+ 
+-	context.subscriptions.push(new GitHubAuthenticationProvider(context, uriHandler));
++	context.subscriptions.push(registerLazyProvider(
++		context,
++		'github',
++		'GitHub',
++		[vscode.Uri.parse('https://github.com/login/oauth')],
++		// Defer creating the real provider until a command explicitly asks for GitHub sessions.
++		() => new GitHubAuthenticationProvider(context, uriHandler, undefined, false)
++	));
+ 
+ 	let before = vscode.workspace.getConfiguration().get<string>('github-enterprise.uri');
+ 	let githubEnterpriseAuthProvider = initGHES(context, uriHandler);
+Index: product-integrator/lib/vscode/extensions/github-authentication/src/github.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/extensions/github-authentication/src/github.ts
++++ product-integrator/lib/vscode/extensions/github-authentication/src/github.ts
+@@ -141,7 +141,8 @@
+ 	constructor(
+ 		private readonly context: vscode.ExtensionContext,
+ 		uriHandler: UriEventHandler,
+-		ghesUri?: vscode.Uri
++		ghesUri?: vscode.Uri,
++		registerAsAuthenticationProvider: boolean = true
+ 	) {
+ 		const { aiKey } = context.extension.packageJSON as { name: string; version: string; aiKey: string };
+ 		this._telemetryReporter = new ExperimentationTelemetry(context, new TelemetryReporter(aiKey));
+@@ -164,26 +165,26 @@
+ 			context.extension.extensionKind,
+ 			ghesUri);
+ 
+-		const supportedAuthorizationServers = ghesUri
+-			? [vscode.Uri.joinPath(ghesUri, '/login/oauth')]
+-			: [vscode.Uri.parse('https://github.com/login/oauth')];
+-		this._disposable = vscode.Disposable.from(
++		const disposables: vscode.Disposable[] = [
+ 			this._telemetryReporter,
+-			vscode.authentication.registerAuthenticationProvider(
+-				type,
+-				this._githubServer.friendlyName,
+-				this,
+-				{
+-					supportsMultipleAccounts: true,
+-					supportedAuthorizationServers
+-				}
+-			),
+ 			this.context.secrets.onDidChange(() => {
+ 				if (this._sessionsPromise) {
+ 					void this.checkForUpdates();
+ 				}
+ 			})
+-		);
++		];
++
++		if (registerAsAuthenticationProvider) {
++			const supportedAuthorizationServers = ghesUri
++				? [vscode.Uri.joinPath(ghesUri, '/login/oauth')]
++				: [vscode.Uri.parse('https://github.com/login/oauth')];
++			disposables.push(vscode.authentication.registerAuthenticationProvider(type, this._githubServer.friendlyName, this, {
++				supportsMultipleAccounts: true,
++				supportedAuthorizationServers
++			}));
++		}
++
++		this._disposable = vscode.Disposable.from(...disposables);
+ 	}
+ 
+ 	dispose() {
+Index: product-integrator/lib/vscode/extensions/github-authentication/src/lazyAuthenticationProvider.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/extensions/github-authentication/src/lazyAuthenticationProvider.ts
+@@ -0,0 +1,45 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import * as vscode from 'vscode';
++
++export class LazyAuthenticationProvider implements vscode.AuthenticationProvider, vscode.Disposable {
++	private readonly _sessionChangeEmitter = new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
++	private _provider: (vscode.AuthenticationProvider & vscode.Disposable) | undefined;
++	private _providerListener: vscode.Disposable | undefined;
++
++	constructor(private readonly factory: () => vscode.AuthenticationProvider & vscode.Disposable) { }
++
++	get onDidChangeSessions() {
++		return this._sessionChangeEmitter.event;
++	}
++
++	private getProvider(): vscode.AuthenticationProvider & vscode.Disposable {
++		if (!this._provider) {
++			this._provider = this.factory();
++			this._providerListener = this._provider.onDidChangeSessions(event => this._sessionChangeEmitter.fire(event));
++		}
++
++		return this._provider;
++	}
++
++	getSessions(scopes?: readonly string[], options?: vscode.AuthenticationProviderSessionOptions): Thenable<vscode.AuthenticationSession[]> {
++		return this.getProvider().getSessions(scopes, options);
++	}
++
++	createSession(scopes: readonly string[], options?: vscode.AuthenticationProviderSessionOptions): Thenable<vscode.AuthenticationSession> {
++		return this.getProvider().createSession(scopes, options);
++	}
++
++	removeSession(sessionId: string): Thenable<void> {
++		return this.getProvider().removeSession(sessionId);
++	}
++
++	dispose(): void {
++		this._providerListener?.dispose();
++		this._provider?.dispose();
++		this._sessionChangeEmitter.dispose();
++	}
++}
+Index: product-integrator/lib/vscode/extensions/github-authentication/src/test/lazyAuthenticationProvider.test.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/extensions/github-authentication/src/test/lazyAuthenticationProvider.test.ts
+@@ -0,0 +1,76 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import * as assert from 'assert';
++import * as vscode from 'vscode';
++import { LazyAuthenticationProvider } from '../lazyAuthenticationProvider';
++
++class TestAuthenticationProvider implements vscode.AuthenticationProvider, vscode.Disposable {
++	private readonly _sessionChangeEmitter = new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
++	private readonly sessions: vscode.AuthenticationSession[] = [];
++	public readonly onDidChangeSessions = this._sessionChangeEmitter.event;
++	public getSessionsCalls = 0;
++
++	getSessions(): Thenable<vscode.AuthenticationSession[]> {
++		this.getSessionsCalls++;
++		return Promise.resolve(this.sessions);
++	}
++
++	createSession(): Thenable<vscode.AuthenticationSession> {
++		throw new Error('not implemented');
++	}
++
++	removeSession(): Thenable<void> {
++		throw new Error('not implemented');
++	}
++
++	fireChange(event: vscode.AuthenticationProviderAuthenticationSessionsChangeEvent): void {
++		this._sessionChangeEmitter.fire(event);
++	}
++
++	dispose(): void {
++		this._sessionChangeEmitter.dispose();
++	}
++}
++
++suite('LazyAuthenticationProvider', () => {
++	test('does not construct the real provider until a session method is called', async () => {
++		let factoryCalls = 0;
++		const provider = new TestAuthenticationProvider();
++		const lazyProvider = new LazyAuthenticationProvider(() => {
++			factoryCalls++;
++			return provider;
++		});
++
++		assert.strictEqual(factoryCalls, 0);
++
++		await lazyProvider.getSessions();
++
++		assert.strictEqual(factoryCalls, 1);
++		assert.strictEqual(provider.getSessionsCalls, 1);
++	});
++
++	test('forwards session change events after the real provider is materialized', async () => {
++		const provider = new TestAuthenticationProvider();
++		const lazyProvider = new LazyAuthenticationProvider(() => provider);
++		let forwardedEvent: vscode.AuthenticationProviderAuthenticationSessionsChangeEvent | undefined;
++
++		lazyProvider.onDidChangeSessions(event => {
++			forwardedEvent = event;
++		});
++
++		await lazyProvider.getSessions();
++
++		const expectedEvent = {
++			added: [],
++			removed: [],
++			changed: []
++		};
++
++		provider.fireChange(expectedEvent);
++
++		assert.deepStrictEqual(forwardedEvent, expectedEvent);
++	});
++});
