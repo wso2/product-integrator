@@ -108,8 +108,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
             commandName: integration.commandName,
             sourcePath: params.importSourcePath,
             orgName: selectedOrgName,
-            parameters: params.parameters,
-            dryRun: true,
+            parameters: { ...params.parameters, dryRun: true },
         };
         try {
             const response = await wsClient.importIntegration(wsParams);
