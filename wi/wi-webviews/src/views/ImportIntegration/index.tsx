@@ -245,25 +245,29 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
         });
 
         wsClient.onMigrationToolStateChanged((state) => {
-            if (activeRunRef.current === "dryRun") {
+            const activeRun = activeRunRef.current;
+            if (activeRun === "dryRun") {
+
                 setDryRunToolState(state);
-            } else {
+            } else if (activeRun === "migration") {
                 setMigrationToolState(state);
             }
         });
 
         wsClient.onMigrationToolLogs((log) => {
-            if (activeRunRef.current === "dryRun") {
+            const activeRun = activeRunRef.current;
+            if (activeRun === "dryRun") {
                 setDryRunLogs((prevLogs) => [...prevLogs, log]);
-            } else {
+            } else if (activeRun === "migration") {
                 setMigrationToolLogs((prevLogs) => [...prevLogs, log]);
             }
         });
 
         wsClient.onMigratedProject((project) => {
-            if (activeRunRef.current === "dryRun") {
+            const activeRun = activeRunRef.current;
+            if (activeRun === "dryRun") {
                 setDryRunProjects((prevProjects) => [...prevProjects, project]);
-            } else {
+            } else if (activeRun === "migration") {
                 setMigratedProjects((prevProjects) => [...prevProjects, project]);
             }
         });
