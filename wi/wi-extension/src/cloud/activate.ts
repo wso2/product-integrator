@@ -28,6 +28,7 @@ import { contextStore } from "./stores/context-store";
 import { dataCacheStore } from "./stores/data-cache-store";
 import { locationStore } from "./stores/location-store";
 import { activateURIHandlers } from "./cloud-uri-handlers";
+import { formatInstalledPluginLogLines } from "./plugin-log";
 import { getExtVersion } from "../utils/commonUtils";
 
 /**
@@ -45,6 +46,9 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	// 2. Log versions
 	ext.log(`Extension version: ${getExtVersion(context)}`);
 	ext.log(`CLI version: ${getCliVersion()}`);
+	for (const line of formatInstalledPluginLogLines(vscode.extensions.all)) {
+		ext.log(line);
+	}
 
 	// 3. Rehydrate persistent stores
 	await contextStore.persist.rehydrate();
