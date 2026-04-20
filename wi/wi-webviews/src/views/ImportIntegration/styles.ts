@@ -36,7 +36,7 @@ export const HeaderSubtitle = _HeaderSubtitle;
 export const IconButton = _BackButton;
 
 export const PageContainer = styled.div`
-    max-width: 960px;
+    max-width: 1100px;
     margin: 0 auto;
     min-height: calc(100vh - 52px);
     display: flex;
