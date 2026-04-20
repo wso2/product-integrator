@@ -21,7 +21,7 @@ jobs:
             target_ref: main
             delivery_mode: archive
           - release_label: 5.0.0 pre-release
-            target_ref: 5.0.x
+            target_ref: 5.0.0-alpha6 # Update this to 5.0.x branch
             delivery_mode: github-release
     steps:
       - name: Trigger Build and Release Artifacts
