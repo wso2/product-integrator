@@ -181,6 +181,14 @@ jobs:
             npm run download-builtin-extensions
           fi
 
+      - name: Compile core output
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run extensions-ci
+          npm run core-ci-pr
+          npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+
       - name: Build client
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
