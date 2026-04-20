@@ -64,7 +64,7 @@ export function MigrationProgressView({
     onBack,
 }: MigrationProgressProps) {
     const [isLogsOpen, setIsLogsOpen] = useState(false);
-    const [aiEnhancementEnabled, setAiEnhancementEnabled] = useState(false);
+    const [aiEnhancementEnabled, setAiEnhancementEnabled] = useState(true);
     const { wsClient } = useVisualizerContext();
 
     // Auto-open logs during migration and auto-collapse when completed
@@ -152,7 +152,7 @@ export function MigrationProgressView({
                             <ActionButtons
                                 primaryButton={{ text: "Done", onClick: onDone }}
                                 secondaryButton={{
-                                    text: "Open Project",
+                                    text: isMultiProject ? "Open Workspace" : "Open Project",
                                     onClick: onOpenProject,
                                     disabled: true,
                                     tooltip: `Opening ${projects.length} projects simultaneously may cause VS Code to become unresponsive. Navigate to the destination path to open them manually.`,
@@ -160,7 +160,7 @@ export function MigrationProgressView({
                             />
                         ) : (
                             <ActionButtons
-                                primaryButton={{ text: "Open Project", onClick: onOpenProject }}
+                                primaryButton={{ text: isMultiProject ? "Open Workspace" : "Open Project", onClick: onOpenProject }}
                                 secondaryButton={{ text: "Done", onClick: onDone, disabled: false }}
                             />
                         )}

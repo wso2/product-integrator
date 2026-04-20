@@ -383,6 +383,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                             <WizardAIEnhancementView
                                 wsClient={wsClient}
                                 projectCount={migratedProjects.length}
+                                isMultiProject={isMultiProject}
                                 onFinish={onBack ?? (() => { })}
                             />
                         )}

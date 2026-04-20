@@ -174,10 +174,11 @@ const SignInErrorText = styled.p`
 interface WizardAIEnhancementViewProps {
     wsClient: WsClient;
     projectCount: number;
+    isMultiProject: boolean;
     onFinish: () => void;
 }
 
-export function WizardAIEnhancementView({ wsClient, projectCount, onFinish }: WizardAIEnhancementViewProps) {
+export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject, onFinish }: WizardAIEnhancementViewProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const enhancementTriggered = useRef(false);
 
@@ -723,7 +724,7 @@ export function WizardAIEnhancementView({ wsClient, projectCount, onFinish }: Wi
                         disabled={isRunning || openProjectDisabled}
                     >
                         <span className="codicon codicon-folder-opened" />
-                        Open Project
+                        {isMultiProject ? "Open Workspace" : "Open Project"}
                     </ActionButton>
                 </span>
                 {/* Done — always visible like Open Project, disabled while running */}
