@@ -203,8 +203,8 @@ jobs:
         run: |
           brew install quilt
 
-      - name: Apply patches (macOS)
-        run: quilt push -a
+      # - name: Apply patches (macOS)
+      #   run: quilt push -a
 
       - name: Set Ballerina extension version
         if: ${{ needs.resolve-versions.outputs.ballerina_extension_version != '' }}
@@ -222,11 +222,11 @@ jobs:
           BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
-      - name: Update product.json and branding
-        working-directory: .
-        run: |
-          chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
+      # - name: Update product.json and branding
+      #   working-directory: .
+      #   run: |
+      #     chmod +x ./ci/build/update-product.sh
+      #     ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
 
       - name: Validate Xcode tools (macOS)
         run: |
@@ -598,12 +598,12 @@ jobs:
           BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
-      - name: Update product.json and branding
-        shell: bash
-        working-directory: .
-        run: |
-          chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
+      # - name: Update product.json and branding
+      #   shell: bash
+      #   working-directory: .
+      #   run: |
+      #     chmod +x ./ci/build/update-product.sh
+      #     ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
 
       - name: Install Rust toolchain (Windows)
         shell: pwsh

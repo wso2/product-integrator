@@ -229,11 +229,11 @@ jobs:
           BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
   
-      - name: Update product.json and branding
-        working-directory: .
-        run: |
-          chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
+      # - name: Update product.json and branding
+      #   working-directory: .
+      #   run: |
+      #     chmod +x ./ci/build/update-product.sh
+      #     ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
 
       - name: Copy .env.example to .env
         shell: bash
