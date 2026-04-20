@@ -59,7 +59,6 @@
         "postRushInstall": [],
         "preRushBuild": [
             "npm run apply-patches",
-            "npm run update-product"
         ],
         "postRushBuild": [
         ]

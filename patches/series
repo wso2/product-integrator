@@ -1,16 +1,1 @@
-skipCompilationChecks.diff
-activities.diff
-productNameChange.diff
-removeExtensionsActivity.diff
-disable-builtin-ext-update.diff
-gettingStarted.diff
-packageResources.diff
-wso2-font-pkg-update
-disableAiFeatures.diff
 increaseHeap.diff
-skip-extension-outdated-test.diff
-disableVsixChecksumCheck.diff
-disableWorkspaceTrust.diff
-disableThirdPartyExtNotifications.diff
-injectEnvs.diff
-integratorMenus.diff
