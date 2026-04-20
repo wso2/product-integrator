@@ -111,9 +111,8 @@
         },
         "updates.serviceUrl": {
           "type": "string",
-          "default": "https://bc594c9c-e5f7-4bd4-8b83-3bdea4d32b49-prod.e1-us-east-azure.choreoapis.dev/product-integrator/product-update-service/v1.0",
           "scope": "application",
-          "description": "Hosted product update service endpoint used by WSO2 Integrator."
+          "description": "Hosted product update service endpoint used by WSO2 Integrator. If not set, the built-in default endpoint is used."
         },
         "updates.requestTimeoutMs": {
           "type": "number",

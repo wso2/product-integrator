@@ -116,12 +116,17 @@ export class ProductUpdateServiceClient {
 
 	private getConfig(): UpdateCheckConfig {
 		const config = vscode.workspace.getConfiguration("wso2-integrator");
+		const configuredServiceURL = config.get<string>("updates.serviceUrl");
+		const resolvedServiceURL =
+			configuredServiceURL && configuredServiceURL.trim().length > 0
+				? configuredServiceURL
+				: DEFAULT_SERVICE_URL;
 
 		return {
 			enabled: config.get<boolean>("updates.enabled", true),
 			checkOnStartup: config.get<boolean>("updates.checkOnStartup", true),
 			checkIntervalHours: Math.max(1, config.get<number>("updates.checkIntervalHours", 24)),
-			serviceURL: config.get<string>("updates.serviceUrl", DEFAULT_SERVICE_URL),
+			serviceURL: resolvedServiceURL,
 			requestTimeoutMs: Math.max(1000, config.get<number>("updates.requestTimeoutMs", DEFAULT_REQUEST_TIMEOUT_MS)),
 		};
 	}
