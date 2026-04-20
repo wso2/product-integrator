@@ -17,6 +17,7 @@ read_version() {
 
 # Accept integrator version as first arg (optional), otherwise read from source-of-truth file.
 VERSION=${1:-"$(read_version "integrator.version")"}
+PRODUCT_MODE=${2:-"full"}
 BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH:-""}
 BALLERINA_EXTENSION_VERSION=${BALLERINA_EXTENSION_VERSION:-"$(read_version "ballerina.extension.version")"}
 WSO2_PLATFORM_EXTENSION_VERSION=$(read_version "wso2.platform.extension.version")
@@ -39,6 +40,15 @@ if [ -z "${VERSION}" ]; then
   exit 1
 fi
 
+case "${PRODUCT_MODE}" in
+  full|no-wso2-builtins)
+    ;;
+  *)
+    echo "Error: unsupported product mode '${PRODUCT_MODE}'. Expected 'full' or 'no-wso2-builtins'." >&2
+    exit 1
+    ;;
+esac
+
 require_non_empty "${WSO2_PLATFORM_EXTENSION_VERSION}" "wso2.platform.extension.version"
 require_non_empty "${WSO2_HURL_CLIENT_EXTENSION_VERSION}" "wso2.hurl-client.extension.version"
 require_non_empty "${WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION}" "wso2.mcp-server-inspector.extension.version"
@@ -54,6 +64,82 @@ if [ -z "${BALLERINA_EXTENSION_VERSION}" ] && [ -z "${BALLERINA_VSIX_PATH}" ]; t
   BALLERINA_EXTENSION_VERSION="latest"
 fi
 WI_EXTENSION_VERSION=$(node -p "require('./wi/wi-extension/package.json').version")
+
+builtin_extensions_entries() {
+  if [ "${PRODUCT_MODE}" = "no-wso2-builtins" ]; then
+    cat <<'STRIPPED_BUILTINS'
+      {
+        "name": "redhat.vscode-yaml",
+        "version": "latest"
+      },
+      {
+        "name": "anweber.httpbook",
+        "version": "latest"
+      },
+      {
+        "name": "anweber.vscode-httpyac",
+        "version": "latest"
+      }
+STRIPPED_BUILTINS
+    return
+  fi
+
+  cat <<FULL_BUILTINS
+      {
+        "name": "redhat.vscode-yaml",
+        "version": "latest"
+      },
+      {
+        "name": "anweber.httpbook",
+        "version": "latest"
+      },
+      {
+        "name": "anweber.vscode-httpyac",
+        "version": "latest"
+      },
+      {
+        "name": "wso2.wso2-platform",
+        "version": "${WSO2_PLATFORM_EXTENSION_VERSION}"
+      },
+      {
+        "name": "wso2.hurl-client",
+        "version": "${WSO2_HURL_CLIENT_EXTENSION_VERSION}"
+      },
+      {
+        "name": "wso2.mcp-server-inspector",
+        "version": "${WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION}"
+      },
+$(if [ -n "${BALLERINA_VSIX_PATH}" ]; then
+cat <<BALLERINA_VSIX_ENTRY
+      {
+        "name": "wso2.ballerina",
+        "vsix": "${BALLERINA_VSIX_PATH}",
+        "version": "${BALLERINA_EXTENSION_VERSION}"
+      },
+BALLERINA_VSIX_ENTRY
+else
+cat <<BALLERINA_MARKETPLACE_ENTRY
+      {
+        "name": "wso2.ballerina",
+        "version": "${BALLERINA_EXTENSION_VERSION}"
+      },
+BALLERINA_MARKETPLACE_ENTRY
+fi)
+      {
+        "name": "wso2.micro-integrator",
+        "version": "${WSO2_MICRO_INTEGRATOR_EXTENSION_VERSION}"
+      },
+      {
+        "name": "wso2.streaming-integrator",
+        "version": "${WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION}"
+      },
+      {
+        "name": "wso2.wso2-integrator",
+        "vsix": "../../wi/wi-extension/wso2-integrator-${WI_EXTENSION_VERSION}.vsix",
+        "version": "${WI_EXTENSION_VERSION}"
+      }
+FULL_BUILTINS
+}
 
 cat > lib/vscode/product.json <<EOF
 {
@@ -123,59 +209,7 @@ cat > lib/vscode/product.json <<EOF
       }
     },
 	  "builtInExtensions": [
-      {
-        "name": "redhat.vscode-yaml",
-        "version": "latest"
-      },
-      {
-        "name": "anweber.httpbook",
-        "version": "latest"
-      },
-      {
-        "name": "anweber.vscode-httpyac",
-        "version": "latest"
-      },
-      {
-        "name": "wso2.wso2-platform",
-        "version": "${WSO2_PLATFORM_EXTENSION_VERSION}"
-      },
-      {
-        "name": "wso2.hurl-client",
-        "version": "${WSO2_HURL_CLIENT_EXTENSION_VERSION}"
-      },
-      {
-        "name": "wso2.mcp-server-inspector",
-        "version": "${WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION}"
-      },
-$(if [ -n "${BALLERINA_VSIX_PATH}" ]; then
-cat <<BALLERINA_VSIX_ENTRY
-      {
-        "name": "wso2.ballerina",
-        "vsix": "${BALLERINA_VSIX_PATH}",
-        "version": "${BALLERINA_EXTENSION_VERSION}"
-      },
-BALLERINA_VSIX_ENTRY
-else
-cat <<BALLERINA_MARKETPLACE_ENTRY
-      {
-        "name": "wso2.ballerina",
-        "version": "${BALLERINA_EXTENSION_VERSION}"
-      },
-BALLERINA_MARKETPLACE_ENTRY
-fi)
-      {
-        "name": "wso2.micro-integrator",
-        "version": "${WSO2_MICRO_INTEGRATOR_EXTENSION_VERSION}"
-      },
-      {
-        "name": "wso2.streaming-integrator",
-        "version": "${WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION}"
-      },
-      {
-        "name": "wso2.wso2-integrator",
-        "vsix": "../../wi/wi-extension/wso2-integrator-${WI_EXTENSION_VERSION}.vsix",
-        "version": "${WI_EXTENSION_VERSION}"
-      }
+$(builtin_extensions_entries)
     ],
     "runtimeEnv": {
       "common": {
