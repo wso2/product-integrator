@@ -52,6 +52,11 @@ if [ ! -f "$ICP_ZIP" ]; then
     exit 1
 fi
 
+if [ ! -f "$JRE_ZIP" ]; then
+    print_error "JRE ZIP file not found: $JRE_ZIP"
+    exit 1
+fi
+
 # Define paths
 INTEGRATOR_TARGET="$WORK_DIR/package/usr/share/wso2-integrator"
 COMPONENTS_DIR="$INTEGRATOR_TARGET/components"

@@ -92,7 +92,7 @@ DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
 rm -rf "$DEPENDENCIES_DIR"
 mkdir -p "$DEPENDENCIES_DIR"
 unzip -o "$JRE_ZIP" -d "$DEPENDENCIES_DIR"
-JRE_FOLDER=$(unzip -Z1 "$JRE_ZIP" | awk -F/ '{print $1}' | sort -u | grep -v '^$' | head -1)
+JRE_FOLDER=$(unzip -Z1 "$JRE_ZIP" | awk -F/ 'NF > 1 && $1 != "__MACOSX" && $1 != "" {print $1}' | sort -u | head -1)
 if [ -z "$JRE_FOLDER" ]; then
     print_error "Could not determine JRE folder from zip"
     exit 1
