@@ -578,6 +578,7 @@ jobs:
 
       
       - name: Login to AWS
+        if: ${{ inputs.build_packed_installers == true }}
         uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
