@@ -1,1 +1,3 @@
+skipCompilationChecks.diff
 increaseHeap.diff
+skip-extension-outdated-test.diff
