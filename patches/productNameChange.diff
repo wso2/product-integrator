@@ -25,7 +25,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/di
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
 +++ product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
-@@ -3,38 +3,32 @@
+@@ -3,38 +3,28 @@
   *  Licensed under the MIT License. See License.txt in the project root for license information.
   *--------------------------------------------------------------------------------------------*/
  
@@ -62,8 +62,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/di
 -			process.versions['chrome'],
 -			process.versions['node'],
 -			process.versions['v8'],
--			`${osProps.type} ${osProps.arch} ${osProps.release}${isLinuxSnap ? ' snap' : ''}`
-+			`${osProps.type} ${osProps.arch} ${osProps.release}${isLinuxSnap ? ' snap' : ''}`
+ 			`${osProps.type} ${osProps.arch} ${osProps.release}${isLinuxSnap ? ' snap' : ''}`
  		);
  	};
  
@@ -74,3 +73,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/di
  
  	return {
  		title: productService.nameLong,
+ 		details: details,
+ 		detailsToCopy: detailsToCopy
+ 	};
+ }
