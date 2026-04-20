@@ -16,7 +16,7 @@
  * under the License.
  */
 import React, { useEffect, useState } from "react";
-import { Button, Dropdown, FormGroup, LocationSelector, OptionProps, TextField, ProgressRing } from "@wso2/ui-toolkit";
+import { Button, Dropdown, FormGroup, LocationSelector, OptionProps, TextField, ProgressRing, CheckBox, ParamManager, Tooltip, Icon, ParamConfig } from "@wso2/ui-toolkit";
 import { yupResolver } from "@hookform/resolvers/yup"
 import * as yup from "yup";
 import { useForm } from "react-hook-form";
@@ -62,15 +62,36 @@ export function MiProjectWizard() {
     const [dirContent, setDirContent] = useState([]);
     const [supportedMIVersions, setSupportedMIVersions] = useState<OptionProps[]>([]);
     const [formSaved, setFormSaved] = useState(false);
+    
+    const [isConsolidatedProject, setIsConsolidatedProject] = useState(false);
+    const [isSubProjectsAdded, setIsSubProjectsAdded] = useState(false);
+    const subProjectConfigs: ParamConfig = {
+        paramValues: [],
+        paramFields: [
+            {
+                id: 0,
+                type: "TextField",
+                label: "Module Name",
+                defaultValue: "",
+                isRequired: true
+            }]
+    }
+    const [subProjects, setSubProjects] = useState(subProjectConfigs);
+    const consolidatedHelpTip = <Tooltip
+                content="A consolidated project allows you to manage multiple related integration projects as a single unit"
+                position='right'
+            >
+                <Icon name="question" isCodicon iconSx={{ fontSize: '18px' }} sx={{ marginLeft: '5px', cursor: 'help' }} />
+            </Tooltip>;
 
     const loweCasedDirContent = dirContent.map((folder: string) => folder.toLowerCase());
     const schema = yup.object({
-        name: yup.string().required("Integration Name is required").matches(/^[a-zA-Z0-9_-]([a-zA-Z0-9_-]*\.?[a-zA-Z0-9_-])*$/i, "Integration name cannot contain spaces or special characters")
+        name: yup.string().required("Project Name is required").matches(/^[a-zA-Z0-9_-]([a-zA-Z0-9_-]*\.?[a-zA-Z0-9_-])*$/i, "Project name cannot contain spaces or special characters")
             .test('validateFolderName',
                 'A subfolder with same name already exists', value => {
                     return !loweCasedDirContent.includes(value.toLowerCase())
                 }),
-        directory: yup.string().required("Integration Path is required"),
+        directory: yup.string().required("Project Path is required"),
         groupID: yup.string().notRequired().default("com.microintegrator.projects").matches(/^[a-zA-Z0-9_-]([a-zA-Z0-9_-]*\.?[a-zA-Z0-9_-])*$/, "Group id cannot contain spaces or special characters"),
         artifactID: yup.string().notRequired().matches(/^[a-zA-Z0-9_-]?([a-zA-Z0-9_-]*\.?[a-zA-Z0-9_-])*$/, "Artifact id cannot contain spaces or special characters"),
         version: yup.string().notRequired().default("1.0.0").matches(/^[a-zA-Z0-9.]*$/, "Version cannot contain spaces or special characters"),
@@ -107,6 +128,21 @@ export function MiProjectWizard() {
         setValue("artifactID", getValues("name"));
     }, [watch("name")]);
 
+    const handleSubProjectsOnChange = (params: any) => {
+        let i = 1;
+        const modifiedParams = {
+            ...params, paramValues: params.paramValues.map((param: any) => {
+                return {
+                    ...param,
+                    key: i++,
+                    value: param.parameters?.[0]?.value
+                }
+            })
+        };
+        setSubProjects(modifiedParams);
+        setIsSubProjectsAdded(modifiedParams.paramValues.map((param: any) => param.value).filter(Boolean).length > 0);
+    };
+
     const handleProjecDirSelection = async () => {
         const projectDirectory = await wsClient.askProjectDirPath();
         setValue("directory", projectDirectory.path);
@@ -119,6 +155,8 @@ export function MiProjectWizard() {
         const createProjectParams = {
             ...values,
             open: true,
+            isConsolidatedProject: isConsolidatedProject,
+            subProjects: subProjects.paramValues.map((param: any) => param.value)
         }
         setFormSaved(true);
         const response = await wsClient.createMiProject(createProjectParams);
@@ -143,7 +181,7 @@ export function MiProjectWizard() {
             <FieldGroup>
                 <TextField
                     id='name'
-                    label="Integration Name"
+                    label="Project Name"
                     required
                     errorMsg={errors.name?.message.toString()}
                     {...register("name")}
@@ -153,7 +191,7 @@ export function MiProjectWizard() {
             <FieldGroup>
                 <Dropdown
                     id='miVersion'
-                    label="WSO2 Integrator: MI profile version"
+                    label="WSO2 Integrator: MI runtime version"
                     isRequired={true}
                     errorMsg={errors.miVersion?.message.toString()}
                     items={supportedMIVersions}
@@ -162,7 +200,7 @@ export function MiProjectWizard() {
             </FieldGroup>
             <FieldGroup>
                 <LocationSelector
-                    label="Select Integration Path"
+                    label="Select Project Path"
                     selectedFile={watch("directory")}
                     required
                     onSelect={handleProjecDirSelection}
@@ -173,6 +211,18 @@ export function MiProjectWizard() {
             <FieldGroup>
                 <FormGroup title="Advanced Options">
                     <React.Fragment>
+                        <FormGroup title="Project Configurations" sx={{ marginBottom: -20 }}>
+                            <CheckBox
+                                label="Consolidated Project"
+                                value="consolidated"
+                                checked={isConsolidatedProject}
+                                onChange={(isChecked: boolean) => setIsConsolidatedProject(isChecked)}
+                                labelAdornment={consolidatedHelpTip}
+                            />
+                            {isConsolidatedProject &&
+                                <ParamManager paramConfigs={subProjects} onChange={handleSubProjectsOnChange} />
+                            }
+                        </FormGroup>
                         <TextField
                             id='groupID'
                             label="Group Id"
@@ -204,14 +254,14 @@ export function MiProjectWizard() {
                 <Button
                     appearance="primary"
                     onClick={handleSubmit(handleCreateProject)}
-                    disabled={(!isDirty) || Object.keys(errors).length > 0 || formSaved || !watch("directory")}
+                    disabled={(!isDirty) || Object.keys(errors).length > 0 || formSaved || !watch("directory") || (isConsolidatedProject && !isSubProjectsAdded)}
                 >
                     {formSaved ? (
                         <>
                             <ProgressRing sx={{ height: 16, marginLeft: -5, marginRight: 2 }} color="white" />
                             Creating
                         </>
-                    ) : "Create Integration"}
+                    ) : "Create Project"}
                 </Button>
             </ButtonWrapper>
         </div>

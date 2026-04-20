@@ -23,9 +23,9 @@ print_warning() {
 
 WORK_DIR=$(pwd)
 
-# Usage: ./build.sh <ballerina_zip> <ballerina_version> <integrator_tar_gz> <icp_zip> [version]
-if [ "$#" -lt 4 ]; then
-    echo "Usage: $0 <ballerina_zip> <ballerina_version> <integrator_tar_gz> <icp_zip> [version]"
+# Usage: ./build.sh <ballerina_zip> <ballerina_version> <integrator_tar_gz> <icp_zip> <jre_zip> [version]
+if [ "$#" -lt 5 ]; then
+    echo "Usage: $0 <ballerina_zip> <ballerina_version> <integrator_tar_gz> <icp_zip> <jre_zip> [version]"
     exit 1
 fi
 
@@ -33,7 +33,8 @@ BALLERINA_ZIP="$1"
 BALLERINA_VERSION="$2"
 INTEGRATOR_TAR_GZ="$3"
 ICP_ZIP="$4"
-VERSION="${5:-1.0.0}"
+JRE_ZIP="$5"
+VERSION="${6:-1.0.0}"
 
 # Check if input files exist
 if [ ! -f "$BALLERINA_ZIP" ]; then
@@ -98,18 +99,16 @@ fi
 mkdir -p "$BALLERINA_TARGET"
 mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
 
-# Move JDK to shared dependencies directory
-print_info "Moving JDK to shared dependencies directory..."
+# Remove unwanted Ballerina folders
+rm -rf "$BALLERINA_TARGET/docs"
+rm -rf "$BALLERINA_TARGET/examples"
+
+# Extract JRE zip into shared dependencies directory
+print_info "Extracting JRE to shared dependencies directory..."
 rm -rf "$DEPENDENCIES_DIR"
 mkdir -p "$DEPENDENCIES_DIR"
-if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
-    for jdk_folder in "$BALLERINA_UNZIPPED_PATH/dependencies"/*; do
-        if [ -d "$jdk_folder" ]; then
-            JDK_FOLDER=$(basename "$jdk_folder")
-            cp -r "$jdk_folder" "$DEPENDENCIES_DIR/"
-        fi
-    done
-fi
+unzip -o "$JRE_ZIP" -d "$DEPENDENCIES_DIR"
+JRE_FOLDER=$(unzip -Z1 "$JRE_ZIP" | head -1 | cut -d/ -f1)
 
 rm -rf "$BALLERINA_UNZIPPED_PATH"
 rm -rf "$BALLERINA_TEMP"
@@ -130,11 +129,11 @@ mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
 
-# Modify icp.sh to use the JDK from shared dependencies directory
+# Modify icp.sh to use the JRE from shared dependencies directory
 ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
 if [ -f "$ICP_SCRIPT" ]; then
-    print_info "Modifying icp.sh to use JDK from dependencies ($JDK_FOLDER)"
-    sed -i "s|java|\"\$SCRIPT_DIR\"/../../dependencies/$JDK_FOLDER/bin/java|g" "$ICP_SCRIPT"
+    print_info "Modifying icp.sh to use JRE from dependencies ($JRE_FOLDER)"
+    sed -i "s|java|\"\$SCRIPT_DIR\"/../../dependencies/$JRE_FOLDER/bin/java|g" "$ICP_SCRIPT"
 fi
 
 # Set executable permissions

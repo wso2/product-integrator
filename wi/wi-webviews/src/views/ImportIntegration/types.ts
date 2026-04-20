@@ -52,11 +52,7 @@ export interface ImportIntegrationFormProps {
     toolPullProgress: DownloadProgress | null;
     setImportParams: (params: FinalIntegrationParams) => void;
     onSelectIntegration: (selectedIntegration: MigrationTool) => void;
-    handleStartImport: (
-        importParams: FinalIntegrationParams,
-        selectedIntegration: MigrationTool,
-        toolPullProgress: DownloadProgress
-    ) => void;
+    onNext: () => void;
     onBack: () => void;
 }
 
@@ -68,8 +64,22 @@ export interface MigrationProgressProps {
     migrationResponse: ImportIntegrationResponse | null;
     projects: ProjectMigrationResult[];
     isMultiProject: boolean;
-    onNext: () => void;
+    onStartAIEnhancement: () => void;
+    onDone: () => void;
+    onOpenProject: () => void;
     onBack: () => void;
+}
+
+export interface DryRunViewProps {
+    migrationState: string | null;
+    migrationLogs: string[];
+    migrationCompleted: boolean;
+    migrationSuccessful: boolean;
+    migrationResponse: ImportIntegrationResponse | null;
+    projects: ProjectMigrationResult[];
+    isMultiProject: boolean;
+    onNext: () => void;
+    onDone: () => void;
 }
 
 export interface ProjectRequest {
