@@ -80,6 +80,7 @@ export function MigrationProgressView({
 
     const displayState = getMigrationDisplayState(migrationCompleted, migrationSuccessful, false);
     const { headerText, headerDesc } = getMigrationProgressHeaderData(displayState, isMultiProject);
+    const openProjectDisabled = projects.length > 15;
 
     return (
         <>
@@ -147,6 +148,16 @@ export function MigrationProgressView({
                     <ButtonWrapper>
                         {aiEnhancementEnabled ? (
                             <Button appearance="primary" onClick={onStartAIEnhancement}>Start AI Enhancement</Button>
+                        ) : openProjectDisabled ? (
+                            <ActionButtons
+                                primaryButton={{ text: "Done", onClick: onDone }}
+                                secondaryButton={{
+                                    text: "Open Project",
+                                    onClick: onOpenProject,
+                                    disabled: true,
+                                    tooltip: `Opening ${projects.length} projects simultaneously may cause VS Code to become unresponsive. Navigate to the destination path to open them manually.`,
+                                }}
+                            />
                         ) : (
                             <ActionButtons
                                 primaryButton={{ text: "Open Project", onClick: onOpenProject }}
