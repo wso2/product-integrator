@@ -96,7 +96,7 @@ jobs:
             echo "All required versions from component-versions.properties are available."
           fi
   compile:
-    needs: [resolve-versions, validate-Inputs]
+    needs: resolve-versions
     name: Build repo
     timeout-minutes: 45
     runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}

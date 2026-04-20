@@ -113,7 +113,7 @@ for %%L in (W X Y Z) do (
 )
 if not defined BUILD_DRIVE (
     echo ERROR: No available drive letter found ^(W-Z all in use or subst failed^)
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
     exit /b 1
 )
@@ -121,7 +121,7 @@ pushd %BUILD_DRIVE%:\
 if errorlevel 1 (
     echo ERROR: pushd into %BUILD_DRIVE%:\ failed
     subst %BUILD_DRIVE%: /D >nul 2>&1
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
     exit /b 1
 )
@@ -131,7 +131,7 @@ if errorlevel 1 (
     echo CustomAction1 build failed
     popd
     subst %BUILD_DRIVE%: /D
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
 dotnet build .\WixPackage\WixPackage.wixproj -p:Platform=x64 -p:Configuration=Release -maxcpucount:1 -v:detailed
@@ -139,7 +139,7 @@ if errorlevel 1 (
     echo WixPackage build failed
     popd
     subst %BUILD_DRIVE%: /D
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
 
@@ -157,7 +157,7 @@ if exist "%MSI_ORIG%" (
 )
 
 REM Revert version placeholder in Package.wxs
-powershell -Command "(Get-Content '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
+powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
 REM Remove payload and resources directories after build
 if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
 endlocal
