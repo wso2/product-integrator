@@ -53,6 +53,7 @@ export interface GetRecentProjectsResponse {
 
 export interface FileOrDirResponse {
     path: string;
+    isDirectory?: boolean;
 }
 
 export interface FileOrDirRequest {
@@ -122,51 +123,41 @@ export interface CreateSiProjectResponse {
     filePath: string;
 }
 
-export interface GettingStartedSample {
-    category: number;
-    priority: number;
-    title: string;
-    description: string;
-    zipFileName: string;
-    isAvailable?: boolean;
-}
-
 export interface GettingStartedCategory {
     id: number;
     title: string;
     icon: string;
 }
 
-export interface PrebuiltIntegration {
+export interface SampleItem {
     displayName: string;
     description: string;
     componentType: string;
     buildPack: string;
     repositoryUrl: string;
-    branch: string;
-    subDirectory: string;
+    branch?: string;
+    subDirectory?: string;
     componentPath: string;
     thumbnailPath: string;
-    documentationPath: string;
-    applications: string[];
-    imageVersion: string;
+    documentationPath?: string;
+    applications?: string[];
+    imageVersion?: string;
     tags?: string[];
     imageUrl?: string;
     defaultPackage?: string;
-    bidirectional: boolean;
+    bidirectional?: boolean;
 }
 
 export interface GettingStartedData {
     categories: GettingStartedCategory[];
-    samples: GettingStartedSample[];
-    prebuiltIntegrations?: PrebuiltIntegration[];
+    samples: SampleItem[];
+    prebuiltIntegrations?: SampleItem[];
 }
 
 export interface SampleDownloadRequest {
     runtime: "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
-    zipFileName?: string;
     itemType?: "sample" | "prebuilt";
-    prebuiltIntegration?: PrebuiltIntegration;
+    sampleItem?: SampleItem;
 }
 
 export interface BIProjectRequest {
@@ -299,14 +290,7 @@ export interface FetchSamplesRequest {
     runtime?: "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 }
 
-export interface BISampleItem {
-    id: string;
-    category: string;
-    title: string;
-    description: string;
-    icon: string;
-    isEnabled: boolean;
-}
+
 export interface ValidateProjectFormRequest {
     projectPath: string;
     projectName: string;

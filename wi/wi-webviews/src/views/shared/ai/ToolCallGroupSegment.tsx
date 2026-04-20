@@ -175,6 +175,7 @@ interface ToolCallGroupSegmentProps {
 
 const ToolCallGroupSegment: React.FC<ToolCallGroupSegmentProps> = ({ segments }) => {
     const isAnyLoading = segments.some((s) => s.loading);
+    const isAnyFailed = !isAnyLoading && segments.some((s) => s.failed);
     const [isExpanded, setIsExpanded] = useState<boolean>(isAnyLoading);
     const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const bodyId = useRef(`tool-group-body-${Math.random().toString(36).slice(2)}`);
@@ -237,7 +238,12 @@ const ToolCallGroupSegment: React.FC<ToolCallGroupSegmentProps> = ({ segments })
                 {isAnyLoading ? (
                     <Spinner className="codicon codicon-loading spin" role="img" aria-label="Running" />
                 ) : (
-                    <StatusIcon className="codicon codicon-check" role="img" aria-label="Completed" />
+                    <StatusIcon
+                        className={`codicon ${isAnyFailed ? "codicon-error" : "codicon-check"}`}
+                        style={isAnyFailed ? { color: "var(--vscode-errorForeground)" } : undefined}
+                        role="img"
+                        aria-label={isAnyFailed ? "Failed" : "Completed"}
+                    />
                 )}
                 <HeaderLabel>
                     {isAnyLoading ? category.running : category.done}

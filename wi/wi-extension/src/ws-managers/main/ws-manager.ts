@@ -35,10 +35,8 @@ import {
     CreateMiProjectResponse,
     CreateSiProjectRequest,
     CreateSiProjectResponse,
-    PrebuiltIntegration,
     GettingStartedData,
     GettingStartedCategory,
-    GettingStartedSample,
     SampleDownloadRequest,
     BIProjectRequest,
     GetMigrationToolsResponse,
@@ -54,12 +52,13 @@ import {
     SetConfigurationRequest,
     ValidateProjectFormRequest,
     ValidateProjectFormResponse,
-    DefaultOrgNameResponse
+    DefaultOrgNameResponse,
+    SampleItem
 } from "@wso2/wi-core";
 import { commands, window, workspace, MarkdownString, Uri, env, ConfigurationTarget } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { getDefaultCreationPath } from "../../utils/pathUtils";
-import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenBISamplesIntegrations, handleOpenFile, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
+import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenSamples, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
 import * as fs from "fs";
 import * as path from "path";
 import axios from "axios";
@@ -73,16 +72,11 @@ import { ext } from "../../extensionVariables";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
 import { ballerinaContext } from "../../bi/ballerinaContext";
 const platform = getPlatform();
-const MI_SAMPLES_INFO_URL = process.env.MI_SAMPLES_INFO_URL;
-const BI_SAMPLES_INFO_URL = process.env.BI_SAMPLES_INFO_URL;
-const BI_SAMPLES_REPOSITORY_URL = process.env.BI_SAMPLES_REPOSITORY_URL;
-const BI_SAMPLES_REPOSITORY_BRANCH = 'main';
-const BI_SAMPLES_REPOSITORY_SUBDIRECTORY = '/ballerina-integrator';
-const BI_PREBUILT_INTEGRATIONS_URL = process.env.BI_PREBUILT_INTEGRATIONS_URL;
-const BI_HIDDEN_SAMPLE_IDS = new Set([
-    "shipment-processor",
-    "real-time-error-notifier",
-]);
+const SAMPLES_INFO_URL = process.env.SAMPLES_INFO_URL;
+const SAMPLES_REPOSITORY_URL = process.env.SAMPLES_REPOSITORY_URL;
+const SAMPLES_REPOSITORY_BRANCH = 'main';
+const SAMPLES_REPOSITORY_SUBDIRECTORY = '/ballerina-integrator';
+const PREBUILT_INTEGRATIONS_URL = process.env.PREBUILT_INTEGRATIONS_URL;
 
 export class MainWsManager implements WIVisualizerAPI {
     private subProjectReports: Map<string, string> = new Map();
@@ -99,10 +93,9 @@ export class MainWsManager implements WIVisualizerAPI {
                 env: {
                     MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
                     BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
-                    MI_SAMPLES_INFO_URL: process.env.MI_SAMPLES_INFO_URL || '',
-                    BI_SAMPLES_INFO_URL: process.env.BI_SAMPLES_INFO_URL || '',
-                    BI_SAMPLES_REPOSITORY_URL: process.env.BI_SAMPLES_REPOSITORY_URL || '',
-                    BI_PREBUILT_INTEGRATIONS_URL: process.env.BI_PREBUILT_INTEGRATIONS_URL || ''
+                    SAMPLES_INFO_URL: process.env.SAMPLES_INFO_URL || '',
+                    SAMPLES_REPOSITORY_URL: process.env.SAMPLES_REPOSITORY_URL || '',
+                    PREBUILT_INTEGRATIONS_URL: process.env.PREBUILT_INTEGRATIONS_URL || ''
                 }
             });
         });
@@ -254,7 +247,13 @@ export class MainWsManager implements WIVisualizerAPI {
                 resolve({ path: "" });
             } else {
                 const fileOrFolderPath = selectedFileOrFolder[0].fsPath;
-                resolve({ path: fileOrFolderPath });
+                let isDirectory = false;
+                try {
+                    isDirectory = fs.statSync(fileOrFolderPath).isDirectory();
+                } catch {
+                    // ignore stat error
+                }
+                resolve({ path: fileOrFolderPath, isDirectory });
             }
         });
     }
@@ -384,68 +383,54 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async fetchSamplesFromGithub(params: FetchSamplesRequest): Promise<GettingStartedData> {
         return new Promise(async (resolve) => {
-            const url = params.runtime === "WSO2: MI" ? MI_SAMPLES_INFO_URL : BI_SAMPLES_INFO_URL;
-            const prebuiltIntegrations = params.runtime === "WSO2: BI"
-                ? await this.fetchBiPrebuiltIntegrations()
-                : [];
+            if (params.runtime === "WSO2: BI") {
+                const prebuiltIntegrations = await this.fetchBiPrebuiltIntegrations();
+                try {
+                    const { data } = await axios.get(SAMPLES_INFO_URL);
+                    const biSamples: SampleItem[] = Array.isArray(data.samples)
+                        ? data.samples.filter((s: SampleItem) => s.buildPack === "ballerina")
+                        : [];
+                    resolve({
+                        categories: [],
+                        samples: biSamples,
+                        prebuiltIntegrations: [...prebuiltIntegrations],
+                    });
+                } catch (error) {
+                    console.error('Error fetching BI samples:', error);
+                    resolve({
+                        categories: [],
+                        samples: [],
+                        prebuiltIntegrations,
+                    });
+                }
+                return;
+            }
+
             try {
-                const { data } = await axios.get(url);
-                console.log('Fetched samples data:', data);
-
-                const samples = data.Samples;
-                const categories = data.categories;
-
-                let categoriesList: GettingStartedCategory[] = [];
-                for (let i = 0; i < categories.length; i++) {
-                    const cat: GettingStartedCategory = {
-                        id: categories[i][0],
-                        title: categories[i][1],
-                        icon: categories[i][2]
-                    };
-                    categoriesList.push(cat);
-                }
-                let sampleList: GettingStartedSample[] = [];
-                for (let i = 0; i < samples.length; i++) {
-                    const sample: GettingStartedSample = {
-                        category: samples[i][0],
-                        priority: samples[i][1],
-                        title: samples[i][2],
-                        description: samples[i][3],
-                        zipFileName: samples[i][4],
-                        isAvailable: samples[i][5]
-                    };
-
-                    // Hide BI samples that are currently not working in WSO2 Integrator
-                    // until their runtime issues are resolved.
-                    if (params.runtime === "WSO2: BI" && BI_HIDDEN_SAMPLE_IDS.has(sample.zipFileName)) {
-                        continue;
-                    }
-
-                    sampleList.push(sample);
-                }
-
-                const gettingStartedData: GettingStartedData = {
-                    categories: categoriesList,
-                    samples: sampleList,
-                    prebuiltIntegrations,
-                };
-                resolve(gettingStartedData);
-
+                const { data } = await axios.get(SAMPLES_INFO_URL);
+                const miSamples: SampleItem[] = Array.isArray(data.samples)
+                    ? data.samples.filter((s: SampleItem) => s.buildPack === "wso2-mi")
+                    : [];
+                resolve({
+                    categories: [],
+                    samples: miSamples,
+                    prebuiltIntegrations: [],
+                });
             } catch (error) {
-                console.error('Error fetching samples:', error);
+                console.error('Error fetching MI samples:', error);
                 resolve({
                     categories: [],
                     samples: [],
-                    prebuiltIntegrations,
+                    prebuiltIntegrations: [],
                 });
             }
         });
     }
 
-    async fetchBiPrebuiltIntegrations(): Promise<PrebuiltIntegration[]> {
+    async fetchBiPrebuiltIntegrations(): Promise<SampleItem[]> {
         try {
-            const { data } = await axios.get(BI_PREBUILT_INTEGRATIONS_URL);
-            return data.prebuiltIntegrations as PrebuiltIntegration[];
+            const { data } = await axios.get(PREBUILT_INTEGRATIONS_URL);
+            return data.prebuiltIntegrations as SampleItem[];
         } catch (error) {
             console.error("Error fetching BI prebuilt integrations:", error);
             return [];
@@ -457,8 +442,8 @@ export class MainWsManager implements WIVisualizerAPI {
         const projectUri = this.projectUri ?? (workspaceFolders ? workspaceFolders[0].uri.fsPath : "");
 
         if (params.runtime === "WSO2: BI") {
-            const componentPath = params.prebuiltIntegration?.componentPath ?? params.zipFileName;
-            const displayName = params.prebuiltIntegration?.displayName ?? params.zipFileName;
+            const componentPath = params.sampleItem?.componentPath;
+            const displayName = params.sampleItem?.displayName;
             const isPrebuilt = params.itemType === "prebuilt";
 
             if (!componentPath || !displayName) {
@@ -466,10 +451,10 @@ export class MainWsManager implements WIVisualizerAPI {
                 return;
             }
 
-            await handleOpenBISamplesIntegrations(projectUri, {
-                repositoryUrl: params?.prebuiltIntegration?.repositoryUrl ?? BI_SAMPLES_REPOSITORY_URL,
-                branch: params?.prebuiltIntegration?.branch ?? BI_SAMPLES_REPOSITORY_BRANCH,
-                subDirectory: params?.prebuiltIntegration?.subDirectory ?? BI_SAMPLES_REPOSITORY_SUBDIRECTORY,
+            await handleOpenSamples(projectUri, {
+                repositoryUrl: SAMPLES_REPOSITORY_URL,
+                branch: SAMPLES_REPOSITORY_BRANCH,
+                subDirectory: SAMPLES_REPOSITORY_SUBDIRECTORY,
                 componentPath,
                 displayName,
                 sourceLabel: isPrebuilt ? "pre-built integration" : "integration sample",
@@ -481,14 +466,25 @@ export class MainWsManager implements WIVisualizerAPI {
             return;
         }
 
-        if (!params.zipFileName) {
-            void window.showErrorMessage("Sample download details are missing.");
-            return;
-        }
+        if (params.runtime === "WSO2: MI" && params.sampleItem) {
+            const { componentPath, displayName, repositoryUrl, branch, subDirectory } = params.sampleItem;
 
-        if (params.runtime === "WSO2: MI") {
-            const url = `https://mi-connectors.wso2.com/samples/samples/${params.zipFileName}`;
-            handleOpenFile(projectUri, params.zipFileName, url);
+            if (!componentPath || !displayName) {
+                await window.showErrorMessage("Sample download details are missing.");
+                return;
+            }
+
+            await handleOpenSamples(projectUri, {
+                repositoryUrl: repositoryUrl ?? SAMPLES_REPOSITORY_URL,
+                branch: branch ?? SAMPLES_REPOSITORY_BRANCH,
+                subDirectory: subDirectory ?? '',
+                componentPath,
+                displayName,
+                sourceLabel: "integration sample",
+                missingSourceError: "Integration sample source files were not found in the downloaded archive.",
+                preparationErrorLabel: "integration sample",
+            });
+            return;
         }
 
     }
