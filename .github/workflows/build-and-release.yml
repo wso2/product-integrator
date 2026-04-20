@@ -411,7 +411,7 @@ jobs:
         working-directory: .
         run: |
           S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
-          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.pkg" --include "*.dmg"
+          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.dmg"
       
       - name: Upload macOS DMG artifacts
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
@@ -425,24 +425,6 @@ jobs:
       - name: cosign-installer
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: sigstore/cosign-installer@v3.5.0
-      - name: Sign the pkg installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
-        run: |
-          cd ../..
-          cosign sign-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg --output-certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --output-signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --yes
-
-      - name: Verify signature of the pkg installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
-        run: |
-          cd ../..
-          cosign verify-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg --certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-          
-      - name: Generate Hashes for pkg installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
-        run: |
-          cd ../..
-          openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg.sha256 installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.pkg
-
       - name: Sign the dmg installer
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
@@ -919,13 +901,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: Product-Integrator-TAR
-          path: release-files/
-        continue-on-error: true
-
-      - name: Download macOS PKG artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: Product-Integrator-Darwin-PKG-arm64
           path: release-files/
         continue-on-error: true
 
