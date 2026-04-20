@@ -25,7 +25,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/di
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
 +++ product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
-@@ -3,38 +3,32 @@
+@@ -3,38 +3,28 @@
   *  Licensed under the MIT License. See License.txt in the project root for license information.
   *--------------------------------------------------------------------------------------------*/
  
@@ -48,15 +48,12 @@ Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/di
 -		version = `${version} (Universal)`;
 -	}
 +	const version = (productService as IWIProductService).wiversion ?? productService.version ?? 'Unknown';
-+	const builtInExtensions = productService.builtInExtensions?.length
-+		? `\n${localize('aboutBuiltInExtensions', "Built-in Extensions:")}\n${productService.builtInExtensions.filter(ext => ext.name.startsWith('wso2.')).map(extension => `${extension.name.split('.')[1]}: ${extension.version}`).join('\n')}`
-+		: '';
  
 -	const getDetails = (useAgo: boolean): string => {
 +	const getDetails = (): string => {
  		return localize({ key: 'aboutDetail', comment: ['Electron, Chromium, Node.js and V8 are product names that need no translation'] },
 -			"Version: {0}\nCommit: {1}\nDate: {2}\nElectron: {3}\nElectronBuildId: {4}\nChromium: {5}\nNode.js: {6}\nV8: {7}\nOS: {8}",
-+			"Version: {0}\nOS: {1}{2}",
++			"Version: {0}\nOS: {1}",
  			version,
 -			productService.commit || 'Unknown',
 -			productService.date ? `${productService.date}${useAgo ? ' (' + fromNow(new Date(productService.date), true) + ')' : ''}` : 'Unknown',
@@ -65,9 +62,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/di
 -			process.versions['chrome'],
 -			process.versions['node'],
 -			process.versions['v8'],
--			`${osProps.type} ${osProps.arch} ${osProps.release}${isLinuxSnap ? ' snap' : ''}`
-+			`${osProps.type} ${osProps.arch} ${osProps.release}${isLinuxSnap ? ' snap' : ''}`,
-+			builtInExtensions
+ 			`${osProps.type} ${osProps.arch} ${osProps.release}${isLinuxSnap ? ' snap' : ''}`
  		);
  	};
  
@@ -78,3 +73,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/di
  
  	return {
  		title: productService.nameLong,
+ 		details: details,
+ 		detailsToCopy: detailsToCopy
+ 	};
+ }
