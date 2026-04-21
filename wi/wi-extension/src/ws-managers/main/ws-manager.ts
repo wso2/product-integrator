@@ -357,6 +357,10 @@ export class MainWsManager implements WIVisualizerAPI {
         });
     }
 
+    async importProjectFromCapp(): Promise<void> {
+        await commands.executeCommand("MI.importProjectFromCapp");
+    }
+
     async createSiProject(params: CreateSiProjectRequest): Promise<CreateSiProjectResponse> {
         return new Promise(async (resolve, reject) => {
             try {

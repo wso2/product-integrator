@@ -827,6 +827,10 @@ export const WelcomeView: React.FC = () => {
 		wsClient.runCommand({ command: WICommandIds.CancelSignIn, args: [] });
 	};
 
+    const handleImportCapp = () => {
+        wsClient.importProjectFromCapp();
+    }
+
 	const renderCurrentView = () => {
 		switch (currentView) {
 			case ViewState.CREATE_INTEGRATION:
@@ -1123,6 +1127,59 @@ export const WelcomeView: React.FC = () => {
 												</SecondaryRowTitle>
 												<SecondaryRowDescription>
                                                     Import integrations from other vendors and convert them to WSO2 Integrator format.
+												</SecondaryRowDescription>
+											</SecondaryRowContent>
+											<Codicon
+												name="chevron-right"
+												iconSx={{
+													fontSize: "14px",
+													color: "var(--vscode-descriptionForeground)",
+													opacity: 0.6,
+												}}
+											/>
+										</SecondaryActionRow>
+									</SecondaryCardsGrid>
+								</SecondaryCardsSection>
+							</>
+						)}
+
+                        {selectedRuntime === "WSO2: MI" && (
+							<>
+								<MoreToggleWrapper>
+									<MoreDivider />
+									<MoreToggleButton
+										type="button"
+										onClick={() => setShowSecondary(!showSecondary)}
+									>
+										<span>{showSecondary ? "Show less" : "More Actions"}</span>
+										<MoreChevron>
+											<span
+												className={`codicon ${showSecondary ? "codicon-triangle-up" : "codicon-triangle-down"}`}
+											/>
+										</MoreChevron>
+									</MoreToggleButton>
+									<MoreDivider />
+								</MoreToggleWrapper>
+
+								<SecondaryCardsSection
+									style={{
+										maxHeight: showSecondary ? "300px" : "0",
+										opacity: showSecondary ? 1 : 0,
+									}}
+								>
+									<SecondaryCardsGrid>
+										<SecondaryActionRow onClick={handleImportCapp}>
+											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
+												<Codicon
+													name="library"
+													iconSx={{ fontSize: "16px" }}
+													sx={{ width: "16px", height: "16px" }}
+												/>
+											</SecondaryRowIcon>
+											<SecondaryRowContent>
+												<SecondaryRowTitle>Import a CApp</SecondaryRowTitle>
+												<SecondaryRowDescription>
+                                                    Import a CApp to create a new project.
 												</SecondaryRowDescription>
 											</SecondaryRowContent>
 											<Codicon
