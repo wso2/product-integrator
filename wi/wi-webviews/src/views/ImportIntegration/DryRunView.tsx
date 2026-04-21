@@ -149,7 +149,7 @@ export function DryRunView({
             <ButtonWrapper>
                 <ActionButtons
                     primaryButton={{
-                        text: "Next",
+                        text: "Configure Destination",
                         onClick: onNext,
                         disabled: !migrationCompleted || !migrationSuccessful,
                     }}

@@ -502,6 +502,8 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
         setStatus("running");
         wsClient.wizardEnhancementReady().catch((err: unknown) => {
             console.error("[WizardAIEnhancementView] wizardEnhancementReady (resume) failed:", err);
+            userPausedRef.current = true;
+            setStatus("paused");
         });
     }, [wsClient]);
 
