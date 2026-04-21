@@ -400,7 +400,7 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
         if (vscode.workspace.workspaceFolders?.length && context.isInWi) {
             ext.log('Workspace is open but project type is unknown');
             if (selectedProfile !== MI_PROFILE) {
-                vscode.window.showWarningMessage('We couldn\'t detect the project type. Please ensure you have a valid WSO2 Ballerina or Streaming Integrator project open.', { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
+                vscode.window.showWarningMessage('We couldn\'t detect the project type. Please ensure you have a valid WSO2 Integration Project open.', { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
                     if (selection === 'Go to Welcome Screen') {
                         // close workspace
                         vscode.commands.executeCommand('workbench.action.closeFolder');
