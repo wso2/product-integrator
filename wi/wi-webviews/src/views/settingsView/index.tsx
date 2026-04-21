@@ -44,6 +44,7 @@ import {
     HeaderTitle,
     PageBackdrop,
 } from "../shared/FormPageLayout";
+import { SetupContent } from "../setupView";
 
 const PROFILE_OPTIONS: OptionProps[] = SELECTED_PROFILE_VALUES.map((profile) => ({
     id: profile,
@@ -126,7 +127,13 @@ const Loader = styled.div`
     height: 100%;
 `;
 
-export function SettingsView({ onBack }: { onBack?: () => void }) {
+const SetupSeparator = styled.div`
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+`;
+
+export function SettingsView({ onBack, ballerinaUnavailable }: { onBack?: () => void; ballerinaUnavailable?: boolean }) {
     const { wsClient } = useVisualizerContext();
     const [selectedProfile, setSelectedProfile] = useState<SelectedProfileValue>(DEFAULT_PROFILE);
     const [isLoading, setIsLoading] = useState(true);
@@ -251,6 +258,11 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                                 />
                             </DropdownShell>
                         </RuntimeField>
+                        {ballerinaUnavailable && selectedProfile === DEFAULT_PROFILE && (
+                            <SetupSeparator>
+                                <SetupContent compact />
+                            </SetupSeparator>
+                        )}
                     </PanelBody>
                 </FormPanel>
             </PageContainer>

@@ -395,4 +395,11 @@ export interface WIVisualizerAPI {
     abortMigrationAgent: () => Promise<void>;
     checkAIAuth: () => Promise<boolean>;
     triggerAICopilotSignIn: () => Promise<SignInResult>;
+    getBIRuntimeStatus: () => Promise<BIRuntimeStatusResponse>;
+    initBIRuntimeContext: () => Promise<void>;
+}
+
+export interface BIRuntimeStatusResponse {
+    isAvailable: boolean;
+    status: string;
 }

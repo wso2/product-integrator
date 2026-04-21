@@ -55,7 +55,8 @@ const LoadingContainer = styled.div`
 export function CreationView({
     onBack,
     runtime,
-}: { onBack?: () => void; runtime?: WIRuntime }) {
+    ballerinaUnavailable,
+}: { onBack?: () => void; runtime?: WIRuntime; ballerinaUnavailable?: boolean }) {
     const [projectType, setProjectType] = useState<WIRuntime | null>(
         runtime ?? null,
     );
@@ -139,7 +140,7 @@ export function CreationView({
                         </HeaderRow>
                     </FormPanelHeader>
                     <FormBody>
-                        {projectType === "WSO2: BI" && <BIProjectForm />}
+                        {projectType === "WSO2: BI" && <BIProjectForm ballerinaUnavailable={ballerinaUnavailable} />}
                         {projectType === "WSO2: MI" && <MiProjectWizard />}
                         {projectType === "WSO2: SI" && <SiProjectWizard />}
                     </FormBody>

@@ -20,6 +20,7 @@
 
 import {
     BIProjectRequest,
+    BIRuntimeStatusResponse,
     CreateMiProjectRequest,
     CreateMiProjectResponse,
     CreateSiProjectRequest,
@@ -444,6 +445,14 @@ export class WsClient {
 
     public async triggerAICopilotSignIn(): Promise<SignInResult> {
         return this.request("triggerAICopilotSignIn");
+    }
+
+    public getBIRuntimeStatus(): Promise<BIRuntimeStatusResponse> {
+        return this.request("getBIRuntimeStatus");
+    }
+
+    public initBIRuntimeContext(): Promise<void> {
+        return this.request("initBIRuntimeContext");
     }
 
     public async request<TAction extends WIWsMethod>(

@@ -18,7 +18,7 @@
 
 import type { Event } from "vscode";
 import { extensions } from "vscode";
-import { EXTENSION_DEPENDENCIES, WIChatNotify } from "@wso2/wi-core";
+import { EXTENSION_DEPENDENCIES, DownloadProgress, WIChatNotify } from "@wso2/wi-core";
 
 /** Shape of the migration API exposed by the Ballerina extension's `activate()` return value. */
 export interface BallerinaExtMigrationAPI {
@@ -40,12 +40,19 @@ export class BallerinaContext {
     public isNPSupported: boolean = false;
     public isWorkspaceSupported: boolean = false;
     public migration: BallerinaExtMigrationAPI | undefined;
+    public onDownloadProgress: Event<DownloadProgress> | undefined;
+    private _initialized: boolean = false;
+
+    public get isInitialized(): boolean {
+        return this._initialized;
+    }
 
     /**
      * Populate the context from the Ballerina extension's exports.
      * The Ballerina extension exposes these via `ext.exports.ballerinaExtInstance`.
      */
     public init(ballerinaExtExports: any): void {
+        this._initialized = true;
         const instance = ballerinaExtExports?.ballerinaExtInstance;
         if (instance) {
             this.biSupported = instance.biSupported ?? false;
@@ -54,6 +61,9 @@ export class BallerinaContext {
         }
         if (ballerinaExtExports?.migration) {
             this.migration = ballerinaExtExports.migration as BallerinaExtMigrationAPI;
+        }
+        if (ballerinaExtExports?.onDownloadProgress) {
+            this.onDownloadProgress = ballerinaExtExports.onDownloadProgress as Event<DownloadProgress>;
         }
     }
     /**

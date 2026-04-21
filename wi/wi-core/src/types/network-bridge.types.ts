@@ -18,6 +18,7 @@
 
 import {
     BIProjectRequest,
+    BIRuntimeStatusResponse,
     CreateMiProjectRequest,
     CreateMiProjectResponse,
     CreateSiProjectRequest,
@@ -148,6 +149,8 @@ export interface WIWsMethodParamsMap {
     openMigratedProject: void;
     abortMigrationAgent: void; checkAIAuth: void;
     triggerAICopilotSignIn: void;
+    getBIRuntimeStatus: void;
+    initBIRuntimeContext: void;
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: void;
     submitComponents: WICloudSubmitComponentsReq;
@@ -213,6 +216,8 @@ export interface WIWsMethodResultMap {
     openMigratedProject: void;
     abortMigrationAgent: void; checkAIAuth: boolean;
     triggerAICopilotSignIn: SignInResult;
+    getBIRuntimeStatus: BIRuntimeStatusResponse;
+    initBIRuntimeContext: void;
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: WICloudFormContext;
     submitComponents: WICloudSubmitComponentsResp;
