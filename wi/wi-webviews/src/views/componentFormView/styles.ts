@@ -18,7 +18,7 @@
 
 import styled from "@emotion/styled";
 import { VSCodeLink } from "@vscode/webview-ui-toolkit/react";
-import { Button, ThemeColors, Typography } from "@wso2/ui-toolkit";
+import { Button, Typography } from "@wso2/ui-toolkit";
 
 export const PageBackdrop = styled.div`
     min-height: 100vh;
@@ -487,5 +487,9 @@ export const SmVSCodeLinks = styled.div`
 `
 
 export const VSCodeLinkForeground = styled(VSCodeLink)`
+    color: var(--vscode-textLink-foreground);
     font-weight: 500;
+    &:hover {
+        color: var(--vscode-textLink-activeForeground);
+    }
 `
