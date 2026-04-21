@@ -40,21 +40,6 @@
           "default": "WSO2 Integrator: Default",
           "description": "Select the active WSO2 Integrator profile."
         },
-        "integrator.enabledRuntimes.bi": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable WSO2 BI runtime."
-        },
-        "integrator.enabledRuntimes.mi": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable WSO2 MI runtime."
-        },
-        "integrator.enabledRuntimes.si": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable WSO2 SI runtime."
-        },
         "integrator.advanced.cloudEnv": {
           "type": "string",
           "enum": [
