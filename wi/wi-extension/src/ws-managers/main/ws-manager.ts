@@ -345,7 +345,7 @@ export class MainWsManager implements WIVisualizerAPI {
                 const result = await commands.executeCommand("MI.project-explorer.create-project", miCommandParams);
 
                 if (result) {
-                    resolve(result as CreateMiProjectResponse);
+                    openInVSCode((result as CreateMiProjectResponse).filePath);
                 } else {
                     resolve({ filePath: '' });
                 }
