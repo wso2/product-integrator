@@ -52,6 +52,11 @@ if [ ! -f "$ICP_ZIP" ]; then
     exit 1
 fi
 
+if [ ! -f "$JRE_ZIP" ]; then
+    print_error "JRE ZIP file not found: $JRE_ZIP"
+    exit 1
+fi
+
 # Define paths
 STAGE_DIR="$WORK_DIR/staging"
 INTEGRATOR_TARGET="$STAGE_DIR/wso2-integrator"
@@ -108,7 +113,11 @@ print_info "Extracting JRE to shared dependencies directory..."
 rm -rf "$DEPENDENCIES_DIR"
 mkdir -p "$DEPENDENCIES_DIR"
 unzip -o "$JRE_ZIP" -d "$DEPENDENCIES_DIR"
-JRE_FOLDER=$(unzip -Z1 "$JRE_ZIP" | head -1 | cut -d/ -f1)
+JRE_FOLDER=$(unzip -Z1 "$JRE_ZIP" | awk -F/ 'NF > 1 && $1 != "__MACOSX" && $1 != "" {print $1}' | sort -u | head -1)
+if [ -z "$JRE_FOLDER" ]; then
+    print_error "Could not determine JRE folder from zip"
+    exit 1
+fi
 
 rm -rf "$BALLERINA_UNZIPPED_PATH"
 rm -rf "$BALLERINA_TEMP"
@@ -133,7 +142,7 @@ chmod +x "$ICP_TARGET/bin"/*
 ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
 if [ -f "$ICP_SCRIPT" ]; then
     print_info "Modifying icp.sh to use JRE from dependencies ($JRE_FOLDER)"
-    sed -i "s|java|\"\$SCRIPT_DIR\"/../../dependencies/$JRE_FOLDER/bin/java|g" "$ICP_SCRIPT"
+    sed -i "s|\bjava\b|\"\$SCRIPT_DIR\"/../../dependencies/$JRE_FOLDER/bin/java|g" "$ICP_SCRIPT"
 fi
 
 # Set executable permissions

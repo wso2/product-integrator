@@ -1,4 +1,4 @@
-REM Accepts four arguments: ballerina.zip, integrator.zip, ICP.zip, and version
+REM Accepts six arguments: ballerina.zip, ballerina-version, integrator.zip, ICP.zip, jre.zip, and version
 REM Extracts the zip files to their respective payload directories and applies the version to Package.wxs before building the installer
 
 @echo off
@@ -48,7 +48,7 @@ if errorlevel 1 (
 REM Extract ballerina.zip
 echo Extracting Ballerina to payload
 REM Extract distributions directory (actual Ballerina runtime) to components\ballerina
-REM and move dependencies (JDK) to shared components\dependencies directory
+REM and remove docs/examples to reduce installer size
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $extractDir = 'C:\tmp_bal'; Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path $extractDir | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', $extractDir); $unzippedFolder = (Get-ChildItem $extractDir -Directory | Select-Object -First 1).FullName; $ballerinaTarget = '.\WixPackage\payload\Integrator\components\ballerina'; New-Item -ItemType Directory -Force -Path $ballerinaTarget | Out-Null; $distDir = Join-Path $unzippedFolder 'distributions'; if (Test-Path $distDir) { $distFolder = (Get-ChildItem $distDir -Directory | Select-Object -First 1).FullName; if ($distFolder) { Copy-Item -Path \"$distFolder\*\" -Destination $ballerinaTarget -Recurse -Force } }; Remove-Item -Recurse -Force (Join-Path $ballerinaTarget 'docs') -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force (Join-Path $ballerinaTarget 'examples') -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force $extractDir }"
 if errorlevel 1 (
     echo Ballerina extraction failed
@@ -73,7 +73,7 @@ if errorlevel 1 (
 REM Modify icp.bat to use the JRE from shared dependencies directory
 echo Modifying icp.bat to use JRE from dependencies
 if exist ".\WixPackage\payload\Integrator\components\icp\bin\icp.bat" (
-    powershell -nologo -noprofile -command "& { $icpScript = '.\WixPackage\payload\Integrator\components\icp\bin\icp.bat'; $jdkDir = (Get-ChildItem '.\WixPackage\payload\Integrator\components\dependencies' -Directory -ErrorAction SilentlyContinue | Select-Object -First 1).Name; if ($jdkDir) { $content = Get-Content $icpScript -Raw; $javaReplacement = '!SCRIPT_DIR!../../dependencies/' + $jdkDir + '/bin/java'; $newContent = $content -replace '\bjava\b', $javaReplacement; Set-Content -Path $icpScript -Value $newContent -NoNewline; Write-Host \"Updated icp.bat to use JDK: $jdkDir\" } else { Write-Host 'Warning: JDK folder not found in dependencies' } }"
+    powershell -nologo -noprofile -command "& { $icpScript = '.\WixPackage\payload\Integrator\components\icp\bin\icp.bat'; $jreDir = (Get-ChildItem '.\WixPackage\payload\Integrator\components\dependencies' -Directory -ErrorAction SilentlyContinue | Select-Object -First 1).Name; if ($jreDir) { $content = Get-Content $icpScript -Raw; $javaReplacement = '!SCRIPT_DIR!../../dependencies/' + $jreDir + '/bin/java'; $newContent = $content -replace '\bjava\b', $javaReplacement; Set-Content -Path $icpScript -Value $newContent -NoNewline; Write-Host \"Updated icp.bat to use JRE: $jreDir\" } else { Write-Host 'Warning: JRE folder not found in dependencies' } }"
 ) else (
     echo Warning: icp.bat not found in ICP bin directory
 )
@@ -113,7 +113,7 @@ for %%L in (W X Y Z) do (
 )
 if not defined BUILD_DRIVE (
     echo ERROR: No available drive letter found ^(W-Z all in use or subst failed^)
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
     exit /b 1
 )
@@ -121,7 +121,7 @@ pushd %BUILD_DRIVE%:\
 if errorlevel 1 (
     echo ERROR: pushd into %BUILD_DRIVE%:\ failed
     subst %BUILD_DRIVE%: /D >nul 2>&1
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
     exit /b 1
 )
@@ -131,7 +131,7 @@ if errorlevel 1 (
     echo CustomAction1 build failed
     popd
     subst %BUILD_DRIVE%: /D
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
 dotnet build .\WixPackage\WixPackage.wixproj -p:Platform=x64 -p:Configuration=Release -maxcpucount:1 -v:detailed
@@ -139,7 +139,7 @@ if errorlevel 1 (
     echo WixPackage build failed
     popd
     subst %BUILD_DRIVE%: /D
-    powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
+    powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
 
@@ -157,7 +157,7 @@ if exist "%MSI_ORIG%" (
 )
 
 REM Revert version placeholder in Package.wxs
-powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '%WIX_VERSION%', '@VERSION@' | Set-Content '.\WixPackage\Package.wxs'"
+powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
 REM Remove payload and resources directories after build
 if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
 endlocal
