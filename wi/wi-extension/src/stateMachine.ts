@@ -90,6 +90,10 @@ function getStartupProfileFromInstalledExtensions(): SelectedProfileValue | unde
     const hasMIExtension = Boolean(vscode.extensions.getExtension(EXTENSION_DEPENDENCIES.MI));
     const hasSIExtension = Boolean(vscode.extensions.getExtension(EXTENSION_DEPENDENCIES.SI));
 
+    if (hasBIExtension && !hasMIExtension && !hasSIExtension) {
+        return DEFAULT_PROFILE;
+    }
+
     if (!hasBIExtension && hasMIExtension && !hasSIExtension) {
         return MI_PROFILE;
     }
@@ -99,18 +103,6 @@ function getStartupProfileFromInstalledExtensions(): SelectedProfileValue | unde
     }
 
     return undefined;
-}
-
-function resolveSelectedProfileForStartup(
-    selectedProfile: string | undefined
-): SelectedProfileValue | undefined {
-    const startupProfile = getStartupProfileFromInstalledExtensions();
-
-    if (startupProfile) {
-        return startupProfile;
-    }
-
-    return isSelectedProfileValue(selectedProfile) ? selectedProfile : undefined;
 }
 
 async function syncStartupSelectedProfile(): Promise<void> {
@@ -143,6 +135,22 @@ async function initializeRuntimeExtension(
     await extensionAPIs.initialize(extensionDependency);
 }
 
+async function ensureSelectedProfileExtensionInstalled(
+    extensionAPIs: ExtensionAPIs
+): Promise<ProjectType[]> {
+    const selectedModes = getSelectedProfileMode();
+
+    for (const mode of selectedModes) {
+        try {
+            await initializeRuntimeExtension(extensionAPIs, mode);
+        } catch (error) {
+            ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
+        }
+    }
+
+    return selectedModes;
+}
+
 async function syncSelectedProfileWithDetectedProject(projectType: ProjectType): Promise<void> {
     const config = vscode.workspace.getConfiguration('integrator');
     const selectedProfile = config.get<string>('selectedProfile');
@@ -163,7 +171,7 @@ async function syncSelectedProfileWithDetectedProject(projectType: ProjectType):
  */
 function getSelectedProfileMode(): ProjectType[] {
     const config = vscode.workspace.getConfiguration("integrator");
-    const selectedProfile = resolveSelectedProfileForStartup(config.get<string>('selectedProfile'));
+    const selectedProfile = config.get<string>('selectedProfile');
 
     if (isSelectedProfileValue(selectedProfile)) {
         return [projectTypeBySelectedProfileValue[selectedProfile]];
@@ -314,17 +322,8 @@ const stateMachine = createMachine<MachineContext>({
                 const runtimeSettingChanged = event.affectsConfiguration('integrator.selectedProfile');
 
                 if (runtimeSettingChanged) {
-                    // get the updated mode from configuration
-                    const newMode = getSelectedProfileMode();
+                    const newMode = await ensureSelectedProfileExtensionInstalled(context.extensionAPIs);
                     ext.log(`Configuration changed: selectedProfileMode = ${newMode}`);
-
-                    for (const mode of newMode) {
-                        try {
-                            await initializeRuntimeExtension(context.extensionAPIs, mode);
-                        } catch (error) {
-                            ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
-                        }
-                    }
 
                     stateService.send({
                         type: 'UPDATE_MODE',
@@ -439,17 +438,10 @@ async function detectProjectType(): Promise<{
 }> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
-    // Initialize the runtime associated with the selected profile, even if we couldn't detect the project type.
-    const selectedModes = getSelectedProfileMode();
     const extensionAPIs = new ExtensionAPIs();
-    for (const mode of selectedModes) {
-        try {
-            await initializeRuntimeExtension(extensionAPIs, mode);
-        } catch (error) {
-            ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
-            // Don't throw the error, as we want to continue initializing other extensions and detect project type based on available extensions
-        }
-    }
+    // Ensure the extension for the configured selected profile is installed,
+    // even if we couldn't detect the project type yet.
+    await ensureSelectedProfileExtensionInstalled(extensionAPIs);
 
     const projectChecks: Array<{
         projectType: ProjectType;
@@ -501,6 +493,7 @@ export const StateMachine = {
         await syncStartupSelectedProfile();
         ext.log('Starting state machine');
         stateService.start();
+        stateService.getSnapshot().context.mode = getSelectedProfileMode();
     },
     getContext: () => stateService.getSnapshot().context,
     setCurrentView: (view: ViewType) => {
