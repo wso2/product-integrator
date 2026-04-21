@@ -76,8 +76,8 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const activeRunRef = useRef<"dryRun" | "migration" | null>(null);
 
     const defaultSteps = aiEnhancementActive
-        ? ["Configure Source", "Report Generation", "Configure Migration", "Migration", "AI Enhancement"]
-        : ["Configure Source", "Report Generation", "Configure Migration", "Migration"];
+        ? ["Configure Source", "Report Generation", "Configure Destination", "Static Migration", "AI Enhancement"]
+        : ["Configure Source", "Report Generation", "Configure Destination", "Static Migration"];
 
     // isMultiProject for ConfigureProjectForm is derived from the source config (step 0 selection)
     const boolParamKey = selectedIntegration?.parameters.find(p => p.valueType === "boolean")?.key;

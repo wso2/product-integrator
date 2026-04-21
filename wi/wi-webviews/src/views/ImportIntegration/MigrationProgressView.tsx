@@ -107,7 +107,7 @@ export function MigrationProgressView({
                 <ButtonWrapper>
                     <ActionButtons
                         primaryButton={{
-                            text: "Next",
+                            text: "Configure Destination",
                             onClick: onDone,
                             disabled: !migrationCompleted || !migrationSuccessful
                         }}
