@@ -935,9 +935,12 @@ export const WelcomeView: React.FC = () => {
 									</CardIcon>
 								</CardIconContainer>
 								<CardContent>
-									<CardTitle>Create New Integration</CardTitle>
+                                    <CardTitle>{selectedRuntime === "WSO2: BI" ? "Create New Integration" : "Create New Project"}</CardTitle>
 									<CardDescription>
-                                        Start building a new integration.
+                                        {selectedRuntime === "WSO2: BI" ? 
+                                            "Start building a new integration." : 
+                                            "Start building a new project."
+                                        }
 									</CardDescription>
 									<StyledButton
 										isPrimary={true}
@@ -962,9 +965,12 @@ export const WelcomeView: React.FC = () => {
 									</CardIcon>
 								</CardIconContainer>
 								<CardContent>
-									<CardTitle>Open Integration</CardTitle>
+									<CardTitle>{selectedRuntime === "WSO2: BI" ? "Open Integration" : "Open Project"}</CardTitle>
 									<CardDescription>
-                                        Open an existing integration and continue building your solution.
+                                        {selectedRuntime === "WSO2: BI" ? 
+                                            "Open an existing integration and continue building your solution." : 
+                                            "Open an existing project and continue building your solution."
+                                        }
 									</CardDescription>
 									<StyledButton
 										onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
