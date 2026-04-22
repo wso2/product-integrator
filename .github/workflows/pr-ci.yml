@@ -19,7 +19,6 @@ jobs:
   compile-integrator:
     name: Compile Integrator (No Installers)
     uses: ./.github/workflows/compile.yml
-    secrets: inherit
     with:
       runOnAWS: false
       build_packed_installers: false
