@@ -218,6 +218,10 @@ export class WsClient {
         return this.request("createMiProject", params);
     }
 
+    public importProjectFromCapp(): Promise<void> {
+        return this.request("importProjectFromCapp");
+    }
+
     public createSiProject(params: CreateSiProjectRequest): Promise<CreateSiProjectResponse> {
         return this.request("createSiProject", params);
     }

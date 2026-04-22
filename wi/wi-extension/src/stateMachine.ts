@@ -364,6 +364,7 @@ const stateMachine = createMachine<MachineContext>({
 
 async function activateExtensionsBasedOnProjectType(context: MachineContext): Promise<void> {
     ext.log(`Activating extensions for project type: ${context.projectType}`);
+    const selectedProfile = vscode.workspace.getConfiguration('integrator').get<string>('selectedProfile');
 
     // Create webview manager
     context.webviewManager = new WebviewManager(context.projectUri);
@@ -398,14 +399,16 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
         // if a folder/workspace is open but we couldn't detect the project type, we should show an popup warning the user that the extension couldn't detect the project type
         if (vscode.workspace.workspaceFolders?.length && context.isInWi) {
             ext.log('Workspace is open but project type is unknown');
-            vscode.window.showWarningMessage('We couldn\'t detect the project type. Please ensure you have a valid WSO2 Ballerina, Micro Integrator, or Streaming Integrator project open.', { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
-                if (selection === 'Go to Welcome Screen') {
-                    // close workspace
-                    vscode.commands.executeCommand('workbench.action.closeFolder');
-                } else if (selection === 'Open another folder') {
-                    vscode.commands.executeCommand('workbench.action.files.openFolder');
-                }
-            });
+            if (selectedProfile !== MI_PROFILE) {
+                vscode.window.showWarningMessage('We couldn\'t detect the project type. Please ensure you have a valid WSO2 Integration Project open.', { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
+                    if (selection === 'Go to Welcome Screen') {
+                        // close workspace
+                        vscode.commands.executeCommand('workbench.action.closeFolder');
+                    } else if (selection === 'Open another folder') {
+                        vscode.commands.executeCommand('workbench.action.files.openFolder');
+                    }
+                });
+            }
         } else {
             ext.log('No workspace open');
             vscode.commands.executeCommand('setContext', 'WI.projectType', 'none');

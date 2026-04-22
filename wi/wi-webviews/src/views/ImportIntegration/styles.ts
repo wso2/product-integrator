@@ -36,7 +36,7 @@ export const HeaderSubtitle = _HeaderSubtitle;
 export const IconButton = _BackButton;
 
 export const PageContainer = styled.div`
-    max-width: 960px;
+    max-width: 1100px;
     margin: 0 auto;
     min-height: calc(100vh - 52px);
     display: flex;
@@ -426,7 +426,7 @@ export const RadioOption = styled.label<{ selected: boolean }>`
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 10px 12px;
+    padding: 12px;
     border-radius: 8px;
     cursor: pointer;
     border: 1px solid ${(props: { selected: boolean }) =>

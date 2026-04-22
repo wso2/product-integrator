@@ -321,6 +321,7 @@ export class BridgeLayer {
         registerRoute("createMiProject", async (request) =>
             wsManager.createMiProject(request.params as CreateMiProjectRequest)
         );
+        registerRoute("importProjectFromCapp", async () => wsManager.importProjectFromCapp());
         registerRoute("createSiProject", async (request) =>
             wsManager.createSiProject(request.params as CreateSiProjectRequest)
         );

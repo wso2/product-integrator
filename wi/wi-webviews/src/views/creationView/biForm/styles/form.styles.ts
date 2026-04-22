@@ -150,7 +150,7 @@ export const CollapsibleSectionWrapper = styled.div<{ isExpanded: boolean }>`
     border: 1px solid var(--vscode-panel-border);
     border-radius: 4px;
     margin-bottom: 12px;
-    overflow: hidden;
+    overflow: ${(props: { isExpanded: boolean }) => props.isExpanded ? 'visible' : 'hidden'};
     transition: border-color 0.2s ease;
 
     &:hover {
@@ -165,8 +165,8 @@ export const CollapsibleHeader = styled.div<{ isExpanded: boolean }>`
     padding: 12px 16px;
     cursor: pointer;
     user-select: none;
-    background-color: ${(props: { isExpanded: boolean }) => props.isExpanded 
-        ? 'var(--vscode-sideBar-background)' 
+    background-color: ${(props: { isExpanded: boolean }) => props.isExpanded
+        ? 'var(--vscode-sideBar-background)'
         : 'transparent'};
     transition: background-color 0.2s ease;
 
@@ -202,9 +202,9 @@ export const ChevronIcon = styled.div<{ isExpanded: boolean }>`
 `;
 
 export const CollapsibleContent = styled.div<{ isExpanded: boolean }>`
-    max-height: ${(props: { isExpanded: boolean }) => props.isExpanded ? '500px' : '0'};
+    max-height: ${(props: { isExpanded: boolean }) => props.isExpanded ? '2000px' : '0'};
     opacity: ${(props: { isExpanded: boolean }) => props.isExpanded ? 1 : 0};
-    overflow: hidden;
+    overflow: ${(props: { isExpanded: boolean }) => props.isExpanded ? 'visible' : 'hidden'};
     transition: max-height 0.3s ease, opacity 0.2s ease;
     padding: ${(props: { isExpanded: boolean }) => props.isExpanded ? '16px' : '0 16px'};
     border-top: ${(props: { isExpanded: boolean }) => props.isExpanded ? '1px solid var(--vscode-panel-border)' : 'none'};
@@ -237,9 +237,9 @@ export const RadioOption = styled.label<{ isSelected: boolean }>`
     padding: 12px;
     border-radius: 6px;
     cursor: pointer;
-    border: 1px solid ${(props: { isSelected: boolean }) => 
+    border: 1px solid ${(props: { isSelected: boolean }) =>
         props.isSelected ? 'var(--vscode-focusBorder)' : 'var(--vscode-panel-border)'};
-    background-color: ${(props: { isSelected: boolean }) => 
+    background-color: ${(props: { isSelected: boolean }) =>
         props.isSelected ? 'var(--vscode-list-hoverBackground)' : 'transparent'};
     transition: all 0.15s ease;
 

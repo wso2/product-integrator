@@ -860,6 +860,10 @@ export const WelcomeView: React.FC = () => {
 		wsClient.runCommand({ command: WICommandIds.CancelSignIn, args: [] });
 	};
 
+    const handleImportCapp = () => {
+        wsClient.importProjectFromCapp();
+    }
+
 	const renderCurrentView = () => {
         // While we're still determining which runtime is active, show a full-page
         // spinner so the banner never flashes.
@@ -998,9 +1002,12 @@ export const WelcomeView: React.FC = () => {
 											</CardIcon>
 										</CardIconContainer>
 										<CardContent>
-											<CardTitle>Create New Integration</CardTitle>
+											<CardTitle>{selectedRuntime === "WSO2: BI" ? "Create New Integration" : "Create New Project"}</CardTitle>
 											<CardDescription>
-												Start building a new integration.
+												{selectedRuntime === "WSO2: BI" ?
+                                            "Start building a new integration." :
+                                            "Start building a new project."
+                                        }
 											</CardDescription>
 											<StyledButton
 												isPrimary={true}
@@ -1030,9 +1037,12 @@ export const WelcomeView: React.FC = () => {
 											</CardIcon>
 										</CardIconContainer>
 										<CardContent>
-											<CardTitle>Open Integration</CardTitle>
+											<CardTitle>{selectedRuntime === "WSO2: BI" ? "Open Integration" : "Open Project"}</CardTitle>
 											<CardDescription>
-												Open an existing integration and continue building your solution.
+												{selectedRuntime === "WSO2: BI" ?
+                                            "Open an existing integration and continue building your solution." :
+                                            "Open an existing project and continue building your solution."
+                                        }
 											</CardDescription>
 											<StyledButton
 												disabled={biUnavailable}
@@ -1222,8 +1232,60 @@ export const WelcomeView: React.FC = () => {
 										</SecondaryCardsSection>
 									</>
 								)}
+
+		{selectedRuntime === "WSO2: MI" && (
+							<>
+								<MoreToggleWrapper>
+									<MoreDivider />
+									<MoreToggleButton
+										type="button"
+										onClick={() => setShowSecondary(!showSecondary)}
+									>
+										<span>{showSecondary ? "Show less" : "More Actions"}</span>
+										<MoreChevron>
+											<span
+												className={`codicon ${showSecondary ? "codicon-triangle-up" : "codicon-triangle-down"}`}
+											/>
+										</MoreChevron>
+									</MoreToggleButton>
+									<MoreDivider />
+								</MoreToggleWrapper>
+
+								<SecondaryCardsSection
+									style={{
+										maxHeight: showSecondary ? "300px" : "0",
+										opacity: showSecondary ? 1 : 0,
+									}}
+								>
+									<SecondaryCardsGrid>
+										<SecondaryActionRow onClick={handleImportCapp}>
+											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
+												<Codicon
+													name="library"
+													iconSx={{ fontSize: "16px" }}
+													sx={{ width: "16px", height: "16px" }}
+												/>
+											</SecondaryRowIcon>
+											<SecondaryRowContent>
+												<SecondaryRowTitle>Import a CApp</SecondaryRowTitle>
+												<SecondaryRowDescription>
+                                                    Import a CApp to create a new project.
+												</SecondaryRowDescription>
+											</SecondaryRowContent>
+											<Codicon
+												name="chevron-right"
+												iconSx={{
+													fontSize: "14px",
+													color: "var(--vscode-descriptionForeground)",
+													opacity: 0.6,
+												}}
+											/>
+										</SecondaryActionRow>
+									</SecondaryCardsGrid>
+								</SecondaryCardsSection>
 							</>
 						)}
+					</>				)}
 					</CardsContainer>
 
 					{isRecentProjectsLoaded && (

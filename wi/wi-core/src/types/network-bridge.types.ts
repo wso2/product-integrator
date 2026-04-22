@@ -124,6 +124,7 @@ export interface WIWsMethodParamsMap {
     getSubFolderNames: GetSubFoldersRequest;
     askProjectDirPath: void;
     createMiProject: CreateMiProjectRequest;
+    importProjectFromCapp: void;
     createSiProject: CreateSiProjectRequest;
     fetchSamplesFromGithub: FetchSamplesRequest;
     downloadSelectedSampleFromGithub: SampleDownloadRequest;
@@ -191,6 +192,7 @@ export interface WIWsMethodResultMap {
     getSubFolderNames: GetSubFoldersResponse;
     askProjectDirPath: ProjectDirResponse;
     createMiProject: CreateMiProjectResponse;
+    importProjectFromCapp: void;
     createSiProject: CreateSiProjectResponse;
     fetchSamplesFromGithub: GettingStartedData;
     downloadSelectedSampleFromGithub: void;
