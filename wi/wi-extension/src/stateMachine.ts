@@ -85,9 +85,10 @@ const extensionDependencyByProjectType: Partial<Record<ProjectType, string>> = {
 };
 
 function getStartupProfileFromInstalledExtensions(): SelectedProfileValue | undefined {
-    const hasBIExtension = Boolean(vscode.extensions.getExtension(EXTENSION_DEPENDENCIES.BALLERINA));
-    const hasMIExtension = Boolean(vscode.extensions.getExtension(EXTENSION_DEPENDENCIES.MI));
-    const hasSIExtension = Boolean(vscode.extensions.getExtension(EXTENSION_DEPENDENCIES.SI));
+    const extensionAPIs = stateService.getSnapshot().context.extensionAPIs;
+    const hasBIExtension = extensionAPIs.isBIAvailable();
+    const hasMIExtension = extensionAPIs.isMIAvailable();
+    const hasSIExtension = extensionAPIs.isSIAvailable();
 
     if (hasBIExtension && !hasMIExtension && !hasSIExtension) {
         return DEFAULT_PROFILE;
