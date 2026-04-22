@@ -73,9 +73,6 @@ import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
 import { ballerinaContext } from "../../bi/ballerinaContext";
 const platform = getPlatform();
 const SAMPLES_INFO_URL = process.env.SAMPLES_INFO_URL;
-const SAMPLES_REPOSITORY_URL = process.env.SAMPLES_REPOSITORY_URL;
-const SAMPLES_REPOSITORY_BRANCH = 'main';
-const SAMPLES_REPOSITORY_SUBDIRECTORY = '/ballerina-integrator';
 const PREBUILT_INTEGRATIONS_URL = process.env.PREBUILT_INTEGRATIONS_URL;
 
 export class MainWsManager implements WIVisualizerAPI {
@@ -444,21 +441,21 @@ export class MainWsManager implements WIVisualizerAPI {
     async downloadSelectedSampleFromGithub(params: SampleDownloadRequest): Promise<void> {
         const workspaceFolders = workspace.workspaceFolders;
         const projectUri = this.projectUri ?? (workspaceFolders ? workspaceFolders[0].uri.fsPath : "");
+        const sampleItem = params.sampleItem;
 
-        if (params.runtime === "WSO2: BI") {
-            const componentPath = params.sampleItem?.componentPath;
-            const displayName = params.sampleItem?.displayName;
+        if ((params.runtime === "WSO2: BI" || params.runtime === "WSO2: MI") && sampleItem) {
+            const { componentPath, displayName, repositoryUrl, branch, subDirectory } = sampleItem;
             const isPrebuilt = params.itemType === "prebuilt";
 
-            if (!componentPath || !displayName) {
+            if (!componentPath || !displayName || !repositoryUrl) {
                 await window.showErrorMessage("Sample download details are missing.");
                 return;
             }
 
             await handleOpenSamples(projectUri, {
-                repositoryUrl: SAMPLES_REPOSITORY_URL,
-                branch: SAMPLES_REPOSITORY_BRANCH,
-                subDirectory: SAMPLES_REPOSITORY_SUBDIRECTORY,
+                repositoryUrl,
+                branch: branch ?? "main",
+                subDirectory: subDirectory ?? "",
                 componentPath,
                 displayName,
                 sourceLabel: isPrebuilt ? "pre-built integration" : "integration sample",
@@ -467,30 +464,7 @@ export class MainWsManager implements WIVisualizerAPI {
                     : "Integration sample source files were not found in the downloaded archive.",
                 preparationErrorLabel: isPrebuilt ? "pre-built integration" : "integration sample",
             });
-            return;
         }
-
-        if (params.runtime === "WSO2: MI" && params.sampleItem) {
-            const { componentPath, displayName, repositoryUrl, branch, subDirectory } = params.sampleItem;
-
-            if (!componentPath || !displayName) {
-                await window.showErrorMessage("Sample download details are missing.");
-                return;
-            }
-
-            await handleOpenSamples(projectUri, {
-                repositoryUrl: repositoryUrl ?? SAMPLES_REPOSITORY_URL,
-                branch: branch ?? SAMPLES_REPOSITORY_BRANCH,
-                subDirectory: subDirectory ?? '',
-                componentPath,
-                displayName,
-                sourceLabel: "integration sample",
-                missingSourceError: "Integration sample source files were not found in the downloaded archive.",
-                preparationErrorLabel: "integration sample",
-            });
-            return;
-        }
-
     }
 
     private async getLangClient() {
