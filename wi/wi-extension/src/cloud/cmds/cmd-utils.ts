@@ -372,8 +372,9 @@ export const getUserInfoForCmd = async (message: string): Promise<UserInfo | nul
 	let userInfo = ext.authProvider?.getState().state.userInfo;
 	const extensionName = webviewStateStore.getState().state.extensionName;
 	if (!userInfo) {
+		const platform = extensionName === "Devant" ? "WSO2 Cloud" : extensionName;
 		const loginSelection = await window.showInformationMessage(
-			`You are not logged into ${extensionName}.`,
+			`You are not logged into ${platform}.`,
 			{ modal: true, detail: `Please login to continue and ${message}` },
 			"Login",
 		);
