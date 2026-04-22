@@ -24,3 +24,4 @@ jobs:
       runOnAWS: false
       build_packed_installers: false
       ballerina_extension_source: github
+      mi_extension_source: github
