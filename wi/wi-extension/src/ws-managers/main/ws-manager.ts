@@ -739,9 +739,12 @@ export class MainWsManager implements WIVisualizerAPI {
         if (!ext.isActive) {
             await ext.activate();
         }
-        if (!ballerinaContext.isInitialized) {
-            ballerinaContext.init(ext.exports);
-            BridgeLayer.setupDownloadProgressSubscription();
-        }
+        // Always run both so the download-progress subscription is wired even when
+        // ballerinaContext was previously initialised via a different code path
+        // init() re-assigns fields from the extension
+        // exports each time; setupDownloadProgressSubscription() is internally guarded
+        // against double-subscription.
+        ballerinaContext.init(ext.exports);
+        BridgeLayer.setupDownloadProgressSubscription();
     }
 }

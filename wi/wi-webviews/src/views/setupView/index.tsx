@@ -168,6 +168,10 @@ const CompactHeader = styled.div`
     display: flex;
     align-items: flex-start;
     gap: 10px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--vscode-editorWarning-foreground, #cca700);
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #cca700) 6%, transparent);
 `;
 
 const CompactWarningIcon = styled.div`
@@ -250,7 +254,7 @@ export function SetupContent({ onBack, compact }: SetupContentProps) {
     const [isStarting, setIsStarting] = useState(false);
 
     useEffect(() => {
-        wsClient.onDownloadProgress((p: DownloadProgress) => setProgress(p));
+        return wsClient.onDownloadProgress((p: DownloadProgress) => setProgress(p));
     }, [wsClient]);
 
     const handleSetup = async () => {

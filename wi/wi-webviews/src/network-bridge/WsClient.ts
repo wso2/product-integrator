@@ -298,8 +298,9 @@ export class WsClient {
         this.stateChangedListeners.add(callback);
     }
 
-    public onDownloadProgress(callback: (progress: DownloadProgress) => void) {
+    public onDownloadProgress(callback: (progress: DownloadProgress) => void): () => void {
         this.downloadProgressListeners.add(callback);
+        return () => this.downloadProgressListeners.delete(callback);
     }
 
     public onMigrationToolStateChanged(callback: (state: string) => void) {

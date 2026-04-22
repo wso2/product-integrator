@@ -153,7 +153,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     useEffect(() => {
         getMigrationTools();
 
-        wsClient.onDownloadProgress((progressUpdate) => {
+        const unsubscribeProgress = wsClient.onDownloadProgress((progressUpdate) => {
             setToolPullProgress(progressUpdate);
             if (progressUpdate.success) {
                 setPullingTool(false);
@@ -176,6 +176,8 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
         wsClient.onMigratedProject((project) => {
             setMigratedProjects((prevProjects) => [...prevProjects, project]);
         });
+
+        return unsubscribeProgress;
     }, [wsClient]);
 
     useEffect(() => {

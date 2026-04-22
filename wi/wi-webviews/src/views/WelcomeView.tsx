@@ -48,6 +48,16 @@ enum ViewState {
     OPEN_PROJECT = "open_project",
 }
 
+const BALLERINA_MISSING_ACTION_TOOLTIP =
+    "Ballerina distribution is missing. Use Configure to set it up";
+const BALLERINA_MISSING_CONFIGURE_TOOLTIP =
+    "Ballerina distribution is missing. Click to set it up";
+const DISABLED_ROW_STYLE: React.CSSProperties = {
+    opacity: 0.5,
+    cursor: "not-allowed",
+    pointerEvents: "none",
+};
+
 const Wrapper = styled.div`
     max-width: 100%;
     margin: 0;
@@ -700,6 +710,8 @@ export const WelcomeView: React.FC = () => {
     // Runs the Ballerina activation check in the background,
     // after the runtime is already known. This way the welcome cards render
     // immediately and only disable actions if Ballerina is definitely unavailable.
+    // wsClient is intentionally omitted from the dependency array — it is a stable
+    // singleton and the check should only re-run when selectedRuntime changes.
     useEffect(() => {
         if (selectedRuntime !== "WSO2: BI" || biStatusCheckDone.current) {
             return;
@@ -711,7 +723,8 @@ export const WelcomeView: React.FC = () => {
         }).catch(() => {
             // If the check fails, let the user proceed — do not block the welcome view.
         });
-    }, [selectedRuntime, wsClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedRuntime]);
 
     useEffect(() => {
         if (currentView !== ViewState.WELCOME) {
@@ -936,7 +949,7 @@ export const WelcomeView: React.FC = () => {
 						<ConfigureBtn
 							type="button"
 							onClick={goToSettings}
-							title={biUnavailable ? "Ballerina distribution is missing — click to set up" : undefined}
+							title={biUnavailable ? BALLERINA_MISSING_CONFIGURE_TOOLTIP : undefined}
 						>
 							<Codicon
 								name="settings-gear"
@@ -973,7 +986,7 @@ export const WelcomeView: React.FC = () => {
 									<ActionCard
 										disabled={biUnavailable}
 										onClick={biUnavailable ? undefined : goToCreateIntegration}
-										title={biUnavailable ? "Ballerina distribution is missing — use Configure to set it up" : undefined}
+										title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
 									>
 										<CardIconContainer>
 											<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-primary-deep) 100%)">
@@ -1005,7 +1018,7 @@ export const WelcomeView: React.FC = () => {
 									<ActionCard
 										disabled={biUnavailable}
 										onClick={biUnavailable ? undefined : openIntegrationFileBrowser}
-										title={biUnavailable ? "Ballerina distribution is missing — use Configure to set it up" : undefined}
+										title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
 									>
 										<CardIconContainer>
 											<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-accent-alt) 100%)">
@@ -1037,7 +1050,7 @@ export const WelcomeView: React.FC = () => {
 										<ActionCard
 											disabled={biUnavailable}
 											onClick={biUnavailable ? undefined : goToSamples}
-											title={biUnavailable ? "Ballerina distribution is missing — use Configure to set it up" : undefined}
+											title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
 										>
 											<CardIconContainer>
 												<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-alt) 100%)">
@@ -1094,8 +1107,8 @@ export const WelcomeView: React.FC = () => {
 											<SecondaryCardsGrid>
 												<SecondaryActionRow
 													onClick={biUnavailable ? undefined : goToCreateLibrary}
-													style={biUnavailable ? { opacity: 0.5, cursor: "not-allowed", pointerEvents: "none" } : undefined}
-													title={biUnavailable ? "Ballerina distribution is missing — use Configure to set it up" : undefined}
+													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
+													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
 												>
 													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 														<Codicon
@@ -1122,8 +1135,8 @@ export const WelcomeView: React.FC = () => {
 
 												<SecondaryActionRow
 													onClick={biUnavailable ? undefined : goToCreateProject}
-													style={biUnavailable ? { opacity: 0.5, cursor: "not-allowed", pointerEvents: "none" } : undefined}
-													title={biUnavailable ? "Ballerina distribution is missing — use Configure to set it up" : undefined}
+													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
+													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
 												>
 													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 														<Codicon
@@ -1150,8 +1163,8 @@ export const WelcomeView: React.FC = () => {
 
 												<SecondaryActionRow
 													onClick={biUnavailable ? undefined : handleProjectDirSelection}
-													style={biUnavailable ? { opacity: 0.5, cursor: "not-allowed", pointerEvents: "none" } : undefined}
-													title={biUnavailable ? "Ballerina distribution is missing — use Configure to set it up" : undefined}
+													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
+													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
 												>
 													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 														<Codicon
@@ -1178,8 +1191,8 @@ export const WelcomeView: React.FC = () => {
 
 												<SecondaryActionRow
 													onClick={biUnavailable ? undefined : goToImportExternal}
-													style={biUnavailable ? { opacity: 0.5, cursor: "not-allowed", pointerEvents: "none" } : undefined}
-													title={biUnavailable ? "Ballerina distribution is missing — use Configure to set it up" : undefined}
+													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
+													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
 												>
 													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 														<Codicon
