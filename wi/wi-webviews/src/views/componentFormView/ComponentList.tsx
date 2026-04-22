@@ -18,7 +18,7 @@
 
 import React from "react";
 import { CheckBox } from "@wso2/ui-toolkit";
-import { getIntegrationScopeText, ICreateNewIntegrationCmdIntegrations, Project } from "@wso2/wso2-platform-core";
+import { DevantScopes, getIntegrationScopeText, ICreateNewIntegrationCmdIntegrations, Project } from "@wso2/wso2-platform-core";
 import {
 	CheckboxCell,
 	ComponentInfo,
@@ -84,6 +84,7 @@ export function ComponentList({
 	onEditStart,
 }: ComponentListProps) {
 	const hasSelected = selectedCount > 0;
+	const deployableCount = integrations.filter((e) => !e.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY)).length;
 	const { wsClient } = useVisualizerContext();
 	const { consoleUrl } = useCloudContext();
 
@@ -95,7 +96,7 @@ export function ComponentList({
 		<ComponentListSection>
 			<ComponentListHeader>
 				<ComponentListLabel>{isBatch ? <>Select Integrations to Deploy to {projectLink} in WSO2 Cloud</> : <>Deploy integration to {projectLink} in WSO2 Cloud</>}</ComponentListLabel>
-				{isBatch && <SelectionCount>{selectedCount} of {integrations.length} selected</SelectionCount>}
+				{isBatch && <SelectionCount>{selectedCount} of {deployableCount} selected</SelectionCount>}
 			</ComponentListHeader>
 
 			<ComponentListContainer>
@@ -106,6 +107,7 @@ export function ComponentList({
 					const currentName = state?.displayName ?? entry.name;
 					const nameError = state?.displayNameError;
 					const isLast = index === integrations.length - 1;
+					const isLibrary = entry.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY) ?? false;
 
 					return (
 						<ComponentListRow
@@ -113,12 +115,13 @@ export function ComponentList({
 							isSelected={isSelected}
 							isLast={isLast}
 						>
-							{/* Checkbox — only shown when multiple components */}
-							{isBatch && (
+							{/* Checkbox — shown for all entries in batch; always shown for libraries (locked) */}
+							{(isBatch || isLibrary) && (
 								<CheckboxCell>
 									<CheckBox
 										label=""
 										checked={isSelected}
+										disabled={isLibrary}
 										onChange={(checked: boolean) => onToggle(index, checked)}
 									/>
 								</CheckboxCell>

@@ -76,8 +76,8 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const activeRunRef = useRef<"dryRun" | "migration" | null>(null);
 
     const defaultSteps = aiEnhancementActive
-        ? ["Configure Source", "Report Generation", "Configure Destination", "Static Migration", "AI Enhancement"]
-        : ["Configure Source", "Report Generation", "Configure Destination", "Static Migration"];
+        ? ["Configure Source", "Report Generation", "Configure Destination", "Rule-Based Migration", "AI Enhancement"]
+        : ["Configure Source", "Report Generation", "Configure Destination", "Rule-Based Migration"];
 
     // isMultiProject for ConfigureProjectForm is derived from the source config (step 0 selection)
     const boolParamKey = selectedIntegration?.parameters.find(p => p.valueType === "boolean")?.key;
@@ -168,7 +168,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
 
     const handleStepBack = () => {
         if (step === 3) {
-            // Back from static migration → reset migration state
+            // Back from rule-based migration → reset migration state
             migrationStartedRef.current = false;
             setMigrationToolState(null);
             setMigrationToolLogs([]);
@@ -289,7 +289,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     }, [step, toolPullProgress?.success]);
 
     useEffect(() => {
-        // Start the static migration when step 3 is reached and the tool (if needToPull) is ready.
+        // Start the rule-based migration when step 3 is reached and the tool (if needToPull) is ready.
         // migrationStartedRef prevents a double-start if multiple deps fire simultaneously.
         if (
             step === 3 &&

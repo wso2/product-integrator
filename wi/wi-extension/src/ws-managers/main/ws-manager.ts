@@ -344,7 +344,7 @@ export class MainWsManager implements WIVisualizerAPI {
                 const result = await commands.executeCommand("MI.project-explorer.create-project", miCommandParams);
 
                 if (result) {
-                    resolve(result as CreateMiProjectResponse);
+                    openInVSCode((result as CreateMiProjectResponse).filePath);
                 } else {
                     resolve({ filePath: '' });
                 }
@@ -355,6 +355,10 @@ export class MainWsManager implements WIVisualizerAPI {
                 reject(error);
             }
         });
+    }
+
+    async importProjectFromCapp(): Promise<void> {
+        await commands.executeCommand("MI.importProjectFromCapp");
     }
 
     async createSiProject(params: CreateSiProjectRequest): Promise<CreateSiProjectResponse> {
