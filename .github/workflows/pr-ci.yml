@@ -23,4 +23,4 @@ jobs:
     with:
       runOnAWS: false
       build_packed_installers: false
-      ballerina_extension_source: marketplace
+      ballerina_extension_source: github
