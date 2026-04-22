@@ -32,8 +32,7 @@ import { SamplesView } from "./samplesView";
 import { SettingsView } from "./settingsView";
 import {
 	type WIRuntime,
-	getDefaultRuntime,
-	loadEnabledRuntimes,
+	loadSelectedRuntime,
 } from "./shared/runtime";
 import { OpenProjectView } from "./OpenProjectView";
 
@@ -690,21 +689,20 @@ export const WelcomeView: React.FC = () => {
             return;
         }
 
-        const fetchEnabledRuntimes = async () => {
+        const fetchSelectedRuntime = async () => {
             setIsRuntimeLoading(true);
             try {
-                const runtimes = await loadEnabledRuntimes(wsClient);
-                const runtime = getDefaultRuntime(runtimes);
+                const runtime = await loadSelectedRuntime(wsClient);
                 setSelectedRuntime(runtime);
             } catch (error) {
-                console.warn("Failed to load enabled runtimes, using fallback:", error);
+                console.warn("Failed to load selected profile, using fallback:", error);
                 setSelectedRuntime("WSO2: BI");
             } finally {
                 setIsRuntimeLoading(false);
             }
         };
 
-        fetchEnabledRuntimes();
+        fetchSelectedRuntime();
     }, [currentView, wsClient]);
 
     // Runs the Ballerina activation check in the background,

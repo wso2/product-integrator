@@ -19,6 +19,11 @@ on:
         default: 'marketplace'
         required: false
         type: string
+      mi_extension_source:
+        description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
+        default: 'marketplace'
+        required: false
+        type: string  
 
 permissions:
   id-token: write
@@ -31,6 +36,7 @@ jobs:
     outputs:
       ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
       ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
+      mi_extension_version: ${{ steps.read-versions.outputs.mi_extension_version }}
       icp_version: ${{ steps.read-versions.outputs.icp_version }}
       integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
       ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
@@ -55,6 +61,7 @@ jobs:
 
           BALLERINA_VERSION=$(read_property "ballerina.version")
           BALLERINA_EXTENSION_VERSION=$(read_property "ballerina.extension.version")
+          MI_EXTENSION_VERSION=$(read_property "wso2.micro-integrator.extension.version")
           ICP_VERSION=$(read_property "icp.version")
           INTEGRATOR_VERSION=$(read_property "integrator.version")
           BALLERINA_JRE_VERSION=$(read_property "ballerina.jre.version")
@@ -69,8 +76,14 @@ jobs:
             exit 1
           fi
 
+          if [[ -n "${MI_EXTENSION_VERSION}" && "${MI_EXTENSION_VERSION}" =~ ^[vV] ]]; then
+            echo "Error: wso2.micro-integrator.extension.version must be provided without a leading v." >&2
+            exit 1
+          fi
+
           echo "ballerina_version=${BALLERINA_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_extension_version=${BALLERINA_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "mi_extension_version=${MI_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
           echo "icp_version=${ICP_VERSION}" >> "$GITHUB_OUTPUT"
           echo "integrator_version=${INTEGRATOR_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_jre_version=${BALLERINA_JRE_VERSION}" >> "$GITHUB_OUTPUT"
@@ -88,6 +101,9 @@ jobs:
             exit 1
           elif [ "${{ inputs.ballerina_extension_source }}" = "github" ] && [ -z "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" ]; then
             echo "Error: ballerina_extension_version must not be empty when ballerina_extension_source is set to github."
+            exit 1
+          elif [ "${{ inputs.mi_extension_source }}" = "github" ] && [ -z "${{ needs.resolve-versions.outputs.mi_extension_version }}" ]; then
+            echo "Error: mi_extension_version must not be empty when mi_extension_source is set to github."
             exit 1
           elif [ -n "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" ] && [[ "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" =~ ^[vV] ]]; then
             echo "Error: ballerina_extension_version must be provided without a leading v. Example: 4.5.0"
@@ -124,6 +140,20 @@ jobs:
             exit 1
           fi
 
+      - name: Validate MI extension input contract
+        shell: bash
+        working-directory: .
+        run: |
+          if [ "${{ inputs.mi_extension_source }}" = "github" ] && [ -z "${{ needs.resolve-versions.outputs.mi_extension_version }}" ]; then
+            echo "Error: mi_extension_version is required when mi_extension_source=github."
+            exit 1
+          fi
+
+          if [[ -n "${{ needs.resolve-versions.outputs.mi_extension_version }}" && "${{ needs.resolve-versions.outputs.mi_extension_version }}" =~ ^[vV] ]]; then
+            echo "Error: mi_extension_version must be provided without a leading v. Example: 4.5.0"
+            exit 1
+          fi    
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -157,7 +187,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
 
       - name: Cache Rust toolchain
         uses: actions/cache@v4
@@ -229,6 +259,22 @@ jobs:
           BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
   
+      - name: Set MI extension version
+        if: ${{ needs.resolve-versions.outputs.mi_extension_version != '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          echo "MI_EXTENSION_VERSION=${{ needs.resolve-versions.outputs.mi_extension_version }}" >> "$GITHUB_ENV"
+
+      - name: Download archived MI VSIX
+        if: ${{ inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          chmod +x ./ci/download-vsix.sh
+          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "v${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD")
+          echo "MI_VSIX_PATH=${MI_VSIX_PATH}" >> "$GITHUB_ENV"
+
       - name: Update product.json and branding
         working-directory: .
         run: |

@@ -25,8 +25,6 @@ import {
     FormBody,
     FormPanel,
     FormPanelHeader,
-    FormPanelSubtitle,
-    FormPanelTitle,
     HeaderRow,
     HeaderSubtitle,
     HeaderText,
@@ -35,11 +33,8 @@ import {
     PageContainer,
 } from "../shared/FormPageLayout";
 import {
-    CREATION_RUNTIME_HELP,
-    RUNTIME_DISPLAY_LABEL,
     type WIRuntime,
-    getDefaultRuntime,
-    loadEnabledRuntimes,
+    loadSelectedRuntime,
 } from "../shared/runtime";
 import { BIProjectForm } from "./biForm";
 import { MiProjectWizard } from "./miForm";
@@ -73,11 +68,10 @@ export function CreationView({
         const resolveRuntime = async () => {
             setIsLoading(true);
             try {
-                const enabledRuntimes = await loadEnabledRuntimes(wsClient);
-                setProjectType(getDefaultRuntime(enabledRuntimes));
+                setProjectType(await loadSelectedRuntime(wsClient));
             } catch (error) {
                 console.warn(
-                    "Failed to load default integrator config, using fallback:",
+                    "Failed to load selected profile, using fallback:",
                     error,
                 );
                 setProjectType("WSO2: BI");

@@ -177,34 +177,38 @@ export class ExtensionAPIs {
 	/**
 	 * Check if BI extension is available
 	 */
-	public isBIAvailable(): boolean {
-		return this.biExtension !== undefined && this.biExtension.isActive;
+	public isBIAvailable(isActive: boolean = true): boolean {
+		const ext = vscode.extensions.getExtension<BIExtensionAPI>(EXTENSION_DEPENDENCIES.BALLERINA)
+		return ext !== undefined && ext.isActive === isActive;
 	}
 
 	/**
 	 * Check if MI extension is available
 	 */
-	public isMIAvailable(): boolean {
-		return this.miExtension !== undefined && this.miExtension.isActive;
+	public isMIAvailable(isActive: boolean = true): boolean {
+		const ext = vscode.extensions.getExtension<MIExtensionAPI>(EXTENSION_DEPENDENCIES.MI)
+		return ext !== undefined && ext.isActive === isActive;
 	}
 
 	/**
 	 * Check if SI extension is available
 	 */
-	public isSIAvailable(): boolean {
-		return this.siExtension !== undefined && this.siExtension.isActive;
+	public isSIAvailable(isActive: boolean = true): boolean {
+		const ext = vscode.extensions.getExtension<any>(EXTENSION_DEPENDENCIES.SI)
+		return ext !== undefined && ext.isActive === isActive;
 	}
 
 	/**
 	 * Get BI status
 	 */
 	public getBIStatus(): string {
-		if (!this.isBIAvailable() || !this.biExtension?.exports) {
+		const balExt = vscode.extensions.getExtension<BIExtensionAPI>(EXTENSION_DEPENDENCIES.BALLERINA);
+		if (!balExt || !balExt.isActive || !balExt.exports) {
 			return "unavailable";
 		}
 
 		try {
-			return this.biExtension.exports.getStatus();
+			return balExt.exports.getStatus();
 		} catch (error) {
 			ext.logError("Failed to get BI status", error as Error);
 			return "error";
@@ -215,12 +219,13 @@ export class ExtensionAPIs {
 	 * Get MI status
 	 */
 	public getMIStatus(): string {
-		if (!this.isMIAvailable() || !this.miExtension?.exports) {
+		const miExt = vscode.extensions.getExtension<MIExtensionAPI>(EXTENSION_DEPENDENCIES.MI);
+		if (!miExt || !miExt.isActive || !miExt.exports) {
 			return "unavailable";
 		}
 
 		try {
-			return this.miExtension.exports.getStatus();
+			return miExt.exports.getStatus();
 		} catch (error) {
 			ext.logError("Failed to get MI status", error as Error);
 			return "error";
