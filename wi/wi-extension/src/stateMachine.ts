@@ -57,7 +57,6 @@ interface MachineContext {
     extensionAPIs: ExtensionAPIs;
     webviewManager?: WebviewManager;
     configChangeDisposable?: vscode.Disposable;
-    mode: ProjectType[];
     currentView: ViewType;
     isInWi: boolean;
 }
@@ -137,7 +136,7 @@ async function initializeRuntimeExtension(
 
 async function ensureSelectedProfileExtensionInstalled(
     extensionAPIs: ExtensionAPIs
-): Promise<ProjectType[]> {
+): Promise<void> {
     const selectedModes = getSelectedProfileMode();
 
     for (const mode of selectedModes) {
@@ -147,8 +146,6 @@ async function ensureSelectedProfileExtensionInstalled(
             ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
         }
     }
-
-    return selectedModes;
 }
 
 async function syncSelectedProfileWithDetectedProject(projectType: ProjectType): Promise<void> {
@@ -194,7 +191,6 @@ const stateMachine = createMachine<MachineContext>({
         projectUri: 'global',
         projectType: ProjectType.NONE,
         extensionAPIs: new ExtensionAPIs(),
-        mode: getSelectedProfileMode(),
         currentView: ViewType.LOADING,
         isInWi: process.env.WSO2_INTEGRATOR_RUNTIME === 'true'
     },
@@ -238,14 +234,6 @@ const stateMachine = createMachine<MachineContext>({
             entry: ["activateBasedOnProjectType", "registerConfigChangeListener"],
             exit: "disposeConfigChangeListener",
             on: {
-                UPDATE_MODE: {
-                    actions: assign({
-                        mode: (context, event: any) => {
-                            ext.log(`Mode updated in context: ${event.mode}`);
-                            return event.mode;
-                        }
-                    })
-                },
                 UPDATE_VIEW: {
                     actions: assign({
                         currentView: (context, event: any) => {
@@ -261,14 +249,6 @@ const stateMachine = createMachine<MachineContext>({
             entry: ["registerConfigChangeListener"],
             exit: "disposeConfigChangeListener",
             on: {
-                UPDATE_MODE: {
-                    actions: assign({
-                        mode: (context, event: any) => {
-                            ext.log(`Mode updated in context: ${event.mode}`);
-                            return event.mode;
-                        }
-                    })
-                },
                 UPDATE_VIEW: {
                     actions: assign({
                         currentView: (context, event: any) => {
@@ -322,13 +302,8 @@ const stateMachine = createMachine<MachineContext>({
                 const runtimeSettingChanged = event.affectsConfiguration('integrator.selectedProfile');
 
                 if (runtimeSettingChanged) {
-                    const newMode = await ensureSelectedProfileExtensionInstalled(context.extensionAPIs);
-                    ext.log(`Configuration changed: selectedProfileMode = ${newMode}`);
-
-                    stateService.send({
-                        type: 'UPDATE_MODE',
-                        mode: newMode
-                    });
+                    await ensureSelectedProfileExtensionInstalled(context.extensionAPIs);
+                    ext.log(`Configuration changed: selectedProfile = ${vscode.workspace.getConfiguration('integrator').get<string>('selectedProfile')}`);
                 }
             });
 
@@ -437,6 +412,7 @@ async function detectProjectType(): Promise<{
     projectType: ProjectType;
 }> {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    await syncStartupSelectedProfile();
 
     const extensionAPIs = new ExtensionAPIs();
     // Ensure the extension for the configured selected profile is installed,
@@ -490,10 +466,8 @@ export const stateService = interpret(stateMachine);
 // Define your API as functions
 export const StateMachine = {
     initialize: async () => {
-        await syncStartupSelectedProfile();
         ext.log('Starting state machine');
         stateService.start();
-        stateService.getSnapshot().context.mode = getSelectedProfileMode();
     },
     getContext: () => stateService.getSnapshot().context,
     setCurrentView: (view: ViewType) => {
