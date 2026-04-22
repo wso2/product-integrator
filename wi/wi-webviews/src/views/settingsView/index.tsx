@@ -139,6 +139,7 @@ export function SettingsView({ onBack, ballerinaUnavailable }: { onBack?: () => 
     const [isLoading, setIsLoading] = useState(true);
     const [savingRuntime, setSavingRuntime] = useState<SelectedProfileValue | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [localBallerinaUnavailable, setLocalBallerinaUnavailable] = useState<boolean>(ballerinaUnavailable ?? false);
 
     const persistSelectedProfile = async (profile: SelectedProfileValue) => {
         await wsClient.setConfiguration({
@@ -185,6 +186,24 @@ export function SettingsView({ onBack, ballerinaUnavailable }: { onBack?: () => 
 
         loadRuntimeSettings();
     }, [wsClient]);
+
+    useEffect(() => {
+        if (selectedProfile !== DEFAULT_PROFILE || isLoading) {
+            setLocalBallerinaUnavailable(false);
+            return;
+        }
+        // If the parent already knows Ballerina is unavailable, use that directly.
+        if (ballerinaUnavailable) {
+            setLocalBallerinaUnavailable(true);
+            return;
+        }
+        wsClient.getBIRuntimeStatus().then(({ isAvailable }) => {
+            setLocalBallerinaUnavailable(!isAvailable);
+        }).catch(() => {
+            // Don't block on failure
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedProfile, isLoading]);
 
     const applyRuntimeSelection = async (runtimeProfile: SelectedProfileValue) => {
         if (selectedProfile === runtimeProfile) {
@@ -258,9 +277,9 @@ export function SettingsView({ onBack, ballerinaUnavailable }: { onBack?: () => 
                                 />
                             </DropdownShell>
                         </RuntimeField>
-                        {ballerinaUnavailable && selectedProfile === DEFAULT_PROFILE && (
+                        {localBallerinaUnavailable && selectedProfile === DEFAULT_PROFILE && (
                             <SetupSeparator>
-                                <SetupContent compact />
+                                <SetupContent />
                             </SetupSeparator>
                         )}
                     </PanelBody>

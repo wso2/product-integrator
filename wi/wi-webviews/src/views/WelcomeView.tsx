@@ -767,6 +767,7 @@ export const WelcomeView: React.FC = () => {
 	useEffect(() => {
 		if (selectedRuntime !== "WSO2: BI") {
 			setShowSecondary(false);
+			setIsBallerinaUnavailable(null);
 		}
 	}, [selectedRuntime]);
 
