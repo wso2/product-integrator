@@ -19,10 +19,8 @@
 import styled from "@emotion/styled";
 import {
     DEFAULT_PROFILE,
-    MI_PROFILE,
     SELECTED_PROFILE_CONFIG_SECTION,
     SELECTED_PROFILE_VALUES,
-    SI_PROFILE,
     type SelectedProfileValue,
 } from "@wso2/wi-core";
 import {
@@ -54,19 +52,6 @@ const PROFILE_OPTIONS: OptionProps[] = SELECTED_PROFILE_VALUES.map((profile) => 
 function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
     return typeof value === "string"
         && (SELECTED_PROFILE_VALUES as readonly string[]).includes(value);
-}
-
-function getProfileForEnabledRuntimes(enabled: Record<"bi" | "mi" | "si", boolean>): SelectedProfileValue {
-    if (enabled.bi) {
-        return DEFAULT_PROFILE;
-    }
-    if (enabled.mi) {
-        return MI_PROFILE;
-    }
-    if (enabled.si) {
-        return SI_PROFILE;
-    }
-    return DEFAULT_PROFILE;
 }
 
 const PageContainer = styled.div`
@@ -152,21 +137,8 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                     return;
                 }
 
-                const [biResp, miResp, siResp] = await Promise.all([
-                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.bi" }),
-                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.mi" }),
-                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.si" }),
-                ]);
-
-                const currentState: Record<"bi" | "mi" | "si", boolean> = {
-                    bi: biResp?.value === true,
-                    mi: miResp?.value === true,
-                    si: siResp?.value === true,
-                };
-
-                const fallbackProfile = getProfileForEnabledRuntimes(currentState);
-                await persistSelectedProfile(fallbackProfile);
-                setSelectedProfile(fallbackProfile);
+                await persistSelectedProfile(DEFAULT_PROFILE);
+                setSelectedProfile(DEFAULT_PROFILE);
             } catch (loadError) {
                 console.error("Failed to load profile settings:", loadError);
                 setError("Failed to load settings. Showing defaults.");
