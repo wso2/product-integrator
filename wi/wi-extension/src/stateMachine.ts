@@ -85,10 +85,10 @@ const extensionDependencyByProjectType: Partial<Record<ProjectType, string>> = {
 };
 
 function getStartupProfileFromInstalledExtensions(): SelectedProfileValue | undefined {
-    const extensionAPIs = stateService.getSnapshot().context.extensionAPIs;
-    const hasBIExtension = extensionAPIs.isBIAvailable();
-    const hasMIExtension = extensionAPIs.isMIAvailable();
-    const hasSIExtension = extensionAPIs.isSIAvailable();
+    const extensionAPIs = new ExtensionAPIs();
+    const hasBIExtension = extensionAPIs.isBIAvailable(false);
+    const hasMIExtension = extensionAPIs.isMIAvailable(false);
+    const hasSIExtension = extensionAPIs.isSIAvailable(false);
 
     if (hasBIExtension && !hasMIExtension && !hasSIExtension) {
         return DEFAULT_PROFILE;
@@ -171,15 +171,12 @@ function getSelectedProfileMode(): ProjectType[] {
     const config = vscode.workspace.getConfiguration("integrator");
     const selectedProfile = config.get<string>('selectedProfile');
 
+    // Otherwise honor the configured profile value.
     if (isSelectedProfileValue(selectedProfile)) {
         return [projectTypeBySelectedProfileValue[selectedProfile]];
     }
 
-    void config.update(
-        'selectedProfile',
-        DEFAULT_PROFILE,
-        vscode.ConfigurationTarget.Global
-    );
+    // Fall back to BI mode without mutating configuration from a sync function.
     return [ProjectType.BI_BALLERINA];
 }
 
@@ -412,8 +409,9 @@ async function hasSiddhiFilesInWorkspace(): Promise<boolean> {
 async function detectProjectType(): Promise<{
     projectType: ProjectType;
 }> {
-    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     await syncStartupSelectedProfile();
+
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
     const extensionAPIs = new ExtensionAPIs();
     // Ensure the extension for the configured selected profile is installed,

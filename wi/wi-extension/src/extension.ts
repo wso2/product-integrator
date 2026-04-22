@@ -75,7 +75,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 		// 3. Tree view activation
 		// 4. Command registration
 		// 5. Webview manager setup
-		await StateMachine.initialize();
+		StateMachine.initialize();
 
 		// Boot cloud/RPC/auth functionality
 		await activateCloudFunctionality(context);
