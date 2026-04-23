@@ -600,7 +600,7 @@ jobs:
           cp .build/linux/rpm/*/*.rpm ../artifacts/ || true
 
       - name: Upload Linux artifacts (only Integrator)
-        if: ${{ inputs.build_packed_installers == false}}
+        if: ${{ inputs.build_packed_installers == false && github.event_name != 'pull_request' }}
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-linux
@@ -609,6 +609,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload compilation artifact
+        if: ${{ github.event_name != 'pull_request' }}
         uses: actions/upload-artifact@v4
         with:
           name: compilation
@@ -616,6 +617,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload WI extension VSIX
+        if: ${{ github.event_name != 'pull_request' }}
         uses: actions/upload-artifact@v4
         with:
           name: wi-extension-vsix
@@ -624,6 +626,7 @@ jobs:
 
       
       - name: Login to AWS
+        if: ${{ inputs.build_packed_installers == true && github.event_name != 'pull_request' }}
         uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -631,7 +634,7 @@ jobs:
           aws-region: us-east-1
       
       - name: Upload linux artifacts to S3
-        if: ${{ inputs.build_packed_installers == true }}
+        if: ${{ inputs.build_packed_installers == true && github.event_name != 'pull_request' }}
         working-directory: .
         run: |
           S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
