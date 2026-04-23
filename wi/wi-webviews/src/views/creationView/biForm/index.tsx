@@ -36,7 +36,7 @@ import {
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { useCloudContext } from "../../../providers";
 
-export function BIProjectForm() {
+export function BIProjectForm({ ballerinaUnavailable }: { ballerinaUnavailable?: boolean }) {
     const { wsClient } = useVisualizerContext();
     const { authState } = useCloudContext();
     const organizations = (authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined);
@@ -230,13 +230,15 @@ export function BIProjectForm() {
                 />
 
             <ButtonWrapper>
-                <Button
-                    disabled={isValidating}
-                    onClick={handleCreateProject}
-                    appearance="primary"
-                >
-                    {isValidating ? "Validating..." : createActionLabel}
-                </Button>
+                <span title={ballerinaUnavailable ? "Ballerina distribution is not set up. Use Configure to set it up." : undefined}>
+                    <Button
+                        disabled={isValidating || ballerinaUnavailable}
+                        onClick={handleCreateProject}
+                        appearance="primary"
+                    >
+                        {isValidating ? "Validating..." : createActionLabel}
+                    </Button>
+                </span>
             </ButtonWrapper>
         </FormContainer>
     );
