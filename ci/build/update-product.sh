@@ -126,10 +126,6 @@ cat > lib/vscode/product.json <<EOF
     },
 	  "builtInExtensions": [
       {
-        "name": "redhat.vscode-yaml",
-        "version": "latest"
-      },
-      {
         "name": "wso2.hurl-client",
         "version": "${WSO2_HURL_CLIENT_EXTENSION_VERSION}"
       },
