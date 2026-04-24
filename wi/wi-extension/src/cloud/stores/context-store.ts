@@ -120,7 +120,7 @@ export const contextStore = createStore(
 );
 
 const getAllContexts = async (previousItems: { [key: string]: ContextItemEnriched }) => {
-    const contextFiles = await workspace.findFiles("**/.choreo/context.yaml");
+    const contextFiles = await workspace.findFiles("**/{.wso2,.choreo}/context.yaml");
     const contextItems: { [key: string]: ContextItemEnriched } = {};
 
     const setContextObj = (contextFilePath: string, dirPath?: string, workspaceName?: string) => {
@@ -179,7 +179,8 @@ const getAllContexts = async (previousItems: { [key: string]: ContextItemEnriche
             try {
                 const gitRoot = await getGitRoot(ext.context, workspaceFolder.uri.fsPath);
                 if (gitRoot) {
-                    const contextPath = path.join(gitRoot, ".choreo", "context.yaml");
+                    const wso2ContextPath = path.join(gitRoot, ".wso2", "context.yaml");
+                    const contextPath = existsSync(wso2ContextPath) ? wso2ContextPath : path.join(gitRoot, ".choreo", "context.yaml");
                     if (existsSync(contextPath)) {
                         setContextObj(contextPath, workspaceFolder.uri.fsPath, workspaceFolder.name);
                     }

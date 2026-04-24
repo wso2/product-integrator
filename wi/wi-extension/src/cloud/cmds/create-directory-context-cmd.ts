@@ -190,7 +190,11 @@ export const updateContextFile = (
 	selectedOrg: Organization,
 	projectList: Project[],
 ) => {
-	const contextFilePath = path.join(gitRoot, ".choreo", "context.yaml");
+	const wso2ContextPath = path.join(gitRoot, ".wso2", "context.yaml");
+	const choreoContextPath = path.join(gitRoot, ".choreo", "context.yaml");
+	const contextFilePath = existsSync(wso2ContextPath) ? wso2ContextPath
+		: existsSync(choreoContextPath) ? choreoContextPath
+			: wso2ContextPath;
 	if (existsSync(contextFilePath)) {
 		let parsedData: ContextItem[] = yaml.load(readFileSync(contextFilePath, "utf8")) as any;
 		if (!Array.isArray(parsedData) && (parsedData as any)?.org && (parsedData as any)?.project) {
@@ -207,12 +211,12 @@ export const updateContextFile = (
 		}
 		writeFileSync(contextFilePath, yaml.dump(newList));
 	} else {
-		const choreoDir = path.join(gitRoot, ".choreo");
-		if (!existsSync(choreoDir)) {
-			mkdirSync(choreoDir);
+		const wso2Dir = path.join(gitRoot, ".wso2");
+		if (!existsSync(wso2Dir)) {
+			mkdirSync(wso2Dir);
 		}
 		const contextYamlData: ContextItem[] = [{ org: selectedOrg.handle, project: selectedProject.handler }];
-		writeFileSync(path.join(choreoDir, "context.yaml"), yaml.dump(contextYamlData));
+		writeFileSync(path.join(wso2Dir, "context.yaml"), yaml.dump(contextYamlData));
 	}
 
 	return contextFilePath;
@@ -220,7 +224,8 @@ export const updateContextFile = (
 
 export const removeContext = (selectedProject: Project, selectedOrg: Organization, projectRootsFsPaths: string[]) => {
 	for (const projectRootPath of projectRootsFsPaths) {
-		const contextFilePath = path.join(projectRootPath, ".choreo", "context.yaml");
+		const wso2ContextPath = path.join(projectRootPath, ".wso2", "context.yaml");
+		const contextFilePath = existsSync(wso2ContextPath) ? wso2ContextPath : path.join(projectRootPath, ".choreo", "context.yaml");
 		if (existsSync(contextFilePath)) {
 			let parsedData: ContextItem[] = yaml.load(readFileSync(contextFilePath, "utf8")) as any;
 			if (!Array.isArray(parsedData) && (parsedData as any)?.org && (parsedData as any)?.project) {
