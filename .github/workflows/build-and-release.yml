@@ -1,3 +1,59 @@
+...existing code...
+
+# Post-release version bump and PR for github-release delivery mode
+  bump-integrator-version:
+    name: Bump integrator.version and PR
+    runs-on: ubuntu-latest
+    needs: publish-github-release
+    if: github.event.inputs.delivery_mode == 'github-release'
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump integrator.version
+        id: bump_version
+        run: |
+          file="ci/build/component-versions.properties"
+          current=$(grep '^integrator.version=' "$file" | cut -d= -f2)
+          if [[ "$current" =~ ^5\.0\.0-alpha([0-9]+)$ ]]; then
+            n=${BASH_REMATCH[1]}
+            next=$((n+1))
+            newver="5.0.0-alpha$next"
+            sed -i "" "s/^integrator.version=.*/integrator.version=$newver/" "$file"
+            echo "newver=$newver" >> $GITHUB_OUTPUT
+          else
+            echo "No bump needed. Current version: $current"
+            echo "newver=$current" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create branch and commit
+        if: steps.bump_version.outputs.newver != '' && steps.bump_version.outputs.newver != steps.bump_version.outputs.current
+        run: |
+          branch="bump-integrator-version-${{ steps.bump_version.outputs.newver }}"
+          git checkout -b "$branch"
+          git add ci/build/component-versions.properties
+          git commit -m "chore: Bump integrator.version to ${{ steps.bump_version.outputs.newver }} after release"
+          git push origin "$branch"
+          echo "branch=$branch" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        if: steps.bump_version.outputs.newver != '' && steps.bump_version.outputs.newver != steps.bump_version.outputs.current
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: Bump integrator.version to ${{ steps.bump_version.outputs.newver }} after release"
+          branch: ${{ steps.bump_version.outputs.newver }}
+          base: ${{ github.ref_name }}
+          title: "chore: Bump integrator.version to ${{ steps.bump_version.outputs.newver }} after release"
+          body: "This PR bumps integrator.version to ${{ steps.bump_version.outputs.newver }} after a GitHub Release."
 name: Build and Release Artifacts
 
 on:
@@ -990,3 +1046,45 @@ jobs:
           files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  bump-version:
+    name: Bump Integrator Version
+    runs-on: ubuntu-latest
+    needs: [publish-github-release, resolve-versions]
+    if: needs.publish-github-release.result == 'success'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Increment alpha version
+        id: bump
+        run: |
+          VERSIONS_FILE="ci/build/component-versions.properties"
+          CURRENT_VERSION=$(awk -F= '$1 == "integrator.version" { print $2; exit }' "${VERSIONS_FILE}" | tr -d '\r')
+          echo "Current version: ${CURRENT_VERSION}"
+
+          # Extract alpha number and increment it
+          if [[ "${CURRENT_VERSION}" =~ ^(.+-alpha)([0-9]+)$ ]]; then
+            PREFIX="${BASH_REMATCH[1]}"
+            ALPHA_NUM="${BASH_REMATCH[2]}"
+            NEXT_ALPHA_NUM=$((ALPHA_NUM + 1))
+            NEW_VERSION="${PREFIX}${NEXT_ALPHA_NUM}"
+          else
+            echo "Error: integrator.version '${CURRENT_VERSION}' does not match expected alpha pattern." >&2
+            exit 1
+          fi
+
+          echo "New version: ${NEW_VERSION}"
+          sed -i "s/^integrator\.version=.*/integrator.version=${NEW_VERSION}/" "${VERSIONS_FILE}"
+          echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ci/build/component-versions.properties
+          git commit -m "Bump integrator version to ${{ steps.bump.outputs.new_version }} [skip ci]"
+          git push
