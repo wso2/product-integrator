@@ -20,6 +20,7 @@
 
 import {
     BIProjectRequest,
+    BIRuntimeStatusResponse,
     CreateMiProjectRequest,
     CreateMiProjectResponse,
     CreateSiProjectRequest,
@@ -217,6 +218,10 @@ export class WsClient {
         return this.request("createMiProject", params);
     }
 
+    public importProjectFromCapp(): Promise<void> {
+        return this.request("importProjectFromCapp");
+    }
+
     public createSiProject(params: CreateSiProjectRequest): Promise<CreateSiProjectResponse> {
         return this.request("createSiProject", params);
     }
@@ -297,8 +302,9 @@ export class WsClient {
         this.stateChangedListeners.add(callback);
     }
 
-    public onDownloadProgress(callback: (progress: DownloadProgress) => void) {
+    public onDownloadProgress(callback: (progress: DownloadProgress) => void): () => void {
         this.downloadProgressListeners.add(callback);
+        return () => this.downloadProgressListeners.delete(callback);
     }
 
     public onMigrationToolStateChanged(callback: (state: string) => void) {
@@ -444,6 +450,14 @@ export class WsClient {
 
     public async triggerAICopilotSignIn(): Promise<SignInResult> {
         return this.request("triggerAICopilotSignIn");
+    }
+
+    public getBIRuntimeStatus(): Promise<BIRuntimeStatusResponse> {
+        return this.request("getBIRuntimeStatus");
+    }
+
+    public initBIRuntimeContext(): Promise<void> {
+        return this.request("initBIRuntimeContext");
     }
 
     public async request<TAction extends WIWsMethod>(

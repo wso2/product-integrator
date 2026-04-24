@@ -355,6 +355,7 @@ export interface WIVisualizerAPI {
     getSubFolderNames: (params: GetSubFoldersRequest) => Promise<GetSubFoldersResponse>;
     askProjectDirPath: () => Promise<ProjectDirResponse>;
     createMiProject: (params: CreateMiProjectRequest) => Promise<CreateMiProjectResponse>;
+    importProjectFromCapp: () => Promise<void>;
     createSiProject: (params: CreateSiProjectRequest) => Promise<CreateSiProjectResponse>;
     fetchSamplesFromGithub: (params: FetchSamplesRequest) => Promise<GettingStartedData>;
     downloadSelectedSampleFromGithub: (params: SampleDownloadRequest) => void;
@@ -381,4 +382,11 @@ export interface WIVisualizerAPI {
     abortMigrationAgent: () => Promise<void>;
     checkAIAuth: () => Promise<boolean>;
     triggerAICopilotSignIn: () => Promise<SignInResult>;
+    getBIRuntimeStatus: () => Promise<BIRuntimeStatusResponse>;
+    initBIRuntimeContext: () => Promise<void>;
+}
+
+export interface BIRuntimeStatusResponse {
+    isAvailable: boolean;
+    status: string;
 }

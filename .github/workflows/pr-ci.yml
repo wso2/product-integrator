@@ -1,0 +1,26 @@
+name: PR CI (Integrator Build)
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 5.0.x
+  workflow_dispatch:
+
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  compile-integrator:
+    name: Compile Integrator (No Installers)
+    uses: ./.github/workflows/compile.yml
+    with:
+      runOnAWS: false
+      build_packed_installers: false
+      ballerina_extension_source: github
+      mi_extension_source: github

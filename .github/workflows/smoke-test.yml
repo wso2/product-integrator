@@ -1,0 +1,124 @@
+name: Smoke Test
+
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        description: 'Name of the uploaded artifact containing the Linux tar.gz'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      integrator_version:
+        description: 'Download from GitHub Release instead of artifact (e.g. 5.0.0-alpha6)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-test:
+    name: Smoke Test (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DISPLAY: ':99'
+      WSO2IPW_ELECTRON_ARGS: '--no-sandbox'
+    steps:
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            libgtk-3-0 libgbm1 libnss3 libxss1 libasound2t64 \
+            libx11-xcb1 libdrm2 libxcomposite1 libxdamage1 \
+            libxrandr2 libatk-bridge2.0-0 libatspi2.0-0 libcups2
+
+      - name: Start Xvfb
+        run: |
+          Xvfb :99 -screen 0 1920x1080x24 &
+          sleep 2
+
+      - name: Download build artifact
+        if: ${{ inputs.artifact_name != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: artifact/
+
+      - name: Download from GitHub Release
+        if: ${{ inputs.integrator_version != '' && inputs.artifact_name == '' }}
+        run: |
+          VERSION="${{ inputs.integrator_version }}"
+          TARBALL="wso2-integrator-${VERSION}-linux-x64.tar.gz"
+          URL="https://github.com/wso2/product-integrator/releases/download/v${VERSION}/${TARBALL}"
+          mkdir -p artifact
+          curl -fSL -o "artifact/${TARBALL}" "$URL"
+
+      - name: Extract and locate Electron binary
+        run: |
+          cd artifact
+          TAR=$(ls *.tar.gz | head -1)
+          echo "Extracting: $TAR"
+          tar -xzf "$TAR"
+          # The packed tar.gz contains wso2-integrator/wso2-integrator (ELF Electron binary)
+          # and wso2-integrator/bin/wso2-integrator (shell wrapper).
+          # Playwright needs the actual Electron binary.
+          BINARY=$(find . -maxdepth 2 -name 'wso2-integrator' -type f ! -path '*/bin/*' | head -1)
+          if [ -z "$BINARY" ]; then
+            echo "ERROR: Could not find wso2-integrator binary"
+            find . -maxdepth 3 -type f | head -30
+            exit 1
+          fi
+          chmod +x "$BINARY"
+          REAL=$(realpath "$BINARY")
+          echo "WSO2_INTEGRATOR_PATH=$REAL" >> "$GITHUB_ENV"
+          echo "Found: $(file $REAL)"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install wso2ipw
+        run: npm install -g wso2ipw@0.1.4
+
+      - name: Run smoke test
+        run: |
+          EXAMPLES="$(npm root -g)/wso2ipw/examples/hello-world-service"
+          for step in "$EXAMPLES"/0*.sh; do
+            name=$(basename "$step")
+            echo ""
+            echo "═══ $name ═══"
+            bash "$step" || {
+              echo "FAIL: $name" >&2
+              wso2ipw screenshot "failure-${name%.sh}.png" 2>/dev/null || true
+              wso2ipw close 2>/dev/null || true
+              exit 1
+            }
+            echo "✓ $name"
+          done
+          echo ""
+          echo "════════════════════════════════════════════"
+          echo "  SMOKE TEST PASSED ✓"
+          echo "════════════════════════════════════════════"
+          wso2ipw close 2>/dev/null || true
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs
+          path: |
+            /home/runner/.wso2ipw/*/daemon.log
+            /home/runner/.wso2ipw/*/daemon.err
+          if-no-files-found: ignore
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-screenshots
+          path: failure-*.png
+          if-no-files-found: ignore

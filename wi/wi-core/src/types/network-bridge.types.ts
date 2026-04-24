@@ -18,6 +18,7 @@
 
 import {
     BIProjectRequest,
+    BIRuntimeStatusResponse,
     CreateMiProjectRequest,
     CreateMiProjectResponse,
     CreateSiProjectRequest,
@@ -123,6 +124,7 @@ export interface WIWsMethodParamsMap {
     getSubFolderNames: GetSubFoldersRequest;
     askProjectDirPath: void;
     createMiProject: CreateMiProjectRequest;
+    importProjectFromCapp: void;
     createSiProject: CreateSiProjectRequest;
     fetchSamplesFromGithub: FetchSamplesRequest;
     downloadSelectedSampleFromGithub: SampleDownloadRequest;
@@ -148,6 +150,8 @@ export interface WIWsMethodParamsMap {
     openMigratedProject: void;
     abortMigrationAgent: void; checkAIAuth: void;
     triggerAICopilotSignIn: void;
+    getBIRuntimeStatus: void;
+    initBIRuntimeContext: void;
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: void;
     submitComponents: WICloudSubmitComponentsReq;
@@ -188,6 +192,7 @@ export interface WIWsMethodResultMap {
     getSubFolderNames: GetSubFoldersResponse;
     askProjectDirPath: ProjectDirResponse;
     createMiProject: CreateMiProjectResponse;
+    importProjectFromCapp: void;
     createSiProject: CreateSiProjectResponse;
     fetchSamplesFromGithub: GettingStartedData;
     downloadSelectedSampleFromGithub: void;
@@ -213,6 +218,8 @@ export interface WIWsMethodResultMap {
     openMigratedProject: void;
     abortMigrationAgent: void; checkAIAuth: boolean;
     triggerAICopilotSignIn: SignInResult;
+    getBIRuntimeStatus: BIRuntimeStatusResponse;
+    initBIRuntimeContext: void;
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: WICloudFormContext;
     submitComponents: WICloudSubmitComponentsResp;

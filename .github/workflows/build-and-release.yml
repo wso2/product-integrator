@@ -34,7 +34,15 @@ on:
       ballerina_extension_source:
         description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
         required: true
-        default: 'marketplace'
+        default: 'github'
+        type: choice
+        options:
+          - marketplace
+          - github
+      mi_extension_source:
+        description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
+        required: true
+        default: 'github'
         type: choice
         options:
           - marketplace
@@ -62,6 +70,7 @@ jobs:
     outputs:
       ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
       ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
+      mi_extension_version: ${{ steps.read-versions.outputs.mi_extension_version }}
       icp_version: ${{ steps.read-versions.outputs.icp_version }}
       integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
       ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
@@ -86,6 +95,7 @@ jobs:
 
           BALLERINA_VERSION=$(read_property "ballerina.version")
           BALLERINA_EXTENSION_VERSION=$(read_property "ballerina.extension.version")
+          MI_EXTENSION_VERSION=$(read_property "wso2.micro-integrator.extension.version")
           ICP_VERSION=$(read_property "icp.version")
           INTEGRATOR_VERSION=$(read_property "integrator.version")
           BALLERINA_JRE_VERSION=$(read_property "ballerina.jre.version")
@@ -100,8 +110,14 @@ jobs:
             exit 1
           fi
 
+          if [[ -n "${MI_EXTENSION_VERSION}" && "${MI_EXTENSION_VERSION}" =~ ^[vV] ]]; then
+            echo "Error: wso2.micro-integrator.extension.version must not start with 'v'." >&2
+            exit 1
+          fi
+
           echo "ballerina_version=${BALLERINA_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_extension_version=${BALLERINA_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "mi_extension_version=${MI_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
           echo "icp_version=${ICP_VERSION}" >> "$GITHUB_OUTPUT"
           echo "integrator_version=${INTEGRATOR_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_jre_version=${BALLERINA_JRE_VERSION}" >> "$GITHUB_OUTPUT"
@@ -113,7 +129,15 @@ jobs:
     with:
       runOnAWS: ${{ github.event.inputs.runner == 'codebuild' }}
       ballerina_extension_source: ${{ github.event.inputs.ballerina_extension_source }}
+      mi_extension_source: ${{ github.event.inputs.mi_extension_source }}
       build_packed_installers: ${{ github.event.inputs.build_packed_installers == 'true' }}
+
+  smoke-test:
+    if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+    needs: compile
+    uses: ./.github/workflows/smoke-test.yml
+    with:
+      artifact_name: Product-Integrator-TAR
 
   build-macos:
     if: ${{ github.event.inputs.build_macos == 'true' }}
@@ -182,7 +206,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ github.event.inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -221,6 +245,15 @@ jobs:
           chmod +x ./ci/download-vsix.sh
           BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
+
+      - name: Download archived MI VSIX
+        if: ${{ github.event.inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          chmod +x ./ci/download-vsix.sh
+          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "v${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD")
+          echo "MI_VSIX_PATH=${MI_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Update product.json and branding
         working-directory: .
@@ -516,7 +549,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ github.event.inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -570,6 +603,15 @@ jobs:
           chmod +x ./ci/download-vsix.sh
           BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
+
+      - name: Download archived MI VSIX
+        if: ${{ github.event.inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          chmod +x ./ci/download-vsix.sh
+          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "v${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD")
+          echo "MI_VSIX_PATH=${MI_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Update product.json and branding
         shell: bash
@@ -818,8 +860,8 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [resolve-versions, compile, build-macos, build-windows]
-    if: always() && (needs.compile.result == 'success') && (github.event.inputs.build_packed_installers == 'false') && (github.event.inputs.delivery_mode == 'archive')
+    needs: [resolve-versions, compile, build-macos, build-windows, smoke-test]
+    if: always() && (needs.compile.result == 'success') && (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') && (github.event.inputs.build_packed_installers == 'false') && (github.event.inputs.delivery_mode == 'archive')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -862,10 +904,11 @@ jobs:
   publish-github-release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: [resolve-versions, compile, build-macos, build-windows]
+    needs: [resolve-versions, compile, build-macos, build-windows, smoke-test]
     if: |
       always() &&
       (needs.compile.result == 'success') &&
+      (needs.smoke-test.result == 'success') &&
       (github.event.inputs.delivery_mode == 'github-release') &&
       (github.event.inputs.build_packed_installers == 'true')
     steps:

@@ -19,10 +19,10 @@ read_version() {
 VERSION=${1:-"$(read_version "integrator.version")"}
 BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH:-""}
 BALLERINA_EXTENSION_VERSION=${BALLERINA_EXTENSION_VERSION:-"$(read_version "ballerina.extension.version")"}
-WSO2_PLATFORM_EXTENSION_VERSION=$(read_version "wso2.platform.extension.version")
+MI_VSIX_PATH=${MI_VSIX_PATH:-""}
+MI_EXTENSION_VERSION=${MI_EXTENSION_VERSION:-"$(read_version "wso2.micro-integrator.extension.version")"}
 WSO2_HURL_CLIENT_EXTENSION_VERSION=$(read_version "wso2.hurl-client.extension.version")
 WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION=$(read_version "wso2.mcp-server-inspector.extension.version")
-WSO2_MICRO_INTEGRATOR_EXTENSION_VERSION=$(read_version "wso2.micro-integrator.extension.version")
 WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION=$(read_version "wso2.streaming-integrator.extension.version")
 
 require_non_empty() {
@@ -39,14 +39,18 @@ if [ -z "${VERSION}" ]; then
   exit 1
 fi
 
-require_non_empty "${WSO2_PLATFORM_EXTENSION_VERSION}" "wso2.platform.extension.version"
 require_non_empty "${WSO2_HURL_CLIENT_EXTENSION_VERSION}" "wso2.hurl-client.extension.version"
 require_non_empty "${WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION}" "wso2.mcp-server-inspector.extension.version"
-require_non_empty "${WSO2_MICRO_INTEGRATOR_EXTENSION_VERSION}" "wso2.micro-integrator.extension.version"
+require_non_empty "${MI_EXTENSION_VERSION}" "wso2.micro-integrator.extension.version"
 require_non_empty "${WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION}" "wso2.streaming-integrator.extension.version"
 
 if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
   echo "Error: BALLERINA_EXTENSION_VERSION must be provided without a leading v. Example: 4.5.0" >&2
+  exit 1
+fi
+
+if [[ -n "${MI_EXTENSION_VERSION}" && "${MI_EXTENSION_VERSION}" =~ ^[vV] ]]; then
+  echo "Error: MI_EXTENSION_VERSION must be provided without a leading v. Example: 4.5.0" >&2
   exit 1
 fi
 
@@ -95,7 +99,6 @@ cat > lib/vscode/product.json <<EOF
       "https://console.devant.dev"
     ],
     "trustedExtensionProtocolHandlers": [
-      "wso2.wso2-platform",
       "wso2.wso2-integrator"
     ],
     "trustedExtensionAuthAccess": [
@@ -103,7 +106,6 @@ cat > lib/vscode/product.json <<EOF
       "github.vscode-pull-request-github",
       "github.copilot", "github.copilot-chat",
       "wso2.ballerina", "wso2.ballerina-integrator",
-      "wso2.wso2-platform",
       "wso2.wso2-integrator",
       "wso2.micro-integrator"
     ],
@@ -123,22 +125,6 @@ cat > lib/vscode/product.json <<EOF
       }
     },
 	  "builtInExtensions": [
-      {
-        "name": "redhat.vscode-yaml",
-        "version": "latest"
-      },
-      {
-        "name": "anweber.httpbook",
-        "version": "latest"
-      },
-      {
-        "name": "anweber.vscode-httpyac",
-        "version": "latest"
-      },
-      {
-        "name": "wso2.wso2-platform",
-        "version": "${WSO2_PLATFORM_EXTENSION_VERSION}"
-      },
       {
         "name": "wso2.hurl-client",
         "version": "${WSO2_HURL_CLIENT_EXTENSION_VERSION}"
@@ -163,10 +149,22 @@ cat <<BALLERINA_MARKETPLACE_ENTRY
       },
 BALLERINA_MARKETPLACE_ENTRY
 fi)
+$(if [ -n "${MI_VSIX_PATH}" ]; then
+cat <<MI_VSIX_ENTRY
       {
         "name": "wso2.micro-integrator",
-        "version": "${WSO2_MICRO_INTEGRATOR_EXTENSION_VERSION}"
+        "vsix": "${MI_VSIX_PATH}",
+        "version": "${MI_EXTENSION_VERSION}"
       },
+MI_VSIX_ENTRY
+else
+cat <<MI_MARKETPLACE_ENTRY
+      {
+        "name": "wso2.micro-integrator",
+        "version": "${MI_EXTENSION_VERSION}"
+      },
+MI_MARKETPLACE_ENTRY
+fi)
       {
         "name": "wso2.streaming-integrator",
         "version": "${WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION}"

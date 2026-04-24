@@ -53,9 +53,11 @@ import {
     ValidateProjectFormRequest,
     ValidateProjectFormResponse,
     DefaultOrgNameResponse,
-    SampleItem
+    SampleItem,
+    BIRuntimeStatusResponse,
+    EXTENSION_DEPENDENCIES
 } from "@wso2/wi-core";
-import { commands, window, workspace, MarkdownString, Uri, env, ConfigurationTarget } from "vscode";
+import { commands, extensions, window, workspace, MarkdownString, Uri, env, ConfigurationTarget } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { getDefaultCreationPath } from "../../utils/pathUtils";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenSamples, isSupportedSLVersionUtil, openInVSCode, sanitizeName, validateProjectPath } from "./utils";
@@ -73,9 +75,6 @@ import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
 import { ballerinaContext } from "../../bi/ballerinaContext";
 const platform = getPlatform();
 const SAMPLES_INFO_URL = process.env.SAMPLES_INFO_URL;
-const SAMPLES_REPOSITORY_URL = process.env.SAMPLES_REPOSITORY_URL;
-const SAMPLES_REPOSITORY_BRANCH = 'main';
-const SAMPLES_REPOSITORY_SUBDIRECTORY = '/ballerina-integrator';
 const PREBUILT_INTEGRATIONS_URL = process.env.PREBUILT_INTEGRATIONS_URL;
 
 export class MainWsManager implements WIVisualizerAPI {
@@ -344,7 +343,7 @@ export class MainWsManager implements WIVisualizerAPI {
                 const result = await commands.executeCommand("MI.project-explorer.create-project", miCommandParams);
 
                 if (result) {
-                    resolve(result as CreateMiProjectResponse);
+                    openInVSCode((result as CreateMiProjectResponse).filePath);
                 } else {
                     resolve({ filePath: '' });
                 }
@@ -355,6 +354,10 @@ export class MainWsManager implements WIVisualizerAPI {
                 reject(error);
             }
         });
+    }
+
+    async importProjectFromCapp(): Promise<void> {
+        await commands.executeCommand("MI.importProjectFromCapp");
     }
 
     async createSiProject(params: CreateSiProjectRequest): Promise<CreateSiProjectResponse> {
@@ -440,21 +443,21 @@ export class MainWsManager implements WIVisualizerAPI {
     async downloadSelectedSampleFromGithub(params: SampleDownloadRequest): Promise<void> {
         const workspaceFolders = workspace.workspaceFolders;
         const projectUri = this.projectUri ?? (workspaceFolders ? workspaceFolders[0].uri.fsPath : "");
+        const sampleItem = params.sampleItem;
 
-        if (params.runtime === "WSO2: BI") {
-            const componentPath = params.sampleItem?.componentPath;
-            const displayName = params.sampleItem?.displayName;
+        if ((params.runtime === "WSO2: BI" || params.runtime === "WSO2: MI") && sampleItem) {
+            const { componentPath, displayName, repositoryUrl, branch, subDirectory } = sampleItem;
             const isPrebuilt = params.itemType === "prebuilt";
 
-            if (!componentPath || !displayName) {
+            if (!componentPath || !displayName || !repositoryUrl) {
                 await window.showErrorMessage("Sample download details are missing.");
                 return;
             }
 
             await handleOpenSamples(projectUri, {
-                repositoryUrl: SAMPLES_REPOSITORY_URL,
-                branch: SAMPLES_REPOSITORY_BRANCH,
-                subDirectory: SAMPLES_REPOSITORY_SUBDIRECTORY,
+                repositoryUrl,
+                branch: branch ?? "main",
+                subDirectory: subDirectory ?? "",
                 componentPath,
                 displayName,
                 sourceLabel: isPrebuilt ? "pre-built integration" : "integration sample",
@@ -463,30 +466,7 @@ export class MainWsManager implements WIVisualizerAPI {
                     : "Integration sample source files were not found in the downloaded archive.",
                 preparationErrorLabel: isPrebuilt ? "pre-built integration" : "integration sample",
             });
-            return;
         }
-
-        if (params.runtime === "WSO2: MI" && params.sampleItem) {
-            const { componentPath, displayName, repositoryUrl, branch, subDirectory } = params.sampleItem;
-
-            if (!componentPath || !displayName) {
-                await window.showErrorMessage("Sample download details are missing.");
-                return;
-            }
-
-            await handleOpenSamples(projectUri, {
-                repositoryUrl: repositoryUrl ?? SAMPLES_REPOSITORY_URL,
-                branch: branch ?? SAMPLES_REPOSITORY_BRANCH,
-                subDirectory: subDirectory ?? '',
-                componentPath,
-                displayName,
-                sourceLabel: "integration sample",
-                missingSourceError: "Integration sample source files were not found in the downloaded archive.",
-                preparationErrorLabel: "integration sample",
-            });
-            return;
-        }
-
     }
 
     private async getLangClient() {
@@ -695,5 +675,52 @@ export class MainWsManager implements WIVisualizerAPI {
         const result = await (migrationAPI?.signInForAI() ?? Promise.resolve({ success: false, error: "Migration API not available." }));
         console.log('[ws-manager] triggerAICopilotSignIn: result:', JSON.stringify(result));
         return result;
+    }
+
+    /**
+     * Pure status check — returns whether the Ballerina distribution is installed
+     * and ready without performing any initialisation or subscription wiring.
+     * Init and subscription wiring are handled by {@link initBIRuntimeContext},
+     * which must be called before starting a download.
+     */
+    async getBIRuntimeStatus(): Promise<BIRuntimeStatusResponse> {
+        try {
+            const ext = extensions.getExtension(EXTENSION_DEPENDENCIES.BALLERINA);
+            if (!ext) {
+                return { isAvailable: false, status: "unavailable" };
+            }
+            // Activate only when the prefetcher hasn't done it yet; otherwise this is a no-op.
+            if (!ext.isActive) {
+                await ext.activate();
+            }
+            const biSupported = ballerinaContext.isInitialized
+                ? ballerinaContext.biSupported
+                : (ext.exports as any)?.ballerinaExtInstance?.biSupported === true;
+            return { isAvailable: biSupported, status: biSupported ? "ready" : "noLS" };
+        } catch {
+            return { isAvailable: false, status: "error" };
+        }
+    }
+
+    /**
+     * Initialises the BallerinaContext and wires up the download-progress
+     * subscription so that subsequent setup progress events are forwarded to
+     * all open webviews. Must be called before starting a Ballerina download.
+     */
+    async initBIRuntimeContext(): Promise<void> {
+        const ext = extensions.getExtension(EXTENSION_DEPENDENCIES.BALLERINA);
+        if (!ext) {
+            return;
+        }
+        if (!ext.isActive) {
+            await ext.activate();
+        }
+        // Always run both so the download-progress subscription is wired even when
+        // ballerinaContext was previously initialised via a different code path
+        // init() re-assigns fields from the extension
+        // exports each time; setupDownloadProgressSubscription() is internally guarded
+        // against double-subscription.
+        ballerinaContext.init(ext.exports);
+        BridgeLayer.setupDownloadProgressSubscription();
     }
 }
