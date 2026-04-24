@@ -985,6 +985,7 @@ jobs:
         with:
           tag_name: v${{ needs.resolve-versions.outputs.integrator_version }}
           name: WSO2 Integrator v${{ needs.resolve-versions.outputs.integrator_version }}
+          target_commitish: ${{ github.sha }}
           draft: false
           prerelease: false
           files: release-files/*
