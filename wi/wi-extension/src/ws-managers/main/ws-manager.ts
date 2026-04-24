@@ -540,10 +540,10 @@ export class MainWsManager implements WIVisualizerAPI {
         orgHandle: string,
         projectHandle: string,
     ): Promise<void> {
-        const choreoDir = path.join(projectRoot, '.choreo');
-        const localProjectFile = path.join(choreoDir, 'context.yaml');
+        const wso2Dir = path.join(projectRoot, '.wso2');
+        const localProjectFile = path.join(wso2Dir, 'context.yaml');
         const content = stringifyYaml([{ org: orgHandle, project: projectHandle, local: true }]);
-        await fs.promises.mkdir(choreoDir, { recursive: true });
+        await fs.promises.mkdir(wso2Dir, { recursive: true });
         await fs.promises.writeFile(localProjectFile, content, { encoding: 'utf8' });
     }
 

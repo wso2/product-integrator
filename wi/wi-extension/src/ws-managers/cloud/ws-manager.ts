@@ -201,8 +201,9 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 							// ignore error
 						}
 						const changes = await gitRepo.diffWith(`${matchingRemoteName}/${branch}`);
-						const componentYamlPath = join(repoDir, ".choreo", "component.yaml");
-						const configPaths = [componentYamlPath];
+						const componentYamlPath = join(repoDir, ".wso2", "component.yaml");
+						const componentYamlLegacyPath = join(repoDir, ".choreo", "component.yaml");
+						const configPaths = [componentYamlPath, componentYamlLegacyPath];
 
 						changes.forEach((item) => {
 							if (configPaths.includes(item.uri.path)) {

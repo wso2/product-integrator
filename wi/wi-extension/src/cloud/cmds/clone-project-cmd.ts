@@ -185,7 +185,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 								selectedRepoUrl,
 								latestDeploymentTrack?.branch,
 								subPath,
-								[".choreo", ".git"]
+								[".wso2", ".choreo", ".git"]
 							);
 
 							// Store the component in global state after cloning it.
