@@ -1030,15 +1030,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Ensure the workflow was triggered on a branch, not a tag or detached SHA
+          if [[ "${{ github.ref_type }}" != "branch" ]]; then
+            echo "Error: expected ref_type=branch, got '${{ github.ref_type }}' (${{ github.ref_name }}). Skipping version bump." >&2
+            exit 1
+          fi
+          BASE_BRANCH="${{ github.ref_name }}"
           BRANCH="bump-integrator-version-${{ steps.bump.outputs.new_version }}"
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
+          # -B resets the branch if it already exists (safe on reruns)
+          git checkout -B "$BRANCH"
           git add ci/build/component-versions.properties
           git commit -m "Bump integrator version to ${{ steps.bump.outputs.new_version }}"
-          git push origin "$BRANCH"
-          gh pr create \
-            --base "${{ github.ref_name }}" \
-            --head "$BRANCH" \
-            --title "Bump integrator version to ${{ steps.bump.outputs.new_version }}" \
-            --body "Automated version bump after successful release of \`v${{ needs.resolve-versions.outputs.integrator_version }}\`. Increments \`integrator.version\` to \`${{ steps.bump.outputs.new_version }}\` in \`ci/build/component-versions.properties\`."
+          # --force-with-lease is safe: only overwrites if no one else pushed to the branch
+          git push --force-with-lease origin "$BRANCH"
+
+          # Only open a new PR if one doesn't already exist for this branch
+          if gh pr view "$BRANCH" --json number -q .number 2>/dev/null; then
+            echo "PR already exists for branch $BRANCH, skipping creation."
+          else
+            gh pr create \
+              --base "$BASE_BRANCH" \
+              --head "$BRANCH" \
+              --title "Bump integrator version to ${{ steps.bump.outputs.new_version }}" \
+              --body "Automated version bump after successful release of \`v${{ needs.resolve-versions.outputs.integrator_version }}\`. Increments \`integrator.version\` to \`${{ steps.bump.outputs.new_version }}\` in \`ci/build/component-versions.properties\`."
+          fi
