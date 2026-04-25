@@ -605,7 +605,7 @@ jobs:
         with:
           name: artifacts-linux
           path: |
-            lib/artifacts/*
+            lib/artifacts/*.tar.gz
           if-no-files-found: error
 
       - name: Upload compilation artifact
