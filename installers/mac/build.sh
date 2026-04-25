@@ -55,6 +55,23 @@ xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
 
 rm -rf "$EXTRACTION_TARGET/__MACOSX"
 
+# Prune choreo-cli to darwin/$ARCH only
+CHOREO_CLI_DIR="$WSO2_TARGET/WSO2 Integrator.app/Contents/Resources/app/extensions/wso2.wso2-integrator/resources/choreo-cli"
+if [ -d "$CHOREO_CLI_DIR" ]; then
+    print_info "Pruning choreo-cli binaries to darwin/$ARCH only"
+    for VERSION_DIR in "$CHOREO_CLI_DIR"/*/; do
+        [ -d "$VERSION_DIR" ] || continue
+        rm -rf "${VERSION_DIR}linux"
+        rm -rf "${VERSION_DIR}win32"
+        for ARCH_DIR in "${VERSION_DIR}darwin"/*/; do
+            [ -d "$ARCH_DIR" ] || continue
+            if [ "$(basename "$ARCH_DIR")" != "$ARCH" ]; then
+                rm -rf "$ARCH_DIR"
+            fi
+        done
+    done
+fi
+
 # Extract Ballerina zip
 print_info "Extracting Ballerina to package resources"
 COMPONENTS_DIR="$WORK_DIR/payload/Applications/WSO2 Integrator.app/Contents/components"

@@ -78,6 +78,18 @@ mkdir -p "$EXTRACTION_TARGET"
 print_info "Extracting WSO2 Integrator..."
 tar -xzf "$INTEGRATOR_TAR_GZ" -C "$INTEGRATOR_TARGET" --strip-components=1
 
+# Prune choreo-cli to linux/amd64 only
+CHOREO_CLI_DIR="$INTEGRATOR_TARGET/resources/app/extensions/wso2.wso2-integrator/resources/choreo-cli"
+if [ -d "$CHOREO_CLI_DIR" ]; then
+    print_info "Pruning choreo-cli binaries to linux/amd64 only"
+    for VERSION_DIR in "$CHOREO_CLI_DIR"/*/; do
+        [ -d "$VERSION_DIR" ] || continue
+        rm -rf "${VERSION_DIR}darwin"
+        rm -rf "${VERSION_DIR}win32"
+        rm -rf "${VERSION_DIR}linux/arm64"
+    done
+fi
+
 # Extract Ballerina zip
 print_info "Extracting Ballerina to components..."
 mkdir -p "$COMPONENTS_DIR"

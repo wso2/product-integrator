@@ -55,6 +55,13 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Prune choreo-cli to win32/amd64 and linux/amd64 (WSL) only
+powershell -nologo -noprofile -command "& { $choreoCliDir = '.\WixPackage\payload\Integrator\resources\app\extensions\wso2.wso2-integrator\resources\choreo-cli'; if (Test-Path $choreoCliDir) { Get-ChildItem $choreoCliDir -Directory | ForEach-Object { $vDir = $_.FullName; Remove-Item (Join-Path $vDir 'darwin') -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item (Join-Path $vDir 'linux\arm64') -Recurse -Force -ErrorAction SilentlyContinue; Write-Host ('Pruned choreo-cli in ' + $_.Name) } } else { Write-Host 'choreo-cli directory not found, skipping prune' } }"
+if errorlevel 1 (
+    echo choreo-cli prune step failed
+    exit /b 1
+)
+
 @REM REM Extract ICP.zip
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~4', '.\temp_icp'); $icpDir = (Get-ChildItem '.\temp_icp' -Directory | Select-Object -First 1).FullName; $icpTarget = '.\WixPackage\payload\Integrator\components\icp'; New-Item -ItemType Directory -Force -Path $icpTarget | Out-Null; Copy-Item -Path \"$icpDir\*\" -Destination $icpTarget -Recurse -Force; Remove-Item -Recurse -Force '.\temp_icp' }"
 if errorlevel 1 (
