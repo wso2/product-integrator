@@ -56,6 +56,10 @@ xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
 rm -rf "$EXTRACTION_TARGET/__MACOSX"
 
 # Prune choreo-cli to darwin/$ARCH only
+case "$ARCH" in
+    amd64|arm64) ;;
+    *) print_error "Unsupported ARCH '$ARCH' for choreo-cli pruning (expected amd64 or arm64)"; exit 1 ;;
+esac
 CHOREO_CLI_DIR="$WSO2_TARGET/WSO2 Integrator.app/Contents/Resources/app/extensions/wso2.wso2-integrator/resources/choreo-cli"
 if [ -d "$CHOREO_CLI_DIR" ]; then
     print_info "Pruning choreo-cli binaries to darwin/$ARCH only"
@@ -69,6 +73,10 @@ if [ -d "$CHOREO_CLI_DIR" ]; then
                 rm -rf "$ARCH_DIR"
             fi
         done
+        if [ -d "${VERSION_DIR}darwin" ] && [ ! -d "${VERSION_DIR}darwin/$ARCH" ]; then
+            print_error "choreo-cli darwin/$ARCH not found after pruning in ${VERSION_DIR}"
+            exit 1
+        fi
     done
 fi
 
