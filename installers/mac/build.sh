@@ -128,8 +128,8 @@ if [ -f "$ICP_SCRIPT" ]; then
     sed -i '' -E "s|[[:<:]]java[[:>:]]|\"\$SCRIPT_DIR\"/../../dependencies/$JRE_FOLDER/bin/java|g" "$ICP_SCRIPT"
 fi
 
-
-
+# Fix ZIP epoch timestamps — unzip preserves 1980-01-01 dates from ZIP archives
+find "$WSO2_TARGET/WSO2 Integrator.app" -exec touch {} +
 
 # Build the component package
 pkgbuild --root "$EXTRACTION_TARGET" \

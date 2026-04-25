@@ -4,6 +4,7 @@ This file contains the declaration of all the localizable strings.
 <WixLocalization xmlns="http://wixtoolset.org/schemas/v4/wxl" Culture="en-US">
 
   <String Id="DowngradeError" Value="A newer version of [ProductName] is already installed." />
-  <String Id="InstallDirDlgDescription" Overridable="yes" Value="Click Change to install into a different folder in your user profile." />
+  <String Id="LicenseAgreementDlgDescription" Overridable="yes" Value="{\WixUI_Font_White}Please read the following license agreement carefully." />
+  <String Id="InstallDirDlgDescription" Overridable="yes" Value="{\WixUI_Font_White}Click Change to install into a different folder in your user profile." />
 
 </WixLocalization>
