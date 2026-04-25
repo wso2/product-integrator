@@ -1027,15 +1027,18 @@ jobs:
           echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Create PR with version bump
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: bump-integrator-version-${{ steps.bump.outputs.new_version }}
-          base: ${{ github.ref_name }}
-          commit-message: "Bump integrator version to ${{ steps.bump.outputs.new_version }}"
-          title: "Bump integrator version to ${{ steps.bump.outputs.new_version }}"
-          body: |
-            Automated version bump after successful release of `v${{ needs.resolve-versions.outputs.integrator_version }}`.
-
-            Increments `integrator.version` → `${{ steps.bump.outputs.new_version }}` in `ci/build/component-versions.properties`.
-          labels: automated
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="bump-integrator-version-${{ steps.bump.outputs.new_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add ci/build/component-versions.properties
+          git commit -m "Bump integrator version to ${{ steps.bump.outputs.new_version }}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --base "${{ github.ref_name }}" \
+            --head "$BRANCH" \
+            --title "Bump integrator version to ${{ steps.bump.outputs.new_version }}" \
+            --body "Automated version bump after successful release of \`v${{ needs.resolve-versions.outputs.integrator_version }}\`. Increments \`integrator.version\` to \`${{ steps.bump.outputs.new_version }}\` in \`ci/build/component-versions.properties\`."
