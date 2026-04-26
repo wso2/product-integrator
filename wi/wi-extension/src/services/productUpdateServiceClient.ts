@@ -18,6 +18,8 @@
 
 import axios from "axios";
 import * as vscode from "vscode";
+import { existsSync, readFileSync } from "fs";
+import path from "path";
 import { EXTENSION_ID, EXTENSION_PUBLISHER } from "@wso2/wi-core";
 import { ext } from "../extensionVariables";
 import { ExternalUrlRequest, UpdateCheckRequest, UpdateCheckResponse } from "./updateServiceTypes";
@@ -37,6 +39,11 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 const LAST_CHECKED_AT_KEY = "wso2-integrator.updates.lastCheckedAt";
 const LAST_NOTIFIED_VERSION_KEY = "wso2-integrator.updates.lastNotifiedVersion";
 const LAST_NOTIFIED_INSTALLED_VERSION_KEY = "wso2-integrator.updates.lastNotifiedInstalledVersion";
+
+interface ProductJsonShape {
+	wiversion?: string;
+	version?: string;
+}
 
 export class ProductUpdateServiceClient {
 	constructor(private readonly context: vscode.ExtensionContext) {}
@@ -147,6 +154,12 @@ export class ProductUpdateServiceClient {
 	}
 
 	private getInstalledVersion(): string | undefined {
+		const appVersion = this.getAppVersionFromProductJson();
+		if (appVersion) {
+			return appVersion;
+		}
+
+		// Fallback for local extension host runs where app product.json does not expose wiversion.
 		const extensionId = `${EXTENSION_PUBLISHER}.${EXTENSION_ID}`;
 		const extension =
 			vscode.extensions.getExtension(extensionId) ??
@@ -155,6 +168,22 @@ export class ProductUpdateServiceClient {
 			);
 
 		return extension?.packageJSON?.version;
+	}
+
+	private getAppVersionFromProductJson(): string | undefined {
+		try {
+			const productJsonPath = path.join(vscode.env.appRoot, "product.json");
+			if (!existsSync(productJsonPath)) {
+				return undefined;
+			}
+
+			const content = readFileSync(productJsonPath, "utf8");
+			const parsed = JSON.parse(content) as ProductJsonShape;
+			return parsed.wiversion ?? parsed.version;
+		} catch (error) {
+			ext.logError("Unable to read app product.json version; falling back to extension version", error as Error);
+			return undefined;
+		}
 	}
 
 	private async fetchLatestVersion(
