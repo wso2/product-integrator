@@ -558,7 +558,8 @@ const clearCodeServerLocalStorage = async () => {
 /** If the context.yaml exists with `local: true`, create project from its data, automatically  */
 const createProjectFromLocalMetadata = async (userInfo: UserInfo, workspacePath?: string): Promise<{ org?: Organization; project?: Project }> => {
 	try {
-		const contextFilePath = path.join(workspacePath, ".choreo", "context.yaml");
+		const wso2ContextPath = path.join(workspacePath, ".wso2", "context.yaml");
+		const contextFilePath = existsSync(wso2ContextPath) ? wso2ContextPath : path.join(workspacePath, ".choreo", "context.yaml");
 		if (!existsSync(contextFilePath)) {
 			return undefined;
 		}
