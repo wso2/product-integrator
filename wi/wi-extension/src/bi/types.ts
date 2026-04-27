@@ -28,26 +28,13 @@
 export const SHARED_COMMANDS = {
     FORCE_UPDATE_PROJECT_ARTIFACTS: 'ballerina.force.update.artifacts',
     SHOW_VISUALIZER: 'ballerina.showVisualizer',
-    GET_STATE_CONTEXT: 'ballerina.get.stateContext',
-    OPEN_BI_WELCOME: 'ballerina.open.bi.welcome',
-    OPEN_BI_NEW_PROJECT: 'ballerina.open.bi.new',
+    GET_STATE_CONTEXT: 'ballerina.get.stateContext'
 };
 
 export const BI_COMMANDS = {
     REFRESH_COMMAND: 'BI.project-explorer.refresh',
     PROJECT_EXPLORER: 'BI.project-explorer',
-    ADD_CONNECTIONS: 'BI.project-explorer.add-connection',
-    DELETE_COMPONENT: 'BI.project-explorer.delete',
-    ADD_ENTRY_POINT: 'BI.project-explorer.add-entry-point',
-    ADD_TYPE: 'BI.project-explorer.add-type',
-    VIEW_TYPE_DIAGRAM: 'BI.project-explorer.view-type-diagram',
-    ADD_FUNCTION: 'BI.project-explorer.add-function',
-    ADD_CONFIGURATION: 'BI.project-explorer.add-configuration',
-    VIEW_CONFIGURATION: 'BI.project-explorer.view-configuration',
-    ADD_PROJECT: 'BI.project-explorer.add',
     SHOW_OVERVIEW: 'BI.project-explorer.overview',
-    ADD_DATA_MAPPER: 'BI.project-explorer.add-data-mapper',
-    ADD_NATURAL_FUNCTION: 'BI.project-explorer.add-natural-function',
     NOTIFY_PROJECT_EXPLORER: 'BI.project-explorer.notify',
 };
 
