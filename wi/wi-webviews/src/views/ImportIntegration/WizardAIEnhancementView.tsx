@@ -698,13 +698,11 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
             {!isAuthPhase && <ButtonRow>
                 {isRunning && (
                     <ActionButton variant="primary" onClick={handlePause}>
-                        <span className="codicon codicon-debug-pause" />
                         Pause
                     </ActionButton>
                 )}
                 {isPaused && (
                     <ActionButton variant="primary" onClick={handleResume}>
-                        <span className="codicon codicon-debug-start" />
                         Resume
                     </ActionButton>
                 )}
@@ -725,7 +723,6 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
                         onClick={handleOpenProject}
                         disabled={isRunning || openProjectDisabled}
                     >
-                        <span className="codicon codicon-folder-opened" />
                         {isMultiProject ? "Open Workspace" : "Open Project"}
                     </ActionButton>
                 </span>

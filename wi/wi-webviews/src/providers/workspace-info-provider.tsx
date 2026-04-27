@@ -18,11 +18,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode } from "react";
+import { DEFAULT_PROFILE, SELECTED_PROFILE_CONFIG_SECTION } from "@wso2/wi-core";
 import { useVisualizerContext } from "../contexts";
 
 export const WORKSPACE_INFO_QUERY_KEYS = {
     projectModeSupported: ["project_mode_supported"] as const,
     workspaceRoot: ["workspace_root"] as const,
+    selectedProfile: ["selected_profile"] as const,
 } as const;
 
 const PROJECT_MODE_MIN_VERSION = { major: 2201, minor: 13, patch: 0 };
@@ -62,12 +64,41 @@ export function useWorkspaceRoot(): { path: string; isReady: boolean } {
 }
 
 /**
- * Drop this once inside the provider tree (inside WIWebviewQueryClientProvider).
- * It calls the workspace info hooks purely to pre-warm their React Query entries
- * at app startup, so any form that renders later receives cached values immediately.
+ * Inner component that performs the actual cache warm-up.
+ * Only mounted when the active runtime profile is the default profile, because
+ * the queries it fires (`isSupportedSLVersion`, `getWorkspaceRoot`) are
+ * Ballerina-specific and are meaningless — and potentially error-prone — under
+ * other profiles such as MI or SI.
  */
-export function WorkspaceInfoPrefetcher({ children }: { children: ReactNode }) {
+function DefaultProfilePrefetcher({ children }: { children: ReactNode }) {
     useProjectModeSupported();
     useWorkspaceRoot();
     return <>{children}</>;
+}
+
+/**
+ * It pre-warms the Ballerina workspace info queries at app startup so that any
+ * form rendering later receives cached values immediately — but only when the
+ * active runtime profile is `DEFAULT_PROFILE`. Under MI or SI profiles the
+ * children are rendered directly without firing any Ballerina-specific requests.
+ */
+export function WorkspaceInfoPrefetcher({ children }: { children: ReactNode }) {
+    const { wsClient } = useVisualizerContext();
+    const { data: selectedProfile } = useQuery({
+        queryKey: WORKSPACE_INFO_QUERY_KEYS.selectedProfile,
+        queryFn: () =>
+            wsClient
+                .getConfiguration({ section: SELECTED_PROFILE_CONFIG_SECTION })
+                .then(response => response.value as string),
+        staleTime: Infinity, // profile does not change mid-session
+    });
+
+    // While the profile is loading we default to not prefetching so we never
+    // fire Ballerina requests unnecessarily. Once resolved, only mount the
+    // inner prefetcher when the default profile is active.
+    if (selectedProfile !== DEFAULT_PROFILE) {
+        return <>{children}</>;
+    }
+
+    return <DefaultProfilePrefetcher>{children}</DefaultProfilePrefetcher>;
 }

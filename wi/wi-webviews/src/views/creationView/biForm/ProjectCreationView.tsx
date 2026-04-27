@@ -58,7 +58,7 @@ import {
 import { DEFAULT_PROJECT_NAME } from "./types";
 
 
-export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
+export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?: () => void; ballerinaUnavailable?: boolean }) {
     const { wsClient } = useVisualizerContext();
     const { authState } = useCloudContext();
     const organizations = authState?.userInfo?.organizations as Organization[] | undefined;
@@ -411,13 +411,15 @@ export function ProjectCreationView({ onBack }: { onBack?: () => void }) {
                             </CollapsibleSection>
 
                             <FormFooter>
-                                <Button
-                                    disabled={isValidating}
-                                    onClick={handleCreate}
-                                    appearance="primary"
-                                >
-                                    {isValidating ? "Validating..." : "Create Project"}
-                                </Button>
+                                <span title={ballerinaUnavailable ? "Ballerina distribution is not set up. Use Configure to set it up." : undefined}>
+                                    <Button
+                                        disabled={isValidating || ballerinaUnavailable}
+                                        onClick={handleCreate}
+                                        appearance="primary"
+                                    >
+                                        {isValidating ? "Validating..." : "Create Project"}
+                                    </Button>
+                                </span>
                             </FormFooter>
                         </FormContent>
                     </FormBody>

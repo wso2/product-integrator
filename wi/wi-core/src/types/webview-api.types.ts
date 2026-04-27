@@ -231,7 +231,6 @@ export interface MigrateRequest {
 
 export interface PullMigrationToolRequest {
     toolName: string;
-    version: string;
 }
 
 export interface ImportIntegrationWsRequest {
@@ -382,4 +381,11 @@ export interface WIVisualizerAPI {
     abortMigrationAgent: () => Promise<void>;
     checkAIAuth: () => Promise<boolean>;
     triggerAICopilotSignIn: () => Promise<SignInResult>;
+    getBIRuntimeStatus: () => Promise<BIRuntimeStatusResponse>;
+    initBIRuntimeContext: () => Promise<void>;
+}
+
+export interface BIRuntimeStatusResponse {
+    isAvailable: boolean;
+    status: string;
 }

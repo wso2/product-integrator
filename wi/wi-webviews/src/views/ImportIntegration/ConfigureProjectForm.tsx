@@ -291,7 +291,6 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         <>
             {isMultiProject ? (
                 <>
-                    <Typography variant="h2">Configure Multi-Project Import</Typography>
                     <BodyText>Select the location where you want to save the migrated integrations.</BodyText>
 
                     <MultiProjectFormFields
@@ -318,7 +317,6 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                 </>
             ) : (
                 <>
-                    <Typography variant="h2">Configure Your New {selectedResourceTypeLabel}</Typography>
                     <BodyText>
                         Please provide the necessary details to create your {selectedResourceTypeLabel.toLowerCase()}.
                     </BodyText>
