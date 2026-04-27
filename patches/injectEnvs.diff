@@ -207,7 +207,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/sc
 +		*":$VSCODE_PRODUCT_BALLERINA_BIN:"*) ;;
 +		*) __vsc_new_path="$VSCODE_PRODUCT_BALLERINA_BIN${__vsc_new_path:+:$__vsc_new_path}" ;;
 +	esac
-+	export PATH="$__vsc_new_path"
++	export PATH="$VSCODE_PRODUCT_BALLERINA_BIN:$__vsc_new_path"
 +fi
 +
  # Register Python shell activate hooks
@@ -234,9 +234,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/sc
 +		__vsc_clean_path_entries+=("$__vsc_entry")
 +	done
 +	PATH="${(j/:/)__vsc_clean_path_entries}"
-+	if [[ ":$PATH:" != *":$VSCODE_PRODUCT_BALLERINA_BIN:"* ]]; then
-+		PATH="$VSCODE_PRODUCT_BALLERINA_BIN:$PATH"
-+	fi
++	PATH="$VSCODE_PRODUCT_BALLERINA_BIN:$PATH"
 +	export PATH
 +fi
 +
