@@ -231,7 +231,6 @@ export interface MigrateRequest {
 
 export interface PullMigrationToolRequest {
     toolName: string;
-    version: string;
 }
 
 export interface ImportIntegrationWsRequest {

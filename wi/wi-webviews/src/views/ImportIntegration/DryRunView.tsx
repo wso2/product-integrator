@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { ActionButtons, Typography } from "@wso2/ui-toolkit";
+import { ActionButtons, Button, Typography } from "@wso2/ui-toolkit";
 import { useEffect, useMemo, useState } from "react";
 import { MigrationLogs } from "./components/MigrationLogs";
 import { MigrationStatusContent } from "./components/MigrationStatusContent";
@@ -35,6 +35,10 @@ export function DryRunView({
     isMultiProject,
     onNext,
     onDone,
+    onBack,
+    toolPullFailed,
+    toolPullFailureMessage,
+    migrationToolCommandName,
 }: DryRunViewProps) {
     const [isLogsOpen, setIsLogsOpen] = useState(false);
     const { wsClient } = useVisualizerContext();
@@ -102,6 +106,37 @@ export function DryRunView({
     };
 
     const displayState = getMigrationDisplayState(migrationCompleted, migrationSuccessful, !!parsedReportData);
+
+    if (toolPullFailed) {
+        return (
+            <>
+                <div>
+                    <Typography variant="h2">Tool Installation Failed</Typography>
+                    <BodyText>
+                        {toolPullFailureMessage || "An error occurred while installing the migration tool."}
+                    </BodyText>
+                    <BodyText style={{ marginTop: 12 }}>
+                        You can install the tool manually by running the following command in your terminal:
+                    </BodyText>
+                    <pre style={{
+                        fontFamily: "var(--vscode-editor-font-family, monospace)",
+                        background: "color-mix(in srgb, var(--vscode-editor-background) 80%, var(--vscode-panel-border))",
+                        border: "1px solid var(--vscode-panel-border)",
+                        borderRadius: 6,
+                        padding: "8px 12px",
+                        marginTop: 8,
+                        fontSize: "0.9em",
+                        overflowX: "auto",
+                    }}>
+                        {`bal tool pull ${migrationToolCommandName ?? "migrate-mule"}`}
+                    </pre>
+                </div>
+                <ButtonWrapper>
+                    <Button appearance="secondary" onClick={onBack ?? onDone}>Back</Button>
+                </ButtonWrapper>
+            </>
+        );
+    }
 
     let headerText: string;
     let headerDesc: string;
