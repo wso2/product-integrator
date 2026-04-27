@@ -72,11 +72,15 @@ export function splitContent(content: string): Segment[] {
                 toolName,
             });
         } else if (match[3] !== undefined) {
-            // <errormsg>
+            // <errormsg> — decode HTML entities escaped at the insertion point
+            const decoded = match[3]
+                .replace(/&gt;/g, ">")
+                .replace(/&lt;/g, "<")
+                .replace(/&amp;/g, "&");
             segments.push({
                 type: SegmentType.Error,
                 loading: false,
-                text: match[3],
+                text: decoded,
             });
         }
 

@@ -406,11 +406,17 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
                     setStatus("completed");
                     break;
 
-                case "error":
-                    updateContent((prev) => prev + `\n\n<errormsg>${event.content ?? "An unexpected error occurred."}</errormsg>`);
+                case "error": {
+                    const rawMsg = event.content ?? "An unexpected error occurred.";
+                    const safeMsg = rawMsg
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;");
+                    updateContent((prev) => prev + `\n\n<errormsg>${safeMsg}</errormsg>`);
                     terminalRef.current = true;
                     setStatus("error");
                     break;
+                }
 
                 case "abort":
                     terminalRef.current = true;
