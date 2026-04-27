@@ -24,6 +24,7 @@ import MarkdownRenderer from "../shared/ai/MarkdownRenderer";
 import { splitContent, SegmentType } from "../shared/ai/segment";
 import ToolCallSegment from "../shared/ai/ToolCallSegment";
 import ToolCallGroupSegment, { ToolCallItem } from "../shared/ai/ToolCallGroupSegment";
+import ErrorSegment from "../shared/ai/ErrorSegment";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Types
@@ -406,7 +407,7 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
                     break;
 
                 case "error":
-                    updateContent((prev) => prev + `\n\n**Error:** ${event.content ?? "An unexpected error occurred."}`);
+                    updateContent((prev) => prev + `\n\n<errormsg>${event.content ?? "An unexpected error occurred."}</errormsg>`);
                     terminalRef.current = true;
                     setStatus("error");
                     break;
@@ -682,6 +683,10 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
                         }
 
                         return <ToolCallGroupSegment key={`tool-group-${i}`} segments={groupItems} />;
+                    }
+
+                    if (segment.type === SegmentType.Error) {
+                        return <ErrorSegment key={`error-${i}`} text={segment.text} />;
                     }
 
                     if (segment.text.trim()) {
