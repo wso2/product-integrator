@@ -39,6 +39,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 const LAST_CHECKED_AT_KEY = "wso2-integrator.updates.lastCheckedAt";
 const LAST_NOTIFIED_VERSION_KEY = "wso2-integrator.updates.lastNotifiedVersion";
 const LAST_NOTIFIED_INSTALLED_VERSION_KEY = "wso2-integrator.updates.lastNotifiedInstalledVersion";
+const APP_VERSION_ENV_KEY = "WSO2_INTEGRATOR_VERSION";
 
 interface ProductJsonShape {
 	wiversion?: string;
@@ -153,6 +154,11 @@ export class ProductUpdateServiceClient {
 	}
 
 	private getInstalledVersion(): string | undefined {
+		const appVersionFromEnv = this.getAppVersionFromEnv();
+		if (appVersionFromEnv) {
+			return appVersionFromEnv;
+		}
+
 		const appVersion = this.getAppVersionFromProductJson();
 		if (appVersion) {
 			return appVersion;
@@ -167,6 +173,16 @@ export class ProductUpdateServiceClient {
 			);
 
 		return extension?.packageJSON?.version;
+	}
+
+	private getAppVersionFromEnv(): string | undefined {
+		const appVersionFromEnv = process.env[APP_VERSION_ENV_KEY];
+		if (!appVersionFromEnv) {
+			return undefined;
+		}
+
+		const normalizedVersion = appVersionFromEnv.trim();
+		return normalizedVersion.length > 0 ? normalizedVersion : undefined;
 	}
 
 	private getAppVersionFromProductJson(): string | undefined {

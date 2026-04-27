@@ -177,7 +177,8 @@ fi)
     ],
     "runtimeEnv": {
       "common": {
-        "WSO2_INTEGRATOR_RUNTIME": "true"
+        "WSO2_INTEGRATOR_RUNTIME": "true",
+        "WSO2_INTEGRATOR_VERSION": "${VERSION}"
       },
       "darwin": {
         "BALLERINA_HOME": "\${APP_ROOT}/Contents/components/ballerina",
