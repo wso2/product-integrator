@@ -18,9 +18,6 @@
 
 import axios from "axios";
 import * as vscode from "vscode";
-import { existsSync, readFileSync } from "fs";
-import path from "path";
-import { EXTENSION_ID, EXTENSION_PUBLISHER } from "@wso2/wi-core";
 import { ext } from "../extensionVariables";
 import { ExternalUrlRequest, UpdateCheckRequest, UpdateCheckResponse } from "./updateServiceTypes";
 
@@ -40,10 +37,6 @@ const LAST_CHECKED_AT_KEY = "wso2-integrator.updates.lastCheckedAt";
 const LAST_NOTIFIED_VERSION_KEY = "wso2-integrator.updates.lastNotifiedVersion";
 const LAST_NOTIFIED_INSTALLED_VERSION_KEY = "wso2-integrator.updates.lastNotifiedInstalledVersion";
 const APP_VERSION_ENV_KEY = "WSO2_INTEGRATOR_VERSION";
-
-interface ProductJsonShape {
-	wiversion?: string;
-}
 
 export class ProductUpdateServiceClient {
 	constructor(private readonly context: vscode.ExtensionContext) {}
@@ -73,6 +66,12 @@ export class ProductUpdateServiceClient {
 		}
 
 		const installedVersion = this.getInstalledVersion();
+		if (!installedVersion) {
+			return {
+				status: "unavailable",
+				message: "Unable to determine WSO2 Integrator app version.",
+			};
+		}
 		ext.log(`Checking WSO2 Integrator updates. Installed version: ${installedVersion ?? "unknown"}`);
 
 		try {
@@ -154,25 +153,7 @@ export class ProductUpdateServiceClient {
 	}
 
 	private getInstalledVersion(): string | undefined {
-		const appVersionFromEnv = this.getAppVersionFromEnv();
-		if (appVersionFromEnv) {
-			return appVersionFromEnv;
-		}
-
-		const appVersion = this.getAppVersionFromProductJson();
-		if (appVersion) {
-			return appVersion;
-		}
-
-		// Fallback for local extension host runs where app product.json does not expose wiversion.
-		const extensionId = `${EXTENSION_PUBLISHER}.${EXTENSION_ID}`;
-		const extension =
-			vscode.extensions.getExtension(extensionId) ??
-			vscode.extensions.all.find(
-				(item) => item.packageJSON?.publisher === EXTENSION_PUBLISHER && item.packageJSON?.name === EXTENSION_ID,
-			);
-
-		return extension?.packageJSON?.version;
+		return this.getAppVersionFromEnv();
 	}
 
 	private getAppVersionFromEnv(): string | undefined {
@@ -183,22 +164,6 @@ export class ProductUpdateServiceClient {
 
 		const normalizedVersion = appVersionFromEnv.trim();
 		return normalizedVersion.length > 0 ? normalizedVersion : undefined;
-	}
-
-	private getAppVersionFromProductJson(): string | undefined {
-		try {
-			const productJsonPath = path.join(vscode.env.appRoot, "product.json");
-			if (!existsSync(productJsonPath)) {
-				return undefined;
-			}
-
-			const content = readFileSync(productJsonPath, "utf8");
-			const parsed = JSON.parse(content) as ProductJsonShape;
-			return parsed.wiversion;
-		} catch (error) {
-			ext.logError("Unable to read app product.json version; falling back to extension version", error as Error);
-			return undefined;
-		}
 	}
 
 	private async fetchLatestVersion(
