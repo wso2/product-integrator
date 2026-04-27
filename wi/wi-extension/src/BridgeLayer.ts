@@ -372,6 +372,9 @@ export class BridgeLayer {
         registerRoute("abortMigrationAgent", async () => wsManager.abortMigrationAgent());
         registerRoute("checkAIAuth", async () => wsManager.checkAIAuth());
         registerRoute("triggerAICopilotSignIn", async () => wsManager.triggerAICopilotSignIn());
+        registerRoute("triggerAnthropicKeySignIn", async (request) => wsManager.triggerAnthropicKeySignIn(request.params));
+        registerRoute("triggerAwsBedrockSignIn", async (request) => wsManager.triggerAwsBedrockSignIn(request.params));
+        registerRoute("triggerVertexAiSignIn", async (request) => wsManager.triggerVertexAiSignIn(request.params));
         registerRoute("getBIRuntimeStatus", async () => wsManager.getBIRuntimeStatus());
         registerRoute("initBIRuntimeContext", async () => wsManager.initBIRuntimeContext());
 

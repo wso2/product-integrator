@@ -29,6 +29,9 @@ export interface BallerinaExtMigrationAPI {
     onChatNotify: Event<WIChatNotify>;
     isAIAuthenticated: () => boolean;
     signInForAI: () => Promise<{ success: boolean; error?: string }>;
+    signInWithAnthropicKey: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
+    signInWithAwsBedrock: (creds: { accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string }) => Promise<{ success: boolean; error?: string }>;
+    signInWithVertexAI: (creds: { projectId: string; location: string; clientEmail: string; privateKey: string }) => Promise<{ success: boolean; error?: string }>;
 }
 
 /**

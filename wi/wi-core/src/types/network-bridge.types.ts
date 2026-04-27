@@ -150,6 +150,9 @@ export interface WIWsMethodParamsMap {
     openMigratedProject: void;
     abortMigrationAgent: void; checkAIAuth: void;
     triggerAICopilotSignIn: void;
+    triggerAnthropicKeySignIn: { apiKey: string };
+    triggerAwsBedrockSignIn: { accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string };
+    triggerVertexAiSignIn: { projectId: string; location: string; clientEmail: string; privateKey: string };
     getBIRuntimeStatus: void;
     initBIRuntimeContext: void;
     // ── Cloud methods ─────────────────────────────────────────
@@ -218,6 +221,9 @@ export interface WIWsMethodResultMap {
     openMigratedProject: void;
     abortMigrationAgent: void; checkAIAuth: boolean;
     triggerAICopilotSignIn: SignInResult;
+    triggerAnthropicKeySignIn: SignInResult;
+    triggerAwsBedrockSignIn: SignInResult;
+    triggerVertexAiSignIn: SignInResult;
     getBIRuntimeStatus: BIRuntimeStatusResponse;
     initBIRuntimeContext: void;
     // ── Cloud methods ─────────────────────────────────────────

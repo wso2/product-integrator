@@ -680,6 +680,24 @@ export class MainWsManager implements WIVisualizerAPI {
         return result;
     }
 
+    async triggerAnthropicKeySignIn(params: { apiKey: string }): Promise<{ success: boolean; error?: string }> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        const result = await (migrationAPI?.signInWithAnthropicKey(params.apiKey) ?? Promise.resolve({ success: false, error: "Migration API not available." }));
+        return result;
+    }
+
+    async triggerAwsBedrockSignIn(params: { accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string }): Promise<{ success: boolean; error?: string }> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        const result = await (migrationAPI?.signInWithAwsBedrock(params) ?? Promise.resolve({ success: false, error: "Migration API not available." }));
+        return result;
+    }
+
+    async triggerVertexAiSignIn(params: { projectId: string; location: string; clientEmail: string; privateKey: string }): Promise<{ success: boolean; error?: string }> {
+        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+        const result = await (migrationAPI?.signInWithVertexAI(params) ?? Promise.resolve({ success: false, error: "Migration API not available." }));
+        return result;
+    }
+
     /**
      * Pure status check — returns whether the Ballerina distribution is installed
      * and ready without performing any initialisation or subscription wiring.
