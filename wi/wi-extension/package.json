@@ -3,7 +3,7 @@
   "displayName": "WSO2 Integrator (Alpha)",
   "description": "Integration development environment for WSO2 Integrator",
   "version": "0.2.5",
-  "cliVersion": "v1.2.212604091715",
+  "cliVersion": "v1.2.212604271730",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
   "license": "Apache-2.0",
