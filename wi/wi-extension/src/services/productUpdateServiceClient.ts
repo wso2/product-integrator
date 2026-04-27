@@ -42,7 +42,6 @@ const LAST_NOTIFIED_INSTALLED_VERSION_KEY = "wso2-integrator.updates.lastNotifie
 
 interface ProductJsonShape {
 	wiversion?: string;
-	version?: string;
 }
 
 export class ProductUpdateServiceClient {
@@ -179,7 +178,7 @@ export class ProductUpdateServiceClient {
 
 			const content = readFileSync(productJsonPath, "utf8");
 			const parsed = JSON.parse(content) as ProductJsonShape;
-			return parsed.wiversion ?? parsed.version;
+			return parsed.wiversion;
 		} catch (error) {
 			ext.logError("Unable to read app product.json version; falling back to extension version", error as Error);
 			return undefined;
