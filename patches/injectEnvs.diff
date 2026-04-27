@@ -173,7 +173,7 @@ Index: product-integrator/lib/vscode/src/main.ts
 +	}
 +
 +	if (runtimeBallerinaBin) {
-+		process.env['WSO2_BALLERINA_BIN'] = runtimeBallerinaBin;
++		process.env['VSCODE_PRODUCT_BALLERINA_BIN'] = runtimeBallerinaBin;
 +	}
 +
  	process.env['VSCODE_NLS_CONFIG'] = JSON.stringify(nlsConfig);
@@ -189,12 +189,12 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/sc
  
 +# Keep only the configured ballerina bin path in PATH and drop all other
 +# ballerina-related entries that may be added by shell startup scripts.
-+if [ -n "${WSO2_BALLERINA_BIN:-}" ]; then
++if [ -n "${VSCODE_PRODUCT_BALLERINA_BIN:-}" ]; then
 +	IFS=':' read -ra __vsc_path_entries <<< "$PATH"
 +	__vsc_new_path=""
 +	for __vsc_entry in "${__vsc_path_entries[@]}"; do
 +		__vsc_entry_lower="$(echo "$__vsc_entry" | tr '[:upper:]' '[:lower:]')"
-+		if [[ "$__vsc_entry_lower" == *ballerina* ]] && [[ "$__vsc_entry" != "$WSO2_BALLERINA_BIN" ]]; then
++		if [[ "$__vsc_entry_lower" == *ballerina* ]] && [[ "$__vsc_entry" != "$VSCODE_PRODUCT_BALLERINA_BIN" ]]; then
 +			continue
 +		fi
 +		if [ -z "$__vsc_new_path" ]; then
@@ -204,8 +204,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/sc
 +		fi
 +	done
 +	case ":$__vsc_new_path:" in
-+		*":$WSO2_BALLERINA_BIN:"*) ;;
-+		*) __vsc_new_path="$WSO2_BALLERINA_BIN${__vsc_new_path:+:$__vsc_new_path}" ;;
++		*":$VSCODE_PRODUCT_BALLERINA_BIN:"*) ;;
++		*) __vsc_new_path="$VSCODE_PRODUCT_BALLERINA_BIN${__vsc_new_path:+:$__vsc_new_path}" ;;
 +	esac
 +	export PATH="$__vsc_new_path"
 +fi
@@ -213,35 +213,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/sc
  # Register Python shell activate hooks
  # Prevent multiple activation with guard
  if [ -z "${VSCODE_PYTHON_AUTOACTIVATE_GUARD:-}" ]; then
-Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
-===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
-+++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
-@@ -36,6 +36,24 @@ if set -q VSCODE_PATH_PREFIX
- end
- set -e VSCODE_PATH_PREFIX
- 
-+# Keep only the configured ballerina bin path in PATH and drop all other
-+# ballerina-related entries that may be added by shell startup scripts.
-+if set -q WSO2_BALLERINA_BIN
-+	set -l __vsc_clean_path_entries
-+	for __vsc_entry in $PATH
-+		set -l __vsc_entry_lower (string lower -- "$__vsc_entry")
-+		if string match -q "*ballerina*" -- "$__vsc_entry_lower"; and test "$__vsc_entry" != "$WSO2_BALLERINA_BIN"
-+			continue
-+		end
-+		set __vsc_clean_path_entries $__vsc_clean_path_entries "$__vsc_entry"
-+	end
-+	if test (count $__vsc_clean_path_entries) -eq 0; or test "$__vsc_clean_path_entries[1]" != "$WSO2_BALLERINA_BIN"
-+		set __vsc_clean_path_entries (string match -v -- "$WSO2_BALLERINA_BIN" $__vsc_clean_path_entries)
-+		set __vsc_clean_path_entries "$WSO2_BALLERINA_BIN" $__vsc_clean_path_entries
-+	end
-+	set -gx PATH $__vsc_clean_path_entries
-+end
-+
- set -g vsc_env_keys
- set -g vsc_env_values
- 
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
@@ -252,19 +223,19 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/sc
  
 +# Keep only the configured ballerina bin path in PATH and drop all other
 +# ballerina-related entries that may be added by shell startup scripts.
-+if [ -n "${WSO2_BALLERINA_BIN:-}" ]; then
++if [ -n "${VSCODE_PRODUCT_BALLERINA_BIN:-}" ]; then
 +	typeset -a __vsc_path_entries
 +	typeset -a __vsc_clean_path_entries
 +	IFS=':' read -rA __vsc_path_entries <<< "$PATH"
 +	for __vsc_entry in "${__vsc_path_entries[@]}"; do
-+		if [[ "${__vsc_entry:l}" == *ballerina* ]] && [[ "$__vsc_entry" != "$WSO2_BALLERINA_BIN" ]]; then
++		if [[ "${__vsc_entry:l}" == *ballerina* ]] && [[ "$__vsc_entry" != "$VSCODE_PRODUCT_BALLERINA_BIN" ]]; then
 +			continue
 +		fi
 +		__vsc_clean_path_entries+=("$__vsc_entry")
 +	done
 +	PATH="${(j/:/)__vsc_clean_path_entries}"
-+	if [[ ":$PATH:" != *":$WSO2_BALLERINA_BIN:"* ]]; then
-+		PATH="$WSO2_BALLERINA_BIN:$PATH"
++	if [[ ":$PATH:" != *":$VSCODE_PRODUCT_BALLERINA_BIN:"* ]]; then
++		PATH="$VSCODE_PRODUCT_BALLERINA_BIN:$PATH"
 +	fi
 +	export PATH
 +fi
@@ -276,18 +247,19 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/te
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
-@@ -258,6 +258,10 @@ export async function createTerminalEnvi
+@@ -258,6 +258,11 @@ export async function createTerminalEnvi
  		// Merge process env with the env from config and from shellLaunchConfig
  		mergeNonNullKeys(env, baseEnv);
  
 +		// Preserve runtime PATH prefix marker from startup before sanitize step
 +		// removes internal VSCODE_* variables.
 +		const runtimePathPrefix = env['VSCODE_PRODUCT_RUNTIME_PATH_PREFIX'];
++		const runtimeBallerinaBin = env['VSCODE_PRODUCT_BALLERINA_BIN'];
 +
  		const allowedEnvFromConfig = { ...envFromConfig };
  
  		// Resolve env vars from config and shell
-@@ -298,6 +302,17 @@ export async function createTerminalEnvi
+@@ -298,6 +303,21 @@ export async function createTerminalEnvi
  		mergeEnvironments(env, allowedEnvFromConfig);
  		mergeEnvironments(env, shellLaunchConfig.env);
  
@@ -300,6 +272,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/te
 +			if (typeof existingPath === 'string' && !existingPath.startsWith(runtimePathPrefix)) {
 +				env['PATH'] = `${runtimePathPrefix}${existingPath}`;
 +			}
++		}
++
++		if (typeof runtimeBallerinaBin === 'string' && runtimeBallerinaBin.length > 0) {
++			env['VSCODE_PRODUCT_BALLERINA_BIN'] = runtimeBallerinaBin;
 +		}
 +
  		// Adding other env keys necessary to create the process
