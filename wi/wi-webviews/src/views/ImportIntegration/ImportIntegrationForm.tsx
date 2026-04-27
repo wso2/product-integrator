@@ -124,7 +124,7 @@ export function ImportIntegrationForm({
             return;
         }
 
-        // Store params; if tool needs downloading, start it in background
+        // Store params and always pull the latest migration tool before proceeding.
         const finalParams: FinalIntegrationParams = {
             importSourcePath,
             type: selectedIntegration!.title,
@@ -132,9 +132,7 @@ export function ImportIntegrationForm({
         };
 
         setImportParams(finalParams);
-        if (selectedIntegration!.needToPull) {
-            pullIntegrationTool(selectedIntegration!.commandName, selectedIntegration!.requiredVersion);
-        }
+        pullIntegrationTool(selectedIntegration!.commandName);
         onNext();
     };
 
