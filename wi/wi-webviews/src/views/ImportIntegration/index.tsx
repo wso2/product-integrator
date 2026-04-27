@@ -54,6 +54,8 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const [migrationToolLogs, setMigrationToolLogs] = useState<string[]>([]);
     const [migratedProjects, setMigratedProjects] = useState<ProjectMigrationResult[]>([]);
     const [pullingTool, setPullingTool] = useState(false);
+    const [toolPullFailed, setToolPullFailed] = useState(false);
+    const [toolPullFailureMessage, setToolPullFailureMessage] = useState<string | null>(null);
     const [selectedIntegration, setSelectedIntegration] = useState<MigrationTool | null>(null);
     const [migrationTools, setMigrationTools] = useState<MigrationTool[]>([]);
     const [importParams, setImportParams] = useState<FinalIntegrationParams | null>(null);
@@ -98,10 +100,6 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
         params: FinalIntegrationParams,
         integration: MigrationTool,
     ) => {
-        if (integration.needToPull && toolPullProgress && toolPullProgress.step === -1) {
-            console.error("Cannot start dry run, tool download failed.");
-            return;
-        }
         activeRunRef.current = "dryRun";
         const wsParams: ImportIntegrationWsRequest = {
             packageName: "",
@@ -132,10 +130,6 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
         project: ProjectRequest
     ) => {
         activeRunRef.current = "migration";
-        if (integration.needToPull && toolPullProgress && toolPullProgress.step === -1) {
-            console.error("Cannot start import, tool download failed.");
-            return;
-        }
         console.log("Starting import with params:", params);
 
         const wsParams: ImportIntegrationWsRequest = {
@@ -167,8 +161,23 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     };
 
     const handleStepBack = () => {
+        if (step === 1) {
+            // Back from dry run → reset pull failure so user can retry
+            setToolPullFailed(false);
+            setToolPullFailureMessage(null);
+            setToolPullProgress(null);
+            setPullingTool(false);
+            dryRunStartedRef.current = false;
+            setDryRunToolState(null);
+            setDryRunLogs([]);
+            setDryRunCompleted(false);
+            setDryRunSuccessful(false);
+            setDryRunResponse(null);
+            setDryRunProjects([]);
+            activeRunRef.current = null;
+        }
         if (step === 3) {
-            // Back from rule-based migration → reset migration state
+            // Back from rule-based migration → reset migration state and pull failure
             migrationStartedRef.current = false;
             setMigrationToolState(null);
             setMigrationToolLogs([]);
@@ -176,6 +185,10 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
             setMigrationSuccessful(false);
             setMigrationResponse(null);
             setMigratedProjects([]);
+            setToolPullFailed(false);
+            setToolPullFailureMessage(null);
+            setToolPullProgress(null);
+            setPullingTool(false);
             activeRunRef.current = null;
         }
         setStep(step - 1);
@@ -240,7 +253,8 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
 
             if (progressUpdate.step === -1) {
                 setPullingTool(false);
-                wsClient.showErrorMessage({ message: progressUpdate.message })
+                setToolPullFailed(true);
+                setToolPullFailureMessage(progressUpdate.message);
             }
         });
 
@@ -276,35 +290,37 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     }, [wsClient]);
 
     useEffect(() => {
-        // Start the dry run when step 1 is reached and the tool (if needToPull) is ready.
+        // Start the dry run when step 1 is reached and the tool pull has succeeded.
         // dryRunStartedRef prevents a double-start if multiple deps fire simultaneously.
         if (
             step === 1 &&
             !dryRunStartedRef.current &&
+            !toolPullFailed &&
             importParams &&
             selectedIntegration &&
-            (!selectedIntegration.needToPull || toolPullProgress?.success)
+            toolPullProgress?.success === true
         ) {
             dryRunStartedRef.current = true;
             handleStartDryRun(importParams, selectedIntegration);
         }
-    }, [step, toolPullProgress?.success]);
+    }, [step, toolPullFailed, toolPullProgress?.success]);
 
     useEffect(() => {
-        // Start the rule-based migration when step 3 is reached and the tool (if needToPull) is ready.
+        // Start the rule-based migration when step 3 is reached and the tool pull has succeeded.
         // migrationStartedRef prevents a double-start if multiple deps fire simultaneously.
         if (
             step === 3 &&
             !migrationStartedRef.current &&
+            !toolPullFailed &&
             importParams &&
             selectedIntegration &&
             storedProjectRequest &&
-            (!selectedIntegration.needToPull || toolPullProgress?.success)
+            toolPullProgress?.success === true
         ) {
             migrationStartedRef.current = true;
             handleStartImport(importParams, selectedIntegration, storedProjectRequest);
         }
-    }, [step, toolPullProgress?.success, storedProjectRequest]);
+    }, [step, toolPullFailed, toolPullProgress?.success, storedProjectRequest]);
 
     return (
         <PageBackdrop>
@@ -360,6 +376,10 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                 isMultiProject={dryRunProjects.length > 0}
                                 onNext={() => setStep(2)}
                                 onDone={onBack ?? (() => { })}
+                                toolPullFailed={toolPullFailed}
+                                toolPullFailureMessage={toolPullFailureMessage}
+                                migrationToolCommandName={selectedIntegration?.commandName}
+                                onBack={handleStepBack}
                             />
                         )}
                         {step === 2 && (
@@ -383,6 +403,9 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                 onDone={handleDone}
                                 onOpenProject={handleOpenProject}
                                 onBack={handleStepBack}
+                                toolPullFailed={toolPullFailed}
+                                toolPullFailureMessage={toolPullFailureMessage}
+                                migrationToolCommandName={selectedIntegration?.commandName}
                             />
                         )}
                         {step === 4 && (

@@ -560,11 +560,11 @@ export class MainWsManager implements WIVisualizerAPI {
         });
     }
 
-    async pullMigrationTool(args: { toolName: string; version: string }): Promise<void> {
+    async pullMigrationTool(args: { toolName: string; version?: string }): Promise<void> {
         try {
-            await pullMigrationTool(args.toolName, args.version);
+            await pullMigrationTool(args.toolName);
         } catch (error) {
-            console.error(`Failed to pull migration tool '${args.toolName}' version '${args.version}':`, error);
+            console.error(`Failed to pull migration tool '${args.toolName}':`, error);
             throw error;
         }
     }

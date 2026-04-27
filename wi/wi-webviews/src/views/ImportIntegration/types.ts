@@ -68,6 +68,9 @@ export interface MigrationProgressProps {
     onDone: () => void;
     onOpenProject: () => void;
     onBack: () => void;
+    toolPullFailed?: boolean;
+    toolPullFailureMessage?: string | null;
+    migrationToolCommandName?: string;
 }
 
 export interface DryRunViewProps {
@@ -80,6 +83,10 @@ export interface DryRunViewProps {
     isMultiProject: boolean;
     onNext: () => void;
     onDone: () => void;
+    onBack?: () => void;
+    toolPullFailed?: boolean;
+    toolPullFailureMessage?: string | null;
+    migrationToolCommandName?: string;
 }
 
 export interface ProjectRequest {
