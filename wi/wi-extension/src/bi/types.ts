@@ -16,13 +16,8 @@
  * under the License.
  */
 
-/**
- * BI-related constants and types, mirrored from @wso2/ballerina-core
- * to keep the WI extension independent of the BI extension.
- */
-
 // ---------------------------------------------------------------------------
-// Command constants (mirrors BI_COMMANDS and SHARED_COMMANDS in ballerina-core)
+// BI-related constants and types
 // ---------------------------------------------------------------------------
 
 export const SHARED_COMMANDS = {
