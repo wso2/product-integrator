@@ -1,8 +1,8 @@
-diff --git a/src/main.ts b/src/main.ts
-index ec188d02721..06383033970 100644
---- a/src/main.ts
-+++ b/src/main.ts
-@@ -17,6 +17,7 @@ import { getUserDataPath } from './vs/platform/environment/node/userDataPath.js'
+Index: b/lib/vscode/src/main.ts
+===================================================================
+--- a/lib/vscode/src/main.ts
++++ b/lib/vscode/src/main.ts
+@@ -17,6 +17,7 @@ import { getUserDataPath } from './vs/pl
  import * as perf from './vs/base/common/performance.js';
  import { resolveNLSConfiguration } from './vs/base/node/nls.js';
  import { getUNCHost, addUNCHostToAllowlist } from './vs/base/node/unc.js';
@@ -104,89 +104,35 @@ index ec188d02721..06383033970 100644
  	process.env['VSCODE_NLS_CONFIG'] = JSON.stringify(nlsConfig);
  	process.env['VSCODE_CODE_CACHE_PATH'] = codeCachePath || '';
  
-diff --git a/src/vs/base/common/product.ts b/src/vs/base/common/product.ts
-index 5329d65bb46..aa77af1e54c 100644
---- a/src/vs/base/common/product.ts
-+++ b/src/vs/base/common/product.ts
-@@ -63,11 +63,29 @@ export type ExtensionVirtualWorkspaceSupport = {
- 	readonly override?: boolean;
- };
+Index: b/lib/vscode/src/vs/server/node/extensionHostConnection.ts
+===================================================================
+--- a/lib/vscode/src/vs/server/node/extensionHostConnection.ts
++++ b/lib/vscode/src/vs/server/node/extensionHostConnection.ts
+@@ -69,6 +69,8 @@ export async function buildUserEnvironme
  
-+export interface IProductRuntimeEnvironmentMetadata {
-+	readonly pathRemovePattern?: string;
-+}
-+
-+export interface IProductRuntimeEnvironmentMap {
-+	readonly __meta?: IProductRuntimeEnvironmentMetadata;
-+	readonly [key: string]: unknown;
-+}
-+
-+export interface IProductRuntimeEnvironmentByPlatform {
-+	readonly common?: IProductRuntimeEnvironmentMap;
-+	readonly default?: IProductRuntimeEnvironmentMap;
-+	readonly darwin?: IProductRuntimeEnvironmentMap;
-+	readonly linux?: IProductRuntimeEnvironmentMap;
-+	readonly win32?: IProductRuntimeEnvironmentMap;
-+}
-+
- export interface IProductConfiguration {
- 	readonly version: string;
- 	readonly date?: string;
- 	readonly quality?: string;
- 	readonly commit?: string;
-+	readonly runtimeEnv?: IProductRuntimeEnvironmentMap | IProductRuntimeEnvironmentByPlatform;
- 
- 	readonly nameShort: string;
- 	readonly nameLong: string;
-diff --git a/src/vs/server/node/extensionHostConnection.ts b/src/vs/server/node/extensionHostConnection.ts
-index 6ae4edd84b9..d0e634f4e98 100644
---- a/src/vs/server/node/extensionHostConnection.ts
-+++ b/src/vs/server/node/extensionHostConnection.ts
-@@ -15,6 +15,7 @@ import { removeDangerousEnvVariables } from '../../base/common/processes.js';
- import { createRandomIPCHandle, NodeSocket, WebSocketNodeSocket } from '../../base/parts/ipc/node/ipc.net.js';
- import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
- import { ILogService } from '../../platform/log/common/log.js';
-+import { applyStoredProductRuntimeEnvironment } from '../../platform/product/common/runtimeEnvironment.js';
- import { IRemoteExtensionHostStartParams } from '../../platform/remote/common/remoteAgentConnection.js';
- import { getResolvedShellEnv } from '../../platform/shell/node/shellEnv.js';
- import { IExtensionHostStatusService } from './extensionHostStatusService.js';
-@@ -66,6 +67,8 @@ export async function buildUserEnvironment(startParamsEnv: { [key: string]: stri
- 	env.VSCODE_RECONNECTION_GRACE_TIME = String(environmentService.reconnectionGraceTime);
- 	logService.trace(`[reconnection-grace-time] Setting VSCODE_RECONNECTION_GRACE_TIME env var for extension host: ${environmentService.reconnectionGraceTime}ms (${Math.floor(environmentService.reconnectionGraceTime / 1000)}s)`);
+ 	applyStoredProductRuntimeEnvironment(env);
  
 +	applyStoredProductRuntimeEnvironment(env);
 +
  	removeNulls(env);
  	return env;
  }
-diff --git a/src/vs/server/node/remoteTerminalChannel.ts b/src/vs/server/node/remoteTerminalChannel.ts
-index a455eba4267..d352ce28d40 100644
---- a/src/vs/server/node/remoteTerminalChannel.ts
-+++ b/src/vs/server/node/remoteTerminalChannel.ts
-@@ -254,6 +254,7 @@ export class RemoteTerminalChannel extends Disposable implements IServerChannel<
- 			const workspaceFolder = activeWorkspaceFolder ? activeWorkspaceFolder ?? undefined : undefined;
- 			await mergedCollection.applyToProcessEnvironment(env, { workspaceFolder }, variableResolver);
+Index: b/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
+===================================================================
+--- a/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
++++ b/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
+@@ -184,6 +184,7 @@ export class RemoteTerminalChannel exten
+ 			case RemoteTerminalChannelEvent.OnDidRequestDetach: return (this._ptyHostService.onDidRequestDetach || Event.None) as Event<T>;
+ 			case RemoteTerminalChannelEvent.OnDidChangeProperty: return (this._ptyHostService.onDidChangeProperty) as Event<T>;
  		}
 +		terminalEnvironment.reapplyProductRuntimeEnvironment(env);
  
- 		// Fork the process and listen for messages
- 		this._logService.debug(`Terminal process launching on remote agent`, { shellLaunchConfig, initialCwd, cols: args.cols, rows: args.rows, env });
-diff --git a/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts b/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
-index 15c30bd3ee3..6fc36e678ba 100644
---- a/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
-+++ b/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
-@@ -475,6 +475,7 @@ export class TerminalProcessManager extends Disposable implements ITerminalProce
- 				this._onEnvironmentVariableInfoChange.fire(this.environmentVariableInfo);
- 			}
- 		}
-+		terminalEnvironment.reapplyProductRuntimeEnvironment(env);
- 		return env;
- 	}
- 
-diff --git a/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh b/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
-index 8ec742e124f..74c7f3e21eb 100644
---- a/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
-+++ b/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
+ 		// @ts-expect-error Assert event is the `never` type to ensure all messages are handled
+ 		throw new Error(`IPC Command ${event} not found`);
+Index: b/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
+===================================================================
+--- a/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
++++ b/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
 @@ -91,6 +91,84 @@ if [ -n "${VSCODE_ENV_APPEND:-}" ]; then
  	builtin unset VSCODE_ENV_APPEND
  fi
@@ -272,22 +218,22 @@ index 8ec742e124f..74c7f3e21eb 100644
  # Register Python shell activate hooks
  # Prevent multiple activation with guard
  if [ -z "${VSCODE_PYTHON_AUTOACTIVATE_GUARD:-}" ]; then
-diff --git a/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-login.zsh b/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-login.zsh
-index 8edbca365e4..b17c32659f6 100644
---- a/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-login.zsh
-+++ b/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-login.zsh
-@@ -13,3 +13,7 @@ ZDOTDIR=$USER_ZDOTDIR
- if [[ $options[norcs] = off && -o "login" &&  -f $ZDOTDIR/.zlogin ]]; then
- 	. $ZDOTDIR/.zlogin
+Index: b/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-login.zsh
+===================================================================
+--- a/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-login.zsh
++++ b/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-login.zsh
+@@ -17,3 +17,7 @@ fi
+ if (( ${+functions[__vsc_apply_product_runtime_env]} )); then
+ 	__vsc_apply_product_runtime_env
  fi
 +
 +if (( ${+functions[__vsc_apply_product_runtime_env]} )); then
 +	__vsc_apply_product_runtime_env
 +fi
-diff --git a/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh b/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
-index f32b74f1927..8b176f8d659 100644
---- a/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
-+++ b/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
+Index: b/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
+===================================================================
+--- a/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
++++ b/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
 @@ -68,6 +68,85 @@ if [ -n "${VSCODE_ENV_APPEND:-}" ]; then
  	unset VSCODE_ENV_APPEND
  fi
@@ -374,13 +320,13 @@ index f32b74f1927..8b176f8d659 100644
  # Register Python shell activate hooks
  # Prevent multiple activation with guard
  if [ -z "${VSCODE_PYTHON_AUTOACTIVATE_GUARD:-}" ]; then
-diff --git a/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish b/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
-index 51e0d3a7d6e..9bf75386f56 100644
---- a/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
-+++ b/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
-@@ -73,6 +73,73 @@ function __vsc_apply_env_vars
- 		end
- 		set -e VSCODE_ENV_APPEND
+Index: b/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
+===================================================================
+--- a/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
++++ b/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
+@@ -140,6 +140,73 @@ function __vsc_apply_env_vars
+ 		set -e VSCODE_PRODUCT_RUNTIME_PATH_APPEND
+ 		set -e VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN
  	end
 +
 +	if test -n "$VSCODE_PRODUCT_RUNTIME_ENV_REPLACE"
@@ -452,12 +398,12 @@ index 51e0d3a7d6e..9bf75386f56 100644
  end
  
  # Register Python shell activate hooks
-diff --git a/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1 b/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1
-index 3c37defc7b2..2b0c45b5919 100644
---- a/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1
-+++ b/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1
-@@ -72,6 +72,76 @@ if ($env:VSCODE_ENV_APPEND) {
- 	$env:VSCODE_ENV_APPEND = $null
+Index: b/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1
+===================================================================
+--- a/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1
++++ b/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1
+@@ -142,6 +142,76 @@ if ($env:VSCODE_PRODUCT_RUNTIME_PATH_PRE
+ 	$env:VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN = $null
  }
  
 +if ($env:VSCODE_PRODUCT_RUNTIME_ENV_REPLACE) {
@@ -533,11 +479,11 @@ index 3c37defc7b2..2b0c45b5919 100644
  # Register Python shell activate hooks
  # Prevent multiple activation with guard
  if (-not $env:VSCODE_PYTHON_AUTOACTIVATE_GUARD) {
-diff --git a/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts b/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
-index a724394106a..20f7405dc17 100644
---- a/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
-+++ b/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
-@@ -19,6 +19,11 @@ import { isNumber, isString } from '../../../../base/common/types.js';
+Index: b/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
+===================================================================
+--- a/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
++++ b/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
+@@ -19,6 +19,11 @@ import { isNumber, isString } from '../.
  import { IHistoryService } from '../../../services/history/common/history.js';
  import { ILogService } from '../../../../platform/log/common/log.js';
  import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -549,7 +495,7 @@ index a724394106a..20f7405dc17 100644
  
  export function mergeEnvironments(parent: IProcessEnvironment, other: ITerminalEnvironment | undefined): void {
  	if (!other) {
-@@ -251,6 +256,7 @@ export async function createTerminalEnvironment(
+@@ -251,6 +256,7 @@ export async function createTerminalEnvi
  ): Promise<IProcessEnvironment> {
  	// Create a terminal environment based on settings, launch config and permissions
  	const env: IProcessEnvironment = {};
@@ -557,7 +503,7 @@ index a724394106a..20f7405dc17 100644
  	if (shellLaunchConfig.strictEnv) {
  		// strictEnv is true, only use the requested env (ignoring null entries)
  		mergeNonNullKeys(env, shellLaunchConfig.env);
-@@ -297,13 +303,30 @@ export async function createTerminalEnvironment(
+@@ -297,13 +303,30 @@ export async function createTerminalEnvi
  		// Merge config (settings) and ShellLaunchConfig environments
  		mergeEnvironments(env, allowedEnvFromConfig);
  		mergeEnvironments(env, shellLaunchConfig.env);
@@ -588,521 +534,16 @@ index a724394106a..20f7405dc17 100644
  /**
   * Takes a path and returns the properly escaped path to send to a given shell. On Windows, this
   * included trying to prepare the path for WSL if needed.
-diff --git a/src/vs/workbench/contrib/terminal/electron-browser/localTerminalBackend.ts b/src/vs/workbench/contrib/terminal/electron-browser/localTerminalBackend.ts
-index 4435552b283..0c1a0bbd140 100644
---- a/src/vs/workbench/contrib/terminal/electron-browser/localTerminalBackend.ts
-+++ b/src/vs/workbench/contrib/terminal/electron-browser/localTerminalBackend.ts
-@@ -368,6 +368,7 @@ class LocalTerminalBackend extends BaseTerminalBackend implements ITerminalBacke
- 			const workspaceFolder = terminalEnvironment.getWorkspaceForTerminal(shellLaunchConfig.cwd, this._workspaceContextService, this._historyService);
- 			await this._environmentVariableService.mergedCollection.applyToProcessEnvironment(env, { workspaceFolder }, variableResolver);
- 		}
-+		terminalEnvironment.reapplyProductRuntimeEnvironment(env);
- 		return env;
- 	}
+Index: b/lib/vscode/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
+===================================================================
+--- a/lib/vscode/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
++++ b/lib/vscode/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
+@@ -202,6 +202,8 @@ export class NativeLocalProcessExtension
  
-diff --git a/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts b/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
-index dad61911059..2511cbd0e08 100644
---- a/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
-+++ b/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
-@@ -9,6 +9,7 @@ import { isWindows, OperatingSystem } from '../../../../../base/common/platform.
- import { URI as Uri } from '../../../../../base/common/uri.js';
- import { addTerminalEnvironmentKeys, createTerminalEnvironment, getUriLabelForShell, getCwd, getLangEnvVariable, mergeEnvironments, preparePathForShell, shouldSetLangEnvVariable } from '../../common/terminalEnvironment.js';
- import { GeneralShellType, PosixShellType, WindowsShellType } from '../../../../../platform/terminal/common/terminal.js';
-+import { storeProductRuntimeEnvironment } from '../../../../../platform/product/common/runtimeEnvironment.js';
- import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
- 
- const wslPathBackend = {
-@@ -313,12 +314,79 @@ suite('Workbench - TerminalEnvironment', () => {
- 			COLORTERM: 'truecolor',
- 			TERM_PROGRAM: 'vscode'
- 		};
-+		const pathSeparator = isWindows ? ';' : ':';
- 		test('should retain variables equal to the empty string', async () => {
- 			deepStrictEqual(
- 				await createTerminalEnvironment({}, undefined, undefined, undefined, 'off', { foo: 'bar', empty: '' }),
- 				{ foo: 'bar', empty: '', ...commonVariables }
- 			);
- 		});
-+		test('should re-apply stored runtime env after config and shell env merge', async () => {
-+			const baseEnv = {
-+				foo: 'base',
-+				PATH: [`/base/bin`, `/opt/ballerina/base`].join(pathSeparator)
-+			};
-+			storeProductRuntimeEnvironment(baseEnv, {
-+				replace: {
-+					foo: 'runtime',
-+					BALLERINA_HOME: '/runtime/home'
-+				},
-+				pathAppend: '/runtime/bin',
-+				pathRemovePattern: '(^|[/\\\\])ballerina([/\\\\]|$)'
-+			});
-+
-+			const env = await createTerminalEnvironment(
-+				{
-+					env: {
-+						foo: 'launch',
-+						PATH: [`/launch/bin`, `/opt/ballerina/launch`].join(pathSeparator)
-+					}
-+				},
-+				{
-+					foo: 'config',
-+					PATH: [`/config/bin`, `/opt/ballerina/config`].join(pathSeparator)
-+				},
-+				undefined,
-+				undefined,
-+				'off',
-+				baseEnv
-+			);
-+
-+			strictEqual(env.foo, 'runtime');
-+			strictEqual(env.BALLERINA_HOME, '/runtime/home');
-+			strictEqual(env.PATH, [`/launch/bin`, `/runtime/bin`].join(pathSeparator));
-+		});
-+		test('should apply stored runtime env in strictEnv terminals', async () => {
-+			const baseEnv = {
-+				PATH: [`/base/bin`, `/opt/ballerina/base`].join(pathSeparator)
-+			};
-+			storeProductRuntimeEnvironment(baseEnv, {
-+				replace: {
-+					foo: 'runtime'
-+				},
-+				pathAppend: '/runtime/bin',
-+				pathRemovePattern: '(^|[/\\\\])ballerina([/\\\\]|$)'
-+			});
-+
-+			const env = await createTerminalEnvironment(
-+				{
-+					strictEnv: true,
-+					env: {
-+						foo: 'launch',
-+						PATH: [`/strict/bin`, `/opt/ballerina/strict`].join(pathSeparator)
-+					}
-+				},
-+				undefined,
-+				undefined,
-+				undefined,
-+				'off',
-+				baseEnv
-+			);
-+
-+			strictEqual(env.foo, 'runtime');
-+			strictEqual(env.PATH, [`/strict/bin`, `/runtime/bin`].join(pathSeparator));
-+			strictEqual(env.TERM_PROGRAM, undefined);
-+		});
- 	});
- 	suite('formatUriForShellDisplay', () => {
- 		test('Wsl', async () => {
-diff --git a/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts b/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
-index 516169c5aa9..13bfb36e41f 100644
---- a/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
-+++ b/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
-@@ -24,6 +24,7 @@ import { ILabelService } from '../../../../platform/label/common/label.js';
- import { ILogService, ILoggerService } from '../../../../platform/log/common/log.js';
- import { INativeHostService } from '../../../../platform/native/common/native.js';
- import { INotificationService, NotificationPriority, Severity } from '../../../../platform/notification/common/notification.js';
-+import { applyStoredProductRuntimeEnvironment } from '../../../../platform/product/common/runtimeEnvironment.js';
- import { IProductService } from '../../../../platform/product/common/productService.js';
- import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
- import { isLoggingOnly } from '../../../../platform/telemetry/common/telemetryUtils.js';
-@@ -199,6 +200,8 @@ export class NativeLocalProcessExtensionHost implements IExtensionHost {
- 			objects.mixin(env, this._environmentService.debugExtensionHost.env);
- 		}
+ 		applyStoredProductRuntimeEnvironment(env);
  
 +		applyStoredProductRuntimeEnvironment(env);
 +
  		removeDangerousEnvVariables(env);
  
  		if (this._isExtensionDevHost) {
-diff --git a/src/vs/platform/product/common/runtimeEnvironment.ts b/src/vs/platform/product/common/runtimeEnvironment.ts
-new file mode 100644
-index 00000000000..d49b79abed6
---- /dev/null
-+++ b/src/vs/platform/product/common/runtimeEnvironment.ts
-@@ -0,0 +1,387 @@
-+/*---------------------------------------------------------------------------------------------
-+ *  Copyright (c) Microsoft Corporation. All rights reserved.
-+ *  Licensed under the MIT License. See License.txt in the project root for license information.
-+ *--------------------------------------------------------------------------------------------*/
-+
-+import * as path from '../../../base/common/path.js';
-+import { IProcessEnvironment, isWindows } from '../../../base/common/platform.js';
-+import { IProductConfiguration, IProductRuntimeEnvironmentMap } from '../../../base/common/product.js';
-+
-+const RUNTIME_ENV_META_KEY = '__meta';
-+const PATH_REMOVE_PATTERN_KEY = 'pathRemovePattern';
-+const PATH_TOKEN_REGEX = /\$\{?PATH}?/i;
-+const PATH_TOKEN_REGEX_GLOBAL = /\$\{?PATH}?/g;
-+const APP_ROOT_TOKEN_REGEX = /\$\{?(?:APP_ROOT|APP_DIR|APP)\}?/g;
-+
-+export const VSCODE_PRODUCT_RUNTIME_ENV_REPLACE = 'VSCODE_PRODUCT_RUNTIME_ENV_REPLACE';
-+export const VSCODE_PRODUCT_RUNTIME_PATH_PREPEND = 'VSCODE_PRODUCT_RUNTIME_PATH_PREPEND';
-+export const VSCODE_PRODUCT_RUNTIME_PATH_APPEND = 'VSCODE_PRODUCT_RUNTIME_PATH_APPEND';
-+export const VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN = 'VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN';
-+
-+export interface IResolvedProductRuntimeEnvironment {
-+	readonly replace: IProcessEnvironment;
-+	readonly pathPrepend?: string;
-+	readonly pathAppend?: string;
-+	readonly pathRemovePattern?: string;
-+}
-+
-+export function resolveProductRuntimeEnvironment(
-+	product: Readonly<Partial<IProductConfiguration>>,
-+	appRoot: string,
-+	env: IProcessEnvironment,
-+	platform: string
-+): IResolvedProductRuntimeEnvironment | undefined {
-+	const runtimeEnv = _resolveRuntimeEnvMap(product.runtimeEnv, platform);
-+	if (!runtimeEnv) {
-+		return undefined;
-+	}
-+
-+	const replace: IProcessEnvironment = {};
-+	let pathPrepend: string | undefined;
-+	let pathAppend: string | undefined;
-+
-+	for (const [key, value] of Object.entries(runtimeEnv)) {
-+		if (key === RUNTIME_ENV_META_KEY) {
-+			continue;
-+		}
-+
-+		if (_isPathKey(key)) {
-+			if (typeof value === 'string') {
-+				const segments = _parseConfiguredPath(value, appRoot);
-+				pathPrepend = segments.prepend;
-+				pathAppend = segments.append;
-+			}
-+			continue;
-+		}
-+
-+		if (typeof value === 'string') {
-+			replace[key] = _resolveRuntimeValue(value, appRoot, env);
-+		} else {
-+			replace[key] = JSON.stringify(value);
-+		}
-+	}
-+
-+	const pathRemovePattern = _getPathRemovePattern(runtimeEnv);
-+	if (Object.keys(replace).length === 0 && !pathPrepend && !pathAppend && !pathRemovePattern) {
-+		return undefined;
-+	}
-+
-+	return {
-+		replace,
-+		pathPrepend,
-+		pathAppend,
-+		pathRemovePattern
-+	};
-+}
-+
-+export function applyProductRuntimeEnvironment(
-+	env: IProcessEnvironment,
-+	runtimeEnv: IResolvedProductRuntimeEnvironment | undefined
-+): void {
-+	if (!runtimeEnv) {
-+		return;
-+	}
-+
-+	for (const [key, value] of Object.entries(runtimeEnv.replace)) {
-+		const actualKey = _getActualKey(env, key);
-+		env[actualKey] = value;
-+	}
-+
-+	_applyPathMutation(env, runtimeEnv.pathPrepend, runtimeEnv.pathAppend, runtimeEnv.pathRemovePattern);
-+}
-+
-+export function storeProductRuntimeEnvironment(
-+	env: IProcessEnvironment,
-+	runtimeEnv: IResolvedProductRuntimeEnvironment | undefined
-+): void {
-+	if (!runtimeEnv) {
-+		delete env[VSCODE_PRODUCT_RUNTIME_ENV_REPLACE];
-+		delete env[VSCODE_PRODUCT_RUNTIME_PATH_PREPEND];
-+		delete env[VSCODE_PRODUCT_RUNTIME_PATH_APPEND];
-+		delete env[VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN];
-+		return;
-+	}
-+
-+	const serializedReplace = _serializeEnvEntries(runtimeEnv.replace);
-+	if (serializedReplace) {
-+		env[VSCODE_PRODUCT_RUNTIME_ENV_REPLACE] = serializedReplace;
-+	} else {
-+		delete env[VSCODE_PRODUCT_RUNTIME_ENV_REPLACE];
-+	}
-+
-+	_setOrDelete(env, VSCODE_PRODUCT_RUNTIME_PATH_PREPEND, _serializePathEntries(runtimeEnv.pathPrepend));
-+	_setOrDelete(env, VSCODE_PRODUCT_RUNTIME_PATH_APPEND, _serializePathEntries(runtimeEnv.pathAppend));
-+	_setOrDelete(env, VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN, runtimeEnv.pathRemovePattern);
-+}
-+
-+export function getStoredProductRuntimeEnvironment(env: IProcessEnvironment): IResolvedProductRuntimeEnvironment | undefined {
-+	const runtimeEnvReplace = env[VSCODE_PRODUCT_RUNTIME_ENV_REPLACE];
-+	const pathPrepend = env[VSCODE_PRODUCT_RUNTIME_PATH_PREPEND];
-+	const pathAppend = env[VSCODE_PRODUCT_RUNTIME_PATH_APPEND];
-+	const pathRemovePattern = env[VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN];
-+
-+	const replace = runtimeEnvReplace ? _deserializeEnvEntries(runtimeEnvReplace) : {};
-+	if (Object.keys(replace).length === 0 && !pathPrepend && !pathAppend && !pathRemovePattern) {
-+		return undefined;
-+	}
-+
-+	return {
-+		replace,
-+		pathPrepend: _deserializePathEntries(pathPrepend),
-+		pathAppend: _deserializePathEntries(pathAppend),
-+		pathRemovePattern
-+	};
-+}
-+
-+export function applyStoredProductRuntimeEnvironment(env: IProcessEnvironment): void {
-+	applyProductRuntimeEnvironment(env, getStoredProductRuntimeEnvironment(env));
-+}
-+
-+function _resolveRuntimeEnvMap(
-+	runtimeEnv: IProductConfiguration['runtimeEnv'],
-+	platform: string
-+): IProductRuntimeEnvironmentMap | undefined {
-+	if (!runtimeEnv || typeof runtimeEnv !== 'object') {
-+		return undefined;
-+	}
-+
-+	const runtimeEnvRecord = runtimeEnv as Record<string, unknown>;
-+	const osKeys = new Set(['darwin', 'linux', 'win32', 'common', 'default']);
-+	const containsOsKeys = Object.keys(runtimeEnvRecord).some(key => osKeys.has(key));
-+	if (!containsOsKeys) {
-+		return runtimeEnv as IProductRuntimeEnvironmentMap;
-+	}
-+
-+	return _mergeRuntimeEnvMaps(
-+		_asRuntimeEnvMap(runtimeEnvRecord['common']),
-+		_asRuntimeEnvMap(runtimeEnvRecord['default']),
-+		_asRuntimeEnvMap(runtimeEnvRecord[platform])
-+	);
-+}
-+
-+function _mergeRuntimeEnvMaps(...maps: Array<IProductRuntimeEnvironmentMap | undefined>): IProductRuntimeEnvironmentMap | undefined {
-+	const merged: Record<string, unknown> = {};
-+	const mergedMeta: Record<string, unknown> = {};
-+
-+	for (const map of maps) {
-+		if (!map) {
-+			continue;
-+		}
-+
-+		for (const [key, value] of Object.entries(map)) {
-+			if (key === RUNTIME_ENV_META_KEY && value && typeof value === 'object') {
-+				Object.assign(mergedMeta, value);
-+				continue;
-+			}
-+			merged[key] = value;
-+		}
-+	}
-+
-+	if (Object.keys(mergedMeta).length > 0) {
-+		merged[RUNTIME_ENV_META_KEY] = mergedMeta;
-+	}
-+
-+	return Object.keys(merged).length > 0 ? merged as IProductRuntimeEnvironmentMap : undefined;
-+}
-+
-+function _asRuntimeEnvMap(value: unknown): IProductRuntimeEnvironmentMap | undefined {
-+	return value && typeof value === 'object' ? value as IProductRuntimeEnvironmentMap : undefined;
-+}
-+
-+function _resolveRuntimeValue(value: string, appRoot: string, env: IProcessEnvironment): string {
-+	const currentPath = _getPathValue(env);
-+	let resolved = value.replace(PATH_TOKEN_REGEX_GLOBAL, currentPath);
-+	resolved = resolved.replace(APP_ROOT_TOKEN_REGEX, appRoot);
-+	if (_isRelativePath(resolved)) {
-+		resolved = path.normalize(path.join(appRoot, resolved));
-+	}
-+	return resolved;
-+}
-+
-+function _parseConfiguredPath(value: string, appRoot: string): { prepend?: string; append?: string } {
-+	const resolvedValue = value.replace(APP_ROOT_TOKEN_REGEX, appRoot);
-+	const pathTokenMatch = PATH_TOKEN_REGEX.exec(resolvedValue);
-+	if (!pathTokenMatch) {
-+		return { append: _normalizePathEntries(resolvedValue, appRoot) };
-+	}
-+
-+	const prepend = _normalizePathEntries(resolvedValue.slice(0, pathTokenMatch.index), appRoot);
-+	const append = _normalizePathEntries(
-+		resolvedValue.slice(pathTokenMatch.index + pathTokenMatch[0].length).replace(PATH_TOKEN_REGEX_GLOBAL, ''),
-+		appRoot
-+	);
-+
-+	return { prepend, append };
-+}
-+
-+function _normalizePathEntries(value: string, appRoot: string): string | undefined {
-+	const entries = value
-+		.split(path.delimiter)
-+		.map(entry => entry.trim())
-+		.filter(entry => entry.length > 0)
-+		.map(entry => _resolvePathEntry(entry, appRoot));
-+
-+	return entries.length > 0 ? entries.join(path.delimiter) : undefined;
-+}
-+
-+function _resolvePathEntry(entry: string, appRoot: string): string {
-+	if (_isRelativePath(entry)) {
-+		return path.normalize(path.join(appRoot, entry));
-+	}
-+	return entry;
-+}
-+
-+function _applyPathMutation(
-+	env: IProcessEnvironment,
-+	pathPrepend: string | undefined,
-+	pathAppend: string | undefined,
-+	pathRemovePattern: string | undefined
-+): void {
-+	if (!pathPrepend && !pathAppend && !pathRemovePattern) {
-+		return;
-+	}
-+
-+	const pathKey = _getPathKey(env);
-+	const currentEntries = _splitPathEntries(env[pathKey]);
-+	let nextEntries = currentEntries;
-+
-+	const removalRegex = _parseRegex(pathRemovePattern);
-+	if (removalRegex) {
-+		nextEntries = nextEntries.filter(entry => {
-+			removalRegex.lastIndex = 0;
-+			return !removalRegex.test(entry.toLowerCase());
-+		});
-+	}
-+
-+	const prependEntries = _splitPathEntries(pathPrepend);
-+	const appendEntries = _splitPathEntries(pathAppend);
-+	if (prependEntries.length > 0 || appendEntries.length > 0) {
-+		const runtimeEntries = new Set([...prependEntries, ...appendEntries]);
-+		nextEntries = nextEntries.filter(entry => !runtimeEntries.has(entry));
-+	}
-+
-+	env[pathKey] = [...prependEntries, ...nextEntries, ...appendEntries].join(path.delimiter);
-+}
-+
-+function _getPathRemovePattern(runtimeEnv: IProductRuntimeEnvironmentMap): string | undefined {
-+	const meta = runtimeEnv[RUNTIME_ENV_META_KEY];
-+	if (!meta || typeof meta !== 'object') {
-+		return undefined;
-+	}
-+
-+	const pattern = (meta as Record<string, unknown>)[PATH_REMOVE_PATTERN_KEY];
-+	return typeof pattern === 'string' && pattern.length > 0 ? pattern : undefined;
-+}
-+
-+function _parseRegex(pattern: string | undefined): RegExp | undefined {
-+	if (!pattern) {
-+		return undefined;
-+	}
-+
-+	try {
-+		return new RegExp(pattern);
-+	} catch {
-+		return undefined;
-+	}
-+}
-+
-+function _splitPathEntries(value: string | undefined): string[] {
-+	return (value || '')
-+		.split(path.delimiter)
-+		.map(entry => entry.trim())
-+		.filter(entry => entry.length > 0);
-+}
-+
-+function _serializeEnvEntries(entries: IProcessEnvironment): string | undefined {
-+	const serialized = Object.entries(entries)
-+		.filter(([, value]) => typeof value === 'string')
-+		.map(([key, value]) => `${key}=${_encodeColons(value!)}`)
-+		.join(':');
-+	return serialized || undefined;
-+}
-+
-+function _serializePathEntries(value: string | undefined): string | undefined {
-+	const serialized = _splitPathEntries(value)
-+		.map(entry => _encodeColons(entry))
-+		.join(':');
-+	return serialized || undefined;
-+}
-+
-+function _deserializeEnvEntries(serialized: string): IProcessEnvironment {
-+	const env: IProcessEnvironment = {};
-+	for (const entry of serialized.split(':')) {
-+		if (entry.length === 0) {
-+			continue;
-+		}
-+
-+		const separatorIndex = entry.indexOf('=');
-+		if (separatorIndex === -1) {
-+			continue;
-+		}
-+
-+		const key = entry.slice(0, separatorIndex);
-+		const value = entry.slice(separatorIndex + 1);
-+		env[key] = value.replaceAll('\\x3a', ':');
-+	}
-+	return env;
-+}
-+
-+function _deserializePathEntries(serialized: string | undefined): string | undefined {
-+	if (!serialized) {
-+		return undefined;
-+	}
-+
-+	const entries = serialized
-+		.split(':')
-+		.map(entry => entry.replaceAll('\\x3a', ':'))
-+		.filter(entry => entry.length > 0);
-+	return entries.length > 0 ? entries.join(path.delimiter) : undefined;
-+}
-+
-+function _encodeColons(value: string): string {
-+	return value.replaceAll(':', '\\x3a');
-+}
-+
-+function _setOrDelete(env: IProcessEnvironment, key: string, value: string | undefined): void {
-+	if (value) {
-+		env[key] = value;
-+	} else {
-+		delete env[key];
-+	}
-+}
-+
-+function _getActualKey(env: IProcessEnvironment, key: string): string {
-+	if (!isWindows) {
-+		return key;
-+	}
-+
-+	const lowerKey = key.toLowerCase();
-+	for (const existingKey of Object.keys(env)) {
-+		if (existingKey.toLowerCase() === lowerKey) {
-+			return existingKey;
-+		}
-+	}
-+
-+	return key;
-+}
-+
-+function _getPathKey(env: IProcessEnvironment): string {
-+	for (const key of Object.keys(env)) {
-+		if (key.toLowerCase() === 'path') {
-+			return key;
-+		}
-+	}
-+	return isWindows ? 'Path' : 'PATH';
-+}
-+
-+function _getPathValue(env: IProcessEnvironment): string {
-+	return env[_getPathKey(env)] || '';
-+}
-+
-+function _isPathKey(key: string): boolean {
-+	return key.toLowerCase() === 'path';
-+}
-+
-+function _isRelativePath(value: string): boolean {
-+	return value.startsWith('./') || value.startsWith('../') || value.startsWith('.\\') || value.startsWith('..\\');
-+}
