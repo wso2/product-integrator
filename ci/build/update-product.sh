@@ -126,18 +126,6 @@ cat > lib/vscode/product.json <<EOF
     },
 	  "builtInExtensions": [
       {
-        "name": "redhat.vscode-yaml",
-        "version": "latest"
-      },
-      {
-        "name": "anweber.httpbook",
-        "version": "latest"
-      },
-      {
-        "name": "anweber.vscode-httpyac",
-        "version": "latest"
-      },
-      {
         "name": "wso2.hurl-client",
         "version": "${WSO2_HURL_CLIENT_EXTENSION_VERSION}"
       },
@@ -190,20 +178,24 @@ fi)
     "runtimeEnv": {
       "common": {
         "WSO2_INTEGRATOR_RUNTIME": "true",
+        "WSO2_INTEGRATOR_VERSION": "${VERSION}",
         "__meta": {
           "pathRemovePattern": "(^|[/\\\\])ballerina([/\\\\]|$)"
         }
       },
       "darwin": {
         "BALLERINA_HOME": "\${APP_ROOT}/Contents/components/ballerina",
+        "WSO2_INTEGRATOR_BALLERINA_HOME": "\${APP_ROOT}/Contents/components/ballerina",
         "PATH": "\${APP_ROOT}/Contents/components/ballerina/bin"
       },
       "linux": {
         "BALLERINA_HOME": "\${APP_ROOT}/components/ballerina",
+        "WSO2_INTEGRATOR_BALLERINA_HOME": "\${APP_ROOT}/components/ballerina",
         "PATH": "\${APP_ROOT}/components/ballerina/bin"
       },
       "win32": {
         "BALLERINA_HOME": "\${APP_ROOT}\\\\components\\\\ballerina",
+        "WSO2_INTEGRATOR_BALLERINA_HOME": "\${APP_ROOT}\\\\components\\\\ballerina",
         "PATH": "\${APP_ROOT}\\\\components\\\\ballerina\\\\bin"
       }
     }

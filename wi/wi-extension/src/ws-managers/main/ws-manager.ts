@@ -68,7 +68,7 @@ import { stringify as stringifyYaml } from "yaml";
 import { pullMigrationTool } from "./migrate-integration";
 import { MigrationReportWebview } from "../../migration-report/webview";
 import { BridgeLayer } from "../../BridgeLayer";
-import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi-core";
+import { OpenMigrationReportRequest, SaveMigrationReportRequest, PullMigrationToolRequest } from "@wso2/wi-core";
 import { StateMachine } from "../../stateMachine";
 import { ext } from "../../extensionVariables";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
@@ -337,7 +337,10 @@ export class MainWsManager implements WIVisualizerAPI {
                     open: params.open,
                     miVersion: params.miVersion,
                     isConsolidatedProject: params.isConsolidatedProject ?? false,
-                    subProjects: params.subProjects ?? []
+                    subProjects: params.subProjects ?? [],
+                    groupId: params.groupID ?? "com.microintegrator.projects",
+                    artifactId: params.artifactID ?? params.name,
+                    version: params.version ?? "1.0.0",
                 };
 
                 const result = await commands.executeCommand("MI.project-explorer.create-project", miCommandParams);
@@ -516,10 +519,10 @@ export class MainWsManager implements WIVisualizerAPI {
         orgHandle: string,
         projectHandle: string,
     ): Promise<void> {
-        const choreoDir = path.join(projectRoot, '.choreo');
-        const localProjectFile = path.join(choreoDir, 'context.yaml');
+        const wso2Dir = path.join(projectRoot, '.wso2');
+        const localProjectFile = path.join(wso2Dir, 'context.yaml');
         const content = stringifyYaml([{ org: orgHandle, project: projectHandle, local: true }]);
-        await fs.promises.mkdir(choreoDir, { recursive: true });
+        await fs.promises.mkdir(wso2Dir, { recursive: true });
         await fs.promises.writeFile(localProjectFile, content, { encoding: 'utf8' });
     }
 
@@ -557,11 +560,11 @@ export class MainWsManager implements WIVisualizerAPI {
         });
     }
 
-    async pullMigrationTool(args: { toolName: string; version: string }): Promise<void> {
+    async pullMigrationTool(args: PullMigrationToolRequest): Promise<void> {
         try {
-            await pullMigrationTool(args.toolName, args.version);
+            await pullMigrationTool(args.toolName);
         } catch (error) {
-            console.error(`Failed to pull migration tool '${args.toolName}' version '${args.version}':`, error);
+            console.error(`Failed to pull migration tool '${args.toolName}':`, error);
             throw error;
         }
     }

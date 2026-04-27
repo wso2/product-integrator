@@ -18,7 +18,6 @@
 
 import axios from "axios";
 import * as vscode from "vscode";
-import { EXTENSION_ID, EXTENSION_PUBLISHER } from "@wso2/wi-core";
 import { ext } from "../extensionVariables";
 import { ExternalUrlRequest, UpdateCheckRequest, UpdateCheckResponse } from "./updateServiceTypes";
 
@@ -37,6 +36,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 const LAST_CHECKED_AT_KEY = "wso2-integrator.updates.lastCheckedAt";
 const LAST_NOTIFIED_VERSION_KEY = "wso2-integrator.updates.lastNotifiedVersion";
 const LAST_NOTIFIED_INSTALLED_VERSION_KEY = "wso2-integrator.updates.lastNotifiedInstalledVersion";
+const APP_VERSION_ENV_KEY = "WSO2_INTEGRATOR_VERSION";
 
 export class ProductUpdateServiceClient {
 	constructor(private readonly context: vscode.ExtensionContext) {}
@@ -66,6 +66,12 @@ export class ProductUpdateServiceClient {
 		}
 
 		const installedVersion = this.getInstalledVersion();
+		if (!installedVersion) {
+			return {
+				status: "unavailable",
+				message: "Unable to determine WSO2 Integrator app version.",
+			};
+		}
 		ext.log(`Checking WSO2 Integrator updates. Installed version: ${installedVersion ?? "unknown"}`);
 
 		try {
@@ -147,14 +153,17 @@ export class ProductUpdateServiceClient {
 	}
 
 	private getInstalledVersion(): string | undefined {
-		const extensionId = `${EXTENSION_PUBLISHER}.${EXTENSION_ID}`;
-		const extension =
-			vscode.extensions.getExtension(extensionId) ??
-			vscode.extensions.all.find(
-				(item) => item.packageJSON?.publisher === EXTENSION_PUBLISHER && item.packageJSON?.name === EXTENSION_ID,
-			);
+		return this.getAppVersionFromEnv();
+	}
 
-		return extension?.packageJSON?.version;
+	private getAppVersionFromEnv(): string | undefined {
+		const appVersionFromEnv = process.env[APP_VERSION_ENV_KEY];
+		if (!appVersionFromEnv) {
+			return undefined;
+		}
+
+		const normalizedVersion = appVersionFromEnv.trim();
+		return normalizedVersion.length > 0 ? normalizedVersion : undefined;
 	}
 
 	private async fetchLatestVersion(
