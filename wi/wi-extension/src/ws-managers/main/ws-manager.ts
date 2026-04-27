@@ -68,7 +68,7 @@ import { stringify as stringifyYaml } from "yaml";
 import { pullMigrationTool } from "./migrate-integration";
 import { MigrationReportWebview } from "../../migration-report/webview";
 import { BridgeLayer } from "../../BridgeLayer";
-import { OpenMigrationReportRequest, SaveMigrationReportRequest } from "@wso2/wi-core";
+import { OpenMigrationReportRequest, SaveMigrationReportRequest, PullMigrationToolRequest } from "@wso2/wi-core";
 import { StateMachine } from "../../stateMachine";
 import { ext } from "../../extensionVariables";
 import { StoreSubProjectReportsRequest } from "@wso2/wi-core";
@@ -560,7 +560,7 @@ export class MainWsManager implements WIVisualizerAPI {
         });
     }
 
-    async pullMigrationTool(args: { toolName: string; version?: string }): Promise<void> {
+    async pullMigrationTool(args: PullMigrationToolRequest): Promise<void> {
         try {
             await pullMigrationTool(args.toolName);
         } catch (error) {

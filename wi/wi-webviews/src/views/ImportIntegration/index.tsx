@@ -87,11 +87,10 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     // isMultiProject for MigrationProgressView is derived from actual dry-run results
     const isMultiProject = migratedProjects.length > 0;
 
-    const pullIntegrationTool = (commandName: string, version: string) => {
+    const pullIntegrationTool = (commandName: string) => {
         setPullingTool(true);
         wsClient.pullMigrationTool({
             toolName: commandName,
-            version: version,
         });
     };
 

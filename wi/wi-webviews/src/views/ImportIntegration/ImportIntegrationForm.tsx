@@ -132,7 +132,7 @@ export function ImportIntegrationForm({
         };
 
         setImportParams(finalParams);
-        pullIntegrationTool(selectedIntegration!.commandName, selectedIntegration!.requiredVersion);
+        pullIntegrationTool(selectedIntegration!.commandName);
         onNext();
     };
 
