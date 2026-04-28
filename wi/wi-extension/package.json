@@ -159,7 +159,7 @@
       },
       {
         "command": "wso2.integrator.openBIIntegration",
-        "title": "Open BI Integration",
+        "title": "Open Default Integration",
         "category": "WSO2 Integrator"
       },
       {
