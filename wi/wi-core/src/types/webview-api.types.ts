@@ -381,6 +381,9 @@ export interface WIVisualizerAPI {
     abortMigrationAgent: () => Promise<void>;
     checkAIAuth: () => Promise<boolean>;
     triggerAICopilotSignIn: () => Promise<SignInResult>;
+    triggerAnthropicKeySignIn: (params: { apiKey: string }) => Promise<SignInResult>;
+    triggerAwsBedrockSignIn: (params: { accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string }) => Promise<SignInResult>;
+    triggerVertexAiSignIn: (params: { projectId: string; location: string; clientEmail: string; privateKey: string }) => Promise<SignInResult>;
     getBIRuntimeStatus: () => Promise<BIRuntimeStatusResponse>;
     initBIRuntimeContext: () => Promise<void>;
 }

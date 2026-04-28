@@ -32,6 +32,8 @@ import ErrorSegment from "../shared/ai/ErrorSegment";
 
 type EnhancementStatus = "checking_auth" | "sign_in_required" | "signing_in" | "running" | "paused" | "completed" | "error" | "aborted";
 
+type LoginMethod = "none" | "sso" | "anthropic" | "aws" | "vertex";
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
@@ -168,6 +170,65 @@ const SignInErrorText = styled.p`
     color: var(--vscode-errorForeground);
 `;
 
+const SignInDivider = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+    &::before, &::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--vscode-panel-border);
+    }
+`;
+
+const TextLinkButton = styled.button`
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 12px;
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    text-align: left;
+    text-decoration: underline;
+    &:hover {
+        color: var(--vscode-textLink-activeForeground);
+    }
+`;
+
+const CredentialForm = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+`;
+
+const CredentialInput = styled.input`
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 3px;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-size: 12px;
+    box-sizing: border-box;
+    &::placeholder {
+        color: var(--vscode-input-placeholderForeground);
+    }
+    &:focus {
+        outline: 1px solid var(--vscode-focusBorder);
+        border-color: var(--vscode-focusBorder);
+    }
+`;
+
+const CredentialLabel = styled.label`
+    display: block;
+    font-size: 11px;
+    color: var(--vscode-foreground);
+    margin-bottom: 2px;
+`;
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Component
 // ──────────────────────────────────────────────────────────────────────────────
@@ -187,6 +248,20 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
     const [content, setContent] = useState("");
     const [elapsed, setElapsed] = useState(0);
     const [signInError, setSignInError] = useState<string | undefined>();
+    const [loginMethod, setLoginMethod] = useState<LoginMethod>("none");
+
+    // Anthropic credentials
+    const [anthropicApiKey, setAnthropicApiKey] = useState("");
+    // AWS Bedrock credentials
+    const [awsAccessKeyId, setAwsAccessKeyId] = useState("");
+    const [awsSecretAccessKey, setAwsSecretAccessKey] = useState("");
+    const [awsRegion, setAwsRegion] = useState("");
+    const [awsSessionToken, setAwsSessionToken] = useState("");
+    // Vertex AI credentials
+    const [vertexProjectId, setVertexProjectId] = useState("");
+    const [vertexLocation, setVertexLocation] = useState("");
+    const [vertexClientEmail, setVertexClientEmail] = useState("");
+    const [vertexPrivateKey, setVertexPrivateKey] = useState("");
 
     const terminalRef = useRef(false);
     const userPausedRef = useRef(false);
@@ -520,6 +595,7 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
 
     const handleSignIn = useCallback(() => {
         setSignInError(undefined);
+        setLoginMethod("sso");
         setStatus("signing_in");
         wsClient.triggerAICopilotSignIn()
             .then((result) => {
@@ -529,13 +605,85 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
                 } else {
                     setSignInError(result.error || "Sign-in was cancelled. Please try again.");
                     setStatus("sign_in_required");
+                    setLoginMethod("none");
                 }
             })
             .catch(() => {
                 setSignInError("Sign-in failed. Please try again.");
                 setStatus("sign_in_required");
+                setLoginMethod("none");
             });
     }, [wsClient]);
+
+    const handleAnthropicSubmit = useCallback(() => {
+        if (!anthropicApiKey.trim()) { return; }
+        setSignInError(undefined);
+        setStatus("signing_in");
+        wsClient.triggerAnthropicKeySignIn({ apiKey: anthropicApiKey.trim() })
+            .then((result) => {
+                if (result.success) {
+                    setStatus("running");
+                    return wsClient.wizardEnhancementReady();
+                } else {
+                    setSignInError(result.error || "Authentication failed. Please check your API key.");
+                    setStatus("sign_in_required");
+                }
+            })
+            .catch(() => {
+                setSignInError("Authentication failed. Please try again.");
+                setStatus("sign_in_required");
+            });
+    }, [wsClient, anthropicApiKey]);
+
+    const handleAwsBedrockSubmit = useCallback(() => {
+        if (!awsAccessKeyId.trim() || !awsSecretAccessKey.trim() || !awsRegion.trim()) { return; }
+        setSignInError(undefined);
+        setStatus("signing_in");
+        wsClient.triggerAwsBedrockSignIn({
+            accessKeyId: awsAccessKeyId.trim(),
+            secretAccessKey: awsSecretAccessKey.trim(),
+            region: awsRegion.trim(),
+            ...(awsSessionToken.trim() ? { sessionToken: awsSessionToken.trim() } : {}),
+        })
+            .then((result) => {
+                if (result.success) {
+                    setStatus("running");
+                    return wsClient.wizardEnhancementReady();
+                } else {
+                    setSignInError(result.error || "Authentication failed. Please check your AWS credentials.");
+                    setStatus("sign_in_required");
+                }
+            })
+            .catch(() => {
+                setSignInError("Authentication failed. Please try again.");
+                setStatus("sign_in_required");
+            });
+    }, [wsClient, awsAccessKeyId, awsSecretAccessKey, awsRegion, awsSessionToken]);
+
+    const handleVertexAiSubmit = useCallback(() => {
+        if (!vertexProjectId.trim() || !vertexLocation.trim() || !vertexClientEmail.trim() || !vertexPrivateKey.trim()) { return; }
+        setSignInError(undefined);
+        setStatus("signing_in");
+        wsClient.triggerVertexAiSignIn({
+            projectId: vertexProjectId.trim(),
+            location: vertexLocation.trim(),
+            clientEmail: vertexClientEmail.trim(),
+            privateKey: vertexPrivateKey.trim(),
+        })
+            .then((result) => {
+                if (result.success) {
+                    setStatus("running");
+                    return wsClient.wizardEnhancementReady();
+                } else {
+                    setSignInError(result.error || "Authentication failed. Please check your Google Vertex AI credentials.");
+                    setStatus("sign_in_required");
+                }
+            })
+            .catch(() => {
+                setSignInError("Authentication failed. Please try again.");
+                setStatus("sign_in_required");
+            });
+    }, [wsClient, vertexProjectId, vertexLocation, vertexClientEmail, vertexPrivateKey]);
 
     // ── Render ───────────────────────────────────────────────────────────────
     const isRunning = status === "running";
@@ -608,26 +756,186 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
 
             {status === "sign_in_required" && (
                 <SignInPanel>
-                    <SignInMessage>
-                        Sign in to WSO2 Integrator Copilot to use AI Enhancement. A browser window will open for authentication.
-                    </SignInMessage>
                     {signInError && <SignInErrorText>{signInError}</SignInErrorText>}
-                    <div style={{ display: "flex", gap: "8px" }}>
-                        <ActionButton variant="primary" onClick={handleSignIn}>
-                            <span className="codicon codicon-account" />
-                            Sign in to Copilot
-                        </ActionButton>
-                        <ActionButton variant="secondary" onClick={onFinish}>
-                            Skip
-                        </ActionButton>
-                    </div>
+
+                    {loginMethod === "none" && (
+                        <>
+                            <SignInMessage>
+                                Sign in to use AI Enhancement. Choose one of the options below.
+                            </SignInMessage>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                <div style={{ display: "flex", gap: "8px" }}>
+                                    <ActionButton variant="primary" onClick={handleSignIn}>
+                                        <span className="codicon codicon-account" />
+                                        Login using WSO2 Integration Platform
+                                    </ActionButton>
+                                    <ActionButton variant="secondary" onClick={onFinish}>
+                                        Skip and Done
+                                    </ActionButton>
+                                </div>
+                                <SignInDivider>or</SignInDivider>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                    <TextLinkButton onClick={() => { setLoginMethod("anthropic"); setSignInError(undefined); }}>
+                                        Enter your Anthropic API key
+                                    </TextLinkButton>
+                                    <TextLinkButton onClick={() => { setLoginMethod("aws"); setSignInError(undefined); }}>
+                                        Enter your AWS Bedrock credentials
+                                    </TextLinkButton>
+                                    <TextLinkButton onClick={() => { setLoginMethod("vertex"); setSignInError(undefined); }}>
+                                        Enter your Google Vertex AI credentials
+                                    </TextLinkButton>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {loginMethod === "anthropic" && (
+                        <>
+                            <SignInMessage>Enter your Anthropic API key:</SignInMessage>
+                            <CredentialForm>
+                                <div>
+                                    <CredentialLabel htmlFor="anthropic-api-key">Anthropic API Key</CredentialLabel>
+                                    <CredentialInput
+                                        id="anthropic-api-key"
+                                        type="password"
+                                        placeholder="sk-ant-..."
+                                        value={anthropicApiKey}
+                                        onChange={(e) => setAnthropicApiKey(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && handleAnthropicSubmit()}
+                                    />
+                                </div>
+                                <div style={{ display: "flex", gap: "8px" }}>
+                                    <ActionButton variant="primary" onClick={handleAnthropicSubmit} disabled={!anthropicApiKey.trim()}>
+                                        Submit
+                                    </ActionButton>
+                                    <ActionButton variant="secondary" onClick={() => { setLoginMethod("none"); setSignInError(undefined); }}>
+                                        Back
+                                    </ActionButton>
+                                </div>
+                            </CredentialForm>
+                        </>
+                    )}
+
+                    {loginMethod === "aws" && (
+                        <>
+                            <SignInMessage>Enter your AWS Bedrock credentials:</SignInMessage>
+                            <CredentialForm>
+                                <div>
+                                    <CredentialLabel htmlFor="aws-access-key-id">Access Key ID</CredentialLabel>
+                                    <CredentialInput
+                                        id="aws-access-key-id"
+                                        type="text"
+                                        placeholder="AKIAIOSFODNN7EXAMPLE"
+                                        value={awsAccessKeyId}
+                                        onChange={(e) => setAwsAccessKeyId(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="aws-secret-access-key">Secret Access Key</CredentialLabel>
+                                    <CredentialInput
+                                        id="aws-secret-access-key"
+                                        type="password"
+                                        placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                                        value={awsSecretAccessKey}
+                                        onChange={(e) => setAwsSecretAccessKey(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="aws-region">Region</CredentialLabel>
+                                    <CredentialInput
+                                        id="aws-region"
+                                        type="text"
+                                        placeholder="us-east-1"
+                                        value={awsRegion}
+                                        onChange={(e) => setAwsRegion(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="aws-session-token">Session Token (optional)</CredentialLabel>
+                                    <CredentialInput
+                                        id="aws-session-token"
+                                        type="password"
+                                        placeholder="Temporary session token"
+                                        value={awsSessionToken}
+                                        onChange={(e) => setAwsSessionToken(e.target.value)}
+                                    />
+                                </div>
+                                <div style={{ display: "flex", gap: "8px" }}>
+                                    <ActionButton variant="primary" onClick={handleAwsBedrockSubmit} disabled={!awsAccessKeyId.trim() || !awsSecretAccessKey.trim() || !awsRegion.trim()}>
+                                        Submit
+                                    </ActionButton>
+                                    <ActionButton variant="secondary" onClick={() => { setLoginMethod("none"); setSignInError(undefined); }}>
+                                        Back
+                                    </ActionButton>
+                                </div>
+                            </CredentialForm>
+                        </>
+                    )}
+
+                    {loginMethod === "vertex" && (
+                        <>
+                            <SignInMessage>Enter your Google Vertex AI credentials:</SignInMessage>
+                            <CredentialForm>
+                                <div>
+                                    <CredentialLabel htmlFor="vertex-project-id">Project ID</CredentialLabel>
+                                    <CredentialInput
+                                        id="vertex-project-id"
+                                        type="text"
+                                        placeholder="my-gcp-project"
+                                        value={vertexProjectId}
+                                        onChange={(e) => setVertexProjectId(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="vertex-location">Location</CredentialLabel>
+                                    <CredentialInput
+                                        id="vertex-location"
+                                        type="text"
+                                        placeholder="us-central1"
+                                        value={vertexLocation}
+                                        onChange={(e) => setVertexLocation(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="vertex-client-email">Client Email</CredentialLabel>
+                                    <CredentialInput
+                                        id="vertex-client-email"
+                                        type="text"
+                                        placeholder="service-account@project.iam.gserviceaccount.com"
+                                        value={vertexClientEmail}
+                                        onChange={(e) => setVertexClientEmail(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="vertex-private-key">Private Key</CredentialLabel>
+                                    <CredentialInput
+                                        id="vertex-private-key"
+                                        type="password"
+                                        placeholder="-----BEGIN PRIVATE KEY-----"
+                                        value={vertexPrivateKey}
+                                        onChange={(e) => setVertexPrivateKey(e.target.value)}
+                                    />
+                                </div>
+                                <div style={{ display: "flex", gap: "8px" }}>
+                                    <ActionButton variant="primary" onClick={handleVertexAiSubmit} disabled={!vertexProjectId.trim() || !vertexLocation.trim() || !vertexClientEmail.trim() || !vertexPrivateKey.trim()}>
+                                        Submit
+                                    </ActionButton>
+                                    <ActionButton variant="secondary" onClick={() => { setLoginMethod("none"); setSignInError(undefined); }}>
+                                        Back
+                                    </ActionButton>
+                                </div>
+                            </CredentialForm>
+                        </>
+                    )}
                 </SignInPanel>
             )}
 
             {status === "signing_in" && (
                 <SignInPanel>
                     <SignInMessage>
-                        Complete sign-in in the browser window that opened. Return here when done.
+                        {loginMethod === "sso" || loginMethod === "none"
+                            ? "Complete sign-in in the browser window that opened. Return here when done."
+                            : "Authenticating with your credentials…"}
                     </SignInMessage>
                 </SignInPanel>
             )}

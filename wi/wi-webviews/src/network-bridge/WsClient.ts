@@ -452,6 +452,18 @@ export class WsClient {
         return this.request("triggerAICopilotSignIn");
     }
 
+    public async triggerAnthropicKeySignIn(params: { apiKey: string }): Promise<SignInResult> {
+        return this.request("triggerAnthropicKeySignIn", params);
+    }
+
+    public async triggerAwsBedrockSignIn(params: { accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string }): Promise<SignInResult> {
+        return this.request("triggerAwsBedrockSignIn", params);
+    }
+
+    public async triggerVertexAiSignIn(params: { projectId: string; location: string; clientEmail: string; privateKey: string }): Promise<SignInResult> {
+        return this.request("triggerVertexAiSignIn", params);
+    }
+
     public getBIRuntimeStatus(): Promise<BIRuntimeStatusResponse> {
         return this.request("getBIRuntimeStatus");
     }
