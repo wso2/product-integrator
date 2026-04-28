@@ -62,12 +62,27 @@ export function MultiProjectFormFields({ formData, onFormDataChange, pathError, 
     };
 
     useEffect(() => {
+        let cancelled = false;
         (async () => {
             if (!formData.path) {
-                const currentDir = await wsClient.getWorkspaceRoot();
-                onFormDataChange({ path: currentDir.path });
+                let path: string | undefined;
+                try {
+                    const currentDir = await wsClient.getWorkspaceRoot();
+                    path = currentDir.path || (await wsClient.getDefaultCreationPath()).path;
+                } catch (error) {
+                    console.error("getWorkspaceRoot failed, trying fallback:", error);
+                    try {
+                        path = (await wsClient.getDefaultCreationPath()).path;
+                    } catch (fallbackError) {
+                        console.error("Failed to fetch default creation path:", fallbackError);
+                    }
+                }
+                if (!cancelled && path) {
+                    onFormDataChange({ path });
+                }
             }
         })();
+        return () => { cancelled = true; };
     }, []);
 
     return (
@@ -78,6 +93,7 @@ export function MultiProjectFormFields({ formData, onFormDataChange, pathError, 
                     label="Select Path"
                     placeholder="Enter path or browse to select a folder..."
                     selectedPath={formData.path}
+                    required={true}
                     onSelect={handleProjectDirSelection}
                     onChange={(value) => onFormDataChange({ path: value })}
                     errorMsg={pathError}
