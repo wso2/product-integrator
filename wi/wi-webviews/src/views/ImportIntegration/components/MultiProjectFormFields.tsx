@@ -107,6 +107,7 @@ export function MultiProjectFormFields({ formData, onFormDataChange, pathError, 
                         value={formData.rootFolderName}
                         label="Folder Name"
                         placeholder="Enter folder name"
+                        autoFocus={true}
                         required={true}
                         errorMsg={folderNameError || ""}
                     />
