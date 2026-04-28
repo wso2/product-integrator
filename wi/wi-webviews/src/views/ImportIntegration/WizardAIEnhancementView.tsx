@@ -222,6 +222,13 @@ const CredentialInput = styled.input`
     }
 `;
 
+const CredentialLabel = styled.label`
+    display: block;
+    font-size: 11px;
+    color: var(--vscode-foreground);
+    margin-bottom: 2px;
+`;
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Component
 // ──────────────────────────────────────────────────────────────────────────────
@@ -786,13 +793,17 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
                         <>
                             <SignInMessage>Enter your Anthropic API key:</SignInMessage>
                             <CredentialForm>
-                                <CredentialInput
-                                    type="password"
-                                    placeholder="Anthropic API key"
-                                    value={anthropicApiKey}
-                                    onChange={(e) => setAnthropicApiKey(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && handleAnthropicSubmit()}
-                                />
+                                <div>
+                                    <CredentialLabel htmlFor="anthropic-api-key">Anthropic API Key</CredentialLabel>
+                                    <CredentialInput
+                                        id="anthropic-api-key"
+                                        type="password"
+                                        placeholder="sk-ant-..."
+                                        value={anthropicApiKey}
+                                        onChange={(e) => setAnthropicApiKey(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && handleAnthropicSubmit()}
+                                    />
+                                </div>
                                 <div style={{ display: "flex", gap: "8px" }}>
                                     <ActionButton variant="primary" onClick={handleAnthropicSubmit} disabled={!anthropicApiKey.trim()}>
                                         Submit
@@ -809,30 +820,46 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
                         <>
                             <SignInMessage>Enter your AWS Bedrock credentials:</SignInMessage>
                             <CredentialForm>
-                                <CredentialInput
-                                    type="text"
-                                    placeholder="Access Key ID"
-                                    value={awsAccessKeyId}
-                                    onChange={(e) => setAwsAccessKeyId(e.target.value)}
-                                />
-                                <CredentialInput
-                                    type="password"
-                                    placeholder="Secret Access Key"
-                                    value={awsSecretAccessKey}
-                                    onChange={(e) => setAwsSecretAccessKey(e.target.value)}
-                                />
-                                <CredentialInput
-                                    type="text"
-                                    placeholder="Region (e.g. us-east-1)"
-                                    value={awsRegion}
-                                    onChange={(e) => setAwsRegion(e.target.value)}
-                                />
-                                <CredentialInput
-                                    type="password"
-                                    placeholder="Session Token (optional)"
-                                    value={awsSessionToken}
-                                    onChange={(e) => setAwsSessionToken(e.target.value)}
-                                />
+                                <div>
+                                    <CredentialLabel htmlFor="aws-access-key-id">Access Key ID</CredentialLabel>
+                                    <CredentialInput
+                                        id="aws-access-key-id"
+                                        type="text"
+                                        placeholder="AKIAIOSFODNN7EXAMPLE"
+                                        value={awsAccessKeyId}
+                                        onChange={(e) => setAwsAccessKeyId(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="aws-secret-access-key">Secret Access Key</CredentialLabel>
+                                    <CredentialInput
+                                        id="aws-secret-access-key"
+                                        type="password"
+                                        placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                                        value={awsSecretAccessKey}
+                                        onChange={(e) => setAwsSecretAccessKey(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="aws-region">Region</CredentialLabel>
+                                    <CredentialInput
+                                        id="aws-region"
+                                        type="text"
+                                        placeholder="us-east-1"
+                                        value={awsRegion}
+                                        onChange={(e) => setAwsRegion(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="aws-session-token">Session Token (optional)</CredentialLabel>
+                                    <CredentialInput
+                                        id="aws-session-token"
+                                        type="password"
+                                        placeholder="Temporary session token"
+                                        value={awsSessionToken}
+                                        onChange={(e) => setAwsSessionToken(e.target.value)}
+                                    />
+                                </div>
                                 <div style={{ display: "flex", gap: "8px" }}>
                                     <ActionButton variant="primary" onClick={handleAwsBedrockSubmit} disabled={!awsAccessKeyId.trim() || !awsSecretAccessKey.trim() || !awsRegion.trim()}>
                                         Submit
@@ -849,30 +876,46 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
                         <>
                             <SignInMessage>Enter your Google Vertex AI credentials:</SignInMessage>
                             <CredentialForm>
-                                <CredentialInput
-                                    type="text"
-                                    placeholder="Project ID"
-                                    value={vertexProjectId}
-                                    onChange={(e) => setVertexProjectId(e.target.value)}
-                                />
-                                <CredentialInput
-                                    type="text"
-                                    placeholder="Location (e.g. us-central1)"
-                                    value={vertexLocation}
-                                    onChange={(e) => setVertexLocation(e.target.value)}
-                                />
-                                <CredentialInput
-                                    type="text"
-                                    placeholder="Client Email"
-                                    value={vertexClientEmail}
-                                    onChange={(e) => setVertexClientEmail(e.target.value)}
-                                />
-                                <CredentialInput
-                                    type="password"
-                                    placeholder="Private Key"
-                                    value={vertexPrivateKey}
-                                    onChange={(e) => setVertexPrivateKey(e.target.value)}
-                                />
+                                <div>
+                                    <CredentialLabel htmlFor="vertex-project-id">Project ID</CredentialLabel>
+                                    <CredentialInput
+                                        id="vertex-project-id"
+                                        type="text"
+                                        placeholder="my-gcp-project"
+                                        value={vertexProjectId}
+                                        onChange={(e) => setVertexProjectId(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="vertex-location">Location</CredentialLabel>
+                                    <CredentialInput
+                                        id="vertex-location"
+                                        type="text"
+                                        placeholder="us-central1"
+                                        value={vertexLocation}
+                                        onChange={(e) => setVertexLocation(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="vertex-client-email">Client Email</CredentialLabel>
+                                    <CredentialInput
+                                        id="vertex-client-email"
+                                        type="text"
+                                        placeholder="service-account@project.iam.gserviceaccount.com"
+                                        value={vertexClientEmail}
+                                        onChange={(e) => setVertexClientEmail(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <CredentialLabel htmlFor="vertex-private-key">Private Key</CredentialLabel>
+                                    <CredentialInput
+                                        id="vertex-private-key"
+                                        type="password"
+                                        placeholder="-----BEGIN PRIVATE KEY-----"
+                                        value={vertexPrivateKey}
+                                        onChange={(e) => setVertexPrivateKey(e.target.value)}
+                                    />
+                                </div>
                                 <div style={{ display: "flex", gap: "8px" }}>
                                     <ActionButton variant="primary" onClick={handleVertexAiSubmit} disabled={!vertexProjectId.trim() || !vertexLocation.trim() || !vertexClientEmail.trim() || !vertexPrivateKey.trim()}>
                                         Submit

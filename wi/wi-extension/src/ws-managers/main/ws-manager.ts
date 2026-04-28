@@ -681,21 +681,30 @@ export class MainWsManager implements WIVisualizerAPI {
     }
 
     async triggerAnthropicKeySignIn(params: { apiKey: string }): Promise<{ success: boolean; error?: string }> {
-        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
-        const result = await (migrationAPI?.signInWithAnthropicKey(params.apiKey) ?? Promise.resolve({ success: false, error: "Migration API not available." }));
-        return result;
+        try {
+            const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+            return await (migrationAPI?.signInWithAnthropicKey(params.apiKey) ?? Promise.resolve({ success: false, error: "Migration API not available." }));
+        } catch (e) {
+            return { success: false, error: e instanceof Error ? e.message : "Authentication failed. Please try again." };
+        }
     }
 
     async triggerAwsBedrockSignIn(params: { accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string }): Promise<{ success: boolean; error?: string }> {
-        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
-        const result = await (migrationAPI?.signInWithAwsBedrock(params) ?? Promise.resolve({ success: false, error: "Migration API not available." }));
-        return result;
+        try {
+            const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+            return await (migrationAPI?.signInWithAwsBedrock(params) ?? Promise.resolve({ success: false, error: "Migration API not available." }));
+        } catch (e) {
+            return { success: false, error: e instanceof Error ? e.message : "Authentication failed. Please try again." };
+        }
     }
 
     async triggerVertexAiSignIn(params: { projectId: string; location: string; clientEmail: string; privateKey: string }): Promise<{ success: boolean; error?: string }> {
-        const migrationAPI = await ballerinaContext.ensureMigrationAPI();
-        const result = await (migrationAPI?.signInWithVertexAI(params) ?? Promise.resolve({ success: false, error: "Migration API not available." }));
-        return result;
+        try {
+            const migrationAPI = await ballerinaContext.ensureMigrationAPI();
+            return await (migrationAPI?.signInWithVertexAI(params) ?? Promise.resolve({ success: false, error: "Migration API not available." }));
+        } catch (e) {
+            return { success: false, error: e instanceof Error ? e.message : "Authentication failed. Please try again." };
+        }
     }
 
     /**
