@@ -62,17 +62,27 @@ export function MultiProjectFormFields({ formData, onFormDataChange, pathError, 
     };
 
     useEffect(() => {
+        let cancelled = false;
         (async () => {
             if (!formData.path) {
+                let path: string | undefined;
                 try {
                     const currentDir = await wsClient.getWorkspaceRoot();
-                    const path = currentDir.path || (await wsClient.getDefaultCreationPath()).path;
-                    onFormDataChange({ path });
+                    path = currentDir.path || (await wsClient.getDefaultCreationPath()).path;
                 } catch (error) {
-                    console.error("Failed to fetch default creation path:", error);
+                    console.error("getWorkspaceRoot failed, trying fallback:", error);
+                    try {
+                        path = (await wsClient.getDefaultCreationPath()).path;
+                    } catch (fallbackError) {
+                        console.error("Failed to fetch default creation path:", fallbackError);
+                    }
+                }
+                if (!cancelled && path) {
+                    onFormDataChange({ path });
                 }
             }
         })();
+        return () => { cancelled = true; };
     }, []);
 
     return (
