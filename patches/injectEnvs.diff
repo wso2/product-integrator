@@ -260,7 +260,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/sc
 +			fi
 +		done
 +
-+		export PATH="$__vsc_new_path"
++		export PATH="${WSO2_INTEGRATOR_BALLERINA_HOME}/bin:$__vsc_new_path"
 +		builtin unset VSCODE_PRODUCT_RUNTIME_PATH_PREPEND
 +		builtin unset VSCODE_PRODUCT_RUNTIME_PATH_APPEND
 +		builtin unset VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN
@@ -354,7 +354,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/sc
 +		done
 +
 +		__vsc_final_path_entries=("${__vsc_runtime_prepend_entries[@]}" "${__vsc_filtered_path_entries[@]}" "${__vsc_runtime_append_entries[@]}")
-+		PATH="${(j/:/)__vsc_final_path_entries}"
++		PATH="${WSO2_INTEGRATOR_BALLERINA_HOME}/bin:${(j/:/)__vsc_final_path_entries}"
 +		export PATH
 +
 +		if [[ "$preserve_runtime_env" != "preserve" ]]; then
