@@ -64,8 +64,13 @@ export function MultiProjectFormFields({ formData, onFormDataChange, pathError, 
     useEffect(() => {
         (async () => {
             if (!formData.path) {
-                const currentDir = await wsClient.getWorkspaceRoot();
-                onFormDataChange({ path: currentDir.path });
+                try {
+                    const currentDir = await wsClient.getWorkspaceRoot();
+                    const path = currentDir.path || (await wsClient.getDefaultCreationPath()).path;
+                    onFormDataChange({ path });
+                } catch (error) {
+                    console.error("Failed to fetch default creation path:", error);
+                }
             }
         })();
     }, []);
@@ -78,6 +83,7 @@ export function MultiProjectFormFields({ formData, onFormDataChange, pathError, 
                     label="Select Path"
                     placeholder="Enter path or browse to select a folder..."
                     selectedPath={formData.path}
+                    required={true}
                     onSelect={handleProjectDirSelection}
                     onChange={(value) => onFormDataChange({ path: value })}
                     errorMsg={pathError}
@@ -101,7 +107,6 @@ export function MultiProjectFormFields({ formData, onFormDataChange, pathError, 
                         value={formData.rootFolderName}
                         label="Folder Name"
                         placeholder="Enter folder name"
-                        autoFocus={true}
                         required={true}
                         errorMsg={folderNameError || ""}
                     />
