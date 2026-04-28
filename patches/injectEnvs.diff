@@ -2,7 +2,7 @@ Index: product-integrator/lib/vscode/src/main.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/main.ts
 +++ product-integrator/lib/vscode/src/main.ts
-@@ -17,6 +17,7 @@ import { getUserDataPath } from './vs/platform/environment/node/userDataPath.js'
+@@ -17,6 +17,7 @@ import { getUserDataPath } from './vs/pl
  import * as perf from './vs/base/common/performance.js';
  import { resolveNLSConfiguration } from './vs/base/node/nls.js';
  import { getUNCHost, addUNCHostToAllowlist } from './vs/base/node/unc.js';
@@ -108,7 +108,7 @@ Index: product-integrator/lib/vscode/src/vs/base/common/product.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/base/common/product.ts
 +++ product-integrator/lib/vscode/src/vs/base/common/product.ts
-@@ -63,11 +63,29 @@ export type ExtensionVirtualWorkspaceSupport = {
+@@ -63,11 +63,29 @@ export type ExtensionVirtualWorkspaceSup
  	readonly override?: boolean;
  };
  
@@ -142,7 +142,7 @@ Index: product-integrator/lib/vscode/src/vs/server/node/extensionHostConnection.
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/server/node/extensionHostConnection.ts
 +++ product-integrator/lib/vscode/src/vs/server/node/extensionHostConnection.ts
-@@ -15,6 +15,7 @@ import { removeDangerousEnvVariables } from '../../base/common/processes.js';
+@@ -15,6 +15,7 @@ import { removeDangerousEnvVariables } f
  import { createRandomIPCHandle, NodeSocket, WebSocketNodeSocket } from '../../base/parts/ipc/node/ipc.net.js';
  import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
  import { ILogService } from '../../platform/log/common/log.js';
@@ -150,7 +150,7 @@ Index: product-integrator/lib/vscode/src/vs/server/node/extensionHostConnection.
  import { IRemoteExtensionHostStartParams } from '../../platform/remote/common/remoteAgentConnection.js';
  import { getResolvedShellEnv } from '../../platform/shell/node/shellEnv.js';
  import { IExtensionHostStatusService } from './extensionHostStatusService.js';
-@@ -66,6 +67,8 @@ export async function buildUserEnvironment(startParamsEnv: { [key: string]: stri
+@@ -66,6 +67,8 @@ export async function buildUserEnvironme
  	env.VSCODE_RECONNECTION_GRACE_TIME = String(environmentService.reconnectionGraceTime);
  	logService.trace(`[reconnection-grace-time] Setting VSCODE_RECONNECTION_GRACE_TIME env var for extension host: ${environmentService.reconnectionGraceTime}ms (${Math.floor(environmentService.reconnectionGraceTime / 1000)}s)`);
  
@@ -163,7 +163,7 @@ Index: product-integrator/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
 +++ product-integrator/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
-@@ -254,6 +254,7 @@ export class RemoteTerminalChannel extends Disposable implements IServerChannel<
+@@ -254,6 +254,7 @@ export class RemoteTerminalChannel exten
  			const workspaceFolder = activeWorkspaceFolder ? activeWorkspaceFolder ?? undefined : undefined;
  			await mergedCollection.applyToProcessEnvironment(env, { workspaceFolder }, variableResolver);
  		}
@@ -175,7 +175,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/browser/t
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
-@@ -475,6 +475,7 @@ export class TerminalProcessManager extends Disposable implements ITerminalProce
+@@ -475,6 +475,7 @@ export class TerminalProcessManager exte
  				this._onEnvironmentVariableInfoChange.fire(this.environmentVariableInfo);
  			}
  		}
@@ -537,7 +537,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/te
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
-@@ -19,6 +19,11 @@ import { isNumber, isString } from '../../../../base/common/types.js';
+@@ -19,6 +19,11 @@ import { isNumber, isString } from '../.
  import { IHistoryService } from '../../../services/history/common/history.js';
  import { ILogService } from '../../../../platform/log/common/log.js';
  import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -549,7 +549,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/te
  
  export function mergeEnvironments(parent: IProcessEnvironment, other: ITerminalEnvironment | undefined): void {
  	if (!other) {
-@@ -251,6 +256,7 @@ export async function createTerminalEnvironment(
+@@ -251,6 +256,7 @@ export async function createTerminalEnvi
  ): Promise<IProcessEnvironment> {
  	// Create a terminal environment based on settings, launch config and permissions
  	const env: IProcessEnvironment = {};
@@ -557,7 +557,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/te
  	if (shellLaunchConfig.strictEnv) {
  		// strictEnv is true, only use the requested env (ignoring null entries)
  		mergeNonNullKeys(env, shellLaunchConfig.env);
-@@ -297,13 +303,30 @@ export async function createTerminalEnvironment(
+@@ -297,13 +303,30 @@ export async function createTerminalEnvi
  		// Merge config (settings) and ShellLaunchConfig environments
  		mergeEnvironments(env, allowedEnvFromConfig);
  		mergeEnvironments(env, shellLaunchConfig.env);
@@ -592,7 +592,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/electron-
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/electron-browser/localTerminalBackend.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/electron-browser/localTerminalBackend.ts
-@@ -368,6 +368,7 @@ class LocalTerminalBackend extends BaseTerminalBackend implements ITerminalBacke
+@@ -368,6 +368,7 @@ class LocalTerminalBackend extends BaseT
  			const workspaceFolder = terminalEnvironment.getWorkspaceForTerminal(shellLaunchConfig.cwd, this._workspaceContextService, this._historyService);
  			await this._environmentVariableService.mergedCollection.applyToProcessEnvironment(env, { workspaceFolder }, variableResolver);
  		}
@@ -604,7 +604,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
-@@ -9,6 +9,7 @@ import { isWindows, OperatingSystem } from '../../../../../base/common/platform.
+@@ -9,6 +9,7 @@ import { isWindows, OperatingSystem } fr
  import { URI as Uri } from '../../../../../base/common/uri.js';
  import { addTerminalEnvironmentKeys, createTerminalEnvironment, getUriLabelForShell, getCwd, getLangEnvVariable, mergeEnvironments, preparePathForShell, shouldSetLangEnvVariable } from '../../common/terminalEnvironment.js';
  import { GeneralShellType, PosixShellType, WindowsShellType } from '../../../../../platform/terminal/common/terminal.js';
@@ -612,7 +612,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
  import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
  
  const wslPathBackend = {
-@@ -313,12 +314,79 @@ suite('Workbench - TerminalEnvironment', () => {
+@@ -313,12 +314,79 @@ suite('Workbench - TerminalEnvironment',
  			COLORTERM: 'truecolor',
  			TERM_PROGRAM: 'vscode'
  		};
@@ -633,7 +633,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 +					foo: 'runtime',
 +					BALLERINA_HOME: '/runtime/home'
 +				},
-+				pathAppend: '/runtime/bin',
++				pathPrepend: '/runtime/bin',
 +				pathRemovePattern: '(^|[/\\\\])ballerina([/\\\\]|$)'
 +			});
 +
@@ -656,7 +656,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 +
 +			strictEqual(env.foo, 'runtime');
 +			strictEqual(env.BALLERINA_HOME, '/runtime/home');
-+			strictEqual(env.PATH, [`/launch/bin`, `/runtime/bin`].join(pathSeparator));
++			strictEqual(env.PATH, [`/runtime/bin`, `/launch/bin`].join(pathSeparator));
 +		});
 +		test('should apply stored runtime env in strictEnv terminals', async () => {
 +			const baseEnv = {
@@ -666,7 +666,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 +				replace: {
 +					foo: 'runtime'
 +				},
-+				pathAppend: '/runtime/bin',
++				pathPrepend: '/runtime/bin',
 +				pathRemovePattern: '(^|[/\\\\])ballerina([/\\\\]|$)'
 +			});
 +
@@ -686,7 +686,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 +			);
 +
 +			strictEqual(env.foo, 'runtime');
-+			strictEqual(env.PATH, [`/strict/bin`, `/runtime/bin`].join(pathSeparator));
++			strictEqual(env.PATH, [`/runtime/bin`, `/strict/bin`].join(pathSeparator));
 +			strictEqual(env.TERM_PROGRAM, undefined);
 +		});
  	});
@@ -696,7 +696,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/services/extensions/electr
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
-@@ -24,6 +24,7 @@ import { ILabelService } from '../../../../platform/label/common/label.js';
+@@ -24,6 +24,7 @@ import { ILabelService } from '../../../
  import { ILogService, ILoggerService } from '../../../../platform/log/common/log.js';
  import { INativeHostService } from '../../../../platform/native/common/native.js';
  import { INotificationService, NotificationPriority, Severity } from '../../../../platform/notification/common/notification.js';
@@ -704,7 +704,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/services/extensions/electr
  import { IProductService } from '../../../../platform/product/common/productService.js';
  import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
  import { isLoggingOnly } from '../../../../platform/telemetry/common/telemetryUtils.js';
-@@ -199,6 +200,8 @@ export class NativeLocalProcessExtensionHost implements IExtensionHost {
+@@ -199,6 +200,8 @@ export class NativeLocalProcessExtension
  			objects.mixin(env, this._environmentService.debugExtensionHost.env);
  		}
  
@@ -922,7 +922,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/product/common/runtimeEnvir
 +	const resolvedValue = value.replace(APP_ROOT_TOKEN_REGEX, appRoot);
 +	const pathTokenMatch = PATH_TOKEN_REGEX.exec(resolvedValue);
 +	if (!pathTokenMatch) {
-+		return { append: _normalizePathEntries(resolvedValue, appRoot) };
++		return { prepend: _normalizePathEntries(resolvedValue, appRoot) };
 +	}
 +
 +	const prepend = _normalizePathEntries(resolvedValue.slice(0, pathTokenMatch.index), appRoot);
