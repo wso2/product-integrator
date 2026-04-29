@@ -1014,14 +1014,14 @@ jobs:
           CURRENT_VERSION=$(awk -F= '$1 == "integrator.version" { print $2; exit }' "${VERSIONS_FILE}" | tr -d '\r')
           echo "Current version: ${CURRENT_VERSION}"
 
-          # Extract alpha number and increment it
-          if [[ "${CURRENT_VERSION}" =~ ^(.+-alpha)([0-9]+)$ ]]; then
-            PREFIX="${BASH_REMATCH[1]}"
-            ALPHA_NUM="${BASH_REMATCH[2]}"
-            NEXT_ALPHA_NUM=$((ALPHA_NUM + 1))
-            NEW_VERSION="${PREFIX}${NEXT_ALPHA_NUM}"
+          # If version ends in a number, increment it (e.g. alpha11 -> alpha12, beta1 -> beta2)
+          # If not, append 1 (e.g. beta -> beta1, RC -> RC1)
+          if [[ "${CURRENT_VERSION}" =~ ^(.*[^0-9])([0-9]+)$ ]]; then
+            NEW_VERSION="${BASH_REMATCH[1]}$((BASH_REMATCH[2] + 1))"
+          elif [[ -n "${CURRENT_VERSION}" ]]; then
+            NEW_VERSION="${CURRENT_VERSION}1"
           else
-            echo "Error: integrator.version '${CURRENT_VERSION}' does not match expected alpha pattern." >&2
+            echo "Error: integrator.version is empty or invalid." >&2
             exit 1
           fi
 
