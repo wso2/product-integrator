@@ -29,12 +29,6 @@ import type { WsClient } from "../../network-bridge/WsClient";
 export type WIRuntime = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 export type SampleSupportedRuntime = Exclude<WIRuntime, "WSO2: SI">;
 
-export const RUNTIME_PRIORITY: WIRuntime[] = [
-	"WSO2: BI",
-	"WSO2: MI",
-	"WSO2: SI",
-];
-
 export const RUNTIME_DISPLAY_LABEL: Record<WIRuntime, string> = {
 	"WSO2: BI": DEFAULT_PROFILE,
 	"WSO2: MI": MI_PROFILE,
@@ -50,12 +44,6 @@ export const CREATION_RUNTIME_HELP: Record<WIRuntime, string> = {
 		"Create a WSO2 Integrator: SI project.",
 };
 
-const RUNTIME_CONFIG_SECTIONS: Record<WIRuntime, string> = {
-	"WSO2: BI": "integrator.enabledRuntimes.bi",
-	"WSO2: MI": "integrator.enabledRuntimes.mi",
-	"WSO2: SI": "integrator.enabledRuntimes.si",
-};
-
 const PROFILE_RUNTIME_MAP: Record<SelectedProfileValue, WIRuntime> = {
 	[DEFAULT_PROFILE]: "WSO2: BI",
 	[MI_PROFILE]: "WSO2: MI",
@@ -67,31 +55,18 @@ function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
 		&& (SELECTED_PROFILE_VALUES as readonly string[]).includes(value);
 }
 
-export async function loadEnabledRuntimes(
+export async function loadSelectedRuntime(
 	wsClient: WsClient,
-): Promise<WIRuntime[]> {
+): Promise<WIRuntime> {
 	const selectedProfileResponse = await wsClient.getConfiguration({
 		section: SELECTED_PROFILE_CONFIG_SECTION,
 	});
 
 	if (isSelectedProfileValue(selectedProfileResponse?.value)) {
-		return [PROFILE_RUNTIME_MAP[selectedProfileResponse.value]];
+		return PROFILE_RUNTIME_MAP[selectedProfileResponse.value];
 	}
 
-	const runtimeResponses = await Promise.all(
-		RUNTIME_PRIORITY.map((runtime) =>
-			wsClient.getConfiguration({ section: RUNTIME_CONFIG_SECTIONS[runtime] }),
-		),
-	);
-
-	const enabledRuntimes = RUNTIME_PRIORITY.filter(
-		(runtime, index) => runtimeResponses[index]?.value === true,
-	);
-	return enabledRuntimes.length > 0 ? enabledRuntimes : [RUNTIME_PRIORITY[0]];
-}
-
-export function getDefaultRuntime(enabledRuntimes: WIRuntime[]): WIRuntime {
-	return enabledRuntimes[0] ?? RUNTIME_PRIORITY[0];
+	return "WSO2: BI";
 }
 
 export function supportsSamples(

@@ -48,7 +48,7 @@ import { ext } from "../../extensionVariables";
 import { StateMachine } from "../../stateMachine";
 import { contextStore } from "../../cloud/stores/context-store";
 import { webviewStateStore } from "../../cloud/stores/webview-state-store";
-import { getGitHead, getGitRemotes, getGitRoot, hasDirtyRepo as checkDirtyRepo, removeCredentialsFromGitURL } from "../../cloud/git/util";
+import { getGitHead, getGitRemotes, getGitRoot, hasDirtyRepo as checkDirtyRepo, removeCredentialsFromGitURL, relativePath } from "../../cloud/git/util";
 import { initGit } from "../../cloud/git/main";
 import fs, { readdirSync } from "fs";
 import path, { join } from "path";
@@ -168,7 +168,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			const git = await initGit(ext.context);
 			const repoRoot = await git?.getRepositoryRoot(repoDir);
 			if (repoRoot) {
-				const subPath = path.relative(repoRoot, repoDir);
+				const subPath = relativePath(repoRoot, repoDir);
 
 				if (git) {
 					const gitRepo = git.open(repoRoot, { path: repoRoot });
@@ -201,8 +201,9 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 							// ignore error
 						}
 						const changes = await gitRepo.diffWith(`${matchingRemoteName}/${branch}`);
-						const componentYamlPath = join(repoDir, ".choreo", "component.yaml");
-						const configPaths = [componentYamlPath];
+						const componentYamlPath = join(repoDir, ".wso2", "component.yaml");
+						const componentYamlLegacyPath = join(repoDir, ".choreo", "component.yaml");
+						const configPaths = [componentYamlPath, componentYamlLegacyPath];
 
 						changes.forEach((item) => {
 							if (configPaths.includes(item.uri.path)) {

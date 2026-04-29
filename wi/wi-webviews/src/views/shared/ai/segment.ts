@@ -22,6 +22,7 @@
 export enum SegmentType {
     Text = "Text",
     ToolCall = "ToolCall",
+    Error = "Error",
 }
 
 export interface Segment {
@@ -36,7 +37,7 @@ export function splitContent(content: string): Segment[] {
     const segments: Segment[] = [];
 
     const regexPattern =
-        /<toolcall(?:\s+[^>]*)?>([\s\S]*?)<\/toolcall>|<toolresult(?:\s+[^>]*)?>([\s\S]*?)<\/toolresult>/g;
+        /<toolcall(?:\s+[^>]*)?>([\s\S]*?)<\/toolcall>|<toolresult(?:\s+[^>]*)?>([\s\S]*?)<\/toolresult>|<errormsg>([\s\S]*?)<\/errormsg>/g;
 
     const matches = Array.from(content.matchAll(regexPattern));
     let lastIndex = 0;
@@ -69,6 +70,17 @@ export function splitContent(content: string): Segment[] {
                 text: match[2],
                 failed: failedAttr,
                 toolName,
+            });
+        } else if (match[3] !== undefined) {
+            // <errormsg> — decode HTML entities escaped at the insertion point
+            const decoded = match[3]
+                .replace(/&gt;/g, ">")
+                .replace(/&lt;/g, "<")
+                .replace(/&amp;/g, "&");
+            segments.push({
+                type: SegmentType.Error,
+                loading: false,
+                text: decoded,
             });
         }
 

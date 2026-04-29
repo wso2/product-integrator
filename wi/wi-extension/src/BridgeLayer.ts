@@ -84,6 +84,8 @@ export class BridgeLayer {
     private static channels: Map<string, BridgeChannel> = new Map();
     private static migrationSubscribed = false;
     private static migrationSubscriptionDisposable: { dispose(): void } | undefined;
+    private static downloadProgressSubscribed = false;
+    private static downloadProgressDisposable: { dispose(): void } | undefined;
 
     static create(webViewPanel: WebviewPanel, projectUri: string): void {
         const channel = this.getOrCreateChannel(projectUri);
@@ -195,6 +197,9 @@ export class BridgeLayer {
             this.migrationSubscriptionDisposable?.dispose();
             this.migrationSubscriptionDisposable = undefined;
             this.migrationSubscribed = false;
+            this.downloadProgressDisposable?.dispose();
+            this.downloadProgressDisposable = undefined;
+            this.downloadProgressSubscribed = false;
         }
     }
 
@@ -243,6 +248,25 @@ export class BridgeLayer {
             this.migrationSubscriptionDisposable = ballerinaContext.migration.onChatNotify((event) => {
                 this.channels.forEach((_channel, uri) => {
                     this.notifyChatEvent(uri, event);
+                });
+            });
+        }
+    }
+
+    /**
+     * Subscribe to download-progress events from the Ballerina extension.
+     * Safe to call multiple times — only the first call with a valid event sets up the listener.
+     * Broadcasts to all active channels so that any open webview receives progress updates.
+     */
+    static setupDownloadProgressSubscription(): void {
+        if (this.downloadProgressSubscribed) {
+            return;
+        }
+        if (ballerinaContext.onDownloadProgress) {
+            this.downloadProgressSubscribed = true;
+            this.downloadProgressDisposable = ballerinaContext.onDownloadProgress((progress) => {
+                this.channels.forEach((_channel, uri) => {
+                    this.notifyDownloadProgress(uri, progress as DownloadProgress);
                 });
             });
         }
@@ -297,6 +321,7 @@ export class BridgeLayer {
         registerRoute("createMiProject", async (request) =>
             wsManager.createMiProject(request.params as CreateMiProjectRequest)
         );
+        registerRoute("importProjectFromCapp", async () => wsManager.importProjectFromCapp());
         registerRoute("createSiProject", async (request) =>
             wsManager.createSiProject(request.params as CreateSiProjectRequest)
         );
@@ -347,6 +372,11 @@ export class BridgeLayer {
         registerRoute("abortMigrationAgent", async () => wsManager.abortMigrationAgent());
         registerRoute("checkAIAuth", async () => wsManager.checkAIAuth());
         registerRoute("triggerAICopilotSignIn", async () => wsManager.triggerAICopilotSignIn());
+        registerRoute("triggerAnthropicKeySignIn", async (request) => wsManager.triggerAnthropicKeySignIn(request.params));
+        registerRoute("triggerAwsBedrockSignIn", async (request) => wsManager.triggerAwsBedrockSignIn(request.params));
+        registerRoute("triggerVertexAiSignIn", async (request) => wsManager.triggerVertexAiSignIn(request.params));
+        registerRoute("getBIRuntimeStatus", async () => wsManager.getBIRuntimeStatus());
+        registerRoute("initBIRuntimeContext", async () => wsManager.initBIRuntimeContext());
 
         // ── Cloud routes ──────────────────────────────────────────
         registerRoute("getCloudFormContext", async () => cloudManager.getCloudFormContext());

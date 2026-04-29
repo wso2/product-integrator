@@ -23,9 +23,9 @@ print_warning() {
 
 WORK_DIR=$(pwd)
 
-# Usage: ./build.sh <ballerina_zip> <integrator_tar_gz> <icp_zip> [version]
-if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 <ballerina_zip> <integrator_tar_gz> <icp_zip> [version]"
+# Usage: ./build.sh <ballerina_zip> <ballerina_version> <integrator_tar_gz> <icp_zip> <jre_zip> [version]
+if [ "$#" -lt 5 ]; then
+    echo "Usage: $0 <ballerina_zip> <ballerina_version> <integrator_tar_gz> <icp_zip> <jre_zip> [version]"
     exit 1
 fi
 
@@ -33,7 +33,8 @@ BALLERINA_ZIP="$1"
 BALLERINA_VERSION="$2"
 INTEGRATOR_TAR_GZ="$3"
 ICP_ZIP="$4"
-VERSION="${5:-1.0.0}"
+JRE_ZIP="$5"
+VERSION="${6:-1.0.0}"
 
 # Check if input files exist
 if [ ! -f "$BALLERINA_ZIP" ]; then
@@ -48,6 +49,11 @@ fi
 
 if [ ! -f "$ICP_ZIP" ]; then
     print_error "ICP ZIP file not found: $ICP_ZIP"
+    exit 1
+fi
+
+if [ ! -f "$JRE_ZIP" ]; then
+    print_error "JRE ZIP file not found: $JRE_ZIP"
     exit 1
 fi
 
@@ -81,6 +87,18 @@ mkdir -p "$EXTRACTION_TARGET"
 print_info "Extracting WSO2 Integrator..."
 tar -xzf "$INTEGRATOR_TAR_GZ" -C "$INTEGRATOR_TARGET" --strip-components=1
 
+# Prune choreo-cli to linux/amd64 only
+CHOREO_CLI_DIR="$INTEGRATOR_TARGET/resources/app/extensions/wso2.wso2-integrator/resources/choreo-cli"
+if [ -d "$CHOREO_CLI_DIR" ]; then
+    print_info "Pruning choreo-cli binaries to linux/amd64 only"
+    for VERSION_DIR in "$CHOREO_CLI_DIR"/*/; do
+        [ -d "$VERSION_DIR" ] || continue
+        rm -rf "${VERSION_DIR}darwin"
+        rm -rf "${VERSION_DIR}win32"
+        rm -rf "${VERSION_DIR}linux/arm64"
+    done
+fi
+
 # Extract Ballerina zip
 print_info "Extracting Ballerina to components..."
 mkdir -p "$COMPONENTS_DIR"
@@ -106,17 +124,19 @@ fi
 mkdir -p "$BALLERINA_TARGET"
 mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
 
-# Move JDK to shared dependencies directory
-print_info "Moving JDK to shared dependencies directory"
+# Remove unwanted Ballerina folders
+rm -rf "$BALLERINA_TARGET/docs"
+rm -rf "$BALLERINA_TARGET/examples"
+
+# Extract JRE zip into shared dependencies directory
+print_info "Extracting JRE to shared dependencies directory"
 rm -rf "$DEPENDENCIES_DIR"
 mkdir -p "$DEPENDENCIES_DIR"
-if [ -d "$BALLERINA_UNZIPPED_PATH/dependencies" ]; then
-    for jdk_folder in "$BALLERINA_UNZIPPED_PATH/dependencies"/*; do
-        if [ -d "$jdk_folder" ]; then
-            JDK_FOLDER=$(basename "$jdk_folder")
-            cp -r "$jdk_folder" "$DEPENDENCIES_DIR/"
-        fi
-    done
+unzip -o "$JRE_ZIP" -d "$DEPENDENCIES_DIR"
+JRE_FOLDER=$(unzip -Z1 "$JRE_ZIP" | awk -F/ '{print $1}' | sort -u | grep -v '^$' | head -1)
+if [ -z "$JRE_FOLDER" ]; then
+    print_error "Could not determine JRE folder from zip"
+    exit 1
 fi
 
 rm -rf "$BALLERINA_UNZIPPED_PATH"
@@ -125,6 +145,7 @@ rm -rf "$BALLERINA_TEMP"
 # Replace bal script with the one from balscript
 print_info "Replacing bal script with updated version from balscript"
 cp "$WORK_DIR/balscript/bal" "$BALLERINA_TARGET/bin/bal"
+sed -i "s/@BALLERINA_VERSION@/$BALLERINA_VERSION/g" "$BALLERINA_TARGET/bin/bal"
 chmod +x "$BALLERINA_TARGET/bin"/*
 
 # Extract ICP zip
@@ -137,11 +158,12 @@ mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
 
-# Modify icp.sh to use the JDK from shared dependencies directory
+# Modify icp.sh to use the JRE from shared dependencies directory
 ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
 if [ -f "$ICP_SCRIPT" ]; then
-    print_info "Modifying icp.sh to use JDK from dependencies ($JDK_FOLDER)"
-    sed -i "s|java|\"\$SCRIPT_DIR\"/../../dependencies/$JDK_FOLDER/bin/java|g" "$ICP_SCRIPT"
+    print_info "Modifying icp.sh to use JRE from dependencies ($JRE_FOLDER)"
+    # Replace standalone 'java' invocations with the full path to the JRE java (word-boundary match)
+    sed -i "s|\bjava\b|\"\$SCRIPT_DIR\"/../../dependencies/$JRE_FOLDER/bin/java|g" "$ICP_SCRIPT"
 fi
 
 # Set executable permissions

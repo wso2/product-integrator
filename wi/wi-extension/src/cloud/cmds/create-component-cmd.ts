@@ -36,7 +36,7 @@ import { type ExtensionContext, ProgressLocation, Uri, commands, window, workspa
 import { ext } from "../../extensionVariables";
 import { initGit } from "../git/main";
 import { Repository } from "../git/git";
-import { getGitRemotes, getGitRoot } from "../git/util";
+import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { isSamePath, isSubpath } from "../../utils/pathUtils";
@@ -336,7 +336,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 			// 	...workspaceContent.folders,
 			// 	{
 			// 		name: createdComponent.metadata.name, // name not needed?
-			// 		path: path.normalize(path.relative(path.dirname(workspace.workspaceFile.fsPath), createParams.componentDir)),
+			// 		path: path.normalize((path.dirname(workspace.workspaceFile.fsPath), createParams.componentDir)),
 			// 	},
 			// ];
 		} else if (isWithinWorkspace) {
@@ -419,7 +419,7 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: CreateComponentReq[
 					throw new Error(`Failed to parse git URL: ${createParam.repoUrl}`);
 				}
 				const [repoOrg, repoName, repoProvider] = parsedGit;
-				const subPathDir = path.relative(gitRoot!, createParam.componentDir);
+				const subPathDir = relativePath(gitRoot!, createParam.componentDir);
 				if (!ext.isDevantCloudEditor && repoProvider === GitProvider.GITHUB) {
 					// This check is not needed in cloud editor, as we have pushed the changes to remote repo
 					const repoMetadata = await ext.clients.rpcClient?.getGitRepoMetadata({
@@ -464,7 +464,7 @@ async function handlePrebuiltComponentUpdate(
 					orgId: org.id.toString(),
 					projectId: project.id,
 					srcGitRepoUrl: createParam.repoUrl,
-					repositorySubPath: path.relative(workspaceFsPath, createParam.componentDir),
+					repositorySubPath: relativePath(workspaceFsPath, createParam.componentDir),
 					originCloud: "devant",
 					repositoryBranch: createParam.branch,
 					secretRef: createParam.gitCredRef,
@@ -558,7 +558,8 @@ const clearCodeServerLocalStorage = async () => {
 /** If the context.yaml exists with `local: true`, create project from its data, automatically  */
 const createProjectFromLocalMetadata = async (userInfo: UserInfo, workspacePath?: string): Promise<{ org?: Organization; project?: Project }> => {
 	try {
-		const contextFilePath = path.join(workspacePath, ".choreo", "context.yaml");
+		const wso2ContextPath = path.join(workspacePath, ".wso2", "context.yaml");
+		const contextFilePath = existsSync(wso2ContextPath) ? wso2ContextPath : path.join(workspacePath, ".choreo", "context.yaml");
 		if (!existsSync(contextFilePath)) {
 			return undefined;
 		}

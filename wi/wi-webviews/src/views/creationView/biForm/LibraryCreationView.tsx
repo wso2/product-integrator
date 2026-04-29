@@ -66,7 +66,7 @@ interface LibraryFormData {
     version: string;
 }
 
-export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
+export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?: () => void; ballerinaUnavailable?: boolean }) {
     const { wsClient } = useVisualizerContext();
     const { authState } = useCloudContext();
     const organizations = (authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined);
@@ -538,13 +538,15 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                             />
 
                             <FormFooter>
-                                <Button
-                                    disabled={isValidating}
-                                    onClick={handleCreate}
-                                    appearance="primary"
-                                >
-                                    {isValidating ? "Validating..." : "Create Library"}
-                                </Button>
+                                <span title={ballerinaUnavailable ? "Ballerina distribution is not set up. Use Configure to set it up." : undefined}>
+                                    <Button
+                                        disabled={isValidating || ballerinaUnavailable}
+                                        onClick={handleCreate}
+                                        appearance="primary"
+                                    >
+                                        {isValidating ? "Validating..." : "Create Library"}
+                                    </Button>
+                                </span>
                             </FormFooter>
                         </FormContent>
                     </FormBody>

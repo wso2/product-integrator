@@ -43,13 +43,13 @@ export const getMigrationProgressHeaderData = (state: MigrationDisplayState, isM
 
     if (state.isSuccess) {
         if (isMultiProject) {
-            headerText = "Static Migration Completed Successfully!";
+            headerText = "Rule-Based Migration Completed Successfully!";
             headerDesc =
-                "Your integration project with multiple packages has been successfully migrated. You can now proceed to configure your project and optionally enhance with AI.";
+                "Your integration project with multiple packages has been successfully migrated. You can now proceed to optionally enhance it with AI.";
         } else {
-            headerText = "Static Migration Completed Successfully!";
+            headerText = "Rule-Based Migration Completed Successfully!";
             headerDesc =
-                "Your integration project has been successfully migrated. You can now proceed to configure your project and optionally enhance with AI.";
+                "Your integration project has been successfully migrated. You can now proceed to optionally enhance it with AI.";
         }
     } else if (state.isFailed) {
         headerText = "Migration Failed";

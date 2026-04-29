@@ -20,6 +20,7 @@ import { existsSync, mkdirSync } from "fs";
 import * as os from "os";
 import * as path from "path";
 import { Uri, commands, window, workspace } from "vscode";
+import { relativePath } from "../cloud/git/util";
 
 
 export const getNormalizedPath = (filePath: string): string => {
@@ -58,7 +59,7 @@ export const isSubpath = (parent: string, sub: string): boolean => {
         return true;
     }
 
-    const relative = path.relative(normalizedParent, normalizedSub);
+    const relative = relativePath(normalizedParent, normalizedSub);
     return !!relative && !relative.startsWith("..") && !path.isAbsolute(relative);
 };
 

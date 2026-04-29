@@ -47,16 +47,12 @@ export interface MigrationReportJSON {
 export interface ImportIntegrationFormProps {
     selectedIntegration: MigrationTool | null;
     migrationTools: MigrationTool[];
-    pullIntegrationTool: (integrationType: string, version: string) => void;
+    pullIntegrationTool: (integrationType: string) => void;
     pullingTool: boolean;
     toolPullProgress: DownloadProgress | null;
     setImportParams: (params: FinalIntegrationParams) => void;
     onSelectIntegration: (selectedIntegration: MigrationTool) => void;
-    handleStartImport: (
-        importParams: FinalIntegrationParams,
-        selectedIntegration: MigrationTool,
-        toolPullProgress: DownloadProgress
-    ) => void;
+    onNext: () => void;
     onBack: () => void;
 }
 
@@ -68,8 +64,29 @@ export interface MigrationProgressProps {
     migrationResponse: ImportIntegrationResponse | null;
     projects: ProjectMigrationResult[];
     isMultiProject: boolean;
-    onNext: () => void;
+    onStartAIEnhancement: () => void;
+    onDone: () => void;
+    onOpenProject: () => void;
     onBack: () => void;
+    toolPullFailed?: boolean;
+    toolPullFailureMessage?: string | null;
+    migrationToolCommandName?: string;
+}
+
+export interface DryRunViewProps {
+    migrationState: string | null;
+    migrationLogs: string[];
+    migrationCompleted: boolean;
+    migrationSuccessful: boolean;
+    migrationResponse: ImportIntegrationResponse | null;
+    projects: ProjectMigrationResult[];
+    isMultiProject: boolean;
+    onNext: () => void;
+    onDone: () => void;
+    onBack?: () => void;
+    toolPullFailed?: boolean;
+    toolPullFailureMessage?: string | null;
+    migrationToolCommandName?: string;
 }
 
 export interface ProjectRequest {

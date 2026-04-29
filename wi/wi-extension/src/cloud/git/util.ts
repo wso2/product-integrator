@@ -594,16 +594,16 @@ export const getGitRoot = async (context: ExtensionContext, directoryPath: strin
 };
 
 export const hasDirtyRepo = async (directoryPath: string, context: ExtensionContext, ignoredFileNames: string[] = []): Promise<boolean> => {
-	try{
+	try {
 		const git = await initGit(context);
 		const repoRoot = await git?.getRepositoryRoot(directoryPath)
-		if(repoRoot){
-			const subPath = relative(repoRoot, directoryPath)
+		if (repoRoot) {
+			const subPath = relativePath(repoRoot, directoryPath)
 			if (git) {
 				const gitRepo = git.open(repoRoot, { path: repoRoot });
 				const status = await gitRepo.getStatus({ untrackedChanges: 'separate', subDirectory: subPath });
-				const hasLocalChanges =  status.status.filter(item=>!ignoredFileNames.some(fileName=>item.path.endsWith(fileName))).length > 0;
-				if(hasLocalChanges){
+				const hasLocalChanges = status.status.filter(item => !ignoredFileNames.some(fileName => item.path.endsWith(fileName))).length > 0;
+				if (hasLocalChanges) {
 					return hasLocalChanges
 				}
 
@@ -612,7 +612,7 @@ export const hasDirtyRepo = async (directoryPath: string, context: ExtensionCont
 			}
 		}
 		return false
-	}catch{
+	} catch {
 		return false
 	}
 };

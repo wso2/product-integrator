@@ -101,24 +101,6 @@ export const CloudContextProvider: FC<Props> = ({ children }) => {
         });
     }, []);
 
-    // Pre-warm cloud projects for all orgs as soon as organizations are known.
-    const organizations = authState?.userInfo?.organizations as Array<{ id?: any; handle: string }> | undefined;
-    useEffect(() => {
-        if (!organizations || organizations.length === 0) {
-            // Signed out — invalidate stale caches so the next login gets fresh data.
-            queryClient.invalidateQueries({ queryKey: ["cloud_projects"] });
-            return;
-        }
-        organizations.forEach(org => {
-            if (!org.id) return;
-            queryClient.prefetchQuery({
-                queryKey: cloudProjectsQueryKey(org.id.toString()),
-                queryFn: () => wsClient.getCloudProjects({ orgId: org.id.toString(), orgHandle: org.handle }),
-                staleTime: CLOUD_PROJECTS_STALE_TIME,
-            });
-        });
-    }, [organizations]);
-
     return (
         <CloudContext.Provider value={{ authState, contextState, authStateLoading, contextStateLoading, consoleUrl }}>
             {children}

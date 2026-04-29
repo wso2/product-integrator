@@ -20,6 +20,7 @@ import { ExtensionContext, TreeView, commands, window, workspace, extensions } f
 import { ProjectExplorerEntry, ProjectExplorerEntryProvider } from './project-explorer-provider';
 import { SHARED_COMMANDS, BI_COMMANDS, MACHINE_VIEW, NodePosition } from '../types';
 import { ballerinaContext } from '../ballerinaContext';
+import { COMMANDS } from '@wso2/wi-core';
 
 const WI_PROJECT_EXPLORER_VIEW_ID = 'wso2-integrator.explorer';
 
@@ -165,5 +166,5 @@ function handleNonBallerinaVisibility(): void {
     } else {
         commands.executeCommand('setContext', 'BI.status', 'unknownProject');
     }
-    commands.executeCommand(SHARED_COMMANDS.OPEN_BI_WELCOME);
+    commands.executeCommand(COMMANDS.OPEN_WELCOME);
 }
