@@ -24,6 +24,18 @@ import { ProgressLocation, window } from "vscode";
 import { ext } from "../extensionVariables";
 import { dataCacheStore } from "./stores/data-cache-store";
 
+const WSO2_DIR = ".wso2";
+const CHOREO_DIR_LEGACY = ".choreo";
+
+/** Returns the config directory path. Prefers .wso2, falls back to .choreo (legacy), defaults to .wso2 for new creation. */
+const resolveConfigDir = (baseDir: string): string => {
+	const wso2Dir = join(baseDir, WSO2_DIR);
+	if (existsSync(wso2Dir)) return wso2Dir;
+	const choreoDir = join(baseDir, CHOREO_DIR_LEGACY);
+	if (existsSync(choreoDir)) return choreoDir;
+	return wso2Dir;
+};
+
 interface ComponentYamlConnectionRef {
 	name: string;
 	resourceRef: string;
@@ -42,7 +54,7 @@ interface ComponentYamlContent {
 }
 
 export const deleteLocalConnectionConfig = (params: DeleteLocalConnectionsConfigReq): void => {
-	const componentYamlPath = join(params.componentDir, ".choreo", "component.yaml");
+	const componentYamlPath = join(resolveConfigDir(params.componentDir), "component.yaml");
 	if (existsSync(componentYamlPath)) {
 		const componentYamlFileContent: ComponentYamlContent = yaml.load(readFileSync(componentYamlPath, "utf8")) as ComponentYamlContent;
 		if (componentYamlFileContent.dependencies?.connectionReferences) {
@@ -66,13 +78,15 @@ export const createConnectionConfig = async (params: CreateLocalConnectionsConfi
 		return "";
 	}
 
-	if (existsSync(join(params.componentDir, ".choreo", "endpoints.yaml"))) {
-		rmSync(join(params.componentDir, ".choreo", "endpoints.yaml"));
+	for (const dir of [WSO2_DIR, CHOREO_DIR_LEGACY]) {
+		if (existsSync(join(params.componentDir, dir, "endpoints.yaml"))) {
+			rmSync(join(params.componentDir, dir, "endpoints.yaml"));
+		}
+		if (existsSync(join(params.componentDir, dir, "component-config.yaml"))) {
+			rmSync(join(params.componentDir, dir, "component-config.yaml"));
+		}
 	}
-	if (existsSync(join(params.componentDir, ".choreo", "component-config.yaml"))) {
-		rmSync(join(params.componentDir, ".choreo", "component-config.yaml"));
-	}
-	const componentYamlPath = join(params.componentDir, ".choreo", "component.yaml");
+	const componentYamlPath = join(resolveConfigDir(params.componentDir), "component.yaml");
 
 	let resourceRef = ``;
 	const marketplaceItem = params.marketplaceItem as MarketplaceItem;
@@ -138,8 +152,9 @@ export const createConnectionConfig = async (params: CreateLocalConnectionsConfi
 			writeFileSync(componentYamlPath, yaml.dump(componentYamlFileContent));
 		}
 	} else {
-		if (!existsSync(join(params.componentDir, ".choreo"))) {
-			mkdirSync(join(params.componentDir, ".choreo"));
+		const newConfigDir = join(params.componentDir, WSO2_DIR);
+		if (!existsSync(newConfigDir)) {
+			mkdirSync(newConfigDir);
 		}
 		const endpointFileContent: ComponentYamlContent = {
 			schemaVersion: "1.2",

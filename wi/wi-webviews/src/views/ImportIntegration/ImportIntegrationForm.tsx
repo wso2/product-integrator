@@ -26,6 +26,12 @@ import {
     IntegrationCardGrid,
     LoadingOverlayContainer,
     PathText,
+    RadioContent,
+    RadioDescription,
+    RadioGroup,
+    RadioInput,
+    RadioOption,
+    RadioTitle,
     StepContainer,
 } from "./styles";
 import { FinalIntegrationParams, ImportIntegrationFormProps } from "./types";
@@ -35,6 +41,18 @@ import { MigrationTool } from "@wso2/wi-core";
 import { DownloadProgress } from "../../components/DownloadProgress";
 import { DirectorySelector } from "../../components/DirectorySelector/DirectorySelector";
 
+const SOURCE_DESCRIPTIONS: Record<string, string> = {
+    mulesoft: "Select your MuleSoft project directory or a directory containing multiple projects.",
+    tibco: "Select your TIBCO BusinessWorks project directory or a directory containing multiple projects.",
+};
+
+function getSourceDescription(tool: MigrationTool): string {
+    const lower = tool.title.toLowerCase();
+    if (lower.includes("mule")) return SOURCE_DESCRIPTIONS.mulesoft;
+    if (lower.includes("tibco")) return SOURCE_DESCRIPTIONS.tibco;
+    return tool.description;
+}
+
 export function ImportIntegrationForm({
     selectedIntegration,
     migrationTools,
@@ -43,15 +61,22 @@ export function ImportIntegrationForm({
     setImportParams,
     pullingTool,
     toolPullProgress,
-    handleStartImport,
+    onNext,
     onBack,
 }: ImportIntegrationFormProps) {
     const { wsClient } = useVisualizerContext();
 
     const [importSourcePath, setImportSourcePath] = useState("");
+    const [isDirectorySelected, setIsDirectorySelected] = useState(false);
     const [integrationParams, setIntegrationParams] = useState<Record<string, any>>({});
 
     const isImportDisabled = importSourcePath.length < 2 || !selectedIntegration;
+
+    const boolParam = selectedIntegration?.parameters.find(p => p.valueType === "boolean") ?? null;
+    const getBoolValue = (key: string): boolean => {
+        const v = integrationParams[key];
+        return typeof v === "string" ? v === "true" : v === true;
+    };
 
     const [sourcePathError, setSourcePathError] = useState<string | null>(null);
     const [integrationSelectionError, setIntegrationSelectionError] = useState<string | null>(null);
@@ -59,6 +84,7 @@ export function ImportIntegrationForm({
     const handleIntegrationSelection = (integration: MigrationTool) => {
         // Reset state when a new integration is selected
         setImportSourcePath("");
+        setIsDirectorySelected(false);
         setSourcePathError(null);
         setIntegrationSelectionError(null);
         onSelectIntegration(integration);
@@ -73,6 +99,7 @@ export function ImportIntegrationForm({
         const result = await wsClient.selectFileOrFolderPath();
         if (result?.path) {
             setImportSourcePath(result.path);
+            setIsDirectorySelected(result.isDirectory ?? false);
         }
     };
 
@@ -97,7 +124,7 @@ export function ImportIntegrationForm({
             return;
         }
 
-        // Proceed with import - backend will validate the project structure
+        // Store params and always pull the latest migration tool before proceeding.
         const finalParams: FinalIntegrationParams = {
             importSourcePath,
             type: selectedIntegration!.title,
@@ -105,11 +132,8 @@ export function ImportIntegrationForm({
         };
 
         setImportParams(finalParams);
-        if (selectedIntegration!.needToPull) {
-            pullIntegrationTool(selectedIntegration!.commandName, selectedIntegration!.requiredVersion);
-        } else {
-            handleStartImport(finalParams, selectedIntegration!, toolPullProgress);
-        }
+        pullIntegrationTool(selectedIntegration!.commandName);
+        onNext();
     };
 
     const handleParameterChange = (paramKey: string, value: any) => {
@@ -122,8 +146,7 @@ export function ImportIntegrationForm({
     return (
         <>
             <BodyText>
-                This wizard converts an external integration project from MuleSoft or TIBCO into a ready-to-use
-                Default integration project.
+                This wizard converts external integration projects from MuleSoft or TIBCO into new WSO2 integrator projects, accelerating the migration process.
             </BodyText>
             <Typography variant="h3" sx={{ marginTop: 20 }}>
                 Choose the source platform
@@ -152,19 +175,61 @@ export function ImportIntegrationForm({
 
             {selectedIntegration && (
                 <StepContainer>
-                    <Typography variant="h3" sx={{ marginBottom: 8 }}>Select Your Project Folder</Typography>
-                    <BodyText>{selectedIntegration.description}</BodyText>
+                    <Typography variant="h3" sx={{ marginBottom: 8 }}>Select a Project Folder or Directory</Typography>
+                    <BodyText>{getSourceDescription(selectedIntegration)}</BodyText>
                     <DirectorySelector
                         id="import-project-folder-selector"
-                        placeholder="Enter path or browse to select your project folder..."
+                        placeholder="Enter path or browse to select your folder..."
                         selectedPath={importSourcePath}
                         onSelect={handleFolderSelection}
                         onChange={(value) => {
                             setImportSourcePath(value);
                             setSourcePathError(null);
+                            // Detect directory from typed path: no extension in the last segment
+                            const lastSegment = value.split(/[/\\]/).pop() ?? "";
+                            setIsDirectorySelected(!lastSegment.includes("."));
                         }}
                         errorMsg={sourcePathError || undefined}
                     />
+                </StepContainer>
+            )}
+
+            {boolParam && isDirectorySelected && (
+                <StepContainer>
+                    <Typography variant="h3" sx={{ marginBottom: 4 }}>Source Layout</Typography>
+                    <BodyText>Specify whether your source path contains a single project or multiple projects.</BodyText>
+                    <RadioGroup role="radiogroup" aria-label="Source Layout" style={{ marginTop: 12 }}>
+                        <RadioOption
+                            selected={!getBoolValue(boolParam.key)}
+                            onClick={() => handleParameterChange(boolParam.key, false)}
+                        >
+                            <RadioInput
+                                type="radio"
+                                name={boolParam.key}
+                                checked={!getBoolValue(boolParam.key)}
+                                onChange={() => handleParameterChange(boolParam.key, false)}
+                            />
+                            <RadioContent>
+                                <RadioTitle>Single Project</RadioTitle>
+                                <RadioDescription>The source path points to a single project directory.</RadioDescription>
+                            </RadioContent>
+                        </RadioOption>
+                        <RadioOption
+                            selected={getBoolValue(boolParam.key)}
+                            onClick={() => handleParameterChange(boolParam.key, true)}
+                        >
+                            <RadioInput
+                                type="radio"
+                                name={boolParam.key}
+                                checked={getBoolValue(boolParam.key)}
+                                onChange={() => handleParameterChange(boolParam.key, true)}
+                            />
+                            <RadioContent>
+                                <RadioTitle>Multiple Projects</RadioTitle>
+                                <RadioDescription>The source path points to a directory containing one or more project directories.</RadioDescription>
+                            </RadioContent>
+                        </RadioOption>
+                    </RadioGroup>
                 </StepContainer>
             )}
 
@@ -185,7 +250,7 @@ export function ImportIntegrationForm({
             <ButtonWrapper>
                 <ActionButtons
                     primaryButton={{
-                        text: "Start Migration",
+                        text: "Generate Report",
                         onClick: handleImportIntegration,
                         disabled: isImportDisabled
                     }}

@@ -36,7 +36,7 @@ import { ProgressLocation, window, workspace } from "vscode";
 import { createStore } from "zustand";
 import { persist } from "zustand/middleware";
 import { ext } from '../../extensionVariables';
-import { getGitRemotes, getGitRoot } from "../git/util";
+import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
 import { isSamePath, isSubpath } from '../../utils';
 import { dataCacheStore } from "./data-cache-store";
 import { locationStore } from "./location-store";
@@ -120,7 +120,7 @@ export const contextStore = createStore(
 );
 
 const getAllContexts = async (previousItems: { [key: string]: ContextItemEnriched }) => {
-    const contextFiles = await workspace.findFiles("**/.choreo/context.yaml");
+    const contextFiles = await workspace.findFiles("**/{.wso2,.choreo}/context.yaml");
     const contextItems: { [key: string]: ContextItemEnriched } = {};
 
     const setContextObj = (contextFilePath: string, dirPath?: string, workspaceName?: string) => {
@@ -179,7 +179,8 @@ const getAllContexts = async (previousItems: { [key: string]: ContextItemEnriche
             try {
                 const gitRoot = await getGitRoot(ext.context, workspaceFolder.uri.fsPath);
                 if (gitRoot) {
-                    const contextPath = path.join(gitRoot, ".choreo", "context.yaml");
+                    const wso2ContextPath = path.join(gitRoot, ".wso2", "context.yaml");
+                    const contextPath = existsSync(wso2ContextPath) ? wso2ContextPath : path.join(gitRoot, ".choreo", "context.yaml");
                     if (existsSync(contextPath)) {
                         setContextObj(contextPath, workspaceFolder.uri.fsPath, workspaceFolder.name);
                     }
@@ -386,7 +387,7 @@ const mapComponentList = async (components: ComponentKind[], selected?: ContextI
                                     component: componentItem,
                                     workspaceName: item.workspaceName,
                                     componentFsPath: subPathDir,
-                                    componentRelativePath: path.relative(item.dirFsPath, subPathDir),
+                                    componentRelativePath: relativePath(item.dirFsPath, subPathDir),
                                 });
                             }
                         }

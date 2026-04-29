@@ -32,8 +32,7 @@ import {
 import {
     RUNTIME_DISPLAY_LABEL,
     type WIRuntime,
-    getDefaultRuntime,
-    loadEnabledRuntimes,
+    loadSelectedRuntime,
     supportsSamples,
 } from "../shared/runtime";
 import { SamplesContainer } from "./SamplesContainer";
@@ -103,13 +102,13 @@ export function SamplesView({ onBack, runtime }: { onBack?: () => void; runtime?
         const resolveRuntime = async () => {
             setIsLoading(true);
             try {
-                const enabledRuntimes = await loadEnabledRuntimes(wsClient);
+                const selectedRuntime = await loadSelectedRuntime(wsClient);
                 if (!disposed) {
-                    setProjectType(getDefaultRuntime(enabledRuntimes));
+                    setProjectType(selectedRuntime);
                 }
             } catch (error) {
                 console.warn(
-                    "Failed to load default integrator config, using fallback:",
+                    "Failed to load selected profile, using fallback:",
                     error,
                 );
                 if (!disposed) {

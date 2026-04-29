@@ -2,18 +2,23 @@ Index: product-integrator/lib/vscode/src/main.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/main.ts
 +++ product-integrator/lib/vscode/src/main.ts
-@@ -201,6 +201,176 @@ async function onReady() {
+@@ -17,6 +17,7 @@ import { getUserDataPath } from './vs/pl
+ import * as perf from './vs/base/common/performance.js';
+ import { resolveNLSConfiguration } from './vs/base/node/nls.js';
+ import { getUNCHost, addUNCHostToAllowlist } from './vs/base/node/unc.js';
++import { applyProductRuntimeEnvironment, resolveProductRuntimeEnvironment, storeProductRuntimeEnvironment } from './vs/platform/product/common/runtimeEnvironment.js';
+ import { INLSConfiguration } from './vs/nls.js';
+ import { NativeParsedArgs } from './vs/platform/environment/common/argv.js';
+ 
+@@ -201,6 +202,93 @@ async function onReady() {
   * Main startup routine
   */
  async function startup(codeCachePath: string | undefined, nlsConfig: INLSConfiguration): Promise<void> {
 +	// Inject product-defined runtime environment variables so they are
 +	// available in the main process, child processes (extension host) and
 +	// inherited by shells launched from the integrated terminal.
-+	let runtimePathPrefix: string | undefined = undefined;
-+	let runtimeBallerinaBin: string | undefined = undefined;
 +	try {
 +		interface IProductMeta {
-+			runtimeEnv?: Record<string, unknown>;
 +			win32DirName?: string;
 +			applicationName?: string;
 +			nameShort?: string;
@@ -22,22 +27,6 @@ Index: product-integrator/lib/vscode/src/main.ts
 +		}
 +
 +		const productMeta = product as unknown as IProductMeta;
-+		const runtimeEnv = productMeta.runtimeEnv;
-+		// Support OS-specific runtimeEnv shape. runtimeEnv can be either a flat
-+		// map of env vars (legacy) or an object containing a `common`/per-OS
-+		// maps. Merge `common` with the current platform's map when present.
-+		let resolvedRuntimeEnv: Record<string, unknown> | undefined = undefined;
-+		if (runtimeEnv && typeof runtimeEnv === 'object') {
-+			const osKeys = new Set(['darwin', 'linux', 'win32', 'common', 'default']);
-+			const containsOsKeys = Object.keys(runtimeEnv).some(k => osKeys.has(k));
-+			if (containsOsKeys) {
-+				const common = (runtimeEnv['common'] && typeof runtimeEnv['common'] === 'object') ? runtimeEnv['common'] as Record<string, unknown> : {};
-+				const platformMap = (runtimeEnv[process.platform] && typeof runtimeEnv[process.platform] === 'object') ? runtimeEnv[process.platform] as Record<string, unknown> : {};
-+				resolvedRuntimeEnv = { ...(common as Record<string, unknown>), ...(platformMap as Record<string, unknown>) };
-+			} else {
-+				resolvedRuntimeEnv = runtimeEnv as Record<string, unknown>;
-+			}
-+		}
 +		// Resolve the installed application directory across platforms. On macOS
 +		// packaged apps live inside a `.app` bundle; on Linux/Windows the
 +		// resources are under `<install-dir>/resources/app`. Prefer Electron's
@@ -103,181 +92,1016 @@ Index: product-integrator/lib/vscode/src/main.ts
 +
 +		const appRoot = resolveInstalledDir();
 +
-+		if (resolvedRuntimeEnv && typeof resolvedRuntimeEnv === 'object') {
-+			// remove existing envs which contains "ballerina" in the key to avoid conflict with the new envs from product.json
-+			for (const key of Object.keys(process.env)) {
-+				if (key.toLowerCase().includes('ballerina')) {
-+					delete process.env[key];
-+				}
-+			}
-+			// remove existing values in path env which contains "ballerina" to avoid conflict with the new path value from product.json
-+			const pathKey = Object.keys(process.env).find(key => key.toLowerCase() === 'path');
-+			if (pathKey) {
-+				const currentPath = process.env[pathKey] || '';
-+				const newPath = currentPath.split(path.delimiter).filter(p => !p.toLowerCase().includes('ballerina')).join(path.delimiter);
-+				process.env[pathKey] = newPath;
-+			}
-+
-+			for (const [key, value] of Object.entries(resolvedRuntimeEnv)) {
-+				if (typeof value === 'string') {
-+					if ((key === 'PATH' || key === 'Path') && !runtimePathPrefix) {
-+						const pathTokenRegex = /\$\{?PATH}?/i;
-+						const pathTokenMatch = pathTokenRegex.exec(value);
-+						if (pathTokenMatch && pathTokenMatch.index > 0) {
-+							let explicitPrefix = value.slice(0, pathTokenMatch.index);
-+							explicitPrefix = explicitPrefix.replace(/\$\{?(?:APP_ROOT|APP_DIR|APP)\}?/g, appRoot);
-+							if (explicitPrefix.startsWith('./') || explicitPrefix.startsWith('../')) {
-+								explicitPrefix = path.normalize(path.join(appRoot, explicitPrefix));
-+							}
-+							runtimePathPrefix = explicitPrefix;
-+
-+							const explicitPrefixEntries = explicitPrefix
-+								.split(path.delimiter)
-+								.map(entry => entry.trim())
-+								.filter(entry => entry.length > 0);
-+							for (const entry of explicitPrefixEntries) {
-+								if (entry.toLowerCase().includes('ballerina')) {
-+									runtimeBallerinaBin = entry;
-+									break;
-+								}
-+							}
-+						}
-+					}
-+
-+					const currentPath = process.env.PATH || process.env.Path || '';
-+
-+					// Replace tokens: $PATH / ${PATH}
-+					let replaced = value.replace(/\$\{?PATH}?/g, currentPath);
-+
-+					// Replace app root tokens: ${APP_ROOT}, ${APP_DIR}, ${APP}
-+					// Put longer alternatives first to avoid partial matches (e.g. APP matching APP_ROOT)
-+					replaced = replaced.replace(/\$\{?(?:APP_ROOT|APP_DIR|APP)\}?/g, appRoot);
-+
-+					// If the value is a relative path (./ or ../), resolve it from the app root
-+					if (replaced.startsWith('./') || replaced.startsWith('../')) {
-+						replaced = path.normalize(path.join(appRoot, replaced));
-+					}
-+
-+					process.env[key] = replaced;
-+				} else {
-+					process.env[key] = JSON.stringify(value);
-+				}
-+			}
++		const resolvedRuntimeEnv = resolveProductRuntimeEnvironment(product, appRoot, process.env, process.platform);
++		if (resolvedRuntimeEnv) {
++			applyProductRuntimeEnvironment(process.env, resolvedRuntimeEnv);
++			storeProductRuntimeEnvironment(process.env, resolvedRuntimeEnv);
 +		}
 +	} catch (e) {
 +		console.warn('Failed to inject product runtimeEnv:', e);
 +	}
 +
-+	if (runtimePathPrefix) {
-+		process.env['VSCODE_PRODUCT_RUNTIME_PATH_PREFIX'] = runtimePathPrefix;
-+	}
-+
-+	if (runtimeBallerinaBin) {
-+		process.env['VSCODE_PRODUCT_BALLERINA_BIN'] = runtimeBallerinaBin;
-+	}
-+
  	process.env['VSCODE_NLS_CONFIG'] = JSON.stringify(nlsConfig);
  	process.env['VSCODE_CODE_CACHE_PATH'] = codeCachePath || '';
+ 
+Index: product-integrator/lib/vscode/src/vs/base/common/product.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/base/common/product.ts
++++ product-integrator/lib/vscode/src/vs/base/common/product.ts
+@@ -63,11 +63,29 @@ export type ExtensionVirtualWorkspaceSup
+ 	readonly override?: boolean;
+ };
+ 
++export interface IProductRuntimeEnvironmentMetadata {
++	readonly pathRemovePattern?: string;
++}
++
++export interface IProductRuntimeEnvironmentMap {
++	readonly __meta?: IProductRuntimeEnvironmentMetadata;
++	readonly [key: string]: unknown;
++}
++
++export interface IProductRuntimeEnvironmentByPlatform {
++	readonly common?: IProductRuntimeEnvironmentMap;
++	readonly default?: IProductRuntimeEnvironmentMap;
++	readonly darwin?: IProductRuntimeEnvironmentMap;
++	readonly linux?: IProductRuntimeEnvironmentMap;
++	readonly win32?: IProductRuntimeEnvironmentMap;
++}
++
+ export interface IProductConfiguration {
+ 	readonly version: string;
+ 	readonly date?: string;
+ 	readonly quality?: string;
+ 	readonly commit?: string;
++	readonly runtimeEnv?: IProductRuntimeEnvironmentMap | IProductRuntimeEnvironmentByPlatform;
+ 
+ 	readonly nameShort: string;
+ 	readonly nameLong: string;
+Index: product-integrator/lib/vscode/src/vs/server/node/extensionHostConnection.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/server/node/extensionHostConnection.ts
++++ product-integrator/lib/vscode/src/vs/server/node/extensionHostConnection.ts
+@@ -15,6 +15,7 @@ import { removeDangerousEnvVariables } f
+ import { createRandomIPCHandle, NodeSocket, WebSocketNodeSocket } from '../../base/parts/ipc/node/ipc.net.js';
+ import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
+ import { ILogService } from '../../platform/log/common/log.js';
++import { applyStoredProductRuntimeEnvironment } from '../../platform/product/common/runtimeEnvironment.js';
+ import { IRemoteExtensionHostStartParams } from '../../platform/remote/common/remoteAgentConnection.js';
+ import { getResolvedShellEnv } from '../../platform/shell/node/shellEnv.js';
+ import { IExtensionHostStatusService } from './extensionHostStatusService.js';
+@@ -66,6 +67,8 @@ export async function buildUserEnvironme
+ 	env.VSCODE_RECONNECTION_GRACE_TIME = String(environmentService.reconnectionGraceTime);
+ 	logService.trace(`[reconnection-grace-time] Setting VSCODE_RECONNECTION_GRACE_TIME env var for extension host: ${environmentService.reconnectionGraceTime}ms (${Math.floor(environmentService.reconnectionGraceTime / 1000)}s)`);
+ 
++	applyStoredProductRuntimeEnvironment(env);
++
+ 	removeNulls(env);
+ 	return env;
+ }
+Index: product-integrator/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
++++ product-integrator/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
+@@ -254,6 +254,7 @@ export class RemoteTerminalChannel exten
+ 			const workspaceFolder = activeWorkspaceFolder ? activeWorkspaceFolder ?? undefined : undefined;
+ 			await mergedCollection.applyToProcessEnvironment(env, { workspaceFolder }, variableResolver);
+ 		}
++		terminalEnvironment.reapplyProductRuntimeEnvironment(env);
+ 
+ 		// Fork the process and listen for messages
+ 		this._logService.debug(`Terminal process launching on remote agent`, { shellLaunchConfig, initialCwd, cols: args.cols, rows: args.rows, env });
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
+@@ -475,6 +475,7 @@ export class TerminalProcessManager exte
+ 				this._onEnvironmentVariableInfoChange.fire(this.environmentVariableInfo);
+ 			}
+ 		}
++		terminalEnvironment.reapplyProductRuntimeEnvironment(env);
+ 		return env;
+ 	}
  
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
-@@ -91,6 +91,29 @@ if [ -n "${VSCODE_ENV_APPEND:-}" ]; then
+@@ -91,6 +91,84 @@ if [ -n "${VSCODE_ENV_APPEND:-}" ]; then
  	builtin unset VSCODE_ENV_APPEND
  fi
  
-+# Keep only the configured ballerina bin path in PATH and drop all other
-+# ballerina-related entries that may be added by shell startup scripts.
-+if [ -n "${VSCODE_PRODUCT_BALLERINA_BIN:-}" ]; then
-+	IFS=':' read -ra __vsc_path_entries <<< "$PATH"
-+	__vsc_new_path=""
-+	for __vsc_entry in "${__vsc_path_entries[@]}"; do
-+		__vsc_entry_lower="$(echo "$__vsc_entry" | tr '[:upper:]' '[:lower:]')"
-+		if [[ "$__vsc_entry_lower" == *ballerina* ]] && [[ "$__vsc_entry" != "$VSCODE_PRODUCT_BALLERINA_BIN" ]]; then
-+			continue
++__vsc_apply_product_runtime_env() {
++	if [ -n "${VSCODE_PRODUCT_RUNTIME_ENV_REPLACE:-}" ]; then
++		IFS=':' read -ra ADDR <<< "$VSCODE_PRODUCT_RUNTIME_ENV_REPLACE"
++		for ITEM in "${ADDR[@]}"; do
++			VARNAME="${ITEM%%=*}"
++			VALUE="${ITEM#*=}"
++			VALUE="${VALUE//\\x3a/:}"
++			export $VARNAME="$VALUE"
++		done
++		builtin unset VSCODE_PRODUCT_RUNTIME_ENV_REPLACE
++	fi
++
++	if [ -n "${VSCODE_PRODUCT_RUNTIME_PATH_PREPEND:-}" ] || [ -n "${VSCODE_PRODUCT_RUNTIME_PATH_APPEND:-}" ] || [ -n "${VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN:-}" ]; then
++		local -a __vsc_current_path_entries __vsc_filtered_path_entries __vsc_runtime_prepend_entries __vsc_runtime_append_entries __vsc_runtime_entries __vsc_final_path_entries
++		local __vsc_entry __vsc_runtime_entry __vsc_skip_entry __vsc_new_path __vsc_regex __vsc_entry_for_match
++		__vsc_regex="${VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN:-}"
++
++		if [ -n "${VSCODE_PRODUCT_RUNTIME_PATH_PREPEND:-}" ]; then
++			IFS=':' read -ra ADDR <<< "$VSCODE_PRODUCT_RUNTIME_PATH_PREPEND"
++			for ITEM in "${ADDR[@]}"; do
++				__vsc_entry="${ITEM//\\x3a/:}"
++				[ -n "$__vsc_entry" ] || continue
++				__vsc_runtime_prepend_entries+=("$__vsc_entry")
++				__vsc_runtime_entries+=("$__vsc_entry")
++			done
 +		fi
-+		if [ -z "$__vsc_new_path" ]; then
-+			__vsc_new_path="$__vsc_entry"
-+		else
-+			__vsc_new_path="$__vsc_new_path:$__vsc_entry"
++
++		if [ -n "${VSCODE_PRODUCT_RUNTIME_PATH_APPEND:-}" ]; then
++			IFS=':' read -ra ADDR <<< "$VSCODE_PRODUCT_RUNTIME_PATH_APPEND"
++			for ITEM in "${ADDR[@]}"; do
++				__vsc_entry="${ITEM//\\x3a/:}"
++				[ -n "$__vsc_entry" ] || continue
++				__vsc_runtime_append_entries+=("$__vsc_entry")
++				__vsc_runtime_entries+=("$__vsc_entry")
++			done
 +		fi
-+	done
-+	case ":$__vsc_new_path:" in
-+		*":$VSCODE_PRODUCT_BALLERINA_BIN:"*) ;;
-+		*) __vsc_new_path="$VSCODE_PRODUCT_BALLERINA_BIN${__vsc_new_path:+:$__vsc_new_path}" ;;
-+	esac
-+	export PATH="$__vsc_new_path"
-+fi
++
++		IFS=':' read -ra __vsc_current_path_entries <<< "${PATH:-}"
++		for __vsc_entry in "${__vsc_current_path_entries[@]}"; do
++			[ -n "$__vsc_entry" ] || continue
++			__vsc_entry_for_match="$(printf '%s' "$__vsc_entry" | tr '[:upper:]' '[:lower:]')"
++			if [ -n "$__vsc_regex" ] && [[ "$__vsc_entry_for_match" =~ $__vsc_regex ]]; then
++				continue
++			fi
++
++			__vsc_skip_entry=0
++			for __vsc_runtime_entry in "${__vsc_runtime_entries[@]}"; do
++				if [[ "$__vsc_entry" == "$__vsc_runtime_entry" ]]; then
++					__vsc_skip_entry=1
++					break
++				fi
++			done
++			if [ "$__vsc_skip_entry" -eq 1 ]; then
++				continue
++			fi
++
++			__vsc_filtered_path_entries+=("$__vsc_entry")
++		done
++
++		__vsc_final_path_entries=("${__vsc_runtime_prepend_entries[@]}" "${__vsc_filtered_path_entries[@]}" "${__vsc_runtime_append_entries[@]}")
++		__vsc_new_path=""
++		for __vsc_entry in "${__vsc_final_path_entries[@]}"; do
++			if [ -z "$__vsc_new_path" ]; then
++				__vsc_new_path="$__vsc_entry"
++			else
++				__vsc_new_path="$__vsc_new_path:$__vsc_entry"
++			fi
++		done
++
++		export PATH="$__vsc_new_path"
++		builtin unset VSCODE_PRODUCT_RUNTIME_PATH_PREPEND
++		builtin unset VSCODE_PRODUCT_RUNTIME_PATH_APPEND
++		builtin unset VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN
++	fi
++}
++
++__vsc_apply_product_runtime_env
 +
  # Register Python shell activate hooks
  # Prevent multiple activation with guard
  if [ -z "${VSCODE_PYTHON_AUTOACTIVATE_GUARD:-}" ]; then
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-login.zsh
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-login.zsh
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-login.zsh
+@@ -13,3 +13,7 @@ ZDOTDIR=$USER_ZDOTDIR
+ if [[ $options[norcs] = off && -o "login" &&  -f $ZDOTDIR/.zlogin ]]; then
+ 	. $ZDOTDIR/.zlogin
+ fi
++
++if (( ${+functions[__vsc_apply_product_runtime_env]} )); then
++	__vsc_apply_product_runtime_env
++fi
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-rc.zsh
-@@ -68,6 +68,25 @@ if [ -n "${VSCODE_ENV_APPEND:-}" ]; then
+@@ -68,6 +68,85 @@ if [ -n "${VSCODE_ENV_APPEND:-}" ]; then
  	unset VSCODE_ENV_APPEND
  fi
  
-+# Keep only the configured ballerina bin path in PATH and drop all other
-+# ballerina-related entries that may be added by shell startup scripts.
-+if [ -n "${VSCODE_PRODUCT_BALLERINA_BIN:-}" ]; then
-+	typeset -a __vsc_path_entries
-+	typeset -a __vsc_clean_path_entries
-+	IFS=':' read -rA __vsc_path_entries <<< "$PATH"
-+	for __vsc_entry in "${__vsc_path_entries[@]}"; do
-+		if [[ "${__vsc_entry:l}" == *ballerina* ]] && [[ "$__vsc_entry" != "$VSCODE_PRODUCT_BALLERINA_BIN" ]]; then
-+			continue
-+		fi
-+		__vsc_clean_path_entries+=("$__vsc_entry")
-+	done
-+	PATH="${(j/:/)__vsc_clean_path_entries}"
-+	if [[ ":$PATH:" != *":$VSCODE_PRODUCT_BALLERINA_BIN:"* ]]; then
-+		PATH="$VSCODE_PRODUCT_BALLERINA_BIN:$PATH"
++__vsc_apply_product_runtime_env() {
++	builtin emulate -L zsh
++
++	local preserve_runtime_env="$1"
++	local __vsc_entry __vsc_runtime_entry __vsc_regex
++	typeset -a __vsc_current_path_entries
++	typeset -a __vsc_filtered_path_entries
++	typeset -a __vsc_runtime_prepend_entries
++	typeset -a __vsc_runtime_append_entries
++	typeset -a __vsc_runtime_entries
++	typeset -a __vsc_final_path_entries
++
++	if [ -n "${VSCODE_PRODUCT_RUNTIME_ENV_REPLACE:-}" ]; then
++		IFS=':' read -rA ADDR <<< "$VSCODE_PRODUCT_RUNTIME_ENV_REPLACE"
++		for ITEM in "${ADDR[@]}"; do
++			VARNAME="${ITEM%%=*}"
++			export $VARNAME="${${ITEM#*=}//\\x3a/:}"
++		done
++		[[ "$preserve_runtime_env" == "preserve" ]] || unset VSCODE_PRODUCT_RUNTIME_ENV_REPLACE
 +	fi
-+	export PATH
++
++	if [ -n "${VSCODE_PRODUCT_RUNTIME_PATH_PREPEND:-}" ] || [ -n "${VSCODE_PRODUCT_RUNTIME_PATH_APPEND:-}" ] || [ -n "${VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN:-}" ]; then
++		__vsc_regex="${VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN:-}"
++
++		if [ -n "${VSCODE_PRODUCT_RUNTIME_PATH_PREPEND:-}" ]; then
++			IFS=':' read -rA ADDR <<< "$VSCODE_PRODUCT_RUNTIME_PATH_PREPEND"
++			for ITEM in "${ADDR[@]}"; do
++				__vsc_entry="${ITEM//\\x3a/:}"
++				[[ -n "$__vsc_entry" ]] || continue
++				__vsc_runtime_prepend_entries+=("$__vsc_entry")
++				__vsc_runtime_entries+=("$__vsc_entry")
++			done
++		fi
++
++		if [ -n "${VSCODE_PRODUCT_RUNTIME_PATH_APPEND:-}" ]; then
++			IFS=':' read -rA ADDR <<< "$VSCODE_PRODUCT_RUNTIME_PATH_APPEND"
++			for ITEM in "${ADDR[@]}"; do
++				__vsc_entry="${ITEM//\\x3a/:}"
++				[[ -n "$__vsc_entry" ]] || continue
++				__vsc_runtime_append_entries+=("$__vsc_entry")
++				__vsc_runtime_entries+=("$__vsc_entry")
++			done
++		fi
++
++		IFS=':' read -rA __vsc_current_path_entries <<< "${PATH:-}"
++		for __vsc_entry in "${__vsc_current_path_entries[@]}"; do
++			[[ -n "$__vsc_entry" ]] || continue
++			if [[ -n "$__vsc_regex" ]] && [[ "${__vsc_entry:l}" =~ $__vsc_regex ]]; then
++				continue
++			fi
++
++			for __vsc_runtime_entry in "${__vsc_runtime_entries[@]}"; do
++				if [[ "$__vsc_entry" == "$__vsc_runtime_entry" ]]; then
++					__vsc_entry=''
++					break
++				fi
++			done
++
++			[[ -n "$__vsc_entry" ]] && __vsc_filtered_path_entries+=("$__vsc_entry")
++		done
++
++		__vsc_final_path_entries=("${__vsc_runtime_prepend_entries[@]}" "${__vsc_filtered_path_entries[@]}" "${__vsc_runtime_append_entries[@]}")
++		PATH="${(j/:/)__vsc_final_path_entries}"
++		export PATH
++
++		if [[ "$preserve_runtime_env" != "preserve" ]]; then
++			unset VSCODE_PRODUCT_RUNTIME_PATH_PREPEND
++			unset VSCODE_PRODUCT_RUNTIME_PATH_APPEND
++			unset VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN
++		fi
++	fi
++}
++
++if [[ -o "login" ]]; then
++	__vsc_apply_product_runtime_env preserve
++else
++	__vsc_apply_product_runtime_env
 +fi
 +
  # Register Python shell activate hooks
  # Prevent multiple activation with guard
  if [ -z "${VSCODE_PYTHON_AUTOACTIVATE_GUARD:-}" ]; then
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
+@@ -73,6 +73,73 @@ function __vsc_apply_env_vars
+ 		end
+ 		set -e VSCODE_ENV_APPEND
+ 	end
++
++	if test -n "$VSCODE_PRODUCT_RUNTIME_ENV_REPLACE"
++		set ITEMS (string split : $VSCODE_PRODUCT_RUNTIME_ENV_REPLACE)
++		for B in $ITEMS
++			set split (string split -m1 = $B)
++			set -gx "$split[1]" (string replace -a '\\x3a' ':' -- "$split[2]")
++		end
++		set -e VSCODE_PRODUCT_RUNTIME_ENV_REPLACE
++	end
++
++	if test -n "$VSCODE_PRODUCT_RUNTIME_PATH_PREPEND"; or test -n "$VSCODE_PRODUCT_RUNTIME_PATH_APPEND"; or test -n "$VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN"
++		set -l runtime_prepend_entries
++		set -l runtime_append_entries
++		set -l runtime_entries
++		set -l filtered_path_entries
++		set -l remove_pattern "$VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN"
++
++		if test -n "$VSCODE_PRODUCT_RUNTIME_PATH_PREPEND"
++			for B in (string split : $VSCODE_PRODUCT_RUNTIME_PATH_PREPEND)
++				set -l decoded (string replace -a '\\x3a' ':' -- "$B")
++				if test -n "$decoded"
++					set runtime_prepend_entries $runtime_prepend_entries "$decoded"
++					set runtime_entries $runtime_entries "$decoded"
++				end
++			end
++		end
++
++		if test -n "$VSCODE_PRODUCT_RUNTIME_PATH_APPEND"
++			for B in (string split : $VSCODE_PRODUCT_RUNTIME_PATH_APPEND)
++				set -l decoded (string replace -a '\\x3a' ':' -- "$B")
++				if test -n "$decoded"
++					set runtime_append_entries $runtime_append_entries "$decoded"
++					set runtime_entries $runtime_entries "$decoded"
++				end
++			end
++		end
++
++		for entry in $PATH
++			if test -z "$entry"
++				continue
++			end
++
++			set -l skip_entry 0
++			if test -n "$remove_pattern"
++				string match -rq -- "$remove_pattern" (string lower -- "$entry")
++				and set skip_entry 1
++			end
++
++			if test $skip_entry -eq 0
++				for runtime_entry in $runtime_entries
++					if test "$entry" = "$runtime_entry"
++						set skip_entry 1
++						break
++					end
++				end
++			end
++
++			if test $skip_entry -eq 0
++				set filtered_path_entries $filtered_path_entries "$entry"
++			end
++		end
++
++		set -gx PATH $runtime_prepend_entries $filtered_path_entries $runtime_append_entries
++		set -e VSCODE_PRODUCT_RUNTIME_PATH_PREPEND
++		set -e VSCODE_PRODUCT_RUNTIME_PATH_APPEND
++		set -e VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN
++	end
+ end
+ 
+ # Register Python shell activate hooks
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.ps1
+@@ -72,6 +72,76 @@ if ($env:VSCODE_ENV_APPEND) {
+ 	$env:VSCODE_ENV_APPEND = $null
+ }
+ 
++if ($env:VSCODE_PRODUCT_RUNTIME_ENV_REPLACE) {
++	$Split = $env:VSCODE_PRODUCT_RUNTIME_ENV_REPLACE.Split(":")
++	foreach ($Item in $Split) {
++		$Inner = $Item.Split('=', 2)
++		[Environment]::SetEnvironmentVariable($Inner[0], $Inner[1].Replace('\x3a', ':'))
++	}
++	$env:VSCODE_PRODUCT_RUNTIME_ENV_REPLACE = $null
++}
++
++if ($env:VSCODE_PRODUCT_RUNTIME_PATH_PREPEND -or $env:VSCODE_PRODUCT_RUNTIME_PATH_APPEND -or $env:VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN) {
++	$pathSeparator = [IO.Path]::PathSeparator
++	$pathSplitRegex = [regex]::Escape([string]$pathSeparator)
++	$prependEntries = [System.Collections.Generic.List[string]]::new()
++	$appendEntries = [System.Collections.Generic.List[string]]::new()
++	$runtimeEntrySet = [System.Collections.Generic.HashSet[string]]::new()
++	$filteredEntries = [System.Collections.Generic.List[string]]::new()
++	$removePattern = $env:VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN
++
++	if ($env:VSCODE_PRODUCT_RUNTIME_PATH_PREPEND) {
++		foreach ($Item in $env:VSCODE_PRODUCT_RUNTIME_PATH_PREPEND.Split(":")) {
++			$decoded = $Item.Replace('\x3a', ':')
++			if ($decoded) {
++				$prependEntries.Add($decoded)
++				$runtimeEntrySet.Add($decoded) | Out-Null
++			}
++		}
++	}
++
++	if ($env:VSCODE_PRODUCT_RUNTIME_PATH_APPEND) {
++		foreach ($Item in $env:VSCODE_PRODUCT_RUNTIME_PATH_APPEND.Split(":")) {
++			$decoded = $Item.Replace('\x3a', ':')
++			if ($decoded) {
++				$appendEntries.Add($decoded)
++				$runtimeEntrySet.Add($decoded) | Out-Null
++			}
++		}
++	}
++
++	$currentPath = [Environment]::GetEnvironmentVariable('PATH')
++	if ($currentPath) {
++		foreach ($Entry in ($currentPath -split $pathSplitRegex)) {
++			if (-not $Entry) {
++				continue
++			}
++			if ($removePattern -and $Entry.ToLowerInvariant() -match $removePattern) {
++				continue
++			}
++			if ($runtimeEntrySet.Contains($Entry)) {
++				continue
++			}
++			$filteredEntries.Add($Entry)
++		}
++	}
++
++	$nextPathEntries = [System.Collections.Generic.List[string]]::new()
++	foreach ($Entry in $prependEntries) {
++		$nextPathEntries.Add($Entry)
++	}
++	foreach ($Entry in $filteredEntries) {
++		$nextPathEntries.Add($Entry)
++	}
++	foreach ($Entry in $appendEntries) {
++		$nextPathEntries.Add($Entry)
++	}
++	[Environment]::SetEnvironmentVariable('PATH', ($nextPathEntries -join $pathSeparator))
++	$env:VSCODE_PRODUCT_RUNTIME_PATH_PREPEND = $null
++	$env:VSCODE_PRODUCT_RUNTIME_PATH_APPEND = $null
++	$env:VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN = $null
++}
++
+ # Register Python shell activate hooks
+ # Prevent multiple activation with guard
+ if (-not $env:VSCODE_PYTHON_AUTOACTIVATE_GUARD) {
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
-@@ -258,6 +258,11 @@ export async function createTerminalEnvi
- 		// Merge process env with the env from config and from shellLaunchConfig
- 		mergeNonNullKeys(env, baseEnv);
+@@ -19,6 +19,11 @@ import { isNumber, isString } from '../.
+ import { IHistoryService } from '../../../services/history/common/history.js';
+ import { ILogService } from '../../../../platform/log/common/log.js';
+ import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
++import {
++	applyStoredProductRuntimeEnvironment,
++	getStoredProductRuntimeEnvironment,
++	storeProductRuntimeEnvironment
++} from '../../../../platform/product/common/runtimeEnvironment.js';
  
-+		// Preserve runtime PATH prefix marker from startup before sanitize step
-+		// removes internal VSCODE_* variables.
-+		const runtimePathPrefix = env['VSCODE_PRODUCT_RUNTIME_PATH_PREFIX'];
-+		const runtimeBallerinaBin = env['VSCODE_PRODUCT_BALLERINA_BIN'];
-+
- 		const allowedEnvFromConfig = { ...envFromConfig };
- 
- 		// Resolve env vars from config and shell
-@@ -298,6 +303,21 @@ export async function createTerminalEnvi
+ export function mergeEnvironments(parent: IProcessEnvironment, other: ITerminalEnvironment | undefined): void {
+ 	if (!other) {
+@@ -251,6 +256,7 @@ export async function createTerminalEnvi
+ ): Promise<IProcessEnvironment> {
+ 	// Create a terminal environment based on settings, launch config and permissions
+ 	const env: IProcessEnvironment = {};
++	const runtimeEnv = getStoredProductRuntimeEnvironment(baseEnv);
+ 	if (shellLaunchConfig.strictEnv) {
+ 		// strictEnv is true, only use the requested env (ignoring null entries)
+ 		mergeNonNullKeys(env, shellLaunchConfig.env);
+@@ -297,13 +303,30 @@ export async function createTerminalEnvi
+ 		// Merge config (settings) and ShellLaunchConfig environments
  		mergeEnvironments(env, allowedEnvFromConfig);
  		mergeEnvironments(env, shellLaunchConfig.env);
++	}
++
++	if (runtimeEnv) {
++		applyStoredProductRuntimeEnvironment(env);
++		storeProductRuntimeEnvironment(env, runtimeEnv);
++	}
  
-+		// Re-apply runtime PATH prefix for terminal process creation and shell
-+		// integration scripts (zsh/bash/fish) which use VSCODE_PATH_PREFIX.
-+		if (typeof runtimePathPrefix === 'string' && runtimePathPrefix.length > 0) {
-+			env['VSCODE_PATH_PREFIX'] = runtimePathPrefix;
-+
-+			const existingPath = env['PATH'];
-+			if (typeof existingPath === 'string' && !existingPath.startsWith(runtimePathPrefix)) {
-+				env['PATH'] = `${runtimePathPrefix}${existingPath}`;
-+			}
-+		}
-+
-+		if (typeof runtimeBallerinaBin === 'string' && runtimeBallerinaBin.length > 0) {
-+			env['VSCODE_PRODUCT_BALLERINA_BIN'] = runtimeBallerinaBin;
-+		}
-+
++	if (!shellLaunchConfig.strictEnv) {
  		// Adding other env keys necessary to create the process
  		addTerminalEnvironmentKeys(env, version, language, detectLocale);
  	}
+ 	return env;
+ }
+ 
++export function reapplyProductRuntimeEnvironment(env: IProcessEnvironment): void {
++	const runtimeEnv = getStoredProductRuntimeEnvironment(env);
++	if (!runtimeEnv) {
++		return;
++	}
++
++	applyStoredProductRuntimeEnvironment(env);
++	storeProductRuntimeEnvironment(env, runtimeEnv);
++}
++
+ /**
+  * Takes a path and returns the properly escaped path to send to a given shell. On Windows, this
+  * included trying to prepare the path for WSL if needed.
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/electron-browser/localTerminalBackend.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/electron-browser/localTerminalBackend.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/electron-browser/localTerminalBackend.ts
+@@ -368,6 +368,7 @@ class LocalTerminalBackend extends BaseT
+ 			const workspaceFolder = terminalEnvironment.getWorkspaceForTerminal(shellLaunchConfig.cwd, this._workspaceContextService, this._historyService);
+ 			await this._environmentVariableService.mergedCollection.applyToProcessEnvironment(env, { workspaceFolder }, variableResolver);
+ 		}
++		terminalEnvironment.reapplyProductRuntimeEnvironment(env);
+ 		return env;
+ 	}
+ 
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
+@@ -9,6 +9,7 @@ import { isWindows, OperatingSystem } fr
+ import { URI as Uri } from '../../../../../base/common/uri.js';
+ import { addTerminalEnvironmentKeys, createTerminalEnvironment, getUriLabelForShell, getCwd, getLangEnvVariable, mergeEnvironments, preparePathForShell, shouldSetLangEnvVariable } from '../../common/terminalEnvironment.js';
+ import { GeneralShellType, PosixShellType, WindowsShellType } from '../../../../../platform/terminal/common/terminal.js';
++import { storeProductRuntimeEnvironment } from '../../../../../platform/product/common/runtimeEnvironment.js';
+ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+ 
+ const wslPathBackend = {
+@@ -313,12 +314,79 @@ suite('Workbench - TerminalEnvironment',
+ 			COLORTERM: 'truecolor',
+ 			TERM_PROGRAM: 'vscode'
+ 		};
++		const pathSeparator = isWindows ? ';' : ':';
+ 		test('should retain variables equal to the empty string', async () => {
+ 			deepStrictEqual(
+ 				await createTerminalEnvironment({}, undefined, undefined, undefined, 'off', { foo: 'bar', empty: '' }),
+ 				{ foo: 'bar', empty: '', ...commonVariables }
+ 			);
+ 		});
++		test('should re-apply stored runtime env after config and shell env merge', async () => {
++			const baseEnv = {
++				foo: 'base',
++				PATH: [`/base/bin`, `/opt/ballerina/base`].join(pathSeparator)
++			};
++			storeProductRuntimeEnvironment(baseEnv, {
++				replace: {
++					foo: 'runtime',
++					BALLERINA_HOME: '/runtime/home'
++				},
++				pathPrepend: '/runtime/bin',
++				pathRemovePattern: '(^|[/\\\\])ballerina([/\\\\]|$)'
++			});
++
++			const env = await createTerminalEnvironment(
++				{
++					env: {
++						foo: 'launch',
++						PATH: [`/launch/bin`, `/opt/ballerina/launch`].join(pathSeparator)
++					}
++				},
++				{
++					foo: 'config',
++					PATH: [`/config/bin`, `/opt/ballerina/config`].join(pathSeparator)
++				},
++				undefined,
++				undefined,
++				'off',
++				baseEnv
++			);
++
++			strictEqual(env.foo, 'runtime');
++			strictEqual(env.BALLERINA_HOME, '/runtime/home');
++			strictEqual(env.PATH, [`/runtime/bin`, `/launch/bin`].join(pathSeparator));
++		});
++		test('should apply stored runtime env in strictEnv terminals', async () => {
++			const baseEnv = {
++				PATH: [`/base/bin`, `/opt/ballerina/base`].join(pathSeparator)
++			};
++			storeProductRuntimeEnvironment(baseEnv, {
++				replace: {
++					foo: 'runtime'
++				},
++				pathPrepend: '/runtime/bin',
++				pathRemovePattern: '(^|[/\\\\])ballerina([/\\\\]|$)'
++			});
++
++			const env = await createTerminalEnvironment(
++				{
++					strictEnv: true,
++					env: {
++						foo: 'launch',
++						PATH: [`/strict/bin`, `/opt/ballerina/strict`].join(pathSeparator)
++					}
++				},
++				undefined,
++				undefined,
++				undefined,
++				'off',
++				baseEnv
++			);
++
++			strictEqual(env.foo, 'runtime');
++			strictEqual(env.PATH, [`/runtime/bin`, `/strict/bin`].join(pathSeparator));
++			strictEqual(env.TERM_PROGRAM, undefined);
++		});
+ 	});
+ 	suite('formatUriForShellDisplay', () => {
+ 		test('Wsl', async () => {
+Index: product-integrator/lib/vscode/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
++++ product-integrator/lib/vscode/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
+@@ -24,6 +24,7 @@ import { ILabelService } from '../../../
+ import { ILogService, ILoggerService } from '../../../../platform/log/common/log.js';
+ import { INativeHostService } from '../../../../platform/native/common/native.js';
+ import { INotificationService, NotificationPriority, Severity } from '../../../../platform/notification/common/notification.js';
++import { applyStoredProductRuntimeEnvironment } from '../../../../platform/product/common/runtimeEnvironment.js';
+ import { IProductService } from '../../../../platform/product/common/productService.js';
+ import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
+ import { isLoggingOnly } from '../../../../platform/telemetry/common/telemetryUtils.js';
+@@ -199,6 +200,8 @@ export class NativeLocalProcessExtension
+ 			objects.mixin(env, this._environmentService.debugExtensionHost.env);
+ 		}
+ 
++		applyStoredProductRuntimeEnvironment(env);
++
+ 		removeDangerousEnvVariables(env);
+ 
+ 		if (this._isExtensionDevHost) {
+Index: product-integrator/lib/vscode/src/vs/platform/product/common/runtimeEnvironment.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/platform/product/common/runtimeEnvironment.ts
+@@ -0,0 +1,387 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import * as path from '../../../base/common/path.js';
++import { IProcessEnvironment, isWindows } from '../../../base/common/platform.js';
++import { IProductConfiguration, IProductRuntimeEnvironmentMap } from '../../../base/common/product.js';
++
++const RUNTIME_ENV_META_KEY = '__meta';
++const PATH_REMOVE_PATTERN_KEY = 'pathRemovePattern';
++const PATH_TOKEN_REGEX = /\$\{?PATH}?/i;
++const PATH_TOKEN_REGEX_GLOBAL = /\$\{?PATH}?/g;
++const APP_ROOT_TOKEN_REGEX = /\$\{?(?:APP_ROOT|APP_DIR|APP)\}?/g;
++
++export const VSCODE_PRODUCT_RUNTIME_ENV_REPLACE = 'VSCODE_PRODUCT_RUNTIME_ENV_REPLACE';
++export const VSCODE_PRODUCT_RUNTIME_PATH_PREPEND = 'VSCODE_PRODUCT_RUNTIME_PATH_PREPEND';
++export const VSCODE_PRODUCT_RUNTIME_PATH_APPEND = 'VSCODE_PRODUCT_RUNTIME_PATH_APPEND';
++export const VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN = 'VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN';
++
++export interface IResolvedProductRuntimeEnvironment {
++	readonly replace: IProcessEnvironment;
++	readonly pathPrepend?: string;
++	readonly pathAppend?: string;
++	readonly pathRemovePattern?: string;
++}
++
++export function resolveProductRuntimeEnvironment(
++	product: Readonly<Partial<IProductConfiguration>>,
++	appRoot: string,
++	env: IProcessEnvironment,
++	platform: string
++): IResolvedProductRuntimeEnvironment | undefined {
++	const runtimeEnv = _resolveRuntimeEnvMap(product.runtimeEnv, platform);
++	if (!runtimeEnv) {
++		return undefined;
++	}
++
++	const replace: IProcessEnvironment = {};
++	let pathPrepend: string | undefined;
++	let pathAppend: string | undefined;
++
++	for (const [key, value] of Object.entries(runtimeEnv)) {
++		if (key === RUNTIME_ENV_META_KEY) {
++			continue;
++		}
++
++		if (_isPathKey(key)) {
++			if (typeof value === 'string') {
++				const segments = _parseConfiguredPath(value, appRoot);
++				pathPrepend = segments.prepend;
++				pathAppend = segments.append;
++			}
++			continue;
++		}
++
++		if (typeof value === 'string') {
++			replace[key] = _resolveRuntimeValue(value, appRoot, env);
++		} else {
++			replace[key] = JSON.stringify(value);
++		}
++	}
++
++	const pathRemovePattern = _getPathRemovePattern(runtimeEnv);
++	if (Object.keys(replace).length === 0 && !pathPrepend && !pathAppend && !pathRemovePattern) {
++		return undefined;
++	}
++
++	return {
++		replace,
++		pathPrepend,
++		pathAppend,
++		pathRemovePattern
++	};
++}
++
++export function applyProductRuntimeEnvironment(
++	env: IProcessEnvironment,
++	runtimeEnv: IResolvedProductRuntimeEnvironment | undefined
++): void {
++	if (!runtimeEnv) {
++		return;
++	}
++
++	for (const [key, value] of Object.entries(runtimeEnv.replace)) {
++		const actualKey = _getActualKey(env, key);
++		env[actualKey] = value;
++	}
++
++	_applyPathMutation(env, runtimeEnv.pathPrepend, runtimeEnv.pathAppend, runtimeEnv.pathRemovePattern);
++}
++
++export function storeProductRuntimeEnvironment(
++	env: IProcessEnvironment,
++	runtimeEnv: IResolvedProductRuntimeEnvironment | undefined
++): void {
++	if (!runtimeEnv) {
++		delete env[VSCODE_PRODUCT_RUNTIME_ENV_REPLACE];
++		delete env[VSCODE_PRODUCT_RUNTIME_PATH_PREPEND];
++		delete env[VSCODE_PRODUCT_RUNTIME_PATH_APPEND];
++		delete env[VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN];
++		return;
++	}
++
++	const serializedReplace = _serializeEnvEntries(runtimeEnv.replace);
++	if (serializedReplace) {
++		env[VSCODE_PRODUCT_RUNTIME_ENV_REPLACE] = serializedReplace;
++	} else {
++		delete env[VSCODE_PRODUCT_RUNTIME_ENV_REPLACE];
++	}
++
++	_setOrDelete(env, VSCODE_PRODUCT_RUNTIME_PATH_PREPEND, _serializePathEntries(runtimeEnv.pathPrepend));
++	_setOrDelete(env, VSCODE_PRODUCT_RUNTIME_PATH_APPEND, _serializePathEntries(runtimeEnv.pathAppend));
++	_setOrDelete(env, VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN, runtimeEnv.pathRemovePattern);
++}
++
++export function getStoredProductRuntimeEnvironment(env: IProcessEnvironment): IResolvedProductRuntimeEnvironment | undefined {
++	const runtimeEnvReplace = env[VSCODE_PRODUCT_RUNTIME_ENV_REPLACE];
++	const pathPrepend = env[VSCODE_PRODUCT_RUNTIME_PATH_PREPEND];
++	const pathAppend = env[VSCODE_PRODUCT_RUNTIME_PATH_APPEND];
++	const pathRemovePattern = env[VSCODE_PRODUCT_RUNTIME_PATH_REMOVE_PATTERN];
++
++	const replace = runtimeEnvReplace ? _deserializeEnvEntries(runtimeEnvReplace) : {};
++	if (Object.keys(replace).length === 0 && !pathPrepend && !pathAppend && !pathRemovePattern) {
++		return undefined;
++	}
++
++	return {
++		replace,
++		pathPrepend: _deserializePathEntries(pathPrepend),
++		pathAppend: _deserializePathEntries(pathAppend),
++		pathRemovePattern
++	};
++}
++
++export function applyStoredProductRuntimeEnvironment(env: IProcessEnvironment): void {
++	applyProductRuntimeEnvironment(env, getStoredProductRuntimeEnvironment(env));
++}
++
++function _resolveRuntimeEnvMap(
++	runtimeEnv: IProductConfiguration['runtimeEnv'],
++	platform: string
++): IProductRuntimeEnvironmentMap | undefined {
++	if (!runtimeEnv || typeof runtimeEnv !== 'object') {
++		return undefined;
++	}
++
++	const runtimeEnvRecord = runtimeEnv as Record<string, unknown>;
++	const osKeys = new Set(['darwin', 'linux', 'win32', 'common', 'default']);
++	const containsOsKeys = Object.keys(runtimeEnvRecord).some(key => osKeys.has(key));
++	if (!containsOsKeys) {
++		return runtimeEnv as IProductRuntimeEnvironmentMap;
++	}
++
++	return _mergeRuntimeEnvMaps(
++		_asRuntimeEnvMap(runtimeEnvRecord['common']),
++		_asRuntimeEnvMap(runtimeEnvRecord['default']),
++		_asRuntimeEnvMap(runtimeEnvRecord[platform])
++	);
++}
++
++function _mergeRuntimeEnvMaps(...maps: Array<IProductRuntimeEnvironmentMap | undefined>): IProductRuntimeEnvironmentMap | undefined {
++	const merged: Record<string, unknown> = {};
++	const mergedMeta: Record<string, unknown> = {};
++
++	for (const map of maps) {
++		if (!map) {
++			continue;
++		}
++
++		for (const [key, value] of Object.entries(map)) {
++			if (key === RUNTIME_ENV_META_KEY && value && typeof value === 'object') {
++				Object.assign(mergedMeta, value);
++				continue;
++			}
++			merged[key] = value;
++		}
++	}
++
++	if (Object.keys(mergedMeta).length > 0) {
++		merged[RUNTIME_ENV_META_KEY] = mergedMeta;
++	}
++
++	return Object.keys(merged).length > 0 ? merged as IProductRuntimeEnvironmentMap : undefined;
++}
++
++function _asRuntimeEnvMap(value: unknown): IProductRuntimeEnvironmentMap | undefined {
++	return value && typeof value === 'object' ? value as IProductRuntimeEnvironmentMap : undefined;
++}
++
++function _resolveRuntimeValue(value: string, appRoot: string, env: IProcessEnvironment): string {
++	const currentPath = _getPathValue(env);
++	let resolved = value.replace(PATH_TOKEN_REGEX_GLOBAL, currentPath);
++	resolved = resolved.replace(APP_ROOT_TOKEN_REGEX, appRoot);
++	if (_isRelativePath(resolved)) {
++		resolved = path.normalize(path.join(appRoot, resolved));
++	}
++	return resolved;
++}
++
++function _parseConfiguredPath(value: string, appRoot: string): { prepend?: string; append?: string } {
++	const resolvedValue = value.replace(APP_ROOT_TOKEN_REGEX, appRoot);
++	const pathTokenMatch = PATH_TOKEN_REGEX.exec(resolvedValue);
++	if (!pathTokenMatch) {
++		return { prepend: _normalizePathEntries(resolvedValue, appRoot) };
++	}
++
++	const prepend = _normalizePathEntries(resolvedValue.slice(0, pathTokenMatch.index), appRoot);
++	const append = _normalizePathEntries(
++		resolvedValue.slice(pathTokenMatch.index + pathTokenMatch[0].length).replace(PATH_TOKEN_REGEX_GLOBAL, ''),
++		appRoot
++	);
++
++	return { prepend, append };
++}
++
++function _normalizePathEntries(value: string, appRoot: string): string | undefined {
++	const entries = value
++		.split(path.delimiter)
++		.map(entry => entry.trim())
++		.filter(entry => entry.length > 0)
++		.map(entry => _resolvePathEntry(entry, appRoot));
++
++	return entries.length > 0 ? entries.join(path.delimiter) : undefined;
++}
++
++function _resolvePathEntry(entry: string, appRoot: string): string {
++	if (_isRelativePath(entry)) {
++		return path.normalize(path.join(appRoot, entry));
++	}
++	return entry;
++}
++
++function _applyPathMutation(
++	env: IProcessEnvironment,
++	pathPrepend: string | undefined,
++	pathAppend: string | undefined,
++	pathRemovePattern: string | undefined
++): void {
++	if (!pathPrepend && !pathAppend && !pathRemovePattern) {
++		return;
++	}
++
++	const pathKey = _getPathKey(env);
++	const currentEntries = _splitPathEntries(env[pathKey]);
++	let nextEntries = currentEntries;
++
++	const removalRegex = _parseRegex(pathRemovePattern);
++	if (removalRegex) {
++		nextEntries = nextEntries.filter(entry => {
++			removalRegex.lastIndex = 0;
++			return !removalRegex.test(entry.toLowerCase());
++		});
++	}
++
++	const prependEntries = _splitPathEntries(pathPrepend);
++	const appendEntries = _splitPathEntries(pathAppend);
++	if (prependEntries.length > 0 || appendEntries.length > 0) {
++		const runtimeEntries = new Set([...prependEntries, ...appendEntries]);
++		nextEntries = nextEntries.filter(entry => !runtimeEntries.has(entry));
++	}
++
++	env[pathKey] = [...prependEntries, ...nextEntries, ...appendEntries].join(path.delimiter);
++}
++
++function _getPathRemovePattern(runtimeEnv: IProductRuntimeEnvironmentMap): string | undefined {
++	const meta = runtimeEnv[RUNTIME_ENV_META_KEY];
++	if (!meta || typeof meta !== 'object') {
++		return undefined;
++	}
++
++	const pattern = (meta as Record<string, unknown>)[PATH_REMOVE_PATTERN_KEY];
++	return typeof pattern === 'string' && pattern.length > 0 ? pattern : undefined;
++}
++
++function _parseRegex(pattern: string | undefined): RegExp | undefined {
++	if (!pattern) {
++		return undefined;
++	}
++
++	try {
++		return new RegExp(pattern);
++	} catch {
++		return undefined;
++	}
++}
++
++function _splitPathEntries(value: string | undefined): string[] {
++	return (value || '')
++		.split(path.delimiter)
++		.map(entry => entry.trim())
++		.filter(entry => entry.length > 0);
++}
++
++function _serializeEnvEntries(entries: IProcessEnvironment): string | undefined {
++	const serialized = Object.entries(entries)
++		.filter(([, value]) => typeof value === 'string')
++		.map(([key, value]) => `${key}=${_encodeColons(value!)}`)
++		.join(':');
++	return serialized || undefined;
++}
++
++function _serializePathEntries(value: string | undefined): string | undefined {
++	const serialized = _splitPathEntries(value)
++		.map(entry => _encodeColons(entry))
++		.join(':');
++	return serialized || undefined;
++}
++
++function _deserializeEnvEntries(serialized: string): IProcessEnvironment {
++	const env: IProcessEnvironment = {};
++	for (const entry of serialized.split(':')) {
++		if (entry.length === 0) {
++			continue;
++		}
++
++		const separatorIndex = entry.indexOf('=');
++		if (separatorIndex === -1) {
++			continue;
++		}
++
++		const key = entry.slice(0, separatorIndex);
++		const value = entry.slice(separatorIndex + 1);
++		env[key] = value.replaceAll('\\x3a', ':');
++	}
++	return env;
++}
++
++function _deserializePathEntries(serialized: string | undefined): string | undefined {
++	if (!serialized) {
++		return undefined;
++	}
++
++	const entries = serialized
++		.split(':')
++		.map(entry => entry.replaceAll('\\x3a', ':'))
++		.filter(entry => entry.length > 0);
++	return entries.length > 0 ? entries.join(path.delimiter) : undefined;
++}
++
++function _encodeColons(value: string): string {
++	return value.replaceAll(':', '\\x3a');
++}
++
++function _setOrDelete(env: IProcessEnvironment, key: string, value: string | undefined): void {
++	if (value) {
++		env[key] = value;
++	} else {
++		delete env[key];
++	}
++}
++
++function _getActualKey(env: IProcessEnvironment, key: string): string {
++	if (!isWindows) {
++		return key;
++	}
++
++	const lowerKey = key.toLowerCase();
++	for (const existingKey of Object.keys(env)) {
++		if (existingKey.toLowerCase() === lowerKey) {
++			return existingKey;
++		}
++	}
++
++	return key;
++}
++
++function _getPathKey(env: IProcessEnvironment): string {
++	for (const key of Object.keys(env)) {
++		if (key.toLowerCase() === 'path') {
++			return key;
++		}
++	}
++	return isWindows ? 'Path' : 'PATH';
++}
++
++function _getPathValue(env: IProcessEnvironment): string {
++	return env[_getPathKey(env)] || '';
++}
++
++function _isPathKey(key: string): boolean {
++	return key.toLowerCase() === 'path';
++}
++
++function _isRelativePath(value: string): boolean {
++	return value.startsWith('./') || value.startsWith('../') || value.startsWith('.\\') || value.startsWith('..\\');
++}
