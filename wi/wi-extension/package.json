@@ -1,8 +1,8 @@
 {
   "name": "wso2-integrator",
-  "displayName": "WSO2 Integrator (Alpha)",
+  "displayName": "WSO2 Integrator (Beta)",
   "description": "Integration development environment for WSO2 Integrator",
-  "version": "0.2.6",
+  "version": "0.9.0",
   "cliVersion": "v1.2.212604271730",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
