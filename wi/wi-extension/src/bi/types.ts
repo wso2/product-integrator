@@ -55,6 +55,8 @@ export enum DIRECTORY_MAP {
     CONNECTOR = 'CONNECTOR',
     RESOURCE = 'RESOURCE',
     REMOTE = 'REMOTE',
+    WORKFLOW = 'WORKFLOW',
+    ACTIVITY = 'ACTIVITY',
 }
 
 export enum MACHINE_VIEW {
