@@ -262,6 +262,11 @@ jobs:
           node build/azure-pipelines/distro/mixin-npm.ts || true
           node build/azure-pipelines/distro/mixin-quality.ts || true
 
+      - name: Apply vscode patches
+        run: |
+          patch -p3 < ../../patches/disableVsixChecksumCheck.diff
+          patch -p3 < ../../patches/increaseHeap.diff
+
       - name: Install builtin extensions
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
