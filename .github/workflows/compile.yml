@@ -311,8 +311,10 @@ jobs:
           node build/azure-pipelines/distro/mixin-npm.ts || true
           node build/azure-pipelines/distro/mixin-quality.ts || true
 
-      - name: Disable VSIX checksum check
-        run: patch -p3 < ../../patches/disableVsixChecksumCheck.diff
+      - name: Apply vscode patches
+        run: |
+          patch -p3 < ../../patches/disableVsixChecksumCheck.diff
+          patch -p3 < ../../patches/increaseHeap.diff
 
       - name: Install builtin extensions
         env:
