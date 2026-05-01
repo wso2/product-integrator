@@ -31,30 +31,22 @@ on:
         default: true
         required:  true
         type: boolean
-      ballerina_version:
-        description: 'Specify Ballerina version to use'
-        required: false
-        type: string
       ballerina_extension_source:
         description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
         required: true
-        default: 'marketplace'
+        default: 'github'
         type: choice
         options:
           - marketplace
           - github
-      ballerina_extension_version:
-        description: 'Specify the Ballerina extension version to use for GitHub VSIX or marketplace flow'
-        required: false
-        type: string
-      icp_version:
-        description: 'Specify ICP version to use'
-        required: false
-        type: string
-      integrator_version:
-        description: 'Specify Integrator version to use'
-        required: false
-        type: string
+      mi_extension_source:
+        description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
+        required: true
+        default: 'github'
+        type: choice
+        options:
+          - marketplace
+          - github
       delivery_mode:
         description: 'Select delivery mode: archive artifacts as workflow artifacts or publish as a GitHub Release'
         required: true
@@ -72,23 +64,93 @@ env:
   awsRunnerId: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}  
 
 jobs:
+  resolve-versions:
+    name: Resolve Component Versions
+    runs-on: ubuntu-latest
+    outputs:
+      ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
+      ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
+      mi_extension_version: ${{ steps.read-versions.outputs.mi_extension_version }}
+      icp_version: ${{ steps.read-versions.outputs.icp_version }}
+      integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
+      ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read versions file
+        id: read-versions
+        shell: bash
+        run: |
+          VERSIONS_FILE="ci/build/component-versions.properties"
+          if [ ! -f "${VERSIONS_FILE}" ]; then
+            echo "Error: ${VERSIONS_FILE} does not exist." >&2
+            exit 1
+          fi
+
+          read_property() {
+            local key="$1"
+            awk -F= -v property_key="$key" '$1 == property_key { print substr($0, index($0, "=") + 1); exit }' "${VERSIONS_FILE}" | tr -d '\r'
+          }
+
+          BALLERINA_VERSION=$(read_property "ballerina.version")
+          BALLERINA_EXTENSION_VERSION=$(read_property "ballerina.extension.version")
+          MI_EXTENSION_VERSION=$(read_property "wso2.micro-integrator.extension.version")
+          ICP_VERSION=$(read_property "icp.version")
+          INTEGRATOR_VERSION=$(read_property "integrator.version")
+          BALLERINA_JRE_VERSION=$(read_property "ballerina.jre.version")
+
+          if [ -z "${BALLERINA_VERSION}" ] || [ -z "${ICP_VERSION}" ] || [ -z "${INTEGRATOR_VERSION}" ] || [ -z "${BALLERINA_JRE_VERSION}" ]; then
+            echo "Error: ballerina.version, icp.version, integrator.version, and ballerina.jre.version must be set in ${VERSIONS_FILE}." >&2
+            exit 1
+          fi
+
+          if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
+            echo "Error: ballerina.extension.version must not start with 'v'." >&2
+            exit 1
+          fi
+
+          if [[ -n "${MI_EXTENSION_VERSION}" && "${MI_EXTENSION_VERSION}" =~ ^[vV] ]]; then
+            echo "Error: wso2.micro-integrator.extension.version must not start with 'v'." >&2
+            exit 1
+          fi
+
+          echo "ballerina_version=${BALLERINA_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "ballerina_extension_version=${BALLERINA_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "mi_extension_version=${MI_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "icp_version=${ICP_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "integrator_version=${INTEGRATOR_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "ballerina_jre_version=${BALLERINA_JRE_VERSION}" >> "$GITHUB_OUTPUT"
+
   compile:
+    needs: resolve-versions
     uses: ./.github/workflows/compile.yml
     secrets: inherit  
     with:
       runOnAWS: ${{ github.event.inputs.runner == 'codebuild' }}
-      ballerina_version: ${{ github.event.inputs.ballerina_version }}
       ballerina_extension_source: ${{ github.event.inputs.ballerina_extension_source }}
-      ballerina_extension_version: ${{ github.event.inputs.ballerina_extension_version }}
-      icp_version: ${{ github.event.inputs.icp_version }}
-      integrator_version: ${{ github.event.inputs.integrator_version }}
+      mi_extension_source: ${{ github.event.inputs.mi_extension_source }}
       build_packed_installers: ${{ github.event.inputs.build_packed_installers == 'true' }}
+
+  smoke-test:
+    if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+    needs: compile
+    uses: ./.github/workflows/smoke-test.yml
+    with:
+      artifact_name: Product-Integrator-TAR
+
+  smoke-test-windows:
+    if: ${{ github.event.inputs.build_windows == 'true' && github.event.inputs.build_packed_installers == 'true' }}
+    needs: build-windows
+    uses: ./.github/workflows/smoke-test.yml
+    with:
+      windows_artifact_name: Product-Integrator-Windows
 
   build-macos:
     if: ${{ github.event.inputs.build_macos == 'true' }}
     name: Build (macOS)
     runs-on: macos-latest
-    needs: compile
+    needs: [resolve-versions, compile]
     defaults:
       run:
         working-directory: lib/vscode
@@ -151,7 +213,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ github.event.inputs.ballerina_extension_source }}-${{ github.event.inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -176,26 +238,35 @@ jobs:
         run: quilt push -a
 
       - name: Set Ballerina extension version
-        if: ${{ github.event.inputs.ballerina_extension_version != '' }}
+        if: ${{ needs.resolve-versions.outputs.ballerina_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
-          echo "BALLERINA_EXTENSION_VERSION=${{ github.event.inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
+          echo "BALLERINA_EXTENSION_VERSION=${{ needs.resolve-versions.outputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
 
       - name: Download archived Ballerina VSIX
-        if: ${{ github.event.inputs.ballerina_extension_source == 'github' && github.event.inputs.ballerina_extension_version != '' }}
+        if: ${{ github.event.inputs.ballerina_extension_source == 'github' && needs.resolve-versions.outputs.ballerina_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ github.event.inputs.ballerina_extension_version }}" "ballerina-${{ github.event.inputs.ballerina_extension_version }}.vsix" "$PWD")
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
+
+      - name: Download archived MI VSIX
+        if: ${{ github.event.inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          chmod +x ./ci/download-vsix.sh
+          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "v${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD")
+          echo "MI_VSIX_PATH=${MI_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Update product.json and branding
         working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh "${{ github.event.inputs.integrator_version }}"
+          ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
 
       - name: Validate Xcode tools (macOS)
         run: |
@@ -342,25 +413,30 @@ jobs:
           cd ../..
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
-          BALLERINA_VERSION="${{ github.event.inputs.ballerina_version }}"
+          BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           if [ "${{ matrix.arch }}" = "arm64" ]; then
           BALLERINA_ARCH="macos-arm"
+          JRE_PLATFORM="macos-arm-64"
           else
           BALLERINA_ARCH="macos"
+          JRE_PLATFORM="macos-64"
           fi
           BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-${BALLERINA_ARCH}.zip"
-          ICP_VERSION="${{ github.event.inputs.icp_version }}"
+          ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
           ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
             ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
           fi
           ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          INTEGRATOR_VERSION="${{ github.event.inputs.integrator_version }}"
+          JRE_VERSION="${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
+          JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-${JRE_PLATFORM}-${JRE_VERSION}.zip"
+          INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/mac
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
+          wget -O jre.zip "$JRE_URL"
+          ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
 
       - name: Login to AWS
@@ -375,43 +451,43 @@ jobs:
         working-directory: .
         run: |
           S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
-          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.pkg"
+          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.dmg"
       
-      - name: Upload macOS artifacts
+      - name: Upload macOS DMG artifacts
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: Product-Integrator-Darwin-${{ matrix.arch }}
+          name: Product-Integrator-Darwin-DMG-${{ matrix.arch }}
           path: |
-            installers/mac/*.pkg
+            installers/mac/*.dmg
           if-no-files-found: error
 
       - name: cosign-installer
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: sigstore/cosign-installer@v3.5.0
-      - name: Sign the pkg installer
+      - name: Sign the dmg installer
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
-          cosign sign-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --output-certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --output-signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --yes
+          cosign sign-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg --output-certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --output-signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --yes
 
-      - name: Verify signature of the pkg installer
+      - name: Verify signature of the dmg installer
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
-          cosign verify-blob installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg --certificate installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.pem --signature installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-          
-      - name: Generate Hashes for pkg installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
-        run: |
-          cd ../..
-          openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg.sha256 installers/mac/wso2-integrator-${{ github.event.inputs.integrator_version }}-${{ matrix.arch }}.pkg
+          cosign verify-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg --certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 
-      - name: Upload Signatures and Hashes for pkg installer
+      - name: Generate Hashes for dmg installer
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        run: |
+          cd ../..
+          openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sha256 installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg
+
+      - name: Upload Signatures and Hashes for mac installers
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: Signatures-and-Hashes-PKG
+          name: Signatures-and-Hashes-MAC
           path: |
             installers/mac/*.pem
             installers/mac/*.sig
@@ -422,7 +498,7 @@ jobs:
     if: ${{ github.event.inputs.build_windows == 'true' }}
     name: Build (Windows)
     runs-on: windows-latest
-    needs: compile
+    needs: [resolve-versions, compile]
     defaults:
       run:
         working-directory: lib/vscode
@@ -480,7 +556,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ github.event.inputs.ballerina_extension_source }}-${{ github.event.inputs.ballerina_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/download-vsix.sh', 'lib/vscode/package.json') }}
+          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -520,27 +596,36 @@ jobs:
           done < patches/series
 
       - name: Set Ballerina extension version
-        if: ${{ github.event.inputs.ballerina_extension_version != '' }}
+        if: ${{ needs.resolve-versions.outputs.ballerina_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
-          echo "BALLERINA_EXTENSION_VERSION=${{ github.event.inputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
+          echo "BALLERINA_EXTENSION_VERSION=${{ needs.resolve-versions.outputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
 
       - name: Download archived Ballerina VSIX
-        if: ${{ github.event.inputs.ballerina_extension_source == 'github' && github.event.inputs.ballerina_extension_version != '' }}
+        if: ${{ github.event.inputs.ballerina_extension_source == 'github' && needs.resolve-versions.outputs.ballerina_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ github.event.inputs.ballerina_extension_version }}" "ballerina-${{ github.event.inputs.ballerina_extension_version }}.vsix" "$PWD")
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
+
+      - name: Download archived MI VSIX
+        if: ${{ github.event.inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
+        shell: bash
+        working-directory: .
+        run: |
+          chmod +x ./ci/download-vsix.sh
+          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "v${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD")
+          echo "MI_VSIX_PATH=${MI_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Update product.json and branding
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/build/update-product.sh
-          ./ci/build/update-product.sh "${{ github.event.inputs.integrator_version }}"
+          ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
 
       - name: Install Rust toolchain (Windows)
         shell: pwsh
@@ -554,10 +639,22 @@ jobs:
       - name: Install OpenSSL (Windows)
         shell: pwsh
         run: |
-          # Install vcpkg and OpenSSL
-          git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
-          cd C:\vcpkg
-          .\bootstrap-vcpkg.bat
+          # Install vcpkg if not already present, otherwise update it
+          if (Test-Path "C:\vcpkg\.git") {
+            Write-Host "vcpkg already cloned, fetching latest..."
+            cd C:\vcpkg
+            git fetch origin
+            git pull origin master
+          } else {
+            Write-Host "Cloning vcpkg..."
+            git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+            cd C:\vcpkg
+          }
+          # Bootstrap vcpkg (idempotent)
+          if (-not (Test-Path "C:\vcpkg\vcpkg.exe")) {
+            .\bootstrap-vcpkg.bat
+          }
+          # Install OpenSSL (vcpkg skips if already installed)
           .\vcpkg.exe install openssl:x64-windows-static
           # Set environment variables for OpenSSL
           $env:VCPKG_ROOT = "C:\vcpkg"
@@ -674,6 +771,18 @@ jobs:
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
+      - name: Exclude build workspace from Windows Defender
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE\installers\windows"
+      - name: Enable long paths (Windows)
+        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
       - name: Build Windows installer packages
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         shell: pwsh
@@ -681,20 +790,23 @@ jobs:
           cd ..\..
           $ROOT_DIR = Get-Location
           Write-Host "Root dir: $ROOT_DIR"
-          $BALLERINA_VERSION = "${{ github.event.inputs.ballerina_version }}"
+          $BALLERINA_VERSION = "${{ needs.resolve-versions.outputs.ballerina_version }}"
           $BALLERINA_VERSION_FILENAME = $BALLERINA_VERSION -replace '-.*$', ''
           $BALLERINA_URL = "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-windows.zip"
-          $ICP_VERSION = "${{ github.event.inputs.icp_version }}"
+          $ICP_VERSION = "${{ needs.resolve-versions.outputs.icp_version }}"
           $ICP_VERSION_FILENAME = $ICP_VERSION -replace '-.*$', ''
           if ($ICP_VERSION -ne $ICP_VERSION_FILENAME) {
             $ICP_VERSION_FILENAME = "${ICP_VERSION_FILENAME}-SNAPSHOT"
           }
           $ICP_URL = "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-          $INTEGRATOR_VERSION = "${{ github.event.inputs.integrator_version }}"
+          $JRE_VERSION = "${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
+          $JRE_URL = "https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-win-64-${JRE_VERSION}.zip"
+          $INTEGRATOR_VERSION = "${{ needs.resolve-versions.outputs.integrator_version }}"
           cd .\installers\windows
           Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
           Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
-          .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip $INTEGRATOR_VERSION
+          Invoke-WebRequest -Uri $JRE_URL -OutFile "jre.zip"
+          .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
 
       - name: Login to AWS
         uses: aws-actions/configure-aws-credentials@v5
@@ -727,19 +839,19 @@ jobs:
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
-          cosign sign-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --output-certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --output-signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --yes
+          cosign sign-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi --output-certificate installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.pem --output-signature installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sig --yes
       - name: Verify signature of the msi installer
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
-          cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 
           
       - name: Generate Hashes for msi installer
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         run: |
           cd ../..
-          openssl dgst -sha256 -out installers\windows\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi.sha256 installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ github.event.inputs.integrator_version }}.msi 
+          openssl dgst -sha256 -out installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sha256 installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi 
 
       - name: Upload Signatures and Hashes for msi installer
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
@@ -755,8 +867,8 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [compile, build-macos, build-windows]
-    if: always() && (needs.compile.result == 'success') && (github.event.inputs.build_packed_installers == 'false') && (github.event.inputs.delivery_mode == 'archive')
+    needs: [resolve-versions, compile, build-macos, build-windows, smoke-test, smoke-test-windows]
+    if: always() && (needs.compile.result == 'success') && (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') && (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') && (github.event.inputs.build_packed_installers == 'false') && (github.event.inputs.delivery_mode == 'archive')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -799,10 +911,12 @@ jobs:
   publish-github-release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: [compile, build-macos, build-windows]
+    needs: [resolve-versions, compile, build-macos, build-windows, smoke-test, smoke-test-windows]
     if: |
       always() &&
       (needs.compile.result == 'success') &&
+      (needs.smoke-test.result == 'success') &&
+      (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') &&
       (github.event.inputs.delivery_mode == 'github-release') &&
       (github.event.inputs.build_packed_installers == 'true')
     steps:
@@ -841,17 +955,17 @@ jobs:
           path: release-files/
         continue-on-error: true
 
-      - name: Download macOS PKG artifacts
+      - name: Download macOS DMG artifacts
         uses: actions/download-artifact@v4
         with:
-          name: Product-Integrator-Darwin-arm64
+          name: Product-Integrator-Darwin-DMG-arm64
           path: release-files/
         continue-on-error: true
 
-      - name: Download Signatures and Hashes (PKG)
+      - name: Download Signatures and Hashes (MAC)
         uses: actions/download-artifact@v4
         with:
-          name: Signatures-and-Hashes-PKG
+          name: Signatures-and-Hashes-MAC
           path: release-files/
         continue-on-error: true
 
@@ -871,16 +985,86 @@ jobs:
 
       - name: List release files
         run: |
-          echo "Files to be released under tag v${{ github.event.inputs.integrator_version }}:"
+          echo "Files to be released under tag v${{ needs.resolve-versions.outputs.integrator_version }}:"
           ls -la release-files/ || echo "No release files found"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.event.inputs.integrator_version }}
-          name: WSO2 Integrator v${{ github.event.inputs.integrator_version }}
+          tag_name: v${{ needs.resolve-versions.outputs.integrator_version }}
+          name: WSO2 Integrator v${{ needs.resolve-versions.outputs.integrator_version }}
+          target_commitish: ${{ github.sha }}
           draft: false
           prerelease: false
           files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  bump-version:
+    name: Bump Integrator Version
+    runs-on: ubuntu-latest
+    needs: [publish-github-release, resolve-versions]
+    if: needs.publish-github-release.result == 'success'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Increment alpha version
+        id: bump
+        run: |
+          VERSIONS_FILE="ci/build/component-versions.properties"
+          CURRENT_VERSION=$(awk -F= '$1 == "integrator.version" { print $2; exit }' "${VERSIONS_FILE}" | tr -d '\r')
+          echo "Current version: ${CURRENT_VERSION}"
+
+          # If version ends in a number, increment it (e.g. alpha11 -> alpha12, beta1 -> beta2)
+          # If not, append 1 (e.g. beta -> beta1, RC -> RC1)
+          if [[ "${CURRENT_VERSION}" =~ ^(.*[^0-9])([0-9]+)$ ]]; then
+            NEW_VERSION="${BASH_REMATCH[1]}$((BASH_REMATCH[2] + 1))"
+          elif [[ -n "${CURRENT_VERSION}" ]]; then
+            NEW_VERSION="${CURRENT_VERSION}1"
+          else
+            echo "Error: integrator.version is empty or invalid." >&2
+            exit 1
+          fi
+
+          echo "New version: ${NEW_VERSION}"
+          sed -i "s/^integrator\.version=.*/integrator.version=${NEW_VERSION}/" "${VERSIONS_FILE}"
+          echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create PR with version bump
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Ensure the workflow was triggered on a branch, not a tag or detached SHA
+          if [[ "${{ github.ref_type }}" != "branch" ]]; then
+            echo "Error: expected ref_type=branch, got '${{ github.ref_type }}' (${{ github.ref_name }}). Skipping version bump." >&2
+            exit 1
+          fi
+          BASE_BRANCH="${{ github.ref_name }}"
+          BRANCH="bump-integrator-version-${{ steps.bump.outputs.new_version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # -B resets the branch if it already exists (safe on reruns)
+          git checkout -B "$BRANCH"
+          git add ci/build/component-versions.properties
+          git commit -m "Bump integrator version to ${{ steps.bump.outputs.new_version }}"
+          # --force-with-lease is safe: only overwrites if no one else pushed to the branch
+          git push --force-with-lease origin "$BRANCH"
+
+          # Only open a new PR if one doesn't already exist for this branch
+          if gh pr view "$BRANCH" --json number -q .number 2>/dev/null; then
+            echo "PR already exists for branch $BRANCH, skipping creation."
+          else
+            gh pr create \
+              --base "$BASE_BRANCH" \
+              --head "$BRANCH" \
+              --title "Bump integrator version to ${{ steps.bump.outputs.new_version }}" \
+              --body "Automated version bump after successful release of \`v${{ needs.resolve-versions.outputs.integrator_version }}\`. Increments \`integrator.version\` to \`${{ steps.bump.outputs.new_version }}\` in \`ci/build/component-versions.properties\`."
+          fi

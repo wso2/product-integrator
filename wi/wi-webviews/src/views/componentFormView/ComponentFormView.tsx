@@ -19,7 +19,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
 import { type WICloudFormContext, type WICloudSubmitComponentsReq } from "@wso2/wi-core";
-import { buildGitURL, type CreateComponentReq, getTypeOfIntegrationType, type ICreateNewIntegrationCmdIntegrations, makeURLSafe, WICommandIds } from "@wso2/wso2-platform-core";
+import { buildGitURL, type CreateComponentReq, DevantScopes, getTypeOfIntegrationType, type ICreateNewIntegrationCmdIntegrations, makeURLSafe, WICommandIds } from "@wso2/wso2-platform-core";
 import { useVisualizerContext } from "../../contexts";
 import { useCloudContext } from "../../providers";
 import {
@@ -121,9 +121,11 @@ function ComponentForm() {
 	}, []);
 
 	const handleToggle = useCallback((index: number, checked: boolean) => {
+		const entry = params?.integrations[index];
+		if (entry?.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY)) { return; }
 		if (!checked) { setEditingIndex((prev) => prev === index ? null : prev); }
 		updateEntry(index, { selected: checked });
-	}, [updateEntry]);
+	}, [updateEntry, params]);
 
 	const handleNameChange = useCallback((index: number, value: string) => {
 		updateEntry(index, { displayName: value, displayNameError: validateName(value) });
@@ -136,7 +138,10 @@ function ComponentForm() {
 	}, [updateEntry]);
 
 	const isBatch = (params?.integrations.length ?? 0) > 1;
-	const selectedCount = useMemo(() => formState.filter((e) => e.selected).length, [formState]);
+	const selectedCount = useMemo(
+		() => formState.filter((e, i) => e.selected && !params?.integrations[i]?.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY)).length,
+		[formState, params],
+	);
 	const hasSelected = selectedCount > 0;
 
 	const validate = (): boolean => {
@@ -232,27 +237,32 @@ function ComponentForm() {
 				org: params!.org,
 				project: params!.project,
 				workspaceFsPath,
-				createParams: formState.filter((state) => state.selected).map((state) => {
-					const mappedType = getTypeOfIntegrationType(state.selectedIntegrationType);
+				createParams: formState
+					.map((state, index) => ({ state, integration: params!.integrations[index] }))
+					.filter(({ state, integration }) =>
+						state.selected && !integration.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY)
+					)
+					.map(({ state }) => {
+						const mappedType = getTypeOfIntegrationType(state.selectedIntegrationType);
 
-					return {
-						branch,
-						buildPackLang: params!.buildPackLang,
-						componentDir: state.fsPath,
-						displayName: state.displayName,
-						repoUrl,
-						projectId: params!.project.id,
-						projectHandle: params!.project.handler,
-						type: mappedType.type,
-						componentSubType: mappedType.subType,
-						gitProvider,
-						gitCredRef: credential,
-						name: makeURLSafe(state.displayName),
-						orgId: params!.org.id?.toString(),
-						orgUUID: params!.org.uuid,
-						originCloud: "devant",
-					} as CreateComponentReq;
-				}),
+						return {
+							branch,
+							buildPackLang: params!.buildPackLang,
+							componentDir: state.fsPath,
+							displayName: state.displayName,
+							repoUrl,
+							projectId: params!.project.id,
+							projectHandle: params!.project.handler,
+							type: mappedType.type,
+							componentSubType: mappedType.subType,
+							gitProvider,
+							gitCredRef: credential,
+							name: makeURLSafe(state.displayName),
+							orgId: params!.org.id?.toString(),
+							orgUUID: params!.org.uuid,
+							originCloud: "devant",
+						} as CreateComponentReq;
+					}),
 			};
 
 			const created = await wsClient.submitComponents(req);
@@ -296,19 +306,22 @@ function ComponentForm() {
 						)}
 
 						{/* Component list */}
-						<ComponentList
-							project={params?.project}
-							integrations={params?.integrations ?? []}
-							formState={formState}
-							isBatch={isBatch}
-							selectedCount={selectedCount}
-							editingIndex={editingIndex}
-							onToggle={handleToggle}
-							onNameChange={handleNameChange}
-							onNameCommit={handleNameCommit}
-							onIntegrationTypeChange={handleIntegrationTypeChange}
-							onEditStart={(index) => setEditingIndex(index)}
-						/>
+						{params?.org && params?.project && (
+							<ComponentList
+								org={params.org}
+								project={params.project}
+								integrations={params?.integrations ?? []}
+								formState={formState}
+								isBatch={isBatch}
+								selectedCount={selectedCount}
+								editingIndex={editingIndex}
+								onToggle={handleToggle}
+								onNameChange={handleNameChange}
+								onNameCommit={handleNameCommit}
+								onIntegrationTypeChange={handleIntegrationTypeChange}
+								onEditStart={(index) => setEditingIndex(index)}
+							/>
+						)}
 
 						{/* Git configuration — switch between existing repo and new repo init */}
 						{params && !isNewCodeServerComp && (

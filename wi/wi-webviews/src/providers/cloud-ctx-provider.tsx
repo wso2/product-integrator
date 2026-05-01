@@ -21,6 +21,27 @@ import type { AuthState, ContextStoreState } from "@wso2/wi-core";
 import React, { type FC, type ReactNode, useContext, useEffect } from "react";
 import { useVisualizerContext } from "../contexts";
 
+// ── Cloud projects cache ───────────────────────────────────────────────────────
+
+const CLOUD_PROJECTS_STALE_TIME = 5 * 60 * 1000; // 5 minutes
+
+export const cloudProjectsQueryKey = (orgId: string) => ["cloud_projects", orgId] as const;
+
+/**
+ * Returns the cloud project list for the given org from the React Query cache.
+ * Data is pre-warmed by CloudContextProvider as soon as organizations are known,
+ * so this is typically a cache hit with zero network latency when used in forms.
+ */
+export function useCloudProjects(orgId: string | undefined, orgHandle: string | undefined) {
+    const { wsClient } = useVisualizerContext();
+    return useQuery({
+        queryKey: cloudProjectsQueryKey(orgId ?? ""),
+        queryFn: () => wsClient.getCloudProjects({ orgId: orgId!, orgHandle: orgHandle! }),
+        enabled: !!orgId && !!orgHandle,
+        staleTime: CLOUD_PROJECTS_STALE_TIME,
+    });
+}
+
 interface ICloudContext {
     authState: AuthState | undefined;
     contextState: ContextStoreState | undefined;

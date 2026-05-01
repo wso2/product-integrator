@@ -1,0 +1,236 @@
+name: Smoke Test
+
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        description: 'Linux tar.gz artifact name'
+        required: false
+        type: string
+        default: ''
+      windows_artifact_name:
+        description: 'Windows MSI artifact name'
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      integrator_version:
+        description: 'Download from GitHub Release (e.g. 5.0.0-alpha14)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    if: inputs.artifact_name != '' || inputs.integrator_version != ''
+    name: ${{ matrix.example }} (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # ICP tests are advisory — hello-world-service gates the release
+    continue-on-error: ${{ matrix.example == 'icp' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        example: [hello-world-service, icp]
+    env:
+      DISPLAY: ':99'
+    steps:
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            libgtk-3-0 libgbm1 libnss3 libxss1 libasound2t64 \
+            libx11-xcb1 libdrm2 libxcomposite1 libxdamage1 \
+            libxrandr2 libatk-bridge2.0-0 libatspi2.0-0 libcups2
+
+      - name: Start Xvfb
+        run: |
+          Xvfb :99 -screen 0 1920x1080x24 &
+          sleep 2
+
+      - name: Download build artifact
+        if: inputs.artifact_name != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: artifact/
+
+      - name: Download from GitHub Release
+        if: inputs.integrator_version != '' && inputs.artifact_name == ''
+        run: |
+          VERSION="${{ inputs.integrator_version }}"
+          TARBALL="wso2-integrator-${VERSION}-linux-x64.tar.gz"
+          URL="https://github.com/wso2/product-integrator/releases/download/v${VERSION}/${TARBALL}"
+          mkdir -p artifact
+          curl -fSL -o "artifact/${TARBALL}" "$URL"
+
+      - name: Extract and locate binary
+        run: |
+          cd artifact
+          tar -xzf *.tar.gz
+          BINARY=$(find . -maxdepth 2 -name 'wso2-integrator' -type f ! -path '*/bin/*' | head -1)
+          chmod +x "$BINARY"
+          echo "WSO2_INTEGRATOR_PATH=$(realpath $BINARY)" >> "$GITHUB_ENV"
+
+      - name: Patch ICP script for dash compatibility
+        if: matrix.example == 'icp'
+        run: |
+          ICP_SH=$(dirname "$WSO2_INTEGRATOR_PATH")/components/icp/bin/icp.sh
+          if [ -f "$ICP_SH" ]; then
+            python3 - "$ICP_SH" <<'PYEOF'
+          import re, sys
+          path = sys.argv[1]
+          with open(path) as f: s = f.read()
+          s = s.replace('JAVA_OPTS=()', 'JAVA_OPTS=""')
+          s = re.sub(r'JAVA_OPTS\+=\(\s*\n((?:\s+.*\n)*?\s*)\)',
+              lambda m: 'JAVA_OPTS="$JAVA_OPTS ' + ' '.join(m.group(1).split()) + '"', s)
+          s = s.replace('"${JAVA_OPTS[@]}"', '$JAVA_OPTS')
+          with open(path, 'w') as f: f.write(s)
+          print('Patched', path)
+          PYEOF
+          fi
+
+      - name: Pre-pull ICP Ballerina modules
+        if: matrix.example == 'icp'
+        run: |
+          BAL=$(dirname "$WSO2_INTEGRATOR_PATH")/components/ballerina/bin/bal
+          export JAVA_HOME=$(find $(dirname "$WSO2_INTEGRATOR_PATH")/components/dependencies -maxdepth 1 -name 'jdk-*' -type d | head -1)
+          "$BAL" pull ballerinax/metrics.logs
+          "$BAL" pull wso2/icp.runtime.bridge
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install wso2ipw
+        run: npm install -g wso2ipw@0.1.5
+
+      - name: Install playwright-cli and Chrome
+        if: matrix.example == 'icp'
+        run: |
+          npm install -g @playwright/cli
+          cd $(npm root -g)/@playwright/cli/node_modules/playwright-core && npx playwright install --with-deps chrome
+
+      - name: Create playwright-cli config
+        if: matrix.example == 'icp'
+        run: |
+          mkdir -p .playwright
+          echo '{"browser":{"contextOptions":{"ignoreHTTPSErrors":true}}}' > .playwright/cli.config.json
+
+      - name: Run ${{ matrix.example }}
+        env:
+          WSO2IPW_ELECTRON_ARGS: ${{ matrix.example == 'icp' && '--no-sandbox --password-store=basic' || '--no-sandbox' }}
+        run: bash "$(npm root -g)/wso2ipw/examples/${{ matrix.example }}/run-all.sh"
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs-${{ matrix.example }}-linux
+          path: |
+            /home/runner/.wso2ipw/*/daemon.log
+            /home/runner/.wso2ipw/*/daemon.err
+          if-no-files-found: ignore
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-screenshots-${{ matrix.example }}-linux
+          path: "*.png"
+          if-no-files-found: ignore
+
+  windows:
+    if: inputs.windows_artifact_name != '' || inputs.integrator_version != ''
+    name: ${{ matrix.example }} (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    continue-on-error: ${{ matrix.example == 'icp' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        example: [hello-world-service, icp]
+    steps:
+      - name: Download build artifact
+        if: inputs.windows_artifact_name != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.windows_artifact_name }}
+          path: artifact/
+
+      - name: Download from GitHub Release
+        if: inputs.integrator_version != '' && inputs.windows_artifact_name == ''
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.integrator_version }}"
+          $msi = "wso2-integrator-${version}.msi"
+          $url = "https://github.com/wso2/product-integrator/releases/download/v${version}/${msi}"
+          New-Item -ItemType Directory -Path artifact -Force
+          Invoke-WebRequest -Uri $url -OutFile "artifact/${msi}"
+
+      - name: Install MSI
+        shell: pwsh
+        run: |
+          reg add 'HKLM\SYSTEM\CurrentControlSet\Control\FileSystem' /v LongPathsEnabled /t REG_DWORD /d 1 /f
+          $msi = Get-ChildItem artifact -Filter '*.msi' | Select-Object -First 1
+          $installDir = 'C:\w\'
+          $proc = Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /norestart INTEGRATORFOLDER=`"$installDir`"" -Wait -PassThru
+          Write-Host "msiexec exit code: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0) { throw "msiexec failed with exit code $($proc.ExitCode)" }
+          $binary = Get-ChildItem $installDir -Recurse -Filter 'WSO2 Integrator.exe' -Depth 2 |
+            Select-Object -First 1
+          if (-not $binary) { throw 'WSO2 Integrator.exe not found' }
+          "WSO2_INTEGRATOR_PATH=$($binary.FullName)" | Out-File -Append $env:GITHUB_ENV
+          # Exclude from Defender to avoid I/O throttling
+          Add-MpPreference -ExclusionPath $installDir
+          Add-MpPreference -ExclusionPath "$env:USERPROFILE\WSO2Integrator"
+          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.ballerina"
+
+      - name: Pre-pull ICP Ballerina modules
+        if: matrix.example == 'icp'
+        shell: pwsh
+        run: |
+          $base = Split-Path $env:WSO2_INTEGRATOR_PATH
+          $bal = Join-Path $base 'components\ballerina\bin\bal.bat'
+          $env:JAVA_HOME = (Get-ChildItem (Join-Path $base 'components\dependencies') -Directory -Filter 'jdk-*' | Select-Object -First 1).FullName
+          & $bal pull ballerinax/metrics.logs
+          & $bal pull wso2/icp.runtime.bridge
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install wso2ipw
+        run: npm install -g wso2ipw@0.1.5
+
+      - name: Install playwright-cli and Chrome
+        if: matrix.example == 'icp'
+        shell: bash
+        run: |
+          npm install -g @playwright/cli
+          cd $(npm root -g)/@playwright/cli/node_modules/playwright-core && npx playwright install --with-deps chrome
+
+      - name: Create playwright-cli config
+        if: matrix.example == 'icp'
+        shell: bash
+        run: |
+          mkdir -p .playwright
+          echo '{"browser":{"contextOptions":{"ignoreHTTPSErrors":true}}}' > .playwright/cli.config.json
+
+      - name: Run ${{ matrix.example }}
+        shell: bash
+        run: bash "$(npm root -g)/wso2ipw/examples/${{ matrix.example }}/run-all.sh"
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-screenshots-${{ matrix.example }}-windows
+          path: "*.png"
+          if-no-files-found: ignore

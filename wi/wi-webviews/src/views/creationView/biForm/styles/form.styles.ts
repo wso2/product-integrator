@@ -51,7 +51,7 @@ export const ProjectSectionLabel = styled.div`
 `;
 
 export const ProjectFieldCollapse = styled.div<{ isVisible: boolean }>`
-    max-height: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? "120px" : "0")};
+    max-height: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? "200px" : "0")};
     opacity: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? 1 : 0)};
     overflow: hidden;
     transition: max-height 0.25s ease, opacity 0.2s ease;
@@ -150,7 +150,7 @@ export const CollapsibleSectionWrapper = styled.div<{ isExpanded: boolean }>`
     border: 1px solid var(--vscode-panel-border);
     border-radius: 4px;
     margin-bottom: 12px;
-    overflow: hidden;
+    overflow: ${(props: { isExpanded: boolean }) => props.isExpanded ? 'visible' : 'hidden'};
     transition: border-color 0.2s ease;
 
     &:hover {
@@ -165,8 +165,8 @@ export const CollapsibleHeader = styled.div<{ isExpanded: boolean }>`
     padding: 12px 16px;
     cursor: pointer;
     user-select: none;
-    background-color: ${(props: { isExpanded: boolean }) => props.isExpanded 
-        ? 'var(--vscode-sideBar-background)' 
+    background-color: ${(props: { isExpanded: boolean }) => props.isExpanded
+        ? 'var(--vscode-sideBar-background)'
         : 'transparent'};
     transition: background-color 0.2s ease;
 
@@ -202,9 +202,9 @@ export const ChevronIcon = styled.div<{ isExpanded: boolean }>`
 `;
 
 export const CollapsibleContent = styled.div<{ isExpanded: boolean }>`
-    max-height: ${(props: { isExpanded: boolean }) => props.isExpanded ? '500px' : '0'};
+    max-height: ${(props: { isExpanded: boolean }) => props.isExpanded ? '2000px' : '0'};
     opacity: ${(props: { isExpanded: boolean }) => props.isExpanded ? 1 : 0};
-    overflow: hidden;
+    overflow: ${(props: { isExpanded: boolean }) => props.isExpanded ? 'visible' : 'hidden'};
     transition: max-height 0.3s ease, opacity 0.2s ease;
     padding: ${(props: { isExpanded: boolean }) => props.isExpanded ? '16px' : '0 16px'};
     border-top: ${(props: { isExpanded: boolean }) => props.isExpanded ? '1px solid var(--vscode-panel-border)' : 'none'};
@@ -237,9 +237,9 @@ export const RadioOption = styled.label<{ isSelected: boolean }>`
     padding: 12px;
     border-radius: 6px;
     cursor: pointer;
-    border: 1px solid ${(props: { isSelected: boolean }) => 
+    border: 1px solid ${(props: { isSelected: boolean }) =>
         props.isSelected ? 'var(--vscode-focusBorder)' : 'var(--vscode-panel-border)'};
-    background-color: ${(props: { isSelected: boolean }) => 
+    background-color: ${(props: { isSelected: boolean }) =>
         props.isSelected ? 'var(--vscode-list-hoverBackground)' : 'transparent'};
     transition: all 0.15s ease;
 
@@ -311,4 +311,93 @@ export const ResolvedPathText = styled.div`
     color: var(--vscode-descriptionForeground);
     margin-top: 6px;
     word-break: break-all;
+`;
+
+// ========== Cloud Duplicate Error Action Row ==========
+
+export const CloudErrorActionRow = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 12px;
+    font-family: var(--vscode-font-family);
+`;
+
+export const ActionLink = styled.button`
+    padding: 0;
+    background: none;
+    border: none;
+    font-size: 12px;
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover {
+        color: var(--vscode-textLink-activeForeground);
+        text-decoration: underline;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
+`;
+
+export const ActionSeparator = styled.span`
+    color: var(--vscode-descriptionForeground);
+`;
+
+export const SubSectionLabel = styled.div`
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 12px;
+`;
+
+export const SubSectionDivider = styled.div`
+    height: 1px;
+    background: var(--vscode-panel-border);
+    margin: 16px 0;
+`;
+
+export const SignInHint = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+`;
+
+export const SignInHintButton = styled.button`
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0;
+    background: none;
+    border: none;
+    font-size: 12px;
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover:not(:disabled) {
+        color: var(--vscode-textLink-activeForeground);
+        text-decoration: underline;
+    }
+
+    &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
 `;

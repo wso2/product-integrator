@@ -1,9 +1,9 @@
 {
   "name": "wso2-integrator",
-  "displayName": "WSO2 Integrator (Alpha)",
+  "displayName": "WSO2 Integrator (Beta)",
   "description": "Integration development environment for WSO2 Integrator",
-  "version": "0.2.2",
-  "cliVersion": "v1.2.212603241600",
+  "version": "0.9.0",
+  "cliVersion": "v1.2.212604271730",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
   "license": "Apache-2.0",
@@ -17,6 +17,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:wso2.integrator.getEmbeddedWelcomeBootstrap",
     "workspaceContains:**/Ballerina.toml",
     "onLanguage:SynapseXml",
@@ -33,27 +34,12 @@
         "integrator.selectedProfile": {
           "type": "string",
           "enum": [
-            "Default",
+            "WSO2 Integrator: Default",
             "WSO2 Integrator: MI",
             "WSO2 Integrator: SI"
           ],
-          "default": "Default",
+          "default": "WSO2 Integrator: Default",
           "description": "Select the active WSO2 Integrator profile."
-        },
-        "integrator.enabledRuntimes.bi": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable WSO2 BI runtime."
-        },
-        "integrator.enabledRuntimes.mi": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable WSO2 MI runtime."
-        },
-        "integrator.enabledRuntimes.si": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable WSO2 SI runtime."
         },
         "integrator.advanced.cloudEnv": {
           "type": "string",
@@ -88,6 +74,37 @@
           "default": false,
           "description": "Enable only if your system does not support keyring.",
           "scope": "window"
+        },
+        "updates.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Enable WSO2 Integrator product update checks."
+        },
+        "updates.checkOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Check for a newer WSO2 Integrator version when the product starts."
+        },
+        "updates.checkIntervalHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "scope": "application",
+          "description": "Minimum number of hours between automatic WSO2 Integrator update checks."
+        },
+        "updates.serviceUrl": {
+          "type": "string",
+          "scope": "application",
+          "description": "Hosted product update service endpoint used by WSO2 Integrator. If not set, the built-in default endpoint is used."
+        },
+        "updates.requestTimeoutMs": {
+          "type": "number",
+          "default": 10000,
+          "minimum": 1000,
+          "scope": "application",
+          "description": "Timeout in milliseconds for calls to the hosted product update service."
         }
       }
     },
@@ -105,7 +122,8 @@
         {
           "id": "wso2-integrator.explorer",
           "name": "Integrations",
-          "contextualTitle": "WSO2 Integrator"
+          "contextualTitle": "WSO2 Integrator",
+          "when": "!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi')"
         }
       ]
     },
@@ -114,11 +132,6 @@
         "view": "wso2-integrator.explorer",
         "contents": "$(loadingspin) Loading WSO2 Integrator...",
         "when": "!WI.projectType"
-      },
-      {
-        "view": "wso2-integrator.explorer",
-        "contents": "$(info) SI project detected.\n\nSI tree view is not available yet. Use File Explorer to browse your project files.",
-        "when": "WI.projectType == 'si'"
       },
       {
         "view": "wso2-integrator.explorer",
@@ -146,12 +159,17 @@
       },
       {
         "command": "wso2.integrator.openBIIntegration",
-        "title": "Open BI Integration",
+        "title": "Open Default Integration",
         "category": "WSO2 Integrator"
       },
       {
         "command": "wso2.integrator.openMIIntegration",
         "title": "Open MI Integration",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "wso2.integrator.checkForUpdates",
+        "title": "Check for Updates",
         "category": "WSO2 Integrator"
       },
       {

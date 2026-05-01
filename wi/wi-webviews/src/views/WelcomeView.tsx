@@ -32,8 +32,7 @@ import { SamplesView } from "./samplesView";
 import { SettingsView } from "./settingsView";
 import {
 	type WIRuntime,
-	getDefaultRuntime,
-	loadEnabledRuntimes,
+	loadSelectedRuntime,
 } from "./shared/runtime";
 import { OpenProjectView } from "./OpenProjectView";
 
@@ -47,6 +46,16 @@ enum ViewState {
     SETTINGS = "settings",
     OPEN_PROJECT = "open_project",
 }
+
+const BALLERINA_MISSING_ACTION_TOOLTIP =
+    "Ballerina distribution is missing. Use Configure to set it up";
+const BALLERINA_MISSING_CONFIGURE_TOOLTIP =
+    "Ballerina distribution is missing. Click to set it up";
+const DISABLED_ROW_STYLE: React.CSSProperties = {
+    opacity: 0.5,
+    cursor: "not-allowed",
+    pointerEvents: "none",
+};
 
 const Wrapper = styled.div`
     max-width: 100%;
@@ -65,26 +74,12 @@ const TopSection = styled.div`
     --welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-white) 36%, transparent);
     --welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent);
     --welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent-soft) 52%, transparent);
-    background:
-        radial-gradient(circle at 82% 14%, color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent) 0%, transparent 34%),
-        radial-gradient(circle at 12% 100%, color-mix(in srgb, var(--wso2-brand-neutral-900) 46%, transparent) 0%, transparent 52%),
-        linear-gradient(115deg, #050a14 0%, var(--wso2-brand-ink) 42%, var(--wso2-brand-ink-alt) 100%);
+    background: linear-gradient(180deg, var(--wso2-brand-hero-start) 0%, var(--wso2-brand-hero-end) 100%);
     padding: 40px 60px 80px;
     position: relative;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-
-    body.vscode-light & {
-        --welcome-hero-foreground: var(--wso2-brand-ink);
-        --welcome-hero-muted: color-mix(in srgb, var(--wso2-brand-ink) 76%, var(--wso2-brand-white));
-        --welcome-hero-surface: color-mix(in srgb, var(--wso2-brand-white) 70%, transparent);
-        --welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
-        --welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
-        --welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent) 34%, transparent);
-        background:
-            linear-gradient(110deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-soft) 100%);
-    }
 `;
 
 const TopControlsSection = styled.div`
@@ -683,29 +678,51 @@ export const WelcomeView: React.FC = () => {
     const [isRecentProjectsLoaded, setIsRecentProjectsLoaded] = useState(false);
     const [showSecondary, setShowSecondary] = useState(false);
     const [isSigningIn, setIsSigningIn] = useState(false);
+    // null = check not yet done; false = available; true = unavailable
+    const [isBallerinaUnavailable, setIsBallerinaUnavailable] = useState<boolean | null>(null);
 	const avatarRef = useRef<HTMLButtonElement>(null);
     const signingInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const biStatusCheckDone = useRef(false);
 
     useEffect(() => {
         if (currentView !== ViewState.WELCOME) {
             return;
         }
 
-        const fetchEnabledRuntimes = async () => {
+        const fetchSelectedRuntime = async () => {
             setIsRuntimeLoading(true);
             try {
-                const runtimes = await loadEnabledRuntimes(wsClient);
-                setSelectedRuntime(getDefaultRuntime(runtimes));
+                const runtime = await loadSelectedRuntime(wsClient);
+                setSelectedRuntime(runtime);
             } catch (error) {
-                console.warn("Failed to load enabled runtimes, using fallback:", error);
+                console.warn("Failed to load selected profile, using fallback:", error);
                 setSelectedRuntime("WSO2: BI");
             } finally {
                 setIsRuntimeLoading(false);
             }
         };
 
-        fetchEnabledRuntimes();
+        fetchSelectedRuntime();
     }, [currentView, wsClient]);
+
+    // Runs the Ballerina activation check in the background,
+    // after the runtime is already known. This way the welcome cards render
+    // immediately and only disable actions if Ballerina is definitely unavailable.
+    // wsClient is intentionally omitted from the dependency array — it is a stable
+    // singleton and the check should only re-run when selectedRuntime changes.
+    useEffect(() => {
+        if (selectedRuntime !== "WSO2: BI" || biStatusCheckDone.current) {
+            return;
+        }
+        biStatusCheckDone.current = true;
+
+        wsClient.getBIRuntimeStatus().then(({ isAvailable }) => {
+            setIsBallerinaUnavailable(!isAvailable);
+        }).catch(() => {
+            // If the check fails, let the user proceed — do not block the welcome view.
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedRuntime]);
 
     useEffect(() => {
         if (currentView !== ViewState.WELCOME) {
@@ -748,6 +765,7 @@ export const WelcomeView: React.FC = () => {
 	useEffect(() => {
 		if (selectedRuntime !== "WSO2: BI") {
 			setShowSecondary(false);
+			setIsBallerinaUnavailable(null);
 		}
 	}, [selectedRuntime]);
 
@@ -792,7 +810,9 @@ export const WelcomeView: React.FC = () => {
 	// Clear it once auth completes or after a short timeout (user cancelled).
 	useEffect(() => {
 		const unsubscribe = wsClient.onSignInInitiated(() => {
-			setIsSigningIn(true);
+			if (signingInTimeoutRef.current) {
+				clearTimeout(signingInTimeoutRef.current);
+			}
 			signingInTimeoutRef.current = setTimeout(() => {
 				setIsSigningIn(false);
 				signingInTimeoutRef.current = null;
@@ -818,16 +838,51 @@ export const WelcomeView: React.FC = () => {
 	}, []);
 
 	const handleSignIn = () => {
+		setIsSigningIn(true);
+		// Give the user 5 minutes to complete browser login before auto-resetting.
+		if (signingInTimeoutRef.current) {
+			clearTimeout(signingInTimeoutRef.current);
+		}
+		signingInTimeoutRef.current = setTimeout(() => {
+			setIsSigningIn(false);
+			signingInTimeoutRef.current = null;
+		}, 300000);
 		wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
 	};
 
+	const handleCancelSignIn = () => {
+		setIsSigningIn(false);
+		if (signingInTimeoutRef.current) {
+			clearTimeout(signingInTimeoutRef.current);
+			signingInTimeoutRef.current = null;
+		}
+		wsClient.runCommand({ command: WICommandIds.CancelSignIn, args: [] });
+	};
+
+    const handleImportCapp = () => {
+        wsClient.importProjectFromCapp();
+    }
+
 	const renderCurrentView = () => {
+        // While we're still determining which runtime is active, show a full-page
+        // spinner so the banner never flashes.
+        if (isRuntimeLoading && currentView === ViewState.WELCOME) {
+            return (
+                <CardsLoadingState style={{ height: "100vh" }}>
+                    <ProgressIndicator />
+                </CardsLoadingState>
+            );
+        }
+
+        const biUnavailable = isBallerinaUnavailable === true;
+
 		switch (currentView) {
 			case ViewState.CREATE_INTEGRATION:
 				return (
 					<CreationView
 						onBack={goBackToWelcome}
 						runtime={selectedRuntime ?? undefined}
+						ballerinaUnavailable={biUnavailable}
 					/>
 				);
 			case ViewState.SAMPLES:
@@ -840,11 +895,11 @@ export const WelcomeView: React.FC = () => {
 			case ViewState.IMPORT_EXTERNAL:
 				return <ImportIntegration onBack={goBackToWelcome} />;
 			case ViewState.CREATE_LIBRARY:
-				return <LibraryCreationView onBack={goBackToWelcome} />;
+				return <LibraryCreationView onBack={goBackToWelcome} ballerinaUnavailable={biUnavailable} />;
 			case ViewState.CREATE_PROJECT:
-				return <ProjectCreationView onBack={goBackToWelcome} />;
+				return <ProjectCreationView onBack={goBackToWelcome} ballerinaUnavailable={biUnavailable} />;
 			case ViewState.SETTINGS:
-				return <SettingsView onBack={goBackToWelcome} />;
+				return <SettingsView onBack={goBackToWelcome} ballerinaUnavailable={biUnavailable} />;
             case ViewState.OPEN_PROJECT:
                 return <OpenProjectView onBack={goBackToWelcome} />;
 			case ViewState.WELCOME:
@@ -853,7 +908,9 @@ export const WelcomeView: React.FC = () => {
 		}
 	};
 
-	const renderWelcomeContent = () => (
+	const renderWelcomeContent = () => {
+        const biUnavailable = isBallerinaUnavailable === true;
+        return (
 		<>
 			<TopSection>
 				<TopControlsSection>
@@ -875,27 +932,39 @@ export const WelcomeView: React.FC = () => {
 									</UserInitial>
 								)}
 							</UserAvatar>
+						) : isSigningIn ? (
+							<SigninBtn type="button" onClick={handleCancelSignIn} title="Cancel sign in">
+								<Codicon
+									name="loading"
+									iconSx={{ fontSize: 13, color: "var(--wso2-brand-white)", animation: "codicon-spin 1.5s steps(30) infinite" }}
+								/>
+								Signing in...
+								<Codicon
+									name="close"
+									iconSx={{ fontSize: 12, color: "var(--wso2-brand-white)", opacity: 0.8 }}
+								/>
+							</SigninBtn>
 						) : (
-							<SigninBtn type="button" onClick={handleSignIn} disabled={isSigningIn}>
-								{isSigningIn ? (
-									<>
-										<Codicon
-											name="loading"
-											iconSx={{ fontSize: 13, color: "var(--wso2-brand-white)", animation: "codicon-spin 1.5s steps(30) infinite" }}
-										/>
-										Signing in...
-									</>
-								) : (
-									"Sign In"
-								)}
+							<SigninBtn type="button" onClick={handleSignIn}>
+								Sign In
 							</SigninBtn>
 						)}
-						<ConfigureBtn type="button" onClick={goToSettings}>
+						<ConfigureBtn
+							type="button"
+							onClick={goToSettings}
+							title={biUnavailable ? BALLERINA_MISSING_CONFIGURE_TOOLTIP : undefined}
+						>
 							<Codicon
 								name="settings-gear"
 								iconSx={{ fontSize: 16 }}
 							/>
-							<span>Settings</span>
+							<span>Configure</span>
+							{biUnavailable && (
+								<Codicon
+									name="warning"
+									iconSx={{ fontSize: 16, color: "var(--vscode-editorWarning-foreground, #cca700)" }}
+								/>
+							)}
 						</ConfigureBtn>
 					</TopBtnSection>
 				</TopControlsSection>
@@ -908,97 +977,262 @@ export const WelcomeView: React.FC = () => {
 				</Caption>
 			</TopSection>
 
-			<CardsContainer>
-				{isRuntimeLoading || !selectedRuntime ? (
-					<CardsLoadingState>
-						<ProgressIndicator />
-					</CardsLoadingState>
-				) : (
-					<>
-						<CardsGrid>
-							<ActionCard onClick={goToCreateIntegration}>
-								<CardIconContainer>
-									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-primary-deep) 100%)">
-										<Codicon
-											name="circuit-board"
-											iconSx={{ fontSize: "25px" }}
-											sx={{ width: "23px", height: "25px" }}
-										/>
-									</CardIcon>
-								</CardIconContainer>
-								<CardContent>
-									<CardTitle>Create New Integration</CardTitle>
-									<CardDescription>
-                                        Start building a new integration.
-									</CardDescription>
-									<StyledButton
-										isPrimary={true}
-										onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-											e.stopPropagation();
-											goToCreateIntegration();
-										}}
+			<>
+					<CardsContainer>
+						{isRuntimeLoading || !selectedRuntime ? (
+							<CardsLoadingState>
+								<ProgressIndicator />
+							</CardsLoadingState>
+						) : (
+							<>
+								<CardsGrid>
+									<ActionCard
+										disabled={biUnavailable}
+										onClick={biUnavailable ? undefined : goToCreateIntegration}
+										title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
 									>
-										<ButtonContent>Create</ButtonContent>
-									</StyledButton>
-								</CardContent>
-							</ActionCard>
+										<CardIconContainer>
+											<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-primary-deep) 100%)">
+												<Codicon
+													name="circuit-board"
+													iconSx={{ fontSize: "25px" }}
+													sx={{ width: "23px", height: "25px" }}
+												/>
+											</CardIcon>
+										</CardIconContainer>
+										<CardContent>
+											<CardTitle>{selectedRuntime === "WSO2: BI" ? "Create New Integration" : "Create New Project"}</CardTitle>
+											<CardDescription>
+												{selectedRuntime === "WSO2: BI" ?
+                                            "Start building a new integration." :
+                                            "Start building a new project."
+                                        }
+											</CardDescription>
+											<StyledButton
+												isPrimary={true}
+												disabled={biUnavailable}
+												onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+													e.stopPropagation();
+													if (!biUnavailable) goToCreateIntegration();
+												}}
+											>
+												<ButtonContent>Create</ButtonContent>
+											</StyledButton>
+										</CardContent>
+									</ActionCard>
 
-							<ActionCard onClick={openIntegrationFileBrowser}>
-								<CardIconContainer>
-									<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-accent-alt) 100%)">
-										<Codicon
-											name="folder-opened"
-											iconSx={{ fontSize: "25px" }}
-											sx={{ width: "23px", height: "25px" }}
-										/>
-									</CardIcon>
-								</CardIconContainer>
-								<CardContent>
-									<CardTitle>Open Integration</CardTitle>
-									<CardDescription>
-                                        Open an existing integration and continue building your solution.
-									</CardDescription>
-									<StyledButton
-										onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-											e.stopPropagation();
-											openIntegrationFileBrowser();
-										}}
+									<ActionCard
+										disabled={biUnavailable}
+										onClick={biUnavailable ? undefined : openIntegrationFileBrowser}
+										title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
 									>
-										<ButtonContent>Open</ButtonContent>
-									</StyledButton>
-								</CardContent>
-							</ActionCard>
+										<CardIconContainer>
+											<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-accent-alt) 100%)">
+												<Codicon
+													name="folder-opened"
+													iconSx={{ fontSize: "25px" }}
+													sx={{ width: "23px", height: "25px" }}
+												/>
+											</CardIcon>
+										</CardIconContainer>
+										<CardContent>
+											<CardTitle>{selectedRuntime === "WSO2: BI" ? "Open Integration" : "Open Project"}</CardTitle>
+											<CardDescription>
+												{selectedRuntime === "WSO2: BI" ?
+                                            "Open an existing integration and continue building your solution." :
+                                            "Open an existing project and continue building your solution."
+                                        }
+											</CardDescription>
+											<StyledButton
+												disabled={biUnavailable}
+												onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+													e.stopPropagation();
+													if (!biUnavailable) openIntegrationFileBrowser();
+												}}
+											>
+												<ButtonContent>Open</ButtonContent>
+											</StyledButton>
+										</CardContent>
+									</ActionCard>
 
-							{selectedRuntime !== "WSO2: SI" && (
-								<ActionCard onClick={goToSamples}>
-									<CardIconContainer>
-										<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-alt) 100%)">
-											<Codicon
-												name="lightbulb"
-												iconSx={{ fontSize: "25px" }}
-												sx={{ width: "23px", height: "25px" }}
-											/>
-										</CardIcon>
-									</CardIconContainer>
-									<CardContent>
-										<CardTitle>Explore Pre-built Integrations and Samples</CardTitle>
-										<CardDescription>
-                                            Explore ready-to-use pre-built integrations and samples to accelerate your development.
-										</CardDescription>
-										<StyledButton
-											onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-												e.stopPropagation();
-												goToSamples();
+									{selectedRuntime !== "WSO2: SI" && (
+										<ActionCard
+											disabled={biUnavailable}
+											onClick={biUnavailable ? undefined : goToSamples}
+											title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
+										>
+											<CardIconContainer>
+												<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-alt) 100%)">
+													<Codicon
+														name="lightbulb"
+														iconSx={{ fontSize: "25px" }}
+														sx={{ width: "23px", height: "25px" }}
+													/>
+												</CardIcon>
+											</CardIconContainer>
+											<CardContent>
+												<CardTitle>Explore Pre-built Integrations and Samples</CardTitle>
+												<CardDescription>
+													Explore ready-to-use pre-built integrations and samples to accelerate your development.
+												</CardDescription>
+												<StyledButton
+													disabled={biUnavailable}
+													onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+														e.stopPropagation();
+														if (!biUnavailable) goToSamples();
+													}}
+												>
+													<ButtonContent>Explore</ButtonContent>
+												</StyledButton>
+											</CardContent>
+										</ActionCard>
+									)}
+								</CardsGrid>
+
+								{selectedRuntime === "WSO2: BI" && (
+									<>
+										<MoreToggleWrapper>
+											<MoreDivider />
+											<MoreToggleButton
+												type="button"
+												onClick={() => setShowSecondary(!showSecondary)}
+											>
+												<span>{showSecondary ? "Show less" : "More Actions"}</span>
+												<MoreChevron>
+													<span
+														className={`codicon ${showSecondary ? "codicon-triangle-up" : "codicon-triangle-down"}`}
+													/>
+												</MoreChevron>
+											</MoreToggleButton>
+											<MoreDivider />
+										</MoreToggleWrapper>
+
+										<SecondaryCardsSection
+											style={{
+												maxHeight: showSecondary ? "300px" : "0",
+												opacity: showSecondary ? 1 : 0,
 											}}
 										>
-											<ButtonContent>Explore</ButtonContent>
-										</StyledButton>
-									</CardContent>
-								</ActionCard>
-							)}
-						</CardsGrid>
+											<SecondaryCardsGrid>
+												<SecondaryActionRow
+													onClick={biUnavailable ? undefined : goToCreateLibrary}
+													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
+													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
+												>
+													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
+														<Codicon
+															name="library"
+															iconSx={{ fontSize: "16px" }}
+															sx={{ width: "16px", height: "16px" }}
+														/>
+													</SecondaryRowIcon>
+													<SecondaryRowContent>
+														<SecondaryRowTitle>Create Library</SecondaryRowTitle>
+														<SecondaryRowDescription>
+															Create reusable components and utilities to share across integrations and projects.
+														</SecondaryRowDescription>
+													</SecondaryRowContent>
+													<Codicon
+														name="chevron-right"
+														iconSx={{
+															fontSize: "14px",
+															color: "var(--vscode-descriptionForeground)",
+															opacity: 0.6,
+														}}
+													/>
+												</SecondaryActionRow>
 
-						{selectedRuntime === "WSO2: BI" && (
+												<SecondaryActionRow
+													onClick={biUnavailable ? undefined : goToCreateProject}
+													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
+													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
+												>
+													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
+														<Codicon
+															name="new-folder"
+															iconSx={{ fontSize: "16px" }}
+															sx={{ width: "16px", height: "16px" }}
+														/>
+													</SecondaryRowIcon>
+													<SecondaryRowContent>
+														<SecondaryRowTitle>Create Project</SecondaryRowTitle>
+														<SecondaryRowDescription>
+															Create a project to organize and manage multiple integrations.
+														</SecondaryRowDescription>
+													</SecondaryRowContent>
+													<Codicon
+														name="chevron-right"
+														iconSx={{
+															fontSize: "14px",
+															color: "var(--vscode-descriptionForeground)",
+															opacity: 0.6,
+														}}
+													/>
+												</SecondaryActionRow>
+
+												<SecondaryActionRow
+													onClick={biUnavailable ? undefined : handleProjectDirSelection}
+													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
+													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
+												>
+													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
+														<Codicon
+															name="root-folder-opened"
+															iconSx={{ fontSize: "16px" }}
+															sx={{ width: "16px", height: "16px" }}
+														/>
+													</SecondaryRowIcon>
+													<SecondaryRowContent>
+														<SecondaryRowTitle>Open Project</SecondaryRowTitle>
+														<SecondaryRowDescription>
+															Open an existing project to view and manage its integrations.
+														</SecondaryRowDescription>
+													</SecondaryRowContent>
+													<Codicon
+														name="chevron-right"
+														iconSx={{
+															fontSize: "14px",
+															color: "var(--vscode-descriptionForeground)",
+															opacity: 0.6,
+														}}
+													/>
+												</SecondaryActionRow>
+
+												<SecondaryActionRow
+													onClick={biUnavailable ? undefined : goToImportExternal}
+													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
+													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
+												>
+													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
+														<Codicon
+															name="cloud-download"
+															iconSx={{ fontSize: "16px" }}
+															sx={{ width: "16px", height: "16px" }}
+														/>
+													</SecondaryRowIcon>
+													<SecondaryRowContent>
+														<SecondaryRowTitle>
+															Migrate Integrations from Other Vendors
+														</SecondaryRowTitle>
+														<SecondaryRowDescription>
+															Import integrations from other vendors and convert them to WSO2 Integrator format.
+														</SecondaryRowDescription>
+													</SecondaryRowContent>
+													<Codicon
+														name="chevron-right"
+														iconSx={{
+															fontSize: "14px",
+															color: "var(--vscode-descriptionForeground)",
+															opacity: 0.6,
+														}}
+													/>
+												</SecondaryActionRow>
+											</SecondaryCardsGrid>
+										</SecondaryCardsSection>
+									</>
+								)}
+
+		{selectedRuntime === "WSO2: MI" && (
 							<>
 								<MoreToggleWrapper>
 									<MoreDivider />
@@ -1023,7 +1257,7 @@ export const WelcomeView: React.FC = () => {
 									}}
 								>
 									<SecondaryCardsGrid>
-										<SecondaryActionRow onClick={goToCreateLibrary}>
+										<SecondaryActionRow onClick={handleImportCapp}>
 											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
 												<Codicon
 													name="library"
@@ -1032,83 +1266,9 @@ export const WelcomeView: React.FC = () => {
 												/>
 											</SecondaryRowIcon>
 											<SecondaryRowContent>
-												<SecondaryRowTitle>Create Library</SecondaryRowTitle>
+												<SecondaryRowTitle>Import a CApp</SecondaryRowTitle>
 												<SecondaryRowDescription>
-                                                    Create reusable components and utilities to share across integrations and projects.
-												</SecondaryRowDescription>
-											</SecondaryRowContent>
-											<Codicon
-												name="chevron-right"
-												iconSx={{
-													fontSize: "14px",
-													color: "var(--vscode-descriptionForeground)",
-													opacity: 0.6,
-												}}
-											/>
-										</SecondaryActionRow>
-
-										<SecondaryActionRow onClick={goToCreateProject}>
-											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
-												<Codicon
-													name="new-folder"
-													iconSx={{ fontSize: "16px" }}
-													sx={{ width: "16px", height: "16px" }}
-												/>
-											</SecondaryRowIcon>
-											<SecondaryRowContent>
-												<SecondaryRowTitle>Create Project</SecondaryRowTitle>
-												<SecondaryRowDescription>
-													Create a project to organize and manage multiple integrations.
-												</SecondaryRowDescription>
-											</SecondaryRowContent>
-											<Codicon
-												name="chevron-right"
-												iconSx={{
-													fontSize: "14px",
-													color: "var(--vscode-descriptionForeground)",
-													opacity: 0.6,
-												}}
-											/>
-										</SecondaryActionRow>
-
-										<SecondaryActionRow onClick={handleProjectDirSelection}>
-											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
-												<Codicon
-													name="root-folder-opened"
-													iconSx={{ fontSize: "16px" }}
-													sx={{ width: "16px", height: "16px" }}
-												/>
-											</SecondaryRowIcon>
-											<SecondaryRowContent>
-												<SecondaryRowTitle>Open Project</SecondaryRowTitle>
-												<SecondaryRowDescription>
-													Open an existing project to view and manage its integrations.
-												</SecondaryRowDescription>
-											</SecondaryRowContent>
-											<Codicon
-												name="chevron-right"
-												iconSx={{
-													fontSize: "14px",
-													color: "var(--vscode-descriptionForeground)",
-													opacity: 0.6,
-												}}
-											/>
-										</SecondaryActionRow>
-
-										<SecondaryActionRow onClick={goToImportExternal}>
-											<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
-												<Codicon
-													name="cloud-download"
-													iconSx={{ fontSize: "16px" }}
-													sx={{ width: "16px", height: "16px" }}
-												/>
-											</SecondaryRowIcon>
-											<SecondaryRowContent>
-												<SecondaryRowTitle>
-                                                    Migrate Integrations from Other Vendors
-												</SecondaryRowTitle>
-												<SecondaryRowDescription>
-                                                    Import integrations from other vendors and convert them to WSO2 Integrator format.
+                                                    Import a CApp to create a new project.
 												</SecondaryRowDescription>
 											</SecondaryRowContent>
 											<Codicon
@@ -1124,51 +1284,51 @@ export const WelcomeView: React.FC = () => {
 								</SecondaryCardsSection>
 							</>
 						)}
-					</>
-				)}
-			</CardsContainer>
+					</>				)}
+					</CardsContainer>
 
-			{isRecentProjectsLoaded && (
-				<BottomSection>
-					<RecentProjectsSection>
-						<RecentProjectsHeader>
-							<RecentProjectsTitle>Recent Integrations and Projects</RecentProjectsTitle>
-							<ViewAllButton type="button" onClick={openRecentProjectsPicker}>
-								See more
-							</ViewAllButton>
-						</RecentProjectsHeader>
-						{recentProjects.length > 0 ? (
-							<ProjectsList>
-								{recentProjects.map((project) => (
-									<ProjectItem
-										key={project.path}
-										type="button"
-										onClick={() => openRecentProject(project.path)}
-										title={project.description || project.path}
-									>
-										<ProjectName>{project.label}</ProjectName>
-										<ProjectPath>
-											{project.description || project.path}
-										</ProjectPath>
-									</ProjectItem>
-								))}
-							</ProjectsList>
-						) : (
-							<RecentProjectsEmptyState>
-								No recent projects found in your current history.
-							</RecentProjectsEmptyState>
-						)}
-					</RecentProjectsSection>
-				</BottomSection>
-			)}
-
+					{isRecentProjectsLoaded && (
+						<BottomSection>
+							<RecentProjectsSection>
+								<RecentProjectsHeader>
+									<RecentProjectsTitle>Recent Integrations and Projects</RecentProjectsTitle>
+									<ViewAllButton type="button" onClick={openRecentProjectsPicker}>
+										See more
+									</ViewAllButton>
+								</RecentProjectsHeader>
+								{recentProjects.length > 0 ? (
+									<ProjectsList>
+										{recentProjects.map((project) => (
+											<ProjectItem
+												key={project.path}
+												type="button"
+												onClick={() => openRecentProject(project.path)}
+												title={project.description || project.path}
+											>
+												<ProjectName>{project.label}</ProjectName>
+												<ProjectPath>
+													{project.description || project.path}
+												</ProjectPath>
+											</ProjectItem>
+										))}
+									</ProjectsList>
+								) : (
+									<RecentProjectsEmptyState>
+										No recent projects found in your current history.
+									</RecentProjectsEmptyState>
+								)}
+							</RecentProjectsSection>
+						</BottomSection>
+					)}
+				</>
             <UserAccountPopover
                 isOpen={popoverOpen}
                 anchorEl={avatarRef.current}
                 onClose={() => setPopoverOpen(false)}
             />
         </>
-    );
+        );
+    };
 
 	return <Wrapper>{renderCurrentView()}</Wrapper>;
 };

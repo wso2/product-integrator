@@ -18,10 +18,12 @@
 
 import { Icon, Typography } from "@wso2/ui-toolkit";
 import { Stepper, StepperContainer } from "@wso2/ui-toolkit/lib/components/Stepper/Stepper";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ConfigureProjectForm } from "./ConfigureProjectForm";
+import { DryRunView } from "./DryRunView";
 import { ImportIntegrationForm } from "./ImportIntegrationForm";
 import { MigrationProgressView } from "./MigrationProgressView";
+import { WizardAIEnhancementView } from "./WizardAIEnhancementView";
 import {
     ContentPanel,
     FormContainer,
@@ -52,82 +54,181 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const [migrationToolLogs, setMigrationToolLogs] = useState<string[]>([]);
     const [migratedProjects, setMigratedProjects] = useState<ProjectMigrationResult[]>([]);
     const [pullingTool, setPullingTool] = useState(false);
+    const [toolPullFailed, setToolPullFailed] = useState(false);
+    const [toolPullFailureMessage, setToolPullFailureMessage] = useState<string | null>(null);
     const [selectedIntegration, setSelectedIntegration] = useState<MigrationTool | null>(null);
     const [migrationTools, setMigrationTools] = useState<MigrationTool[]>([]);
     const [importParams, setImportParams] = useState<FinalIntegrationParams | null>(null);
     const [migrationCompleted, setMigrationCompleted] = useState(false);
     const [migrationSuccessful, setMigrationSuccessful] = useState(false);
     const [migrationResponse, setMigrationResponse] = useState<ImportIntegrationResponse | null>(null);
+    const [aiEnhancementActive, setAiEnhancementActive] = useState(false);
+    const [storedProjectRequest, setStoredProjectRequest] = useState<ProjectRequest | null>(null);
+    const migrationStartedRef = useRef(false);
 
-    const defaultSteps = ["Select Source Project", "Migration Status", "Create and Open Project"];
+    // Dry-run state (step 2)
+    const [dryRunToolState, setDryRunToolState] = useState<string | null>(null);
+    const [dryRunLogs, setDryRunLogs] = useState<string[]>([]);
+    const [dryRunCompleted, setDryRunCompleted] = useState(false);
+    const [dryRunSuccessful, setDryRunSuccessful] = useState(false);
+    const [dryRunResponse, setDryRunResponse] = useState<ImportIntegrationResponse | null>(null);
+    const [dryRunProjects, setDryRunProjects] = useState<ProjectMigrationResult[]>([]);
+    const dryRunStartedRef = useRef(false);
+    // Routes migration tool events to the correct run's state
+    const activeRunRef = useRef<"dryRun" | "migration" | null>(null);
 
-    const isMultiProject = migratedProjects.length! > 0;
+    const defaultSteps = aiEnhancementActive
+        ? ["Configure Source", "Report Generation", "Configure Destination", "Rule-Based Migration", "AI Enhancement"]
+        : ["Configure Source", "Report Generation", "Configure Destination", "Rule-Based Migration"];
 
-    const pullIntegrationTool = (commandName: string, version: string) => {
+    // isMultiProject for ConfigureProjectForm is derived from the source config (step 0 selection)
+    const boolParamKey = selectedIntegration?.parameters.find(p => p.valueType === "boolean")?.key;
+    const isMultiProjectFromConfig = boolParamKey ? importParams?.parameters?.[boolParamKey] === true : false;
+    // isMultiProject for MigrationProgressView is derived from actual dry-run results
+    const isMultiProject = migratedProjects.length > 0;
+
+    const pullIntegrationTool = (commandName: string) => {
         setPullingTool(true);
         wsClient.pullMigrationTool({
             toolName: commandName,
-            version: version,
         });
     };
 
-    // Handler to begin the import and switch to the migration progress view
-    const handleStartImport = (
-        importParams: FinalIntegrationParams,
-        selectedIntegration: MigrationTool,
-        toolPullProgress: DownloadProgress
+    // Runs the dry-run CLI migration (importIntegration with dryRun: true).
+    const handleStartDryRun = async (
+        params: FinalIntegrationParams,
+        integration: MigrationTool,
     ) => {
-        if (selectedIntegration.needToPull && toolPullProgress && toolPullProgress.step === -1) {
-            console.error("Cannot start import, tool download failed.");
-        }
-        setStep(1);
-        console.log("Starting import with params:", importParams);
-
-        const params: ImportIntegrationWsRequest = {
+        activeRunRef.current = "dryRun";
+        const wsParams: ImportIntegrationWsRequest = {
             packageName: "",
-            commandName: selectedIntegration.commandName,
-            sourcePath: importParams.importSourcePath,
+            commandName: integration.commandName,
+            sourcePath: params.importSourcePath,
             orgName: selectedOrgName,
-            parameters: importParams.parameters,
+            parameters: { ...params.parameters, dryRun: true },
         };
-        wsClient
-
-            .importIntegration(params)
-            .then((response) => {
-                setMigrationCompleted(true);
-                setMigrationResponse(response);
-                if (!response.error) {
-                    setMigrationSuccessful(true);
-                }
-            })
-            .catch((error) => {
-                console.error("Error during TIBCO import:", error);
-            });
+        try {
+            const response = await wsClient.importIntegration(wsParams);
+            setDryRunCompleted(true);
+            setDryRunResponse(response);
+            if (!response.error) {
+                setDryRunSuccessful(true);
+            }
+        } catch (error) {
+            console.error("Error during dry run:", error);
+            setDryRunCompleted(true);
+            setDryRunSuccessful(false);
+        }
     };
 
-    const handleCreateIntegrationFiles = (project: ProjectRequest) => {
-        console.log("Creating integration files with params:", importParams);
-        if (migrationResponse) {
-            const params: MigrateRequest = {
-                project: project,
-                textEdits: migrationResponse.textEdits,
-                projects: migratedProjects,
-            };
-            wsClient.migrateProject(params);
+    // Runs the static CLI migration (importIntegration) and stores the report.
+    // migrateProject (file writing + folder open) is deferred to the user's choice at step 3.
+    const handleStartImport = async (
+        params: FinalIntegrationParams,
+        integration: MigrationTool,
+        project: ProjectRequest
+    ) => {
+        activeRunRef.current = "migration";
+        console.log("Starting import with params:", params);
+
+        const wsParams: ImportIntegrationWsRequest = {
+            packageName: "",
+            commandName: integration.commandName,
+            sourcePath: params.importSourcePath,
+            orgName: selectedOrgName,
+            parameters: params.parameters,
+        };
+        try {
+            const response = await wsClient.importIntegration(wsParams);
+            setMigrationCompleted(true);
+            setMigrationResponse(response);
+            if (!response.error) {
+                setMigrationSuccessful(true);
+            }
+        } catch (error) {
+            console.error("Error during migration:", error);
+            setMigrationCompleted(true);
+            setMigrationSuccessful(false);
         }
+    };
+
+    const handleConfigureDestinationDone = (project: ProjectRequest, _aiFeatureUsed: boolean) => {
+        if (!importParams || !selectedIntegration) return;
+        setStoredProjectRequest(project);
+        // Advance to migration step; import starts automatically when step 3 renders.
+        setStep(3);
     };
 
     const handleStepBack = () => {
         if (step === 1) {
+            // Back from dry run → reset pull failure so user can retry
+            setToolPullFailed(false);
+            setToolPullFailureMessage(null);
+            setToolPullProgress(null);
+            setPullingTool(false);
+            dryRunStartedRef.current = false;
+            setDryRunToolState(null);
+            setDryRunLogs([]);
+            setDryRunCompleted(false);
+            setDryRunSuccessful(false);
+            setDryRunResponse(null);
+            setDryRunProjects([]);
+            activeRunRef.current = null;
+        }
+        if (step === 3) {
+            // Back from rule-based migration → reset migration state and pull failure
+            migrationStartedRef.current = false;
             setMigrationToolState(null);
             setMigrationToolLogs([]);
             setMigrationCompleted(false);
             setMigrationSuccessful(false);
             setMigrationResponse(null);
             setMigratedProjects([]);
+            setToolPullFailed(false);
+            setToolPullFailureMessage(null);
+            setToolPullProgress(null);
+            setPullingTool(false);
+            activeRunRef.current = null;
         }
-
         setStep(step - 1);
+    };
+
+    const handleAIEnhancement = async () => {
+        if (!importParams || !storedProjectRequest || !migrationResponse) return;
+        await wsClient.migrateProject({
+            project: storedProjectRequest,
+            textEdits: migrationResponse.textEdits,
+            projects: migratedProjects,
+            aiFeatureUsed: true,
+            sourcePath: importParams.importSourcePath,
+        });
+        setAiEnhancementActive(true);
+        setStep(4);
+    };
+
+    const handleOpenProject = async () => {
+        if (!importParams || !storedProjectRequest || !migrationResponse) return;
+        // aiFeatureUsed: false → extension calls vscode.openFolder immediately (VS Code reloads)
+        await wsClient.migrateProject({
+            project: storedProjectRequest,
+            textEdits: migrationResponse.textEdits,
+            projects: migratedProjects,
+            aiFeatureUsed: false,
+            sourcePath: importParams.importSourcePath,
+        });
+    };
+
+    const handleDone = async () => {
+        if (!importParams || !storedProjectRequest || !migrationResponse) return;
+        // aiFeatureUsed: true → project created but folder not opened; user can enhance later
+        await wsClient.migrateProject({
+            project: storedProjectRequest,
+            textEdits: migrationResponse.textEdits,
+            projects: migratedProjects,
+            aiFeatureUsed: true,
+            sourcePath: importParams.importSourcePath,
+        });
+        onBack?.();
     };
 
     const getMigrationTools = () => {
@@ -143,7 +244,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     useEffect(() => {
         getMigrationTools();
 
-        wsClient.onDownloadProgress((progressUpdate) => {
+        const unsubscribeProgress = wsClient.onDownloadProgress((progressUpdate) => {
             setToolPullProgress(progressUpdate);
             if (progressUpdate.success) {
                 setPullingTool(false);
@@ -151,28 +252,74 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
 
             if (progressUpdate.step === -1) {
                 setPullingTool(false);
-                wsClient.showErrorMessage({ message: progressUpdate.message })
+                setToolPullFailed(true);
+                setToolPullFailureMessage(progressUpdate.message);
             }
         });
 
         wsClient.onMigrationToolStateChanged((state) => {
-            setMigrationToolState(state);
+            const activeRun = activeRunRef.current;
+            if (activeRun === "dryRun") {
+
+                setDryRunToolState(state);
+            } else if (activeRun === "migration") {
+                setMigrationToolState(state);
+            }
         });
 
         wsClient.onMigrationToolLogs((log) => {
-            setMigrationToolLogs((prevLogs) => [...prevLogs, log]);
+            const activeRun = activeRunRef.current;
+            if (activeRun === "dryRun") {
+                setDryRunLogs((prevLogs) => [...prevLogs, log]);
+            } else if (activeRun === "migration") {
+                setMigrationToolLogs((prevLogs) => [...prevLogs, log]);
+            }
         });
 
         wsClient.onMigratedProject((project) => {
-            setMigratedProjects((prevProjects) => [...prevProjects, project]);
+            const activeRun = activeRunRef.current;
+            if (activeRun === "dryRun") {
+                setDryRunProjects((prevProjects) => [...prevProjects, project]);
+            } else if (activeRun === "migration") {
+                setMigratedProjects((prevProjects) => [...prevProjects, project]);
+            }
         });
+
+        return unsubscribeProgress;
     }, [wsClient]);
 
     useEffect(() => {
-        if (selectedIntegration?.needToPull && toolPullProgress && toolPullProgress.success && importParams) {
-            handleStartImport(importParams, selectedIntegration, toolPullProgress);
+        // Start the dry run when step 1 is reached and the tool pull has succeeded.
+        // dryRunStartedRef prevents a double-start if multiple deps fire simultaneously.
+        if (
+            step === 1 &&
+            !dryRunStartedRef.current &&
+            !toolPullFailed &&
+            importParams &&
+            selectedIntegration &&
+            toolPullProgress?.success === true
+        ) {
+            dryRunStartedRef.current = true;
+            handleStartDryRun(importParams, selectedIntegration);
         }
-    }, [toolPullProgress, importParams, selectedIntegration]);
+    }, [step, toolPullFailed, toolPullProgress?.success]);
+
+    useEffect(() => {
+        // Start the rule-based migration when step 3 is reached and the tool pull has succeeded.
+        // migrationStartedRef prevents a double-start if multiple deps fire simultaneously.
+        if (
+            step === 3 &&
+            !migrationStartedRef.current &&
+            !toolPullFailed &&
+            importParams &&
+            selectedIntegration &&
+            storedProjectRequest &&
+            toolPullProgress?.success === true
+        ) {
+            migrationStartedRef.current = true;
+            handleStartImport(importParams, selectedIntegration, storedProjectRequest);
+        }
+    }, [step, toolPullFailed, toolPullProgress?.success, storedProjectRequest]);
 
     return (
         <PageBackdrop>
@@ -193,7 +340,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                     Migrate External Integration
                                 </Typography>
                                 <HeaderSubtitle>
-                                    Convert your MuleSoft or TIBCO project into a new integration project.
+                                    Convert your MuleSoft or TIBCO projects into new WSO2 Integrator projects.
                                 </HeaderSubtitle>
                             </HeaderText>
                         </HeaderRow>
@@ -213,11 +360,36 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                 pullingTool={pullingTool}
                                 toolPullProgress={toolPullProgress}
                                 onSelectIntegration={setSelectedIntegration}
-                                handleStartImport={handleStartImport}
+                                onNext={() => setStep(1)}
                                 onBack={onBack}
                             />
                         )}
                         {step === 1 && (
+                            <DryRunView
+                                migrationState={dryRunToolState}
+                                migrationLogs={dryRunLogs}
+                                migrationCompleted={dryRunCompleted}
+                                migrationSuccessful={dryRunSuccessful}
+                                migrationResponse={dryRunResponse}
+                                projects={dryRunProjects}
+                                isMultiProject={dryRunProjects.length > 0}
+                                onNext={() => setStep(2)}
+                                onDone={onBack ?? (() => { })}
+                                toolPullFailed={toolPullFailed}
+                                toolPullFailureMessage={toolPullFailureMessage}
+                                migrationToolCommandName={selectedIntegration?.commandName}
+                                onBack={handleStepBack}
+                            />
+                        )}
+                        {step === 2 && (
+                            <ConfigureProjectForm
+                                isMultiProject={isMultiProjectFromConfig}
+                                onNext={handleConfigureDestinationDone}
+                                onBack={handleStepBack}
+                                selectedOrgName={selectedOrgName}
+                            />
+                        )}
+                        {step === 3 && (
                             <MigrationProgressView
                                 migrationState={migrationToolState}
                                 migrationLogs={migrationToolLogs}
@@ -226,16 +398,21 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                 migrationResponse={migrationResponse}
                                 projects={migratedProjects}
                                 isMultiProject={isMultiProject}
-                                onNext={() => setStep(2)}
+                                onStartAIEnhancement={handleAIEnhancement}
+                                onDone={handleDone}
+                                onOpenProject={handleOpenProject}
                                 onBack={handleStepBack}
+                                toolPullFailed={toolPullFailed}
+                                toolPullFailureMessage={toolPullFailureMessage}
+                                migrationToolCommandName={selectedIntegration?.commandName}
                             />
                         )}
-                        {step === 2 && (
-                            <ConfigureProjectForm
+                        {step === 4 && (
+                            <WizardAIEnhancementView
+                                wsClient={wsClient}
+                                projectCount={migratedProjects.length}
                                 isMultiProject={isMultiProject}
-                                onNext={handleCreateIntegrationFiles}
-                                onBack={handleStepBack}
-                                selectedOrgName={selectedOrgName}
+                                onFinish={onBack ?? (() => { })}
                             />
                         )}
                     </FormContainer>

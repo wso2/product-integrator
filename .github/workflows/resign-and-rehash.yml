@@ -1,0 +1,143 @@
+name: Re-sign and Rehash Installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to re-sign (e.g. v5.0.0-alpha12)'
+        required: true
+        type: string
+      resign_dmg:
+        description: 'Re-sign macOS DMG installers'
+        required: false
+        default: true
+        type: boolean
+      resign_msi:
+        description: 'Re-sign Windows MSI installer'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  id-token: write   # required for cosign keyless signing via OIDC
+  contents: write   # required to upload assets back to the release
+
+jobs:
+  resign-dmg:
+    name: Re-sign macOS DMG
+    if: ${{ inputs.resign_dmg == true }}
+    runs-on: macos-latest
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
+
+      - name: Download DMG files from release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p release-files
+          gh release download "${{ inputs.release_tag }}" \
+            --repo wso2/product-integrator \
+            --pattern "*.dmg" \
+            --dir release-files/
+          echo "Downloaded files:"
+          ls -lh release-files/
+
+      - name: Sign and hash DMG files
+        run: |
+          for dmg in release-files/*.dmg; do
+            [ -f "$dmg" ] || { echo "No DMG files found"; exit 1; }
+            base="${dmg%.dmg}"
+            echo "Signing: $dmg"
+            cosign sign-blob "$dmg" \
+              --output-certificate "${base}.dmg.pem" \
+              --output-signature "${base}.dmg.sig" \
+              --yes
+            echo "Hashing: $dmg"
+            openssl dgst -sha256 -out "${base}.dmg.sha256" "$dmg"
+          done
+
+      - name: Verify signatures
+        run: |
+          for dmg in release-files/*.dmg; do
+            base="${dmg%.dmg}"
+            cosign verify-blob "$dmg" \
+              --certificate "${base}.dmg.pem" \
+              --signature "${base}.dmg.sig" \
+              --certificate-identity="https://github.com/wso2/product-integrator/.github/workflows/resign-and-rehash.yml@${{ github.ref }}" \
+              --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          done
+
+      - name: Upload signatures and hashes to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ inputs.release_tag }}" \
+            release-files/*.pem \
+            release-files/*.sig \
+            release-files/*.sha256 \
+            --repo wso2/product-integrator \
+            --clobber
+          echo "Uploaded:"
+          ls -lh release-files/*.pem release-files/*.sig release-files/*.sha256
+
+  resign-msi:
+    name: Re-sign Windows MSI
+    if: ${{ inputs.resign_msi == true }}
+    runs-on: windows-latest
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
+
+      - name: Download MSI file from release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          New-Item -ItemType Directory -Force -Path release-files | Out-Null
+          gh release download "${{ inputs.release_tag }}" `
+            --repo wso2/product-integrator `
+            --pattern "*.msi" `
+            --dir release-files/
+          Write-Host "Downloaded files:"
+          Get-ChildItem release-files/ | Format-Table Name, Length
+
+      - name: Sign and hash MSI files
+        shell: bash
+        run: |
+          for msi in release-files/*.msi; do
+            [ -f "$msi" ] || { echo "No MSI files found"; exit 1; }
+            base="${msi%.msi}"
+            echo "Signing: $msi"
+            cosign sign-blob "$msi" \
+              --output-certificate "${base}.msi.pem" \
+              --output-signature "${base}.msi.sig" \
+              --yes
+            echo "Hashing: $msi"
+            openssl dgst -sha256 -out "${base}.msi.sha256" "$msi"
+          done
+
+      - name: Verify signatures
+        shell: bash
+        run: |
+          for msi in release-files/*.msi; do
+            base="${msi%.msi}"
+            cosign verify-blob "$msi" \
+              --certificate "${base}.msi.pem" \
+              --signature "${base}.msi.sig" \
+              --certificate-identity="https://github.com/wso2/product-integrator/.github/workflows/resign-and-rehash.yml@${{ github.ref }}" \
+              --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          done
+
+      - name: Upload signatures and hashes to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ inputs.release_tag }}" \
+            release-files/*.pem \
+            release-files/*.sig \
+            release-files/*.sha256 \
+            --repo wso2/product-integrator \
+            --clobber
+          echo "Uploaded:"
+          ls -lh release-files/*.pem release-files/*.sig release-files/*.sha256

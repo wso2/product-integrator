@@ -45,6 +45,11 @@ installers/linux-deb/package/usr/share/wso2-integrator
 lib/
 build/
 !lib/vscode
+# `build/` above is intentionally broad for VSCode build output, but it
+# also matches tracked files under ci/build/ (component-versions.properties,
+# update-product.sh). Re-include the directory so tooling can stage those
+# files without `git add --force`.
+!ci/build/
 
 # Rush temporary files
 common/deploy/
@@ -54,3 +59,4 @@ common/autoinstallers/*/.npmrc
 
 **/rush-logs/
 .github/workflows/release.yml
+installers/mac/dmg_mount/

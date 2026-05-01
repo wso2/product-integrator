@@ -18,6 +18,12 @@
 
 import styled from "@emotion/styled";
 import {
+    DEFAULT_PROFILE,
+    SELECTED_PROFILE_CONFIG_SECTION,
+    SELECTED_PROFILE_VALUES,
+    type SelectedProfileValue,
+} from "@wso2/wi-core";
+import {
     Dropdown,
     Icon,
     type OptionProps,
@@ -36,65 +42,17 @@ import {
     HeaderTitle,
     PageBackdrop,
 } from "../shared/FormPageLayout";
+import { SetupContent } from "../setupView";
 
-type SelectedProfileValue = "Default" | "WSO2 Integrator: MI" | "WSO2 Integrator: SI";
-type LegacyProfileValue = "bi" | "mi" | "si";
-const SELECTED_PROFILE_SECTION = "integrator.selectedProfile";
-
-const PROFILES: SelectedProfileValue[] = [
-    "Default",
-    "WSO2 Integrator: MI",
-    "WSO2 Integrator: SI",
-];
-
-const PROFILE_OPTIONS: OptionProps[] = PROFILES.map((profile) => ({
+const PROFILE_OPTIONS: OptionProps[] = SELECTED_PROFILE_VALUES.map((profile) => ({
     id: profile,
     value: profile,
     content: profile,
 }));
 
 function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
-    return (
-        value === "Default" ||
-        value === "WSO2 Integrator: MI" ||
-        value === "WSO2 Integrator: SI"
-    );
-}
-
-function isLegacyProfileValue(value: unknown): value is LegacyProfileValue {
-    return value === "bi" || value === "mi" || value === "si";
-}
-
-function normalizeProfileValue(profileValue: unknown): SelectedProfileValue | undefined {
-    if (isSelectedProfileValue(profileValue)) {
-        return profileValue;
-    }
-
-    if (!isLegacyProfileValue(profileValue)) {
-        return undefined;
-    }
-
-    switch (profileValue) {
-        case "bi":
-            return "Default";
-        case "mi":
-            return "WSO2 Integrator: MI";
-        case "si":
-            return "WSO2 Integrator: SI";
-    }
-}
-
-function getProfileForEnabledRuntimes(enabled: Record<LegacyProfileValue, boolean>): SelectedProfileValue {
-    if (enabled.bi) {
-        return "Default";
-    }
-    if (enabled.mi) {
-        return "WSO2 Integrator: MI";
-    }
-    if (enabled.si) {
-        return "WSO2 Integrator: SI";
-    }
-    return "Default";
+    return typeof value === "string"
+        && (SELECTED_PROFILE_VALUES as readonly string[]).includes(value);
 }
 
 const PageContainer = styled.div`
@@ -154,16 +112,23 @@ const Loader = styled.div`
     height: 100%;
 `;
 
-export function SettingsView({ onBack }: { onBack?: () => void }) {
+const SetupSeparator = styled.div`
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.2));
+`;
+
+export function SettingsView({ onBack, ballerinaUnavailable }: { onBack?: () => void; ballerinaUnavailable?: boolean }) {
     const { wsClient } = useVisualizerContext();
-    const [selectedProfile, setSelectedProfile] = useState<SelectedProfileValue>("Default");
+    const [selectedProfile, setSelectedProfile] = useState<SelectedProfileValue>(DEFAULT_PROFILE);
     const [isLoading, setIsLoading] = useState(true);
     const [savingRuntime, setSavingRuntime] = useState<SelectedProfileValue | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [localBallerinaUnavailable, setLocalBallerinaUnavailable] = useState<boolean>(ballerinaUnavailable ?? false);
 
     const persistSelectedProfile = async (profile: SelectedProfileValue) => {
         await wsClient.setConfiguration({
-            section: SELECTED_PROFILE_SECTION,
+            section: SELECTED_PROFILE_CONFIG_SECTION,
             value: profile,
         });
     };
@@ -172,37 +137,20 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
         const loadRuntimeSettings = async () => {
             try {
                 const selectedProfileResponse = await wsClient.getConfiguration({
-                    section: SELECTED_PROFILE_SECTION,
+                    section: SELECTED_PROFILE_CONFIG_SECTION,
                 });
 
-                const normalizedProfile = normalizeProfileValue(selectedProfileResponse?.value);
-                if (normalizedProfile) {
-                    if (selectedProfileResponse?.value !== normalizedProfile) {
-                        await persistSelectedProfile(normalizedProfile);
-                    }
-                    setSelectedProfile(normalizedProfile);
+                if (isSelectedProfileValue(selectedProfileResponse?.value)) {
+                    setSelectedProfile(selectedProfileResponse.value);
                     return;
                 }
 
-                const [biResp, miResp, siResp] = await Promise.all([
-                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.bi" }),
-                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.mi" }),
-                    wsClient.getConfiguration({ section: "integrator.enabledRuntimes.si" }),
-                ]);
-
-                const currentState: Record<LegacyProfileValue, boolean> = {
-                    bi: biResp?.value === true,
-                    mi: miResp?.value === true,
-                    si: siResp?.value === true,
-                };
-
-                const fallbackProfile = getProfileForEnabledRuntimes(currentState);
-                await persistSelectedProfile(fallbackProfile);
-                setSelectedProfile(fallbackProfile);
+                await persistSelectedProfile(DEFAULT_PROFILE);
+                setSelectedProfile(DEFAULT_PROFILE);
             } catch (loadError) {
                 console.error("Failed to load profile settings:", loadError);
                 setError("Failed to load settings. Showing defaults.");
-                setSelectedProfile("Default");
+                setSelectedProfile(DEFAULT_PROFILE);
             } finally {
                 setIsLoading(false);
             }
@@ -210,6 +158,24 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
 
         loadRuntimeSettings();
     }, [wsClient]);
+
+    useEffect(() => {
+        if (selectedProfile !== DEFAULT_PROFILE || isLoading) {
+            setLocalBallerinaUnavailable(false);
+            return;
+        }
+        // If the parent already knows Ballerina is unavailable, use that directly.
+        if (ballerinaUnavailable) {
+            setLocalBallerinaUnavailable(true);
+            return;
+        }
+        wsClient.getBIRuntimeStatus().then(({ isAvailable }) => {
+            setLocalBallerinaUnavailable(!isAvailable);
+        }).catch(() => {
+            // Don't block on failure
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedProfile, isLoading]);
 
     const applyRuntimeSelection = async (runtimeProfile: SelectedProfileValue) => {
         if (selectedProfile === runtimeProfile) {
@@ -260,8 +226,8 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                                 />
                             </BackButton>
                             <HeaderText>
-                                <HeaderTitle variant="h2">Settings</HeaderTitle>
-                                <HeaderSubtitle>Settings related to WSO2 Integrator.</HeaderSubtitle>
+                                <HeaderTitle variant="h2">Configurations</HeaderTitle>
+                                <HeaderSubtitle>Configurations related to WSO2 Integrator.</HeaderSubtitle>
                             </HeaderText>
                         </HeaderRow>
                     </FormPanelHeader>
@@ -283,6 +249,11 @@ export function SettingsView({ onBack }: { onBack?: () => void }) {
                                 />
                             </DropdownShell>
                         </RuntimeField>
+                        {localBallerinaUnavailable && selectedProfile === DEFAULT_PROFILE && (
+                            <SetupSeparator>
+                                <SetupContent />
+                            </SetupSeparator>
+                        )}
                     </PanelBody>
                 </FormPanel>
             </PageContainer>

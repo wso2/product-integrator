@@ -18,7 +18,16 @@
 
 import { assign, createMachine, interpret } from 'xstate';
 import * as vscode from 'vscode';
-import { CONTEXT_KEYS, EXTENSION_DEPENDENCIES, ViewType } from '@wso2/wi-core';
+import {
+    CONTEXT_KEYS,
+    DEFAULT_PROFILE,
+    EXTENSION_DEPENDENCIES,
+    MI_PROFILE,
+    SELECTED_PROFILE_VALUES,
+    SI_PROFILE,
+    type SelectedProfileValue,
+    ViewType
+} from '@wso2/wi-core';
 import { ext } from './extensionVariables';
 import { fetchProjectInfo, fetchExtendedProjectInfo } from './bi/utils';
 import { activateProjectExplorer } from './bi/project-explorer/activate';
@@ -37,8 +46,6 @@ export enum ProjectType {
     SI = 'WSO2: SI',
     NONE = 'NONE'
 }
-type SelectedProfileValue = 'Default' | 'WSO2 Integrator: MI' | 'WSO2 Integrator: SI';
-type LegacyProfileValue = 'bi' | 'mi' | 'si';
 
 interface MachineContext {
     projectUri: string;
@@ -50,54 +57,25 @@ interface MachineContext {
     extensionAPIs: ExtensionAPIs;
     webviewManager?: WebviewManager;
     configChangeDisposable?: vscode.Disposable;
-    mode: ProjectType[];
     currentView: ViewType;
     isInWi: boolean;
 }
 
-const runtimeConfigKeyByProjectType: Partial<Record<ProjectType, string>> = {
-    [ProjectType.BI_BALLERINA]: 'enabledRuntimes.bi',
-    [ProjectType.MI]: 'enabledRuntimes.mi',
-    [ProjectType.SI]: 'enabledRuntimes.si'
-};
 const profileValueByProjectType: Partial<Record<ProjectType, SelectedProfileValue>> = {
-    [ProjectType.BI_BALLERINA]: 'Default',
-    [ProjectType.MI]: 'WSO2 Integrator: MI',
-    [ProjectType.SI]: 'WSO2 Integrator: SI'
+    [ProjectType.BI_BALLERINA]: DEFAULT_PROFILE,
+    [ProjectType.MI]: MI_PROFILE,
+    [ProjectType.SI]: SI_PROFILE
 };
 
 const projectTypeBySelectedProfileValue: Record<SelectedProfileValue, ProjectType> = {
-    Default: ProjectType.BI_BALLERINA,
-    'WSO2 Integrator: MI': ProjectType.MI,
-    'WSO2 Integrator: SI': ProjectType.SI
-};
-
-const projectTypeByLegacyProfileValue: Record<LegacyProfileValue, ProjectType> = {
-    bi: ProjectType.BI_BALLERINA,
-    mi: ProjectType.MI,
-    si: ProjectType.SI
+    [DEFAULT_PROFILE]: ProjectType.BI_BALLERINA,
+    [MI_PROFILE]: ProjectType.MI,
+    [SI_PROFILE]: ProjectType.SI
 };
 
 function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
-    return value === 'Default'
-        || value === 'WSO2 Integrator: MI'
-        || value === 'WSO2 Integrator: SI';
-}
-
-function isLegacyProfileValue(value: unknown): value is LegacyProfileValue {
-    return value === 'bi' || value === 'mi' || value === 'si';
-}
-
-function normalizeProfileValue(value: unknown): SelectedProfileValue | undefined {
-    if (isSelectedProfileValue(value)) {
-        return value;
-    }
-
-    if (!isLegacyProfileValue(value)) {
-        return undefined;
-    }
-
-    return profileValueByProjectType[projectTypeByLegacyProfileValue[value]];
+    return typeof value === 'string'
+        && (SELECTED_PROFILE_VALUES as readonly string[]).includes(value);
 }
 
 const extensionDependencyByProjectType: Partial<Record<ProjectType, string>> = {
@@ -105,6 +83,44 @@ const extensionDependencyByProjectType: Partial<Record<ProjectType, string>> = {
     [ProjectType.MI]: EXTENSION_DEPENDENCIES.MI,
     [ProjectType.SI]: EXTENSION_DEPENDENCIES.SI
 };
+
+function getStartupProfileFromInstalledExtensions(): SelectedProfileValue | undefined {
+    const extensionAPIs = new ExtensionAPIs();
+    const hasBIExtension = extensionAPIs.isBIAvailable(false);
+    const hasMIExtension = extensionAPIs.isMIAvailable(false);
+    const hasSIExtension = extensionAPIs.isSIAvailable(false);
+
+    if (hasBIExtension && !hasMIExtension && !hasSIExtension) {
+        return DEFAULT_PROFILE;
+    }
+
+    if (!hasBIExtension && hasMIExtension && !hasSIExtension) {
+        return MI_PROFILE;
+    }
+
+    if (!hasBIExtension && !hasMIExtension && hasSIExtension) {
+        return SI_PROFILE;
+    }
+
+    return undefined;
+}
+
+async function syncStartupSelectedProfile(): Promise<void> {
+    const config = vscode.workspace.getConfiguration("integrator");
+    const selectedProfile = config.get<string>('selectedProfile');
+    const startupProfile = getStartupProfileFromInstalledExtensions();
+
+    if (!startupProfile || selectedProfile === startupProfile) {
+        return;
+    }
+
+    await config.update(
+        'selectedProfile',
+        startupProfile,
+        vscode.ConfigurationTarget.Global
+    );
+    ext.log(`Selected profile changed to ${startupProfile} at startup based on installed extensions`);
+}
 
 async function initializeRuntimeExtension(
     extensionAPIs: ExtensionAPIs,
@@ -119,26 +135,24 @@ async function initializeRuntimeExtension(
     await extensionAPIs.initialize(extensionDependency);
 }
 
-async function enableDetectedRuntime(projectType: ProjectType): Promise<void> {
-    const runtimeConfigKey = runtimeConfigKeyByProjectType[projectType];
+async function ensureSelectedProfileExtensionInstalled(
+    extensionAPIs: ExtensionAPIs
+): Promise<void> {
+    const selectedModes = getSelectedProfileMode();
 
-    if (!runtimeConfigKey) {
-        return;
+    for (const mode of selectedModes) {
+        try {
+            await initializeRuntimeExtension(extensionAPIs, mode);
+        } catch (error) {
+            ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
+        }
     }
+}
 
+async function syncSelectedProfileWithDetectedProject(projectType: ProjectType): Promise<void> {
     const config = vscode.workspace.getConfiguration('integrator');
-    const isEnabled = config.get<boolean>(runtimeConfigKey, false);
     const selectedProfile = config.get<string>('selectedProfile');
     const expectedProfile = profileValueByProjectType[projectType];
-
-    if (!isEnabled) {
-        await config.update(
-            runtimeConfigKey,
-            true,
-            vscode.ConfigurationTarget.Global
-        );
-        ext.log(`Enabled ${projectType} in settings as we detected a matching project`);
-    }
 
     if (expectedProfile && selectedProfile !== expectedProfile) {
         await config.update(
@@ -151,69 +165,19 @@ async function enableDetectedRuntime(projectType: ProjectType): Promise<void> {
 }
 
 /**
- * Get the enabled integrator runtimes from configuration.
+ * Get the selected integrator profile from configuration.
  */
-function getDefaultIntegratorMode(): ProjectType[] {
+function getSelectedProfileMode(): ProjectType[] {
     const config = vscode.workspace.getConfiguration("integrator");
     const selectedProfile = config.get<string>('selectedProfile');
 
-    const normalizedProfile = normalizeProfileValue(selectedProfile);
-    if (normalizedProfile) {
-        if (selectedProfile !== normalizedProfile) {
-            config.update(
-                'integrator.selectedProfile',
-                normalizedProfile,
-                vscode.ConfigurationTarget.Global
-            );
-        }
-        return [projectTypeBySelectedProfileValue[normalizedProfile]];
+    // Otherwise honor the configured profile value.
+    if (isSelectedProfileValue(selectedProfile)) {
+        return [projectTypeBySelectedProfileValue[selectedProfile]];
     }
 
-    const biEnabled = config.get<boolean>("enabledRuntimes.bi", true);
-    const miEnabled = config.get<boolean>("enabledRuntimes.mi", false);
-    const siEnabled = config.get<boolean>("enabledRuntimes.si", false);
-
-    const enabled: ProjectType[] = [];
-    if (biEnabled) { enabled.push(ProjectType.BI_BALLERINA); }
-    if (miEnabled) { enabled.push(ProjectType.MI); }
-    if (siEnabled) { enabled.push(ProjectType.SI); }
-
-    if (enabled.length === 0) {
-        vscode.window.showWarningMessage(
-            'WSO2 Integrator: A profile must be selected. Re-selecting Default.',
-            'Open Settings'
-        ).then((selection) => {
-            if (selection === 'Open Settings') {
-                vscode.commands.executeCommand(
-                    'workbench.action.openSettings',
-                    'integrator.selectedProfile'
-                );
-            }
-        });
-        // Restore the default profile in settings so the selection reflects reality.
-        config.update(
-            'integrator.selectedProfile',
-            'Default',
-            vscode.ConfigurationTarget.Global
-        );
-        config.update(
-            'integrator.enabledRuntimes.bi',
-            true,
-            vscode.ConfigurationTarget.Global
-        );
-        return [ProjectType.BI_BALLERINA];
-    }
-
-    const fallbackProfile = profileValueByProjectType[enabled[0]];
-    if (fallbackProfile) {
-        config.update(
-            'integrator.selectedProfile',
-            fallbackProfile,
-            vscode.ConfigurationTarget.Global
-        );
-    }
-
-    return [enabled[0]];
+    // Fall back to BI mode without mutating configuration from a sync function.
+    return [ProjectType.BI_BALLERINA];
 }
 
 const stateMachine = createMachine<MachineContext>({
@@ -225,7 +189,6 @@ const stateMachine = createMachine<MachineContext>({
         projectUri: 'global',
         projectType: ProjectType.NONE,
         extensionAPIs: new ExtensionAPIs(),
-        mode: getDefaultIntegratorMode(),
         currentView: ViewType.LOADING,
         isInWi: process.env.WSO2_INTEGRATOR_RUNTIME === 'true'
     },
@@ -269,14 +232,6 @@ const stateMachine = createMachine<MachineContext>({
             entry: ["activateBasedOnProjectType", "registerConfigChangeListener"],
             exit: "disposeConfigChangeListener",
             on: {
-                UPDATE_MODE: {
-                    actions: assign({
-                        mode: (context, event: any) => {
-                            ext.log(`Mode updated in context: ${event.mode}`);
-                            return event.mode;
-                        }
-                    })
-                },
                 UPDATE_VIEW: {
                     actions: assign({
                         currentView: (context, event: any) => {
@@ -292,14 +247,6 @@ const stateMachine = createMachine<MachineContext>({
             entry: ["registerConfigChangeListener"],
             exit: "disposeConfigChangeListener",
             on: {
-                UPDATE_MODE: {
-                    actions: assign({
-                        mode: (context, event: any) => {
-                            ext.log(`Mode updated in context: ${event.mode}`);
-                            return event.mode;
-                        }
-                    })
-                },
                 UPDATE_VIEW: {
                     actions: assign({
                         currentView: (context, event: any) => {
@@ -350,29 +297,11 @@ const stateMachine = createMachine<MachineContext>({
             }
 
             context.configChangeDisposable = vscode.workspace.onDidChangeConfiguration(async (event) => {
-                const runtimeSettingChanged =
-                    event.affectsConfiguration('integrator.selectedProfile') ||
-                    event.affectsConfiguration('integrator.enabledRuntimes.bi') ||
-                    event.affectsConfiguration('integrator.enabledRuntimes.mi') ||
-                    event.affectsConfiguration('integrator.enabledRuntimes.si');
+                const runtimeSettingChanged = event.affectsConfiguration('integrator.selectedProfile');
 
                 if (runtimeSettingChanged) {
-                    // get the updated mode from configuration
-                    const newMode = getDefaultIntegratorMode();
-                    ext.log(`Configuration changed: defaultRuntime = ${newMode}`);
-
-                    for (const mode of newMode) {
-                        try {
-                            await initializeRuntimeExtension(context.extensionAPIs, mode);
-                        } catch (error) {
-                            ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
-                        }
-                    }
-
-                    stateService.send({
-                        type: 'UPDATE_MODE',
-                        mode: newMode
-                    });
+                    await ensureSelectedProfileExtensionInstalled(context.extensionAPIs);
+                    ext.log(`Configuration changed: selectedProfile = ${vscode.workspace.getConfiguration('integrator').get<string>('selectedProfile')}`);
                 }
             });
 
@@ -387,6 +316,7 @@ const stateMachine = createMachine<MachineContext>({
 
 async function activateExtensionsBasedOnProjectType(context: MachineContext): Promise<void> {
     ext.log(`Activating extensions for project type: ${context.projectType}`);
+    const selectedProfile = vscode.workspace.getConfiguration('integrator').get<string>('selectedProfile');
 
     // Create webview manager
     context.webviewManager = new WebviewManager(context.projectUri);
@@ -421,14 +351,16 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
         // if a folder/workspace is open but we couldn't detect the project type, we should show an popup warning the user that the extension couldn't detect the project type
         if (vscode.workspace.workspaceFolders?.length && context.isInWi) {
             ext.log('Workspace is open but project type is unknown');
-            vscode.window.showWarningMessage('We couldn\'t detect the project type. Please ensure you have a valid WSO2 Ballerina, Micro Integrator, or Streaming Integrator project open.', { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
-                if (selection === 'Go to Welcome Screen') {
-                    // close workspace
-                    vscode.commands.executeCommand('workbench.action.closeFolder');
-                } else if (selection === 'Open another folder') {
-                    vscode.commands.executeCommand('workbench.action.files.openFolder');
-                }
-            });
+            if (selectedProfile !== MI_PROFILE) {
+                vscode.window.showWarningMessage('We couldn\'t detect the project type. Please ensure you have a valid WSO2 Integration Project open.', { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
+                    if (selection === 'Go to Welcome Screen') {
+                        // close workspace
+                        vscode.commands.executeCommand('workbench.action.closeFolder');
+                    } else if (selection === 'Open another folder') {
+                        vscode.commands.executeCommand('workbench.action.files.openFolder');
+                    }
+                });
+            }
         } else {
             ext.log('No workspace open');
             vscode.commands.executeCommand('setContext', 'WI.projectType', 'none');
@@ -480,19 +412,14 @@ async function hasSiddhiFilesInWorkspace(): Promise<boolean> {
 async function detectProjectType(): Promise<{
     projectType: ProjectType;
 }> {
+    await syncStartupSelectedProfile();
+
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
-    // activate extensions for enabled runtimes in settings, even if we couldn't detect the project type.
-    const enabledModes = getDefaultIntegratorMode();
     const extensionAPIs = new ExtensionAPIs();
-    for (const mode of enabledModes) {
-        try {
-            await initializeRuntimeExtension(extensionAPIs, mode);
-        } catch (error) {
-            ext.logError(`Failed to initialize extension for mode ${mode}`, error as Error);
-            // Don't throw the error, as we want to continue initializing other extensions and detect project type based on available extensions
-        }
-    }
+    // Ensure the extension for the configured selected profile is installed,
+    // even if we couldn't detect the project type yet.
+    await ensureSelectedProfileExtensionInstalled(extensionAPIs);
 
     const projectChecks: Array<{
         projectType: ProjectType;
@@ -522,7 +449,7 @@ async function detectProjectType(): Promise<{
         }
 
         ext.log(projectCheck.logMessage);
-        await enableDetectedRuntime(projectCheck.projectType);
+        await syncSelectedProfileWithDetectedProject(projectCheck.projectType);
 
         return {
             projectType: projectCheck.projectType,

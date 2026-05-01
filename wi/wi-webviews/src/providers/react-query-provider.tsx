@@ -23,7 +23,7 @@ import React, { useState } from "react";
 
 // These queries reflect live extension state and must never be restored from the
 // persisted cache – they should always be fetched fresh on mount.
-const NON_PERSISTENT_QUERY_KEYS = ["cloud_auth_state", "cloud_context_state", "console_url"];
+const NON_PERSISTENT_QUERY_KEYS = ["cloud_auth_state", "cloud_context_state", "console_url", "project_mode_supported"];
 
 interface PersistedClient {
     timestamp: number;

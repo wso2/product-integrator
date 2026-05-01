@@ -1,0 +1,49 @@
+name: Daily Pre-release Builds
+
+on:
+  schedule:
+    # 12:00 PM IST = 06:30 AM UTC
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch-builds:
+    name: Dispatch ${{ matrix.release_label }} build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - release_label: 5.1.0 pre-release
+            target_ref: main
+            delivery_mode: archive
+          - release_label: 5.0.0 pre-release
+            target_ref: 5.0.x
+            delivery_mode: github-release
+    steps:
+      - name: Trigger Build and Release Artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'build-and-release.yml',
+              ref: '${{ matrix.target_ref }}',
+              inputs: {
+                runner: 'codebuild',
+                build_linux: 'true',
+                build_macos: 'true',
+                build_windows: 'true',
+                build_packed_installers: 'true',
+                ballerina_extension_source: 'github',
+                delivery_mode: '${{ matrix.delivery_mode }}'
+              }
+            });
+
+            core.info(
+              `Triggered Build and Release Artifacts for ${'${{ matrix.target_ref }}'} (${ '${{ matrix.release_label }}' })`
+            );

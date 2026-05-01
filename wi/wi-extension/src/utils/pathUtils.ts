@@ -19,7 +19,8 @@
 import { existsSync, mkdirSync } from "fs";
 import * as os from "os";
 import * as path from "path";
-import { Uri, commands, window } from "vscode";
+import { Uri, commands, window, workspace } from "vscode";
+import { relativePath } from "../cloud/git/util";
 
 
 export const getNormalizedPath = (filePath: string): string => {
@@ -58,7 +59,7 @@ export const isSubpath = (parent: string, sub: string): boolean => {
         return true;
     }
 
-    const relative = path.relative(normalizedParent, normalizedSub);
+    const relative = relativePath(normalizedParent, normalizedSub);
     return !!relative && !relative.startsWith("..") && !path.isAbsolute(relative);
 };
 
@@ -88,7 +89,7 @@ export const createDirectory = (basePath: string, dirName: string): { dirName: s
 };
 
 export const getDefaultCreationPath = (): string => {
-    const defaultPath = path.join(os.homedir(), "wso2integrator", "projects");
+    const defaultPath = path.join(os.homedir(), "WSO2Integrator");
     if (!existsSync(defaultPath)) {
         mkdirSync(defaultPath, { recursive: true });
     }
@@ -101,7 +102,12 @@ export async function openDirectory(openingPath: string, message: string, onSele
         onSelect();
     }
     if (openInCurrentWorkspace === "Current Window") {
-        await commands.executeCommand("vscode.openFolder", Uri.file(openingPath), { forceNewWindow: false });
+        const currentFolder = workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (currentFolder && isSamePath(currentFolder, openingPath)) {
+            await commands.executeCommand("workbench.action.reloadWindow");
+        } else {
+            await commands.executeCommand("vscode.openFolder", Uri.file(openingPath), { forceNewWindow: false });
+        }
         await commands.executeCommand("workbench.explorer.fileView.focus");
     } else if (openInCurrentWorkspace === "New Window") {
         await commands.executeCommand("vscode.openFolder", Uri.file(openingPath), { forceNewWindow: true });

@@ -25,7 +25,6 @@ import {
 	parseGitURL,
 	GitProvider,
 	ICreateNewIntegrationCmdParams,
-	makeURLSafe,
 	ContextItem,
 	UserInfo,
 	Organization,
@@ -37,7 +36,7 @@ import { type ExtensionContext, ProgressLocation, Uri, commands, window, workspa
 import { ext } from "../../extensionVariables";
 import { initGit } from "../git/main";
 import { Repository } from "../git/git";
-import { getGitRemotes, getGitRoot } from "../git/util";
+import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { isSamePath, isSubpath } from "../../utils/pathUtils";
@@ -56,6 +55,7 @@ const allIntegrationTypes = [
 	DevantScopes.INTEGRATION_AS_API,
 	DevantScopes.EVENT_INTEGRATION,
 	DevantScopes.FILE_INTEGRATION,
+	DevantScopes.MCP,
 ];
 
 export function createNewComponentCommand(context: ExtensionContext) {
@@ -70,8 +70,8 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					let selectedProject = selected?.project;
 					let selectedOrg = selected?.org;
 
-					if (!selectedOrg || !selectedOrg) {
-						const contextFileEntry = await createProjectFromContext(userInfo, params?.workspaceDir);
+					if (params?.workspaceDir && (!selectedOrg || !selectedProject)) {
+						const contextFileEntry = await createProjectFromLocalMetadata(userInfo, params?.workspaceDir);
 						selectedOrg = contextFileEntry?.org;
 						selectedProject = contextFileEntry?.project;
 					}
@@ -208,7 +208,6 @@ export function createNewComponentCommand(context: ExtensionContext) {
 
 					for (const integration of integrations) {
 						let compInitialName = integration?.name || path.basename(integration.fsPath);
-						compInitialName = makeURLSafe(compInitialName);
 						const existingNames = components.map((c) => c.metadata?.name?.toLowerCase?.());
 						const baseIntName = compInitialName;
 						let counter = 1;
@@ -337,7 +336,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 			// 	...workspaceContent.folders,
 			// 	{
 			// 		name: createdComponent.metadata.name, // name not needed?
-			// 		path: path.normalize(path.relative(path.dirname(workspace.workspaceFile.fsPath), createParams.componentDir)),
+			// 		path: path.normalize((path.dirname(workspace.workspaceFile.fsPath), createParams.componentDir)),
 			// 	},
 			// ];
 		} else if (isWithinWorkspace) {
@@ -420,7 +419,7 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: CreateComponentReq[
 					throw new Error(`Failed to parse git URL: ${createParam.repoUrl}`);
 				}
 				const [repoOrg, repoName, repoProvider] = parsedGit;
-				const subPathDir = path.relative(gitRoot!, createParam.componentDir);
+				const subPathDir = relativePath(gitRoot!, createParam.componentDir);
 				if (!ext.isDevantCloudEditor && repoProvider === GitProvider.GITHUB) {
 					// This check is not needed in cloud editor, as we have pushed the changes to remote repo
 					const repoMetadata = await ext.clients.rpcClient?.getGitRepoMetadata({
@@ -465,7 +464,7 @@ async function handlePrebuiltComponentUpdate(
 					orgId: org.id.toString(),
 					projectId: project.id,
 					srcGitRepoUrl: createParam.repoUrl,
-					repositorySubPath: path.relative(workspaceFsPath, createParam.componentDir),
+					repositorySubPath: relativePath(workspaceFsPath, createParam.componentDir),
 					originCloud: "devant",
 					repositoryBranch: createParam.branch,
 					secretRef: createParam.gitCredRef,
@@ -556,59 +555,77 @@ const clearCodeServerLocalStorage = async () => {
 	}
 }
 
-/** If project in context.yaml doesn't exist, create it automatically */
-const createProjectFromContext = async (userInfo: UserInfo, workspacePath?: string): Promise<{ org?: Organization; project?: Project }> => {
+/** If the context.yaml exists with `local: true`, create project from its data, automatically  */
+const createProjectFromLocalMetadata = async (userInfo: UserInfo, workspacePath?: string): Promise<{ org?: Organization; project?: Project }> => {
 	try {
-		const contextFilePath = path.join(workspacePath || "", ".choreo", "context.yaml");
-		if (existsSync(contextFilePath)) {
-			let parsedData: ContextItem[] = yaml.load(readFileSync(contextFilePath, "utf8")) as any;
-			if (!Array.isArray(parsedData) && (parsedData as any)?.org && (parsedData as any)?.project) {
-				parsedData = [{ org: (parsedData as any).org, project: (parsedData as any).project }];
-			}
-
-			if (!parsedData || parsedData.length !== 1) {
-				return;
-			}
-
-			const newContextItem = parsedData[0];
-			const matchingOrg = userInfo.organizations.find((org) => org.handle === newContextItem.org);
-			if (!matchingOrg) {
-				return;
-			}
-
-			const projects = await window.withProgress(
-				{
-					title: `Fetching cloud projects of organization ${matchingOrg.name}...`,
-					location: ProgressLocation.Notification,
-				},
-				() => ext.clients.rpcClient.getProjects(matchingOrg.id.toString()),
-			);
-			dataCacheStore.getState().setProjects(matchingOrg.handle, projects);
-
-			let projectName = newContextItem.project;
-			let suffix = 1;
-			while (projects.some((project) => project.handler === projectName || project.name === projectName)) {
-				projectName = `${newContextItem.project}-${suffix}`;
-				suffix++;
-			}
-
-			const createdProject = await window.withProgress(
-				{
-					title: `Creating new cloud project ${matchingOrg.name}...`,
-					location: ProgressLocation.Notification,
-				},
-				() => ext.clients.rpcClient.createProject({
-					orgId: matchingOrg.id.toString(),
-					orgHandler: matchingOrg.handle,
-					projectName: projectName,
-					region: ext.authProvider?.getState().state.region || "US"
-				}),
-			);
-
-			const newList: ContextItem[] = [{ org: matchingOrg.handle, project: createdProject.handler }];
-			writeFileSync(contextFilePath, yaml.dump(newList));
-			return { org: matchingOrg, project: createdProject };
+		const wso2ContextPath = path.join(workspacePath, ".wso2", "context.yaml");
+		const contextFilePath = existsSync(wso2ContextPath) ? wso2ContextPath : path.join(workspacePath, ".choreo", "context.yaml");
+		if (!existsSync(contextFilePath)) {
+			return undefined;
 		}
+
+		type LocalContextItem = ContextItem & { local?: boolean };
+		const contextList: LocalContextItem[] = (yaml.load(readFileSync(contextFilePath, "utf8")) as LocalContextItem[]) ?? [];
+		const localEntry = contextList.find((entry) => entry.local === true);
+		if (!localEntry) {
+			return undefined;
+		}
+
+		let selectedOrg = userInfo.organizations.find((org) => org.handle === localEntry.org);
+		if (!selectedOrg) {
+			selectedOrg = await selectOrg(userInfo, "Select organization");
+		}
+
+		const projects = await window.withProgress(
+			{
+				title: `Fetching cloud projects of organization ${selectedOrg.name}...`,
+				location: ProgressLocation.Notification,
+			},
+			() => ext.clients.rpcClient.getProjects(selectedOrg.id.toString()),
+		);
+		dataCacheStore.getState().setProjects(selectedOrg.handle, projects);
+
+		// Strip the `local` flag from the matched entry and write the updated list back in-place.
+		const stripLocalFlag = (list: LocalContextItem[]): ContextItem[] =>
+			list.map(({ local: _local, ...rest }) => rest);
+
+		const matchingProject = projects.find((project) => project.handler === localEntry.project);
+		if (matchingProject) {
+			writeFileSync(contextFilePath, yaml.dump(stripLocalFlag(contextList)));
+			return { org: selectedOrg, project: matchingProject };
+		}
+
+		// Derive a human-readable name from Ballerina.toml [workspace].title, falling back to the handler.
+		let projectName: string | undefined;
+		const ballerinaTomlPath = path.join(workspacePath, "Ballerina.toml");
+		if (existsSync(ballerinaTomlPath)) {
+			const tomlContent = readFileSync(ballerinaTomlPath, "utf8");
+			const titleMatch = tomlContent.match(/^\[workspace\][^\[]*title\s*=\s*"([^"]+)"/ms);
+			projectName = titleMatch?.[1];
+		}
+		if (!projectName) {
+			projectName = localEntry.project
+				.split("-")
+				.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+				.join(" ");
+		}
+
+		const createdProject = await window.withProgress(
+			{
+				title: `Creating new cloud project ${selectedOrg.name}...`,
+				location: ProgressLocation.Notification,
+			},
+			() => ext.clients.rpcClient.createProject({
+				orgId: selectedOrg.id.toString(),
+				orgHandler: selectedOrg.handle,
+				projectName,
+				projectHandler: localEntry.project,
+				region: ext.authProvider?.getState().state.region || "US"
+			}),
+		);
+
+		writeFileSync(contextFilePath, yaml.dump(stripLocalFlag(contextList)));
+		return { org: selectedOrg, project: createdProject };
 	} catch (err) {
 		ext.logError(`Failed to get context file entry`, err as Error);
 		return

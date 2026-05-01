@@ -485,3 +485,11 @@ export const SmVSCodeLinks = styled.div`
     display: flex;
     gap: 10px
 `
+
+export const VSCodeLinkForeground = styled(VSCodeLink)`
+    color: var(--vscode-textLink-foreground);
+    font-weight: 500;
+    &:hover {
+        color: var(--vscode-textLink-activeForeground);
+    }
+`

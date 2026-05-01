@@ -33,6 +33,7 @@ export const COMMANDS = {
 	REFRESH_EXPLORER: "wso2-integrator.explorer.refresh",
 	OPEN_BI_INTEGRATION: "wso2.integrator.openBIIntegration",
 	OPEN_MI_INTEGRATION: "wso2.integrator.openMIIntegration",
+	CHECK_FOR_UPDATES: "wso2.integrator.checkForUpdates",
 	CREATE_PROJECT: "wso2.integrator.createProject",
 	EXPLORE_SAMPLES: "wso2.integrator.exploreSamples",
 	IMPORT_PROJECT: "wso2.integrator.importProject",
@@ -62,3 +63,20 @@ export const EXTENSION_DEPENDENCIES = {
 	MI: "wso2.micro-integrator",
 	SI: "WSO2.streaming-integrator"
 };
+
+/**
+ * Integrator profile constants
+ */
+export const SELECTED_PROFILE_CONFIG_SECTION = "integrator.selectedProfile";
+
+export const DEFAULT_PROFILE = "WSO2 Integrator: Default";
+export const MI_PROFILE = "WSO2 Integrator: MI";
+export const SI_PROFILE = "WSO2 Integrator: SI";
+
+export const SELECTED_PROFILE_VALUES = [
+	DEFAULT_PROFILE,
+	MI_PROFILE,
+	SI_PROFILE,
+] as const;
+
+export type SelectedProfileValue = typeof SELECTED_PROFILE_VALUES[number];

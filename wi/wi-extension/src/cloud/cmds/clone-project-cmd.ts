@@ -27,6 +27,7 @@ import {
 	type Organization,
 	getComponentKindRepoSource,
 	parseGitURL,
+	Project,
 } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, type QuickPickItem, QuickPickItemKind, Uri, commands, window } from "vscode";
 import { ext } from "../../extensionVariables";
@@ -102,11 +103,6 @@ export function cloneRepoCommand(context: ExtensionContext) {
 						);
 					}
 
-					// clone single or multiple repos
-					if (components.length === 0) {
-						throw new Error(`No ${ext.terminologies?.componentTermPlural} found within ${selectedProject.name}.`);
-					}
-
 					const repoSet = new Set<string>();
 					for (const component of components) {
 						const repo = getComponentKindRepoSource(component.spec.source).repo;
@@ -121,9 +117,6 @@ export function cloneRepoCommand(context: ExtensionContext) {
 						}
 					}
 
-					if (repoSet.size === 0) {
-						throw new Error(`No repos found to link within ${selectedProject.name}.`);
-					}
 
 					if (repoSet.size > 1) {
 						BridgeLayer.notifyCloneProgress("selecting_component");
@@ -192,7 +185,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 								selectedRepoUrl,
 								latestDeploymentTrack?.branch,
 								subPath,
-								[".choreo", ".git"]
+								[".wso2", ".choreo", ".git"]
 							);
 
 							// Store the component in global state after cloning it.
@@ -211,12 +204,13 @@ export function cloneRepoCommand(context: ExtensionContext) {
 						const subDir = params?.component?.spec?.source ? getComponentKindRepoSource(params?.component?.spec?.source)?.path || "" : "";
 						const subDirFullPath = join(clonedResp[0].clonedPath, subDir);
 						if (params?.technology === "ballerina") {
-							await ensureBallerinaFilesIfEmpty(
-								selectedOrg,
-								params?.componentName || "bal-integration",
-								subDirFullPath,
-								params?.integrationDisplayType || DevantScopes.ANY,
-							);
+							await ensureBallerinaFilesIfEmpty({
+								org: selectedOrg,
+								project: selectedProject,
+								componentName: params?.componentName || "bal-integration",
+								directoryPath: subDirFullPath,
+								integrationDisplayType: params?.integrationDisplayType || DevantScopes.ANY
+							});
 						} else if (params?.technology === "mi" || params?.technology === "microintegrator") {
 							await ensureMIFilesIfEmpty(
 								params?.componentName || "mi-integration",
@@ -250,6 +244,10 @@ export function cloneRepoCommand(context: ExtensionContext) {
 							}),
 						);
 						await openClonedDirectory(projectDirPath);
+					} else if (repoSet.size === 0) {
+						await ensureBallerinaFilesIfEmpty({ org: selectedOrg, project: selectedProject, directoryPath: selectedCloneDir.fsPath })
+						updateContextFile(selectedCloneDir.fsPath, userInfo, selectedProject, selectedOrg, projectCache);
+						await openClonedDirectory(selectedCloneDir.fsPath);
 					}
 				}
 			} catch (err: any) {
@@ -263,48 +261,64 @@ export function cloneRepoCommand(context: ExtensionContext) {
 	);
 }
 
-async function ensureBallerinaFilesIfEmpty(
+async function ensureBallerinaFilesIfEmpty(params: {
 	org: Organization,
-	componentName: string,
+	project?: Project,
+	componentName?: string,
 	directoryPath: string,
-	integrationDisplayType: string,
-): Promise<void> {
-	const createBalFiles = (directoryPath: string, integrationDisplayType: string) => {
-		writeFileSync(
-			join(directoryPath, "Ballerina.toml"),
-			`[package]\norg = "${org.handle}"\nname = "${componentName.replace(/ /g, "_").replace(/-/g, "_")}"\nversion = "0.1.0"`,
-			"utf8",
-		);
-		if (integrationDisplayType) {
-			const scopeVal = integrationDisplayType.toLowerCase().replace(/ /g, "-").replace(/\+/g, "-");
-			if (!existsSync(join(directoryPath, ".vscode"))) {
-				mkdirSync(join(directoryPath, ".vscode"));
-			}
-			const settingsPath = join(directoryPath, ".vscode", "settings.json");
-			if (existsSync(settingsPath)) {
-				// add property
-				const data = readFileSync(settingsPath, "utf8");
-				const settings = JSON.parse(data);
+	integrationDisplayType?: string,
+}): Promise<void> {
+	const createBalFiles = (directoryPath: string, integrationDisplayType: string = "") => {
+		if (params.componentName) {
+			// create individual ballerina integration
+			writeFileSync(
+				join(directoryPath, "Ballerina.toml"),
+				`[package]\norg = "${params.org.handle}"\nname = "${params.componentName.replace(/ /g, "_").replace(/-/g, "_")}"\nversion = "0.1.0"`,
+				"utf8",
+			);
+		} else {
+			// create as workspace
+			writeFileSync(
+				join(directoryPath, "Ballerina.toml"),
+				`[workspace]\ntitle = "${params?.project?.name || "Project"}"\npackages = []`,
+				"utf8",
+			);
+		}
+
+		const scopeVal = integrationDisplayType.toLowerCase().replace(/ /g, "-").replace(/\+/g, "-");
+		if (!existsSync(join(directoryPath, ".vscode"))) {
+			mkdirSync(join(directoryPath, ".vscode"));
+		}
+		const settingsPath = join(directoryPath, ".vscode", "settings.json");
+		if (existsSync(settingsPath)) {
+			// add property
+			const data = readFileSync(settingsPath, "utf8");
+			const settings = JSON.parse(data);
+			if (scopeVal) {
 				settings["ballerina.scope"] = scopeVal;
-				settings["ballerina.isBI"] = true;
-				writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-			} else {
-				// create new json
-				writeFileSync(settingsPath, JSON.stringify({ "ballerina.scope": scopeVal, "ballerina.isBI": true }, null, 2));
 			}
+			settings["ballerina.isBI"] = true;
+			writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+		} else {
+			// create new json
+			const settingsContent: any = { "ballerina.isBI": true };
+			if (scopeVal) {
+				settingsContent["ballerina.scope"] = scopeVal;
+			}
+			writeFileSync(settingsPath, JSON.stringify(settingsContent, null, 2));
 		}
 	};
 
 	try {
-		const files = readdirSync(directoryPath);
+		const files = readdirSync(params?.directoryPath);
 		if (!files.some((file) => file.toLowerCase() === "ballerina.toml")) {
-			createBalFiles(directoryPath, integrationDisplayType);
+			createBalFiles(params.directoryPath, params.integrationDisplayType);
 		}
 	} catch (err: any) {
 		if (err.code === "ENOENT") {
 			try {
-				mkdirSync(directoryPath, { recursive: true });
-				createBalFiles(directoryPath, integrationDisplayType);
+				mkdirSync(params.directoryPath, { recursive: true });
+				createBalFiles(params.directoryPath, params.integrationDisplayType);
 			} catch (mkdirError: any) {
 				console.error("Error creating directory or files:", mkdirError);
 			}

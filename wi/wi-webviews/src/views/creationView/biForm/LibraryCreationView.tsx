@@ -16,15 +16,27 @@
  * under the License.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
-import { useCloudContext, useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
-import { sanitizePackageName, validatePackageName, validateOrgName, joinPath } from "./utils";
+import { useCloudContext, useCloudProjects, useProjectModeSupported, useWorkspaceRoot } from "../../../providers";
+import {
+    sanitizePackageName,
+    validateComponentName,
+    validatePackageName,
+    validateOrgName,
+    joinPath,
+    sanitizeProjectHandle,
+    sanitizeOrgHandle,
+    validateProjectHandle,
+    validateProjectName,
+    suggestAvailableProjectName
+} from "./utils";
+import { WICommandIds } from "@wso2/wso2-platform-core";
 import { DirectorySelector } from "../../../components/DirectorySelector/DirectorySelector";
-import { PackageInfoSection } from "./components";
-import { SectionDivider, Description, ResolvedPathText, ProjectSectionContainer, ProjectSectionLabel, ProjectFieldCollapse, SkipOptionRow } from "./styles";
+import { AdvancedConfigurationSection } from "./components";
+import { SectionDivider, Description, ResolvedPathText, ProjectSectionContainer, ProjectSectionLabel, ProjectFieldCollapse, SkipOptionRow, CloudErrorActionRow, ActionLink } from "./styles";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import {
     PageBackdrop,
@@ -36,8 +48,6 @@ import {
     HeaderSubtitle,
     FormPanel,
     FormPanelHeader,
-    FormPanelTitle,
-    FormPanelSubtitle,
     FormBody,
     FormContent,
     FormFooter,
@@ -56,23 +66,32 @@ interface LibraryFormData {
     version: string;
 }
 
-export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
+export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?: () => void; ballerinaUnavailable?: boolean }) {
     const { wsClient } = useVisualizerContext();
     const { authState } = useCloudContext();
     const organizations = (authState?.userInfo?.organizations as Array<{ id?: any; handle: string; name: string }> | undefined);
     const isProjectModeSupported = useProjectModeSupported();
     const { path: workspacePath, isReady: workspaceReady } = useWorkspaceRoot();
+    const firstFieldRef = useRef<HTMLInputElement>(null);
+    const handleTouched = useRef(false);
+    const withinProjectNameTouchedRef = useRef(false);
+    const orgNameInitialized = useRef(false);
     const [packageNameTouched, setPackageNameTouched] = useState(false);
     const [withinProjectNameTouched, setWithinProjectNameTouched] = useState(false);
     const [isPackageInfoExpanded, setIsPackageInfoExpanded] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
     const [createWithinProject, setCreateWithinProject] = useState(false);
     const [withinProjectName, setWithinProjectName] = useState(DEFAULT_PROJECT_NAME);
+    const [withinProjectHandle, setWithinProjectHandle] = useState(() => sanitizeProjectHandle(DEFAULT_PROJECT_NAME));
     const [libraryNameError, setLibraryNameError] = useState<string | null>(null);
     const [pathError, setPathError] = useState<string | null>(null);
     const [packageNameError, setPackageNameError] = useState<string | null>(null);
     const [orgNameError, setOrgNameError] = useState<string | null>(null);
     const [withinProjectNameError, setWithinProjectNameError] = useState<string | null>(null);
+    const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
+    const [cloudProjectNameError, setCloudProjectNameError] = useState<string | null>(null);
+    const [cloudProjectHandleError, setCloudProjectHandleError] = useState<string | null>(null);
+    const [matchedCloudProject, setMatchedCloudProject] = useState<{ project: any; org: any } | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
     const [formData, setFormData] = useState<LibraryFormData>({
         libraryName: DEFAULT_LIBRARY_NAME,
@@ -81,6 +100,18 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         orgName: "",
         version: "",
     });
+
+    const resolvedOrg = useMemo(() => {
+        if (!organizations || organizations.length === 0) return undefined;
+        return formData.orgName
+            ? (organizations.find(o => o.handle === formData.orgName) ?? organizations[0])
+            : organizations[0];
+    }, [organizations, formData.orgName]);
+
+    const { data: cloudProjectsData } = useCloudProjects(
+        resolvedOrg?.id?.toString(),
+        resolvedOrg?.handle
+    );
 
     useEffect(() => {
         if (!workspaceReady) return;
@@ -91,19 +122,6 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             setDefaultPath(dp);
             setFormData(prev => ({ ...prev, path: dp }));
 
-            if (organizations && organizations.length > 0) {
-                if (!mounted) return;
-                setFormData(prev => ({ ...prev, orgName: organizations[0].handle }));
-            } else {
-                try {
-                    const { orgName } = await wsClient.getDefaultOrgName();
-                    if (!mounted) return;
-                    setFormData(prev => ({ ...prev, orgName }));
-                } catch (error) {
-                    console.error("Failed to fetch default org name:", error);
-                }
-            }
-
             if (isProjectModeSupported) {
                 if (!mounted) return;
                 setCreateWithinProject(true);
@@ -112,7 +130,20 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         return () => {
             mounted = false;
         };
-    }, [workspaceReady, wsClient, workspacePath, isProjectModeSupported, organizations]);
+    }, [workspaceReady, wsClient, workspacePath, isProjectModeSupported]);
+
+    // Initialize org name independently of workspace readiness.
+    useEffect(() => {
+        if (orgNameInitialized.current) return;
+        orgNameInitialized.current = true;
+        if (organizations && organizations.length > 0) {
+            setFormData(prev => ({ ...prev, orgName: organizations[0].handle }));
+        } else {
+            wsClient.getDefaultOrgName()
+                .then(({ orgName }) => setFormData(prev => ({ ...prev, orgName })))
+                .catch((error) => console.error("Failed to fetch default org name:", error));
+        }
+    }, [organizations, wsClient]);
 
     useEffect(() => {
         const error = validatePackageName(formData.packageName, formData.libraryName);
@@ -123,11 +154,92 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         setOrgNameError(validateOrgName(formData.orgName));
     }, [formData.orgName]);
 
+    // Auto-derive handle from withinProjectName unless manually edited
+    useEffect(() => {
+        if (handleTouched.current) return;
+        if (createWithinProject && withinProjectName) {
+            const derived = sanitizeProjectHandle(withinProjectName);
+            setWithinProjectHandle(derived);
+        }
+    }, [withinProjectName, createWithinProject]);
+
+    // Validate handle
+    useEffect(() => {
+        if (createWithinProject) {
+            setProjectHandleError(validateProjectHandle(withinProjectHandle));
+        } else {
+            setProjectHandleError(null);
+        }
+    }, [withinProjectHandle, createWithinProject]);
+
+    // Validate project name against cached cloud projects — synchronous, no debounce needed.
+    useEffect(() => {
+        if (!cloudProjectsData?.projects || !createWithinProject || !withinProjectName?.trim()) {
+            setCloudProjectNameError(null);
+            setMatchedCloudProject(null);
+            return;
+        }
+        const nameToCheck = withinProjectName.trim().toLowerCase();
+        const matched = cloudProjectsData.projects.find(p => p.name.toLowerCase() === nameToCheck);
+        if (matched) {
+            const suggested = suggestAvailableProjectName(
+                withinProjectName.trim(),
+                cloudProjectsData.projects.map(p => p.name)
+            );
+            if (!withinProjectNameTouchedRef.current) {
+                // Default name conflicts — silently auto-rename
+                setWithinProjectName(suggested);
+                setCloudProjectNameError(null);
+                setMatchedCloudProject(null);
+            } else {
+                setCloudProjectNameError("A project with this name already exists in cloud");
+                setMatchedCloudProject({ project: matched, org: resolvedOrg });
+            }
+        } else {
+            setCloudProjectNameError(null);
+            setMatchedCloudProject(null);
+        }
+    }, [cloudProjectsData, withinProjectName, createWithinProject]);
+
+    // Validate project handle against cached cloud project handles
+    useEffect(() => {
+        if (!cloudProjectsData?.projects || !createWithinProject || !withinProjectHandle?.trim()) {
+            setCloudProjectHandleError(null);
+            return;
+        }
+        const handleToCheck = withinProjectHandle.trim().toLowerCase();
+        const matched = cloudProjectsData.projects.find(p => p.handler.toLowerCase() === handleToCheck);
+        if (matched) {
+            const suggested = suggestAvailableProjectName(
+                withinProjectHandle.trim(),
+                cloudProjectsData.projects.map(p => p.handler)
+            );
+            if (!handleTouched.current) {
+                setWithinProjectHandle(suggested);
+                setCloudProjectHandleError(null);
+            } else {
+                setCloudProjectHandleError("A project with this id already exists in cloud");
+            }
+        } else {
+            setCloudProjectHandleError(null);
+        }
+    }, [cloudProjectsData, withinProjectHandle, createWithinProject]);
+
+    // Focus and select the first field on mount — VSCodeTextField is a web component,
+    // so the real <input> is inside its shadow DOM and needs to be targeted directly.
+    useEffect(() => {
+        setTimeout(() => {
+            const inner = (firstFieldRef.current as any)?.shadowRoot?.querySelector("input") as HTMLInputElement | null;
+            inner?.focus();
+            inner?.select();
+        }, 0);
+    }, []);
+
     const computeDisplayedPath = (): string => {
         const base = formData.path || defaultPath;
         if (createWithinProject) {
-            const projectPath = withinProjectName
-                ? joinPath(base, withinProjectName)
+            const projectPath = withinProjectHandle
+                ? joinPath(base, withinProjectHandle)
                 : base;
             return formData.packageName ? joinPath(projectPath, formData.packageName) : projectPath;
         }
@@ -161,10 +273,15 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             setCreateWithinProject(true);
             if (!withinProjectName) {
                 setWithinProjectName(DEFAULT_PROJECT_NAME);
+                if (!handleTouched.current) {
+                    setWithinProjectHandle(sanitizeProjectHandle(DEFAULT_PROJECT_NAME));
+                }
             }
         } else {
+            handleTouched.current = false;
             setCreateWithinProject(false);
             setWithinProjectName("");
+            setWithinProjectHandle("");
         }
     };
 
@@ -177,18 +294,21 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
         let hasError = false;
 
-        if (formData.libraryName.length < 2) {
-            setLibraryNameError("Library name must be at least 2 characters");
+        const libraryNameErr = validateComponentName(formData.libraryName);
+        if (libraryNameErr) {
+            setLibraryNameError(libraryNameErr);
             hasError = true;
         }
 
         if (formData.packageName.length < 2) {
             setPackageNameError("Package name must be at least 2 characters");
+            setIsPackageInfoExpanded(true);
             hasError = true;
         } else {
             const pkgError = validatePackageName(formData.packageName, formData.libraryName);
             if (pkgError) {
                 setPackageNameError(pkgError);
+                setIsPackageInfoExpanded(true);
                 hasError = true;
             }
         }
@@ -198,9 +318,33 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
             hasError = true;
         }
 
-        if (createWithinProject && withinProjectName.trim().length === 0) {
-            setWithinProjectNameError("Project name is required");
-            setWithinProjectNameTouched(true);
+        if (createWithinProject) {
+            const projectNameErr = validateProjectName(withinProjectName.trim());
+            if (projectNameErr) {
+                setWithinProjectNameError(projectNameErr);
+                hasError = true;
+            }
+        }
+
+        if (createWithinProject) {
+            const hErr = validateProjectHandle(withinProjectHandle);
+            if (hErr) {
+                setProjectHandleError(hErr);
+                setIsPackageInfoExpanded(true);
+                hasError = true;
+            }
+        }
+
+        if (cloudProjectNameError) {
+            hasError = true;
+        }
+
+        if (cloudProjectHandleError) {
+            hasError = true;
+        }
+
+        if (orgNameError) {
+            setIsPackageInfoExpanded(true);
             hasError = true;
         }
 
@@ -212,7 +356,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
         try {
             const validationResult = await wsClient.validateProjectPath({
                 projectPath: formData.path,
-                projectName: createWithinProject ? withinProjectName : formData.packageName,
+                projectName: createWithinProject ? withinProjectHandle : formData.packageName,
                 createDirectory: true,
                 createAsWorkspace: createWithinProject,
             });
@@ -222,25 +366,32 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                     setPathError(validationResult.errorMessage || "Invalid library path");
                 } else if (validationResult.errorField === ValidateProjectFormErrorField.NAME) {
                     if (createWithinProject) {
-                        setWithinProjectNameError(validationResult.errorMessage || "Invalid project name");
+                        setProjectHandleError(validationResult.errorMessage || "Invalid project ID");
+                        setIsPackageInfoExpanded(true);
                     } else {
                         setPackageNameError(validationResult.errorMessage || "Invalid package name");
+                        setIsPackageInfoExpanded(true);
                     }
                 }
                 setIsValidating(false);
                 return;
             }
 
+            const orgHandle = organizations?.find(o => o.handle === formData.orgName)?.handle ||
+                sanitizeOrgHandle(formData.orgName)
+
             await wsClient.createBIProject({
-                projectName: formData.libraryName,
+                projectName: formData.libraryName.trim(),
                 packageName: formData.packageName,
                 projectPath: formData.path,
                 createDirectory: true,
                 createAsWorkspace: createWithinProject,
                 workspaceName: createWithinProject ? withinProjectName : undefined,
                 orgName: formData.orgName || undefined,
+                orgHandle: orgHandle,
                 version: formData.version || undefined,
                 isLibrary: true,
+                projectHandle: createWithinProject ? withinProjectHandle : undefined,
             });
         } catch (error) {
             setPathError("An error occurred during validation");
@@ -276,11 +427,11 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                         <FormContent>
                             <FieldGroup>
                                 <TextField
+                                    ref={firstFieldRef}
                                     onTextChange={handleLibraryName}
                                     value={formData.libraryName}
                                     label="Library Name"
                                     placeholder="Enter a library name"
-                                    autoFocus={true}
                                     required={true}
                                     errorMsg={libraryNameError || ""}
                                 />
@@ -294,6 +445,7 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                         <TextField
                                             onTextChange={(value) => {
                                                 setWithinProjectNameTouched(true);
+                                                withinProjectNameTouchedRef.current = true;
                                                 setWithinProjectName(value);
                                                 if (withinProjectNameError) setWithinProjectNameError(null);
                                             }}
@@ -301,8 +453,22 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                             label="Project Name"
                                             placeholder="Enter project name"
                                             required={true}
-                                            errorMsg={withinProjectNameTouched && withinProjectName.trim().length === 0 ? (withinProjectNameError || "Project name is required") : ""}
+                                            errorMsg={withinProjectNameError || cloudProjectNameError || ""}
                                         />
+                                        {cloudProjectNameError && (
+                                            <CloudErrorActionRow>
+                                                {matchedCloudProject && (
+                                                    <ActionLink type="button" onClick={() =>
+                                                        wsClient.runCommand({
+                                                            command: WICommandIds.CloneProject,
+                                                            args: [{ organization: matchedCloudProject.org, project: matchedCloudProject.project, integrationOnly: true }],
+                                                        })
+                                                    }>
+                                                        Open existing project
+                                                    </ActionLink>
+                                                )}
+                                            </CloudErrorActionRow>
+                                        )}
                                     </ProjectFieldCollapse>
                                     <SkipOptionRow>
                                         <CheckBox
@@ -338,11 +504,22 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
 
                             <SectionDivider />
 
-                            <PackageInfoSection
+                            <AdvancedConfigurationSection
                                 isExpanded={isPackageInfoExpanded}
                                 onToggle={() => setIsPackageInfoExpanded(!isPackageInfoExpanded)}
-                                data={{ packageName: formData.packageName, orgName: formData.orgName, version: formData.version }}
+                                data={{
+                                    packageName: formData.packageName,
+                                    orgName: formData.orgName,
+                                    version: formData.version,
+                                    projectHandle: createWithinProject ? withinProjectHandle : undefined,
+                                }}
                                 onChange={(data) => {
+                                    if (data.projectHandle !== undefined) {
+                                        handleTouched.current = true;
+                                        if (projectHandleError) setProjectHandleError(null);
+                                        setWithinProjectHandle(data.projectHandle);
+                                        return;
+                                    }
                                     if (data.packageName !== undefined) {
                                         setPackageNameTouched(data.packageName.length > 0);
                                         if (packageNameError) setPackageNameError(null);
@@ -355,17 +532,21 @@ export function LibraryCreationView({ onBack }: { onBack?: () => void }) {
                                 isLibrary={true}
                                 packageNameError={packageNameError}
                                 orgNameError={orgNameError}
+                                projectHandleError={projectHandleError || cloudProjectHandleError}
                                 organizations={organizations}
+                                hasError={!!(packageNameError || orgNameError || projectHandleError || cloudProjectHandleError)}
                             />
 
                             <FormFooter>
-                                <Button
-                                    disabled={isValidating}
-                                    onClick={handleCreate}
-                                    appearance="primary"
-                                >
-                                    {isValidating ? "Validating..." : "Create Library"}
-                                </Button>
+                                <span title={ballerinaUnavailable ? "Ballerina distribution is not set up. Use Configure to set it up." : undefined}>
+                                    <Button
+                                        disabled={isValidating || ballerinaUnavailable}
+                                        onClick={handleCreate}
+                                        appearance="primary"
+                                    >
+                                        {isValidating ? "Validating..." : "Create Library"}
+                                    </Button>
+                                </span>
                             </FormFooter>
                         </FormContent>
                     </FormBody>

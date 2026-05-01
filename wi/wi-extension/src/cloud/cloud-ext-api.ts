@@ -48,6 +48,11 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public isLoggedIn = (): boolean => !!ext.authProvider?.getState().state?.userInfo;
 	public getStsToken = (): Promise<string> => ext.clients.rpcClient.getStsToken();
 
+	// Project
+	public getProjects = (orgId: string) => ext.clients.rpcClient.getProjects(orgId);
+	public updateProject = (params: Parameters<IWso2PlatformExtensionAPI["updateProject"]>[0]) =>
+		ext.clients.rpcClient.updateProject(params);
+
 	// Context
 	public getDirectoryComponents = (fsPath: string): ComponentKind[] =>
 		this.getComponentsOfDir(fsPath, contextStore.getState().state?.components);
@@ -107,8 +112,7 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 		ext.clients.rpcClient.resolveConnectionSecrets(params);
 
 	// Environments & console
-	public getDevantConsoleUrl = async (): Promise<string> =>
-		(await ext.clients.rpcClient.getConfigFromCli()).devantConsoleUrl;
+	public getDevantConsoleUrl = async (): Promise<string> => ext.config?.devantConsoleUrl;
 	public getProjectEnvs = (params: Parameters<IWso2PlatformExtensionAPI["getProjectEnvs"]>[0]) =>
 		ext.clients.rpcClient.getEnvs(params);
 	public getComponentList = (params: Parameters<IWso2PlatformExtensionAPI["getComponentList"]>[0]) =>

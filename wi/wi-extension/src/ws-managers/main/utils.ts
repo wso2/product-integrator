@@ -30,6 +30,17 @@ interface ProgressMessage {
     increment?: number;
 }
 
+interface RepositoryArchiveSource {
+    repositoryUrl: string;
+    branch: string;
+    subDirectory: string;
+    componentPath: string;
+    displayName: string;
+    sourceLabel: string;
+    missingSourceError: string;
+    preparationErrorLabel: string;
+}
+
 export enum VERSION {
     BETA = 'beta',
     ALPHA = 'alpha',
@@ -71,83 +82,86 @@ export async function askFileOrFolderPath() {
     });
 }
 
-export async function handleOpenFile(projectUri: string, sampleName: string, repoUrl: string) {
-    const rawFileLink = repoUrl + '/' + sampleName + '.zip';
-    const defaultDownloadsPath = path.join(os.homedir(), 'Downloads'); // Construct the default downloads path
-    const pathFromDialog = await selectFileDownloadPath();
-    if (pathFromDialog === "") {
+export async function handleOpenSamples(
+    projectUri: string,
+    repositorySource: RepositoryArchiveSource,
+) {
+    const selectedPath = await selectFileDownloadPath();
+    if (selectedPath === "") {
         return;
     }
-    const selectedPath = pathFromDialog === "" ? defaultDownloadsPath : pathFromDialog;
-    const filePath = path.join(selectedPath, sampleName + '.zip');
-    let isSuccess = false;
 
-    if (fs.existsSync(filePath)) {
-        // already downloaded
-        isSuccess = true;
-    } else {
+    const trimSlashes = (value: string) => value.replace(/^[\\/]+|[\\/]+$/g, '');
+    const componentPath = trimSlashes(repositorySource.componentPath);
+    const componentName = componentPath.split(/[\\/]/).pop();
+    const integrationFolderName = componentName && componentName.length > 0
+        ? componentName
+        : sanitizeName(repositorySource.displayName);
+    const extractedProjectPath = path.join(selectedPath, integrationFolderName);
+
+    if (fs.existsSync(extractedProjectPath)) {
+        await openDownloadedProject(extractedProjectPath, true);
+        return;
+    }
+
+    const archiveFilePath = path.join(os.tmpdir(), `${integrationFolderName}-${Date.now()}.zip`);
+    const archiveExtractPath = path.join(os.tmpdir(), `${integrationFolderName}-extract-${Date.now()}`);
+    const archiveUrl = `${repositorySource.repositoryUrl.replace(/\/+$/, '')}/archive/refs/heads/${repositorySource.branch}.zip`;
+
+    try {
         await window.withProgress({
             location: ProgressLocation.Notification,
             title: 'Downloading file',
             cancellable: true
-        }, async (progress, cancellationToken) => {
-
-            let cancelled: boolean = false;
-            cancellationToken.onCancellationRequested(async () => {
-                cancelled = true;
-            });
-
-            try {
-                await handleDownloadFile(projectUri, rawFileLink, filePath, progress, cancelled);
-                console.log('Download completed');
-                isSuccess = true;
-                return;
-            } catch (error) {
-                window.showErrorMessage(`Error while downloading the file: ${error}`);
-            }
+        }, async (progress) => {
+            await handleDownloadFile(projectUri, archiveUrl, archiveFilePath, progress);
         });
+    } catch (error) {
+        window.showErrorMessage(`Error while downloading the file: ${error}`);
+        return;
     }
 
-    if (isSuccess) {
-        const successMsg = `The Integration sample file has been downloaded successfully to the following directory: ${filePath}.`;
-        const zipReadStream = fs.createReadStream(filePath);
-        if (fs.existsSync(path.join(selectedPath, sampleName))) {
-            // already extracted
-            let uri = Uri.file(path.join(selectedPath, sampleName));
-            commands.executeCommand("vscode.openFolder", uri, true);
-            return;
-        }
-        zipReadStream.pipe(unzipper.Parse()).on("entry", function (entry) {
-            var isDir = entry.type === "Directory";
-            var fullpath = path.join(selectedPath, entry.path);
-            var directory = isDir ? fullpath : path.dirname(fullpath);
-            if (!fs.existsSync(directory)) {
-                fs.mkdirSync(directory, { recursive: true });
-            }
-            if (!isDir) {
-                entry.pipe(fs.createWriteStream(fullpath));
-            }
-        }).on("close", () => {
-            console.log("Extraction complete!");
-            window.showInformationMessage('Where would you like to open the project?',
-                { modal: true },
-                'Current Window',
-                'New Window'
-            ).then(selection => {
-                if (selection === "Current Window") {
-                    const folderUri = Uri.file(path.join(selectedPath, sampleName));
-                    const workspaceFolders = workspace.workspaceFolders || [];
-                    if (!workspaceFolders.some(folder => folder.uri.fsPath === folderUri.fsPath)) {
-                        workspace.updateWorkspaceFolders(workspaceFolders.length, 0, { uri: folderUri });
-                    }
-                } else if (selection === "New Window") {
-                    commands.executeCommand('vscode.openFolder', Uri.file(path.join(selectedPath, sampleName)));
-                }
-            });
+    try {
+        await fs.promises.mkdir(archiveExtractPath, { recursive: true });
+
+        await new Promise<void>((resolve, reject) => {
+            fs.createReadStream(archiveFilePath)
+                .on('error', reject)
+                .pipe(unzipper.Extract({ path: archiveExtractPath }))
+                .on('close', resolve)
+                .on('error', reject);
         });
-        window.showInformationMessage(
-            successMsg,
+
+        const archiveRootDir = fs.readdirSync(archiveExtractPath)[0];
+        if (!archiveRootDir) {
+            throw new Error('Failed to extract the pre-built integration archive.');
+        }
+
+        const normalizedSubDirectory = trimSlashes(repositorySource.subDirectory);
+        const sourcePath = path.join(
+            archiveExtractPath,
+            archiveRootDir,
+            componentPath.startsWith(normalizedSubDirectory)
+                ? componentPath
+                : path.join(normalizedSubDirectory, componentPath),
         );
+
+        if (!fs.existsSync(sourcePath)) {
+            throw new Error(repositorySource.missingSourceError);
+        }
+
+        fs.cpSync(sourcePath, extractedProjectPath, { recursive: true });
+        window.showInformationMessage(
+            `The ${repositorySource.sourceLabel} has been downloaded successfully to the following directory: ${extractedProjectPath}.`,
+        );
+        await openDownloadedProject(extractedProjectPath);
+    } catch (error) {
+        window.showErrorMessage(`Failed to prepare the ${repositorySource.preparationErrorLabel}: ${error}`);
+    } finally {
+        await Promise.allSettled([
+            fs.promises.unlink(archiveFilePath),
+            fs.promises.rm(archiveExtractPath, { recursive: true, force: true }),
+        ]);
     }
 }
 
@@ -160,7 +174,7 @@ async function selectFileDownloadPath(): Promise<string> {
     return "";
 }
 
-async function handleDownloadFile(projectUri: string, rawFileLink: string, defaultDownloadsPath: string, progress: Progress<ProgressMessage>, cancelled: boolean) {
+async function handleDownloadFile(projectUri: string, rawFileLink: string, defaultDownloadsPath: string, progress: Progress<ProgressMessage>) {
     const handleProgress = (progressPercentage: any) => {
         progress.report({ message: "Downloading file...", increment: progressPercentage });
     };
@@ -170,6 +184,33 @@ async function handleDownloadFile(projectUri: string, rawFileLink: string, defau
         window.showErrorMessage(`Failed to download file: ${error}`);
     }
     progress.report({ message: "Download finished" });
+}
+
+async function openDownloadedProject(projectPath: string, openInNewWindowDirectly = false): Promise<void> {
+    if (openInNewWindowDirectly) {
+        await commands.executeCommand('vscode.openFolder', Uri.file(projectPath), true);
+        return;
+    }
+
+    const selection = await window.showInformationMessage(
+        'Where would you like to open the project?',
+        { modal: true },
+        'Current Window',
+        'New Window'
+    );
+
+    if (selection === "Current Window") {
+        const folderUri = Uri.file(projectPath);
+        const workspaceFolders = workspace.workspaceFolders || [];
+        if (!workspaceFolders.some(folder => folder.uri.fsPath === folderUri.fsPath)) {
+            workspace.updateWorkspaceFolders(workspaceFolders.length, 0, { uri: folderUri });
+        }
+        return;
+    }
+
+    if (selection === "New Window") {
+        await commands.executeCommand('vscode.openFolder', Uri.file(projectPath));
+    }
 }
 
 async function downloadFile(projectUri: string, url: string, filePath: string, progressCallback?: (downloadProgress: DownloadProgress) => void) {

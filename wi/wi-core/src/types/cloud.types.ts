@@ -61,12 +61,7 @@ export interface GetCloudProjectsReq {
 }
 
 export interface GetCloudProjectsResp {
-	projects: Array<{
-		id: string;
-		name: string;
-		handle: string;
-		description: string;
-	}>;
+	projects: Array<Project>;
 }
 
 export interface WICloudAPI {

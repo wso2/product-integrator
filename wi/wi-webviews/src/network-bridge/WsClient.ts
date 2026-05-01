@@ -20,6 +20,7 @@
 
 import {
     BIProjectRequest,
+    BIRuntimeStatusResponse,
     CreateMiProjectRequest,
     CreateMiProjectResponse,
     CreateSiProjectRequest,
@@ -64,6 +65,8 @@ import {
     WITransportBootstrap,
     WorkspaceRootResponse,
     CloneProgressStage,
+    WIChatNotify,
+    SignInResult,
 } from "@wso2/wi-core";
 import type {
     AuthState,
@@ -142,6 +145,7 @@ export class WsClient {
     private readonly authStateChangedListeners = new Set<(state: AuthState) => void>();
     private readonly contextStateChangedListeners = new Set<(state: ContextStoreState) => void>();
     private readonly cloneProgressListeners = new Set<(stage: CloneProgressStage) => void>();
+    private readonly chatNotifyListeners = new Set<(event: WIChatNotify) => void>();
 
     constructor() {
         this.transport.subscribe(
@@ -212,6 +216,10 @@ export class WsClient {
 
     public createMiProject(params: CreateMiProjectRequest): Promise<CreateMiProjectResponse> {
         return this.request("createMiProject", params);
+    }
+
+    public importProjectFromCapp(): Promise<void> {
+        return this.request("importProjectFromCapp");
     }
 
     public createSiProject(params: CreateSiProjectRequest): Promise<CreateSiProjectResponse> {
@@ -294,8 +302,9 @@ export class WsClient {
         this.stateChangedListeners.add(callback);
     }
 
-    public onDownloadProgress(callback: (progress: DownloadProgress) => void) {
+    public onDownloadProgress(callback: (progress: DownloadProgress) => void): () => void {
         this.downloadProgressListeners.add(callback);
+        return () => this.downloadProgressListeners.delete(callback);
     }
 
     public onMigrationToolStateChanged(callback: (state: string) => void) {
@@ -418,6 +427,51 @@ export class WsClient {
         return () => this.cloneProgressListeners.delete(callback);
     }
 
+    public onChatNotify(callback: (event: WIChatNotify) => void): () => void {
+        this.chatNotifyListeners.add(callback);
+        return () => this.chatNotifyListeners.delete(callback);
+    }
+
+    public async wizardEnhancementReady(): Promise<void> {
+        await this.request("wizardEnhancementReady");
+    }
+
+    public async openMigratedProject(): Promise<void> {
+        await this.request("openMigratedProject");
+    }
+
+    public async abortMigrationAgent(): Promise<void> {
+        await this.request("abortMigrationAgent");
+    }
+
+    public async checkAIAuth(): Promise<boolean> {
+        return this.request("checkAIAuth");
+    }
+
+    public async triggerAICopilotSignIn(): Promise<SignInResult> {
+        return this.request("triggerAICopilotSignIn");
+    }
+
+    public async triggerAnthropicKeySignIn(params: { apiKey: string }): Promise<SignInResult> {
+        return this.request("triggerAnthropicKeySignIn", params);
+    }
+
+    public async triggerAwsBedrockSignIn(params: { accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string }): Promise<SignInResult> {
+        return this.request("triggerAwsBedrockSignIn", params);
+    }
+
+    public async triggerVertexAiSignIn(params: { projectId: string; location: string; clientEmail: string; privateKey: string }): Promise<SignInResult> {
+        return this.request("triggerVertexAiSignIn", params);
+    }
+
+    public getBIRuntimeStatus(): Promise<BIRuntimeStatusResponse> {
+        return this.request("getBIRuntimeStatus");
+    }
+
+    public initBIRuntimeContext(): Promise<void> {
+        return this.request("initBIRuntimeContext");
+    }
+
     public async request<TAction extends WIWsMethod>(
         action: TAction,
         ...args: WIWsMethodParamsMap[TAction] extends void ? [] : [WIWsMethodParamsMap[TAction]]
@@ -488,6 +542,9 @@ export class WsClient {
                 return;
             case WI_BRIDGE_EVENTS.CLONE_PROGRESS:
                 this.cloneProgressListeners.forEach((listener) => listener(message.stage));
+                return;
+            case WI_BRIDGE_EVENTS.CHAT_NOTIFY:
+                this.chatNotifyListeners.forEach((listener) => listener(message.event));
                 return;
             case WI_BRIDGE_EVENTS.WS_RESPONSE:
             default:

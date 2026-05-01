@@ -22,7 +22,7 @@ import { useVisualizerContext } from "../../contexts";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
 import { BodyText } from "./styles";
 import { ProjectFormData, ProjectFormFields } from "../creationView/biForm/ProjectFormFields";
-import { validatePackageName } from "../creationView/biForm/utils";
+import { validatePackageName, validateProjectName, validateProjectHandle, validateOrgName } from "../creationView/biForm/utils";
 import { MultiProjectFormData, MultiProjectFormFields } from "./components/MultiProjectFormFields";
 import { ButtonWrapper } from "./styles";
 import { ConfigureProjectFormProps } from "./types";
@@ -37,6 +37,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         workspaceName: "",
         createWithinProject: false,
         withinProjectName: "",
+        projectHandle: "",
         orgName: "",
         version: "",
         isLibrary: false,
@@ -55,6 +56,10 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
     const [singleIntegrationPathError, setSingleIntegrationPathError] = useState<string | null>(null);
     const [projectNameError, setProjectNameError] = useState<string | null>(null);
     const [singleIntegrationPackageNameError, setSingleIntegrationPackageNameError] = useState<string | null>(null);
+    const [singleIntegrationProjectHandleError, setSingleIntegrationProjectHandleError] = useState<string | null>(null);
+    const [orgNameError, setOrgNameError] = useState<string | null>(null);
+    const [singleIntegrationCloudProjectNameError, setSingleIntegrationCloudProjectNameError] = useState<string | null>(null);
+    const [singleIntegrationCloudProjectHandleError, setSingleIntegrationCloudProjectHandleError] = useState<string | null>(null);
     const selectedResourceTypeLabel = singleIntegrationData.isLibrary ? "Library" : "Integration";
 
     useEffect(() => {
@@ -70,6 +75,9 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         if (singleIntegrationNameError) {
             setSingleIntegrationNameError(null);
         }
+        if (orgNameError && data.orgName !== undefined) {
+            setOrgNameError(null);
+        }
         if (singleIntegrationPathError) {
             setSingleIntegrationPathError(null);
         }
@@ -78,6 +86,9 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         }
         if (singleIntegrationPackageNameError) {
             setSingleIntegrationPackageNameError(null);
+        }
+        if (singleIntegrationProjectHandleError) {
+            setSingleIntegrationProjectHandleError(null);
         }
     };
 
@@ -98,6 +109,8 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         setSingleIntegrationPathError(null);
         setProjectNameError(null);
         setSingleIntegrationPackageNameError(null);
+        setSingleIntegrationProjectHandleError(null);
+        setOrgNameError(null);
 
         // Validate required fields first
         let hasError = false;
@@ -118,6 +131,38 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
             }
         }
 
+        if (singleIntegrationData.createWithinProject) {
+            const projectNameErr = validateProjectName(singleIntegrationData.withinProjectName.trim());
+            if (projectNameErr) {
+                setProjectNameError(projectNameErr);
+                hasError = true;
+            }
+        }
+
+        if (singleIntegrationData.createWithinProject) {
+            const handleErr = validateProjectHandle(singleIntegrationData.projectHandle);
+            if (handleErr) {
+                setSingleIntegrationProjectHandleError(handleErr);
+                hasError = true;
+            }
+        }
+
+        const orgErr = validateOrgName(singleIntegrationData.orgName);
+        if (orgErr) {
+            setOrgNameError(orgErr);
+            hasError = true;
+        } else {
+            setOrgNameError(null);
+        }
+
+        if (singleIntegrationCloudProjectNameError) {
+            hasError = true;
+        }
+
+        if (singleIntegrationCloudProjectHandleError) {
+            hasError = true;
+        }
+
         if (singleIntegrationData.path.trim().length < 2) {
             setSingleIntegrationPathError(`Please select a path for your ${selectedResourceTypeLabel.toLowerCase()}`);
             hasError = true;
@@ -131,7 +176,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         try {
             // Validate the project path
             const targetNameForValidation = singleIntegrationData.createWithinProject
-                ? singleIntegrationData.withinProjectName
+                ? singleIntegrationData.projectHandle
                 : singleIntegrationData.packageName;
 
             const validationResult = await wsClient.validateProjectPath({
@@ -173,11 +218,14 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                 orgName: singleIntegrationData.orgName || undefined,
                 version: singleIntegrationData.version || undefined,
                 isLibrary: singleIntegrationData.isLibrary,
+                projectHandle: singleIntegrationData.createWithinProject
+                    ? singleIntegrationData.projectHandle
+                    : undefined,
             };
-            setIsValidating(false);
-            onNext(payload);
+            await onNext(payload, false);
         } catch (error) {
             setSingleIntegrationPathError("An error occurred during validation");
+        } finally {
             setIsValidating(false);
         }
     };
@@ -225,15 +273,16 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
             }
 
             // If validation passes, proceed
-            onNext({
+            await onNext({
                 projectName: multiProjectData.rootFolderName,
                 packageName: multiProjectData.rootFolderName,
                 projectPath: multiProjectData.path,
                 createDirectory: multiProjectData.createDirectory,
                 createAsWorkspace: false,
-            });
+            }, false);
         } catch (error) {
             setPathError("An error occurred during validation");
+        } finally {
             setIsValidating(false);
         }
     };
@@ -242,7 +291,6 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         <>
             {isMultiProject ? (
                 <>
-                    <Typography variant="h2">Configure Multi-Project Import</Typography>
                     <BodyText>Select the location where you want to save the migrated integrations.</BodyText>
 
                     <MultiProjectFormFields
@@ -255,7 +303,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                     <ButtonWrapper>
                         <ActionButtons
                             primaryButton={{
-                                text: isValidating ? "Validating..." : "Create and Open Project",
+                                text: isValidating ? "Validating..." : "Start Migration",
                                 onClick: handleCreateMultiProject,
                                 disabled: isValidating
                             }}
@@ -269,7 +317,6 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                 </>
             ) : (
                 <>
-                    <Typography variant="h2">Configure Your {selectedResourceTypeLabel}</Typography>
                     <BodyText>
                         Please provide the necessary details to create your {selectedResourceTypeLabel.toLowerCase()}.
                     </BodyText>
@@ -281,14 +328,16 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                         pathError={singleIntegrationPathError || undefined}
                         packageNameValidationError={singleIntegrationPackageNameError || undefined}
                         projectNameError={projectNameError || undefined}
+                        projectHandleError={singleIntegrationProjectHandleError || undefined}
+                        orgNameError={orgNameError ?? undefined}
+                        onCloudProjectNameError={setSingleIntegrationCloudProjectNameError}
+                        onCloudProjectHandleError={setSingleIntegrationCloudProjectHandleError}
                     />
 
                     <ButtonWrapper>
                         <ActionButtons
                             primaryButton={{
-                                text: isValidating
-                                    ? "Validating..."
-                                    : `Create and Open ${selectedResourceTypeLabel}`,
+                                text: isValidating ? "Validating..." : "Start Migration",
                                 onClick: handleCreateSingleProject,
                                 disabled: isValidating
                             }}

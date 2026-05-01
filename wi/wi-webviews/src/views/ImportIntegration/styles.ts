@@ -36,7 +36,7 @@ export const HeaderSubtitle = _HeaderSubtitle;
 export const IconButton = _BackButton;
 
 export const PageContainer = styled.div`
-    max-width: 960px;
+    max-width: 1100px;
     margin: 0 auto;
     min-height: calc(100vh - 52px);
     display: flex;
@@ -396,4 +396,73 @@ export const TopBar = styled.div`
     justify-content: space-between;
     align-items: center;
     padding-bottom: 16px;
+`;
+
+// ── AI Enhancement styled components ────────────────────────────────────────
+export const AIEnhancementSection = styled.div`
+    margin-top: 24px;
+    padding: 16px;
+    border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 22%, var(--vscode-widget-border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--wso2-brand-accent) 4%, var(--vscode-editor-background));
+`;
+
+export const AIEnhancementTitle = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--vscode-foreground);
+`;
+
+export const RadioGroup = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+`;
+
+export const RadioOption = styled.label<{ selected: boolean }>`
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid ${(props: { selected: boolean }) =>
+        props.selected
+            ? "var(--vscode-focusBorder)"
+            : "color-mix(in srgb, var(--wso2-brand-accent) 14%, var(--vscode-widget-border))"};
+    background: ${(props: { selected: boolean }) =>
+        props.selected
+            ? "color-mix(in srgb, var(--wso2-brand-accent) 8%, transparent)"
+            : "transparent"};
+    transition: border-color 0.15s, background 0.15s;
+    &:hover {
+        background: color-mix(in srgb, var(--wso2-brand-accent) 6%, transparent);
+    }
+`;
+
+export const RadioInput = styled.input`
+    margin-top: 2px;
+    accent-color: var(--vscode-focusBorder);
+    flex-shrink: 0;
+    outline: none;
+`;
+
+export const RadioContent = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+`;
+
+export const RadioTitle = styled.div`
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--vscode-foreground);
+`;
+
+export const RadioDescription = styled.div`
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
 `;

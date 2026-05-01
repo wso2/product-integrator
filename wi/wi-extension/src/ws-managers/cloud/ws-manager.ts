@@ -48,7 +48,7 @@ import { ext } from "../../extensionVariables";
 import { StateMachine } from "../../stateMachine";
 import { contextStore } from "../../cloud/stores/context-store";
 import { webviewStateStore } from "../../cloud/stores/webview-state-store";
-import { getGitHead, getGitRemotes, getGitRoot, hasDirtyRepo as checkDirtyRepo, removeCredentialsFromGitURL } from "../../cloud/git/util";
+import { getGitHead, getGitRemotes, getGitRoot, hasDirtyRepo as checkDirtyRepo, removeCredentialsFromGitURL, relativePath } from "../../cloud/git/util";
 import { initGit } from "../../cloud/git/main";
 import fs, { readdirSync } from "fs";
 import path, { join } from "path";
@@ -106,22 +106,22 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	async changeOrgContext(orgId: string): Promise<void> {
 		try {
 			await ext.clients.rpcClient.changeOrgContext(orgId);
-			
+
 			const userInfo = await ext.clients.rpcClient.getUserInfo();
 			if (!userInfo) {
 				throw new Error("Failed to retrieve user info after org context change");
 			}
-			
+
 			const region = await ext.clients.rpcClient.getCurrentRegion();
-			
+
 			if (!region || (region !== "US" && region !== "EU")) {
 				throw new Error("Region is not available or invalid. Expected 'US' or 'EU'.");
 			}
-			
+
 			if (!ext.authProvider) {
 				throw new Error("Auth provider is not available");
 			}
-			
+
 			await ext.context.globalState.update("selectedOrgId", orgId);
 
 			await ext.authProvider.getState().loginSuccess(userInfo, region);
@@ -168,7 +168,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			const git = await initGit(ext.context);
 			const repoRoot = await git?.getRepositoryRoot(repoDir);
 			if (repoRoot) {
-				const subPath = path.relative(repoRoot, repoDir);
+				const subPath = relativePath(repoRoot, repoDir);
 
 				if (git) {
 					const gitRepo = git.open(repoRoot, { path: repoRoot });
@@ -201,8 +201,9 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 							// ignore error
 						}
 						const changes = await gitRepo.diffWith(`${matchingRemoteName}/${branch}`);
-						const componentYamlPath = join(repoDir, ".choreo", "component.yaml");
-						const configPaths = [componentYamlPath];
+						const componentYamlPath = join(repoDir, ".wso2", "component.yaml");
+						const componentYamlLegacyPath = join(repoDir, ".choreo", "component.yaml");
+						const configPaths = [componentYamlPath, componentYamlLegacyPath];
 
 						changes.forEach((item) => {
 							if (configPaths.includes(item.uri.path)) {
@@ -343,14 +344,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 	async getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
 		const projects = await ext.clients.rpcClient.getProjects(params.orgId);
-		return {
-			projects: (projects ?? []).map((p) => ({
-				id: p.id,
-				name: p.name,
-				handle: p.handler,
-				description: p.description ?? "",
-			})),
-		};
+		return { projects };
 	}
 
 	async getDefaultOrgName(): Promise<DefaultOrgNameResponse> {

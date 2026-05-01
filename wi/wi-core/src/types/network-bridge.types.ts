@@ -18,6 +18,7 @@
 
 import {
     BIProjectRequest,
+    BIRuntimeStatusResponse,
     CreateMiProjectRequest,
     CreateMiProjectResponse,
     CreateSiProjectRequest,
@@ -56,7 +57,8 @@ import {
     ValidateProjectFormResponse,
     WebviewContext,
     WorkspaceRootResponse,
-    DefaultOrgNameResponse
+    DefaultOrgNameResponse,
+    WIChatNotify
 } from "./webview-api.types";
 import type {
     AuthState,
@@ -81,6 +83,11 @@ import type {
     GetCloudProjectsResp,
 } from "./cloud.types";
 
+export interface SignInResult {
+    success: boolean;
+    error?: string;
+}
+
 export const WI_BRIDGE_EVENTS = {
     WS_RESPONSE: "wi.ws.response",
     STATE_CHANGED: "wi.event.stateChanged",
@@ -93,6 +100,8 @@ export const WI_BRIDGE_EVENTS = {
     CONTEXT_STATE_CHANGED: "wi.event.contextStateChanged",
     CLONE_PROGRESS: "wi.event.cloneProgress",
     SIGN_IN_INITIATED: "wi.event.signInInitiated",
+    // ── AI migration streaming ────────────────────────────────
+    CHAT_NOTIFY: "wi.event.chatNotify",
 } as const;
 
 /** Granular stages emitted by the clone-project command so the webview can show accurate progress. */
@@ -115,6 +124,7 @@ export interface WIWsMethodParamsMap {
     getSubFolderNames: GetSubFoldersRequest;
     askProjectDirPath: void;
     createMiProject: CreateMiProjectRequest;
+    importProjectFromCapp: void;
     createSiProject: CreateSiProjectRequest;
     fetchSamplesFromGithub: FetchSamplesRequest;
     downloadSelectedSampleFromGithub: SampleDownloadRequest;
@@ -136,7 +146,15 @@ export interface WIWsMethodParamsMap {
     clearWebviewCache: string;
     getDefaultOrgName: void;
     getDefaultCreationPath: void;
-
+    wizardEnhancementReady: void;
+    openMigratedProject: void;
+    abortMigrationAgent: void; checkAIAuth: void;
+    triggerAICopilotSignIn: void;
+    triggerAnthropicKeySignIn: { apiKey: string };
+    triggerAwsBedrockSignIn: { accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string };
+    triggerVertexAiSignIn: { projectId: string; location: string; clientEmail: string; privateKey: string };
+    getBIRuntimeStatus: void;
+    initBIRuntimeContext: void;
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: void;
     submitComponents: WICloudSubmitComponentsReq;
@@ -177,6 +195,7 @@ export interface WIWsMethodResultMap {
     getSubFolderNames: GetSubFoldersResponse;
     askProjectDirPath: ProjectDirResponse;
     createMiProject: CreateMiProjectResponse;
+    importProjectFromCapp: void;
     createSiProject: CreateSiProjectResponse;
     fetchSamplesFromGithub: GettingStartedData;
     downloadSelectedSampleFromGithub: void;
@@ -198,7 +217,15 @@ export interface WIWsMethodResultMap {
     clearWebviewCache: void;
     getDefaultOrgName: DefaultOrgNameResponse;
     getDefaultCreationPath: WorkspaceRootResponse;
-
+    wizardEnhancementReady: void;
+    openMigratedProject: void;
+    abortMigrationAgent: void; checkAIAuth: boolean;
+    triggerAICopilotSignIn: SignInResult;
+    triggerAnthropicKeySignIn: SignInResult;
+    triggerAwsBedrockSignIn: SignInResult;
+    triggerVertexAiSignIn: SignInResult;
+    getBIRuntimeStatus: BIRuntimeStatusResponse;
+    initBIRuntimeContext: void;
     // ── Cloud methods ─────────────────────────────────────────
     getCloudFormContext: WICloudFormContext;
     submitComponents: WICloudSubmitComponentsResp;
@@ -293,6 +320,11 @@ export interface WISignInInitiatedEvent {
     type: typeof WI_BRIDGE_EVENTS.SIGN_IN_INITIATED;
 }
 
+export interface WIChatNotifyEvent {
+    type: typeof WI_BRIDGE_EVENTS.CHAT_NOTIFY;
+    event: WIChatNotify;
+}
+
 export type WIBridgeRequest = WIWsRequest;
 
 export type WIBridgeResponse =
@@ -305,7 +337,8 @@ export type WIBridgeResponse =
     | WIAuthStateChangedEvent
     | WIContextStateChangedEvent
     | WICloneProgressEvent
-    | WISignInInitiatedEvent;
+    | WISignInInitiatedEvent
+    | WIChatNotifyEvent;
 
 export type WITransportMode = "proxy" | "websocket";
 

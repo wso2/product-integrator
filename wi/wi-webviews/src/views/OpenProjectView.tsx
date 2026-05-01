@@ -19,7 +19,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import styled from "@emotion/styled";
 import { Codicon, ProgressRing, ThemeColors } from "@wso2/ui-toolkit";
-import { WICommandIds } from "@wso2/wso2-platform-core";
+import { Project, WICommandIds } from "@wso2/wso2-platform-core";
 import {
     BackButton,
     FormBody,
@@ -36,9 +36,8 @@ import {
 } from "./shared/FormPageLayout";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
-import { CloneProgressStage, GetCloudProjectsResp } from "@wso2/wi-core";
-
-type CloudProject = GetCloudProjectsResp["projects"][number];
+import { useSignIn } from "../hooks/useSignIn";
+import { CloneProgressStage } from "@wso2/wi-core";
 
 // ── Project list styles ───────────────────────────────────────────────────────
 
@@ -540,18 +539,17 @@ interface OpenProjectViewProps {
 export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const { wsClient } = useVisualizerContext();
     const { authState, authStateLoading } = useCloudContext();
-    const [projects, setProjects] = useState<CloudProject[]>([]);
+    const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedProject, setSelectedProject] = useState<CloudProject | null>(null);
+    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
     const [cloning, setCloning] = useState(false);
     const [cloneStage, setCloneStage] = useState<CloneProgressStage | null>(null);
     const [cloneSuccess, setCloneSuccess] = useState(false);
     const [cloningError, setCloningError] = useState<string | null>(null);
     const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
-    const [isSigningIn, setIsSigningIn] = useState(false);
+    const { isSigningIn, handleSignIn, handleCancelSignIn } = useSignIn();
     const [view, setView] = useState<"landing" | "cloud">("landing");
-    const signingInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const orgs = (authState?.userInfo?.organizations as Array<{ id: number | string; handle: string; name: string }> | undefined) ?? [];
     const org = (selectedOrgId ? orgs.find((o) => String(o.id) === selectedOrgId) : null) ?? orgs[0];
@@ -578,33 +576,6 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         document.addEventListener("mousedown", handleMouseDown);
         return () => document.removeEventListener("mousedown", handleMouseDown);
     }, [orgDropdownOpen]);
-
-    useEffect(() => {
-        const unsubscribe = wsClient.onSignInInitiated(() => {
-            setIsSigningIn(true);
-            signingInTimeoutRef.current = setTimeout(() => {
-                setIsSigningIn(false);
-                signingInTimeoutRef.current = null;
-            }, 15000);
-        });
-        return unsubscribe;
-    }, [wsClient]);
-
-    useEffect(() => {
-        if (authState?.userInfo && isSigningIn) {
-            setIsSigningIn(false);
-            if (signingInTimeoutRef.current) {
-                clearTimeout(signingInTimeoutRef.current);
-                signingInTimeoutRef.current = null;
-            }
-        }
-    }, [authState?.userInfo]);
-
-    useEffect(() => {
-        return () => {
-            if (signingInTimeoutRef.current) clearTimeout(signingInTimeoutRef.current);
-        };
-    }, []);
 
     const fetchProjects = () => {
         if (!org) {
@@ -684,10 +655,6 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
             });
     };
 
-    const handleSignIn = () => {
-        wsClient.runCommand({ command: WICommandIds.SignIn, args: [] });
-    };
-
     const handleOpenLocal = async () => {
         try {
             const { path: startPath } = await wsClient.getDefaultCreationPath();
@@ -704,7 +671,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
 
     // ── Confirmation panel ────────────────────────────────────────────────────
 
-    const renderConfirm = (project: CloudProject) => (
+    const renderConfirm = (project: Project) => (
         <>
             <FormPanelHeader>
                 <FormPanelTitle>{cloneSuccess ? "All done!" : "Clone Project"}</FormPanelTitle>
@@ -881,7 +848,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                     <SignInDescription>
                         Connect your WSO2 account to clone and open projects directly from the cloud.
                     </SignInDescription>
-                    <SignInButton type="button" onClick={handleSignIn} disabled={isSigningIn}>
+                    <SignInButton type="button" onClick={isSigningIn ? handleCancelSignIn : handleSignIn}>
                         {isSigningIn ? (
                             <>
                                 <Codicon
@@ -890,6 +857,11 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                                     sx={{ width: "14px", height: "14px" }}
                                 />
                                 Signing in...
+                                <Codicon
+                                    name="close"
+                                    iconSx={{ fontSize: "12px", color: "var(--vscode-button-foreground)", opacity: 0.8 }}
+                                    sx={{ width: "12px", height: "12px" }}
+                                />
                             </>
                         ) : (
                             <>
