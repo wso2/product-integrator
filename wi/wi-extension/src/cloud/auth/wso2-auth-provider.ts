@@ -31,6 +31,7 @@ import {
 import type { ChoreoRPCClient } from "../choreo-cli-rpc";
 import { contextStore } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
+import { ext } from "../../extensionVariables";
 
 export const WSO2_AUTH_PROVIDER_ID = "wso2-wi";
 const WSO2_SESSIONS_SECRET_KEY = `${WSO2_AUTH_PROVIDER_ID}.sessions`;
@@ -240,7 +241,15 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 				if (!region) {
 					throw new Error("Region is not available or invalid");
 				}
-				
+
+				if (ext.isDevantCloudEditor) {
+					try {
+						await this.deps.rpcClient.getStsToken();
+					} catch (err) {
+						this.deps.logError("STS token warm-up failed on cloud-editor startup", err as Error);
+					}
+				}
+
 				await this.loginSuccess(userInfo, region);
 				const contextStoreState = contextStore.getState().state;
 				if (contextStoreState.selected?.org) {
