@@ -347,6 +347,7 @@ export class MainWsManager implements WIVisualizerAPI {
 
                 if (result) {
                     openInVSCode((result as CreateMiProjectResponse).filePath);
+                    resolve(result as CreateMiProjectResponse);
                 } else {
                     resolve({ filePath: '' });
                 }
