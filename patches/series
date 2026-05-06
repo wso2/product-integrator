@@ -7,6 +7,7 @@ gettingStarted.diff
 packageResources.diff
 wso2-font-pkg-update
 disableAiFeatures.diff
+removeCopilotStatusBar.diff
 increaseHeap.diff
 skip-extension-outdated-test.diff
 disableVsixChecksumCheck.diff
