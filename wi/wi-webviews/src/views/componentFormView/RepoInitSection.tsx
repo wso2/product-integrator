@@ -149,6 +149,7 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
                 orgId,
                 credRef: gitProvider !== GitProvider.GITHUB ? credential : "",
             }),
+        select: (data: any) => data ?? [],
         enabled: !!repo && !!repoUrl,
         refetchOnWindowFocus: true,
     });

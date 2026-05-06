@@ -2,7 +2,7 @@
   "name": "wso2-integrator",
   "displayName": "WSO2 Integrator (Beta)",
   "description": "Integration development environment for WSO2 Integrator",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "cliVersion": "v1.2.212604271730",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
@@ -131,7 +131,7 @@
       {
         "view": "wso2-integrator.explorer",
         "contents": "$(loadingspin) Loading WSO2 Integrator...",
-        "when": "!WI.projectType"
+        "when": "!WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
       },
       {
         "view": "wso2-integrator.explorer",
@@ -142,6 +142,16 @@
         "view": "wso2-integrator.explorer",
         "contents": "No integrations or libraries found in this project.\n\nGet started by adding your first integration or library.\n\n[$(add) Create Integration or Library](command:BI.project-explorer.add)",
         "when": "BI.project.empty"
+      },
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": "Welcome to WSO2 Integrator.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart VS Code to apply the changes. [Learn more](https://wso2.github.io/docs-integrator/)",
+        "when": "(!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
+      },
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": "Welcome to WSO2 Integrator.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart VS Code to apply the changes. [Learn more](https://wso2.github.io/docs-integrator/)",
+        "when": "(!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
       }
     ],
     "commands": [
@@ -335,6 +345,11 @@
         "title": "Add Custom Connector",
         "icon": "$(add)",
         "category": "WSO2 Integrator"
+      },
+      {
+        "command": "wso2.integrator.setupBallerinaVisually",
+        "title": "Setup Ballerina",
+        "category": "WSO2 Integrator"
       }
     ],
     "menus": {
@@ -397,6 +412,10 @@
         },
         {
           "command": "BI.project-explorer.add-custom-connector",
+          "when": "false"
+        },
+        {
+          "command": "wso2.integrator.setupBallerinaVisually",
           "when": "false"
         }
       ],
