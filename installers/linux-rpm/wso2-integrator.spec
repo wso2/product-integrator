@@ -66,7 +66,9 @@ rm -rf %{buildroot}
 # Change ownership and permissions for integrator files
 chown -R root:root /usr/share/wso2-integrator
 chmod -R o+w /usr/share/wso2-integrator/components/icp/bin/database/ 2>/dev/null || true
-chmod -R o+rwx /usr/share/wso2-integrator/components/icp/www/public/ 2>/dev/null || true
+mkdir -p /usr/share/wso2-integrator/components/icp/logs
+chmod -R o+rwx /usr/share/wso2-integrator/components/icp/logs/
+chmod o+w /usr/share/wso2-integrator/components/icp/www/config.json 2>/dev/null || true
 chmod 4755 /usr/share/wso2-integrator/chrome-sandbox 2>/dev/null || true
 
 # Create symlink to /usr/bin
