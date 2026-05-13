@@ -1518,7 +1518,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		const signInButton = append(formContainer, $('button.wso2-sign-in-btn')) as HTMLButtonElement;
 +		signInButton.style.display = 'none';
 +		const textSpan = append(signInButton, $('span.btn-text'));
-+		textSpan.textContent = 'Sign in with WSO2 account';
++		textSpan.textContent = 'Sign in with WSO2 Cloud';
 +
 +		// Skip button (hidden initially)
 +		const skipButton = append(formContainer, $('button.skip-btn')) as HTMLButtonElement;
