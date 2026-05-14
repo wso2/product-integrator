@@ -137,7 +137,7 @@ jobs:
     needs: compile
     uses: ./.github/workflows/smoke-test.yml
     with:
-      artifact_name: Product-Integrator-TAR
+      artifact_name: Product-Integrator-DEB
 
   smoke-test-windows:
     if: ${{ github.event.inputs.build_windows == 'true' && github.event.inputs.build_packed_installers == 'true' }}

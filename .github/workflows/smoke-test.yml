@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       artifact_name:
-        description: 'Linux tar.gz artifact name'
+        description: 'Linux DEB artifact name'
         required: false
         type: string
         default: ''
@@ -63,16 +63,19 @@ jobs:
         if: inputs.integrator_version != '' && inputs.artifact_name == ''
         run: |
           VERSION="${{ inputs.integrator_version }}"
-          TARBALL="wso2-integrator-${VERSION}-linux-x64.tar.gz"
-          URL="https://github.com/wso2/product-integrator/releases/download/v${VERSION}/${TARBALL}"
+          DEB="wso2-integrator_${VERSION}_amd64.deb"
+          URL="https://github.com/wso2/product-integrator/releases/download/v${VERSION}/${DEB}"
           mkdir -p artifact
-          curl -fSL -o "artifact/${TARBALL}" "$URL"
+          curl -fSL -o "artifact/${DEB}" "$URL"
 
-      - name: Extract and locate binary
+      - name: Install DEB and locate binary
         run: |
-          cd artifact
-          tar -xzf *.tar.gz
-          BINARY=$(find . -maxdepth 2 -name 'wso2-integrator' -type f ! -path '*/bin/*' | head -1)
+          sudo apt-get install -y ./artifact/*.deb
+          BINARY=$(find /usr/share /opt -maxdepth 4 -name 'wso2-integrator' -type f ! -path '*/bin/*' 2>/dev/null | head -1)
+          if [ -z "$BINARY" ]; then
+            echo "wso2-integrator binary not found" >&2
+            exit 1
+          fi
           chmod +x "$BINARY"
           echo "WSO2_INTEGRATOR_PATH=$(realpath $BINARY)" >> "$GITHUB_ENV"
 
