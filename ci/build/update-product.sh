@@ -86,7 +86,7 @@ cat > lib/vscode/product.json <<EOF
     "urlProtocol": "wso2-integrator",
     "licenseFileName": "LICENSE.txt",
     "reportIssueUrl": "https://github.com/wso2/product-integrator/issues",
-    "documentationUrl": "https://wso2.github.io/docs-integrator/",
+    "documentationUrl": "https://wso2.com/integration-platform/docs/",
     "keyboardShortcutsUrlMac": "https://go.microsoft.com/fwlink/?linkid=832143",
     "keyboardShortcutsUrlLinux": "https://go.microsoft.com/fwlink/?linkid=832144",
     "keyboardShortcutsUrlWin": "https://go.microsoft.com/fwlink/?linkid=832145",

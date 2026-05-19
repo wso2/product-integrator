@@ -61,6 +61,7 @@ export function BIProjectForm({ ballerinaUnavailable }: { ballerinaUnavailable?:
     const [projectHandleError, setProjectHandleError] = useState<string | null>(null);
     const [cloudProjectNameError, setCloudProjectNameError] = useState<string | null>(null);
     const [cloudProjectHandleError, setCloudProjectHandleError] = useState<string | null>(null);
+    const [childHasErrors, setChildHasErrors] = useState(false);
     const [expandAdvancedTrigger, setExpandAdvancedTrigger] = useState(0);
     const createActionLabel = "Create Integration";
 
@@ -227,12 +228,13 @@ export function BIProjectForm({ ballerinaUnavailable }: { ballerinaUnavailable?:
                 organizations={organizations}
                 onCloudProjectNameError={setCloudProjectNameError}
                 onCloudProjectHandleError={setCloudProjectHandleError}
+                onHasErrors={setChildHasErrors}
                 />
 
             <ButtonWrapper>
                 <span title={ballerinaUnavailable ? "Ballerina distribution is not set up. Use Configure to set it up." : undefined}>
                     <Button
-                        disabled={isValidating || ballerinaUnavailable}
+                        disabled={isValidating || ballerinaUnavailable || childHasErrors}
                         onClick={handleCreateProject}
                         appearance="primary"
                     >

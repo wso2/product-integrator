@@ -22,6 +22,7 @@ const CLI_PLATFORMS = [
     { assetSuffix: 'linux-amd64',    os: 'linux',   arch: 'amd64',  ext: '.tar.gz', binary: 'choreo' },
     { assetSuffix: 'linux-arm64',    os: 'linux',   arch: 'arm64',  ext: '.tar.gz', binary: 'choreo' },
     { assetSuffix: 'windows-amd64',  os: 'win32',   arch: 'amd64',  ext: '.zip',    binary: 'choreo.exe' },
+    { assetSuffix: 'windows-arm64',  os: 'win32',   arch: 'arm64',  ext: '.zip',    binary: 'choreo.exe' },
 ];
 
 // ============================================================================

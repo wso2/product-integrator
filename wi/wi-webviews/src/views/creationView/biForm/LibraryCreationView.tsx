@@ -17,6 +17,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import debounce from "lodash/debounce";
 import { Button, Icon, TextField, CheckBox } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
 import { useVisualizerContext } from "../../../contexts";
@@ -53,6 +54,7 @@ import {
     FormFooter,
 } from "../../shared/FormPageLayout";
 import { DEFAULT_LIBRARY_NAME, DEFAULT_PACKAGE_NAME, DEFAULT_PROJECT_NAME } from "./types";
+import { useRealtimeProjectPathValidation } from "./useRealtimeProjectPathValidation";
 
 const FieldGroup = styled.div`
     margin-bottom: 20px;
@@ -93,6 +95,8 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
     const [cloudProjectHandleError, setCloudProjectHandleError] = useState<string | null>(null);
     const [matchedCloudProject, setMatchedCloudProject] = useState<{ project: any; org: any } | null>(null);
     const [defaultPath, setDefaultPath] = useState("");
+    const [pathTouched, setPathTouched] = useState(false);
+    const [editablePath, setEditablePath] = useState("");
     const [formData, setFormData] = useState<LibraryFormData>({
         libraryName: DEFAULT_LIBRARY_NAME,
         packageName: DEFAULT_PACKAGE_NAME,
@@ -100,6 +104,15 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
         orgName: "",
         version: "",
     });
+
+    const debouncedSetLibraryNameError = useMemo(
+        () => debounce((error: string) => setLibraryNameError(error), 300),
+        []
+    );
+    const debouncedSetWithinProjectNameError = useMemo(
+        () => debounce((error: string) => setWithinProjectNameError(error), 300),
+        []
+    );
 
     const resolvedOrg = useMemo(() => {
         if (!organizations || organizations.length === 0) return undefined;
@@ -121,16 +134,11 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
             if (!mounted) return;
             setDefaultPath(dp);
             setFormData(prev => ({ ...prev, path: dp }));
-
-            if (isProjectModeSupported) {
-                if (!mounted) return;
-                setCreateWithinProject(true);
-            }
         })();
         return () => {
             mounted = false;
         };
-    }, [workspaceReady, wsClient, workspacePath, isProjectModeSupported]);
+    }, [workspaceReady, wsClient, workspacePath]);
 
     // Initialize org name independently of workspace readiness.
     useEffect(() => {
@@ -154,6 +162,19 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
         setOrgNameError(validateOrgName(formData.orgName));
     }, [formData.orgName]);
 
+    // Real-time library name validation — clear immediately when valid, debounce new errors
+    // to avoid flashing "required" on every keystroke.
+    useEffect(() => {
+        const error = validateComponentName(formData.libraryName);
+        if (!error) {
+            debouncedSetLibraryNameError.cancel();
+            setLibraryNameError(null);
+            return;
+        }
+        debouncedSetLibraryNameError(error);
+        return () => debouncedSetLibraryNameError.cancel();
+    }, [formData.libraryName]);
+
     // Auto-derive handle from withinProjectName unless manually edited
     useEffect(() => {
         if (handleTouched.current) return;
@@ -163,7 +184,6 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
         }
     }, [withinProjectName, createWithinProject]);
 
-    // Validate handle
     useEffect(() => {
         if (createWithinProject) {
             setProjectHandleError(validateProjectHandle(withinProjectHandle));
@@ -171,6 +191,23 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
             setProjectHandleError(null);
         }
     }, [withinProjectHandle, createWithinProject]);
+
+    // Real-time project name validation — clear immediately when valid, debounce new errors.
+    useEffect(() => {
+        if (!createWithinProject) {
+            debouncedSetWithinProjectNameError.cancel();
+            setWithinProjectNameError(null);
+            return;
+        }
+        const error = validateProjectName(withinProjectName.trim());
+        if (!error) {
+            debouncedSetWithinProjectNameError.cancel();
+            setWithinProjectNameError(null);
+            return;
+        }
+        debouncedSetWithinProjectNameError(error);
+        return () => debouncedSetWithinProjectNameError.cancel();
+    }, [withinProjectName, createWithinProject]);
 
     // Validate project name against cached cloud projects — synchronous, no debounce needed.
     useEffect(() => {
@@ -235,8 +272,26 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
         }, 0);
     }, []);
 
+    // Keep editablePath in sync with the committed path when the user is not actively editing
+    useEffect(() => {
+        if (!pathTouched) {
+            setEditablePath(formData.path || defaultPath);
+        }
+    }, [formData.path, defaultPath, pathTouched]);
+
+    useRealtimeProjectPathValidation({
+        wsClient,
+        projectPath: editablePath,
+        projectName: createWithinProject ? withinProjectHandle : formData.packageName,
+        createAsWorkspace: createWithinProject,
+        pathTouched,
+        requiredPathMessage: "Please select a path for your library",
+        invalidPathMessage: "Invalid library path",
+        onPathErrorChange: setPathError,
+    });
+
     const computeDisplayedPath = (): string => {
-        const base = formData.path || defaultPath;
+        const base = editablePath;
         if (createWithinProject) {
             const projectPath = withinProjectHandle
                 ? joinPath(base, withinProjectHandle)
@@ -249,7 +304,6 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
     const resolvedPath = computeDisplayedPath();
 
     const handleLibraryName = (value: string) => {
-        if (libraryNameError) setLibraryNameError(null);
         const sanitized = sanitizePackageName(value);
         setFormData(prev => ({
             ...prev,
@@ -262,9 +316,10 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
     };
 
     const handlePathSelection = async () => {
-        const result = await wsClient.selectFileOrDirPath({ startPath: formData.path || defaultPath });
+        const result = await wsClient.selectFileOrDirPath({ startPath: editablePath || formData.path || defaultPath });
         if (!result.path) return;
-        if (pathError) setPathError(null);
+        setPathTouched(false);
+        setEditablePath(result.path);
         setFormData(prev => ({ ...prev, path: result.path }));
     };
 
@@ -287,10 +342,12 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
 
     const handleCreate = async () => {
         setIsValidating(true);
-        setLibraryNameError(null);
-        setPathError(null);
-        setPackageNameError(null);
-        setWithinProjectNameError(null);
+
+        // Commit any un-blurred path before submitting
+        const currentPath = editablePath || formData.path;
+        if (pathTouched && editablePath !== formData.path) {
+            setFormData(prev => ({ ...prev, path: editablePath }));
+        }
 
         let hasError = false;
 
@@ -313,7 +370,7 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
             }
         }
 
-        if (formData.path.length < 2) {
+        if (!currentPath || currentPath.trim().length < 2) {
             setPathError("Please select a path for your library");
             hasError = true;
         }
@@ -355,7 +412,7 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
 
         try {
             const validationResult = await wsClient.validateProjectPath({
-                projectPath: formData.path,
+                projectPath: currentPath,
                 projectName: createWithinProject ? withinProjectHandle : formData.packageName,
                 createDirectory: true,
                 createAsWorkspace: createWithinProject,
@@ -383,7 +440,7 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
             await wsClient.createBIProject({
                 projectName: formData.libraryName.trim(),
                 packageName: formData.packageName,
-                projectPath: formData.path,
+                projectPath: currentPath,
                 createDirectory: true,
                 createAsWorkspace: createWithinProject,
                 workspaceName: createWithinProject ? withinProjectName : undefined,
@@ -437,10 +494,20 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
                                 />
                             </FieldGroup>
 
-                            {/* Project Name - shown by default when project mode is supported */}
+                            {/* Project Name - shown when checkbox is checked */}
                             {isProjectModeSupported && (
                                 <ProjectSectionContainer>
                                     <ProjectSectionLabel>Project</ProjectSectionLabel>
+                                    <SkipOptionRow>
+                                        <CheckBox
+                                            label="Create within a project"
+                                            checked={createWithinProject}
+                                            onChange={handleCreateWithinProjectToggle}
+                                        />
+                                        <Description style={{ marginTop: "6px" }}>
+                                            Enable project mode to manage multiple integrations and libraries within a single repository.
+                                        </Description>
+                                    </SkipOptionRow>
                                     <ProjectFieldCollapse isVisible={createWithinProject}>
                                         <TextField
                                             onTextChange={(value) => {
@@ -470,16 +537,6 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
                                             </CloudErrorActionRow>
                                         )}
                                     </ProjectFieldCollapse>
-                                    <SkipOptionRow>
-                                        <CheckBox
-                                            label="Create within a project"
-                                            checked={createWithinProject}
-                                            onChange={handleCreateWithinProjectToggle}
-                                        />
-                                        <Description style={{ marginTop: "6px" }}>
-                                            Enable project mode to manage multiple integrations and libraries within a single repository.
-                                        </Description>
-                                    </SkipOptionRow>
                                 </ProjectSectionContainer>
                             )}
 
@@ -488,16 +545,21 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
                                     id="library-folder-selector"
                                     label="Select Path"
                                     placeholder="Browse to select a folder..."
-                                    selectedPath={formData.path || defaultPath}
+                                    selectedPath={editablePath}
                                     required={true}
                                     onSelect={handlePathSelection}
                                     onChange={(value) => {
-                                        if (pathError) setPathError(null);
-                                        setFormData(prev => ({ ...prev, path: value }));
+                                        setPathTouched(true);
+                                        setEditablePath(value);
+                                    }}
+                                    onBlur={() => {
+                                        if (pathTouched && editablePath !== formData.path) {
+                                            setFormData(prev => ({ ...prev, path: editablePath }));
+                                        }
                                     }}
                                     errorMsg={pathError || undefined}
                                 />
-                                {resolvedPath && resolvedPath !== (formData.path || defaultPath) && (
+                                {resolvedPath && resolvedPath !== editablePath && (
                                     <ResolvedPathText>Will be created at: {resolvedPath}</ResolvedPathText>
                                 )}
                             </FieldGroup>
@@ -540,7 +602,7 @@ export function LibraryCreationView({ onBack, ballerinaUnavailable }: { onBack?:
                             <FormFooter>
                                 <span title={ballerinaUnavailable ? "Ballerina distribution is not set up. Use Configure to set it up." : undefined}>
                                     <Button
-                                        disabled={isValidating || ballerinaUnavailable}
+                                        disabled={isValidating || ballerinaUnavailable || !!libraryNameError || !!withinProjectNameError || !!cloudProjectNameError || !!cloudProjectHandleError || !!packageNameError || !!orgNameError || !!projectHandleError || !!pathError}
                                         onClick={handleCreate}
                                         appearance="primary"
                                     >

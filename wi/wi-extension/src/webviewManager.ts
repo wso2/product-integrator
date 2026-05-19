@@ -58,11 +58,29 @@ export class WebviewManager {
 		const columnToShowIn = vscode.window.activeTextEditor
 			? vscode.window.activeTextEditor.viewColumn
 			: undefined;
+		const publishCurrentState = () => {
+			const context = StateMachine.getContext();
+			BridgeLayer.notifyStateChanged(this.projectUri, {
+				currentView: context.currentView,
+				projectUri: this.projectUri,
+				platform: getPlatform(),
+				pathSeparator: path.sep,
+				env: {
+					MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
+					BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
+					SAMPLES_INFO_URL: process.env.SAMPLES_INFO_URL || '',
+					SAMPLES_REPOSITORY_URL: process.env.SAMPLES_REPOSITORY_URL || '',
+					PREBUILT_INTEGRATIONS_URL: process.env.PREBUILT_INTEGRATIONS_URL || '',
+				},
+			});
+		};
 
 		// If we already have a panel, update view type and reveal it
 		if (this.currentPanel) {
 			this.currentViewType = viewType;
+			this.currentPanel.title = this.getPanelTitle(viewType);
 			this.currentPanel.reveal(columnToShowIn);
+			publishCurrentState();
 			return;
 		}
 
@@ -110,21 +128,10 @@ export class WebviewManager {
 
 		// Subscribe to state machine changes
 		this.stateSubscription = StateMachine.subscribe(() => {
-			const context = StateMachine.getContext();
-			BridgeLayer.notifyStateChanged(this.projectUri, {
-				currentView: context.currentView,
-				projectUri: this.projectUri,
-				platform: getPlatform(),
-				pathSeparator: path.sep,
-				env: {
-					MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
-					BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
-					SAMPLES_INFO_URL: process.env.SAMPLES_INFO_URL || '',
-					SAMPLES_REPOSITORY_URL: process.env.SAMPLES_REPOSITORY_URL || '',
-					PREBUILT_INTEGRATIONS_URL: process.env.PREBUILT_INTEGRATIONS_URL || '',
-				},
-			});
+			publishCurrentState();
 		});
+
+		publishCurrentState();
 	}
 
 	/**
@@ -154,6 +161,8 @@ export class WebviewManager {
 				return "Import Project";
 			case ViewType.CREATE_CLOUD_INTEGRATION:
 				return "Deploy Integration";
+			case ViewType.SETUP_BALLERINA:
+				return "Setup Ballerina";
 			case ViewType.WELCOME:
 			default:
 				return "Welcome";

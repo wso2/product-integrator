@@ -1033,7 +1033,7 @@ export function WizardAIEnhancementView({ wsClient, projectCount, isMultiProject
                         isRunning
                             ? "AI enhancement is in progress. Pause first to open the project."
                             : openProjectDisabled
-                                ? `Opening ${projectCount} projects simultaneously may cause VS Code to become unresponsive. Navigate to the destination path to open them manually.`
+                                ? `Opening ${projectCount} projects simultaneously may cause the editor to become unresponsive. Navigate to the destination path to open them manually.`
                                 : undefined
                     }
                 >

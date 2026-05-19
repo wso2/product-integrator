@@ -18,7 +18,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
-import { type WICloudFormContext, type WICloudSubmitComponentsReq } from "@wso2/wi-core";
+import { GetGitMetadataResp, type WICloudFormContext, type WICloudSubmitComponentsReq } from "@wso2/wi-core";
 import { buildGitURL, type CreateComponentReq, DevantScopes, getTypeOfIntegrationType, type ICreateNewIntegrationCmdIntegrations, makeURLSafe, WICommandIds } from "@wso2/wso2-platform-core";
 import { useVisualizerContext } from "../../contexts";
 import { useCloudContext } from "../../providers";
@@ -183,18 +183,25 @@ function ComponentForm() {
 				const repoInit = repoInitDataRef.current;
 				if (!repoInit) { throw new Error("Repo init data is missing"); }
 
-				const repoUrl = buildGitURL(repoInit.orgHandler, repoInit.repo, repoInit.gitProvider, false, repoInit.serverUrl);
+				repoUrl = buildGitURL(repoInit.orgHandler, repoInit.repo, repoInit.gitProvider, false, repoInit.serverUrl);
 
 				// Validate subpath via getGitRepoMetadata
 				const subPath = repoInit.subPath.startsWith("/") ? repoInit.subPath.slice(1) : repoInit.subPath;
-				const resp = await wsClient.getGitRepoMetadata({
-					branch: repoInit.branch,
-					gitOrgName: repoInit.org,
-					gitRepoName: repoInit.repo,
-					relativePath: subPath,
-					orgId: params!.org.id?.toString(),
-					secretRef: repoInit.credential || "",
-				});
+				let resp: GetGitMetadataResp;
+				try {
+					resp = await wsClient.getGitRepoMetadata({
+						branch: repoInit.branch,
+						gitOrgName: repoInit.org,
+						gitRepoName: repoInit.repo,
+						relativePath: subPath,
+						orgId: params!.org.id?.toString(),
+						secretRef: repoInit.credential || "",
+					});
+				} catch (error) {
+					// Console log and proceed as this would anyway fail with a 400 for repositories without branches
+					repoInit.branch = "";
+					console.error("Failed to get Git repository metadata", error);
+				}
 				if (resp?.metadata && !resp.metadata.isSubPathEmpty) {
 					throw new Error(`The path "${repoInit.subPath}" is not empty in the remote repository. Please choose an empty path.`);
 				}

@@ -36,7 +36,8 @@
     "react-refresh": "0.18.0",
     "@ts-morph/common": "0.28.1",
     "react-markdown": "10.1.0",
-    "remark-gfm": "4.0.1"
+    "remark-gfm": "4.0.1",
+    "lodash": "4.17.23"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
@@ -52,6 +53,7 @@
     "webpack-dev-server": "5.2.2",
     "ts-loader": "9.5.2",
     "react-hot-loader": "4.13.1",
-    "source-map-loader": "5.0.0"
+    "source-map-loader": "5.0.0",
+    "@types/lodash": "4.17.16"
   }
 }

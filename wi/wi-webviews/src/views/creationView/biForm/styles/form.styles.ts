@@ -55,13 +55,12 @@ export const ProjectFieldCollapse = styled.div<{ isVisible: boolean }>`
     opacity: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? 1 : 0)};
     overflow: hidden;
     transition: max-height 0.25s ease, opacity 0.2s ease;
-    padding: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? "12px 12px 12px 12px" : "0 12px")};
+    padding: ${({ isVisible }: { isVisible: boolean }) => (isVisible ? "12px" : "0 12px")};
 `;
 
 export const SkipOptionRow = styled.div`
     display: flex;
     flex-direction: column;
-    border-top: 1px solid var(--vscode-panel-border);
     padding: 10px 12px;
 `;
 

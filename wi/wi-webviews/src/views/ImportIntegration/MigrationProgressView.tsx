@@ -189,7 +189,7 @@ export function MigrationProgressView({
                                     text: isMultiProject ? "Open Workspace" : "Open Project",
                                     onClick: onOpenProject,
                                     disabled: true,
-                                    tooltip: `Opening ${projects.length} projects simultaneously may cause VS Code to become unresponsive. Navigate to the destination path to open them manually.`,
+                                    tooltip: `Opening ${projects.length} projects simultaneously may cause the editor to become unresponsive. Navigate to the destination path to open them manually.`,
                                 }}
                             />
                         ) : (

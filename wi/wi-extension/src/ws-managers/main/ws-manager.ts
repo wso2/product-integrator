@@ -228,7 +228,6 @@ export class MainWsManager implements WIVisualizerAPI {
             } else {
                 const selectedDir = await askProjectPath(params.startPath);
                 if (!selectedDir || selectedDir.length === 0) {
-                    window.showErrorMessage('A folder must be selected');
                     resolve({ path: "" });
                 } else {
                     const dirPath = selectedDir[0].fsPath;

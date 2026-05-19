@@ -383,6 +383,9 @@ importers:
       classnames:
         specifier: 2.5.1
         version: 2.5.1
+      lodash:
+        specifier: 4.17.23
+        version: 4.17.23
       react:
         specifier: 18.2.0
         version: 18.2.0
@@ -411,6 +414,9 @@ importers:
       '@biomejs/biome':
         specifier: 1.9.4
         version: 1.9.4
+      '@types/lodash':
+        specifier: 4.17.16
+        version: 4.17.16
       '@types/node':
         specifier: 22.15.21
         version: 22.15.21

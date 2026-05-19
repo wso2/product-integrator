@@ -385,37 +385,72 @@ export function validateProjectPath(projectPath: string, projectName: string, cr
             return { isValid: false, errorMessage: 'Project name is required', errorField: ValidateProjectFormErrorField.NAME };
         }
 
-        // Check if the base directory exists
-        if (!fs.existsSync(projectPath)) {
-            // Check if parent directory exists and we can create the path
-            const parentDir = path.dirname(projectPath);
-            if (!fs.existsSync(parentDir)) {
-                return { isValid: false, errorMessage: 'Directory path does not exist', errorField: ValidateProjectFormErrorField.PATH };
-            }
-        }
-
-        // Determine the final project path
         const finalPath = createDirectory ? path.join(projectPath, sanitizeName(projectName)) : projectPath;
 
-        // If not creating a new directory, check if the target directory already has a Ballerina project
         if (!createDirectory) {
+            if (!fs.existsSync(projectPath)) {
+                return { isValid: false, errorMessage: 'Directory does not exist. Please select an existing directory.', errorField: ValidateProjectFormErrorField.PATH };
+            }
+            if (!fs.statSync(projectPath).isDirectory()) {
+                return {
+                    isValid: false,
+                    errorMessage: 'The selected path is a file, not a directory. Please select a directory.',
+                    errorField: ValidateProjectFormErrorField.PATH
+                };
+            }
             const ballerinaTomlPath = path.join(finalPath, 'Ballerina.toml');
             if (fs.existsSync(ballerinaTomlPath)) {
                 return { isValid: false, errorMessage: 'Existing Ballerina project detected in the selected directory', errorField: ValidateProjectFormErrorField.PATH };
             }
         } else {
-            // If creating a new directory, check if it already exists
+            // non-existing projectPath is fine — all intermediate directories will be created at project-creation time.
             if (fs.existsSync(finalPath)) {
-                return { isValid: false, errorMessage: `A directory with this name already exists at the selected location`, errorField: ValidateProjectFormErrorField.NAME};
+                const isDir = fs.statSync(finalPath).isDirectory();
+                return {
+                    isValid: false,
+                    errorMessage: isDir
+                        ? `A directory with this name already exists at the selected location`
+                        : `A file with this name already exists at the selected location`,
+                    errorField: ValidateProjectFormErrorField.NAME
+                };
             }
         }
 
-        // Validate if we have write permissions
+        // Validate write permissions. Walk up from projectPath to find the first existing
+        // ancestor, then check that ancestor for write access. This correctly handles typed
+        // paths that are multiple levels deep and not yet on disk.
+        let writableAncestor = projectPath;
+        while (!fs.existsSync(writableAncestor)) {
+            const parent = path.dirname(writableAncestor);
+            if (parent === writableAncestor) {
+                return {
+                    isValid: false,
+                    errorMessage: 'Directory does not exist. Please select an existing directory.',
+                    errorField: ValidateProjectFormErrorField.PATH
+                };
+            }
+            writableAncestor = parent;
+        }
+
+        if (!fs.statSync(writableAncestor).isDirectory()) {
+            return {
+                isValid: false,
+                errorMessage: 'The path contains a file where a directory is expected.',
+                errorField: ValidateProjectFormErrorField.PATH
+            };
+        }
+
         try {
-            // Try to access the directory with write permissions
-            fs.accessSync(projectPath, fs.constants.W_OK);
+            fs.accessSync(writableAncestor, fs.constants.W_OK);
         } catch (error) {
-            return { isValid: false, errorMessage: 'No write permission for the selected directory', errorField: ValidateProjectFormErrorField.PATH };
+            const isProjectPathMissing = !fs.existsSync(projectPath);
+            return {
+                isValid: false,
+                errorMessage: isProjectPathMissing
+                    ? 'No write permission to create the directory at the selected location'
+                    : 'No write permission for the selected directory',
+                errorField: ValidateProjectFormErrorField.PATH
+            };
         }
 
         return { isValid: true };

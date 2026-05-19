@@ -57,24 +57,30 @@ rm -rf "$EXTRACTION_TARGET/__MACOSX"
 
 # Prune choreo-cli to darwin/$ARCH only
 case "$ARCH" in
-    amd64|arm64) ;;
-    *) print_error "Unsupported ARCH '$ARCH' for choreo-cli pruning (expected amd64 or arm64)"; exit 1 ;;
+    amd64|arm64|x64) ;;
+    *) print_error "Unsupported ARCH '$ARCH' for choreo-cli pruning (expected amd64, x64, or arm64)"; exit 1 ;;
 esac
+# choreo-cli uses Go/Docker naming (amd64), while VSCode/matrix uses x64 for Intel
+if [ "$ARCH" = "x64" ]; then
+    CHOREO_ARCH="amd64"
+else
+    CHOREO_ARCH="$ARCH"
+fi
 CHOREO_CLI_DIR="$WSO2_TARGET/WSO2 Integrator.app/Contents/Resources/app/extensions/wso2.wso2-integrator/resources/choreo-cli"
 if [ -d "$CHOREO_CLI_DIR" ]; then
-    print_info "Pruning choreo-cli binaries to darwin/$ARCH only"
+    print_info "Pruning choreo-cli binaries to darwin/$CHOREO_ARCH only"
     for VERSION_DIR in "$CHOREO_CLI_DIR"/*/; do
         [ -d "$VERSION_DIR" ] || continue
         rm -rf "${VERSION_DIR}linux"
         rm -rf "${VERSION_DIR}win32"
         for ARCH_DIR in "${VERSION_DIR}darwin"/*/; do
             [ -d "$ARCH_DIR" ] || continue
-            if [ "$(basename "$ARCH_DIR")" != "$ARCH" ]; then
+            if [ "$(basename "$ARCH_DIR")" != "$CHOREO_ARCH" ]; then
                 rm -rf "$ARCH_DIR"
             fi
         done
-        if [ -d "${VERSION_DIR}darwin" ] && [ ! -d "${VERSION_DIR}darwin/$ARCH" ]; then
-            print_error "choreo-cli darwin/$ARCH not found after pruning in ${VERSION_DIR}"
+        if [ -d "${VERSION_DIR}darwin" ] && [ ! -d "${VERSION_DIR}darwin/$CHOREO_ARCH" ]; then
+            print_error "choreo-cli darwin/$CHOREO_ARCH not found after pruning in ${VERSION_DIR}"
             exit 1
         fi
     done

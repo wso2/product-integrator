@@ -137,10 +137,10 @@ export class WSO2AuthenticationProvider implements AuthenticationProvider, Dispo
 
 	/**
 	 * Create a new auth session by triggering the sign-in flow
-	 * This is called when user clicks "Sign in" in VS Code's Accounts menu
+	 * This is called when user clicks "Sign in" in the Editor Accounts menu
 	 */
 	public async createSession(scopes: string[], options?: AuthenticationProviderSessionOptions): Promise<AuthenticationSession> {
-		console.log("Creating new auth session via VS Code Accounts menu");
+		console.log("Creating new auth session via the Editor Accounts menu");
 		const customOptions = options as any;
 		const platform = customOptions?.platform;
 

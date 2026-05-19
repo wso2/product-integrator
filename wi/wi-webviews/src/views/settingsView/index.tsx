@@ -42,7 +42,7 @@ import {
     HeaderTitle,
     PageBackdrop,
 } from "../shared/FormPageLayout";
-import { SetupContent } from "../setupView";
+import { SetupContent } from "../setup/CompactContent";
 
 const PROFILE_OPTIONS: OptionProps[] = SELECTED_PROFILE_VALUES.map((profile) => ({
     id: profile,

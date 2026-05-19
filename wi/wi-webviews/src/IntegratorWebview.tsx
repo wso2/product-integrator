@@ -22,6 +22,7 @@ import { CreationView } from "./views/creationView";
 import { ImportIntegration } from "./views/ImportIntegration";
 import { SamplesView } from "./views/samplesView";
 import { ComponentFormView } from "./views/componentFormView";
+import { SetupBallerinaView } from "./views/setup/BallerinaView";
 import { useVisualizerContext } from "./contexts";
 import { ProgressIndicator } from "@wso2/ui-toolkit";
 
@@ -54,6 +55,8 @@ function IntegratorWebview() {
 			);
 		case ViewType.CREATE_CLOUD_INTEGRATION:
 			return <ComponentFormView />;
+		case ViewType.SETUP_BALLERINA:
+			return <SetupBallerinaView />;
 		default:
 			return (
 				<div style={{ padding: "2rem", textAlign: "center" }}>

@@ -8,7 +8,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
  			urlProtocol: 'wso2-integrator',
 -			reportIssueUrl: 'https://github.com/wso2/product-integrator/issues/new',
 +			reportIssueUrl: 'https://github.com/wso2/product-integrator/issues',
-+			documentationUrl: 'https://wso2.github.io/docs-integrator/',
++			documentationUrl: 'https://wso2.com/integration-platform/docs/',
  			licenseName: 'MIT',
 -			licenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt',
 -			serverLicenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt'
