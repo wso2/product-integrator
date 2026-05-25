@@ -775,7 +775,6 @@ export const WelcomeView: React.FC = () => {
 	const goToImportExternal = () => setCurrentView(ViewState.IMPORT_EXTERNAL);
 	const goToSettings = () => setCurrentView(ViewState.SETTINGS);
 	const goBackToWelcome = () => setCurrentView(ViewState.WELCOME);
-	const goToCreateLibrary = () => setCurrentView(ViewState.CREATE_LIBRARY);
 	const goToCreateProject = () => setCurrentView(ViewState.CREATE_PROJECT);
 
     const handleProjectDirSelection = () => {
@@ -910,6 +909,9 @@ export const WelcomeView: React.FC = () => {
 
 	const renderWelcomeContent = () => {
         const biUnavailable = isBallerinaUnavailable === true;
+        const isBI = selectedRuntime === "WSO2: BI";
+        const primaryCreateAction = isBI ? goToCreateProject : goToCreateIntegration;
+        const primaryOpenAction = isBI ? handleProjectDirSelection : openIntegrationFileBrowser;
         return (
 		<>
 			<TopSection>
@@ -988,7 +990,7 @@ export const WelcomeView: React.FC = () => {
 								<CardsGrid>
 									<ActionCard
 										disabled={biUnavailable}
-										onClick={biUnavailable ? undefined : goToCreateIntegration}
+										onClick={biUnavailable ? undefined : primaryCreateAction}
 										title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
 									>
 										<CardIconContainer>
@@ -1001,19 +1003,16 @@ export const WelcomeView: React.FC = () => {
 											</CardIcon>
 										</CardIconContainer>
 										<CardContent>
-											<CardTitle>{selectedRuntime === "WSO2: BI" ? "Create New Integration" : "Create New Project"}</CardTitle>
+											<CardTitle>Create New Project</CardTitle>
 											<CardDescription>
-												{selectedRuntime === "WSO2: BI" ?
-                                            "Start building a new integration." :
-                                            "Start building a new project."
-                                        }
+                                            Start building a new project.
 											</CardDescription>
 											<StyledButton
 												isPrimary={true}
 												disabled={biUnavailable}
 												onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
 													e.stopPropagation();
-													if (!biUnavailable) goToCreateIntegration();
+													if (!biUnavailable) primaryCreateAction();
 												}}
 											>
 												<ButtonContent>Create</ButtonContent>
@@ -1023,7 +1022,7 @@ export const WelcomeView: React.FC = () => {
 
 									<ActionCard
 										disabled={biUnavailable}
-										onClick={biUnavailable ? undefined : openIntegrationFileBrowser}
+										onClick={biUnavailable ? undefined : primaryOpenAction}
 										title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
 									>
 										<CardIconContainer>
@@ -1036,18 +1035,15 @@ export const WelcomeView: React.FC = () => {
 											</CardIcon>
 										</CardIconContainer>
 										<CardContent>
-											<CardTitle>{selectedRuntime === "WSO2: BI" ? "Open Integration" : "Open Project"}</CardTitle>
+											<CardTitle>Open Project</CardTitle>
 											<CardDescription>
-												{selectedRuntime === "WSO2: BI" ?
-                                            "Open an existing integration and continue building your solution." :
-                                            "Open an existing project and continue building your solution."
-                                        }
+                                            Open an existing project and continue building your solution.
 											</CardDescription>
 											<StyledButton
 												disabled={biUnavailable}
 												onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
 													e.stopPropagation();
-													if (!biUnavailable) openIntegrationFileBrowser();
+													if (!biUnavailable) primaryOpenAction();
 												}}
 											>
 												<ButtonContent>Open</ButtonContent>
@@ -1114,90 +1110,6 @@ export const WelcomeView: React.FC = () => {
 											}}
 										>
 											<SecondaryCardsGrid>
-												<SecondaryActionRow
-													onClick={biUnavailable ? undefined : goToCreateLibrary}
-													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
-													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
-												>
-													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
-														<Codicon
-															name="library"
-															iconSx={{ fontSize: "16px" }}
-															sx={{ width: "16px", height: "16px" }}
-														/>
-													</SecondaryRowIcon>
-													<SecondaryRowContent>
-														<SecondaryRowTitle>Create Library</SecondaryRowTitle>
-														<SecondaryRowDescription>
-															Create reusable components and utilities to share across integrations and projects.
-														</SecondaryRowDescription>
-													</SecondaryRowContent>
-													<Codicon
-														name="chevron-right"
-														iconSx={{
-															fontSize: "14px",
-															color: "var(--vscode-descriptionForeground)",
-															opacity: 0.6,
-														}}
-													/>
-												</SecondaryActionRow>
-
-												<SecondaryActionRow
-													onClick={biUnavailable ? undefined : goToCreateProject}
-													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
-													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
-												>
-													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
-														<Codicon
-															name="new-folder"
-															iconSx={{ fontSize: "16px" }}
-															sx={{ width: "16px", height: "16px" }}
-														/>
-													</SecondaryRowIcon>
-													<SecondaryRowContent>
-														<SecondaryRowTitle>Create Project</SecondaryRowTitle>
-														<SecondaryRowDescription>
-															Create a project to organize and manage multiple integrations.
-														</SecondaryRowDescription>
-													</SecondaryRowContent>
-													<Codicon
-														name="chevron-right"
-														iconSx={{
-															fontSize: "14px",
-															color: "var(--vscode-descriptionForeground)",
-															opacity: 0.6,
-														}}
-													/>
-												</SecondaryActionRow>
-
-												<SecondaryActionRow
-													onClick={biUnavailable ? undefined : handleProjectDirSelection}
-													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
-													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
-												>
-													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
-														<Codicon
-															name="root-folder-opened"
-															iconSx={{ fontSize: "16px" }}
-															sx={{ width: "16px", height: "16px" }}
-														/>
-													</SecondaryRowIcon>
-													<SecondaryRowContent>
-														<SecondaryRowTitle>Open Project</SecondaryRowTitle>
-														<SecondaryRowDescription>
-															Open an existing project to view and manage its integrations.
-														</SecondaryRowDescription>
-													</SecondaryRowContent>
-													<Codicon
-														name="chevron-right"
-														iconSx={{
-															fontSize: "14px",
-															color: "var(--vscode-descriptionForeground)",
-															opacity: 0.6,
-														}}
-													/>
-												</SecondaryActionRow>
-
 												<SecondaryActionRow
 													onClick={biUnavailable ? undefined : goToImportExternal}
 													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
