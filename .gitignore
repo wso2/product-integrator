@@ -44,7 +44,7 @@ installers/linux-deb/package/usr/share/wso2-integrator
 # VScode build output
 lib/
 build/
-!lib/vscode
+# !lib/vscode
 # `build/` above is intentionally broad for VSCode build output, but it
 # also matches tracked files under ci/build/ (component-versions.properties,
 # update-product.sh). Re-include the directory so tooling can stage those

@@ -166,7 +166,7 @@ export const DirectorySelector: React.FC<DirectorySelectorProps> = props => {
                 </InputWrapper>
                 <BrowseButton 
                     data-testid="directory-selector-btn"
-                    appearance="primary" 
+                    appearance="secondary" 
                     onClick={onSelect}
                 >
                     Browse

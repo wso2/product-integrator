@@ -254,7 +254,7 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
         try {
             const result = await wsClient.selectFileOrDirPath({ startPath: editablePath || formData.path || defaultPath });
             if (!result.path) return;
-            setPathTouched(false);
+            setPathTouched(true);
             setEditablePath(result.path);
             setFormData(prev => ({ ...prev, path: result.path }));
         } catch (error) {
@@ -267,10 +267,17 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
         setIsValidating(true);
 
         // Commit any un-blurred path before submitting
-        const currentPath = editablePath || formData.path;
         if (pathTouched && editablePath !== formData.path) {
             setFormData(prev => ({ ...prev, path: editablePath }));
         }
+
+        // The selector shows the full project path, so create the project exactly there.
+        // The backend nests the project under projectPath/<folder>, so split the chosen path
+        // into its parent directory (sent as projectPath) and leaf folder name (the handle).
+        const createPath = pathTouched ? editablePath : resolvedPath;
+        const sepIdx = Math.max(createPath.lastIndexOf("/"), createPath.lastIndexOf("\\"));
+        const basePath = sepIdx > 0 ? createPath.slice(0, sepIdx) : createPath;
+        const folderName = sepIdx >= 0 ? createPath.slice(sepIdx + 1) : projectHandle;
 
         let hasError = false;
 
@@ -281,13 +288,13 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
         }
 
         const hErr = validateProjectHandle(projectHandle);
-        if (hErr) {
-            setProjectHandleError(hErr);
-            setIsAdvancedExpanded(true);
-            hasError = true;
-        }
+        // if (hErr) {
+        //     setProjectHandleError(hErr);
+        //     setIsAdvancedExpanded(true);
+        //     hasError = true;
+        // }
 
-        if (!currentPath || currentPath.trim().length < 2) {
+        if (!createPath || createPath.trim().length < 2) {
             setPathError("Please select a path for your project");
             hasError = true;
         }
@@ -314,9 +321,9 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
 
         try {
             const validationResult = await wsClient.validateProjectPath({
-                projectPath: currentPath,
-                projectName: projectHandle,
-                createDirectory: true,
+                projectPath: basePath,
+                projectName: folderName,
+                createDirectory: !pathTouched, // If the user manually edited the path, assume they know what they're doing and don't validate existence (which would be redundant anyway)
                 createAsWorkspace: true,
             });
 
@@ -336,13 +343,13 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
 
             await wsClient.createBIProject({
                 workspaceName: formData.projectName,
-                projectPath: currentPath,
-                createDirectory: true,
+                projectPath: basePath,
+                createDirectory: !pathTouched, // Same logic as in validation — if the user manually edited the path, assume they know what they're doing and don't create an extra directory
                 createAsWorkspace: true,
                 orgName: formData.orgName || undefined,
                 orgHandle: orgHandle,
                 version: formData.version || undefined,
-                projectHandle: projectHandle,
+                projectHandle: folderName,
             });
         } catch (error) {
             setPathError("An error occurred during validation");
@@ -367,9 +374,6 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
                             </BackButton>
                             <HeaderText>
                                 <HeaderTitle variant="h2">Create Project</HeaderTitle>
-                                <HeaderSubtitle>
-                                    Set up a new multi-integration workspace project.
-                                </HeaderSubtitle>
                             </HeaderText>
                         </HeaderRow>
                     </FormPanelHeader>
@@ -407,7 +411,7 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
                                     id="project-folder-selector"
                                     label="Select Path"
                                     placeholder="Browse to select a folder..."
-                                    selectedPath={editablePath}
+                                    selectedPath={pathTouched ? editablePath : resolvedPath}
                                     required={true}
                                     onSelect={handlePathSelection}
                                     onChange={(value) => {
@@ -419,14 +423,14 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
                                             setFormData(prev => ({ ...prev, path: editablePath }));
                                         }
                                     }}
-                                    errorMsg={pathError || undefined}
+                                    errorMsg={pathError  || undefined}
                                 />
-                                {resolvedPath && resolvedPath !== editablePath && (
+                                {/* {resolvedPath && resolvedPath !== editablePath && (
                                     <ResolvedPathText>Will be created at: {resolvedPath}</ResolvedPathText>
-                                )}
+                                )} */}
                             </FieldGroup>
 
-                            <CollapsibleSection
+                            {/* <CollapsibleSection
                                 isExpanded={isAdvancedExpanded}
                                 onToggle={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
                                 icon="gear"
@@ -460,12 +464,12 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
                                     />
                                     <Description>Unique identifier for your project in various contexts.</Description>
                                 </FieldGroup>
-                            </CollapsibleSection>
+                            </CollapsibleSection> */}
 
                             <FormFooter>
                                 <span title={ballerinaUnavailable ? "Ballerina distribution is not set up. Use Configure to set it up." : undefined}>
                                     <Button
-                                        disabled={isValidating || ballerinaUnavailable || !!projectNameError || !!cloudProjectNameError || !!cloudProjectHandleError || !!orgNameError || !!projectHandleError || !!pathError}
+                                        disabled={isValidating || ballerinaUnavailable || !!projectNameError || !!cloudProjectNameError || !!cloudProjectHandleError || !!orgNameError || !!pathError}
                                         onClick={handleCreate}
                                         appearance="primary"
                                     >
