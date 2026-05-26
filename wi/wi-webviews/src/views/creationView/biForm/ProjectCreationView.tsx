@@ -243,6 +243,9 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
         projectName: projectHandle,
         createAsWorkspace: true,
         pathTouched,
+        // The selector shows the full project path, so the project is created in place at
+        // editablePath. Validate it as-is to flag an existing Ballerina project at that location.
+        createDirectory: false,
         requiredPathMessage: "Please select a path for your project",
         invalidPathMessage: "Invalid project path",
         onPathErrorChange: setPathError,
@@ -321,9 +324,12 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
 
         try {
             const validationResult = await wsClient.validateProjectPath({
-                projectPath: basePath,
+                // When touched, validate the exact target (createPath) in place so an existing
+                // Ballerina project at that location is detected; otherwise validate the new
+                // subfolder that will be created under basePath.
+                projectPath: pathTouched ? createPath : basePath,
                 projectName: folderName,
-                createDirectory: !pathTouched, // If the user manually edited the path, assume they know what they're doing and don't validate existence (which would be redundant anyway)
+                createDirectory: !pathTouched,
                 createAsWorkspace: true,
             });
 

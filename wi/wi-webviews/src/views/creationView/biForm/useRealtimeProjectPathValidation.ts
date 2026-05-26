@@ -40,6 +40,12 @@ interface RealtimeProjectPathValidationOptions {
     requiredPathMessage: string;
     invalidPathMessage: string;
     onPathErrorChange: (error: string | null) => void;
+    /**
+     * When false, the project is created in place at projectPath (existence is allowed, but an
+     * existing Ballerina project is rejected) and projectName is not required. Defaults to true,
+     * which validates a new subfolder created under projectPath.
+     */
+    createDirectory?: boolean;
 }
 
 export function useRealtimeProjectPathValidation({
@@ -51,6 +57,7 @@ export function useRealtimeProjectPathValidation({
     requiredPathMessage,
     invalidPathMessage,
     onPathErrorChange,
+    createDirectory = true,
 }: RealtimeProjectPathValidationOptions) {
     const validationRequestId = useRef(0);
     const debouncedValidatePath = useMemo(
@@ -59,12 +66,13 @@ export function useRealtimeProjectPathValidation({
             trimmedPath: string,
             trimmedProjectName: string,
             validateAsWorkspace: boolean,
+            createDir: boolean,
         ) => {
             try {
                 const validationResult = await wsClient.validateProjectPath({
                     projectPath: trimmedPath,
                     projectName: trimmedProjectName,
-                    createDirectory: true,
+                    createDirectory: createDir,
                     createAsWorkspace: validateAsWorkspace,
                 });
 
@@ -106,7 +114,9 @@ export function useRealtimeProjectPathValidation({
         }
 
         const trimmedProjectName = projectName.trim();
-        if (!trimmedProjectName) {
+        // When creating in place (createDirectory false) the project name isn't part of the
+        // target path, so don't gate validation on it.
+        if (createDirectory && !trimmedProjectName) {
             validationRequestId.current += 1;
             debouncedValidatePath.cancel();
             onPathErrorChange(null);
@@ -115,13 +125,14 @@ export function useRealtimeProjectPathValidation({
 
         const requestId = validationRequestId.current + 1;
         validationRequestId.current = requestId;
-        debouncedValidatePath(requestId, trimmedPath, trimmedProjectName, createAsWorkspace);
+        debouncedValidatePath(requestId, trimmedPath, trimmedProjectName, createAsWorkspace, createDirectory);
 
         return () => {
             debouncedValidatePath.cancel();
         };
     }, [
         createAsWorkspace,
+        createDirectory,
         debouncedValidatePath,
         invalidPathMessage,
         onPathErrorChange,

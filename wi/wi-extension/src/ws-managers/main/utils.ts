@@ -388,19 +388,21 @@ export function validateProjectPath(projectPath: string, projectName: string, cr
         const finalPath = createDirectory ? path.join(projectPath, sanitizeName(projectName)) : projectPath;
 
         if (!createDirectory) {
-            if (!fs.existsSync(projectPath)) {
-                return { isValid: false, errorMessage: 'Directory does not exist. Please select an existing directory.', errorField: ValidateProjectFormErrorField.PATH };
-            }
-            if (!fs.statSync(projectPath).isDirectory()) {
-                return {
-                    isValid: false,
-                    errorMessage: 'The selected path is a file, not a directory. Please select a directory.',
-                    errorField: ValidateProjectFormErrorField.PATH
-                };
-            }
-            const ballerinaTomlPath = path.join(finalPath, 'Ballerina.toml');
-            if (fs.existsSync(ballerinaTomlPath)) {
-                return { isValid: false, errorMessage: 'Existing Ballerina project detected in the selected directory', errorField: ValidateProjectFormErrorField.PATH };
+            // The project is created in place at projectPath. A path that doesn't exist yet is
+            // fine — it will be created — so only reject when the existing path is a file or is
+            // already a Ballerina project. The write-permission walk below handles missing paths.
+            if (fs.existsSync(projectPath)) {
+                if (!fs.statSync(projectPath).isDirectory()) {
+                    return {
+                        isValid: false,
+                        errorMessage: 'The selected path is a file, not a directory. Please select a directory.',
+                        errorField: ValidateProjectFormErrorField.PATH
+                    };
+                }
+                const ballerinaTomlPath = path.join(finalPath, 'Ballerina.toml');
+                if (fs.existsSync(ballerinaTomlPath)) {
+                    return { isValid: false, errorMessage: 'Existing Ballerina project detected in the selected directory', errorField: ValidateProjectFormErrorField.PATH };
+                }
             }
         } else {
             // non-existing projectPath is fine — all intermediate directories will be created at project-creation time.
