@@ -302,22 +302,23 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
             hasError = true;
         }
 
-        const orgErr = validateOrgName(formData.orgName);
-        if (orgErr) {
-            setOrgNameError(orgErr);
-            setIsAdvancedExpanded(true);
-            hasError = true;
-        }
+        // const orgErr = validateOrgName(formData.orgName);
+        // if (orgErr) {
+        //     setOrgNameError(orgErr);
+        //     setIsAdvancedExpanded(true);
+        //     hasError = true;
+        // }
 
-        if (cloudProjectNameError) {
-            hasError = true;
-        }
+        // if (cloudProjectNameError) {
+        //     hasError = true;
+        // }
 
-        if (cloudProjectHandleError) {
-            hasError = true;
-        }
+        // if (cloudProjectHandleError) {
+        //     hasError = true;
+        // }
 
         if (hasError) {
+            // console.log("Validation errors, cannot submit:", { projectNameError: nameError, projectHandleError: hErr, pathError: !createPath ? "Path is required" : null, orgNameError: orgErr, cloudProjectNameError, cloudProjectHandleError });
             setIsValidating(false);
             return;
         }
@@ -333,11 +334,12 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
                 createAsWorkspace: true,
             });
 
+            // console.log("Validation result:", validationResult);
             if (!validationResult.isValid) {
                 if (validationResult.errorField === ValidateProjectFormErrorField.PATH) {
                     setPathError(validationResult.errorMessage || "Invalid project path");
                 } else if (validationResult.errorField === ValidateProjectFormErrorField.NAME) {
-                    setProjectHandleError(validationResult.errorMessage || "Invalid project ID");
+                    setPathError(validationResult.errorMessage || "Invalid project ID");
                     setIsAdvancedExpanded(true);
                 }
                 setIsValidating(false);
@@ -475,7 +477,7 @@ export function ProjectCreationView({ onBack, ballerinaUnavailable }: { onBack?:
                             <FormFooter>
                                 <span title={ballerinaUnavailable ? "Ballerina distribution is not set up. Use Configure to set it up." : undefined}>
                                     <Button
-                                        disabled={isValidating || ballerinaUnavailable || !!projectNameError || !!cloudProjectNameError || !!cloudProjectHandleError || !!orgNameError || !!pathError}
+                                        disabled={isValidating || ballerinaUnavailable || !!projectNameError || !!orgNameError || !!pathError}
                                         onClick={handleCreate}
                                         appearance="primary"
                                     >
