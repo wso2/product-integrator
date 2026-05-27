@@ -731,7 +731,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                         </CloneInfoCallout>
                     ) : cloneStage === "fetching_components" ? (
                         <CloneInfoCallout>
-                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--vscode-descriptionForeground)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
+                            {/* <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--vscode-descriptionForeground)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} /> */}
                             <CalloutText>
                                 <CalloutTitle>Loading project details...</CalloutTitle>
                                 <CalloutDesc>Fetching the list of integrations in this project. Won't be long.</CalloutDesc>
@@ -747,7 +747,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                         </CloneInfoCallout>
                     ) : cloneStage === "cloning" ? (
                         <CloneInfoCallout>
-                            <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--vscode-descriptionForeground)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} />
+                            {/* <Codicon name="loading" iconSx={{ fontSize: "15px", color: "var(--vscode-descriptionForeground)", marginTop: "1px", animation: "codicon-spin 1.5s steps(30) infinite" }} /> */}
                             <CalloutText>
                                 <CalloutTitle>Almost there!</CalloutTitle>
                                 <CalloutDesc>Cloning your repository into the selected folder. Hang on just a moment.</CalloutDesc>
