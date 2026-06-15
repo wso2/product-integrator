@@ -125,7 +125,7 @@ jobs:
           node-version: '20'
 
       - name: Install wso2ipw
-        run: npm install -g https://github.com/manuranga/wso2ipw/archive/refs/tags/v0.1.10.tar.gz
+        run: npm install -g wso2ipw@0.1.10
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'
@@ -224,7 +224,7 @@ jobs:
           node-version: '20'
 
       - name: Install wso2ipw
-        run: npm install -g https://github.com/manuranga/wso2ipw/archive/refs/tags/v0.1.10.tar.gz
+        run: npm install -g wso2ipw@0.1.10
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'
