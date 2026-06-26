@@ -554,7 +554,7 @@ export class MainWsManager implements WIVisualizerAPI {
                     const projectRoot = typeof result === "string" ? result : undefined;
                     if (projectRoot) {
                         const migrationAPI = await ballerinaContext.ensureMigrationAPI();
-                        migrationAPI?.setWizardProjectRoot(projectRoot, params.sourcePath);
+                        migrationAPI?.setWizardProjectRoot(projectRoot, params.sourcePath, params.keepStructure);
                         // Ensure the BridgeLayer forwards chat events now that the API is available
                         BridgeLayer.setupMigrationSubscription(this.projectUri ?? "global");
                     }

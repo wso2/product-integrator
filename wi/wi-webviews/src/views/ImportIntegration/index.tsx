@@ -207,6 +207,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
             projects: migratedProjects,
             aiFeatureUsed: true,
             sourcePath: importParams.importSourcePath,
+            keepStructure,
         });
         setAiEnhancementActive(true);
         setStep(4);
