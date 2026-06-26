@@ -48,7 +48,7 @@ export const IntegrationParameters: React.FC<IntegrationParametersProps> = ({
     onParameterChange,
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    const collapsibleParams = (selectedIntegration?.parameters.filter(p => p.key !== "multiRoot") ?? [])
+    const collapsibleParams = (selectedIntegration?.parameters.filter(p => p.key !== "multiRoot" && p.key !== "keepStructure") ?? [])
         .sort((a, b) => (a.valueType === "boolean" ? -1 : b.valueType === "boolean" ? 1 : 0));
     if (!selectedIntegration || !collapsibleParams.length) return null;
 
