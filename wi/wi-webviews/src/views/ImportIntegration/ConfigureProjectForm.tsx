@@ -305,7 +305,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
             isExpanded={isOptionsExpanded}
             onToggle={() => setIsOptionsExpanded(v => !v)}
             icon="gear"
-            title="Output Options"
+            title="Output Structure"
         >
             <CheckBox
                 label="Keep Original Structure"

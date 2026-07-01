@@ -325,7 +325,7 @@ export function AdvancedConfigurationSection({
             isExpanded={isExpanded}
             onToggle={onToggle}
             icon="gear"
-            title="Package Settings"
+            title="Advanced Configurations"
             hasError={hasError}
         >
             {createWithinProject && (
