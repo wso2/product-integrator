@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
+import { Button, CheckBox, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
 import { type WICloudFormContext, type WICloudSubmitComponentsReq } from "@wso2/wi-core";
 import { buildGitURL, type CreateComponentReq, DevantScopes, getTypeOfIntegrationType, type ICreateNewIntegrationCmdIntegrations, makeURLSafe, WICommandIds } from "@wso2/wso2-platform-core";
 import { useVisualizerContext } from "../../contexts";
@@ -113,6 +113,10 @@ function ComponentForm() {
 	const [isRepoInitValid, setIsRepoInitValid] = useState(false);
 
 	const isNewCodeServerComp = params?.isNewCodeServerComp ?? false;
+	const isMCPProxyFromExistingAPI = params?.isMCPProxyFromExistingAPI ?? false;
+
+	// ── MCP proxy deploy-track option ────────────────────────────────────────
+	const [deployToNewTrack, setDeployToNewTrack] = useState(false);
 
 	// ── Component list handlers ──────────────────────────────────────────────
 
@@ -263,6 +267,7 @@ function ComponentForm() {
 							originCloud: "devant",
 						} as CreateComponentReq;
 					}),
+				...(isMCPProxyFromExistingAPI ? { deployToNewTrack } : {}),
 			};
 
 			const created = await wsClient.submitComponents(req);
@@ -334,6 +339,15 @@ function ComponentForm() {
 								consoleUrl={consoleUrl}
 								onBlockCreationChange={setBlockCreation}
 								onGitConfigDataChange={(data) => { gitConfigDataRef.current = data; }}
+							/>
+						)}
+
+						{/* MCP proxy: deploy-track option */}
+						{params && isMCPProxyFromExistingAPI && !isNewCodeServerComp && (
+							<CheckBox
+								label="Deploy to new deployment track"
+								checked={deployToNewTrack}
+								onChange={(checked: boolean) => setDeployToNewTrack(checked)}
 							/>
 						)}
 

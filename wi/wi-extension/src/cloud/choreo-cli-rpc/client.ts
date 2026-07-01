@@ -16,6 +16,7 @@
  * under the License.
  */
 
+import type { AttachMCPProxyRepositoryReq } from "@wso2/wi-core";
 import type {
 	BuildKind,
 	BuildPackReq,
@@ -745,6 +746,13 @@ export class ChoreoRPCClient implements IChoreoRPCClient {
 			throw new Error("RPC client is not initialized");
 		}
 		await this.client.sendRequest("component/changePrebuiltIntegrationRepository", params);
+	}
+
+	async attachMCPProxyRepository(params: AttachMCPProxyRepositoryReq): Promise<void> {
+		if (!this.client) {
+			throw new Error("RPC client is not initialized");
+		}
+		await this.client.sendRequest("component/attachMCPProxyRepository", params);
 	}
 
 	async getComponentUsage(params: GetComponentUsageReq): Promise<GetComponentUsageResp> {

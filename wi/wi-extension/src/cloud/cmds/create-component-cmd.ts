@@ -219,6 +219,13 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					}
 
 					if (isWithinWorkspace || workspace.workspaceFile) {
+						const workspaceCompId = ext.context.workspaceState.get<string>("SOURCE_COMPONENT_ID");
+						const isMCPProxyFromExistingAPI = workspaceCompId
+							? dataCacheStore.getState().getComponents(selectedOrg.handle, selectedProject.handler)
+								?.find(c => c.metadata?.id === workspaceCompId)
+								?.spec?.subType === "MCPProxyFromExistingAPI"
+							: false;
+
 						openCloudFormWebview({
 							org: selectedOrg,
 							project: selectedProject,
@@ -226,6 +233,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 							isNewCodeServerComp: !isGitInitialized && ext.isDevantCloudEditor,
 							buildPackLang: buildPackLang!,
 							integrations: integrations,
+							isMCPProxyFromExistingAPI,
 						})
 					} else {
 						throw new Error(`Selected directory is outside of the workspace. Please select a directory within the workspace to create the integration.`);
@@ -239,7 +247,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 	);
 }
 
-export const submitCreateComponentHandler = async ({ createParams, org, project, workspaceFsPath }: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> => {
+export const submitCreateComponentHandler = async ({ createParams, org, project, workspaceFsPath, deployToNewTrack }: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> => {
 	const totalCount = createParams.length;
 	const result: WICloudSubmitComponentsResp = {
 		created: [],
@@ -258,6 +266,9 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		if (component?.metadata?.isPrebuilt) {
 			// if its pre-built integration, we need to update the existing component with new repo details instead of creating a new component.
 			return await handlePrebuiltComponentUpdate(workspaceCompId, component, org, project, createParams[0], workspaceFsPath, gitRoot!);
+		}
+		if (component?.spec?.subType === "MCPProxyFromExistingAPI") {
+			return await handleMCPProxyRepositoryAttach(workspaceCompId, component, org, project, createParams[0], workspaceFsPath, gitRoot!, deployToNewTrack ?? false);
 		}
 	}
 
@@ -488,6 +499,61 @@ async function handlePrebuiltComponentUpdate(
 	} catch (err) {
 		ext.logError(`Failed to update prebuilt integration repository for component ${component.metadata?.name}`, err as Error);
 		result.failed.push({ name: component.metadata?.name || "Unknown", error: `Failed to update prebuilt integration repository: ${(err as Error).message}` });
+	}
+	return result;
+}
+
+async function handleMCPProxyRepositoryAttach(
+	workspaceCompId: string,
+	component: ComponentKind,
+	org: Organization,
+	project: Project,
+	createParam: WICloudSubmitComponentsReq['createParams'][number],
+	workspaceFsPath: string,
+	gitRoot: string,
+	deployToNewTrack: boolean,
+): Promise<WICloudSubmitComponentsResp> {
+	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: 1 };
+	try {
+		if (!ext.clients.rpcClient) {
+			throw new Error("RPC client is not initialized");
+		}
+		const apiVersion = component.apiVersions?.[0]?.apiVersion ?? "v1.0";
+		await window.withProgress(
+			{ title: "Attaching MCP proxy repository...", location: ProgressLocation.Notification },
+			() =>
+				ext.clients.rpcClient.attachMCPProxyRepository({
+					componentId: workspaceCompId,
+					isPublicRepo: false,
+					orgHandler: org.handle,
+					orgId: org.id.toString(),
+					projectId: project.id,
+					srcGitRepoUrl: createParam.repoUrl,
+					repositorySubPath: relativePath(workspaceFsPath, createParam.componentDir),
+					repositoryBranch: createParam.branch,
+					secretRef: createParam.gitCredRef,
+					deployToNewTrack,
+					apiVersion,
+				}),
+		);
+		result.created.push(component);
+		await ext.context.workspaceState.update("SOURCE_COMPONENT_ID", null);
+
+		clearCodeServerLocalStorage();
+		const projectCache = dataCacheStore.getState().getProjects(org?.handle);
+		updateContextFile(gitRoot, ext.authProvider?.getState().state.userInfo!, project, org, projectCache);
+		contextStore.getState().refreshState();
+
+		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
+		const successMessage = "Successfully attached repository to MCP proxy component";
+		if (isWithinWorkspace) {
+			showViewInConsoleMessage(successMessage, org, project, result.created);
+		} else {
+			showReloadWorkspaceMessage(successMessage, workspaceFsPath);
+		}
+	} catch (err) {
+		ext.logError(`Failed to attach repository to MCP proxy component ${component.metadata?.name}`, err as Error);
+		result.failed.push({ name: component.metadata?.name || "Unknown", error: `Failed to attach MCP proxy repository: ${(err as Error).message}` });
 	}
 	return result;
 }
