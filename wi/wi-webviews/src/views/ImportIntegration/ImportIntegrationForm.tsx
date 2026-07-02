@@ -72,7 +72,7 @@ export function ImportIntegrationForm({
 
     const isImportDisabled = importSourcePath.length < 2 || !selectedIntegration;
 
-    const boolParam = selectedIntegration?.parameters.find(p => p.valueType === "boolean") ?? null;
+    const boolParam = selectedIntegration?.parameters.find(p => p.key === "multiRoot") ?? null;
     const getBoolValue = (key: string): boolean => {
         const v = integrationParams[key];
         return typeof v === "string" ? v === "true" : v === true;

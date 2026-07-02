@@ -63,6 +63,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const [migrationSuccessful, setMigrationSuccessful] = useState(false);
     const [migrationResponse, setMigrationResponse] = useState<ImportIntegrationResponse | null>(null);
     const [aiEnhancementActive, setAiEnhancementActive] = useState(false);
+    const [keepStructure, setKeepStructure] = useState(false);
     const [storedProjectRequest, setStoredProjectRequest] = useState<ProjectRequest | null>(null);
     const migrationStartedRef = useRef(false);
 
@@ -80,10 +81,15 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
     const defaultSteps = ["Configure Source", "Report Generation", "Configure Destination", "Rule-Based Migration", "AI Enhancement"];
 
     // isMultiProject for ConfigureProjectForm is derived from the source config (step 0 selection)
-    const boolParamKey = selectedIntegration?.parameters.find(p => p.valueType === "boolean")?.key;
+    const boolParamKey = selectedIntegration?.parameters.find(p => p.key === "multiRoot")?.key;
     const isMultiProjectFromConfig = boolParamKey ? importParams?.parameters?.[boolParamKey] === true : false;
     // isMultiProject for MigrationProgressView is derived from actual dry-run results
     const isMultiProject = migratedProjects.length > 0;
+
+    const handleSelectIntegration = (integration: typeof selectedIntegration) => {
+        setSelectedIntegration(integration);
+        setKeepStructure(false);
+    };
 
     const pullIntegrationTool = (commandName: string) => {
         setPullingTool(true);
@@ -135,7 +141,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
             commandName: integration.commandName,
             sourcePath: params.importSourcePath,
             orgName: selectedOrgName,
-            parameters: params.parameters,
+            parameters: { ...params.parameters, keepStructure },
         };
         try {
             const response = await wsClient.importIntegration(wsParams);
@@ -201,6 +207,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
             projects: migratedProjects,
             aiFeatureUsed: true,
             sourcePath: importParams.importSourcePath,
+            keepStructure,
         });
         setAiEnhancementActive(true);
         setStep(4);
@@ -227,6 +234,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
             projects: migratedProjects,
             aiFeatureUsed: true,
             sourcePath: importParams.importSourcePath,
+            keepStructure,
         });
         onBack?.();
     };
@@ -359,7 +367,7 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                 pullIntegrationTool={pullIntegrationTool}
                                 pullingTool={pullingTool}
                                 toolPullProgress={toolPullProgress}
-                                onSelectIntegration={setSelectedIntegration}
+                                onSelectIntegration={handleSelectIntegration}
                                 onNext={() => setStep(1)}
                                 onBack={onBack}
                             />
@@ -387,6 +395,9 @@ export function ImportIntegration({ onBack }: { onBack?: () => void }) {
                                 onNext={handleConfigureDestinationDone}
                                 onBack={handleStepBack}
                                 selectedOrgName={selectedOrgName}
+                                keepStructure={keepStructure}
+                                onKeepStructureChange={setKeepStructure}
+                                selectedIntegration={selectedIntegration}
                             />
                         )}
                         {step === 3 && (

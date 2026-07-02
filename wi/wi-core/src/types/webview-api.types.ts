@@ -227,6 +227,7 @@ export interface MigrateRequest {
     projects?: ProjectMigrationResult[];
     aiFeatureUsed?: boolean;
     sourcePath?: string;
+    keepStructure?: boolean;
 }
 
 export interface PullMigrationToolRequest {

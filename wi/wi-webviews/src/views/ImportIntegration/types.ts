@@ -106,6 +106,9 @@ export interface ConfigureProjectFormProps {
     onNext: (project: ProjectRequest, aiFeatureUsed: boolean) => Promise<void> | void;
     onBack: () => void;
     selectedOrgName?: string;
+    keepStructure: boolean;
+    onKeepStructureChange: (value: boolean) => void;
+    selectedIntegration?: MigrationTool | null;
 }
 
 export interface MigrationDisplayState {
