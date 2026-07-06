@@ -131,6 +131,7 @@ jobs:
           # wso2/vscode-extensions) maintained and scanned in their own repos.
           skip-dirs: 'common/temp,lib/vscode,external'
           ignore-unfixed: true
+          trivyignores: '.trivyignore'
 
   compile:
     needs: resolve-versions
