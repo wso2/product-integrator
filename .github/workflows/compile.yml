@@ -111,6 +111,27 @@ jobs:
           else
             echo "All required versions from component-versions.properties are available."
           fi
+  trivy-scan:
+    name: Trivy vulnerability scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          timeout: '10m'
+          # lib/vscode and external are third-party submodules (upstream VS Code and
+          # wso2/vscode-extensions) maintained and scanned in their own repos.
+          skip-dirs: 'common/temp,lib/vscode,external'
+          ignore-unfixed: true
+
   compile:
     needs: resolve-versions
     name: Build repo
