@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { Dropdown, OptionProps, TextField } from "@wso2/ui-toolkit";
+import { CheckBox, Dropdown, OptionProps, TextField } from "@wso2/ui-toolkit";
 import React, { useState } from "react";
 import { BodyText, ParameterItem, ParametersSection } from "../styles";
 import { CollapsibleSection } from "../../../views/creationView/biForm/components/CollapsibleSection";
@@ -28,6 +28,12 @@ const ParametersContainer = styled.div`
     flex-direction: column;
     gap: 16px;
     margin-top: 16px;
+`;
+
+const ParamDescription = styled.div`
+    color: var(--vscode-list-deemphasizedForeground);
+    margin-top: 4px;
+    margin-left: 26px;
 `;
 
 interface IntegrationParametersProps {
@@ -42,8 +48,9 @@ export const IntegrationParameters: React.FC<IntegrationParametersProps> = ({
     onParameterChange,
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    const nonBoolParams = selectedIntegration?.parameters.filter(p => p.valueType !== "boolean") ?? [];
-    if (!selectedIntegration || !nonBoolParams.length) return null;
+    const collapsibleParams = (selectedIntegration?.parameters.filter(p => p.key !== "multiRoot" && p.key !== "keepStructure") ?? [])
+        .sort((a, b) => (b.valueType === "boolean" ? 1 : 0) - (a.valueType === "boolean" ? 1 : 0));
+    if (!selectedIntegration || !collapsibleParams.length) return null;
 
     return (
         <ParametersSection>
@@ -51,13 +58,24 @@ export const IntegrationParameters: React.FC<IntegrationParametersProps> = ({
                 isExpanded={isExpanded}
                 onToggle={() => setIsExpanded(v => !v)}
                 icon="gear"
-                title={`Configure ${selectedIntegration.title} Settings`}
+                title="Configure Additional Settings"
             >
-                <BodyText>{`Configure additional settings for ${selectedIntegration.title} migration.`}</BodyText>
+                <BodyText>Configure additional settings for your migration.</BodyText>
                 <ParametersContainer>
-                    {nonBoolParams.map((param) => (
+                    {collapsibleParams.map((param) => (
                         <ParameterItem key={param.key}>
-                            {param.valueType === "enum" && param.options ? (
+                            {param.valueType === "boolean" ? (
+                                <>
+                                    <CheckBox
+                                        label={param.label}
+                                        checked={integrationParams[param.key] === true || integrationParams[param.key] === "true"}
+                                        onChange={(checked) => onParameterChange(param.key, checked)}
+                                    />
+                                    {param.description && (
+                                        <ParamDescription>{param.description}</ParamDescription>
+                                    )}
+                                </>
+                            ) : param.valueType === "enum" && param.options ? (
                                 <Dropdown
                                     id={`${param.key}-dropdown`}
                                     label={param.label}

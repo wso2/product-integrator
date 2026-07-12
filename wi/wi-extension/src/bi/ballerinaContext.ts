@@ -22,7 +22,7 @@ import { EXTENSION_DEPENDENCIES, DownloadProgress, WIChatNotify } from "@wso2/wi
 
 /** Shape of the migration API exposed by the Ballerina extension's `activate()` return value. */
 export interface BallerinaExtMigrationAPI {
-    setWizardProjectRoot: (projectRoot: string, sourcePath?: string) => void;
+    setWizardProjectRoot: (projectRoot: string, sourcePath?: string, keepStructure?: boolean) => void;
     wizardEnhancementReady: () => Promise<void>;
     abortAgent: () => void;
     openMigratedProject: () => void;

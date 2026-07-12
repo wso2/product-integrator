@@ -1,0 +1,6 @@
+# Trivy ignore file for known low-risk vulnerabilities
+# Format: CVE-ID or vulnerability ID
+
+# file-type v19+ is ESM-only which is incompatible with the CommonJS VS Code extension build.
+# Upgrading requires significant refactoring. Risk is low as this package handles binary file detection.
+CVE-2026-31808

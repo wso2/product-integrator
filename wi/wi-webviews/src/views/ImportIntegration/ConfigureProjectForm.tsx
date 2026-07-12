@@ -16,7 +16,9 @@
  * under the License.
  */
 
-import { ActionButtons, Typography } from "@wso2/ui-toolkit";
+import { ActionButtons, CheckBox, Typography } from "@wso2/ui-toolkit";
+import styled from "@emotion/styled";
+import { CollapsibleSection } from "../creationView/biForm/components/CollapsibleSection";
 import { useEffect, useState } from "react";
 import { useVisualizerContext } from "../../contexts";
 import { ValidateProjectFormErrorField } from "@wso2/wi-core";
@@ -27,7 +29,13 @@ import { MultiProjectFormData, MultiProjectFormFields } from "./components/Multi
 import { ButtonWrapper } from "./styles";
 import { ConfigureProjectFormProps } from "./types";
 
-export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedOrgName }: ConfigureProjectFormProps) {
+const OptionDescription = styled.div`
+    color: var(--vscode-list-deemphasizedForeground);
+    margin-top: 4px;
+    margin-left: 26px;
+`;
+
+export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedOrgName, keepStructure, onKeepStructureChange, selectedIntegration }: ConfigureProjectFormProps) {
     const { wsClient } = useVisualizerContext();
     const [singleIntegrationData, setSingleIntegrationData] = useState<ProjectFormData>({
         integrationName: "",
@@ -50,6 +58,7 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
     });
 
     const [isValidating, setIsValidating] = useState(false);
+    const [isOptionsExpanded, setIsOptionsExpanded] = useState(false);
     const [pathError, setPathError] = useState<string | null>(null);
     const [folderNameError, setFolderNameError] = useState<string | null>(null);
     const [singleIntegrationNameError, setSingleIntegrationNameError] = useState<string | null>(null);
@@ -287,6 +296,26 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
         }
     };
 
+    const keepStructureDesc = selectedIntegration?.commandName === "migrate-tibco"
+        ? "Preserve the original source file structure (each process in a separate .bal file)."
+        : "Preserve the original source file structure (each .xml in a separate .bal file).";
+
+    const outputOptionsCollapsible = (
+        <CollapsibleSection
+            isExpanded={isOptionsExpanded}
+            onToggle={() => setIsOptionsExpanded(v => !v)}
+            icon="gear"
+            title="Output Structure"
+        >
+            <CheckBox
+                label="Keep Original Structure"
+                checked={keepStructure}
+                onChange={onKeepStructureChange}
+            />
+            <OptionDescription>{keepStructureDesc}</OptionDescription>
+        </CollapsibleSection>
+    );
+
     return (
         <>
             {isMultiProject ? (
@@ -299,6 +328,8 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                         pathError={pathError || undefined}
                         folderNameError={folderNameError || undefined}
                     />
+
+                    {outputOptionsCollapsible}
 
                     <ButtonWrapper>
                         <ActionButtons
@@ -333,6 +364,8 @@ export function ConfigureProjectForm({ isMultiProject, onNext, onBack, selectedO
                         onCloudProjectNameError={setSingleIntegrationCloudProjectNameError}
                         onCloudProjectHandleError={setSingleIntegrationCloudProjectHandleError}
                     />
+
+                    {outputOptionsCollapsible}
 
                     <ButtonWrapper>
                         <ActionButtons
