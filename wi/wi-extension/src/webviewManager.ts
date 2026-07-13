@@ -17,7 +17,7 @@
  */
 
 import * as vscode from "vscode";
-import { ViewType } from "@wso2/wi-core";
+import { EXTENSION_DEPENDENCIES, ViewType } from "@wso2/wi-core";
 import { ext } from "./extensionVariables";
 import { Uri } from "vscode";
 import path from "path";
@@ -26,6 +26,19 @@ import { StateMachine } from "./stateMachine";
 import { getPlatform } from "./ws-managers/main/utils";
 
 export const WEB_VIEW_TYPE = "wso2IntegratorWebview";
+
+/**
+ * Root of the MI extension's Module Federation bundle (the federated MI
+ * project-creation form served by `wso2.micro-integrator`), or undefined when
+ * the MI extension is not installed.
+ */
+function getMiFederationRoot(): vscode.Uri | undefined {
+	const miExtension = vscode.extensions.getExtension(EXTENSION_DEPENDENCIES.MI);
+	if (!miExtension) {
+		return undefined;
+	}
+	return vscode.Uri.joinPath(miExtension.extensionUri, "resources", "jslibs", "federation");
+}
 
 /**
  * Webview manager for WSO2 Integrator
@@ -96,6 +109,8 @@ export class WebviewManager {
 				localResourceRoots: [
 					vscode.Uri.joinPath(ext.context.extensionUri, "dist"),
 					vscode.Uri.joinPath(ext.context.extensionUri, "resources"),
+					// Allow loading the MI extension's federated form bundle.
+					...(getMiFederationRoot() ? [getMiFederationRoot()!] : []),
 				],
 			},
 		);
@@ -183,6 +198,14 @@ export class WebviewManager {
 		const scriptUri = isDevMode
 			? new URL('lib/' + componentName + '.js', devHost).toString()
 			: webview.asWebviewUri(Uri.file(filePath)).toString();
+
+		// URL of the MI extension's federated form remote (undefined when the MI
+		// extension is not installed — the webview falls back to an error state).
+		const miFederationRoot = getMiFederationRoot();
+		const miFormRemoteUri = miFederationRoot
+			? webview.asWebviewUri(vscode.Uri.joinPath(miFederationRoot, "remoteEntry.js")).toString()
+			: undefined;
+		const serializedMiFormRemote = JSON.stringify(miFormRemoteUri ?? null).replace(/</g, "\\u003c");
 
 		const styles = `
             .container {
@@ -297,7 +320,23 @@ export class WebviewManager {
 					</div>
 				</div>
 				<script>
+					// acquireVsCodeApi() throws if called more than once per webview.
+					// Both the host bundle and the MI federated remote acquire it at
+					// module scope, so make it idempotent before any bundle loads.
+					(function () {
+						if (typeof acquireVsCodeApi === "function") {
+							const original = acquireVsCodeApi;
+							let instance;
+							window.acquireVsCodeApi = function () {
+								if (!instance) {
+									instance = original();
+								}
+								return instance;
+							};
+						}
+					})();
 					window.__WI_BRIDGE_BOOTSTRAP = ${serializedBridgeBootstrap};
+					window.__WI_MI_FORM_REMOTE = ${serializedMiFormRemote};
 				</script>
 				<script src="${scriptUri}"></script>
 				<script>
