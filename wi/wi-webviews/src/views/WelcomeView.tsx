@@ -1255,6 +1255,7 @@ export const WelcomeView: React.FC = () => {
 										</MoreToggleWrapper>
 
 										<SecondaryCardsSection
+											aria-hidden={!showSecondary}
 											style={{
 												maxHeight: showSecondary ? "200px" : "0",
 												opacity: showSecondary ? 1 : 0,
@@ -1280,12 +1281,14 @@ export const WelcomeView: React.FC = () => {
 													</SecondaryRowContent>
 													<SecondaryRowActions>
 														<CompactButton
+															tabIndex={showSecondary ? undefined : -1}
 															disabled={biUnavailable}
 															onClick={goToCreateLibrary}
 														>
 															<ButtonContent>Create</ButtonContent>
 														</CompactButton>
 														<CompactButton
+															tabIndex={showSecondary ? undefined : -1}
 															disabled={biUnavailable}
 															onClick={openIntegrationFileBrowser}
 														>
@@ -1347,6 +1350,7 @@ export const WelcomeView: React.FC = () => {
 								</MoreToggleWrapper>
 
 								<SecondaryCardsSection
+									aria-hidden={!showSecondary}
 									style={{
 										maxHeight: showSecondary ? "300px" : "0",
 										opacity: showSecondary ? 1 : 0,
@@ -1410,7 +1414,7 @@ export const WelcomeView: React.FC = () => {
 									</ProjectsList>
 								) : (
 									<RecentProjectsEmptyState>
-										No Recent Integration or Project found in your current history
+										No recent integrations or projects found in your history.
 									</RecentProjectsEmptyState>
 								)}
 							</RecentProjectsSection>
