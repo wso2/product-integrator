@@ -267,6 +267,12 @@
         "category": "WSO2 Integrator"
       },
       {
+        "command": "BI.project-explorer.convert",
+        "title": "Convert to Project",
+        "icon": "$(project)",
+        "category": "WSO2 Integrator"
+      },
+      {
         "command": "BI.project-explorer.overview",
         "title": "Open Overview",
         "icon": {
@@ -379,6 +385,10 @@
           "when": "false"
         },
         {
+          "command": "BI.project-explorer.convert",
+          "when": "false"
+        },
+        {
           "command": "BI.project-explorer.overview",
           "when": "false"
         },
@@ -449,6 +459,11 @@
           "command": "ballerina.force.update.artifacts",
           "when": "view == wso2-integrator.explorer && viewItem == bi-project",
           "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.convert",
+          "when": "view == wso2-integrator.explorer && viewItem == bi-project && BI.isBallerinaWorkspace != true",
+          "group": "navigation"
         },
         {
           "command": "BI.project-explorer.add-connection",
@@ -523,8 +538,13 @@
           "group": "navigation@2"
         },
         {
+          "command": "BI.project-explorer.convert",
+          "when": "view == wso2-integrator.explorer && BI.project == true && BI.isBallerinaWorkspace != true",
+          "group": "navigation"
+        },
+        {
           "command": "BI.project-explorer.add",
-          "when": "view == wso2-integrator.explorer && BI.project == true",
+          "when": "view == wso2-integrator.explorer && BI.isBallerinaWorkspace == true",
           "group": "navigation"
         },
         {
