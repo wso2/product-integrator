@@ -349,13 +349,31 @@ jobs:
           if [ "$limit_bytes" -gt "$phys_bytes" ]; then
             limit_bytes=$phys_bytes
           fi
-          cap_mb=$(( limit_bytes / 1024 / 1024 * 75 / 100 ))
-          # guard against a bogus tiny reading; keep at least Node's ~2GB default
-          if [ "$cap_mb" -lt 2048 ]; then
-            cap_mb=2048
+          limit_mb=$(( limit_bytes / 1024 / 1024 ))
+          # An implausibly small reading (e.g. a misconfigured cgroup) would produce a
+          # broken cap; treat anything under 1 GiB as bogus and fall back to physical RAM.
+          if [ "$limit_mb" -lt 1024 ]; then
+            limit_mb=$(( phys_bytes / 1024 / 1024 ))
           fi
-          echo "Container memory limit: $(( limit_bytes / 1024 / 1024 )) MB -> Node heap cap: ${cap_mb} MB"
+          # Always take a fraction of the *measured* limit so the cap can never exceed
+          # what the container can hold. A fixed floor could exceed a small container's
+          # total memory and re-trigger the OOM, so there is deliberately no floor.
+          cap_mb=$(( limit_mb * 75 / 100 ))
+
+          # The heavy compile commands (extensions-ci, core-ci-pr) run sequentially and
+          # each need the full cap. The validation step, however, runs several checks at
+          # once via `npm-run-all -lp`; giving every concurrent process the full cap can
+          # oversubscribe the runner and OOM-kill it. Bound that fan-out to what memory
+          # (~4 GiB budget per check) and CPU can support, keeping each process's heap
+          # usable instead of shrinking it to an unusable size.
+          cpu=$(nproc 2>/dev/null || echo 2)
+          parallel_jobs=$(( limit_mb / 4096 ))
+          [ "$parallel_jobs" -lt 1 ] && parallel_jobs=1
+          [ "$parallel_jobs" -gt "$cpu" ] && parallel_jobs=$cpu
+
+          echo "Container memory limit: ${limit_mb} MB -> Node heap cap: ${cap_mb} MB, max parallel checks: ${parallel_jobs}"
           echo "NODE_OPTIONS=--max-old-space-size=${cap_mb}" >> "$GITHUB_ENV"
+          echo "COMPILE_MAX_PARALLEL=${parallel_jobs}" >> "$GITHUB_ENV"
 
       - name: Compile (with cache optimization)
         env:
@@ -364,13 +382,13 @@ jobs:
           if [ "${{ steps.cache-typescript.outputs.cache-hit }}" = "true" ]; then
             echo "✅ TypeScript cache hit - using cached compilation"
             echo "Skipping core compilation, running validation only"
-            npm exec -- npm-run-all -lp extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            npm exec -- npm-run-all --max-parallel "${COMPILE_MAX_PARALLEL:-1}" -lp extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           else
             echo "❌ TypeScript cache miss - full compilation required"
             echo "Running complete compilation pipeline"
             npm run extensions-ci
             npm run core-ci-pr
-            npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            npm exec -- npm-run-all --max-parallel "${COMPILE_MAX_PARALLEL:-1}" -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           fi
 
       - name: Compress compilation artifact
