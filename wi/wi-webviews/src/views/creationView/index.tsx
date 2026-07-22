@@ -36,7 +36,7 @@ import {
     type WIRuntime,
     loadSelectedRuntime,
 } from "../shared/runtime";
-import { BIProjectForm } from "./biForm";
+import { RemoteBIProjectForm } from "./federation/RemoteBIProjectForm";
 import { MiProjectWizard } from "./miForm";
 import { SiProjectWizard } from "./siForm";
 
@@ -134,7 +134,7 @@ export function CreationView({
                         </HeaderRow>
                     </FormPanelHeader>
                     <FormBody>
-                        {projectType === "WSO2: BI" && <BIProjectForm ballerinaUnavailable={ballerinaUnavailable} />}
+                        {projectType === "WSO2: BI" && <RemoteBIProjectForm ballerinaUnavailable={ballerinaUnavailable} />}
                         {projectType === "WSO2: MI" && <MiProjectWizard />}
                         {projectType === "WSO2: SI" && <SiProjectWizard />}
                     </FormBody>

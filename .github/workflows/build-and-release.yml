@@ -17,7 +17,7 @@ on:
         default: true
         type: boolean
       build_macos:
-        description: 'Build for macOS (Apple Silicon)'
+        description: 'Build for macOS (Apple Silicon and Intel)'
         required: false
         default: true
         type: boolean
@@ -137,7 +137,7 @@ jobs:
     needs: compile
     uses: ./.github/workflows/smoke-test.yml
     with:
-      artifact_name: Product-Integrator-TAR
+      artifact_name: Product-Integrator-DEB
 
   smoke-test-windows:
     if: ${{ github.event.inputs.build_windows == 'true' && github.event.inputs.build_packed_installers == 'true' }}
@@ -149,14 +149,21 @@ jobs:
   build-macos:
     if: ${{ github.event.inputs.build_macos == 'true' }}
     name: Build (macOS)
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     needs: [resolve-versions, compile]
     defaults:
       run:
         working-directory: lib/vscode
     strategy:
       matrix:
-        arch: [arm64]
+        include:
+          - arch: arm64
+            runner: macos-latest
+          - arch: x64
+            # macos-15-intel is the last available Intel (x86_64) GitHub-hosted runner.
+            # It will be retired in August 2027 — revisit the x64 build strategy before then.
+            #http://github.com/actions/runner-images/issues/13045
+            runner: macos-15-intel
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -277,7 +284,6 @@ jobs:
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source "$HOME/.cargo/env"
-          # Add ARM64 target for cross-compilation
           if [ "${{ matrix.arch }}" = "arm64" ]; then
             rustup target add aarch64-apple-darwin
           else
@@ -487,7 +493,7 @@ jobs:
         if: ${{ github.event.inputs.build_packed_installers == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: Signatures-and-Hashes-MAC
+          name: Signatures-and-Hashes-MAC-${{ matrix.arch }}
           path: |
             installers/mac/*.pem
             installers/mac/*.sig
@@ -497,7 +503,7 @@ jobs:
   build-windows:
     if: ${{ github.event.inputs.build_windows == 'true' }}
     name: Build (Windows)
-    runs-on: windows-latest
+    runs-on: windows-2022
     needs: [resolve-versions, compile]
     defaults:
       run:
@@ -955,17 +961,31 @@ jobs:
           path: release-files/
         continue-on-error: true
 
-      - name: Download macOS DMG artifacts
+      - name: Download macOS DMG artifacts (arm64)
         uses: actions/download-artifact@v4
         with:
           name: Product-Integrator-Darwin-DMG-arm64
           path: release-files/
         continue-on-error: true
 
-      - name: Download Signatures and Hashes (MAC)
+      - name: Download macOS DMG artifacts (x64)
         uses: actions/download-artifact@v4
         with:
-          name: Signatures-and-Hashes-MAC
+          name: Product-Integrator-Darwin-DMG-x64
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Signatures and Hashes (MAC arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: Signatures-and-Hashes-MAC-arm64
+          path: release-files/
+        continue-on-error: true
+
+      - name: Download Signatures and Hashes (MAC x64)
+        uses: actions/download-artifact@v4
+        with:
+          name: Signatures-and-Hashes-MAC-x64
           path: release-files/
         continue-on-error: true
 

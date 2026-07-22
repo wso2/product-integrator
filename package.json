@@ -4,7 +4,7 @@
   "description": "Open source integration platform offering a powerful low-code development experience with enhanced capabilities.",
   "scripts": {
     "init-submodules": "git submodule update --init --recursive",
-    "apply-patches": "quilt push -a",
+    "apply-patches": "quilt push -a || test $? -eq 2",
     "unapply-patches": "quilt pop -a",
     "link-wi-extension": "ln -sfn $PWD/wi/wi-extension lib/vscode/extensions/wso2.integrator",
     "link-bal-extension": "ln -sfn $PWD/external/wso2-vscode-extensions/workspaces/ballerina/ballerina-extension lib/vscode/extensions/wso2.ballerina",

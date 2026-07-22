@@ -9,5 +9,5 @@ Index: product-integrator/lib/vscode/build/linux/dependencies-generator.ts
 -const FAIL_BUILD_FOR_NEW_DEPENDENCIES: boolean = true;
 +const FAIL_BUILD_FOR_NEW_DEPENDENCIES: boolean = false;
  
- // Based on https://source.chromium.org/chromium/chromium/src/+/refs/tags/142.0.7444.175:chrome/installer/linux/BUILD.gn;l=64-80
+ // Based on https://source.chromium.org/chromium/chromium/src/+/refs/tags/148.0.7778.97:chrome/installer/linux/BUILD.gn;l=64-80
  // and the Linux Archive build

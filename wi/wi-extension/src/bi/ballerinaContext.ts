@@ -43,6 +43,7 @@ export class BallerinaContext {
     public isNPSupported: boolean = false;
     public isWorkspaceSupported: boolean = false;
     public migration: BallerinaExtMigrationAPI | undefined;
+    public langClient: any | undefined;
     public onDownloadProgress: Event<DownloadProgress> | undefined;
     private _initialized: boolean = false;
 
@@ -61,6 +62,7 @@ export class BallerinaContext {
             this.biSupported = instance.biSupported ?? false;
             this.isNPSupported = instance.isNPSupported ?? false;
             this.isWorkspaceSupported = instance.isWorkspaceSupported ?? false;
+            this.langClient = instance.langClient;
         }
         if (ballerinaExtExports?.migration) {
             this.migration = ballerinaExtExports.migration as BallerinaExtMigrationAPI;

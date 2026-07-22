@@ -82,7 +82,7 @@ export function commitAndPushToGitCommand(context: ExtensionContext) {
 						throw new Error(`Failed to select ${ext.terminologies?.componentTerm} to be pushed to remote`);
 					}
 
-					const haveChanges = await hasDirtyRepo(selectedComp.componentFsPath, ext.context, ["context.yaml"]);
+					const haveChanges = await hasDirtyRepo(selectedComp.componentFsPath, ext.context);
 					if (!haveChanges) {
 						window.showErrorMessage("There are no new changes to push to cloud");
 						return;

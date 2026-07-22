@@ -1,14 +1,14 @@
 {
   "name": "wso2-integrator",
-  "displayName": "WSO2 Integrator (Beta)",
+  "displayName": "WSO2 Integrator",
   "description": "Integration development environment for WSO2 Integrator",
-  "version": "0.9.0",
-  "cliVersion": "v1.2.212604271730",
+  "version": "1.0.1",
+  "cliVersion": "v1.2.212606121500",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
   "license": "Apache-2.0",
   "repository": {
-    "url": "https://github.com/wso2/vscode-extensions"
+    "url": "https://github.com/wso2/product-integrator"
   },
   "engines": {
     "vscode": "^1.100.0"
@@ -21,6 +21,7 @@
     "onCommand:wso2.integrator.getEmbeddedWelcomeBootstrap",
     "workspaceContains:**/Ballerina.toml",
     "onLanguage:SynapseXml",
+    "onLanguage:ballerina",
     "workspaceContains:.project",
     "workspaceContains:pom.xml",
     "workspaceContains:**/*.siddhi"
@@ -131,7 +132,7 @@
       {
         "view": "wso2-integrator.explorer",
         "contents": "$(loadingspin) Loading WSO2 Integrator...",
-        "when": "!WI.projectType"
+        "when": "!WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
       },
       {
         "view": "wso2-integrator.explorer",
@@ -140,8 +141,18 @@
       },
       {
         "view": "wso2-integrator.explorer",
-        "contents": "No integrations or libraries found in this project.\n\nGet started by adding your first integration or library.\n\n[$(add) Create Integration or Library](command:BI.project-explorer.add)",
+        "contents": "No integrations or libraries found in this project.\n\nGet started by adding your first integration or library.\n\n[$(add) Add Integration or Library](command:BI.project-explorer.add)",
         "when": "BI.project.empty"
+      },
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": "Welcome to WSO2 Integrator.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+        "when": "(!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
+      },
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": "Welcome to WSO2 Integrator.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+        "when": "(!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
       }
     ],
     "commands": [
@@ -251,7 +262,7 @@
       },
       {
         "command": "BI.project-explorer.add",
-        "title": "Add Artifact",
+        "title": "Add Integration or Library",
         "icon": "$(add)",
         "category": "WSO2 Integrator"
       },
@@ -337,6 +348,10 @@
         "category": "WSO2 Integrator"
       },
       {
+        "command": "wso2.integrator.setupBallerinaVisually",
+        "title": "Setup Ballerina"
+      },
+      {
         "command": "BI.project-explorer.add-workflow",
         "title": "Add Workflow",
         "icon": "$(add)",
@@ -409,6 +424,10 @@
         },
         {
           "command": "BI.project-explorer.add-custom-connector",
+          "when": "false"
+        },
+        {
+          "command": "wso2.integrator.setupBallerinaVisually",
           "when": "false"
         },
         {
@@ -570,7 +589,7 @@
     "@vscode/iconv-lite-umd": "^0.7.0",
     "file-type": "^18.2.1",
     "jschardet": "^3.1.4",
-    "webview-giga-bridge": "workspace:*",
+    "@wso2/webview-giga-bridge": "workspace:*",
     "xstate": "4.38.3",
     "@emotion/styled": "11.14.1",
     "@wso2/ui-toolkit": "workspace:*",

@@ -7,7 +7,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/debug/browser/debu
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
-@@ -460,7 +460,7 @@ const viewContainer = Registry.as<IViewC
+@@ -462,7 +462,7 @@ const viewContainer = Registry.as<IViewC
  	ctorDescriptor: new SyncDescriptor(DebugViewPaneContainer),
  	icon: icons.runViewIcon,
  	alwaysUseContainerInfo: true,
@@ -55,7 +55,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/search/browser/sea
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/search/browser/search.contribution.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/search/browser/search.contribution.ts
-@@ -63,7 +63,7 @@ const viewContainer = Registry.as<IViewC
+@@ -57,7 +57,7 @@ const viewContainer = Registry.as<IViewC
  	hideIfEmpty: true,
  	icon: searchViewIcon,
  	order: 1,
@@ -81,7 +81,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/scm/browser/scm.co
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/scm/browser/scm.contribution.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/scm/browser/scm.contribution.ts
-@@ -72,7 +72,7 @@ const viewContainer = Registry.as<IViewC
+@@ -60,7 +60,7 @@ const viewContainer = Registry.as<IViewC
  	storageId: 'workbench.scm.views.state',
  	icon: sourceControlViewIcon,
  	alwaysUseContainerInfo: true,

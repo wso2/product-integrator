@@ -2,122 +2,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/actio
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/chat/browser/actions/chatActions.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/actions/chatActions.ts
-@@ -42,8 +42,7 @@ import { IOpenerService } from '../../..
- import product from '../../../../../platform/product/common/product.js';
- import { IQuickInputButton, IQuickInputService, IQuickPickItem, IQuickPickSeparator } from '../../../../../platform/quickinput/common/quickInput.js';
- import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
--import { ToggleTitleBarConfigAction } from '../../../../browser/parts/titlebar/titlebarActions.js';
--import { ActiveEditorContext, IsCompactTitleBarContext } from '../../../../common/contextkeys.js';
-+import { ActiveEditorContext } from '../../../../common/contextkeys.js';
- import { IWorkbenchContribution } from '../../../../common/contributions.js';
- import { IViewDescriptorService, ViewContainerLocation } from '../../../../common/views.js';
- import { ChatEntitlement, IChatEntitlementService } from '../../../../services/chat/common/chatEntitlementService.js';
-@@ -1602,56 +1601,56 @@ const defaultChat = {
- };
- 
- // Add next to the command center if command center is disabled
--MenuRegistry.appendMenuItem(MenuId.CommandCenter, {
--	submenu: MenuId.ChatTitleBarMenu,
--	title: localize('title4', "Chat"),
--	icon: Codicon.chatSparkle,
--	when: ContextKeyExpr.and(
--		ChatContextKeys.supported,
--		ContextKeyExpr.and(
--			ChatContextKeys.Setup.hidden.negate(),
--			ChatContextKeys.Setup.disabled.negate()
--		),
--		ContextKeyExpr.has('config.chat.commandCenter.enabled')
--	),
--	order: 10001 // to the right of command center
--});
-+// MenuRegistry.appendMenuItem(MenuId.CommandCenter, {
-+// 	submenu: MenuId.ChatTitleBarMenu,
-+// 	title: localize('title4', "Chat"),
-+// 	icon: Codicon.chatSparkle,
-+// 	when: ContextKeyExpr.and(
-+// 		ChatContextKeys.supported,
-+// 		ContextKeyExpr.and(
-+// 			ChatContextKeys.Setup.hidden.negate(),
-+// 			ChatContextKeys.Setup.disabled.negate()
-+// 		),
-+// 		ContextKeyExpr.has('config.chat.commandCenter.enabled')
-+// 	),
-+// 	order: 10001 // to the right of command center
-+// });
- 
- // Add to the global title bar if command center is disabled
--MenuRegistry.appendMenuItem(MenuId.TitleBar, {
--	submenu: MenuId.ChatTitleBarMenu,
--	title: localize('title4', "Chat"),
--	group: 'navigation',
--	icon: Codicon.chatSparkle,
--	when: ContextKeyExpr.and(
--		ChatContextKeys.supported,
--		ContextKeyExpr.and(
--			ChatContextKeys.Setup.hidden.negate(),
--			ChatContextKeys.Setup.disabled.negate()
--		),
--		ContextKeyExpr.has('config.chat.commandCenter.enabled'),
--		ContextKeyExpr.has('config.window.commandCenter').negate(),
--	),
--	order: 1
--});
--
--registerAction2(class ToggleCopilotControl extends ToggleTitleBarConfigAction {
--	constructor() {
--		super(
--			'chat.commandCenter.enabled',
--			localize('toggle.chatControl', 'Chat Controls'),
--			localize('toggle.chatControlsDescription', "Toggle visibility of the Chat Controls in title bar"), 5,
--			ContextKeyExpr.and(
--				ContextKeyExpr.and(
--					ChatContextKeys.Setup.hidden.negate(),
--					ChatContextKeys.Setup.disabled.negate()
--				),
--				IsCompactTitleBarContext.negate(),
--				ChatContextKeys.supported
--			)
--		);
--	}
--});
-+// MenuRegistry.appendMenuItem(MenuId.TitleBar, {
-+// 	submenu: MenuId.ChatTitleBarMenu,
-+// 	title: localize('title4', "Chat"),
-+// 	group: 'navigation',
-+// 	icon: Codicon.chatSparkle,
-+// 	when: ContextKeyExpr.and(
-+// 		ChatContextKeys.supported,
-+// 		ContextKeyExpr.and(
-+// 			ChatContextKeys.Setup.hidden.negate(),
-+// 			ChatContextKeys.Setup.disabled.negate()
-+// 		),
-+// 		ContextKeyExpr.has('config.chat.commandCenter.enabled'),
-+// 		ContextKeyExpr.has('config.window.commandCenter').negate(),
-+// 	),
-+// 	order: 1
-+// });
-+
-+// registerAction2(class ToggleCopilotControl extends ToggleTitleBarConfigAction {
-+// 	constructor() {
-+// 		super(
-+// 			'chat.commandCenter.enabled',
-+// 			localize('toggle.chatControl', 'Chat Controls'),
-+// 			localize('toggle.chatControlsDescription', "Toggle visibility of the Chat Controls in title bar"), 5,
-+// 			ContextKeyExpr.and(
-+// 				ContextKeyExpr.and(
-+// 					ChatContextKeys.Setup.hidden.negate(),
-+// 					ChatContextKeys.Setup.disabled.negate()
-+// 				),
-+// 				IsCompactTitleBarContext.negate(),
-+// 				ChatContextKeys.supported
-+// 			)
-+// 		);
-+// 	}
-+// });
- 
- export class CopilotTitleBarMenuRendering extends Disposable implements IWorkbenchContribution {
- 
-@@ -1791,32 +1790,32 @@ MenuRegistry.appendMenuItem(MenuId.Edito
+@@ -1796,32 +1796,32 @@ MenuRegistry.appendMenuItem(MenuId.Edito
  
  // --- Chat Default Visibility
  
@@ -139,14 +24,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/actio
 -			},
 -		});
 -	}
--
--	async run(accessor: ServicesAccessor) {
--		const configurationService = accessor.get(IConfigurationService);
--
--		const currentValue = configurationService.getValue<'hidden' | unknown>('workbench.secondarySideBar.defaultVisibility');
--		configurationService.updateValue('workbench.secondarySideBar.defaultVisibility', currentValue !== 'hidden' ? 'hidden' : 'visible');
--	}
--});
 +// registerAction2(class ToggleDefaultVisibilityAction extends Action2 {
 +// 	constructor() {
 +// 		super({
@@ -165,10 +42,16 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/actio
 +// 			},
 +// 		});
 +// 	}
-+
+ 
+-	async run(accessor: ServicesAccessor) {
+-		const configurationService = accessor.get(IConfigurationService);
 +// 	async run(accessor: ServicesAccessor) {
 +// 		const configurationService = accessor.get(IConfigurationService);
-+
+ 
+-		const currentValue = configurationService.getValue<'hidden' | unknown>('workbench.secondarySideBar.defaultVisibility');
+-		configurationService.updateValue('workbench.secondarySideBar.defaultVisibility', currentValue !== 'hidden' ? 'hidden' : 'visible');
+-	}
+-});
 +// 		const currentValue = configurationService.getValue<'hidden' | unknown>('workbench.secondarySideBar.defaultVisibility');
 +// 		configurationService.updateValue('workbench.secondarySideBar.defaultVisibility', currentValue !== 'hidden' ? 'hidden' : 'visible');
 +// 	}
@@ -176,98 +59,135 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/actio
  
  registerAction2(class EditToolApproval extends Action2 {
  	constructor() {
-Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/chat.contribution.ts
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
 ===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/chat/browser/chat.contribution.ts
-+++ product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/chat.contribution.ts
-@@ -36,7 +36,7 @@ import { CodeMapperService, ICodeMapperS
- import '../common/chatColors.js';
- import { IChatEditingService } from '../common/chatEditingService.js';
- import { IChatLayoutService } from '../common/chatLayoutService.js';
--import { ChatModeService, IChatMode, IChatModeService } from '../common/chatModes.js';
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/chat.shared.contribution.ts
+@@ -6,7 +6,7 @@
+ import { Event } from '../../../../base/common/event.js';
+ import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
+ import { Schemas } from '../../../../base/common/network.js';
+-import { autorun, observableFromEvent } from '../../../../base/common/observable.js';
++// import { autorun, observableFromEvent } from '../../../../base/common/observable.js';
+ import { isMacintosh } from '../../../../base/common/platform.js';
+ import { PolicyCategory } from '../../../../base/common/policy.js';
+ import '../../../../platform/agentHost/common/agentHost.config.contribution.js';
+@@ -48,7 +48,7 @@ import { CodeMapperService, ICodeMapperS
+ import '../common/widget/chatColors.js';
+ import { IChatEditingService } from '../common/editing/chatEditingService.js';
+ import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
+-import { ChatModeService, IChatMode, IChatModeService, IChatModes } from '../common/chatModes.js';
 +import { ChatModeService, IChatModeService } from '../common/chatModes.js';
- import { ChatResponseResourceFileSystemProvider } from '../common/chatResponseResourceFileSystemProvider.js';
- import { IChatService } from '../common/chatService.js';
- import { ChatService } from '../common/chatServiceImpl.js';
-@@ -64,7 +64,7 @@ import { BuiltinToolsContribution } from
- import { IVoiceChatService, VoiceChatService } from '../common/voiceChatService.js';
+ import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
+ import { IChatService } from '../common/chatService/chatService.js';
+ import { ChatService } from '../common/chatService/chatServiceImpl.js';
+@@ -94,7 +94,7 @@ import './voiceClient/voiceToolDispatchS
+ import './voiceClient/voiceSessionController.js';
  import { registerChatAccessibilityActions } from './actions/chatAccessibilityActions.js';
  import { AgentChatAccessibilityHelp, EditsChatAccessibilityHelp, PanelChatAccessibilityHelp, QuickChatAccessibilityHelp } from './actions/chatAccessibilityHelp.js';
--import { ACTION_ID_NEW_CHAT, CopilotTitleBarMenuRendering, ModeOpenChatGlobalAction, registerChatActions } from './actions/chatActions.js';
-+import { ACTION_ID_NEW_CHAT } from './actions/chatActions.js';
+-import { ModeOpenChatGlobalAction, registerChatActions } from './actions/chatActions.js';
++// import { ModeOpenChatGlobalAction, registerChatActions } from './actions/chatActions.js';
  import { CodeBlockActionRendering, registerChatCodeBlockActions, registerChatCodeCompareBlockActions } from './actions/chatCodeblockActions.js';
  import { ChatContextContributions } from './actions/chatContext.js';
  import { registerChatContextActions } from './actions/chatContextActions.js';
-@@ -79,7 +79,7 @@ import { registerLanguageModelActions }
- import { registerMoveActions } from './actions/chatMoveActions.js';
+@@ -110,7 +110,7 @@ import { registerMoveActions } from './a
  import { registerNewChatActions } from './actions/chatNewActions.js';
  import { registerChatPromptNavigationActions } from './actions/chatPromptNavigationActions.js';
+ import { registerChatQueueActions } from './actions/chatQueueActions.js';
 -import { registerQuickChatActions } from './actions/chatQuickInputActions.js';
 +// import { registerQuickChatActions } from './actions/chatQuickInputActions.js';
- import { ChatSessionsGettingStartedAction, DeleteChatSessionAction, OpenChatSessionInNewEditorGroupAction, OpenChatSessionInNewWindowAction, OpenChatSessionInSidebarAction, RenameChatSessionAction, ToggleAgentSessionsViewLocationAction, ToggleChatSessionsDescriptionDisplayAction } from './actions/chatSessionActions.js';
+ import { ChatAgentRecommendation } from './actions/chatAgentRecommendationActions.js';
  import { registerChatTitleActions } from './actions/chatTitleActions.js';
  import { registerChatElicitationActions } from './actions/chatElicitationActions.js';
-@@ -106,13 +106,13 @@ import { ChatLayoutService } from './cha
- import './chatManagement/chatManagement.contribution.js';
- import { agentSlashCommandToMarkdown, agentToMarkdown } from './chatMarkdownDecorationsRenderer.js';
+@@ -153,7 +153,7 @@ import './aiCustomization/aiCustomizatio
+ import './aiCustomization/aiCustomizationItemsModel.js';
+ 
  import { ChatOutputRendererService, IChatOutputRendererService } from './chatOutputItemRenderer.js';
 -import { ChatCompatibilityNotifier, ChatExtensionPointHandler } from './chatParticipant.contribution.js';
 +// import { ChatCompatibilityNotifier, ChatExtensionPointHandler } from './chatParticipant.contribution.js';
- import { ChatPasteProvidersFeature } from './chatPasteProviders.js';
- import { QuickChatService } from './chatQuick.js';
- import { ChatResponseAccessibleView } from './chatResponseAccessibleView.js';
- import { ChatTerminalOutputAccessibleView } from './chatTerminalOutputAccessibleView.js';
- import { LocalAgentsSessionsProvider } from './agentSessions/localAgentSessionsProvider.js';
--import { ChatSessionsView, ChatSessionsViewContrib } from './chatSessions/view/chatSessionsView.js';
-+import { ChatSessionsViewContrib } from './chatSessions/view/chatSessionsView.js';
- import { ChatSetupContribution, ChatTeardownContribution } from './chatSetup/chatSetupContributions.js';
- import { ChatStatusBarEntry } from './chatStatus/chatStatusEntry.js';
- import { ChatVariablesService } from './chatVariables.js';
-@@ -940,55 +940,55 @@ class ChatAgentSettingContribution exten
- /**
-  * Workbench contribution to register actions for custom chat modes via events
-  */
+ import { ChatPasteProvidersFeature } from './widget/input/editor/chatPasteProviders.js';
+ import { QuickChatService } from './widgetHosts/chatQuick.js';
+ import { ChatResponseAccessibleView } from './accessibility/chatResponseAccessibleView.js';
+@@ -2260,93 +2260,93 @@ class ChatForegroundSessionCountContribu
+ }
+ 
+ 
+-/**
+- * Given builtin and custom modes, returns only the custom mode IDs that should have actions registered.
+- * Custom modes whose names conflict with builtin modes are excluded.
+- * If there are name collisions among custom modes, the later mode in the list wins.
+- */
+-function getCustomModesWithUniqueNames(builtinModes: readonly IChatMode[], customModes: readonly IChatMode[]): Set<string> {
+-	const customModeIds = new Set<string>();
+-	const builtinNames = new Set(builtinModes.map(mode => mode.name.get()));
+-	const customNameToId = new Map<string, string>();
+-
+-	for (const mode of customModes) {
+-		const modeName = mode.name.get();
+-
+-		// Skip custom modes that conflict with builtin mode names
+-		if (builtinNames.has(modeName)) {
+-			continue;
+-		}
+-
+-		// If there is a name collision among custom modes, the later one in the list wins
+-		const existingId = customNameToId.get(modeName);
+-		if (existingId) {
+-			customModeIds.delete(existingId);
+-		}
+-
+-		customNameToId.set(modeName, mode.id);
+-		customModeIds.add(mode.id);
+-	}
+-
+-	return customModeIds;
+-}
+-
+-/**
+- * Workbench contribution to register actions for custom chat modes via events
+- */
 -class ChatAgentActionsContribution extends Disposable implements IWorkbenchContribution {
-+// class ChatAgentActionsContribution extends Disposable implements IWorkbenchContribution {
- 
+-
 -	static readonly ID = 'workbench.contrib.chatAgentActions';
-+// 	static readonly ID = 'workbench.contrib.chatAgentActions';
- 
+-
 -	private readonly _modeActionDisposables = new DisposableMap<string>();
-+// 	private readonly _modeActionDisposables = new DisposableMap<string>();
- 
+-
 -	constructor(
--		@IChatModeService private readonly chatModeService: IChatModeService,
+-		@IChatModeService _chatModeService: IChatModeService,
+-		@IChatWidgetService private readonly chatWidgetService: IChatWidgetService,
 -	) {
 -		super();
 -		this._store.add(this._modeActionDisposables);
 -
--		// Register actions for existing custom modes
--		const { custom } = this.chatModeService.getModes();
--		for (const mode of custom) {
--			this._registerModeAction(mode);
+-		const focusedWidget = observableFromEvent(this, this.chatWidgetService.onDidChangeFocusedSession, () => this.chatWidgetService.lastFocusedWidget);
+-		this._register(autorun(reader => {
+-			const chatModes = focusedWidget.read(reader)?.input.currentChatModesObs.read(reader);
+-			this._syncModeActions(chatModes);
+-		}));
+-	}
+-
+-	private _syncModeActions(chatModes: IChatModes | undefined): void {
+-		if (!chatModes) {
+-			this._modeActionDisposables.clearAndDisposeAll();
+-			return;
 -		}
 -
--		// Listen for custom mode changes by tracking snapshots
--		this._register(this.chatModeService.onDidChangeChatModes(() => {
--			const { custom } = this.chatModeService.getModes();
--			const currentModeIds = new Set<string>();
+-		const { builtin, custom } = chatModes;
+-		const currentModeIds = getCustomModesWithUniqueNames(builtin, custom);
 -
--			// Register new modes
--			for (const mode of custom) {
--				currentModeIds.add(mode.id);
--				if (!this._modeActionDisposables.has(mode.id)) {
--					this._registerModeAction(mode);
--				}
+-		// Remove modes that no longer exist and those replaced by modes later in the list with same name.
+-		for (const modeId of this._modeActionDisposables.keys()) {
+-			if (!currentModeIds.has(modeId)) {
+-				this._modeActionDisposables.deleteAndDispose(modeId);
 -			}
+-		}
 -
--			// Remove modes that no longer exist
--			for (const modeId of this._modeActionDisposables.keys()) {
--				if (!currentModeIds.has(modeId)) {
--					this._modeActionDisposables.deleteAndDispose(modeId);
--				}
+-		// Register new modes.
+-		for (const mode of custom) {
+-			if (currentModeIds.has(mode.id) && !this._modeActionDisposables.has(mode.id)) {
+-				this._registerModeAction(mode);
 -			}
--		}));
+-		}
 -	}
 -
 -	private _registerModeAction(mode: IChatMode): void {
@@ -279,38 +199,82 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/chat.
 -		this._modeActionDisposables.set(mode.id, registerAction2(actionClass));
 -	}
 -}
++// /**
++//  * Given builtin and custom modes, returns only the custom mode IDs that should have actions registered.
++//  * Custom modes whose names conflict with builtin modes are excluded.
++//  * If there are name collisions among custom modes, the later mode in the list wins.
++//  */
++// function getCustomModesWithUniqueNames(builtinModes: readonly IChatMode[], customModes: readonly IChatMode[]): Set<string> {
++// 	const customModeIds = new Set<string>();
++// 	const builtinNames = new Set(builtinModes.map(mode => mode.name.get()));
++// 	const customNameToId = new Map<string, string>();
++
++// 	for (const mode of customModes) {
++// 		const modeName = mode.name.get();
++
++// 		// Skip custom modes that conflict with builtin mode names
++// 		if (builtinNames.has(modeName)) {
++// 			continue;
++// 		}
++
++// 		// If there is a name collision among custom modes, the later one in the list wins
++// 		const existingId = customNameToId.get(modeName);
++// 		if (existingId) {
++// 			customModeIds.delete(existingId);
++// 		}
++
++// 		customNameToId.set(modeName, mode.id);
++// 		customModeIds.add(mode.id);
++// 	}
++
++// 	return customModeIds;
++// }
++
++// /**
++//  * Workbench contribution to register actions for custom chat modes via events
++//  */
++// class ChatAgentActionsContribution extends Disposable implements IWorkbenchContribution {
++
++// 	static readonly ID = 'workbench.contrib.chatAgentActions';
++
++// 	private readonly _modeActionDisposables = new DisposableMap<string>();
++
 +// 	constructor(
-+// 		@IChatModeService private readonly chatModeService: IChatModeService,
++// 		@IChatModeService _chatModeService: IChatModeService,
++// 		@IChatWidgetService private readonly chatWidgetService: IChatWidgetService,
 +// 	) {
 +// 		super();
 +// 		this._store.add(this._modeActionDisposables);
 +
-+// 		// Register actions for existing custom modes
-+// 		const { custom } = this.chatModeService.getModes();
-+// 		for (const mode of custom) {
-+// 			this._registerModeAction(mode);
++// 		const focusedWidget = observableFromEvent(this, this.chatWidgetService.onDidChangeFocusedSession, () => this.chatWidgetService.lastFocusedWidget);
++// 		this._register(autorun(reader => {
++// 			const chatModes = focusedWidget.read(reader)?.input.currentChatModesObs.read(reader);
++// 			this._syncModeActions(chatModes);
++// 		}));
++// 	}
++
++// 	private _syncModeActions(chatModes: IChatModes | undefined): void {
++// 		if (!chatModes) {
++// 			this._modeActionDisposables.clearAndDisposeAll();
++// 			return;
 +// 		}
 +
-+// 		// Listen for custom mode changes by tracking snapshots
-+// 		this._register(this.chatModeService.onDidChangeChatModes(() => {
-+// 			const { custom } = this.chatModeService.getModes();
-+// 			const currentModeIds = new Set<string>();
++// 		const { builtin, custom } = chatModes;
++// 		const currentModeIds = getCustomModesWithUniqueNames(builtin, custom);
 +
-+// 			// Register new modes
-+// 			for (const mode of custom) {
-+// 				currentModeIds.add(mode.id);
-+// 				if (!this._modeActionDisposables.has(mode.id)) {
-+// 					this._registerModeAction(mode);
-+// 				}
++// 		// Remove modes that no longer exist and those replaced by modes later in the list with same name.
++// 		for (const modeId of this._modeActionDisposables.keys()) {
++// 			if (!currentModeIds.has(modeId)) {
++// 				this._modeActionDisposables.deleteAndDispose(modeId);
 +// 			}
++// 		}
 +
-+// 			// Remove modes that no longer exist
-+// 			for (const modeId of this._modeActionDisposables.keys()) {
-+// 				if (!currentModeIds.has(modeId)) {
-+// 					this._modeActionDisposables.deleteAndDispose(modeId);
-+// 				}
++// 		// Register new modes.
++// 		for (const mode of custom) {
++// 			if (currentModeIds.has(mode.id) && !this._modeActionDisposables.has(mode.id)) {
++// 				this._registerModeAction(mode);
 +// 			}
-+// 		}));
++// 		}
 +// 	}
 +
 +// 	private _registerModeAction(mode: IChatMode): void {
@@ -323,53 +287,74 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/chat.
 +// 	}
 +// }
  
- class ToolReferenceNamesContribution extends Disposable implements IWorkbenchContribution {
+ class HookSchemaAssociationContribution extends Disposable implements IWorkbenchContribution {
  
-@@ -1116,11 +1116,11 @@ Registry.as<IEditorFactoryRegistry>(Edit
+@@ -2454,10 +2454,10 @@ registerWorkbenchContribution2(ChatLangu
+ registerWorkbenchContribution2(ChatSlashCommandsContribution.ID, ChatSlashCommandsContribution, WorkbenchPhase.Eventually);
+ registerWorkbenchContribution2(ChatSessionOptionSlashCommandsContribution.ID, ChatSessionOptionSlashCommandsContribution, WorkbenchPhase.Eventually);
  
- registerWorkbenchContribution2(ChatResolverContribution.ID, ChatResolverContribution, WorkbenchPhase.BlockStartup);
- registerWorkbenchContribution2(ChatSlashStaticSlashCommandsContribution.ID, ChatSlashStaticSlashCommandsContribution, WorkbenchPhase.Eventually);
 -registerWorkbenchContribution2(ChatExtensionPointHandler.ID, ChatExtensionPointHandler, WorkbenchPhase.BlockStartup);
 +// registerWorkbenchContribution2(ChatExtensionPointHandler.ID, ChatExtensionPointHandler, WorkbenchPhase.BlockStartup);
  registerWorkbenchContribution2(LanguageModelToolsExtensionPointHandler.ID, LanguageModelToolsExtensionPointHandler, WorkbenchPhase.BlockRestore);
  registerWorkbenchContribution2(ChatPromptFilesExtensionPointHandler.ID, ChatPromptFilesExtensionPointHandler, WorkbenchPhase.BlockRestore);
 -registerWorkbenchContribution2(ChatCompatibilityNotifier.ID, ChatCompatibilityNotifier, WorkbenchPhase.Eventually);
--registerWorkbenchContribution2(CopilotTitleBarMenuRendering.ID, CopilotTitleBarMenuRendering, WorkbenchPhase.BlockRestore);
 +// registerWorkbenchContribution2(ChatCompatibilityNotifier.ID, ChatCompatibilityNotifier, WorkbenchPhase.Eventually);
-+// registerWorkbenchContribution2(CopilotTitleBarMenuRendering.ID, CopilotTitleBarMenuRendering, WorkbenchPhase.BlockRestore);
  registerWorkbenchContribution2(CodeBlockActionRendering.ID, CodeBlockActionRendering, WorkbenchPhase.BlockRestore);
- registerWorkbenchContribution2(ContinueChatInSessionActionRendering.ID, ContinueChatInSessionActionRendering, WorkbenchPhase.BlockRestore);
+ registerWorkbenchContribution2(ChatCopyActionRendering.ID, ChatCopyActionRendering, WorkbenchPhase.BlockRestore);
  registerWorkbenchContribution2(ChatImplicitContextContribution.ID, ChatImplicitContextContribution, WorkbenchPhase.Eventually);
-@@ -1132,7 +1132,7 @@ registerWorkbenchContribution2(ChatTeard
- registerWorkbenchContribution2(ChatStatusBarEntry.ID, ChatStatusBarEntry, WorkbenchPhase.BlockRestore);
- registerWorkbenchContribution2(BuiltinToolsContribution.ID, BuiltinToolsContribution, WorkbenchPhase.Eventually);
+@@ -2475,7 +2475,7 @@ registerWorkbenchContribution2(UsagesToo
+ registerWorkbenchContribution2(RenameToolContribution.ID, RenameToolContribution, WorkbenchPhase.BlockRestore);
  registerWorkbenchContribution2(ChatAgentSettingContribution.ID, ChatAgentSettingContribution, WorkbenchPhase.AfterRestored);
+ registerWorkbenchContribution2(ChatForegroundSessionCountContribution.ID, ChatForegroundSessionCountContribution, WorkbenchPhase.AfterRestored);
 -registerWorkbenchContribution2(ChatAgentActionsContribution.ID, ChatAgentActionsContribution, WorkbenchPhase.Eventually);
 +// registerWorkbenchContribution2(ChatAgentActionsContribution.ID, ChatAgentActionsContribution, WorkbenchPhase.Eventually);
+ registerWorkbenchContribution2(HookSchemaAssociationContribution.ID, HookSchemaAssociationContribution, WorkbenchPhase.AfterRestored);
  registerWorkbenchContribution2(ToolReferenceNamesContribution.ID, ToolReferenceNamesContribution, WorkbenchPhase.AfterRestored);
- registerWorkbenchContribution2(ChatEditingEditorAccessibility.ID, ChatEditingEditorAccessibility, WorkbenchPhase.AfterRestored);
- registerWorkbenchContribution2(ChatEditingEditorOverlay.ID, ChatEditingEditorOverlay, WorkbenchPhase.AfterRestored);
-@@ -1144,12 +1144,12 @@ registerWorkbenchContribution2(ChatRespo
- registerWorkbenchContribution2(PromptUrlHandler.ID, PromptUrlHandler, WorkbenchPhase.BlockRestore);
- registerWorkbenchContribution2(LocalAgentsSessionsProvider.ID, LocalAgentsSessionsProvider, WorkbenchPhase.AfterRestored);
- registerWorkbenchContribution2(ChatSessionsViewContrib.ID, ChatSessionsViewContrib, WorkbenchPhase.AfterRestored);
--registerWorkbenchContribution2(ChatSessionsView.ID, ChatSessionsView, WorkbenchPhase.BlockRestore);
-+// registerWorkbenchContribution2(ChatSessionsView.ID, ChatSessionsView, WorkbenchPhase.BlockRestore);
- registerWorkbenchContribution2(ChatEditingNotebookFileSystemProviderContrib.ID, ChatEditingNotebookFileSystemProviderContrib, WorkbenchPhase.BlockStartup);
- registerWorkbenchContribution2(UserToolSetsContributions.ID, UserToolSetsContributions, WorkbenchPhase.Eventually);
- registerWorkbenchContribution2(PromptLanguageFeaturesProvider.ID, PromptLanguageFeaturesProvider, WorkbenchPhase.Eventually);
+ registerWorkbenchContribution2(ChatAgentRecommendation.ID, ChatAgentRecommendation, WorkbenchPhase.Eventually);
+@@ -2496,7 +2496,7 @@ registerWorkbenchContribution2(ChatRepoI
+ registerWorkbenchContribution2(AgentPluginRecommendations.ID, AgentPluginRecommendations, WorkbenchPhase.Eventually);
+ registerWorkbenchContribution2(PluginAutoUpdate.ID, PluginAutoUpdate, WorkbenchPhase.Eventually);
  
 -registerChatActions();
 +// registerChatActions();
  registerChatAccessibilityActions();
  registerChatCopyActions();
- registerChatCodeBlockActions();
-@@ -1158,7 +1158,7 @@ registerChatFileTreeActions();
- registerChatPromptNavigationActions();
+ registerChatOpenAgentDebugPanelAction();
+@@ -2507,7 +2507,7 @@ registerChatPromptNavigationActions();
  registerChatTitleActions();
  registerChatExecuteActions();
+ registerChatQueueActions();
 -registerQuickChatActions();
 +// registerQuickChatActions();
  registerChatExportActions();
  registerMoveActions();
  registerNewChatActions();
+Index: product-integrator/lib/vscode/src/vs/workbench/services/accounts/browser/defaultAccount.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/services/accounts/browser/defaultAccount.ts
++++ product-integrator/lib/vscode/src/vs/workbench/services/accounts/browser/defaultAccount.ts
+@@ -89,6 +89,24 @@ interface IMcpRegistryResponse {
+ }
+ 
+ function toDefaultAccountConfig(defaultChatAgent: IDefaultChatAgent): IDefaultAccountConfig {
++	// WSO2 Integrator ships no default chat agent (AI features are disabled). Return an inert
++	// configuration so the default-account service can construct without a Copilot product config.
++	if (!defaultChatAgent) {
++		return {
++			preferredExtensions: [],
++			authenticationProvider: {
++				default: { id: '', name: '' },
++				enterprise: { id: '', name: '' },
++				enterpriseProviderConfig: '',
++				enterpriseProviderUriSetting: '',
++				scopes: [],
++			},
++			entitlementUrl: '',
++			tokenEntitlementUrl: '',
++			mcpRegistryDataUrl: '',
++			managedSettingsUrl: '',
++		};
++	}
+ 	return {
+ 		preferredExtensions: [
+ 			defaultChatAgent.chatExtensionId,

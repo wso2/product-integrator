@@ -18,6 +18,7 @@
 
 import {
     BIProjectRequest,
+    BiFormWsBootstrap,
     BIRuntimeStatusResponse,
     CreateMiProjectRequest,
     CreateMiProjectResponse,
@@ -31,34 +32,22 @@ import {
     GetConfigurationResponse,
     GetRecentProjectsResponse,
     SetConfigurationRequest,
-    GetMigrationToolsResponse,
     GetSubFoldersRequest,
     GetSubFoldersResponse,
     GetSupportedMIVersionsResponse,
     GettingStartedData,
-    ImportIntegrationWsRequest,
-    ImportIntegrationResponse,
-    MigrateRequest,
-    MigrationToolLogData,
-    MigrationToolStateData,
-    OpenMigrationReportRequest,
     ProjectDirResponse,
-    ProjectMigrationResult,
-    PullMigrationToolRequest,
     RunCommandRequest,
     RunCommandResponse,
     SampleDownloadRequest,
-    SaveMigrationReportRequest,
     SemanticVersion,
     SetWebviewCacheParams,
     ShowErrorMessageRequest,
-    StoreSubProjectReportsRequest,
     ValidateProjectFormRequest,
     ValidateProjectFormResponse,
     WebviewContext,
     WorkspaceRootResponse,
     DefaultOrgNameResponse,
-    WIChatNotify
 } from "./webview-api.types";
 import type {
     AuthState,
@@ -83,25 +72,15 @@ import type {
     GetCloudProjectsResp,
 } from "./cloud.types";
 
-export interface SignInResult {
-    success: boolean;
-    error?: string;
-}
-
 export const WI_BRIDGE_EVENTS = {
     WS_RESPONSE: "wi.ws.response",
     STATE_CHANGED: "wi.event.stateChanged",
     DOWNLOAD_PROGRESS: "wi.event.downloadProgress",
-    MIGRATION_TOOL_STATE_CHANGED: "wi.event.migrationToolStateChanged",
-    MIGRATION_TOOL_LOGS: "wi.event.migrationToolLogs",
-    MIGRATED_PROJECT: "wi.event.migratedProject",
     // ── Cloud events ──────────────────────────────────────────
     AUTH_STATE_CHANGED: "wi.event.authStateChanged",
     CONTEXT_STATE_CHANGED: "wi.event.contextStateChanged",
     CLONE_PROGRESS: "wi.event.cloneProgress",
     SIGN_IN_INITIATED: "wi.event.signInInitiated",
-    // ── AI migration streaming ────────────────────────────────
-    CHAT_NOTIFY: "wi.event.chatNotify",
 } as const;
 
 /** Granular stages emitted by the clone-project command so the webview can show accurate progress. */
@@ -129,15 +108,9 @@ export interface WIWsMethodParamsMap {
     fetchSamplesFromGithub: FetchSamplesRequest;
     downloadSelectedSampleFromGithub: SampleDownloadRequest;
     createBIProject: BIProjectRequest;
-    getMigrationTools: void;
+    getBiFormWsBootstrap: void;
     isSupportedSLVersion: SemanticVersion;
-    migrateProject: MigrateRequest;
-    pullMigrationTool: PullMigrationToolRequest;
-    importIntegration: ImportIntegrationWsRequest;
     showErrorMessage: ShowErrorMessageRequest;
-    openMigrationReport: OpenMigrationReportRequest;
-    saveMigrationReport: SaveMigrationReportRequest;
-    storeSubProjectReports: StoreSubProjectReportsRequest;
     validateProjectPath: ValidateProjectFormRequest;
     openFolder: string;
     openExternal: string;
@@ -146,13 +119,6 @@ export interface WIWsMethodParamsMap {
     clearWebviewCache: string;
     getDefaultOrgName: void;
     getDefaultCreationPath: void;
-    wizardEnhancementReady: void;
-    openMigratedProject: void;
-    abortMigrationAgent: void; checkAIAuth: void;
-    triggerAICopilotSignIn: void;
-    triggerAnthropicKeySignIn: { apiKey: string };
-    triggerAwsBedrockSignIn: { accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string };
-    triggerVertexAiSignIn: { projectId: string; location: string; clientEmail: string; privateKey: string };
     getBIRuntimeStatus: void;
     initBIRuntimeContext: void;
     // ── Cloud methods ─────────────────────────────────────────
@@ -200,15 +166,9 @@ export interface WIWsMethodResultMap {
     fetchSamplesFromGithub: GettingStartedData;
     downloadSelectedSampleFromGithub: void;
     createBIProject: void;
-    getMigrationTools: GetMigrationToolsResponse;
+    getBiFormWsBootstrap: BiFormWsBootstrap;
     isSupportedSLVersion: boolean;
-    migrateProject: void;
-    pullMigrationTool: void;
-    importIntegration: ImportIntegrationResponse;
     showErrorMessage: void;
-    openMigrationReport: void;
-    saveMigrationReport: void;
-    storeSubProjectReports: void;
     validateProjectPath: ValidateProjectFormResponse;
     openFolder: void;
     openExternal: void;
@@ -217,13 +177,6 @@ export interface WIWsMethodResultMap {
     clearWebviewCache: void;
     getDefaultOrgName: DefaultOrgNameResponse;
     getDefaultCreationPath: WorkspaceRootResponse;
-    wizardEnhancementReady: void;
-    openMigratedProject: void;
-    abortMigrationAgent: void; checkAIAuth: boolean;
-    triggerAICopilotSignIn: SignInResult;
-    triggerAnthropicKeySignIn: SignInResult;
-    triggerAwsBedrockSignIn: SignInResult;
-    triggerVertexAiSignIn: SignInResult;
     getBIRuntimeStatus: BIRuntimeStatusResponse;
     initBIRuntimeContext: void;
     // ── Cloud methods ─────────────────────────────────────────
@@ -285,21 +238,6 @@ export interface WIDownloadProgressEvent {
     progress: DownloadProgress;
 }
 
-export interface WIMigrationToolStateChangedEvent {
-    type: typeof WI_BRIDGE_EVENTS.MIGRATION_TOOL_STATE_CHANGED;
-    state: MigrationToolStateData;
-}
-
-export interface WIMigrationToolLogsEvent {
-    type: typeof WI_BRIDGE_EVENTS.MIGRATION_TOOL_LOGS;
-    log: MigrationToolLogData;
-}
-
-export interface WIMigratedProjectEvent {
-    type: typeof WI_BRIDGE_EVENTS.MIGRATED_PROJECT;
-    project: ProjectMigrationResult;
-}
-
 // ── Cloud event interfaces ────────────────────────────────
 export interface WIAuthStateChangedEvent {
     type: typeof WI_BRIDGE_EVENTS.AUTH_STATE_CHANGED;
@@ -320,25 +258,16 @@ export interface WISignInInitiatedEvent {
     type: typeof WI_BRIDGE_EVENTS.SIGN_IN_INITIATED;
 }
 
-export interface WIChatNotifyEvent {
-    type: typeof WI_BRIDGE_EVENTS.CHAT_NOTIFY;
-    event: WIChatNotify;
-}
-
 export type WIBridgeRequest = WIWsRequest;
 
 export type WIBridgeResponse =
     | WIWsResponseMessage
     | WIStateChangedEvent
     | WIDownloadProgressEvent
-    | WIMigrationToolStateChangedEvent
-    | WIMigrationToolLogsEvent
-    | WIMigratedProjectEvent
     | WIAuthStateChangedEvent
     | WIContextStateChangedEvent
     | WICloneProgressEvent
-    | WISignInInitiatedEvent
-    | WIChatNotifyEvent;
+    | WISignInInitiatedEvent;
 
 export type WITransportMode = "proxy" | "websocket";
 

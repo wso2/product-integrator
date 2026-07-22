@@ -185,6 +185,16 @@ const stateMachine = createMachine<MachineContext>({
     id: 'wi',
     initial: 'initialize',
     predictableActionArguments: true,
+    on: {
+        UPDATE_VIEW: {
+            actions: assign({
+                currentView: (_context, event: any) => {
+                    ext.log(`View updated in context: ${event.view}`);
+                    return event.view;
+                }
+            })
+        }
+    },
     context: {
         projectUri: 'global',
         projectType: ProjectType.NONE,
@@ -231,31 +241,11 @@ const stateMachine = createMachine<MachineContext>({
         ready: {
             entry: ["activateBasedOnProjectType", "registerConfigChangeListener"],
             exit: "disposeConfigChangeListener",
-            on: {
-                UPDATE_VIEW: {
-                    actions: assign({
-                        currentView: (context, event: any) => {
-                            ext.log(`View updated in context: ${event.view}`);
-                            return event.view;
-                        }
-                    })
-                }
-            }
         },
         disabled: {
             // Project type could not be detected or no known project
             entry: ["registerConfigChangeListener"],
             exit: "disposeConfigChangeListener",
-            on: {
-                UPDATE_VIEW: {
-                    actions: assign({
-                        currentView: (context, event: any) => {
-                            ext.log(`View updated in context: ${event.view}`);
-                            return event.view;
-                        }
-                    })
-                }
-            }
         },
     }
 }, {

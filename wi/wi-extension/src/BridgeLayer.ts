@@ -17,7 +17,7 @@
  */
 
 import { WebviewPanel } from "vscode";
-import { createExtensionTransportManager, createRequestRouter } from "webview-giga-bridge";
+import { createExtensionTransportManager, createRequestRouter } from "@wso2/webview-giga-bridge";
 import {
     BIProjectRequest,
     CreateMiProjectRequest,
@@ -28,20 +28,11 @@ import {
     GetConfigurationRequest,
     SetConfigurationRequest,
     GetSubFoldersRequest,
-    ImportIntegrationWsRequest,
-    MigrateRequest,
-    MigrationToolLogData,
-    MigrationToolStateData,
-    OpenMigrationReportRequest,
-    ProjectMigrationResult,
-    PullMigrationToolRequest,
     RunCommandRequest,
     SampleDownloadRequest,
-    SaveMigrationReportRequest,
     SemanticVersion,
     SetWebviewCacheParams,
     ShowErrorMessageRequest,
-    StoreSubProjectReportsRequest,
     ValidateProjectFormRequest,
     WI_BRIDGE_EVENTS,
     WIBridgeRequest,
@@ -52,7 +43,6 @@ import {
     WebviewContext,
     WITransportBootstrap,
     CloneProgressStage,
-    WIChatNotify,
 } from "@wso2/wi-core";
 import type {
     AuthState,
@@ -78,12 +68,11 @@ type RequestRouter = ReturnType<typeof createRequestRouter<WIBridgeRequest, WIBr
 interface BridgeChannel {
     transport: TransportManager;
     registration?: { dispose(): void };
+    wsManager: MainWsManager;
 }
 
 export class BridgeLayer {
     private static channels: Map<string, BridgeChannel> = new Map();
-    private static migrationSubscribed = false;
-    private static migrationSubscriptionDisposable: { dispose(): void } | undefined;
     private static downloadProgressSubscribed = false;
     private static downloadProgressDisposable: { dispose(): void } | undefined;
 
@@ -129,27 +118,6 @@ export class BridgeLayer {
         });
     }
 
-    static notifyMigrationToolStateChanged(projectUri: string, state: MigrationToolStateData): void {
-        this.publish(projectUri, {
-            type: WI_BRIDGE_EVENTS.MIGRATION_TOOL_STATE_CHANGED,
-            state,
-        });
-    }
-
-    static notifyMigrationToolLogs(projectUri: string, log: MigrationToolLogData): void {
-        this.publish(projectUri, {
-            type: WI_BRIDGE_EVENTS.MIGRATION_TOOL_LOGS,
-            log,
-        });
-    }
-
-    static notifyMigratedProject(project: ProjectMigrationResult, projectUri: string = "global"): void {
-        this.publish(projectUri, {
-            type: WI_BRIDGE_EVENTS.MIGRATED_PROJECT,
-            project,
-        });
-    }
-
     static notifyCloneProgress(stage: CloneProgressStage, projectUri: string = "global"): void {
         this.publish(projectUri, {
             type: WI_BRIDGE_EVENTS.CLONE_PROGRESS,
@@ -178,13 +146,6 @@ export class BridgeLayer {
         });
     }
 
-    static notifyChatEvent(projectUri: string, event: WIChatNotify): void {
-        this.publish(projectUri, {
-            type: WI_BRIDGE_EVENTS.CHAT_NOTIFY,
-            event,
-        });
-    }
-
     static dispose(projectUri: string): void {
         const channel = this.channels.get(projectUri);
         if (!channel) {
@@ -194,9 +155,6 @@ export class BridgeLayer {
         channel.transport.dispose();
         this.channels.delete(projectUri);
         if (this.channels.size === 0) {
-            this.migrationSubscriptionDisposable?.dispose();
-            this.migrationSubscriptionDisposable = undefined;
-            this.migrationSubscribed = false;
             this.downloadProgressDisposable?.dispose();
             this.downloadProgressDisposable = undefined;
             this.downloadProgressSubscribed = false;
@@ -219,7 +177,7 @@ export class BridgeLayer {
             handleRequest: (request) => router.handle(request),
         });
 
-        const channel: BridgeChannel = { transport };
+        const channel: BridgeChannel = { transport, wsManager };
         this.channels.set(projectUri, channel);
 
         // Subscribe to cloud state changes and forward as bridge events
@@ -228,29 +186,7 @@ export class BridgeLayer {
             (state) => this.notifyContextStateChanged(projectUri, state),
         );
 
-        // Subscribe to AI migration streaming events from the Ballerina extension
-        this.setupMigrationSubscription(projectUri);
-
         return channel;
-    }
-
-    /**
-     * Subscribe to AI migration streaming events from the Ballerina extension.
-     * Safe to call multiple times — only the first call with a valid API sets up the listener.
-     * Broadcasts to all active channels so that any open webview receives events.
-     */
-    static setupMigrationSubscription(_projectUri: string): void {
-        if (this.migrationSubscribed) {
-            return;
-        }
-        if (ballerinaContext.migration?.onChatNotify) {
-            this.migrationSubscribed = true;
-            this.migrationSubscriptionDisposable = ballerinaContext.migration.onChatNotify((event) => {
-                this.channels.forEach((_channel, uri) => {
-                    this.notifyChatEvent(uri, event);
-                });
-            });
-        }
     }
 
     /**
@@ -332,28 +268,12 @@ export class BridgeLayer {
             wsManager.downloadSelectedSampleFromGithub(request.params as SampleDownloadRequest)
         );
         registerRoute("createBIProject", async (request) => wsManager.createBIProject(request.params as BIProjectRequest));
-        registerRoute("getMigrationTools", async () => wsManager.getMigrationTools());
+        registerRoute("getBiFormWsBootstrap", async () => wsManager.getBiFormWsBootstrap());
         registerRoute("isSupportedSLVersion", async (request) =>
             wsManager.isSupportedSLVersion(request.params as SemanticVersion)
         );
-        registerRoute("migrateProject", async (request) => wsManager.migrateProject(request.params as MigrateRequest));
-        registerRoute("pullMigrationTool", async (request) =>
-            wsManager.pullMigrationTool(request.params as PullMigrationToolRequest)
-        );
-        registerRoute("importIntegration", async (request) =>
-            wsManager.importIntegration(request.params as ImportIntegrationWsRequest)
-        );
         registerRoute("showErrorMessage", async (request) =>
             wsManager.showErrorMessage(request.params as ShowErrorMessageRequest)
-        );
-        registerRoute("openMigrationReport", async (request) =>
-            wsManager.openMigrationReport(request.params as OpenMigrationReportRequest)
-        );
-        registerRoute("saveMigrationReport", async (request) =>
-            wsManager.saveMigrationReport(request.params as SaveMigrationReportRequest)
-        );
-        registerRoute("storeSubProjectReports", async (request) =>
-            wsManager.storeSubProjectReports(request.params as StoreSubProjectReportsRequest)
         );
         registerRoute("validateProjectPath", async (request) =>
             wsManager.validateProjectPath(request.params as ValidateProjectFormRequest)
@@ -367,14 +287,6 @@ export class BridgeLayer {
         registerRoute("clearWebviewCache", async (request) => wsManager.clearWebviewCache(request.params));
         registerRoute("getDefaultOrgName", async () => cloudManager.getDefaultOrgName());
         registerRoute("getDefaultCreationPath", async () => wsManager.getDefaultCreationPath());
-        registerRoute("wizardEnhancementReady", async () => wsManager.wizardEnhancementReady());
-        registerRoute("openMigratedProject", async () => wsManager.openMigratedProject());
-        registerRoute("abortMigrationAgent", async () => wsManager.abortMigrationAgent());
-        registerRoute("checkAIAuth", async () => wsManager.checkAIAuth());
-        registerRoute("triggerAICopilotSignIn", async () => wsManager.triggerAICopilotSignIn());
-        registerRoute("triggerAnthropicKeySignIn", async (request) => wsManager.triggerAnthropicKeySignIn(request.params));
-        registerRoute("triggerAwsBedrockSignIn", async (request) => wsManager.triggerAwsBedrockSignIn(request.params));
-        registerRoute("triggerVertexAiSignIn", async (request) => wsManager.triggerVertexAiSignIn(request.params));
         registerRoute("getBIRuntimeStatus", async () => wsManager.getBIRuntimeStatus());
         registerRoute("initBIRuntimeContext", async () => wsManager.initBIRuntimeContext());
 

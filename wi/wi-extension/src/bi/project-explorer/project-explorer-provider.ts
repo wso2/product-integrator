@@ -32,6 +32,7 @@ import {
 } from '../types';
 import { ballerinaContext } from '../ballerinaContext';
 import { ext } from '../../extensionVariables';
+import { isSamePath } from '../../utils/pathUtils';
 
 // View ID used for progress indicator
 const EXPLORER_VIEW_ID = 'wso2-integrator.explorer';
@@ -174,7 +175,7 @@ export class ProjectExplorerEntryProvider implements vscode.TreeDataProvider<Pro
     }
 
     private matchesPathAndPosition(item: ProjectExplorerEntry, targetPath: string, targetPosition: NodePosition | undefined): boolean {
-        if (item.info !== targetPath) {
+        if (!item.info || !isSamePath(item.info, targetPath)) {
             return false;
         }
         if (!targetPosition) {
@@ -258,7 +259,7 @@ async function getProjectStructureData(): Promise<{ entries: ProjectExplorerEntr
 
         const ballerinaWorkspace = stateContext.workspacePath;
         const workspaceFolderOfPackage = vscode.workspace.workspaceFolders
-            .find(folder => folder.uri.fsPath === stateContext.projectPath);
+            .find(folder => stateContext.projectPath && isSamePath(folder.uri.fsPath, stateContext.projectPath));
 
         let projectName: string | undefined;
 

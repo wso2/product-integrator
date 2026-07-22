@@ -1,0 +1,16 @@
+Index: product-integrator/lib/vscode/build/lib/copilot.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/build/lib/copilot.ts
++++ product-integrator/lib/vscode/build/lib/copilot.ts
+@@ -297,7 +297,10 @@ export function prepareBuiltInCopilotRip
+ 	const copilotBase = path.join(extensionNodeModules, '@github', 'copilot');
+ 	const copilotSdkBase = path.join(copilotBase, 'sdk');
+ 	if (!fs.existsSync(copilotSdkBase)) {
+-		throw new Error(`[prepareBuiltInCopilotRipgrepShim] Copilot SDK directory not found at ${copilotSdkBase}`);
++		// WSO2 Integrator does not bundle the GitHub Copilot SDK (AI/Copilot is disabled), so there is
++		// no built-in Copilot ripgrep shim to prepare. Skip instead of failing the packaging build.
++		console.warn(`[prepareBuiltInCopilotRipgrepShim] Copilot SDK not found at ${copilotSdkBase}; skipping shim (expected for WSO2 Integrator).`);
++		return;
+ 	}
+ 	materializeBuiltInCopilotSdkPlatformFiles(copilotPackagePlatformArch, tgrepPlatformArch, copilotBase, appNodeModulesDir);
+ 	pruneNonTargetCopilotSdkPrebuilds(copilotPackagePlatformArch, path.join(copilotSdkBase, 'prebuilds'), copilotPlatforms);

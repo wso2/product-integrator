@@ -2,7 +2,7 @@ Index: product-integrator/lib/vscode/build/gulpfile.vscode.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/build/gulpfile.vscode.ts
 +++ product-integrator/lib/vscode/build/gulpfile.vscode.ts
-@@ -71,8 +71,9 @@ const vscodeResourceIncludes = [
+@@ -75,8 +75,9 @@ const vscodeResourceIncludes = [
  	// Node Scripts
  	'out-build/vs/base/node/{terminateProcess.sh,cpuUsage.sh,ps.sh}',
  

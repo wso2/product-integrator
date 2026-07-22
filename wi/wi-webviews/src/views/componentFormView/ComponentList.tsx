@@ -18,7 +18,7 @@
 
 import React from "react";
 import { CheckBox } from "@wso2/ui-toolkit";
-import { DevantScopes, getIntegrationScopeText, ICreateNewIntegrationCmdIntegrations, Project } from "@wso2/wso2-platform-core";
+import { AUTOMATION_WITH_LISTENER_WARNING, DevantScopes, getIntegrationScopeText, ICreateNewIntegrationCmdIntegrations, Project, resolveIntegrationType } from "@wso2/wso2-platform-core";
 import {
 	CheckboxCell,
 	ComponentInfo,
@@ -40,7 +40,11 @@ import {
 } from "./styles";
 import { useCloudContext } from "../../providers";
 import { useVisualizerContext } from "../../contexts";
-import { Organization } from "../creationView/biForm/components/AdvancedConfigurationSection";
+interface Organization {
+    id?: number | string;
+    handle: string;
+    name: string;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -109,89 +113,102 @@ export function ComponentList({
 					const isLast = index === integrations.length - 1;
 					const isLibrary = entry.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY) ?? false;
 
+					const resolution = resolveIntegrationType(entry.supportedIntegrationTypes ?? []);
+					const showAutomationWarning = resolution.kind === "autoPickWithWarning";
+
 					return (
 						<ComponentListRow
 							key={entry.fsPath}
 							isSelected={isSelected}
 							isLast={isLast}
+							style={{ flexDirection: "column", alignItems: "stretch", gap: 0 }}
 						>
-							{/* Checkbox — shown for all entries in batch; always shown for libraries (locked) */}
-							{(isBatch || isLibrary) && (
-								<CheckboxCell>
-									<CheckBox
-										label=""
-										checked={isSelected}
-										disabled={isLibrary}
-										onChange={(checked: boolean) => onToggle(index, checked)}
-									/>
-								</CheckboxCell>
-							)}
-
-							{/* Name + directory */}
-							<ComponentInfo>
-								{isEditing && isSelected ? (
-									<NameInputWrapper>
-										<NameInput
-											hasError={!!nameError}
-											value={currentName}
-											autoFocus
-											spellCheck={false}
-											onChange={(e) => onNameChange(index, e.target.value)}
-											onBlur={onNameCommit}
-											onKeyDown={(e) => {
-												if (e.key === "Enter" || e.key === "Escape") {
-													onNameCommit();
-												}
-											}}
+							<div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+								{/* Checkbox — shown for all entries in batch; always shown for libraries (locked) */}
+								{(isBatch || isLibrary) && (
+									<CheckboxCell>
+										<CheckBox
+											label=""
+											checked={isSelected}
+											disabled={isLibrary}
+											onChange={(checked: boolean) => onToggle(index, checked)}
 										/>
-										{nameError && <NameError>{nameError}</NameError>}
-									</NameInputWrapper>
-								) : isSelected ? (
-									<NameButton
-										type="button"
-										title={nameError ?? "Click to edit name"}
-										onClick={() => onEditStart(index)}
-									>
-										<span>{currentName}</span>
-										{nameError && <span style={{ color: "var(--vscode-errorForeground)", fontSize: 11 }}>⚠</span>}
-										<span className="edit-icon" aria-hidden>✎</span>
-									</NameButton>
-								) : (
-									<NameStatic>{currentName}</NameStatic>
+									</CheckboxCell>
 								)}
 
-								<DirPath title={entry.fsPath}>
-									<span aria-hidden>⊞</span>
-									<span className="path-text">{entry.fsPath}</span>
-								</DirPath>
-							</ComponentInfo>
-
-							{/* Type badge */}
-							{entry.supportedIntegrationTypes?.length > 0 && (
-								<TypeBadge isSelected={isSelected}>
-									{entry.supportedIntegrationTypes.length === 1 ? (
-										<span>{getIntegrationScopeText(entry.supportedIntegrationTypes[0])}</span>
-									) : (
-										<select
-											value={state?.selectedIntegrationType ?? ""}
-											onChange={(e) => onIntegrationTypeChange(index, e.target.value)}
-											style={{
-												background: "transparent",
-												border: "none",
-												color: "inherit",
-												font: "inherit",
-												fontSize: "inherit",
-												cursor: "pointer",
-												outline: "none",
-												padding: 0,
-											}}
+								{/* Name + directory */}
+								<ComponentInfo>
+									{isEditing && isSelected ? (
+										<NameInputWrapper>
+											<NameInput
+												hasError={!!nameError}
+												value={currentName}
+												autoFocus
+												spellCheck={false}
+												onChange={(e) => onNameChange(index, e.target.value)}
+												onBlur={onNameCommit}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" || e.key === "Escape") {
+														onNameCommit();
+													}
+												}}
+											/>
+											{nameError && <NameError>{nameError}</NameError>}
+										</NameInputWrapper>
+									) : isSelected ? (
+										<NameButton
+											type="button"
+											title={nameError ?? "Click to edit name"}
+											onClick={() => onEditStart(index)}
 										>
-											{entry.supportedIntegrationTypes.map((type) => (
-												<option key={type} value={type}>{getIntegrationScopeText(type)}</option>
-											))}
-										</select>
+											<span>{currentName}</span>
+											{nameError && <span style={{ color: "var(--vscode-errorForeground)", fontSize: 11 }}>⚠</span>}
+											<span className="edit-icon" aria-hidden>✎</span>
+										</NameButton>
+									) : (
+										<NameStatic>{currentName}</NameStatic>
 									)}
-								</TypeBadge>
+
+									<DirPath title={entry.fsPath}>
+										<span aria-hidden>⊞</span>
+										<span className="path-text">{entry.fsPath}</span>
+									</DirPath>
+								</ComponentInfo>
+
+								{/* Type badge — auto-picked label or ask-the-user dropdown */}
+								{entry.supportedIntegrationTypes?.length > 0 && (
+									<TypeBadge isSelected={isSelected}>
+										{resolution.kind === "ask" ? (
+											<select
+												value={state?.selectedIntegrationType ?? ""}
+												onChange={(e) => onIntegrationTypeChange(index, e.target.value)}
+												style={{
+													background: "transparent",
+													border: "none",
+													color: "inherit",
+													font: "inherit",
+													fontSize: "inherit",
+													cursor: "pointer",
+													outline: "none",
+													padding: 0,
+												}}
+											>
+												{resolution.choices.map((type) => (
+													<option key={type} value={type}>{getIntegrationScopeText(type)}</option>
+												))}
+											</select>
+										) : (
+											<span>{getIntegrationScopeText(resolution.scope)}</span>
+										)}
+									</TypeBadge>
+								)}
+							</div>
+
+							{/* Inline warning for AUTOMATION + listener combos */}
+							{showAutomationWarning && (
+								<WarningBanner style={{ marginTop: 10 }}>
+									⚠ {AUTOMATION_WITH_LISTENER_WARNING}
+								</WarningBanner>
 							)}
 						</ComponentListRow>
 					);

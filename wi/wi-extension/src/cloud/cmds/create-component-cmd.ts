@@ -219,6 +219,13 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					}
 
 					if (isWithinWorkspace || workspace.workspaceFile) {
+						// Update context.yaml file when opening the integration creation form
+						if (gitRoot || params?.workspaceDir) {
+							const projectCache = dataCacheStore.getState().getProjects(selectedOrg?.handle);
+							updateContextFile(gitRoot || params?.workspaceDir, ext.authProvider?.getState().state.userInfo!, selectedProject, selectedOrg, projectCache);
+							contextStore.getState().refreshState();
+						}
+
 						openCloudFormWebview({
 							org: selectedOrg,
 							project: selectedProject,

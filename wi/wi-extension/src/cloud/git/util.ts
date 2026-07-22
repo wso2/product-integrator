@@ -312,7 +312,7 @@ function normalizePath(path: string): string {
 }
 
 export function isDescendant(parent: string, descendant: string): boolean {
-	if (parent === descendant) {
+	if (normalizePath(parent) === normalizePath(descendant)) {
 		return true;
 	}
 
@@ -341,7 +341,10 @@ export function relativePath(from: string, to: string): string {
 		from = from.replace(/\\$/, "");
 	}
 
-	if (isDescendant(from, to) && from.length < to.length) {
+	if (isDescendant(from, to) && from.length <= to.length) {
+		if (from.length === to.length) {
+			return "";
+		}
 		return to.substring(from.length + 1);
 	}
 

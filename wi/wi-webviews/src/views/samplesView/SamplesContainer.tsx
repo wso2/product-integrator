@@ -18,7 +18,7 @@
 
 import styled from "@emotion/styled";
 import { VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react";
-import { Button, Codicon, Dropdown, SearchBox } from "@wso2/ui-toolkit";
+import { Button, Codicon, Dropdown, SearchBox, Tooltip } from "@wso2/ui-toolkit";
 import {
 	GettingStartedCategory,
 	SampleItem,
@@ -873,7 +873,19 @@ export function SamplesContainer(props: SamplesContainerProps) {
 						{filteredItems.map((item) => (
 							<SampleCard key={item.id} className="sample-card">
 								<CardHeader>
-									<CardTitle>{item.title}</CardTitle>
+									<Tooltip
+										content={item.title}
+										position="bottom"
+										offset={{ top: 16, left: 20 }}
+										sx={{
+											maxWidth: "280px",
+											whiteSpace: "normal",
+											wordWrap: "break-word",
+											overflowWrap: "break-word",
+										}}
+									>
+										<CardTitle>{item.title}</CardTitle>
+									</Tooltip>
 									<CategoryLabel>{item.componentType}</CategoryLabel>
 								</CardHeader>
 								<IconFrame>

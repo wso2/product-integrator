@@ -33,7 +33,8 @@ export enum ViewType {
     CREATE_PROJECT = "create_project",
     SAMPLES = "samples",
     IMPORT_EXTERNAL = "import_external",
-    CREATE_CLOUD_INTEGRATION = "create_cloud_integration"
+    CREATE_CLOUD_INTEGRATION = "create_cloud_integration",
+    SETUP_BALLERINA = "setup_ballerina",
 }
 
 /**

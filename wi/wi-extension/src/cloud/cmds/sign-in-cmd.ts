@@ -53,6 +53,10 @@ export function signInCommand(context: ExtensionContext) {
 				if (error instanceof Error) {
 					window.showErrorMessage(error.message);
 				}
+				// Re-throw so that callers who await executeCommand (e.g. the SSO flow
+				// in the migration wizard) receive the failure immediately instead of
+				// waiting for the 120-second sign-in timeout.
+				throw error;
 			}
 		}),
 		// Register cancellation command

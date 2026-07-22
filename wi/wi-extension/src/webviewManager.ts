@@ -20,12 +20,73 @@ import * as vscode from "vscode";
 import { ViewType } from "@wso2/wi-core";
 import { ext } from "./extensionVariables";
 import { Uri } from "vscode";
+import * as fs from "fs";
 import path from "path";
+import { randomBytes } from "crypto";
 import { BridgeLayer } from "./BridgeLayer";
 import { StateMachine } from "./stateMachine";
 import { getPlatform } from "./ws-managers/main/utils";
+import { findBallerinaExtension } from "./utils/ballerinaExtension";
 
 export const WEB_VIEW_TYPE = "wso2IntegratorWebview";
+
+/** Location of the BI project-creation form's federated bundle inside the Ballerina extension. */
+const BI_FORM_FEDERATION_SUBPATH = ["resources", "jslibs", "federation"];
+const BI_FORM_REMOTE_ENTRY = "remoteEntry.js";
+
+/** Generates a random nonce used to authorize inline webview scripts via CSP. */
+function getNonce(): string {
+	return randomBytes(16).toString("base64");
+}
+
+/**
+ * Availability of the Ballerina-owned BI form federation bundle. `missing` =
+ * the Ballerina extension is not installed; `outdated` = it is installed but
+ * predates the federated forms (no bundle on disk — e.g. the app's pinned
+ * builtin is older than the Ballerina release that ships it). The webview uses
+ * this to show an accurate, actionable message instead of a generic failure.
+ */
+interface BiFormRemoteState {
+	status: "ok" | "missing" | "outdated";
+	/** Installed Ballerina extension version — set for `ok`/`outdated`. */
+	version?: string;
+}
+
+/**
+ * Absolute path to the Ballerina-owned BI form federation bundle dir, or
+ * undefined when it cannot be served (extension missing or bundle absent).
+ * The existence check avoids advertising a remoteEntry.js URI that would 404
+ * inside the webview.
+ */
+function getBiFormFederationDir(): string | undefined {
+	const balExt = findBallerinaExtension();
+	if (!balExt) {
+		return undefined;
+	}
+	const dir = path.join(balExt.extensionUri.fsPath, ...BI_FORM_FEDERATION_SUBPATH);
+	return fs.existsSync(path.join(dir, BI_FORM_REMOTE_ENTRY)) ? dir : undefined;
+}
+
+/** localResourceRoots entry granting the webview access to the BI form bundle (empty if Ballerina is absent). */
+function getBiFormResourceRoots(): vscode.Uri[] {
+	const dir = getBiFormFederationDir();
+	return dir ? [Uri.file(dir)] : [];
+}
+
+/** Resolves the BI form remote's webview URI plus the reason when unavailable. */
+function getBiFormRemoteState(webview: vscode.Webview): { uri: string | undefined; state: BiFormRemoteState } {
+	const balExt = findBallerinaExtension();
+	if (!balExt) {
+		return { uri: undefined, state: { status: "missing" } };
+	}
+	const version = (balExt.packageJSON as { version?: string } | undefined)?.version;
+	const dir = path.join(balExt.extensionUri.fsPath, ...BI_FORM_FEDERATION_SUBPATH);
+	if (!fs.existsSync(path.join(dir, BI_FORM_REMOTE_ENTRY))) {
+		return { uri: undefined, state: { status: "outdated", version } };
+	}
+	const uri = webview.asWebviewUri(Uri.file(path.join(dir, BI_FORM_REMOTE_ENTRY))).toString();
+	return { uri, state: { status: "ok", version } };
+}
 
 /**
  * Webview manager for WSO2 Integrator
@@ -58,11 +119,29 @@ export class WebviewManager {
 		const columnToShowIn = vscode.window.activeTextEditor
 			? vscode.window.activeTextEditor.viewColumn
 			: undefined;
+		const publishCurrentState = () => {
+			const context = StateMachine.getContext();
+			BridgeLayer.notifyStateChanged(this.projectUri, {
+				currentView: context.currentView,
+				projectUri: this.projectUri,
+				platform: getPlatform(),
+				pathSeparator: path.sep,
+				env: {
+					MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
+					BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
+					SAMPLES_INFO_URL: process.env.SAMPLES_INFO_URL || '',
+					SAMPLES_REPOSITORY_URL: process.env.SAMPLES_REPOSITORY_URL || '',
+					PREBUILT_INTEGRATIONS_URL: process.env.PREBUILT_INTEGRATIONS_URL || '',
+				},
+			});
+		};
 
 		// If we already have a panel, update view type and reveal it
 		if (this.currentPanel) {
 			this.currentViewType = viewType;
+			this.currentPanel.title = this.getPanelTitle(viewType);
 			this.currentPanel.reveal(columnToShowIn);
+			publishCurrentState();
 			return;
 		}
 
@@ -78,6 +157,8 @@ export class WebviewManager {
 				localResourceRoots: [
 					vscode.Uri.joinPath(ext.context.extensionUri, "dist"),
 					vscode.Uri.joinPath(ext.context.extensionUri, "resources"),
+					// Allow loading the Ballerina-owned BI form federation bundle.
+					...getBiFormResourceRoots(),
 				],
 			},
 		);
@@ -110,21 +191,10 @@ export class WebviewManager {
 
 		// Subscribe to state machine changes
 		this.stateSubscription = StateMachine.subscribe(() => {
-			const context = StateMachine.getContext();
-			BridgeLayer.notifyStateChanged(this.projectUri, {
-				currentView: context.currentView,
-				projectUri: this.projectUri,
-				platform: getPlatform(),
-				pathSeparator: path.sep,
-				env: {
-					MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
-					BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
-					SAMPLES_INFO_URL: process.env.SAMPLES_INFO_URL || '',
-					SAMPLES_REPOSITORY_URL: process.env.SAMPLES_REPOSITORY_URL || '',
-					PREBUILT_INTEGRATIONS_URL: process.env.PREBUILT_INTEGRATIONS_URL || '',
-				},
-			});
+			publishCurrentState();
 		});
+
+		publishCurrentState();
 	}
 
 	/**
@@ -154,6 +224,8 @@ export class WebviewManager {
 				return "Import Project";
 			case ViewType.CREATE_CLOUD_INTEGRATION:
 				return "Deploy Integration";
+			case ViewType.SETUP_BALLERINA:
+				return "Setup Ballerina";
 			case ViewType.WELCOME:
 			default:
 				return "Welcome";
@@ -174,6 +246,35 @@ export class WebviewManager {
 		const scriptUri = isDevMode
 			? new URL('lib/' + componentName + '.js', devHost).toString()
 			: webview.asWebviewUri(Uri.file(filePath)).toString();
+
+		// The BI project-creation form is a Module Federation remote owned by and
+		// shipped inside the Ballerina extension. It is loaded through VS Code's
+		// webview resource protocol (asWebviewUri) — no local server. The Ballerina
+		// federation dir is added to localResourceRoots at panel creation. The
+		// state (missing/outdated + version) lets the webview explain unavailability.
+		const { uri: biFormRemoteUri, state: biFormRemoteState } = getBiFormRemoteState(webview);
+		const serializedBiFormRemote = JSON.stringify(biFormRemoteUri ?? null).replace(/</g, "\\u003c");
+		const serializedBiFormRemoteState = JSON.stringify(biFormRemoteState).replace(/</g, "\\u003c");
+
+		// Content-Security-Policy. Inline bootstrap scripts are authorized by a
+		// per-render nonce; all bundles (the integrator's own and the Ballerina
+		// federated form) load from the webview resource origin (webview.cspSource).
+		// Dev origins and 'unsafe-eval' are added only in webview dev mode
+		// (HMR / eval source maps).
+		const nonce = getNonce();
+		const devScript = isDevMode ? " http://localhost:3000 'unsafe-eval'" : "";
+		const devConnect = isDevMode ? " http://localhost:3000 ws://localhost:3000 ws://localhost:*" : "";
+		const devImg = isDevMode ? " http://localhost:3000" : "";
+		const csp = [
+			`default-src 'none'`,
+			`script-src 'nonce-${nonce}' ${webview.cspSource}${devScript}`,
+			`style-src ${webview.cspSource} 'unsafe-inline'`,
+			`font-src ${webview.cspSource} data:`,
+			`img-src ${webview.cspSource} data: https:${devImg}`,
+			// ws://127.0.0.1:* — the embedded BI form connects to the Ballerina
+			// extension's WS server (OS-allocated loopback port) for project RPCs.
+			`connect-src ${webview.cspSource} ws://127.0.0.1:*${devConnect}`,
+		].join("; ");
 
 		const styles = `
             .container {
@@ -271,6 +372,7 @@ export class WebviewManager {
 			<html lang="en">
 			<head>
 				<meta charset="utf-8">
+				<meta http-equiv="Content-Security-Policy" content="${csp}">
 				<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
 				<meta name="theme-color" content="#000000">
 				<title>WSO2 Integrator</title>
@@ -287,11 +389,13 @@ export class WebviewManager {
 						</div>
 					</div>
 				</div>
-				<script>
+				<script nonce="${nonce}">
 					window.__WI_BRIDGE_BOOTSTRAP = ${serializedBridgeBootstrap};
+					window.__WI_BI_FORM_REMOTE = ${serializedBiFormRemote};
+					window.__WI_BI_FORM_REMOTE_STATE = ${serializedBiFormRemoteState};
 				</script>
-				<script src="${scriptUri}"></script>
-				<script>
+				<script nonce="${nonce}" src="${scriptUri}"></script>
+				<script nonce="${nonce}">
 					function render() {
 						wiWebview.renderWebview(
 							document.getElementById("root")

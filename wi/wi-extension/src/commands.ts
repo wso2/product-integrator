@@ -23,6 +23,8 @@ import { ext } from "./extensionVariables";
 import { WebviewManager } from "./webviewManager";
 import { ExtensionAPIs } from "./extensionAPIs";
 import { StateMachine, getBIProjectExplorerProvider } from "./stateMachine";
+import { BridgeLayer } from "./BridgeLayer";
+import type { DownloadProgress } from "@wso2/wi-core";
 
 /**
  * Register all extension commands
@@ -113,6 +115,26 @@ export function registerCommands(
 					}
 				});
 			}
+		}),
+	);
+
+	// Setup Ballerina command — opens the WI webview with the setup progress UI
+	context.subscriptions.push(
+		vscode.commands.registerCommand(COMMANDS.SETUP_BALLERINA, () => {
+			try {
+				StateMachine.openWebview(ViewType.SETUP_BALLERINA);
+			} catch (error) {
+				ext.logError("Failed to open Ballerina setup view", error as Error);
+				vscode.window.showErrorMessage("Failed to open Ballerina setup view");
+			}
+		}),
+	);
+
+	// Receives download-progress events forwarded by the Ballerina extension's
+	// notifyDownloadProgress via command execution (works even when ext.isActive=false).
+	context.subscriptions.push(
+		vscode.commands.registerCommand(COMMANDS.ON_DOWNLOAD_PROGRESS, (progress: DownloadProgress) => {
+			BridgeLayer.notifyDownloadProgress("global", progress);
 		}),
 	);
 

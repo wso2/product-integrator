@@ -1,0 +1,165 @@
+Index: product-integrator/lib/vscode/src/vs/code/electron-main/app.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/code/electron-main/app.ts
++++ product-integrator/lib/vscode/src/vs/code/electron-main/app.ts
+@@ -1395,14 +1395,14 @@ export class CodeApplication extends Dis
+ 		const context = isLaunchedFromCli(process.env) ? OpenContext.CLI : OpenContext.DESKTOP;
+ 		const args = this.environmentMainService.args;
+ 
+-		// Handle agents window first based on context
+-		if (args['agents']) {
+-			return windowsMainService.openAgentsWindow({
+-				context,
+-				cli: args,
+-				initialStartup: true
+-			});
+-		}
++		// WSO2 Integrator: Agents window disabled — ignore the --agents flag and open a normal window
++		// if (args['agents']) {
++		// 	return windowsMainService.openAgentsWindow({
++		// 		context,
++		// 		cli: args,
++		// 		initialStartup: true
++		// 	});
++		// }
+ 
+ 		// Then check for windows from protocol links to open
+ 		if (initialProtocolUrls) {
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/electron-browser/chat.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/chat/electron-browser/chat.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/chat/electron-browser/chat.contribution.ts
+@@ -50,7 +50,8 @@ import { registerChatExportZipAction } f
+ import { registerExportAgentTracesDbAction } from './actions/exportAgentTracesDb.js';
+ import { shouldWarnForSessionShutdown } from './chatLifecycle.js';
+ import { HoldToVoiceChatInChatViewAction, InlineVoiceChatAction, KeywordActivationContribution, QuickVoiceChatAction, ReadChatResponseAloud, StartVoiceChatAction, StopListeningAction, StopListeningAndSubmitAction, StopReadAloud, StopReadChatItemAloud, VoiceChatInChatViewAction } from './actions/voiceChatActions.js';
+-import { OpenWorkspaceInAgentsWindowAction, OpenWorkspaceInAgentsContribution, OpenAgentsWindowAction, OpenChatSessionInAgentsWindowAction, AgentsHandoffInputTipContribution, ToggleOpenInAgentsWindowTitleBarAction } from './agentSessions/agentSessionsActions.js';
++// WSO2 Integrator: Agents window feature disabled
++// import { OpenWorkspaceInAgentsWindowAction, OpenWorkspaceInAgentsContribution, OpenAgentsWindowAction, OpenChatSessionInAgentsWindowAction, AgentsHandoffInputTipContribution, ToggleOpenInAgentsWindowTitleBarAction } from './agentSessions/agentSessionsActions.js';
+ import { NativeBuiltinToolsContribution } from './builtInTools/tools.js';
+ import { NativePluginGitCommandService } from './pluginGitCommandService.js';
+ 
+@@ -234,10 +235,10 @@ class ChatLifecycleHandler extends Dispo
+ 	}
+ }
+ 
+-registerAction2(OpenWorkspaceInAgentsWindowAction);
+-registerAction2(ToggleOpenInAgentsWindowTitleBarAction);
+-registerAction2(OpenAgentsWindowAction);
+-registerAction2(OpenChatSessionInAgentsWindowAction);
++// registerAction2(OpenWorkspaceInAgentsWindowAction);
++// registerAction2(ToggleOpenInAgentsWindowTitleBarAction);
++// registerAction2(OpenAgentsWindowAction);
++// registerAction2(OpenChatSessionInAgentsWindowAction);
+ registerAction2(StartVoiceChatAction);
+ 
+ registerAction2(VoiceChatInChatViewAction);
+@@ -265,8 +266,8 @@ registerWorkbenchContribution2(AgentHost
+ registerWorkbenchContribution2(AgentHostSessionListContribution.ID, AgentHostSessionListContribution, WorkbenchPhase.AfterRestored);
+ registerWorkbenchContribution2(AgentHostTerminalContribution.ID, AgentHostTerminalContribution, WorkbenchPhase.AfterRestored);
+ registerWorkbenchContribution2(AgentHostCopilotPromptContribution.ID, AgentHostCopilotPromptContribution, WorkbenchPhase.AfterRestored);
+-registerWorkbenchContribution2(OpenWorkspaceInAgentsContribution.ID, OpenWorkspaceInAgentsContribution, WorkbenchPhase.BlockRestore);
+-registerWorkbenchContribution2(AgentsHandoffInputTipContribution.ID, AgentsHandoffInputTipContribution, WorkbenchPhase.Eventually);
++// registerWorkbenchContribution2(OpenWorkspaceInAgentsContribution.ID, OpenWorkspaceInAgentsContribution, WorkbenchPhase.BlockRestore);
++// registerWorkbenchContribution2(AgentsHandoffInputTipContribution.ID, AgentsHandoffInputTipContribution, WorkbenchPhase.Eventually);
+ 
+ // How long to wait for the agent host to surface an AgentInfo before
+ // throwing an error. Long enough for normal startup, short enough to avoid
+Index: product-integrator/lib/vscode/src/vs/workbench/workbench.common.main.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/workbench.common.main.ts
++++ product-integrator/lib/vscode/src/vs/workbench/workbench.common.main.ts
+@@ -384,7 +384,8 @@ import './contrib/surveys/browser/langua
+ 
+ // Welcome
+ import './contrib/welcomeGettingStarted/browser/gettingStarted.contribution.js';
+-import './contrib/welcomeAgentSessions/browser/agentSessionsWelcome.contribution.js';
++// WSO2 Integrator: Agent Sessions welcome disabled
++// import './contrib/welcomeAgentSessions/browser/agentSessionsWelcome.contribution.js';
+ import './contrib/welcomeWalkthrough/browser/walkThrough.contribution.js';
+ import './contrib/welcomeViews/common/viewsWelcome.contribution.js';
+ import './contrib/welcomeViews/common/newFile.contribution.js';
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/agentSessions/experiments/agentSessionsExperiments.contribution.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/chat/browser/agentSessions/experiments/agentSessionsExperiments.contribution.ts
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/chat/browser/agentSessions/experiments/agentSessionsExperiments.contribution.ts
+@@ -10,11 +10,12 @@ import { EnterAgentSessionProjectionActi
+ import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../../common/contributions.js';
+ import { AgentTitleBarStatusRendering } from './agentTitleBarStatusWidget.js';
+ import { AgentTitleBarStatusService, IAgentTitleBarStatusService } from './agentTitleBarStatusService.js';
+-import { Codicon } from '../../../../../../base/common/codicons.js';
++// WSO2 Integrator: title-bar chat/agents icon removed
++// import { Codicon } from '../../../../../../base/common/codicons.js';
+ import { localize } from '../../../../../../nls.js';
+ import { ContextKeyExpr } from '../../../../../../platform/contextkey/common/contextkey.js';
+ import { ProductQualityContext } from '../../../../../../platform/contextkey/common/contextkeys.js';
+-import { InEditorZenModeContext } from '../../../../../common/contextkeys.js';
++// import { InEditorZenModeContext } from '../../../../../common/contextkeys.js';
+ import { ChatAgentLocation, ChatConfiguration } from '../../../common/constants.js';
+ import { ChatContextKeys } from '../../../common/actions/chatContextKeys.js';
+ import { Disposable, DisposableStore, IDisposable } from '../../../../../../base/common/lifecycle.js';
+@@ -250,35 +251,35 @@ registerSingleton(IAgentTitleBarStatusSe
+ registerWorkbenchContribution2(AgentTitleBarStatusRendering.ID, AgentTitleBarStatusRendering, WorkbenchPhase.AfterRestored);
+ registerWorkbenchContribution2(AgentSessionReadyContribution.ID, AgentSessionReadyContribution, WorkbenchPhase.AfterRestored);
+ 
+-// Register Agent Status as a menu item in the command center (alongside the search box, not replacing it)
+-MenuRegistry.appendMenuItem(MenuId.CommandCenter, {
+-	submenu: MenuId.AgentsTitleBarControlMenu,
+-	title: localize('agentsControl', "Agents"),
+-	icon: Codicon.chatSparkle,
+-	when: ContextKeyExpr.and(
+-		ChatContextKeys.enabled,
+-		ContextKeyExpr.notEquals(`config.${ChatConfiguration.AgentStatusEnabled}`, 'hidden'),
+-		ContextKeyExpr.notEquals(`config.${ChatConfiguration.AgentStatusEnabled}`, false),
+-		InEditorZenModeContext.negate()
+-	),
+-	order: 10002 // to the right of the chat button
+-});
+-
+-// Add to the global title bar if command center is disabled
+-MenuRegistry.appendMenuItem(MenuId.TitleBar, {
+-	submenu: MenuId.ChatTitleBarMenu,
+-	title: localize('title4', "Chat"),
+-	group: 'navigation',
+-	icon: Codicon.chatSparkle,
+-	when: ContextKeyExpr.and(
+-		ChatContextKeys.supported,
+-		ContextKeyExpr.and(
+-			ChatContextKeys.Setup.hidden.negate(),
+-		),
+-		ContextKeyExpr.has('config.window.commandCenter').negate(),
+-	),
+-	order: 1
+-});
++// // Register Agent Status as a menu item in the command center (alongside the search box, not replacing it)
++// MenuRegistry.appendMenuItem(MenuId.CommandCenter, {
++// 	submenu: MenuId.AgentsTitleBarControlMenu,
++// 	title: localize('agentsControl', "Agents"),
++// 	icon: Codicon.chatSparkle,
++// 	when: ContextKeyExpr.and(
++// 		ChatContextKeys.enabled,
++// 		ContextKeyExpr.notEquals(`config.${ChatConfiguration.AgentStatusEnabled}`, 'hidden'),
++// 		ContextKeyExpr.notEquals(`config.${ChatConfiguration.AgentStatusEnabled}`, false),
++// 		InEditorZenModeContext.negate()
++// 	),
++// 	order: 10002 // to the right of the chat button
++// });
++
++// // Add to the global title bar if command center is disabled
++// MenuRegistry.appendMenuItem(MenuId.TitleBar, {
++// 	submenu: MenuId.ChatTitleBarMenu,
++// 	title: localize('title4', "Chat"),
++// 	group: 'navigation',
++// 	icon: Codicon.chatSparkle,
++// 	when: ContextKeyExpr.and(
++// 		ChatContextKeys.supported,
++// 		ContextKeyExpr.and(
++// 			ChatContextKeys.Setup.hidden.negate(),
++// 		),
++// 		ContextKeyExpr.has('config.window.commandCenter').negate(),
++// 	),
++// 	order: 1
++// });
+ 
+ // Register a placeholder action to the submenu so it appears (required for submenus)
+ MenuRegistry.appendMenuItem(MenuId.AgentsTitleBarControlMenu, {

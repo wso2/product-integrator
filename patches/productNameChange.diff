@@ -20,7 +20,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
 +			reportIssueUrl: 'https://github.com/wso2/product-integrator/issues/new',
  			licenseName: 'MIT',
  			licenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt',
- 			serverLicenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt'
+ 			serverLicenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt',
 Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
@@ -73,7 +73,3 @@ Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/di
  
  	return {
  		title: productService.nameLong,
- 		details: details,
- 		detailsToCopy: detailsToCopy
- 	};
- }

@@ -158,7 +158,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async hasDirtyRepo(dirPath: string): Promise<boolean> {
-		return checkDirtyRepo(dirPath, ext.context, ["context.yaml"]);
+		return checkDirtyRepo(dirPath, ext.context);
 	}
 
 	async getConfigFileDrifts(params: GetConfigFileDriftsReq): Promise<string[]> {

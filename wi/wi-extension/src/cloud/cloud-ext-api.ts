@@ -36,6 +36,19 @@ import { isSamePath } from "../utils/pathUtils";
  * Mirrors PlatformExtensionApi from the wso2-platform extension.
  */
 export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
+	public active: boolean;
+	constructor() {
+		this.active = false;
+	}
+
+	public setActive(active: boolean) {
+		this.active = active;
+	}
+
+	public isActive(): boolean {
+		return this.active;
+	}
+
 	private getComponentsOfDir = (fsPath: string, components?: ContextStoreComponentState[]): ComponentKind[] =>
 		(components
 			?.filter((item) => isSamePath(item?.componentFsPath, fsPath))
@@ -63,7 +76,7 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 
 	// Git
 	public localRepoHasChanges = (fsPath: string): Promise<boolean> =>
-		hasDirtyRepo(fsPath, ext.context, ["context.yaml"]);
+		hasDirtyRepo(fsPath, ext.context);
 
 	// Navigation
 	public openClonedDir = (params: Parameters<IWso2PlatformExtensionAPI["openClonedDir"]>[0]): Promise<void> =>

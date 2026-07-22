@@ -2,6 +2,13 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "Debug webview",
+			"type": "editor-browser",
+			"request": "launch",
+			"url": "http://localhost:3000/browser.html",
+			"webRoot": "${workspaceFolder}/wi-webviews/src"
+		},
+		{
 			"name": "Run Extension",
 			"type": "extensionHost",
 			"request": "launch",

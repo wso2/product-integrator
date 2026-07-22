@@ -281,6 +281,15 @@ jobs:
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
 
+      # Apply the quilt patches explicitly (from the repo root) instead of relying on the
+      # rush `preRushBuild` apply-patches hook, whose output rush suppresses and whose failure
+      # rush treats as non-fatal — leaving vscode unpatched and later breaking the build
+      # (e.g. the vsix checksum check that disableVsixChecksumCheck is meant to disable).
+      # Running quilt directly here surfaces any patch error and guarantees patches are applied.
+      - name: Apply patches
+        working-directory: .
+        run: quilt push -a
+
       - name: Copy .env.example to .env
         shell: bash
         working-directory: .
@@ -360,8 +369,8 @@ jobs:
           # total memory and re-trigger the OOM, so there is deliberately no floor.
           cap_mb=$(( limit_mb * 75 / 100 ))
 
-          # The heavy compile commands (extensions-ci, core-ci-pr) run sequentially and
-          # each need the full cap. The validation step, however, runs several checks at
+          # The heavy compile command (core-ci) runs sequentially and needs the full
+          # cap. The validation step, however, runs several checks at
           # once via `npm-run-all -lp`; giving every concurrent process the full cap can
           # oversubscribe the runner and OOM-kill it. Bound that fan-out to what memory
           # (~4 GiB budget per check) and CPU can support, keeping each process's heap
@@ -382,12 +391,12 @@ jobs:
           if [ "${{ steps.cache-typescript.outputs.cache-hit }}" = "true" ]; then
             echo "✅ TypeScript cache hit - using cached compilation"
             echo "Skipping core compilation, running validation only"
-            npm exec -- npm-run-all --max-parallel "${COMPILE_MAX_PARALLEL:-1}" -lp extensions-ci-pr eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            npm run compile-extensions-build
+            npm exec -- npm-run-all --max-parallel "${COMPILE_MAX_PARALLEL:-1}" -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           else
             echo "❌ TypeScript cache miss - full compilation required"
             echo "Running complete compilation pipeline"
-            npm run extensions-ci
-            npm run core-ci-pr
+            npm run core-ci
             npm exec -- npm-run-all --max-parallel "${COMPILE_MAX_PARALLEL:-1}" -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           fi
 

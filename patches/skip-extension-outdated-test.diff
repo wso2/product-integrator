@@ -11,4 +11,3 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/extensions/test/el
  		const extension = instantiationService.createInstance(Extension, () => ExtensionState.Installed, () => undefined, undefined, aLocalExtension('somext', { version: '1.0.0' }, { type: ExtensionType.System }), aGalleryExtension('somext', { version: '1.0.1' }), undefined);
  		assert.strictEqual(extension.outdated, true);
  	});
-

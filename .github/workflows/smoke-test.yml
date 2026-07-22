@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       artifact_name:
-        description: 'Linux tar.gz artifact name'
+        description: 'Linux DEB artifact name'
         required: false
         type: string
         default: ''
@@ -29,8 +29,6 @@ jobs:
     name: ${{ matrix.example }} (Linux)
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # ICP tests are advisory — hello-world-service gates the release
-    continue-on-error: ${{ matrix.example == 'icp' }}
     strategy:
       fail-fast: false
       matrix:
@@ -42,7 +40,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            xvfb \
+            xvfb unzip \
             libgtk-3-0 libgbm1 libnss3 libxss1 libasound2t64 \
             libx11-xcb1 libdrm2 libxcomposite1 libxdamage1 \
             libxrandr2 libatk-bridge2.0-0 libatspi2.0-0 libcups2
@@ -63,25 +61,44 @@ jobs:
         if: inputs.integrator_version != '' && inputs.artifact_name == ''
         run: |
           VERSION="${{ inputs.integrator_version }}"
-          TARBALL="wso2-integrator-${VERSION}-linux-x64.tar.gz"
-          URL="https://github.com/wso2/product-integrator/releases/download/v${VERSION}/${TARBALL}"
+          curl -fsSL "https://api.github.com/repos/wso2/product-integrator/releases/tags/v${VERSION}" -o release.json
+          DEB=$(python3 <<'PYEOF'
+          import json, re
+          with open('release.json') as f:
+              release = json.load(f)
+          for asset in release['assets']:
+              if re.fullmatch(r'wso2-integrator_.*_amd64\.deb', asset['name']):
+                  print(asset['name'])
+                  print(asset['browser_download_url'])
+                  break
+          else:
+              raise SystemExit('DEB asset not found')
+          PYEOF
+          )
+          DEB_NAME=$(echo "$DEB" | sed -n '1p')
+          DEB_URL=$(echo "$DEB" | sed -n '2p')
           mkdir -p artifact
-          curl -fSL -o "artifact/${TARBALL}" "$URL"
+          curl -fSL -o "artifact/${DEB_NAME}" "$DEB_URL"
 
-      - name: Extract and locate binary
+      - name: Install DEB and locate binary
         run: |
-          cd artifact
-          tar -xzf *.tar.gz
-          BINARY=$(find . -maxdepth 2 -name 'wso2-integrator' -type f ! -path '*/bin/*' | head -1)
-          chmod +x "$BINARY"
-          echo "WSO2_INTEGRATOR_PATH=$(realpath $BINARY)" >> "$GITHUB_ENV"
+          sudo apt-get install -y ./artifact/*.deb
+          for ROOT in /usr/share/wso2-integrator /opt/wso2-integrator; do
+            BINARY="$ROOT/wso2-integrator"
+            if [ -x "$BINARY" ] && [ -d "$ROOT/components" ]; then
+              echo "WSO2_INTEGRATOR_PATH=$(realpath "$BINARY")" >> "$GITHUB_ENV"
+              exit 0
+            fi
+          done
+          echo "wso2-integrator payload binary not found under /usr/share/wso2-integrator or /opt/wso2-integrator" >&2
+          exit 1
 
       - name: Patch ICP script for dash compatibility
         if: matrix.example == 'icp'
         run: |
           ICP_SH=$(dirname "$WSO2_INTEGRATOR_PATH")/components/icp/bin/icp.sh
           if [ -f "$ICP_SH" ]; then
-            python3 - "$ICP_SH" <<'PYEOF'
+            sudo python3 - "$ICP_SH" <<'PYEOF'
           import re, sys
           path = sys.argv[1]
           with open(path) as f: s = f.read()
@@ -108,7 +125,7 @@ jobs:
           node-version: '20'
 
       - name: Install wso2ipw
-        run: npm install -g wso2ipw@0.1.5
+        run: npm install -g wso2ipw@0.1.8
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'
@@ -148,9 +165,8 @@ jobs:
   windows:
     if: inputs.windows_artifact_name != '' || inputs.integrator_version != ''
     name: ${{ matrix.example }} (Windows)
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 25
-    continue-on-error: ${{ matrix.example == 'icp' }}
     strategy:
       fail-fast: false
       matrix:
@@ -168,10 +184,11 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ inputs.integrator_version }}"
-          $msi = "wso2-integrator-${version}.msi"
-          $url = "https://github.com/wso2/product-integrator/releases/download/v${version}/${msi}"
+          $release = Invoke-RestMethod "https://api.github.com/repos/wso2/product-integrator/releases/tags/v$version"
+          $asset = $release.assets | Where-Object { $_.name -match '^wso2-integrator-.*\.msi$' } | Select-Object -First 1
+          if (-not $asset) { throw 'MSI asset not found' }
           New-Item -ItemType Directory -Path artifact -Force
-          Invoke-WebRequest -Uri $url -OutFile "artifact/${msi}"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "artifact/$($asset.name)"
 
       - name: Install MSI
         shell: pwsh
@@ -207,7 +224,7 @@ jobs:
           node-version: '20'
 
       - name: Install wso2ipw
-        run: npm install -g wso2ipw@0.1.5
+        run: npm install -g wso2ipw@0.1.8
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'

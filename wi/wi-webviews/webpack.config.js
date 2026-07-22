@@ -1,6 +1,9 @@
 const path = require("path");
 const webpack = require("webpack");
+const { ModuleFederationPlugin } = require("webpack").container;
 const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
+
+const REACT_VERSION = "18.2.0";
 
 module.exports = {
     entry: "./src/index.tsx",
@@ -76,6 +79,18 @@ module.exports = {
     plugins: [
         new webpack.ProvidePlugin({
             process: "process/browser",
+        }),
+        // Federation host: shares a single React runtime with the dynamically
+        // loaded Ballerina BI-form remote. React is `eager` here because this
+        // host bundles it directly (no async entry boundary); the remote
+        // consumes it from this share scope. Remotes are loaded at runtime from
+        // the URL in the bootstrap, so none are declared statically.
+        new ModuleFederationPlugin({
+            name: "wiWebviewHost",
+            shared: {
+                react: { singleton: true, eager: true, requiredVersion: REACT_VERSION },
+                "react-dom": { singleton: true, eager: true, requiredVersion: REACT_VERSION },
+            },
         }),
         new ReactRefreshWebpackPlugin(),
     ],

@@ -1,0 +1,12 @@
+Index: product-integrator/lib/vscode/extensions/xml/package.json
+===================================================================
+--- product-integrator.orig/lib/vscode/extensions/xml/package.json
++++ product-integrator/lib/vscode/extensions/xml/package.json
+@@ -14,7 +14,6 @@
+       {
+         "id": "xml",
+         "extensions": [
+-          ".xml",
+           ".xsd",
+           ".ascx",
+           ".atom",

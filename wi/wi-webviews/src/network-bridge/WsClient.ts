@@ -20,6 +20,7 @@
 
 import {
     BIProjectRequest,
+    BiFormWsBootstrap,
     BIRuntimeStatusResponse,
     CreateMiProjectRequest,
     CreateMiProjectResponse,
@@ -33,26 +34,17 @@ import {
     GetConfigurationResponse,
     GetRecentProjectsResponse,
     SetConfigurationRequest,
-    GetMigrationToolsResponse,
     GetSubFoldersRequest,
     GetSubFoldersResponse,
     GetSupportedMIVersionsResponse,
     GettingStartedData,
-    ImportIntegrationWsRequest,
-    ImportIntegrationResponse,
-    MigrateRequest,
-    OpenMigrationReportRequest,
     ProjectDirResponse,
-    ProjectMigrationResult,
-    PullMigrationToolRequest,
     RunCommandRequest,
     RunCommandResponse,
     SampleDownloadRequest,
-    SaveMigrationReportRequest,
     SemanticVersion,
     SetWebviewCacheParams,
     ShowErrorMessageRequest,
-    StoreSubProjectReportsRequest,
     ValidateProjectFormRequest,
     ValidateProjectFormResponse,
     WebviewContext,
@@ -65,8 +57,6 @@ import {
     WITransportBootstrap,
     WorkspaceRootResponse,
     CloneProgressStage,
-    WIChatNotify,
-    SignInResult,
 } from "@wso2/wi-core";
 import type {
     AuthState,
@@ -91,7 +81,7 @@ import type {
     GetCloudProjectsReq,
     GetCloudProjectsResp,
 } from "@wso2/wi-core";
-import { ConnectionStatus, createWebviewTransportAdapter } from "webview-giga-bridge/webview";
+import { ConnectionStatus, createWebviewTransportAdapter } from "@wso2/webview-giga-bridge/webview";
 
 declare global {
     interface Window {
@@ -137,15 +127,11 @@ export class WsClient {
     });
     private readonly stateChangedListeners = new Set<(context: WebviewContext) => void>();
     private readonly downloadProgressListeners = new Set<(progress: DownloadProgress) => void>();
-    private readonly migrationToolStateListeners = new Set<(state: string) => void>();
-    private readonly migrationToolLogListeners = new Set<(log: string) => void>();
-    private readonly migratedProjectListeners = new Set<(result: ProjectMigrationResult) => void>();
     // ── Cloud event listeners ─────────────────────────────────
     private readonly signInInitiatedListeners = new Set<() => void>();
     private readonly authStateChangedListeners = new Set<(state: AuthState) => void>();
     private readonly contextStateChangedListeners = new Set<(state: ContextStoreState) => void>();
     private readonly cloneProgressListeners = new Set<(stage: CloneProgressStage) => void>();
-    private readonly chatNotifyListeners = new Set<(event: WIChatNotify) => void>();
 
     constructor() {
         this.transport.subscribe(
@@ -238,24 +224,16 @@ export class WsClient {
         return this.request("createBIProject", params);
     }
 
+    public getBiFormWsBootstrap(): Promise<BiFormWsBootstrap> {
+        return this.request("getBiFormWsBootstrap");
+    }
+
     public validateProjectPath(params: ValidateProjectFormRequest): Promise<ValidateProjectFormResponse> {
         return this.request("validateProjectPath", params);
     }
 
-    public getMigrationTools(): Promise<GetMigrationToolsResponse> {
-        return this.request("getMigrationTools");
-    }
-
     public isSupportedSLVersion(params: SemanticVersion): Promise<boolean> {
         return this.request("isSupportedSLVersion", params);
-    }
-
-    public migrateProject(params: MigrateRequest): Promise<void> {
-        return this.request("migrateProject", params);
-    }
-
-    public storeSubProjectReports(params: StoreSubProjectReportsRequest): Promise<void> {
-        return this.request("storeSubProjectReports", params);
     }
 
     public openFolder(folderPath: string): void {
@@ -278,24 +256,8 @@ export class WsClient {
         return this.request("clearWebviewCache", cacheKey);
     }
 
-    public pullMigrationTool(params: PullMigrationToolRequest): Promise<void> {
-        return this.request("pullMigrationTool", params);
-    }
-
-    public importIntegration(params: ImportIntegrationWsRequest): Promise<ImportIntegrationResponse> {
-        return this.request("importIntegration", params);
-    }
-
     public showErrorMessage(params: ShowErrorMessageRequest): Promise<void> {
         return this.request("showErrorMessage", params);
-    }
-
-    public openMigrationReport(params: OpenMigrationReportRequest): Promise<void> {
-        return this.request("openMigrationReport", params);
-    }
-
-    public saveMigrationReport(params: SaveMigrationReportRequest): Promise<void> {
-        return this.request("saveMigrationReport", params);
     }
 
     public onStateChanged(callback: (context: WebviewContext) => void) {
@@ -305,18 +267,6 @@ export class WsClient {
     public onDownloadProgress(callback: (progress: DownloadProgress) => void): () => void {
         this.downloadProgressListeners.add(callback);
         return () => this.downloadProgressListeners.delete(callback);
-    }
-
-    public onMigrationToolStateChanged(callback: (state: string) => void) {
-        this.migrationToolStateListeners.add(callback);
-    }
-
-    public onMigrationToolLogs(callback: (log: string) => void) {
-        this.migrationToolLogListeners.add(callback);
-    }
-
-    public onMigratedProject(callback: (result: ProjectMigrationResult) => void) {
-        this.migratedProjectListeners.add(callback);
     }
 
     public getDefaultOrgName(): Promise<DefaultOrgNameResponse> {
@@ -427,43 +377,6 @@ export class WsClient {
         return () => this.cloneProgressListeners.delete(callback);
     }
 
-    public onChatNotify(callback: (event: WIChatNotify) => void): () => void {
-        this.chatNotifyListeners.add(callback);
-        return () => this.chatNotifyListeners.delete(callback);
-    }
-
-    public async wizardEnhancementReady(): Promise<void> {
-        await this.request("wizardEnhancementReady");
-    }
-
-    public async openMigratedProject(): Promise<void> {
-        await this.request("openMigratedProject");
-    }
-
-    public async abortMigrationAgent(): Promise<void> {
-        await this.request("abortMigrationAgent");
-    }
-
-    public async checkAIAuth(): Promise<boolean> {
-        return this.request("checkAIAuth");
-    }
-
-    public async triggerAICopilotSignIn(): Promise<SignInResult> {
-        return this.request("triggerAICopilotSignIn");
-    }
-
-    public async triggerAnthropicKeySignIn(params: { apiKey: string }): Promise<SignInResult> {
-        return this.request("triggerAnthropicKeySignIn", params);
-    }
-
-    public async triggerAwsBedrockSignIn(params: { accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string }): Promise<SignInResult> {
-        return this.request("triggerAwsBedrockSignIn", params);
-    }
-
-    public async triggerVertexAiSignIn(params: { projectId: string; location: string; clientEmail: string; privateKey: string }): Promise<SignInResult> {
-        return this.request("triggerVertexAiSignIn", params);
-    }
-
     public getBIRuntimeStatus(): Promise<BIRuntimeStatusResponse> {
         return this.request("getBIRuntimeStatus");
     }
@@ -521,15 +434,6 @@ export class WsClient {
             case WI_BRIDGE_EVENTS.DOWNLOAD_PROGRESS:
                 this.downloadProgressListeners.forEach((listener) => listener(message.progress));
                 return;
-            case WI_BRIDGE_EVENTS.MIGRATION_TOOL_STATE_CHANGED:
-                this.migrationToolStateListeners.forEach((listener) => listener(message.state.state));
-                return;
-            case WI_BRIDGE_EVENTS.MIGRATION_TOOL_LOGS:
-                this.migrationToolLogListeners.forEach((listener) => listener(message.log.log));
-                return;
-            case WI_BRIDGE_EVENTS.MIGRATED_PROJECT:
-                this.migratedProjectListeners.forEach((listener) => listener(message.project));
-                return;
             // ── Cloud events ──────────────────────────────────────
             case WI_BRIDGE_EVENTS.SIGN_IN_INITIATED:
                 this.signInInitiatedListeners.forEach((listener) => listener());
@@ -542,9 +446,6 @@ export class WsClient {
                 return;
             case WI_BRIDGE_EVENTS.CLONE_PROGRESS:
                 this.cloneProgressListeners.forEach((listener) => listener(message.stage));
-                return;
-            case WI_BRIDGE_EVENTS.CHAT_NOTIFY:
-                this.chatNotifyListeners.forEach((listener) => listener(message.event));
                 return;
             case WI_BRIDGE_EVENTS.WS_RESPONSE:
             default:

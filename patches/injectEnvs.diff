@@ -10,7 +10,7 @@ Index: product-integrator/lib/vscode/src/main.ts
  import { INLSConfiguration } from './vs/nls.js';
  import { NativeParsedArgs } from './vs/platform/environment/common/argv.js';
  
-@@ -201,6 +202,93 @@ async function onReady() {
+@@ -209,6 +210,93 @@ async function onReady() {
   * Main startup routine
   */
  async function startup(codeCachePath: string | undefined, nlsConfig: INLSConfiguration): Promise<void> {
@@ -108,9 +108,9 @@ Index: product-integrator/lib/vscode/src/vs/base/common/product.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/base/common/product.ts
 +++ product-integrator/lib/vscode/src/vs/base/common/product.ts
-@@ -63,11 +63,29 @@ export type ExtensionVirtualWorkspaceSup
- 	readonly override?: boolean;
- };
+@@ -83,11 +83,29 @@ export interface IAgentSdkProductConfig
+ 	readonly urlTemplate: string;
+ }
  
 +export interface IProductRuntimeEnvironmentMetadata {
 +	readonly pathRemovePattern?: string;
@@ -163,7 +163,7 @@ Index: product-integrator/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
 +++ product-integrator/lib/vscode/src/vs/server/node/remoteTerminalChannel.ts
-@@ -254,6 +254,7 @@ export class RemoteTerminalChannel exten
+@@ -255,6 +255,7 @@ export class RemoteTerminalChannel exten
  			const workspaceFolder = activeWorkspaceFolder ? activeWorkspaceFolder ?? undefined : undefined;
  			await mergedCollection.applyToProcessEnvironment(env, { workspaceFolder }, variableResolver);
  		}
@@ -175,7 +175,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/browser/t
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/browser/terminalProcessManager.ts
-@@ -475,6 +475,7 @@ export class TerminalProcessManager exte
+@@ -485,6 +485,7 @@ export class TerminalProcessManager exte
  				this._onEnvironmentVariableInfoChange.fire(this.environmentVariableInfo);
  			}
  		}
@@ -187,7 +187,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/sc
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh
-@@ -91,6 +91,84 @@ if [ -n "${VSCODE_ENV_APPEND:-}" ]; then
+@@ -97,6 +97,84 @@ if [ -n "${VSCODE_ENV_APPEND:-}" ]; then
  	builtin unset VSCODE_ENV_APPEND
  fi
  
@@ -378,7 +378,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/sc
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration.fish
-@@ -73,6 +73,73 @@ function __vsc_apply_env_vars
+@@ -80,6 +80,73 @@ function __vsc_apply_env_vars
  		end
  		set -e VSCODE_ENV_APPEND
  	end
@@ -592,7 +592,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/electron-
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/electron-browser/localTerminalBackend.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/electron-browser/localTerminalBackend.ts
-@@ -368,6 +368,7 @@ class LocalTerminalBackend extends BaseT
+@@ -377,6 +377,7 @@ class LocalTerminalBackend extends BaseT
  			const workspaceFolder = terminalEnvironment.getWorkspaceForTerminal(shellLaunchConfig.cwd, this._workspaceContextService, this._historyService);
  			await this._environmentVariableService.mergedCollection.applyToProcessEnvironment(env, { workspaceFolder }, variableResolver);
  		}
@@ -606,13 +606,13 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
 @@ -9,6 +9,7 @@ import { isWindows, OperatingSystem } fr
  import { URI as Uri } from '../../../../../base/common/uri.js';
- import { addTerminalEnvironmentKeys, createTerminalEnvironment, getUriLabelForShell, getCwd, getLangEnvVariable, mergeEnvironments, preparePathForShell, shouldSetLangEnvVariable } from '../../common/terminalEnvironment.js';
+ import { addTerminalEnvironmentKeys, createTerminalEnvironment, getUriLabelForShell, getCwd, getLangEnvVariable, getWorkspaceForTerminal, mergeEnvironments, preparePathForShell, shouldSetLangEnvVariable } from '../../common/terminalEnvironment.js';
  import { GeneralShellType, PosixShellType, WindowsShellType } from '../../../../../platform/terminal/common/terminal.js';
 +import { storeProductRuntimeEnvironment } from '../../../../../platform/product/common/runtimeEnvironment.js';
  import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
- 
- const wslPathBackend = {
-@@ -313,12 +314,79 @@ suite('Workbench - TerminalEnvironment',
+ import { TestContextService, TestHistoryService } from '../../../../test/common/workbenchTestServices.js';
+ import { testWorkspace } from '../../../../../platform/workspace/test/common/testWorkspace.js';
+@@ -315,12 +316,79 @@ suite('Workbench - TerminalEnvironment',
  			COLORTERM: 'truecolor',
  			TERM_PROGRAM: 'vscode'
  		};
@@ -690,8 +690,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 +			strictEqual(env.TERM_PROGRAM, undefined);
 +		});
  	});
- 	suite('formatUriForShellDisplay', () => {
- 		test('Wsl', async () => {
+ 	suite('getWorkspaceForTerminal', () => {
+ 		test('should resolve workspace folder from cwd, not last active workspace', () => {
 Index: product-integrator/lib/vscode/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/services/extensions/electron-browser/localProcessExtensionHost.ts
@@ -704,7 +704,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/services/extensions/electr
  import { IProductService } from '../../../../platform/product/common/productService.js';
  import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
  import { isLoggingOnly } from '../../../../platform/telemetry/common/telemetryUtils.js';
-@@ -199,6 +200,8 @@ export class NativeLocalProcessExtension
+@@ -236,6 +237,8 @@ export class NativeLocalProcessExtension
  			objects.mixin(env, this._environmentService.debugExtensionHost.env);
  		}
  

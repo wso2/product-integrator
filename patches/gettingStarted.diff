@@ -2,7 +2,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
-@@ -7,28 +7,24 @@ import { localize, localize2 } from '../
+@@ -7,33 +7,27 @@ import { localize, localize2 } from '../
  import { GettingStartedInputSerializer, GettingStartedPage, inWelcomeContext } from './gettingStarted.js';
  import { Registry } from '../../../../platform/registry/common/platform.js';
  import { EditorExtensions, IEditorFactoryRegistry } from '../../../common/editor.js';
@@ -22,6 +22,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
 +import { GettingStartedInput } from './gettingStartedInput.js';
 +import { WorkbenchPhase, registerWorkbenchContribution2 } from '../../../common/contributions.js';
  import { ConfigurationScope, Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
++// import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
  import { workbenchConfigurationNodeBase } from '../../../common/configuration.js';
  import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 -import { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
@@ -34,8 +36,12 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
 -import { DisposableStore } from '../../../../base/common/lifecycle.js';
  import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
  import { GettingStartedAccessibleView } from './gettingStartedAccessibleView.js';
+-import { AgentSessionsWelcomePage } from '../../welcomeAgentSessions/browser/agentSessionsWelcome.js';
+-import { IChatEntitlementService } from '../../../services/chat/common/chatEntitlementService.js';
  
-@@ -40,12 +36,6 @@ registerAction2(class extends Action2 {
+ export * as icons from './gettingStartedIcons.js';
+ 
+@@ -43,12 +37,6 @@ registerAction2(class extends Action2 {
  			id: 'workbench.action.openWalkthrough',
  			title: localize2('miWelcome', 'Welcome'),
  			category: Categories.Help,
@@ -48,7 +54,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
  			metadata: {
  				description: localize2('minWelcomeDescription', 'Opens a Walkthrough to help you get started in VS Code.')
  			}
-@@ -53,52 +43,11 @@ registerAction2(class extends Action2 {
+@@ -56,60 +44,11 @@ registerAction2(class extends Action2 {
  	}
  
  	public run(
@@ -61,51 +67,59 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
  	) {
 -		const editorService = accessor.get(IEditorService);
 -		const commandService = accessor.get(ICommandService);
+-		const configurationService = accessor.get(IConfigurationService);
+-		const chatEntitlementService = accessor.get(IChatEntitlementService);
 -
 -		const toSide = typeof optionsOrToSide === 'object' ? optionsOrToSide.toSide : optionsOrToSide;
 -		const inactive = typeof optionsOrToSide === 'object' ? optionsOrToSide.inactive : false;
 -		const activeEditor = editorService.activeEditor;
 -
--		if (walkthroughID) {
--			const selectedCategory = typeof walkthroughID === 'string' ? walkthroughID : walkthroughID.category;
--			let selectedStep: string | undefined;
--			if (typeof walkthroughID === 'object' && 'category' in walkthroughID && 'step' in walkthroughID) {
--				selectedStep = `${walkthroughID.category}#${walkthroughID.step}`;
--			} else {
--				selectedStep = undefined;
--			}
--
--			// If the walkthrough is already open just reveal the step
--			if (selectedStep && activeEditor instanceof GettingStartedInput && activeEditor.selectedCategory === selectedCategory) {
--				activeEditor.showWelcome = false;
--				commandService.executeCommand('walkthroughs.selectStep', selectedStep);
--				return;
--			}
--
--			let options: GettingStartedEditorOptions;
--			if (selectedCategory) {
--				// Otherwise open the walkthrough editor with the selected category and step
--				options = { selectedCategory, selectedStep, showWelcome: false, preserveFocus: toSide ?? false, inactive };
--			} else {
--				// Open Welcome page
--				options = { selectedCategory, selectedStep, showWelcome: true, preserveFocus: toSide ?? false, inactive };
--			}
--			editorService.openEditor({
--				resource: GettingStartedInput.RESOURCE,
--				options
--			}, toSide ? SIDE_GROUP : undefined);
--
+-		// If no specific walkthrough is requested and agent sessions welcome is preferred, open that instead
+-		if (!walkthroughID && !chatEntitlementService.sentiment.hidden && configurationService.getValue<string>('workbench.startupEditor') === 'agentSessionsWelcomePage') {
+-			commandService.executeCommand(AgentSessionsWelcomePage.COMMAND_ID);
+-			return;
 -		} else {
--			editorService.openEditor({
--				resource: GettingStartedInput.RESOURCE,
--				options: { preserveFocus: toSide ?? false, inactive }
--			}, toSide ? SIDE_GROUP : undefined);
+-			if (walkthroughID) {
+-				const selectedCategory = typeof walkthroughID === 'string' ? walkthroughID : walkthroughID.category;
+-				let selectedStep: string | undefined;
+-				if (typeof walkthroughID === 'object' && 'category' in walkthroughID && 'step' in walkthroughID) {
+-					selectedStep = `${walkthroughID.category}#${walkthroughID.step}`;
+-				} else {
+-					selectedStep = undefined;
+-				}
+-
+-				// If the walkthrough is already open just reveal the step
+-				if (selectedStep && activeEditor instanceof GettingStartedInput && activeEditor.selectedCategory === selectedCategory) {
+-					activeEditor.showWelcome = false;
+-					commandService.executeCommand('walkthroughs.selectStep', selectedStep);
+-					return;
+-				}
+-
+-				let options: GettingStartedEditorOptions;
+-				if (selectedCategory) {
+-					// Otherwise open the walkthrough editor with the selected category and step
+-					options = { selectedCategory, selectedStep, showWelcome: false, preserveFocus: toSide ?? false, inactive };
+-				} else {
+-					// Open Welcome page
+-					options = { selectedCategory, selectedStep, showWelcome: true, preserveFocus: toSide ?? false, inactive };
+-				}
+-				editorService.openEditor({
+-					resource: GettingStartedInput.RESOURCE,
+-					options
+-				}, toSide ? SIDE_GROUP : undefined);
+-
+-			} else {
+-				editorService.openEditor({
+-					resource: GettingStartedInput.RESOURCE,
+-					options: { preserveFocus: toSide ?? false, inactive }
+-				}, toSide ? SIDE_GROUP : undefined);
+-			}
 -		}
 +		return;
  	}
  });
  
-@@ -192,59 +141,11 @@ registerAction2(class extends Action2 {
+@@ -203,59 +142,11 @@ registerAction2(class extends Action2 {
  			id: 'welcome.showAllWalkthroughs',
  			title: localize2('welcome.showAllWalkthroughs', 'Open Walkthrough...'),
  			category,
@@ -167,20 +181,19 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
  	}
  });
  
-@@ -315,7 +216,7 @@ configurationRegistry.registerConfigurat
- 				localize({ comment: ['This is the description for a setting. Values surrounded by single quotes are not to be translated.'], key: 'workbench.startupEditor.welcomePageInEmptyWorkbench' }, "Open the Welcome page when opening an empty workbench."),
+@@ -327,7 +218,7 @@ configurationRegistry.registerConfigurat
  				localize({ comment: ['This is the description for a setting. Values surrounded by single quotes are not to be translated.'], key: 'workbench.startupEditor.terminal' }, "Open a new terminal in the editor area."),
+ 				localize({ comment: ['This is the description for a setting. Values surrounded by single quotes are not to be translated.'], key: 'workbench.startupEditor.agentSessionsWelcomePage' }, "Open the Agent Sessions Welcome page. Will override the workbench secondary side bar visibility settings."),
  			],
 -			'default': 'welcomePage',
 +			'default': 'none',
- 			'description': localize('workbench.startupEditor', "Controls which editor is shown at startup, if none are restored from the previous session.")
- 		},
- 		'workbench.welcomePage.preferReducedMotion': {
-@@ -324,13 +225,19 @@ configurationRegistry.registerConfigurat
- 			default: false,
+ 			'description': localize('workbench.startupEditor', "Controls which editor is shown at startup, if none are restored from the previous session."),
+ 			'experiment': { mode: 'auto' },
+ 			agentsWindow: { default: 'none', readOnly: true },
+@@ -339,6 +230,14 @@ configurationRegistry.registerConfigurat
  			deprecationMessage: localize('deprecationMessage', "Deprecated, use the global `workbench.reduceMotion`."),
  			description: localize('workbench.welcomePage.preferReducedMotion', "When enabled, reduce motion in welcome page.")
-+		},
+ 		},
 +		'integrator.defaultIntegrator': {
 +			'scope': ConfigurationScope.APPLICATION,
 +			'type': 'string',
@@ -188,8 +201,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
 +			'default': 'WI',
 +			'restricted': true,
 +			'disallowSyncIgnore': true,
- 		}
- 	}
++		},
+ 		'workbench.welcomePage.experimentalOnboarding': {
+ 			scope: ConfigurationScope.APPLICATION,
+ 			type: 'boolean',
+@@ -353,8 +252,7 @@ configurationRegistry.registerConfigurat
  });
  
  registerWorkbenchContribution2(WorkspacePlatformContribution.ID, WorkspacePlatformContribution, WorkbenchPhase.AfterRestored);
@@ -198,7 +214,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
 +// WSO2 Integrator provides a custom tabless empty-window experience instead of the built-in Welcome page.
  
  AccessibleViewRegistry.register(new GettingStartedAccessibleView());
--
+ 
 Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
 ===================================================================
 --- /dev/null
@@ -986,16 +1002,20 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/browser/layout.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
-@@ -14,7 +14,7 @@ import { PanelPart } from './parts/panel
- import { Position, Parts, PartOpensMaximizedOptions, IWorkbenchLayoutService, positionFromString, positionToString, partOpensMaximizedFromString, PanelAlignment, ActivityBarPosition, LayoutSettings, MULTI_WINDOW_PARTS, SINGLE_WINDOW_PARTS, ZenModeSettings, EditorTabsMode, EditorActionsLocation, shouldShowCustomTitleBar, isHorizontal, isMultiWindowPart } from '../services/layout/browser/layoutService.js';
+@@ -14,10 +14,10 @@ import { PanelPart } from './parts/panel
+ import { Position, Parts, PartOpensMaximizedOptions, IWorkbenchLayoutService, positionFromString, positionToString, partOpensMaximizedFromString, PanelAlignment, ActivityBarPosition, LayoutSettings, MULTI_WINDOW_PARTS, SINGLE_WINDOW_PARTS, ZenModeSettings, EditorTabsMode, EditorActionsLocation, shouldShowCustomTitleBar, isHorizontal, isMultiWindowPart, IPartVisibilityChangeEvent } from '../services/layout/browser/layoutService.js';
  import { isTemporaryWorkspace, IWorkspaceContextService, WorkbenchState } from '../../platform/workspace/common/workspace.js';
  import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 -import { IConfigurationChangeEvent, IConfigurationService, isConfigured } from '../../platform/configuration/common/configuration.js';
 +import { IConfigurationChangeEvent, IConfigurationService, isConfigured, ConfigurationTarget } from '../../platform/configuration/common/configuration.js';
  import { ITitleService } from '../services/title/browser/titleService.js';
  import { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
- import { StartupKind, ILifecycleService } from '../services/lifecycle/common/lifecycle.js';
-@@ -338,6 +338,15 @@ export abstract class Layout extends Dis
+-import { StartupKind, ILifecycleService } from '../services/lifecycle/common/lifecycle.js';
++import { StartupKind, ILifecycleService, LifecyclePhase } from '../services/lifecycle/common/lifecycle.js';
+ import { getMenuBarVisibility, IPath, hasNativeTitlebar, hasCustomTitlebar, TitleBarSetting, CustomTitleBarVisibility, useWindowControlsOverlay, DEFAULT_EMPTY_WINDOW_SIZE, DEFAULT_WORKSPACE_WINDOW_SIZE, hasNativeMenu, MenuSettings } from '../../platform/window/common/window.js';
+ import { IHostService } from '../services/host/browser/host.js';
+ import { IBrowserWorkbenchEnvironmentService } from '../services/environment/browser/environmentService.js';
+@@ -341,6 +341,15 @@ export abstract class Layout extends Dis
  
  	private registerLayoutListeners(): void {
  
@@ -1009,9 +1029,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
 +		}));
 +
  		// Restore editor if hidden and an editor is to show
- 		const showEditorIfHidden = () => {
- 			if (!this.isVisible(Parts.EDITOR_PART, mainWindow)) {
-@@ -703,7 +712,8 @@ export abstract class Layout extends Dis
+ 		const showEditorIfHidden = (explicitUserAction?: boolean) => {
+ 			if (
+@@ -781,7 +790,8 @@ export abstract class Layout extends Dis
  		};
  
  		// Sidebar View Container To Restore
@@ -1021,17 +1041,21 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  			let viewContainerToRestore = this.storageService.get(SidebarPart.activeViewletSettingsKey, StorageScope.WORKSPACE, this.viewDescriptorService.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id);
  			if (
  				!this.environmentService.isBuilt ||
-@@ -749,6 +759,35 @@ export abstract class Layout extends Dis
+@@ -827,6 +837,39 @@ export abstract class Layout extends Dis
  
  		// Window border
  		this.updateWindowBorder(true);
 +
-+		// Configure UI for empty workspace
-+		if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
-+			this.configureEmptyWorkspaceUI();
-+		} else {
-+			this.restoreUIForNonEmptyWorkspace();
-+		}
++		// Configure UI for empty workspace. Deferred to LifecyclePhase.Restored: these updateValue()
++		// calls fire configuration listeners synchronously (titlebar, activity bar) that require the
++		// workbench parts and grid to exist, which are created after initLayout.
++		lifecycleService.when(LifecyclePhase.Restored).then(() => {
++			if (this.contextService.getWorkbenchState() === WorkbenchState.EMPTY) {
++				this.configureEmptyWorkspaceUI();
++			} else {
++				this.restoreUIForNonEmptyWorkspace();
++			}
++		});
 +	}
 +
 +	private async configureEmptyWorkspaceUI(): Promise<void> {
@@ -1057,7 +1081,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  	}
  
  	private getDefaultLayoutViews(environmentService: IBrowserWorkbenchEnvironmentService, storageService: IStorageService): string[] | undefined {
-@@ -1049,6 +1088,11 @@ export abstract class Layout extends Dis
+@@ -1132,6 +1175,11 @@ export abstract class Layout extends Dis
  				return;
  			}
  
@@ -1069,7 +1093,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  			mark('code/willRestoreViewlet');
  
  			await this.openViewContainer(ViewContainerLocation.Sidebar, this.state.initialization.views.containerToRestore.sideBar);
-@@ -1626,6 +1670,16 @@ export abstract class Layout extends Dis
+@@ -1718,6 +1766,16 @@ export abstract class Layout extends Dis
  			// Auxiliary Bar State
  			this.stateModel.setInitializationValue(LayoutStateKeys.AUXILIARYBAR_EMPTY, this.paneCompositeService.getPaneCompositeIds(ViewContainerLocation.AuxiliaryBar).length === 0);
  		}));
@@ -1086,7 +1110,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  	}
  
  	layout(): void {
-@@ -1768,6 +1822,11 @@ export abstract class Layout extends Dis
+@@ -1861,6 +1919,11 @@ export abstract class Layout extends Dis
  	}
  
  	private setActivityBarHidden(hidden: boolean): void {
@@ -1098,7 +1122,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  		this.stateModel.setRuntimeValue(LayoutStateKeys.ACTIVITYBAR_HIDDEN, hidden);
  		this.workbenchGrid.setViewVisible(this.activityBarPartView, !hidden);
  	}
-@@ -1816,6 +1875,11 @@ export abstract class Layout extends Dis
+@@ -1911,6 +1974,11 @@ export abstract class Layout extends Dis
  			return; // return: leaving maximised auxiliary bar made this part visible
  		}
  
@@ -1110,7 +1134,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  		this.stateModel.setRuntimeValue(LayoutStateKeys.SIDEBAR_HIDDEN, hidden);
  
  		// Adjust CSS
-@@ -1951,6 +2015,11 @@ export abstract class Layout extends Dis
+@@ -2050,6 +2118,11 @@ export abstract class Layout extends Dis
  			return; // return: leaving maximised auxiliary bar made this part visible
  		}
  
@@ -1120,9 +1144,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
 +		}
 +
  		const wasHidden = !this.isVisible(Parts.PANEL_PART);
+ 		const isPanelMaximized = this.isPanelMaximized();
  
- 		this.stateModel.setRuntimeValue(LayoutStateKeys.PANEL_HIDDEN, hidden);
-@@ -2149,6 +2218,11 @@ export abstract class Layout extends Dis
+@@ -2249,6 +2322,11 @@ export abstract class Layout extends Dis
  			return; // return: leaving maximised auxiliary bar made this part hidden
  		}
  
@@ -1134,7 +1158,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  		this.stateModel.setRuntimeValue(LayoutStateKeys.AUXILIARYBAR_HIDDEN, hidden);
  
  		// Adjust CSS
-@@ -2848,9 +2922,9 @@ class LayoutStateModel extends Disposabl
+@@ -2954,9 +3032,9 @@ class LayoutStateModel extends Disposabl
  		}
  
  		// Apply legacy settings
@@ -1146,12 +1170,12 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
 +		// this.stateCache.set(LayoutStateKeys.SIDEBAR_POSITON.name, positionFromString(this.configurationService.getValue(LegacyWorkbenchLayoutSettings.SIDEBAR_POSITION) ?? 'left'));
  
  		// Set dynamic defaults: part sizing and side bar visibility
- 		const workbenchState = this.contextService.getWorkbenchState();
+ 		const auxiliaryBarForceMaximized = this.configurationService.getValue(WorkbenchLayoutSettings.AUXILIARYBAR_FORCE_MAXIMIZED);
 Index: product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
-@@ -28,6 +28,7 @@ import { IEditorService } from '../../..
+@@ -29,6 +29,7 @@ import { IEditorService } from '../../..
  import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
  import { CodeWindow, mainWindow } from '../../../../base/browser/window.js';
  import { IsWindowAlwaysOnTopContext } from '../../../common/contextkeys.js';
@@ -1159,43 +1183,43 @@ Index: product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/tit
  
  export class NativeTitlebarPart extends BrowserTitlebarPart {
  
-@@ -76,9 +77,10 @@ export class NativeTitlebarPart extends
- 		@IEditorGroupsService editorGroupService: IEditorGroupsService,
+@@ -78,9 +79,10 @@ export class NativeTitlebarPart extends
  		@IEditorService editorService: IEditorService,
  		@IMenuService menuService: IMenuService,
--		@IKeybindingService keybindingService: IKeybindingService
-+		@IKeybindingService keybindingService: IKeybindingService,
+ 		@IKeybindingService keybindingService: IKeybindingService,
+-		@IActionViewItemService actionViewItemService: IActionViewItemService
++		@IActionViewItemService actionViewItemService: IActionViewItemService,
 +		@IWorkspaceContextService contextService: IWorkspaceContextService
  	) {
--		super(id, targetWindow, editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService);
-+		super(id, targetWindow, editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, contextService);
+-		super(id, targetWindow, editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, actionViewItemService);
++		super(id, targetWindow, editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, actionViewItemService, contextService);
  
- 		this.bigSurOrNewer = isBigSurOrNewer(environmentService.os.release);
+ 		this.tahoeOrNewer = isTahoeOrNewer(environmentService.os.release);
  
-@@ -306,9 +308,10 @@ export class MainNativeTitlebarPart exte
- 		@IEditorGroupsService editorGroupService: IEditorGroupsService,
+@@ -303,9 +305,10 @@ export class MainNativeTitlebarPart exte
  		@IEditorService editorService: IEditorService,
  		@IMenuService menuService: IMenuService,
--		@IKeybindingService keybindingService: IKeybindingService
-+		@IKeybindingService keybindingService: IKeybindingService,
+ 		@IKeybindingService keybindingService: IKeybindingService,
+-		@IActionViewItemService actionViewItemService: IActionViewItemService
++		@IActionViewItemService actionViewItemService: IActionViewItemService,
 +		@IWorkspaceContextService contextService: IWorkspaceContextService
  	) {
--		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService);
-+		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService, contextService);
+-		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService, actionViewItemService);
++		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService, actionViewItemService, contextService);
  	}
  }
  
-@@ -335,10 +338,11 @@ export class AuxiliaryNativeTitlebarPart
- 		@IEditorGroupsService editorGroupService: IEditorGroupsService,
+@@ -333,10 +336,11 @@ export class AuxiliaryNativeTitlebarPart
  		@IEditorService editorService: IEditorService,
  		@IMenuService menuService: IMenuService,
--		@IKeybindingService keybindingService: IKeybindingService
-+		@IKeybindingService keybindingService: IKeybindingService,
+ 		@IKeybindingService keybindingService: IKeybindingService,
+-		@IActionViewItemService actionViewItemService: IActionViewItemService
++		@IActionViewItemService actionViewItemService: IActionViewItemService,
 +		@IWorkspaceContextService contextService: IWorkspaceContextService
  	) {
  		const id = AuxiliaryNativeTitlebarPart.COUNTER++;
--		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService);
-+		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService, contextService);
+-		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService, actionViewItemService);
++		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, nativeHostService, editorGroupService, editorService, menuService, keybindingService, actionViewItemService, contextService);
  	}
  
  	override get preventZoom(): boolean {
@@ -1413,7 +1437,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
-@@ -0,0 +1,591 @@
+@@ -0,0 +1,592 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -1485,7 +1509,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		heroBadge.textContent = 'Get Started';
 +
 +		const headline = append(leftSection, $('h1.login-headline'));
-+		headline.textContent = 'Welcome to WSO2 Integrator';
++		headline.textContent = 'Welcome to\nWSO2 Integrator';
 +
 +		const caption = append(leftSection, $('p.login-caption'));
 +		caption.textContent = 'Connect AI agents, APIs, data, and events across cloud, on-prem, and hybrid environments. Build any type of integration and AI agent with the 100% open source WSO2 Integrator.';
@@ -1518,7 +1542,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		const signInButton = append(formContainer, $('button.wso2-sign-in-btn')) as HTMLButtonElement;
 +		signInButton.style.display = 'none';
 +		const textSpan = append(signInButton, $('span.btn-text'));
-+		textSpan.textContent = 'Sign in with WSO2 account';
++		textSpan.textContent = 'Sign in with WSO2 Integration Platform';
 +
 +		// Skip button (hidden initially)
 +		const skipButton = append(formContainer, $('button.skip-btn')) as HTMLButtonElement;
@@ -1788,6 +1812,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +				margin: 0;
 +				line-height: 1.12;
 +				max-width: 460px;
++				white-space: pre-line;
 +			}
 +
 +			.wso2-login-dialog .login-caption {
@@ -2009,25 +2034,25 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/tit
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
-@@ -55,6 +55,7 @@ import { IHoverDelegate } from '../../..
+@@ -56,6 +56,7 @@ import { IHoverDelegate } from '../../..
  import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
  import { safeIntl } from '../../../../base/common/date.js';
  import { IsCompactTitleBarContext, TitleBarVisibleContext } from '../../../common/contextkeys.js';
 +import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
+ import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
  
  export interface ITitleVariable {
- 	readonly name: string;
-@@ -306,7 +307,8 @@ export class BrowserTitlebarPart extends
- 		@IHostService private readonly hostService: IHostService,
- 		@IEditorService private readonly editorService: IEditorService,
+@@ -317,7 +318,8 @@ export class BrowserTitlebarPart extends
+ 		@IEditorService editorService: IEditorService,
  		@IMenuService private readonly menuService: IMenuService,
--		@IKeybindingService private readonly keybindingService: IKeybindingService
-+		@IKeybindingService private readonly keybindingService: IKeybindingService,
+ 		@IKeybindingService private readonly keybindingService: IKeybindingService,
+-		@IActionViewItemService private readonly actionViewItemService: IActionViewItemService
++		@IActionViewItemService private readonly actionViewItemService: IActionViewItemService,
 +		@IWorkspaceContextService private readonly contextService: IWorkspaceContextService
  	) {
  		super(id, { hasTitle: false }, themeService, storageService, layoutService);
  
-@@ -784,6 +786,11 @@ export class BrowserTitlebarPart extends
+@@ -846,6 +848,11 @@ export class BrowserTitlebarPart extends
  	}
  
  	protected onContextMenu(e: MouseEvent, menuId: MenuId): void {
@@ -2039,26 +2064,26 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/tit
  		const event = new StandardMouseEvent(getWindow(this.element), e);
  
  		// Show it
-@@ -908,8 +915,9 @@ export class MainBrowserTitlebarPart ext
- 		@IEditorService editorService: IEditorService,
+@@ -997,8 +1004,9 @@ export class MainBrowserTitlebarPart ext
  		@IMenuService menuService: IMenuService,
  		@IKeybindingService keybindingService: IKeybindingService,
+ 		@IActionViewItemService actionViewItemService: IActionViewItemService,
 +		@IWorkspaceContextService contextService: IWorkspaceContextService
  	) {
--		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService);
-+		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, contextService);
+-		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, actionViewItemService);
++		super(Parts.TITLEBAR_PART, mainWindow, editorGroupService.mainPart, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, actionViewItemService, contextService);
  	}
  }
  
-@@ -943,9 +951,10 @@ export class AuxiliaryBrowserTitlebarPar
- 		@IEditorService editorService: IEditorService,
+@@ -1033,9 +1041,10 @@ export class AuxiliaryBrowserTitlebarPar
  		@IMenuService menuService: IMenuService,
  		@IKeybindingService keybindingService: IKeybindingService,
+ 		@IActionViewItemService actionViewItemService: IActionViewItemService,
 +		@IWorkspaceContextService contextService: IWorkspaceContextService
  	) {
  		const id = AuxiliaryBrowserTitlebarPart.COUNTER++;
--		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService);
-+		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, contextService);
+-		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, actionViewItemService);
++		super(`workbench.parts.auxiliaryTitle.${id}`, getWindow(container), editorGroupsContainer, contextMenuService, configurationService, environmentService, instantiationService, themeService, storageService, layoutService, contextKeyService, hostService, editorService, menuService, keybindingService, actionViewItemService, contextService);
  	}
  
  	override get preventZoom(): boolean {
@@ -2152,7 +2177,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
-@@ -38,6 +38,15 @@ const configurationKey = 'workbench.star
+@@ -43,6 +43,15 @@ const configurationKey = 'workbench.star
  const oldConfigurationKey = 'workbench.welcome.enabled';
  const telemetryOptOutStorageKey = 'workbench.telemetryOptOutShown';
  
@@ -2168,7 +2193,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
  export class StartupPageEditorResolverContribution extends Disposable implements IWorkbenchContribution {
  
  	static readonly ID = 'workbench.contrib.startupPageEditorResolver';
-@@ -124,6 +133,17 @@ export class StartupPageRunnerContributi
+@@ -131,6 +140,17 @@ export class StartupPageRunnerContributi
  			this.storageService.store(telemetryOptOutStorageKey, true, StorageScope.PROFILE, StorageTarget.USER);
  		}
  
@@ -2257,8 +2282,8 @@ Index: product-integrator/lib/vscode/src/vs/code/electron-browser/workbench/work
 +
  	function showSplash(configuration: INativeWindowConfiguration) {
  		performance.mark('code/willShowPartsSplash');
- 
-@@ -76,7 +137,38 @@
+ 		showDefaultSplash(configuration);
+@@ -80,7 +141,38 @@
  		const style = document.createElement('style');
  		style.className = 'initialShellColors';
  		window.document.head.appendChild(style);
@@ -2298,64 +2323,17 @@ Index: product-integrator/lib/vscode/src/vs/code/electron-browser/workbench/work
  
  		// set zoom level as soon as possible
  		if (typeof data?.zoomLevel === 'number' && typeof preloadGlobals?.webFrame?.setZoomLevel === 'function') {
-@@ -237,34 +329,34 @@
- 				}
- 			}
+Index: product-integrator/lib/vscode/src/vs/workbench/workbench.common.main.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/workbench/workbench.common.main.ts
++++ product-integrator/lib/vscode/src/vs/workbench/workbench.common.main.ts
+@@ -390,7 +390,8 @@ import './contrib/welcomeViews/common/vi
+ import './contrib/welcomeViews/common/newFile.contribution.js';
  
--			// part: statusbar
--			if (layoutInfo.statusBarHeight > 0) {
--				const statusDiv = document.createElement('div');
--				statusDiv.style.position = 'absolute';
--				statusDiv.style.width = '100%';
--				statusDiv.style.height = `${layoutInfo.statusBarHeight}px`;
--				statusDiv.style.bottom = '0';
--				statusDiv.style.left = '0';
--				if (configuration.workspace && colorInfo.statusBarBackground) {
--					statusDiv.style.backgroundColor = colorInfo.statusBarBackground;
--				} else if (!configuration.workspace && colorInfo.statusBarNoFolderBackground) {
--					statusDiv.style.backgroundColor = colorInfo.statusBarNoFolderBackground;
--				}
--				splash.appendChild(statusDiv);
--
--				if (colorInfo.statusBarBorder) {
--					const statusBorderDiv = document.createElement('div');
--					statusBorderDiv.style.position = 'absolute';
--					statusBorderDiv.style.width = '100%';
--					statusBorderDiv.style.height = '1px';
--					statusBorderDiv.style.top = '0';
--					statusBorderDiv.style.borderTop = `1px solid ${colorInfo.statusBarBorder}`;
--					statusDiv.appendChild(statusBorderDiv);
-+				// part: statusbar
-+				if (layoutInfo.statusBarHeight > 0) {
-+					const statusDiv = document.createElement('div');
-+					statusDiv.style.position = 'absolute';
-+					statusDiv.style.width = '100%';
-+					statusDiv.style.height = `${layoutInfo.statusBarHeight}px`;
-+					statusDiv.style.bottom = '0';
-+					statusDiv.style.left = '0';
-+					if (configuration.workspace && colorInfo.statusBarBackground) {
-+						statusDiv.style.backgroundColor = colorInfo.statusBarBackground;
-+					} else if (!configuration.workspace && colorInfo.statusBarNoFolderBackground) {
-+						statusDiv.style.backgroundColor = colorInfo.statusBarNoFolderBackground;
-+					}
-+					splash.appendChild(statusDiv);
-+
-+					if (colorInfo.statusBarBorder) {
-+						const statusBorderDiv = document.createElement('div');
-+						statusBorderDiv.style.position = 'absolute';
-+						statusBorderDiv.style.width = '100%';
-+						statusBorderDiv.style.height = '1px';
-+						statusBorderDiv.style.top = '0';
-+						statusBorderDiv.style.borderTop = `1px solid ${colorInfo.statusBarBorder}`;
-+						statusDiv.appendChild(statusBorderDiv);
-+					}
- 				}
--			}
+ // Welcome Onboarding
+-import './contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution.js';
++// WSO2 Integrator disables the built-in 2026 onboarding (requires product.defaultChatAgent; superseded by the custom experience)
++// import './contrib/welcomeOnboarding/browser/welcomeOnboarding.contribution.js';
  
--			window.document.body.appendChild(splash);
--		}
-+				window.document.body.appendChild(splash);
-+			}
- 
- 		performance.mark('code/didShowPartsSplash');
- 	}
+ // Onboarding (scenario engine)
+ import './contrib/onboarding/browser/onboarding.contribution.js';

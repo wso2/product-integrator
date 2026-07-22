@@ -1,8 +1,8 @@
 {
     "$schema": "https://developer.microsoft.com/json-schemas/rush/v5/rush.schema.json",
-    "rushVersion": "5.155.1",
+    "rushVersion": "5.177.1",
     "pnpmVersion": "10.11.0",
-    "nodeSupportedVersionRange": ">=18.0.0 <23.0.0",
+    "nodeSupportedVersionRange": ">=22.0.0 <25.0.0",
     "suppressNodeLtsWarning": false,
     "ensureConsistentVersions": false,
     "projectFolderMinDepth": 2,
@@ -18,6 +18,12 @@
         {
             "packageName": "@wso2/ui-toolkit",
             "projectFolder": "external/wso2-vscode-extensions/workspaces/common-libs/ui-toolkit",
+            "reviewCategory": "production",
+            "shouldPublish": false
+        },
+        {
+            "packageName": "@wso2/webview-giga-bridge",
+            "projectFolder": "external/wso2-vscode-extensions/workspaces/common-libs/vscode-webview-bridge",
             "reviewCategory": "production",
             "shouldPublish": false
         },
@@ -42,12 +48,6 @@
         {
             "packageName": "wso2-integrator",
             "projectFolder": "wi/wi-extension",
-            "reviewCategory": "production",
-            "shouldPublish": false
-        },
-        {
-            "packageName": "webview-giga-bridge",
-            "projectFolder": "wi/webview-giga-bridge",
             "reviewCategory": "production",
             "shouldPublish": false
         }

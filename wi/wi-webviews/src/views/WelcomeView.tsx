@@ -23,11 +23,10 @@ import { Codicon, ProgressIndicator } from "@wso2/ui-toolkit";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
-import { ImportIntegration } from "./ImportIntegration";
 import { UserAccountPopover } from "./UserAccountPopover";
 import { CreationView } from "./creationView";
-import { LibraryCreationView } from "./creationView/biForm/LibraryCreationView";
-import { ProjectCreationView } from "./creationView/biForm/ProjectCreationView";
+import { RemoteBIProjectForm } from "./creationView/federation/RemoteBIProjectForm";
+import { RemoteImportIntegration } from "./creationView/federation/RemoteImportIntegration";
 import { SamplesView } from "./samplesView";
 import { SettingsView } from "./settingsView";
 import {
@@ -893,11 +892,11 @@ export const WelcomeView: React.FC = () => {
 					/>
 				);
 			case ViewState.IMPORT_EXTERNAL:
-				return <ImportIntegration onBack={goBackToWelcome} />;
+				return <RemoteImportIntegration onBack={goBackToWelcome} />;
 			case ViewState.CREATE_LIBRARY:
-				return <LibraryCreationView onBack={goBackToWelcome} ballerinaUnavailable={biUnavailable} />;
+				return <RemoteBIProjectForm mode="library" onBack={goBackToWelcome} ballerinaUnavailable={biUnavailable} />;
 			case ViewState.CREATE_PROJECT:
-				return <ProjectCreationView onBack={goBackToWelcome} ballerinaUnavailable={biUnavailable} />;
+				return <RemoteBIProjectForm mode="project" onBack={goBackToWelcome} ballerinaUnavailable={biUnavailable} />;
 			case ViewState.SETTINGS:
 				return <SettingsView onBack={goBackToWelcome} ballerinaUnavailable={biUnavailable} />;
             case ViewState.OPEN_PROJECT:

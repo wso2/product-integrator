@@ -8,20 +8,20 @@ Index: product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
  			urlProtocol: 'wso2-integrator',
 -			reportIssueUrl: 'https://github.com/wso2/product-integrator/issues/new',
 +			reportIssueUrl: 'https://github.com/wso2/product-integrator/issues',
-+			documentationUrl: 'https://wso2.github.io/docs-integrator/',
++			documentationUrl: 'https://wso2.com/integration-platform/docs/',
  			licenseName: 'MIT',
 -			licenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt',
--			serverLicenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt'
+-			serverLicenseUrl: 'https://github.com/microsoft/vscode/blob/main/LICENSE.txt',
 +			licenseUrl: 'https://wso2.com/licenses/',
-+			serverLicenseUrl: 'https://wso2.com/licenses/'
- 		});
- 	}
- }
++			serverLicenseUrl: 'https://wso2.com/licenses/',
+ 			defaultChatAgent: {
+ 				extensionId: 'GitHub.copilot',
+ 				chatExtensionId: 'GitHub.copilot-chat',
 Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/helpActions.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/browser/actions/helpActions.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/actions/helpActions.ts
-@@ -73,7 +73,8 @@ class OpenIntroductoryVideosUrlAction ex
+@@ -74,7 +74,8 @@ class OpenIntroductoryVideosUrlAction ex
  			menu: {
  				id: MenuId.MenubarHelpMenu,
  				group: '2_reference',
@@ -31,7 +31,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/helpAction
  			}
  		});
  	}
-@@ -105,7 +106,8 @@ class OpenTipsAndTricksUrlAction extends
+@@ -106,7 +107,8 @@ class OpenTipsAndTricksUrlAction extends
  			menu: {
  				id: MenuId.MenubarHelpMenu,
  				group: '2_reference',
@@ -41,7 +41,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/helpAction
  			}
  		});
  	}
-@@ -248,8 +250,8 @@ class OpenLicenseUrlAction extends Actio
+@@ -249,8 +251,8 @@ class OpenLicenseUrlAction extends Actio
  		super({
  			id: OpenLicenseUrlAction.ID,
  			title: {
@@ -52,11 +52,20 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/helpAction
  			},
  			category: Categories.Help,
  			f1: true,
-@@ -358,7 +360,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+@@ -331,7 +333,7 @@ class GetStartedWithAccessibilityFeature
+ 	}
+ 	run(accessor: ServicesAccessor): void {
+ 		const commandService = accessor.get(ICommandService);
+-		commandService.executeCommand('workbench.action.openWalkthrough', 'SetupAccessibility');
++		commandService.executeCommand('workbench.action.openAccessibilitySettings');
+ 	}
+ }
+ 
+@@ -362,7 +364,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
  	},
  	order: 7,
  	group: '1_welcome',
--	when: ContextKeyExpr.equals('chatSetupHidden', false)
+-	when: ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false), IsSessionsWindowContext.negate())
 +	when: ContextKeyExpr.false()
  });
  
@@ -105,7 +114,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/workspaceA
  		id: ADD_ROOT_FOLDER_COMMAND_ID,
  		title: localize({ key: 'miAddFolderToWorkspace', comment: ['&& denotes a mnemonic'] }, "A&&dd Folder to Workspace...")
  	},
--	when: ContextKeyExpr.or(EnterMultiRootWorkspaceSupportContext, WorkbenchStateContext.isEqualTo('workspace')),
+-	when: ContextKeyExpr.and(ContextKeyExpr.or(EnterMultiRootWorkspaceSupportContext, WorkbenchStateContext.isEqualTo('workspace')), IsSessionsWindowContext.negate()),
 +	when: ContextKeyExpr.false(),
  	order: 1
  });
@@ -114,7 +123,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/workspaceA
  		title: localize('miSaveWorkspaceAs', "Save Workspace As...")
  	},
  	order: 2,
--	when: EnterMultiRootWorkspaceSupportContext
+-	when: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext, IsSessionsWindowContext.negate())
 +	when: ContextKeyExpr.false()
  });
  
@@ -123,7 +132,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/workspaceA
  		title: localize('duplicateWorkspace', "Duplicate Workspace")
  	},
  	order: 3,
--	when: EnterMultiRootWorkspaceSupportContext
+-	when: ContextKeyExpr.and(EnterMultiRootWorkspaceSupportContext, IsSessionsWindowContext.negate())
 +	when: ContextKeyExpr.false()
  });
  
@@ -135,15 +144,16 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/workspaceA
 +		title: localize({ key: 'miCloseFolder', comment: ['&& denotes a mnemonic'] }, "Close &&Integration")
  	},
  	order: 3,
- 	when: ContextKeyExpr.and(WorkbenchStateContext.isEqualTo('folder'), EmptyWorkspaceSupportContext)
+ 	when: ContextKeyExpr.and(WorkbenchStateContext.isEqualTo('folder'), EmptyWorkspaceSupportContext, IsSessionsWindowContext.negate())
 Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editor.contribution.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/editor/editor.contribution.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editor.contribution.ts
-@@ -682,6 +682,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+@@ -731,7 +731,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
  	submenu: MenuId.MenubarShare,
  	group: '45_share',
  	order: 1,
+-	when: IsSessionsWindowContext.negate()
 +	when: ContextKeyExpr.false(),
  });
  
@@ -152,27 +162,23 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/debug/browser/debu
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/debug/browser/debug.contribution.ts
-@@ -272,8 +272,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarDebugMenu, {
- 		id: DEBUG_START_COMMAND_ID,
+@@ -275,7 +275,6 @@ MenuRegistry.appendMenuItem(MenuId.Menub
  		title: nls.localize({ key: 'miStartDebugging', comment: ['&& denotes a mnemonic'] }, "&&Start Debugging")
  	},
--	order: 1,
+ 	order: 1,
 -	when: CONTEXT_DEBUGGERS_AVAILABLE
-+	order: 1,
  });
  
  MenuRegistry.appendMenuItem(MenuId.MenubarDebugMenu, {
-@@ -282,8 +281,7 @@ MenuRegistry.appendMenuItem(MenuId.MenubarDebugMenu, {
- 		id: DEBUG_RUN_COMMAND_ID,
+@@ -285,7 +284,6 @@ MenuRegistry.appendMenuItem(MenuId.Menub
  		title: nls.localize({ key: 'miRun', comment: ['&& denotes a mnemonic'] }, "Run &&Without Debugging")
  	},
--	order: 2,
+ 	order: 2,
 -	when: CONTEXT_DEBUGGERS_AVAILABLE
-+	order: 2,
  });
  
  MenuRegistry.appendMenuItem(MenuId.MenubarDebugMenu, {
-@@ -416,6 +414,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
+@@ -418,6 +416,7 @@ MenuRegistry.appendMenuItem(MenuId.Menub
  		id: 'debug.installAdditionalDebuggers',
  		title: nls.localize({ key: 'miInstallAdditionalDebuggers', comment: ['&& denotes a mnemonic'] }, "&&Install Additional Debuggers...")
  	},
@@ -245,7 +251,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/userDataProfile/br
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/userDataProfile/browser/userDataProfile.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/userDataProfile/browser/userDataProfile.ts
-@@ -169,6 +169,7 @@ export class UserDataProfilesWorkbenchCo
+@@ -203,6 +203,7 @@ export class UserDataProfilesWorkbenchCo
  			submenu: OpenProfileMenu,
  			group: '1_new',
  			order: 4,
@@ -263,15 +269,14 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeViews/commo
  import { ICommandService } from '../../../../platform/commands/common/commands.js';
 -import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 +import { ContextKeyExpr, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+ import { IsSessionsWindowContext } from '../../../common/contextkeys.js';
  import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
  import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
- import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-@@ -37,7 +37,8 @@ registerAction2(class extends Action2 {
- 			menu: {
+@@ -40,7 +40,7 @@ registerAction2(class extends Action2 {
  				id: MenuId.MenubarFileMenu,
  				group: '1_new',
--				order: 2
-+				order: 2,
+ 				order: 2,
+-				when: IsSessionsWindowContext.negate()
 +				when: ContextKeyExpr.false()
  			}
  		});

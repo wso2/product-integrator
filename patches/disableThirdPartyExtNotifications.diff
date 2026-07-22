@@ -99,9 +99,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/workbench.desktop.main.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/workbench.desktop.main.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/workbench.desktop.main.ts
-@@ -185,6 +185,9 @@ import './contrib/mcp/electron-browser/m
- // Policy Export
- import './contrib/policyExport/electron-browser/policyExport.contribution.js';
+@@ -204,6 +204,9 @@ import './contrib/policyExport/electron-
+ // Keybindings Export
+ import './contrib/keybindingsExport/electron-browser/keybindingsExport.contribution.js';
  
 +// WSO2
 +import './contrib/wso2/browser/wso2.contribution.js';
@@ -109,17 +109,15 @@ Index: product-integrator/lib/vscode/src/vs/workbench/workbench.desktop.main.ts
  //#endregion
  
  
-Index: product-integrator/lib/vscode/src/vs/workbench/workbench.web.main.internal.ts
+Index: product-integrator/lib/vscode/src/vs/workbench/workbench.web.main.ts
 ===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/workbench.web.main.internal.ts
-+++ product-integrator/lib/vscode/src/vs/workbench/workbench.web.main.internal.ts
-@@ -170,6 +170,9 @@ import './contrib/remote/browser/remoteS
- // Process Explorer
- import './contrib/processExplorer/browser/processExplorer.web.contribution.js';
+--- product-integrator.orig/lib/vscode/src/vs/workbench/workbench.web.main.ts
++++ product-integrator/lib/vscode/src/vs/workbench/workbench.web.main.ts
+@@ -187,4 +187,7 @@ import './contrib/processExplorer/browse
+ // Browser View
+ import './contrib/browserView/browser/browserView.contribution.js';
  
 +// WSO2
 +import './contrib/wso2/browser/wso2.contribution.js';
 +
  //#endregion
- 
- 

@@ -2,7 +2,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/workspace/browser/
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/workspace/browser/workspace.contribution.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/workspace/browser/workspace.contribution.ts
-@@ -730,7 +730,7 @@ Registry.as<IConfigurationRegistry>(Conf
+@@ -798,7 +798,7 @@ Registry.as<IConfigurationRegistry>(Conf
  		properties: {
  			[WORKSPACE_TRUST_ENABLED]: {
  				type: 'boolean',
