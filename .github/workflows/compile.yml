@@ -359,14 +359,12 @@ jobs:
             limit_bytes=$phys_bytes
           fi
           limit_mb=$(( limit_bytes / 1024 / 1024 ))
-          # An implausibly small reading (e.g. a misconfigured cgroup) would produce a
-          # broken cap; treat anything under 1 GiB as bogus and fall back to physical RAM.
-          if [ "$limit_mb" -lt 1024 ]; then
-            limit_mb=$(( phys_bytes / 1024 / 1024 ))
-          fi
           # Always take a fraction of the *measured* limit so the cap can never exceed
-          # what the container can hold. A fixed floor could exceed a small container's
-          # total memory and re-trigger the OOM, so there is deliberately no floor.
+          # what the container can hold. A valid limit is trusted as-is even when small;
+          # an absent or non-numeric cgroup reading has already fallen back to physical
+          # RAM above. Replacing a valid small limit with (larger) host RAM, or applying
+          # a fixed floor, could exceed the container's memory and re-trigger the OOM, so
+          # neither is done here.
           cap_mb=$(( limit_mb * 75 / 100 ))
 
           # The heavy compile command (core-ci) runs sequentially and needs the full
