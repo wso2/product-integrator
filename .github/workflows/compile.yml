@@ -331,6 +331,57 @@ jobs:
             npm run download-builtin-extensions
           fi
 
+      - name: Configure Node heap limit from container memory
+        shell: bash
+        working-directory: .
+        run: |
+          # Node sizes its default V8 heap from the host's physical RAM, not from the
+          # container's cgroup memory limit. On the memory-limited CodeBuild runner it
+          # therefore lets the heap grow past the cgroup limit during the minified
+          # bundling of core-ci, and the kernel OOM-kills it (exit code 137).
+          #
+          # Derive a safe --max-old-space-size (~75% of the *real* limit) and apply it to
+          # every node process in this job via NODE_OPTIONS, so the fix scales to any
+          # CodeBuild compute size instead of relying on a hardcoded value.
+          limit_bytes=""
+          if [ -r /sys/fs/cgroup/memory.max ]; then
+            limit_bytes=$(cat /sys/fs/cgroup/memory.max)              # cgroup v2
+          elif [ -r /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
+            limit_bytes=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)  # cgroup v1
+          fi
+          phys_bytes=$(( $(awk '/^MemTotal:/ {print $2}' /proc/meminfo) * 1024 ))
+          # "max" (cgroup v2 unlimited) or any non-numeric reading -> fall back to physical RAM
+          case "$limit_bytes" in
+            ''|*[!0-9]*) limit_bytes=$phys_bytes ;;
+          esac
+          # cgroup v1 reports a huge sentinel when unlimited; never exceed physical RAM
+          if [ "$limit_bytes" -gt "$phys_bytes" ]; then
+            limit_bytes=$phys_bytes
+          fi
+          limit_mb=$(( limit_bytes / 1024 / 1024 ))
+          # Always take a fraction of the *measured* limit so the cap can never exceed
+          # what the container can hold. A valid limit is trusted as-is even when small;
+          # an absent or non-numeric cgroup reading has already fallen back to physical
+          # RAM above. Replacing a valid small limit with (larger) host RAM, or applying
+          # a fixed floor, could exceed the container's memory and re-trigger the OOM, so
+          # neither is done here.
+          cap_mb=$(( limit_mb * 75 / 100 ))
+
+          # The heavy compile command (core-ci) runs sequentially and needs the full
+          # cap. The validation step, however, runs several checks at
+          # once via `npm-run-all -lp`; giving every concurrent process the full cap can
+          # oversubscribe the runner and OOM-kill it. Bound that fan-out to what memory
+          # (~4 GiB budget per check) and CPU can support, keeping each process's heap
+          # usable instead of shrinking it to an unusable size.
+          cpu=$(nproc 2>/dev/null || echo 2)
+          parallel_jobs=$(( limit_mb / 4096 ))
+          [ "$parallel_jobs" -lt 1 ] && parallel_jobs=1
+          [ "$parallel_jobs" -gt "$cpu" ] && parallel_jobs=$cpu
+
+          echo "Container memory limit: ${limit_mb} MB -> Node heap cap: ${cap_mb} MB, max parallel checks: ${parallel_jobs}"
+          echo "NODE_OPTIONS=--max-old-space-size=${cap_mb}" >> "$GITHUB_ENV"
+          echo "COMPILE_MAX_PARALLEL=${parallel_jobs}" >> "$GITHUB_ENV"
+
       - name: Compile (with cache optimization)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -339,12 +390,12 @@ jobs:
             echo "✅ TypeScript cache hit - using cached compilation"
             echo "Skipping core compilation, running validation only"
             npm run compile-extensions-build
-            npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            npm exec -- npm-run-all --max-parallel "${COMPILE_MAX_PARALLEL:-1}" -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           else
             echo "❌ TypeScript cache miss - full compilation required"
             echo "Running complete compilation pipeline"
             npm run core-ci
-            npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            npm exec -- npm-run-all --max-parallel "${COMPILE_MAX_PARALLEL:-1}" -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           fi
 
       - name: Compress compilation artifact
