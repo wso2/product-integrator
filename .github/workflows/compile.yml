@@ -322,6 +322,41 @@ jobs:
             npm run download-builtin-extensions
           fi
 
+      - name: Configure Node heap limit from container memory
+        shell: bash
+        working-directory: .
+        run: |
+          # Node sizes its default V8 heap from the host's physical RAM, not from the
+          # container's cgroup memory limit. On the memory-limited CodeBuild runner it
+          # therefore lets the heap grow past the cgroup limit during the minified
+          # bundling of core-ci, and the kernel OOM-kills it (exit code 137).
+          #
+          # Derive a safe --max-old-space-size (~75% of the *real* limit) and apply it to
+          # every node process in this job via NODE_OPTIONS, so the fix scales to any
+          # CodeBuild compute size instead of relying on a hardcoded value.
+          limit_bytes=""
+          if [ -r /sys/fs/cgroup/memory.max ]; then
+            limit_bytes=$(cat /sys/fs/cgroup/memory.max)              # cgroup v2
+          elif [ -r /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
+            limit_bytes=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)  # cgroup v1
+          fi
+          phys_bytes=$(( $(awk '/^MemTotal:/ {print $2}' /proc/meminfo) * 1024 ))
+          # "max" (cgroup v2 unlimited) or any non-numeric reading -> fall back to physical RAM
+          case "$limit_bytes" in
+            ''|*[!0-9]*) limit_bytes=$phys_bytes ;;
+          esac
+          # cgroup v1 reports a huge sentinel when unlimited; never exceed physical RAM
+          if [ "$limit_bytes" -gt "$phys_bytes" ]; then
+            limit_bytes=$phys_bytes
+          fi
+          cap_mb=$(( limit_bytes / 1024 / 1024 * 75 / 100 ))
+          # guard against a bogus tiny reading; keep at least Node's ~2GB default
+          if [ "$cap_mb" -lt 2048 ]; then
+            cap_mb=2048
+          fi
+          echo "Container memory limit: $(( limit_bytes / 1024 / 1024 )) MB -> Node heap cap: ${cap_mb} MB"
+          echo "NODE_OPTIONS=--max-old-space-size=${cap_mb}" >> "$GITHUB_ENV"
+
       - name: Compile (with cache optimization)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
