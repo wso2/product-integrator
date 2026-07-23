@@ -345,12 +345,16 @@ jobs:
             echo "✅ TypeScript cache hit - using cached compilation"
             echo "Skipping core compilation, running validation only"
             npm run compile-extensions-build
-            npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            npm exec -- npm-run-all --max-parallel 1 -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           else
             echo "❌ TypeScript cache miss - full compilation required"
             echo "Running complete compilation pipeline"
             npm run core-ci
-            npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            # Run the validation checks serially (--max-parallel 1). Several carry large
+            # --max-old-space-size caps (define-class-fields and tsec use 8192 MB each);
+            # two 8 GB checks at once exceed the 14 GB runner and the kernel OOM-kills one
+            # (exit 137). Serial keeps peak memory to a single check at a time.
+            npm exec -- npm-run-all --max-parallel 1 -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           fi
 
       - name: Compress compilation artifact
