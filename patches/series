@@ -19,3 +19,4 @@ disableAgentSessions.diff
 skipCopilotRipgrepShim.diff
 coreCiSerializeBundles.diff
 increaseHeap.diff
+windowsSigntoolOptional.diff
