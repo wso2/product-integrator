@@ -304,6 +304,12 @@ jobs:
 
       - name: Build WI extension
         working-directory: .
+        env:
+          # The wso2-integrator build downloads Choreo CLI binaries from the GitHub API
+          # (scripts/download-choreo-cli.js). Without a token those calls are unauthenticated
+          # and hit the 60 req/hour limit -> "HTTP 403: rate limit exceeded". Authenticate to
+          # raise the limit to 5000/hour, matching the other steps in this job.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           node common/scripts/install-run-rush.js build --verbose
 
