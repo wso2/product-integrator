@@ -19,7 +19,7 @@
 import { ViewType } from "@wso2/wi-core";
 import { WelcomeView } from "./views/WelcomeView";
 import { CreationView } from "./views/creationView";
-import { ImportIntegration } from "./views/ImportIntegration";
+import { RemoteImportIntegration } from "./views/creationView/federation/RemoteImportIntegration";
 import { SamplesView } from "./views/samplesView";
 import { ComponentFormView } from "./views/componentFormView";
 import { SetupBallerinaView } from "./views/setup/BallerinaView";
@@ -51,7 +51,7 @@ function IntegratorWebview() {
 			);
 		case ViewType.IMPORT_EXTERNAL:
 			return (
-				<ImportIntegration onBack={goBackToWelcome} />
+				<RemoteImportIntegration onBack={goBackToWelcome} />
 			);
 		case ViewType.CREATE_CLOUD_INTEGRATION:
 			return <ComponentFormView />;

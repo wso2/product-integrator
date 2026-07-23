@@ -22,6 +22,12 @@
             "shouldPublish": false
         },
         {
+            "packageName": "@wso2/webview-giga-bridge",
+            "projectFolder": "external/wso2-vscode-extensions/workspaces/common-libs/vscode-webview-bridge",
+            "reviewCategory": "production",
+            "shouldPublish": false
+        },
+        {
             "packageName": "@wso2/wso2-platform-core",
             "projectFolder": "external/wso2-vscode-extensions/workspaces/wso2-platform/wso2-platform-core",
             "reviewCategory": "production",
@@ -42,12 +48,6 @@
         {
             "packageName": "wso2-integrator",
             "projectFolder": "wi/wi-extension",
-            "reviewCategory": "production",
-            "shouldPublish": false
-        },
-        {
-            "packageName": "webview-giga-bridge",
-            "projectFolder": "wi/webview-giga-bridge",
             "reviewCategory": "production",
             "shouldPublish": false
         }

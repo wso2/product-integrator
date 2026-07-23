@@ -40,7 +40,11 @@ import {
 } from "./styles";
 import { useCloudContext } from "../../providers";
 import { useVisualizerContext } from "../../contexts";
-import { Organization } from "../creationView/biForm/components/AdvancedConfigurationSection";
+interface Organization {
+    id?: number | string;
+    handle: string;
+    name: string;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 /**
  * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
  *
@@ -16,59 +18,76 @@
  * under the License.
  */
 
-// Webpack Module Federation runtime globals (provided by ModuleFederationPlugin
-// in this host build).
+// Webpack Module Federation runtime globals, injected by ModuleFederationPlugin.
 declare const __webpack_init_sharing__: (scope: string) => Promise<void>;
 declare const __webpack_share_scopes__: { default: unknown };
 
 interface FederationContainer {
-    init(shareScope: unknown): Promise<void>;
-    get(module: string): Promise<() => unknown>;
+    init: (shareScope: unknown) => Promise<void>;
+    get: (module: string) => Promise<() => any>;
 }
 
-/** remoteEntry URL → loaded-and-initialized container. */
-const containerPromises = new Map<string, Promise<FederationContainer>>();
+const scriptPromises = new Map<string, Promise<void>>();
+const initializedContainers = new Map<string, Promise<FederationContainer>>();
+let sharingInitialized: Promise<void> | undefined;
 
-function injectRemoteEntry(remoteUrl: string, containerName: string): Promise<FederationContainer> {
-    return new Promise<FederationContainer>((resolve, reject) => {
-        const existing = (globalThis as Record<string, unknown>)[containerName] as FederationContainer | undefined;
-        if (existing) {
-            resolve(existing);
-            return;
-        }
+function loadScript(url: string): Promise<void> {
+    let existing = scriptPromises.get(url);
+    if (existing) {
+        return existing;
+    }
+    existing = new Promise<void>((resolve, reject) => {
         const script = document.createElement("script");
-        script.src = remoteUrl;
+        script.src = url;
+        script.type = "text/javascript";
         script.async = true;
-        script.onload = () => {
-            const container = (globalThis as Record<string, unknown>)[containerName] as FederationContainer | undefined;
-            if (container) {
-                resolve(container);
-            } else {
-                reject(new Error(`Remote container "${containerName}" was not defined by ${remoteUrl}`));
-            }
+        script.onload = () => resolve();
+        script.onerror = () => {
+            scriptPromises.delete(url);
+            reject(new Error(`Failed to load remote script: ${url}`));
         };
-        script.onerror = () => reject(new Error(`Failed to load remote entry: ${remoteUrl}`));
         document.head.appendChild(script);
     });
+    scriptPromises.set(url, existing);
+    return existing;
+}
+
+async function getContainer(remoteUrl: string, globalName: string): Promise<FederationContainer> {
+    let existing = initializedContainers.get(globalName);
+    if (existing) {
+        return existing;
+    }
+    existing = (async () => {
+        await loadScript(remoteUrl);
+        if (!sharingInitialized) {
+            sharingInitialized = __webpack_init_sharing__("default");
+        }
+        await sharingInitialized;
+        const container = (window as any)[globalName] as FederationContainer | undefined;
+        if (!container) {
+            throw new Error(`Remote container "${globalName}" was not found after loading ${remoteUrl}.`);
+        }
+        // Wire the remote to the host's shared scope so React stays a singleton.
+        await container.init(__webpack_share_scopes__.default);
+        return container;
+    })();
+    initializedContainers.set(globalName, existing);
+    return existing;
 }
 
 /**
- * Dynamically loads a Module Federation remote and returns one of its exposed
- * modules. The container is initialized against this host's default share
- * scope, so `singleton` shared deps (react/react-dom) resolve to the host copy.
+ * Dynamically loads an exposed module from a federated remote served at runtime.
+ *
+ * @param remoteUrl  Absolute URL of the remote's `remoteEntry.js`.
+ * @param globalName Federation container name (the remote's `name`).
+ * @param moduleName Exposed module key, e.g. `"./EmbeddedBIProjectForm"`.
  */
-export async function loadRemoteModule<T>(remoteUrl: string, containerName: string, exposedModule: string): Promise<T> {
-    let containerPromise = containerPromises.get(remoteUrl);
-    if (!containerPromise) {
-        containerPromise = (async () => {
-            const container = await injectRemoteEntry(remoteUrl, containerName);
-            await __webpack_init_sharing__("default");
-            await container.init(__webpack_share_scopes__.default);
-            return container;
-        })();
-        containerPromises.set(remoteUrl, containerPromise);
-    }
-    const container = await containerPromise;
-    const factory = await container.get(exposedModule);
+export async function loadRemoteModule<T = any>(
+    remoteUrl: string,
+    globalName: string,
+    moduleName: string,
+): Promise<T> {
+    const container = await getContainer(remoteUrl, globalName);
+    const factory = await container.get(moduleName);
     return factory() as T;
 }

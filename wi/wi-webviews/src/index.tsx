@@ -22,8 +22,8 @@ import IntegratorWebview from "./IntegratorWebview";
 import { WebviewContextProvider } from "./contexts/WsContext";
 import { CloudContextProvider, WIWebviewQueryClientProvider, WorkspaceInfoPrefetcher } from "./providers";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { injectVSCodeCssVariables } from "webview-giga-bridge/webview";
-import type { VSCodeCssTheme, VSCodeCssVariables } from "webview-giga-bridge/webview";
+import { injectVSCodeCssVariables } from "@wso2/webview-giga-bridge/webview";
+import type { VSCodeCssTheme, VSCodeCssVariables } from "@wso2/webview-giga-bridge/webview";
 import { resolveBridgeBootstrap } from "./network-bridge/WsClient";
 import "./style.css";
 

@@ -17,7 +17,6 @@
  */
 
 import { ViewType, Platform } from "../enums";
-import type { SignInResult } from "./network-bridge.types";
 
 export interface WebviewContext {
     currentView: ViewType;
@@ -162,31 +161,22 @@ export interface BIProjectRequest {
     projectHandle?: string;
 }
 
+/**
+ * Coordinates returned by the Ballerina extension's
+ * `ballerina.getBiFormWsBootstrap` command. The embedded BI form connects to
+ * this WebSocket to run project-creation RPCs directly against the Ballerina
+ * host. Cloud reads still go to this (integrator) host.
+ */
+export interface BiFormWsBootstrap {
+    host: string;
+    port: number;
+    token: string;
+}
+
 export interface SemanticVersion {
     major: number;
     minor: number;
     patch: number;
-}
-
-export interface MigrationTool {
-    id: number;
-    title: string;
-    needToPull: boolean;
-    commandName: string;
-    description: string;
-    requiredVersion: string;
-    parameters: Array<{
-        key: string;
-        label: string;
-        description: string;
-        valueType: "boolean" | "string" | "number" | "enum";
-        defaultValue?: boolean | string | number;
-        options?: string[];
-    }>;
-}
-
-export interface GetMigrationToolsResponse {
-    tools: MigrationTool[];
 }
 
 export interface DownloadProgress {
@@ -198,83 +188,8 @@ export interface DownloadProgress {
     step?: number;
 }
 
-export interface ImportIntegrationResponse {
-    error: string;
-    textEdits: {
-        [key: string]: string;
-    };
-    report: string;
-    jsonReport: string;
-}
-
-export interface MigrateRequest {
-    project: BIProjectRequest;
-    textEdits: {
-        [key: string]: string;
-    };
-    projects?: ProjectMigrationResult[];
-    aiFeatureUsed?: boolean;
-    sourcePath?: string;
-}
-
-export interface PullMigrationToolRequest {
-    toolName: string;
-}
-
-export interface ImportIntegrationWsRequest {
-    commandName: string;
-    packageName: string;
-    sourcePath: string;
-    orgName?: string;
-    parameters?: Record<string, any>;
-}
-
-export interface ImportIntegrationRequest {
-    packageName: string;
-    orgName: string;
-    sourcePath: string;
-    parameters?: Record<string, any>;
-}
-
 export interface ShowErrorMessageRequest {
     message: string;
-}
-
-export interface MigrationToolStateData {
-    state: string;
-}
-
-export interface MigrationToolLogData {
-    log: string;
-}
-
-export interface OpenMigrationReportRequest {
-    reportContent: string;
-    fileName: string;
-}
-
-export interface SaveMigrationReportRequest {
-    reportContent: string;
-    defaultFileName: string;
-    projectReports?: {
-        [projectName: string]: string;
-    };
-}
-
-export interface ProjectMigrationResult {
-    projectName: string;
-    textEdits: {
-        [key: string]: string;
-    };
-    report: string;
-}
-
-export interface StoreSubProjectReportsRequest {
-    reports: { [projectName: string]: string };
-}
-
-export interface OpenSubProjectReportRequest {
-    projectName: string;
 }
 
 export interface FetchSamplesRequest {
@@ -362,15 +277,9 @@ export interface WIVisualizerAPI {
     fetchSamplesFromGithub: (params: FetchSamplesRequest) => Promise<GettingStartedData>;
     downloadSelectedSampleFromGithub: (params: SampleDownloadRequest) => void;
     createBIProject: (params: BIProjectRequest) => Promise<void>;
-    getMigrationTools: () => Promise<GetMigrationToolsResponse>;
+    getBiFormWsBootstrap: () => Promise<BiFormWsBootstrap>;
     isSupportedSLVersion: (params: SemanticVersion) => Promise<boolean>;
-    migrateProject: (params: MigrateRequest) => Promise<void>;
-    pullMigrationTool: (params: PullMigrationToolRequest) => Promise<void>;
-    importIntegration: (params: ImportIntegrationWsRequest) => Promise<ImportIntegrationResponse>;
     showErrorMessage: (params: ShowErrorMessageRequest) => Promise<void>;
-    openMigrationReport: (params: OpenMigrationReportRequest) => Promise<void>;
-    saveMigrationReport: (params: SaveMigrationReportRequest) => Promise<void>;
-    storeSubProjectReports: (params: StoreSubProjectReportsRequest) => Promise<void>;
     validateProjectPath: (params: ValidateProjectFormRequest) => Promise<ValidateProjectFormResponse>;
     openFolder: (folderPath: string) => void;
     openExternal: (url: string) => void;
@@ -379,14 +288,6 @@ export interface WIVisualizerAPI {
     clearWebviewCache: (cacheKey: string) => Promise<void>;
     getDefaultOrgName: () => Promise<DefaultOrgNameResponse>;
     getDefaultCreationPath: () => Promise<WorkspaceRootResponse>;
-    wizardEnhancementReady: () => Promise<void>;
-    openMigratedProject: () => Promise<void>;
-    abortMigrationAgent: () => Promise<void>;
-    checkAIAuth: () => Promise<boolean>;
-    triggerAICopilotSignIn: () => Promise<SignInResult>;
-    triggerAnthropicKeySignIn: (params: { apiKey: string }) => Promise<SignInResult>;
-    triggerAwsBedrockSignIn: (params: { accessKeyId: string; secretAccessKey: string; region: string; sessionToken?: string }) => Promise<SignInResult>;
-    triggerVertexAiSignIn: (params: { projectId: string; location: string; clientEmail: string; privateKey: string }) => Promise<SignInResult>;
     getBIRuntimeStatus: () => Promise<BIRuntimeStatusResponse>;
     initBIRuntimeContext: () => Promise<void>;
 }
