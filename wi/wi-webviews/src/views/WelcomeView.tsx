@@ -449,14 +449,10 @@ const CardButtonRow = styled.div`
 `;
 
 // Card variant whose body is inert — actions live only on its buttons,
-// so the pointer cursor and hover lift are suppressed.
+// so the pointer cursor is suppressed. The hover lift is kept for visual
+// consistency with the other action cards.
 const StaticActionCard = styled(ActionCard)`
     cursor: default;
-
-    &:hover {
-        transform: none;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    }
 `;
 
 const BottomSection = styled.div`
