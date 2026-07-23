@@ -19,7 +19,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import styled from "@emotion/styled";
 import { Codicon, ProgressRing, ThemeColors } from "@wso2/ui-toolkit";
-import { Project, WICommandIds } from "@wso2/wso2-platform-core";
+import { ComponentKind, Project, WICommandIds } from "@wso2/wso2-platform-core";
 import {
     BackButton,
     FormBody,
@@ -105,6 +105,93 @@ const ProjectRowDescription = styled.span`
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+`;
+
+// ── Grouped integration list styles ───────────────────────────────────────────
+
+const ProjectGroupList = styled.div`
+    display: flex;
+    flex-direction: column;
+`;
+
+const ProjectGroup = styled.div`
+    &:not(:last-child) {
+        border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 50%, transparent);
+    }
+`;
+
+const ProjectGroupHeader = styled.div`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 16px 4px;
+`;
+
+const ProjectGroupTitle = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--vscode-descriptionForeground);
+
+    & > span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+`;
+
+const GroupNote = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 16px 12px;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+`;
+
+// Skeleton placeholders shown while a project's integrations load.
+const SkeletonBlock = styled.div`
+    background: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+    border-radius: 4px;
+    animation: oiv-skeleton-pulse 1.4s ease-in-out infinite;
+
+    @keyframes oiv-skeleton-pulse {
+        0%,
+        100% {
+            opacity: 0.4;
+        }
+        50% {
+            opacity: 0.9;
+        }
+    }
+`;
+
+const SkeletonRow = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 50%, transparent);
+
+    &:last-child {
+        border-bottom: none;
+    }
+`;
+
+const SkeletonCircle = styled(SkeletonBlock)`
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    flex-shrink: 0;
+`;
+
+const SkeletonBar = styled(SkeletonBlock)<{ w?: string }>`
+    height: 10px;
+    width: ${(props: { w?: string }) => props.w ?? "60%"};
 `;
 
 // ── Confirmation panel styles ─────────────────────────────────────────────────
@@ -534,9 +621,17 @@ const FormPanelHeaderRow = styled.div`
 
 interface OpenProjectViewProps {
     onBack: () => void;
+    /**
+     * "project" opens a whole project/workspace (clones every repo of the project);
+     * "integration" opens a single integration (drills into one component, cloning
+     * only its sub-path). Both browse the same cloud project list first.
+     */
+    mode?: "project" | "integration";
 }
 
-export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
+export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack, mode = "project" }) => {
+    const isIntegration = mode === "integration";
+    const Noun = isIntegration ? "Integration" : "Project";
     const { wsClient } = useVisualizerContext();
     const { authState, authStateLoading } = useCloudContext();
     const [projects, setProjects] = useState<Project[]>([]);
@@ -550,6 +645,12 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
     const { isSigningIn, handleSignIn, handleCancelSignIn } = useSignIn();
     const [view, setView] = useState<"landing" | "cloud">("landing");
+    // Integration mode: integrations grouped by project, eagerly loaded so they
+    // show inline without drilling into a project. Keyed by project id.
+    const [componentsByProject, setComponentsByProject] = useState<
+        Record<string, { loading: boolean; error: string | null; components: ComponentKind[] }>
+    >({});
+    const [selectedComponent, setSelectedComponent] = useState<ComponentKind | null>(null);
 
     const orgs = (authState?.userInfo?.organizations as Array<{ id: number | string; handle: string; name: string }> | undefined) ?? [];
     const org = (selectedOrgId ? orgs.find((o) => String(o.id) === selectedOrgId) : null) ?? orgs[0];
@@ -560,6 +661,8 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         setSelectedProject(null);
         setCloneSuccess(false);
         setCloningError(null);
+        setSelectedComponent(null);
+        setComponentsByProject({});
     }, [org?.id]);
 
     useEffect(() => {
@@ -623,6 +726,66 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         };
     }, [org?.id]);
 
+    // Integration mode: load one project's integrations into the grouped list.
+    // Rendering iterates the current `projects`, so a late resolve for a project
+    // that's no longer listed (e.g. after an org switch) is simply never shown.
+    const fetchComponentsForProject = (project: Project) => {
+        if (!org) {
+            return;
+        }
+        setComponentsByProject((prev) => ({
+            ...prev,
+            [project.id]: { loading: true, error: null, components: [] },
+        }));
+        wsClient
+            .getCloudComponents({
+                orgId: org.id.toString(),
+                orgHandle: org.handle,
+                projectId: project.id,
+                projectHandle: project.handler,
+            })
+            .then((resp) => {
+                setComponentsByProject((prev) => ({
+                    ...prev,
+                    [project.id]: { loading: false, error: null, components: resp.components },
+                }));
+            })
+            .catch((err: unknown) => {
+                setComponentsByProject((prev) => ({
+                    ...prev,
+                    [project.id]: {
+                        loading: false,
+                        error: err instanceof Error ? err.message : "Failed to load integrations",
+                        components: [],
+                    },
+                }));
+            });
+    };
+
+    // Eagerly load every project's integrations (in parallel) once the project
+    // list arrives, so the user sees them grouped without a drill-in click.
+    useEffect(() => {
+        if (!isIntegration || !org || projects.length === 0) {
+            return;
+        }
+        projects.forEach((project) => fetchComponentsForProject(project));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isIntegration, org?.id, projects]);
+
+    // Project mode: selecting a project row goes straight to the clone confirmation.
+    const handleProjectSelect = (project: Project) => {
+        setSelectedProject(project);
+        setCloneSuccess(false);
+        setCloningError(null);
+    };
+
+    const handleIntegrationSelect = (project: Project, component: ComponentKind) => {
+        setSelectedProject(project);
+        setSelectedComponent(component);
+        setCloneSuccess(false);
+        setCloningError(null);
+    };
+
     const handleCloneProject = () => {
         if (!org || !selectedProject) {
             return;
@@ -631,10 +794,15 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         setCloneStage("selecting_folder");
         setCloneSuccess(false);
         setCloningError(null);
+        // Integration mode has already resolved the chosen integration in the
+        // webview, so the command clones exactly that one with no in-editor picker.
+        const cloneArgs = isIntegration
+            ? { organization: org, project: selectedProject, component: selectedComponent, singleIntegration: true }
+            : { organization: org, project: selectedProject, integrationOnly: true };
         wsClient
             .runCommand({
                 command: WICommandIds.CloneProject,
-                args: [{ organization: org, project: selectedProject, integrationOnly: true }],
+                args: [cloneArgs],
             })
             .then(() => {
                 setCloning(false);
@@ -671,13 +839,21 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
 
     // ── Confirmation panel ────────────────────────────────────────────────────
 
-    const renderConfirm = (project: Project) => (
+    const renderConfirm = (project: Project) => {
+        // In integration mode the confirmation is about the chosen integration,
+        // unless the user picked the "open entire project" escape hatch.
+        const asIntegration = isIntegration && !!selectedComponent;
+        const confirmNoun = asIntegration ? "integration" : "project";
+        const confirmName = asIntegration
+            ? selectedComponent!.metadata.displayName ?? selectedComponent!.metadata.name
+            : project.name;
+        return (
         <>
             <FormPanelHeader>
-                <FormPanelTitle>{cloneSuccess ? "All done!" : "Clone Project"}</FormPanelTitle>
+                <FormPanelTitle>{cloneSuccess ? "All done!" : `Clone ${asIntegration ? "Integration" : "Project"}`}</FormPanelTitle>
                 <FormPanelSubtitle>
                     {cloneSuccess
-                        ? "The project was cloned. Check the prompt in your editor to open it."
+                        ? `The ${confirmNoun} was cloned. Check the prompt in your editor to open it.`
                         : cloningError
                             ? "Something went wrong — you can try again below."
                             : "Review and confirm before cloning"}
@@ -687,13 +863,13 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                 <ConfirmBody>
                     <ConfirmProjectIcon>
                         <Codicon
-                            name="project"
+                            name={asIntegration ? "circuit-board" : "project"}
                             iconSx={{ fontSize: "24px", color: "var(--wso2-brand-white)" }}
                             sx={{ width: "24px", height: "24px" }}
                         />
                     </ConfirmProjectIcon>
-                    <ConfirmProjectName>{project.name}</ConfirmProjectName>
-                    {project.description ? (
+                    <ConfirmProjectName>{confirmName}</ConfirmProjectName>
+                    {!asIntegration && project.description ? (
                         <ConfirmProjectDescription>{project.description}</ConfirmProjectDescription>
                     ) : (
                         <ConfirmProjectDescription style={{ marginBottom: 24 }} />
@@ -821,11 +997,27 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                 </ConfirmBody>
             </FormBody>
         </>
+        );
+    };
+
+    // ── Project / integration list ────────────────────────────────────────────
+
+    // Placeholder rows shown while a list loads (projects, or a project's
+    // integrations). Reused by both the project-list and grouped views.
+    const renderRowSkeleton = (count: number) => (
+        <>
+            {Array.from({ length: count }).map((_, i) => (
+                <SkeletonRow key={i}>
+                    <SkeletonCircle />
+                    <SkeletonBar w={i % 2 === 0 ? "55%" : "40%"} />
+                </SkeletonRow>
+            ))}
+        </>
     );
 
-    // ── Project list ──────────────────────────────────────────────────────────
-
-    const renderList = () => {
+    // Shared "not ready" states for the cloud views (sign-in, loading, error,
+    // empty). Returns null once the project list is ready to render.
+    const renderCloudStateGuard = (): React.ReactNode => {
         if (authStateLoading && !authState?.userInfo) {
             return (
                 <CenteredMessage>
@@ -878,12 +1070,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
             );
         }
         if (loading) {
-            return (
-                <CenteredMessage>
-                    <ProgressRing color={ThemeColors.PRIMARY} />
-                    <span>Loading projects...</span>
-                </CenteredMessage>
-            );
+            return <ProjectList>{renderRowSkeleton(5)}</ProjectList>;
         }
         if (error) {
             return (
@@ -903,14 +1090,22 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         if (projects.length === 0) {
             return (
                 <CenteredMessage>
-                    <span>No projects found in <strong>{org.name}</strong>.</span>
+                    <span>No projects found in <strong>{org?.name}</strong>.</span>
                 </CenteredMessage>
             );
+        }
+        return null;
+    };
+
+    const renderList = () => {
+        const guard = renderCloudStateGuard();
+        if (guard) {
+            return guard;
         }
         return (
             <ProjectList>
                 {projects.map((project) => (
-                    <ProjectRow key={project.id} type="button" onClick={() => { setSelectedProject(project); setCloneSuccess(false); setCloningError(null); }}>
+                    <ProjectRow key={project.id} type="button" onClick={() => handleProjectSelect(project)}>
                         <ProjectRowIcon>
                             <Codicon
                                 name="project"
@@ -934,15 +1129,26 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         );
     };
 
-    // ── Header back target: list → welcome, confirm → list ───────────────────
+    // ── View resolution + header/back targets ────────────────────────────────
+
+    // Integration mode: the cloud view shows every project's integrations inline
+    // (grouped); picking one goes to the clone confirmation. Project mode: project
+    // list → confirmation.
+    const showConfirm = isIntegration ? !!selectedComponent : !!selectedProject;
+
+    const clearCloneState = () => {
+        setCloning(false);
+        setCloneStage(null);
+        setCloneSuccess(false);
+        setCloningError(null);
+    };
 
     const handleBack = () => {
-        if (selectedProject) {
+        if (showConfirm) {
+            // Confirmation → back to the cloud list.
+            clearCloneState();
             setSelectedProject(null);
-            setCloning(false);
-            setCloneStage(null);
-            setCloneSuccess(false);
-            setCloningError(null);
+            setSelectedComponent(null);
         } else if (view === "cloud") {
             setView("landing");
         } else {
@@ -950,15 +1156,21 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         }
     };
 
-    const headerTitle = "Open Project";
+    const headerTitle = `Open ${Noun}`;
     const headerSubtitle =
         view === "landing"
-            ? "Choose how you'd like to open a project."
-            : selectedProject
+            ? `Choose how you'd like to open ${isIntegration ? "an integration" : "a project"}.`
+            : showConfirm
                 ? "Review and confirm before cloning."
-                : "Select a cloud project to clone to your machine.";
-    const panelTitle = selectedProject ? null : view === "cloud" ? "Cloud Projects" : null;
-    const panelSubtitle = !selectedProject && view === "cloud" && org ? "Select a project to clone it to your local machine." : null;
+                : isIntegration
+                    ? "Pick an integration to open, grouped by project."
+                    : "Select a cloud project to clone to your machine.";
+    const panelTitle = showConfirm ? null : view === "cloud" ? (isIntegration ? "Integrations" : "Cloud Projects") : null;
+    const panelSubtitle = !showConfirm && view === "cloud" && org
+        ? isIntegration
+            ? "Select an integration to open, or open its entire project."
+            : "Select a project to clone it to your local machine."
+        : null;
 
     const renderLanding = () => (
         <LandingWrapper>
@@ -976,8 +1188,12 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                             sx={{ width: "20px", height: "20px" }}
                         />
                     </ChoiceCardIconWrapper>
-                    <ChoiceCardTitle>Open Local Project</ChoiceCardTitle>
-                    <ChoiceCardDesc>Browse your computer and open an existing integration project folder.</ChoiceCardDesc>
+                    <ChoiceCardTitle>Open Local {Noun}</ChoiceCardTitle>
+                    <ChoiceCardDesc>
+                        {isIntegration
+                            ? "Browse your computer and open an existing integration folder."
+                            : "Browse your computer and open an existing integration project folder."}
+                    </ChoiceCardDesc>
                 </ChoiceCard>
                 <ChoiceCard type="button" onClick={() => setView("cloud")}>
                     <ChoiceCardIconWrapper
@@ -992,12 +1208,79 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                             sx={{ width: "20px", height: "20px" }}
                         />
                     </ChoiceCardIconWrapper>
-                    <ChoiceCardTitle>Open Cloud Project</ChoiceCardTitle>
-                    <ChoiceCardDesc>Browse and clone a project from your WSO2 Cloud organization.</ChoiceCardDesc>
+                    <ChoiceCardTitle>Open Cloud {Noun}</ChoiceCardTitle>
+                    <ChoiceCardDesc>
+                        {isIntegration
+                            ? "Browse your WSO2 Cloud projects and open a single integration from one."
+                            : "Browse and clone a project from your WSO2 Cloud organization."}
+                    </ChoiceCardDesc>
                 </ChoiceCard>
             </ChoiceGrid>
         </LandingWrapper>
     );
+
+    // Integration mode: every project rendered as a group with its integrations
+    // listed inline (eagerly loaded).
+    const renderProjectGroups = () => {
+        const guard = renderCloudStateGuard();
+        if (guard) {
+            return guard;
+        }
+        return (
+            <ProjectGroupList>
+                {projects.map((project) => {
+                    const entry = componentsByProject[project.id];
+                    const comps = entry?.components ?? [];
+                    // An empty project has nothing to open, so it stays visible for
+                    // awareness but is muted and offers no clickable actions.
+                    const isEmpty = !entry?.loading && !entry?.error && comps.length === 0;
+                    return (
+                        <ProjectGroup key={project.id}>
+                            <ProjectGroupHeader>
+                                <ProjectGroupTitle style={isEmpty ? { opacity: 0.55 } : undefined}>
+                                    <Codicon name="project" iconSx={{ fontSize: "13px", color: "var(--vscode-descriptionForeground)" }} />
+                                    <span>{project.name}</span>
+                                </ProjectGroupTitle>
+                            </ProjectGroupHeader>
+                            {entry?.loading ? (
+                                renderRowSkeleton(2)
+                            ) : entry?.error ? (
+                                <GroupNote>
+                                    <span>{entry.error}</span>
+                                    <RetryButton onClick={() => fetchComponentsForProject(project)}>Retry</RetryButton>
+                                </GroupNote>
+                            ) : isEmpty ? (
+                                <GroupNote style={{ opacity: 0.55 }}>No integrations in this project yet.</GroupNote>
+                            ) : (
+                                comps.map((component) => (
+                                    <ProjectRow
+                                        key={component.metadata.id ?? component.metadata.name}
+                                        type="button"
+                                        onClick={() => handleIntegrationSelect(project, component)}
+                                    >
+                                        <ProjectRowIcon>
+                                            <Codicon
+                                                name="circuit-board"
+                                                iconSx={{ fontSize: "16px", color: "var(--wso2-brand-white)" }}
+                                                sx={{ width: "16px", height: "16px" }}
+                                            />
+                                        </ProjectRowIcon>
+                                        <ProjectRowContent>
+                                            <ProjectRowName>{component.metadata.displayName ?? component.metadata.name}</ProjectRowName>
+                                        </ProjectRowContent>
+                                        <Codicon
+                                            name="chevron-right"
+                                            iconSx={{ fontSize: "14px", color: "var(--vscode-descriptionForeground)", opacity: 0.6 }}
+                                        />
+                                    </ProjectRow>
+                                ))
+                            )}
+                        </ProjectGroup>
+                    );
+                })}
+            </ProjectGroupList>
+        );
+    };
 
     const renderCloudView = () => (
         <>
@@ -1050,7 +1333,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                 </FormPanelHeaderRow>
             </FormPanelHeader>
             <FormBody style={{ padding: 0 }}>
-                {renderList()}
+                {isIntegration ? renderProjectGroups() : renderList()}
             </FormBody>
         </>
     );
@@ -1070,8 +1353,8 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                             </HeaderText>
                         </HeaderRow>
                     </FormPanelHeader>
-                    {selectedProject ? (
-                        renderConfirm(selectedProject)
+                    {showConfirm ? (
+                        renderConfirm(selectedProject!)
                     ) : view === "landing" ? (
                         renderLanding()
                     ) : (

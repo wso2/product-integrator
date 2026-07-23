@@ -44,6 +44,7 @@ enum ViewState {
     CREATE_PROJECT = "create_project",
     SETTINGS = "settings",
     OPEN_PROJECT = "open_project",
+    OPEN_INTEGRATION = "open_integration",
 }
 
 const BALLERINA_MISSING_ACTION_TOOLTIP =
@@ -827,6 +828,10 @@ export const WelcomeView: React.FC = () => {
         setCurrentView(ViewState.OPEN_PROJECT);
     };
 
+    const handleIntegrationOpen = () => {
+        setCurrentView(ViewState.OPEN_INTEGRATION);
+    };
+
     const openIntegrationFileBrowser = async () => {
         try {
             const { path: startPath } = await wsClient.getDefaultCreationPath();
@@ -947,6 +952,8 @@ export const WelcomeView: React.FC = () => {
 				return <SettingsView onBack={goBackToWelcome} ballerinaUnavailable={biUnavailable} />;
             case ViewState.OPEN_PROJECT:
                 return <OpenProjectView onBack={goBackToWelcome} />;
+            case ViewState.OPEN_INTEGRATION:
+                return <OpenProjectView mode="integration" onBack={goBackToWelcome} />;
 			case ViewState.WELCOME:
 			default:
 				return renderWelcomeContent();
@@ -1061,7 +1068,7 @@ export const WelcomeView: React.FC = () => {
 														</StyledButton>
 														<StyledButton
 															disabled={biUnavailable}
-															onClick={openIntegrationFileBrowser}
+															onClick={handleIntegrationOpen}
 														>
 															<ButtonContent>Open</ButtonContent>
 														</StyledButton>

@@ -80,6 +80,8 @@ import type {
     WICloudSubmitComponentsResp,
     GetCloudProjectsReq,
     GetCloudProjectsResp,
+    GetCloudComponentsReq,
+    GetCloudComponentsResp,
 } from "@wso2/wi-core";
 import { ConnectionStatus, createWebviewTransportAdapter } from "@wso2/webview-giga-bridge/webview";
 
@@ -357,6 +359,10 @@ export class WsClient {
 
     public getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
         return this.request("getCloudProjects", params);
+    }
+
+    public getCloudComponents(params: GetCloudComponentsReq): Promise<GetCloudComponentsResp> {
+        return this.request("getCloudComponents", params);
     }
 
     public onSignInInitiated(callback: () => void): () => void {
