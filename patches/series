@@ -18,3 +18,4 @@ removeXmlLanguageAssociation.diff
 disableAgentSessions.diff
 skipCopilotRipgrepShim.diff
 coreCiSerializeBundles.diff
+increaseHeap.diff
