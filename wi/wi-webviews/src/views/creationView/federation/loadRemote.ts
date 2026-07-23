@@ -60,7 +60,10 @@ async function getContainer(remoteUrl: string, globalName: string): Promise<Fede
     existing = (async () => {
         await loadScript(remoteUrl);
         if (!sharingInitialized) {
-            sharingInitialized = __webpack_init_sharing__("default");
+            sharingInitialized = __webpack_init_sharing__("default").catch((err) => {
+                sharingInitialized = undefined;
+                throw err;
+            });
         }
         await sharingInitialized;
         const container = (window as any)[globalName] as FederationContainer | undefined;
@@ -72,6 +75,11 @@ async function getContainer(remoteUrl: string, globalName: string): Promise<Fede
         return container;
     })();
     initializedContainers.set(globalName, existing);
+    // Evict a failed initialization so callers can retry (e.g. the MI extension
+    // wasn't ready yet) instead of reusing the cached rejected promise.
+    existing.catch(() => {
+        initializedContainers.delete(globalName);
+    });
     return existing;
 }
 
