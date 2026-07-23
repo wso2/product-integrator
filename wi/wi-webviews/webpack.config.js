@@ -2,9 +2,6 @@ const path = require("path");
 const webpack = require("webpack");
 const { ModuleFederationPlugin } = require("webpack").container;
 const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
-const { ModuleFederationPlugin } = require("webpack").container;
-
-const REACT_VERSION = "18.2.0";
 
 const REACT_VERSION = "18.2.0";
 
@@ -96,15 +93,5 @@ module.exports = {
             },
         }),
         new ReactRefreshWebpackPlugin(),
-        // Module Federation HOST: shares the React runtime with federated
-        // remotes (e.g. the MI extension's project-creation form). `eager` is
-        // required because this entry has no async boundary.
-        new ModuleFederationPlugin({
-            name: "wiHost",
-            shared: {
-                react: { singleton: true, strictVersion: true, requiredVersion: REACT_VERSION, eager: true },
-                "react-dom": { singleton: true, strictVersion: true, requiredVersion: REACT_VERSION, eager: true },
-            },
-        }),
     ],
 };
