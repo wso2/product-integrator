@@ -17,7 +17,6 @@
  */
 
 import React, { useEffect, useRef, useState } from "react";
-import "./WelcomeView.css";
 import styled from "@emotion/styled";
 import { Codicon, ProgressIndicator } from "@wso2/ui-toolkit";
 import { WICommandIds } from "@wso2/wso2-platform-core";
