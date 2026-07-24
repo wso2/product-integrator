@@ -40,6 +40,7 @@ jobs:
                 build_windows: 'true',
                 build_packed_installers: 'true',
                 ballerina_extension_source: 'github',
+                ballerina_extension_version: 'latest',
                 delivery_mode: '${{ matrix.delivery_mode }}'
               }
             });

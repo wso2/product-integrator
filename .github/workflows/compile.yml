@@ -19,6 +19,11 @@ on:
         default: 'marketplace'
         required: false
         type: string
+      ballerina_extension_version:
+        description: "Override ballerina.extension.version. Empty = pinned value in component-versions.properties. 'latest' = newest wso2/ballerina-vscode release."
+        default: ''
+        required: false
+        type: string
       mi_extension_source:
         description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
         default: 'marketplace'
@@ -33,6 +38,8 @@ jobs:
   resolve-versions:
     name: Resolve Component Versions
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     outputs:
       ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
       ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
@@ -47,6 +54,8 @@ jobs:
       - name: Read versions file
         id: read-versions
         shell: bash
+        env:
+          BALLERINA_EXT_VERSION_OVERRIDE: ${{ inputs.ballerina_extension_version }}
         run: |
           VERSIONS_FILE="ci/build/component-versions.properties"
           if [ ! -f "${VERSIONS_FILE}" ]; then
@@ -61,6 +70,11 @@ jobs:
 
           BALLERINA_VERSION=$(read_property "ballerina.version")
           BALLERINA_EXTENSION_VERSION=$(read_property "ballerina.extension.version")
+          # A workflow input (e.g. the daily build passing "latest") overrides the pinned value.
+          if [ -n "${BALLERINA_EXT_VERSION_OVERRIDE}" ]; then
+            echo "Overriding ballerina.extension.version with workflow input: ${BALLERINA_EXT_VERSION_OVERRIDE}" >&2
+            BALLERINA_EXTENSION_VERSION="${BALLERINA_EXT_VERSION_OVERRIDE}"
+          fi
           MI_EXTENSION_VERSION=$(read_property "wso2.micro-integrator.extension.version")
           ICP_VERSION=$(read_property "icp.version")
           INTEGRATOR_VERSION=$(read_property "integrator.version")
@@ -69,6 +83,23 @@ jobs:
           if [ -z "${BALLERINA_VERSION}" ] || [ -z "${ICP_VERSION}" ] || [ -z "${INTEGRATOR_VERSION}" ] || [ -z "${BALLERINA_JRE_VERSION}" ]; then
             echo "Error: ballerina.version, icp.version, integrator.version, and ballerina.jre.version must be set in ${VERSIONS_FILE}." >&2
             exit 1
+          fi
+
+          # "latest" (or "latest-release") means: don't pin a version — resolve the
+          # newest published release from the wso2/ballerina-vscode releases tab that
+          # actually ships a ballerina-*.vsix asset (pre-releases included). This lets
+          # the daily build pick up new Ballerina extension releases automatically
+          # without a manual version bump in component-versions.properties.
+          if [[ "${BALLERINA_EXTENSION_VERSION}" == "latest" || "${BALLERINA_EXTENSION_VERSION}" == "latest-release" ]]; then
+            echo "Resolving latest wso2/ballerina-vscode release with a ballerina-*.vsix asset..." >&2
+            RESOLVED_TAG=$(gh api "repos/wso2/ballerina-vscode/releases?per_page=100" \
+              --jq '[.[] | select(.draft == false) | select(any(.assets[]?; .name | test("^ballerina-.*\\.vsix$")))][0].tag_name')
+            if [ -z "${RESOLVED_TAG}" ] || [ "${RESOLVED_TAG}" = "null" ]; then
+              echo "Error: could not resolve a latest ballerina-vscode release with a ballerina-*.vsix asset." >&2
+              exit 1
+            fi
+            BALLERINA_EXTENSION_VERSION="${RESOLVED_TAG#[vV]}"
+            echo "Resolved ballerina.extension.version=${BALLERINA_EXTENSION_VERSION} (from release tag ${RESOLVED_TAG})." >&2
           fi
 
           if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
