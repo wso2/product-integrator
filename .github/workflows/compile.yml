@@ -178,7 +178,10 @@ jobs:
   compile:
     needs: resolve-versions
     name: Build repo
-    timeout-minutes: 45
+    # 90 gives a fully cold-cache build room to finish and reach the post-step that SAVES the
+    # caches; warm runs finish well under this. 45 was too tight for a cold build, and a
+    # timeout there cancels the job before caches are saved -> every run stays cold (vicious cycle).
+    timeout-minutes: 90
     runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
     defaults:
       run:
@@ -252,6 +255,12 @@ jobs:
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
           key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
+          # Partial restore so a moving ballerina version (latest/nightly) doesn't fully bust the
+          # cache. download-builtin-extensions re-validates versions (isUpToDate) and re-downloads
+          # only the changed extension, so a prefix-restored cache stays correct.
+          restore-keys: |
+            extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-
+            extensions-shared-${{ inputs.ballerina_extension_source }}-
 
       - name: Cache Rust toolchain
         uses: actions/cache@v4
