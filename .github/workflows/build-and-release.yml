@@ -40,10 +40,19 @@ on:
           - marketplace
           - github
       ballerina_extension_version:
-        description: "Override ballerina.extension.version. Leave empty to use the pinned value in component-versions.properties. Use 'latest' to auto-pick the newest wso2/ballerina-vscode release."
+        description: "Ballerina extension version selector: an exact version (e.g. 5.12.3), 'nightly' (newest wso2/ballerina-vscode release tagged *nightly*), 'latest' (newest release by date), 'pinned' or empty (value in component-versions.properties)."
         required: false
         default: ''
         type: string
+      version_channel:
+        description: "Integrator version channel. nightly -> <base>-nightly; custom -> <base>-<UTC timestamp>; exact -> integrator.version verbatim (GA/private). Base = first 3 dotted fields of integrator.version."
+        required: false
+        default: 'custom'
+        type: choice
+        options:
+          - nightly
+          - custom
+          - exact
       mi_extension_source:
         description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
         required: true
@@ -90,6 +99,7 @@ jobs:
         shell: bash
         env:
           BALLERINA_EXT_VERSION_OVERRIDE: ${{ inputs.ballerina_extension_version }}
+          VERSION_CHANNEL: ${{ inputs.version_channel }}
         run: |
           VERSIONS_FILE="ci/build/component-versions.properties"
           if [ ! -f "${VERSIONS_FILE}" ]; then
@@ -119,21 +129,40 @@ jobs:
             exit 1
           fi
 
-          # "latest" (or "latest-release") means: don't pin a version — resolve the
-          # newest published release from the wso2/ballerina-vscode releases tab that
-          # actually ships a ballerina-*.vsix asset (pre-releases included). This lets
-          # the daily build pick up new Ballerina extension releases automatically
-          # without a manual version bump in component-versions.properties.
-          if [[ "${BALLERINA_EXTENSION_VERSION}" == "latest" || "${BALLERINA_EXTENSION_VERSION}" == "latest-release" ]]; then
-            echo "Resolving latest wso2/ballerina-vscode release with a ballerina-*.vsix asset..." >&2
-            RESOLVED_TAG=$(gh api "repos/wso2/ballerina-vscode/releases?per_page=100" \
-              --jq '[.[] | select(.draft == false) | select(any(.assets[]?; .name | test("^ballerina-.*\\.vsix$")))][0].tag_name')
+          # Resolve the Ballerina extension version selector against the wso2/ballerina-vscode
+          # releases tab (only releases that ship a ballerina-*.vsix asset are considered):
+          #   nightly               -> newest release whose tag contains "nightly"
+          #   latest/latest-release -> newest release by date (pre-releases included)
+          #   pinned                -> the value pinned in component-versions.properties
+          #   <x.y.z>               -> used verbatim
+          # The daily build passes "nightly"; manual builds may pass latest/pinned/an exact version.
+          RESOLVED_TAG=""
+          BAL_SELECTOR=""
+          case "${BALLERINA_EXTENSION_VERSION}" in
+            nightly)
+              BAL_SELECTOR="nightly"
+              echo "Resolving newest nightly wso2/ballerina-vscode release with a ballerina-*.vsix asset..." >&2
+              RESOLVED_TAG=$(gh api "repos/wso2/ballerina-vscode/releases?per_page=100" \
+                --jq '[.[] | select(.draft == false) | select(.tag_name | test("nightly"; "i")) | select(any(.assets[]?; .name | test("^ballerina-.*\\.vsix$")))][0].tag_name')
+              ;;
+            latest|latest-release)
+              BAL_SELECTOR="latest"
+              echo "Resolving latest wso2/ballerina-vscode release with a ballerina-*.vsix asset..." >&2
+              RESOLVED_TAG=$(gh api "repos/wso2/ballerina-vscode/releases?per_page=100" \
+                --jq '[.[] | select(.draft == false) | select(any(.assets[]?; .name | test("^ballerina-.*\\.vsix$")))][0].tag_name')
+              ;;
+            pinned)
+              BALLERINA_EXTENSION_VERSION=$(read_property "ballerina.extension.version")
+              echo "Using pinned ballerina.extension.version=${BALLERINA_EXTENSION_VERSION}." >&2
+              ;;
+          esac
+          if [ -n "${BAL_SELECTOR}" ]; then
             if [ -z "${RESOLVED_TAG}" ] || [ "${RESOLVED_TAG}" = "null" ]; then
-              echo "Error: could not resolve a latest ballerina-vscode release with a ballerina-*.vsix asset." >&2
+              echo "Error: no ${BAL_SELECTOR} wso2/ballerina-vscode release with a ballerina-*.vsix asset was found." >&2
               exit 1
             fi
             BALLERINA_EXTENSION_VERSION="${RESOLVED_TAG#[vV]}"
-            echo "Resolved ballerina.extension.version=${BALLERINA_EXTENSION_VERSION} (from release tag ${RESOLVED_TAG})." >&2
+            echo "Resolved ballerina.extension.version=${BALLERINA_EXTENSION_VERSION} (from tag ${RESOLVED_TAG})." >&2
           fi
 
           if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
@@ -145,6 +174,21 @@ jobs:
             echo "Error: wso2.micro-integrator.extension.version must not start with 'v'." >&2
             exit 1
           fi
+
+          # Derive the integrator version from the channel. Base = first 3 dotted fields of
+          # integrator.version (e.g. 5.1.0.1 -> 5.1.0). A dash-delimited suffix is required
+          # (never a dot): Windows MSI/WiX needs a numeric a.b.c.d and the build scripts strip
+          # at the first '-'; a dot suffix would overflow WiX's 65535 field limit.
+          #   nightly -> <base>-nightly   custom -> <base>-<UTC timestamp>   exact -> verbatim (GA)
+          CHANNEL="${VERSION_CHANNEL:-custom}"
+          BASE3=$(echo "${INTEGRATOR_VERSION}" | cut -d. -f1-3)
+          case "${CHANNEL}" in
+            exact)   : ;;
+            nightly) INTEGRATOR_VERSION="${BASE3}-nightly" ;;
+            custom)  INTEGRATOR_VERSION="${BASE3}-$(date -u +%Y%m%d%H%M)" ;;
+            *) echo "Error: unknown version_channel '${CHANNEL}' (expected nightly|custom|exact)." >&2; exit 1 ;;
+          esac
+          echo "Resolved integrator version: ${INTEGRATOR_VERSION} (channel=${CHANNEL})." >&2
 
           echo "ballerina_version=${BALLERINA_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_extension_version=${BALLERINA_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
@@ -160,7 +204,10 @@ jobs:
     with:
       runOnAWS: ${{ github.event.inputs.runner == 'codebuild' }}
       ballerina_extension_source: ${{ github.event.inputs.ballerina_extension_source }}
-      ballerina_extension_version: ${{ github.event.inputs.ballerina_extension_version }}
+      # Pass the already-resolved concrete version (nightly/latest resolved once here) so the
+      # Linux build uses the exact same Ballerina release as mac/Windows.
+      ballerina_extension_version: ${{ needs.resolve-versions.outputs.ballerina_extension_version }}
+      integrator_version_override: ${{ needs.resolve-versions.outputs.integrator_version }}
       mi_extension_source: ${{ github.event.inputs.mi_extension_source }}
       build_packed_installers: ${{ github.event.inputs.build_packed_installers == 'true' }}
 
@@ -1047,7 +1094,7 @@ jobs:
           name: WSO2 Integrator v${{ needs.resolve-versions.outputs.integrator_version }}
           target_commitish: ${{ github.sha }}
           draft: false
-          prerelease: false
+          prerelease: ${{ github.event.inputs.version_channel != 'exact' }}
           files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1056,7 +1103,9 @@ jobs:
     name: Bump Integrator Version
     runs-on: ubuntu-latest
     needs: [publish-github-release, resolve-versions]
-    if: needs.publish-github-release.result == 'success'
+    # Only bump integrator.version after a real GA release (exact channel). nightly/custom
+    # builds carry a dash suffix and must never rewrite the pinned version.
+    if: needs.publish-github-release.result == 'success' && github.event.inputs.version_channel == 'exact'
     permissions:
       contents: write
       pull-requests: write
