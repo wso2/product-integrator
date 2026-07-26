@@ -19,10 +19,10 @@ jobs:
         include:
           - release_label: 5.1.0 pre-release
             target_ref: main
-            delivery_mode: archive
+            delivery_mode: github-release
           - release_label: 5.0.0 pre-release
             target_ref: 5.0.x
-            delivery_mode: archive
+            delivery_mode: github-release
     steps:
       - name: Trigger Build and Release Artifacts
         uses: actions/github-script@v7
@@ -40,6 +40,8 @@ jobs:
                 build_windows: 'true',
                 build_packed_installers: 'true',
                 ballerina_extension_source: 'github',
+                ballerina_extension_version: 'nightly',
+                version_channel: 'nightly',
                 delivery_mode: '${{ matrix.delivery_mode }}'
               }
             });
