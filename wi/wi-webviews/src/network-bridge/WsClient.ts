@@ -22,8 +22,7 @@ import {
     BIProjectRequest,
     BiFormWsBootstrap,
     BIRuntimeStatusResponse,
-    CreateMiProjectRequest,
-    CreateMiProjectResponse,
+    MiFormWsBootstrap,
     CreateSiProjectRequest,
     CreateSiProjectResponse,
     DownloadProgress,
@@ -36,7 +35,6 @@ import {
     SetConfigurationRequest,
     GetSubFoldersRequest,
     GetSubFoldersResponse,
-    GetSupportedMIVersionsResponse,
     GettingStartedData,
     ProjectDirResponse,
     RunCommandRequest,
@@ -188,10 +186,6 @@ export class WsClient {
         return this.request("setConfiguration", params);
     }
 
-    public getSupportedMIVersionsHigherThan(version: string): Promise<GetSupportedMIVersionsResponse> {
-        return this.request("getSupportedMIVersionsHigherThan", version);
-    }
-
     public getSubFolderNames(params: GetSubFoldersRequest): Promise<GetSubFoldersResponse> {
         return this.request("getSubFolderNames", params);
     }
@@ -200,8 +194,8 @@ export class WsClient {
         return this.request("askProjectDirPath");
     }
 
-    public createMiProject(params: CreateMiProjectRequest): Promise<CreateMiProjectResponse> {
-        return this.request("createMiProject", params);
+    public getMiFormWsBootstrap(): Promise<MiFormWsBootstrap> {
+        return this.request("getMiFormWsBootstrap");
     }
 
     public importProjectFromCapp(): Promise<void> {

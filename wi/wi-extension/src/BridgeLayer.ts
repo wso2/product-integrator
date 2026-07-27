@@ -20,7 +20,6 @@ import { WebviewPanel } from "vscode";
 import { createExtensionTransportManager, createRequestRouter } from "@wso2/webview-giga-bridge";
 import {
     BIProjectRequest,
-    CreateMiProjectRequest,
     CreateSiProjectRequest,
     DownloadProgress,
     FetchSamplesRequest,
@@ -247,16 +246,11 @@ export class BridgeLayer {
         registerRoute("setConfiguration", async (request) =>
             wsManager.setConfiguration(request.params as SetConfigurationRequest)
         );
-        registerRoute("getSupportedMIVersionsHigherThan", async (request) =>
-            wsManager.getSupportedMIVersionsHigherThan(request.params)
-        );
         registerRoute("getSubFolderNames", async (request) =>
             wsManager.getSubFolderNames(request.params as GetSubFoldersRequest)
         );
         registerRoute("askProjectDirPath", async () => wsManager.askProjectDirPath());
-        registerRoute("createMiProject", async (request) =>
-            wsManager.createMiProject(request.params as CreateMiProjectRequest)
-        );
+        registerRoute("getMiFormWsBootstrap", async () => wsManager.getMiFormWsBootstrap());
         registerRoute("importProjectFromCapp", async () => wsManager.importProjectFromCapp());
         registerRoute("createSiProject", async (request) =>
             wsManager.createSiProject(request.params as CreateSiProjectRequest)

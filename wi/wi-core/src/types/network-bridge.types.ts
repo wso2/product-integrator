@@ -20,8 +20,7 @@ import {
     BIProjectRequest,
     BiFormWsBootstrap,
     BIRuntimeStatusResponse,
-    CreateMiProjectRequest,
-    CreateMiProjectResponse,
+    MiFormWsBootstrap,
     CreateSiProjectRequest,
     CreateSiProjectResponse,
     DownloadProgress,
@@ -34,7 +33,6 @@ import {
     SetConfigurationRequest,
     GetSubFoldersRequest,
     GetSubFoldersResponse,
-    GetSupportedMIVersionsResponse,
     GettingStartedData,
     ProjectDirResponse,
     RunCommandRequest,
@@ -99,10 +97,9 @@ export interface WIWsMethodParamsMap {
     getWorkspaceRoot: void;
     getConfiguration: GetConfigurationRequest;
     setConfiguration: SetConfigurationRequest;
-    getSupportedMIVersionsHigherThan: string;
     getSubFolderNames: GetSubFoldersRequest;
     askProjectDirPath: void;
-    createMiProject: CreateMiProjectRequest;
+    getMiFormWsBootstrap: void;
     importProjectFromCapp: void;
     createSiProject: CreateSiProjectRequest;
     fetchSamplesFromGithub: FetchSamplesRequest;
@@ -157,10 +154,9 @@ export interface WIWsMethodResultMap {
     getWorkspaceRoot: WorkspaceRootResponse;
     getConfiguration: GetConfigurationResponse;
     setConfiguration: void;
-    getSupportedMIVersionsHigherThan: GetSupportedMIVersionsResponse;
     getSubFolderNames: GetSubFoldersResponse;
     askProjectDirPath: ProjectDirResponse;
-    createMiProject: CreateMiProjectResponse;
+    getMiFormWsBootstrap: MiFormWsBootstrap;
     importProjectFromCapp: void;
     createSiProject: CreateSiProjectResponse;
     fetchSamplesFromGithub: GettingStartedData;
