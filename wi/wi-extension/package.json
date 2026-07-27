@@ -269,7 +269,7 @@
       {
         "command": "BI.project-explorer.convert",
         "title": "Convert to Project",
-        "icon": "$(project)",
+        "icon": "$(package)",
         "category": "WSO2 Integrator"
       },
       {
