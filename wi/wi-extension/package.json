@@ -273,6 +273,18 @@
         "category": "WSO2 Integrator"
       },
       {
+        "command": "BI.project-explorer.open-project",
+        "title": "Open Project",
+        "icon": "$(folder-opened)",
+        "category": "WSO2 Integrator"
+      },
+      {
+        "command": "BI.project-explorer.add-to-project",
+        "title": "Add to Project",
+        "icon": "$(add)",
+        "category": "WSO2 Integrator"
+      },
+      {
         "command": "BI.project-explorer.overview",
         "title": "Open Overview",
         "icon": {
@@ -389,6 +401,14 @@
           "when": "false"
         },
         {
+          "command": "BI.project-explorer.open-project",
+          "when": "false"
+        },
+        {
+          "command": "BI.project-explorer.add-to-project",
+          "when": "false"
+        },
+        {
           "command": "BI.project-explorer.overview",
           "when": "false"
         },
@@ -462,7 +482,17 @@
         },
         {
           "command": "BI.project-explorer.convert",
-          "when": "view == wso2-integrator.explorer && viewItem == bi-project && BI.isBallerinaWorkspace != true",
+          "when": "view == wso2-integrator.explorer && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus != 'member' && BI.enclosingProjectStatus != 'orphaned'",
+          "group": "navigation"
+        },
+        {
+          "command": "BI.project-explorer.open-project",
+          "when": "view == wso2-integrator.explorer && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'member'",
+          "group": "navigation"
+        },
+        {
+          "command": "BI.project-explorer.add-to-project",
+          "when": "view == wso2-integrator.explorer && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'orphaned'",
           "group": "navigation"
         },
         {
@@ -539,7 +569,17 @@
         },
         {
           "command": "BI.project-explorer.convert",
-          "when": "view == wso2-integrator.explorer && BI.project == true && BI.isBallerinaWorkspace != true",
+          "when": "view == wso2-integrator.explorer && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus != 'member' && BI.enclosingProjectStatus != 'orphaned'",
+          "group": "navigation"
+        },
+        {
+          "command": "BI.project-explorer.open-project",
+          "when": "view == wso2-integrator.explorer && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'member'",
+          "group": "navigation"
+        },
+        {
+          "command": "BI.project-explorer.add-to-project",
+          "when": "view == wso2-integrator.explorer && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'orphaned'",
           "group": "navigation"
         },
         {
