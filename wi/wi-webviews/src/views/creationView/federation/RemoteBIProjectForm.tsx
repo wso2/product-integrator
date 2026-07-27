@@ -40,7 +40,7 @@ const StateContainer = styled.div`
 `;
 
 /** The BI creation variant the federated form should render. */
-type EmbeddedFormMode = "integration" | "project" | "library";
+type EmbeddedFormMode = "create" | "integration" | "project" | "library";
 
 /** Props of the federated form exposed by the Ballerina extension. */
 interface EmbeddedFormProps {

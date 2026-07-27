@@ -37,6 +37,8 @@ import { OpenProjectView } from "./OpenProjectView";
 
 enum ViewState {
     WELCOME = "welcome",
+    /** Unified Create flow: project chooser → integration wizard / library form. */
+    CREATE = "create",
     CREATE_INTEGRATION = "create_integration",
     SAMPLES = "samples",
     IMPORT_EXTERNAL = "import_external",
@@ -272,8 +274,12 @@ const Caption = styled.p`
 `;
 
 const CardsContainer = styled.div`
+    /* Cap and center the whole cards area so the primary cards, the More Actions
+       rows, and Recent Projects all share one content width and line up. */
     padding: 0 60px 60px;
-    margin-top: -40px;
+    margin: -40px auto 0;
+    max-width: 1160px;
+    box-sizing: border-box;
     position: relative;
     z-index: 1;
 `;
@@ -287,15 +293,14 @@ const CardsLoadingState = styled.div`
 
 const CardsGrid = styled.div`
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    /* Cards stretch to fill the shared container width (auto-fit collapses the
+       empty track when there are only two), so the two primary cards span the
+       same width as the full-width More Actions rows below them. */
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 24px;
 
-    @media (max-width: 1200px) {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    @media (max-width: 768px) {
-        grid-template-columns: 1fr;
+    @media (max-width: 640px) {
+        grid-template-columns: minmax(0, 1fr);
     }
 `;
 
@@ -811,21 +816,16 @@ export const WelcomeView: React.FC = () => {
 		}
 	}, [selectedRuntime]);
 
+	const goToCreate = () => setCurrentView(ViewState.CREATE);
 	const goToCreateIntegration = () =>
 		setCurrentView(ViewState.CREATE_INTEGRATION);
 	const goToSamples = () => setCurrentView(ViewState.SAMPLES);
 	const goToImportExternal = () => setCurrentView(ViewState.IMPORT_EXTERNAL);
 	const goToSettings = () => setCurrentView(ViewState.SETTINGS);
 	const goBackToWelcome = () => setCurrentView(ViewState.WELCOME);
-	const goToCreateLibrary = () => setCurrentView(ViewState.CREATE_LIBRARY);
-	const goToCreateProject = () => setCurrentView(ViewState.CREATE_PROJECT);
 
     const handleProjectDirSelection = () => {
         setCurrentView(ViewState.OPEN_PROJECT);
-    };
-
-    const handleIntegrationOpen = () => {
-        setCurrentView(ViewState.OPEN_INTEGRATION);
     };
 
     const openIntegrationFileBrowser = async () => {
@@ -923,6 +923,8 @@ export const WelcomeView: React.FC = () => {
         const biUnavailable = isBallerinaUnavailable === true;
 
 		switch (currentView) {
+			case ViewState.CREATE:
+				return <RemoteBIProjectForm mode="create" onBack={goBackToWelcome} ballerinaUnavailable={biUnavailable} />;
 			case ViewState.CREATE_INTEGRATION:
 				return (
 					<CreationView
@@ -1050,50 +1052,15 @@ export const WelcomeView: React.FC = () => {
 													</CardIcon>
 												</CardIconContainer>
 												<CardContent>
-													<CardTitle>Integrations</CardTitle>
+													<CardTitle>Start your Integration Project</CardTitle>
 													<CardDescription>
-														Create and manage your integrations to connect services, APIs, and data sources
+														Create and manage your integrations to connect services, APIs, and data sources.
 													</CardDescription>
 													<CardButtonRow>
 														<StyledButton
 															isPrimary={true}
 															disabled={biUnavailable}
-															onClick={goToCreateIntegration}
-														>
-															<ButtonContent>Create</ButtonContent>
-														</StyledButton>
-														<StyledButton
-															disabled={biUnavailable}
-															onClick={handleIntegrationOpen}
-														>
-															<ButtonContent>Open</ButtonContent>
-														</StyledButton>
-													</CardButtonRow>
-												</CardContent>
-											</StaticActionCard>
-
-											<StaticActionCard
-												disabled={biUnavailable}
-												title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
-											>
-												<CardIconContainer>
-													<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-accent-alt) 100%)">
-														<Codicon
-															name="folder-opened"
-															iconSx={{ fontSize: "25px" }}
-															sx={{ width: "23px", height: "25px" }}
-														/>
-													</CardIcon>
-												</CardIconContainer>
-												<CardContent>
-													<CardTitle>Projects</CardTitle>
-													<CardDescription>
-														Organize and manage multiple integrations within a single workspace
-													</CardDescription>
-													<CardButtonRow>
-														<StyledButton
-															disabled={biUnavailable}
-															onClick={goToCreateProject}
+															onClick={goToCreate}
 														>
 															<ButtonContent>Create</ButtonContent>
 														</StyledButton>
@@ -1124,7 +1091,7 @@ export const WelcomeView: React.FC = () => {
 												<CardContent>
 													<CardTitle>Pre-built Integrations and Samples</CardTitle>
 													<CardDescription>
-														Explore ready-to-use pre-built integrations and samples to accelerate your development.
+														Ready-to-use pre-built integrations and samples to accelerate your development.
 													</CardDescription>
 													<StyledButton
 														disabled={biUnavailable}
@@ -1221,7 +1188,7 @@ export const WelcomeView: React.FC = () => {
 													<CardContent>
 														<CardTitle>Explore Pre-built Integrations and Samples</CardTitle>
 														<CardDescription>
-															Explore ready-to-use pre-built integrations and samples to accelerate your development.
+															Ready-to-use pre-built integrations and samples to accelerate your development.
 														</CardDescription>
 														<StyledButton
 															disabled={biUnavailable}
@@ -1265,41 +1232,6 @@ export const WelcomeView: React.FC = () => {
 											}}
 										>
 											<SecondaryCardsGrid>
-												<StaticSecondaryActionRow
-													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
-													title={biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined}
-												>
-													<SecondaryRowIcon bgColor="var(--wso2-brand-primary-alt)">
-														<Codicon
-															name="library"
-															iconSx={{ fontSize: "16px" }}
-															sx={{ width: "16px", height: "16px" }}
-														/>
-													</SecondaryRowIcon>
-													<SecondaryRowContent>
-														<SecondaryRowTitle>Libraries</SecondaryRowTitle>
-														<SecondaryRowDescription>
-															Create reusable components and utilities to share across integrations and projects.
-														</SecondaryRowDescription>
-													</SecondaryRowContent>
-													<SecondaryRowActions>
-														<CompactButton
-															tabIndex={showSecondary ? undefined : -1}
-															disabled={biUnavailable}
-															onClick={goToCreateLibrary}
-														>
-															<ButtonContent>Create</ButtonContent>
-														</CompactButton>
-														<CompactButton
-															tabIndex={showSecondary ? undefined : -1}
-															disabled={biUnavailable}
-															onClick={openIntegrationFileBrowser}
-														>
-															<ButtonContent>Open</ButtonContent>
-														</CompactButton>
-													</SecondaryRowActions>
-												</StaticSecondaryActionRow>
-
 												<SecondaryActionRow
 													onClick={biUnavailable ? undefined : goToImportExternal}
 													style={biUnavailable ? DISABLED_ROW_STYLE : undefined}
