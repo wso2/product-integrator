@@ -293,11 +293,28 @@ jobs:
           restore-keys: |
             sysroots-${{ runner.os }}-
 
+      # The runner image ships a pinned apt index. Once the archive supersedes a
+      # package (e.g. a krb5 security update), the old .deb is dropped from the pool
+      # and the stale index resolves to a 404. cache-apt-pkgs-action does not refresh
+      # the index itself, so do it here.
+      - name: Refresh apt package index
+        run: sudo apt-get update
+
       - name: Cache apt packages
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3 quilt
-          version: 1.0
+          # Bumped from 1.0 to invalidate caches poisoned by the 404 above: when the
+          # fetch failed, the action still saved an empty (2 KB) cache under the old
+          # key, so every later run got a cache hit that installed nothing and failed
+          # downstream with "quilt: command not found".
+          version: 1.1
+
+      - name: Verify apt packages installed
+        run: |
+          for c in quilt g++; do
+            command -v "$c" >/dev/null || { echo "::error::$c missing after apt install step"; exit 1; }
+          done
 
       - name: Install Rust toolchain
         run: |
