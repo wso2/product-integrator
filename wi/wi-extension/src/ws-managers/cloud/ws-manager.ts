@@ -38,8 +38,6 @@ import {
 	type GetConfigFileDriftsReq,
 	type GetCloudProjectsReq,
 	type GetCloudProjectsResp,
-	type GetCloudComponentsReq,
-	type GetCloudComponentsResp,
 	ViewType,
 	COMMANDS,
 	WICloudAPI,
@@ -347,16 +345,6 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	async getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
 		const projects = await ext.clients.rpcClient.getProjects(params.orgId);
 		return { projects };
-	}
-
-	async getCloudComponents(params: GetCloudComponentsReq): Promise<GetCloudComponentsResp> {
-		const components = await ext.clients.rpcClient.getComponentList({
-			orgId: params.orgId,
-			orgHandle: params.orgHandle,
-			projectId: params.projectId,
-			projectHandle: params.projectHandle,
-		});
-		return { components };
 	}
 
 	async getDefaultOrgName(): Promise<DefaultOrgNameResponse> {

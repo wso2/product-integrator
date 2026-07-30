@@ -431,15 +431,6 @@ export interface ICloneOptions {
 	readonly progress: Progress<{ increment: number }>;
 	readonly recursive?: boolean;
 	readonly ref?: string;
-	/** Value for `git clone --filter=<...>` (partial clone), e.g. "blob:none". */
-	readonly filter?: string;
-	/** Pass `git clone --sparse` so only top-level files are checked out initially. */
-	readonly sparse?: boolean;
-	/**
-	 * Cone-mode paths to materialize after the clone (`git sparse-checkout set`).
-	 * Only applied when `sparse` is set and at least one path is given.
-	 */
-	readonly sparseCheckoutPaths?: string[];
 }
 
 export class Git {
@@ -554,12 +545,6 @@ export class Git {
 			if (options.ref) {
 				command.push("--branch", options.ref);
 			}
-			if (options.filter) {
-				command.push(`--filter=${options.filter}`);
-			}
-			if (options.sparse) {
-				command.push("--sparse");
-			}
 			await this.exec(options.parentPath, command, {
 				cancellationToken,
 				env: { GIT_HTTP_USER_AGENT: this.userAgent },
@@ -573,13 +558,6 @@ export class Git {
 			}
 
 			throw err;
-		}
-
-		// Restrict the working tree to the requested sub-paths (cone mode). Root
-		// files remain checked out, which is why VS Code is opened at the sub-path.
-		if (options.sparse && options.sparseCheckoutPaths && options.sparseCheckoutPaths.length > 0) {
-			const repoPath = options.skipCreateSubPath ? options.parentPath : folderPath;
-			await this.exec(repoPath, ["sparse-checkout", "set", ...options.sparseCheckoutPaths]);
 		}
 
 		return folderPath;
