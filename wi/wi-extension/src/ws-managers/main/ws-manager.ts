@@ -69,9 +69,8 @@ const SAMPLES_INFO_URL = process.env.SAMPLES_INFO_URL;
 const PREBUILT_INTEGRATIONS_URL = process.env.PREBUILT_INTEGRATIONS_URL;
 
 /**
- * Command ids the webview is permitted to invoke through the `runCommand`
- * route. Keep this in sync with the `wsClient.runCommand` call sites in
- * `wi-webviews`; anything absent here is refused.
+ * Command ids the webview may invoke via `runCommand`; anything else is refused.
+ * Keep in sync with the `wsClient.runCommand` call sites in `wi-webviews`.
  */
 const ALLOWED_WEBVIEW_COMMANDS: ReadonlySet<string> = new Set([
     // Cloud auth / project flows
@@ -162,9 +161,8 @@ export class MainWsManager implements WIVisualizerAPI {
 
     async runCommand(props: RunCommandRequest): Promise<RunCommandResponse> {
         if (!ALLOWED_WEBVIEW_COMMANDS.has(props.command)) {
-            // Forwarding an arbitrary command id would turn this route into a
-            // general-purpose command-execution primitive for anything that can
-            // talk to the bridge, so unknown ids are refused rather than run.
+            // Forwarding arbitrary ids would make this a general command-execution
+            // primitive for anything that can reach the bridge.
             ext.logError(`Blocked disallowed webview command: ${props.command}`);
             return { success: false, error: `Command not allowed: ${props.command}` };
         }

@@ -87,11 +87,8 @@ export class BridgeLayer {
     }
 
     /**
-     * Starts the websocket backend and returns its connection coordinates.
-     *
-     * Awaiting the start is required: the port is only known once the server is
-     * bound, so `getWebviewBootstrap()` would otherwise report the configured
-     * `wsPort` (0 when the OS allocates one).
+     * Starts the websocket backend and returns its connection coordinates. The
+     * start must be awaited: the port is only known once the server is bound.
      */
     static async startWebSocketServer(projectUri: string): Promise<WITransportBootstrap> {
         const channel = this.getOrCreateChannel(projectUri);
@@ -181,10 +178,8 @@ export class BridgeLayer {
         const transport = createExtensionTransportManager<WIBridgeRequest, WIBridgeResponse>({
             initialMode: "proxy",
             wsPort: this.resolveWebSocketPort(),
-            // Per-channel secret. The bridge rejects websocket upgrades that do
-            // not present it, so reaching the port is not enough to issue
-            // requests or receive broadcast events. Proxy mode is unaffected --
-            // it runs in-process over the trusted webview postMessage channel.
+            // Per-channel secret authenticating the websocket handshake. Unused
+            // by proxy mode, which runs in-process over postMessage.
             authToken: randomBytes(32).toString("hex"),
             handleRequest: (request) => router.handle(request),
         });
