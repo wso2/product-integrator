@@ -8,7 +8,6 @@ packageResources.diff
 wso2-font-pkg-update
 disableAiFeatures.diff
 removeCopilotStatusBar.diff
-increaseHeap.diff
 skip-extension-outdated-test.diff
 disableVsixChecksumCheck.diff
 disableWorkspaceTrust.diff
@@ -18,3 +17,6 @@ integratorMenus.diff
 removeXmlLanguageAssociation.diff
 disableAgentSessions.diff
 skipCopilotRipgrepShim.diff
+coreCiSerializeBundles.diff
+increaseHeap.diff
+windowsSigntoolOptional.diff
