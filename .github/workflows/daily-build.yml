@@ -41,6 +41,7 @@ jobs:
     outputs:
       integrator_version: ${{ steps.stamp.outputs.integrator_version }}
       wi_extension_version: ${{ steps.stamp.outputs.wi_extension_version }}
+      sha: ${{ steps.commit.outputs.sha }}
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
@@ -74,6 +75,7 @@ jobs:
           if-no-files-found: error
 
       - name: Commit pinned versions to nightly
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -81,6 +83,7 @@ jobs:
           git add ci/build/component-versions.properties wi/wi-extension/package.json
           git commit -m "Pin nightly versions for ${{ steps.stamp.outputs.integrator_version }}"
           git push --force origin nightly
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build
@@ -93,6 +96,9 @@ jobs:
       versions_artifact: versions
       publish_tag: nightly
       is_prerelease: true
+      # Without this the tag would be created on the caller's ref (main), so checking out `nightly`
+      # would give main's -SNAPSHOT versions rather than the pin this run actually built.
+      target_commitish: ${{ needs.prepare-nightly.outputs.sha }}
       runner: codebuild
       build_linux: true
       build_macos: true
