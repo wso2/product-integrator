@@ -191,12 +191,13 @@ jobs:
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
           key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
-          # Partial restore so a cold key doesn't mean a cold cache. download-builtin-extensions
-          # re-validates versions (isUpToDate) and re-downloads only what actually changed, so a
-          # prefix-restored cache stays correct.
+          # Partial restore so a cold key doesn't mean a cold cache: this prefix keeps the component
+          # versions fixed and only drops the patch/wi/** hash, which is the churn we are absorbing.
+          # download-builtin-extensions then re-validates each extension by version string
+          # (isUpToDate) -- see the wso2.wso2-integrator removal in "Install builtin extensions" for
+          # the one extension that check cannot catch.
           restore-keys: |
             extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-
-            extensions-shared-${{ inputs.ballerina_extension_source }}-
 
       - name: Cache Rust toolchain
         uses: actions/cache@v4
@@ -360,6 +361,13 @@ jobs:
             echo "✅ Extensions cache hit - using cached extensions"
           else
             echo "⬇️ Downloading built-in extensions"
+            # wso2.wso2-integrator is pinned in product.json to the hand-bumped version in
+            # wi/wi-extension/package.json, which does not move when wi/** content changes.
+            # isUpToDate() (lib/vscode/build/lib/builtInExtensions.ts) compares only that version
+            # string, so a prefix-restored copy would be judged current and the vsix just built
+            # would never be unpacked. Reaching this branch means the exact key missed, so drop it
+            # and force a re-unpack.
+            rm -rf .build/builtInExtensions/wso2.wso2-integrator
             npm run download-builtin-extensions
           fi
 
@@ -371,16 +379,20 @@ jobs:
             echo "✅ TypeScript cache hit - using cached compilation"
             echo "Skipping core compilation, running validation only"
             npm run compile-extensions-build
-            npm exec -- npm-run-all --max-parallel 1 -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            npm exec -- npm-run-all -lp eslint vscode-dts-compile-check
+            npm exec -- npm-run-all -ls valid-layers-check define-class-fields-check tsec-compile-check
           else
             echo "❌ TypeScript cache miss - full compilation required"
             echo "Running complete compilation pipeline"
             npm run core-ci
-            # Run the validation checks serially (--max-parallel 1). Several carry large
-            # --max-old-space-size caps (define-class-fields and tsec use 8192 MB each);
-            # two 8 GB checks at once exceed the 14 GB runner and the kernel OOM-kills one
-            # (exit 137). Serial keeps peak memory to a single check at a time.
-            npm exec -- npm-run-all --max-parallel 1 -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            # patches/increaseHeap.diff caps the node heap for three of these five checks:
+            # tsec-compile-check at 8192 MB, define-class-fields-check at 4096 then 8192, and
+            # valid-layers-check at 4096. Running two capped checks at once exceeds the runner and
+            # the kernel OOM-kills one, surfacing as a bare exit 137 with no useful log. So the
+            # three capped checks run serially (-ls) and only the two uncapped ones -- eslint and
+            # vscode-dts-compile-check, the latter being tsgo -- run in parallel.
+            npm exec -- npm-run-all -lp eslint vscode-dts-compile-check
+            npm exec -- npm-run-all -ls valid-layers-check define-class-fields-check tsec-compile-check
           fi
 
       - name: Compress compilation artifact
