@@ -57,7 +57,10 @@ fi
 if [ -z "${BALLERINA_EXTENSION_VERSION}" ] && [ -z "${BALLERINA_VSIX_PATH}" ]; then
   BALLERINA_EXTENSION_VERSION="latest"
 fi
-WI_EXTENSION_VERSION=$(node -p "require('./wi/wi-extension/package.json').version")
+# The properties file is the single declaration; ci/build/apply-version.sh mirrors it into
+# wi/wi-extension/package.json, which is what package-vsix.js names the .vsix from.
+WI_EXTENSION_VERSION=$(read_version "wi.extension.version")
+require_non_empty "${WI_EXTENSION_VERSION}" "wi.extension.version"
 
 cat > lib/vscode/product.json <<EOF
 {

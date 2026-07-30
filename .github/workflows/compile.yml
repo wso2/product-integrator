@@ -19,21 +19,16 @@ on:
         default: 'marketplace'
         required: false
         type: string
-      ballerina_extension_version:
-        description: "Override ballerina.extension.version. Empty = pinned value in component-versions.properties. 'latest' = newest wso2/ballerina-vscode release."
-        default: ''
-        required: false
-        type: string
-      integrator_version_override:
-        description: "Final integrator version computed by the caller (e.g. 5.1.0-nightly). Empty = use integrator.version from component-versions.properties. Keeps Linux installers in lock-step with mac/Windows."
-        default: ''
-        required: false
-        type: string
       mi_extension_source:
         description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
         default: 'marketplace'
         required: false
-        type: string  
+        type: string
+      versions_artifact:
+        description: 'Artifact holding the already-stamped component-versions.properties and wi-extension package.json. Empty (a direct call from pr-ci.yml) means stamp here instead.'
+        default: ''
+        required: false
+        type: string
 
 permissions:
   id-token: write
@@ -43,12 +38,12 @@ jobs:
   resolve-versions:
     name: Resolve Component Versions
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
     outputs:
       ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
       ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
+      ballerina_extension_tag: ${{ steps.read-versions.outputs.ballerina_extension_tag }}
       mi_extension_version: ${{ steps.read-versions.outputs.mi_extension_version }}
+      mi_extension_tag: ${{ steps.read-versions.outputs.mi_extension_tag }}
       icp_version: ${{ steps.read-versions.outputs.icp_version }}
       integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
       ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
@@ -56,12 +51,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download stamped versions
+        if: ${{ inputs.versions_artifact != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.versions_artifact }}
+          path: .
+
+      # Called directly (pr-ci.yml): nothing has stamped yet, and `1.2.0-SNAPSHOT` is not a valid
+      # VS Code extension version, so the vsix would fail to package. Stamp here and publish the
+      # result so the compile job below builds exactly these versions.
+      - name: Stamp versions
+        if: ${{ inputs.versions_artifact == '' }}
+        shell: bash
+        run: |
+          chmod +x ./ci/build/apply-version.sh
+          ./ci/build/apply-version.sh
+
+      - name: Upload stamped versions
+        if: ${{ inputs.versions_artifact == '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: versions
+          path: |
+            ci/build/component-versions.properties
+            wi/wi-extension/package.json
+          if-no-files-found: error
+
       - name: Read versions file
         id: read-versions
         shell: bash
-        env:
-          BALLERINA_EXT_VERSION_OVERRIDE: ${{ inputs.ballerina_extension_version }}
-          INTEGRATOR_VERSION_OVERRIDE: ${{ inputs.integrator_version_override }}
         run: |
           VERSIONS_FILE="ci/build/component-versions.properties"
           if [ ! -f "${VERSIONS_FILE}" ]; then
@@ -76,63 +95,20 @@ jobs:
 
           BALLERINA_VERSION=$(read_property "ballerina.version")
           BALLERINA_EXTENSION_VERSION=$(read_property "ballerina.extension.version")
-          # A workflow input (e.g. the daily build passing "latest") overrides the pinned value.
-          if [ -n "${BALLERINA_EXT_VERSION_OVERRIDE}" ]; then
-            echo "Overriding ballerina.extension.version with workflow input: ${BALLERINA_EXT_VERSION_OVERRIDE}" >&2
-            BALLERINA_EXTENSION_VERSION="${BALLERINA_EXT_VERSION_OVERRIDE}"
-          fi
           MI_EXTENSION_VERSION=$(read_property "wso2.micro-integrator.extension.version")
           ICP_VERSION=$(read_property "icp.version")
           INTEGRATOR_VERSION=$(read_property "integrator.version")
-          # The caller (build-and-release.yml) computes the final, channel-suffixed version
-          # (e.g. 5.1.0-nightly) once and passes it here so Linux installers match mac/Windows
-          # exactly (no timestamp skew). Empty = direct call, keep the file value.
-          if [ -n "${INTEGRATOR_VERSION_OVERRIDE}" ]; then
-            echo "Overriding integrator version with caller value: ${INTEGRATOR_VERSION_OVERRIDE}" >&2
-            INTEGRATOR_VERSION="${INTEGRATOR_VERSION_OVERRIDE}"
-          fi
           BALLERINA_JRE_VERSION=$(read_property "ballerina.jre.version")
+
+          # A `<key>.tag` companion is only present when the upstream release tag cannot be derived
+          # from the version (a rolling tag such as wso2/ballerina-vscode's `nightly`, pinned by
+          # ci/build/resolve-nightly-versions.sh). Otherwise the conventional v<version> tag applies.
+          BALLERINA_EXTENSION_TAG=$(read_property "ballerina.extension.version.tag")
+          MI_EXTENSION_TAG=$(read_property "wso2.micro-integrator.extension.version.tag")
 
           if [ -z "${BALLERINA_VERSION}" ] || [ -z "${ICP_VERSION}" ] || [ -z "${INTEGRATOR_VERSION}" ] || [ -z "${BALLERINA_JRE_VERSION}" ]; then
             echo "Error: ballerina.version, icp.version, integrator.version, and ballerina.jre.version must be set in ${VERSIONS_FILE}." >&2
             exit 1
-          fi
-
-          # Resolve the Ballerina extension version selector against the wso2/ballerina-vscode
-          # releases tab (only releases that ship a ballerina-*.vsix asset are considered):
-          #   nightly               -> newest release whose tag contains "nightly"
-          #   latest/latest-release -> newest release by date (pre-releases included)
-          #   pinned                -> the value pinned in component-versions.properties
-          #   <x.y.z>               -> used verbatim
-          # Normally build-and-release.yml passes an already-resolved concrete version here, so
-          # these keywords only matter when compile.yml is invoked directly.
-          RESOLVED_TAG=""
-          BAL_SELECTOR=""
-          case "${BALLERINA_EXTENSION_VERSION}" in
-            nightly)
-              BAL_SELECTOR="nightly"
-              echo "Resolving newest nightly wso2/ballerina-vscode release with a ballerina-*.vsix asset..." >&2
-              RESOLVED_TAG=$(gh api "repos/wso2/ballerina-vscode/releases?per_page=100" \
-                --jq '[.[] | select(.draft == false) | select(.tag_name | test("nightly"; "i")) | select(any(.assets[]?; .name | test("^ballerina-.*\\.vsix$")))][0].tag_name')
-              ;;
-            latest|latest-release)
-              BAL_SELECTOR="latest"
-              echo "Resolving latest wso2/ballerina-vscode release with a ballerina-*.vsix asset..." >&2
-              RESOLVED_TAG=$(gh api "repos/wso2/ballerina-vscode/releases?per_page=100" \
-                --jq '[.[] | select(.draft == false) | select(any(.assets[]?; .name | test("^ballerina-.*\\.vsix$")))][0].tag_name')
-              ;;
-            pinned)
-              BALLERINA_EXTENSION_VERSION=$(read_property "ballerina.extension.version")
-              echo "Using pinned ballerina.extension.version=${BALLERINA_EXTENSION_VERSION}." >&2
-              ;;
-          esac
-          if [ -n "${BAL_SELECTOR}" ]; then
-            if [ -z "${RESOLVED_TAG}" ] || [ "${RESOLVED_TAG}" = "null" ]; then
-              echo "Error: no ${BAL_SELECTOR} wso2/ballerina-vscode release with a ballerina-*.vsix asset was found." >&2
-              exit 1
-            fi
-            BALLERINA_EXTENSION_VERSION="${RESOLVED_TAG#[vV]}"
-            echo "Resolved ballerina.extension.version=${BALLERINA_EXTENSION_VERSION} (from tag ${RESOLVED_TAG})." >&2
           fi
 
           if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
@@ -147,7 +123,9 @@ jobs:
 
           echo "ballerina_version=${BALLERINA_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_extension_version=${BALLERINA_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "ballerina_extension_tag=${BALLERINA_EXTENSION_TAG:-v${BALLERINA_EXTENSION_VERSION}}" >> "$GITHUB_OUTPUT"
           echo "mi_extension_version=${MI_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "mi_extension_tag=${MI_EXTENSION_TAG:-v${MI_EXTENSION_VERSION}}" >> "$GITHUB_OUTPUT"
           echo "icp_version=${ICP_VERSION}" >> "$GITHUB_OUTPUT"
           echo "integrator_version=${INTEGRATOR_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_jre_version=${BALLERINA_JRE_VERSION}" >> "$GITHUB_OUTPUT"
@@ -346,7 +324,7 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.ballerina_extension_tag }}")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
   
       - name: Set MI extension version
@@ -362,8 +340,18 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "v${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD")
+          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.mi_extension_tag }}")
           echo "MI_VSIX_PATH=${MI_VSIX_PATH}" >> "$GITHUB_ENV"
+
+      # Deliberately after the cache steps: a timestamped version in
+      # hashFiles('ci/build/component-versions.properties') would bust the extensions cache every run.
+      # This also lands before `rush build`, so the .vsix filename, product.json and the installer
+      # names all carry the same stamp.
+      - name: Download stamped versions
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.versions_artifact != '' && inputs.versions_artifact || 'versions' }}
+          path: .
 
       - name: Update product.json and branding
         working-directory: .

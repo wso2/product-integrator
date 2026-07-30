@@ -1,16 +1,17 @@
-name: Build and Release Artifacts
+name: Build
+
+# The build engine: compile, package the installers for every platform, sign, and optionally publish.
+# Not runnable on its own — dev-build.yml and release.yml are the two entry points. They prepare a
+# branch, stamp the versions, and hand the result here as an artifact.
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       runner:
         description: 'Select runner type'
-        required: true
+        required: false
         default: 'codebuild'
-        type: choice
-        options:
-          - codebuild
-          - ubuntu-latest
+        type: string
       build_linux:
         description: 'Build for Linux'
         required: false
@@ -29,46 +30,38 @@ on:
       build_packed_installers:
         description: 'Whether to build a Balleirna, ICP, and Integrator packed installers'
         default: true
-        required:  true
+        required: false
         type: boolean
       ballerina_extension_source:
         description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
-        required: true
+        required: false
         default: 'github'
-        type: choice
-        options:
-          - marketplace
-          - github
-      ballerina_extension_version:
-        description: "Ballerina extension version selector: an exact version (e.g. 5.12.3), 'nightly' (newest wso2/ballerina-vscode release tagged *nightly*), 'latest' (newest release by date), 'pinned' or empty (value in component-versions.properties)."
+        type: string
+      mi_extension_source:
+        description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
+        required: false
+        default: 'github'
+        type: string
+      versions_artifact:
+        description: 'Artifact holding the already-stamped component-versions.properties and wi-extension package.json. Empty means stamp here from the current ref.'
         required: false
         default: ''
         type: string
-      version_channel:
-        description: "Integrator version channel. nightly -> <base>-nightly; custom -> <base>-<UTC timestamp>; exact -> integrator.version verbatim (GA/private). Base = first 3 dotted fields of integrator.version."
+      publish_tag:
+        description: "Release tag to publish under. Empty publishes nothing (workflow artifacts only); `nightly` is the rolling tag and replaces the previous release; anything else is created as-is."
         required: false
-        default: 'custom'
-        type: choice
-        options:
-          - nightly
-          - custom
-          - exact
-      mi_extension_source:
-        description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
-        required: true
-        default: 'github'
-        type: choice
-        options:
-          - marketplace
-          - github
-      delivery_mode:
-        description: 'Select delivery mode: archive artifacts as workflow artifacts or publish as a GitHub Release'
-        required: true
-        default: 'archive'
-        type: choice
-        options:
-          - archive
-          - github-release
+        default: ''
+        type: string
+      is_prerelease:
+        description: 'Mark the GitHub release as a pre-release. False also makes it the repository Latest.'
+        required: false
+        default: true
+        type: boolean
+      target_commitish:
+        description: 'Commit the release points at. Empty uses the commit this run started from.'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   id-token: write
@@ -78,15 +71,59 @@ env:
   awsRunnerId: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}  
 
 jobs:
+  # Settle the product and extension versions ONCE, up front, and hand the resulting files to every
+  # other job as an artifact. A VS Code extension version must be exactly three integers, so
+  # `1.2.0-SNAPSHOT` can never be packaged and some job has to stamp on every path.
+  #
+  # Callers that prepared a branch (dev-build.yml's nightly, release.yml) pass their own artifact and
+  # this job just re-publishes it. A caller that passes nothing gets a stamp from the current ref:
+  # apply-version.sh is shape-based, rewriting only `-SNAPSHOT` values, so a concrete version always
+  # passes through verbatim and the build ships exactly what the branch declares.
+  stamp-version:
+    name: Stamp Versions
+    runs-on: ubuntu-latest
+    outputs:
+      integrator_version: ${{ steps.stamp.outputs.integrator_version }}
+      wi_extension_version: ${{ steps.stamp.outputs.wi_extension_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download the caller's versions
+        if: ${{ inputs.versions_artifact != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.versions_artifact }}
+          path: .
+
+      # Re-run unconditionally: a no-op on a prepared branch, and the stamp itself when the caller
+      # passed nothing. Either way this is the single point where the versions become final.
+      - name: Apply versions
+        id: stamp
+        shell: bash
+        run: |
+          chmod +x ./ci/build/apply-version.sh
+          ./ci/build/apply-version.sh
+
+      - name: Upload versions
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-versions
+          path: |
+            ci/build/component-versions.properties
+            wi/wi-extension/package.json
+          if-no-files-found: error
+
   resolve-versions:
     name: Resolve Component Versions
+    needs: stamp-version
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
     outputs:
       ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
       ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
+      ballerina_extension_tag: ${{ steps.read-versions.outputs.ballerina_extension_tag }}
       mi_extension_version: ${{ steps.read-versions.outputs.mi_extension_version }}
+      mi_extension_tag: ${{ steps.read-versions.outputs.mi_extension_tag }}
       icp_version: ${{ steps.read-versions.outputs.icp_version }}
       integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
       ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
@@ -94,12 +131,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download stamped versions
+        uses: actions/download-artifact@v4
+        with:
+          name: build-versions
+          path: .
+
       - name: Read versions file
         id: read-versions
         shell: bash
-        env:
-          BALLERINA_EXT_VERSION_OVERRIDE: ${{ inputs.ballerina_extension_version }}
-          VERSION_CHANNEL: ${{ inputs.version_channel }}
         run: |
           VERSIONS_FILE="ci/build/component-versions.properties"
           if [ ! -f "${VERSIONS_FILE}" ]; then
@@ -114,55 +154,20 @@ jobs:
 
           BALLERINA_VERSION=$(read_property "ballerina.version")
           BALLERINA_EXTENSION_VERSION=$(read_property "ballerina.extension.version")
-          # A workflow input (e.g. the daily build passing "latest") overrides the pinned value.
-          if [ -n "${BALLERINA_EXT_VERSION_OVERRIDE}" ]; then
-            echo "Overriding ballerina.extension.version with workflow input: ${BALLERINA_EXT_VERSION_OVERRIDE}" >&2
-            BALLERINA_EXTENSION_VERSION="${BALLERINA_EXT_VERSION_OVERRIDE}"
-          fi
           MI_EXTENSION_VERSION=$(read_property "wso2.micro-integrator.extension.version")
           ICP_VERSION=$(read_property "icp.version")
           INTEGRATOR_VERSION=$(read_property "integrator.version")
           BALLERINA_JRE_VERSION=$(read_property "ballerina.jre.version")
 
+          # A `<key>.tag` companion is only present when the upstream release tag cannot be derived
+          # from the version (a rolling tag such as wso2/ballerina-vscode's `nightly`, pinned by
+          # ci/build/resolve-nightly-versions.sh). Otherwise the conventional v<version> tag applies.
+          BALLERINA_EXTENSION_TAG=$(read_property "ballerina.extension.version.tag")
+          MI_EXTENSION_TAG=$(read_property "wso2.micro-integrator.extension.version.tag")
+
           if [ -z "${BALLERINA_VERSION}" ] || [ -z "${ICP_VERSION}" ] || [ -z "${INTEGRATOR_VERSION}" ] || [ -z "${BALLERINA_JRE_VERSION}" ]; then
             echo "Error: ballerina.version, icp.version, integrator.version, and ballerina.jre.version must be set in ${VERSIONS_FILE}." >&2
             exit 1
-          fi
-
-          # Resolve the Ballerina extension version selector against the wso2/ballerina-vscode
-          # releases tab (only releases that ship a ballerina-*.vsix asset are considered):
-          #   nightly               -> newest release whose tag contains "nightly"
-          #   latest/latest-release -> newest release by date (pre-releases included)
-          #   pinned                -> the value pinned in component-versions.properties
-          #   <x.y.z>               -> used verbatim
-          # The daily build passes "nightly"; manual builds may pass latest/pinned/an exact version.
-          RESOLVED_TAG=""
-          BAL_SELECTOR=""
-          case "${BALLERINA_EXTENSION_VERSION}" in
-            nightly)
-              BAL_SELECTOR="nightly"
-              echo "Resolving newest nightly wso2/ballerina-vscode release with a ballerina-*.vsix asset..." >&2
-              RESOLVED_TAG=$(gh api "repos/wso2/ballerina-vscode/releases?per_page=100" \
-                --jq '[.[] | select(.draft == false) | select(.tag_name | test("nightly"; "i")) | select(any(.assets[]?; .name | test("^ballerina-.*\\.vsix$")))][0].tag_name')
-              ;;
-            latest|latest-release)
-              BAL_SELECTOR="latest"
-              echo "Resolving latest wso2/ballerina-vscode release with a ballerina-*.vsix asset..." >&2
-              RESOLVED_TAG=$(gh api "repos/wso2/ballerina-vscode/releases?per_page=100" \
-                --jq '[.[] | select(.draft == false) | select(any(.assets[]?; .name | test("^ballerina-.*\\.vsix$")))][0].tag_name')
-              ;;
-            pinned)
-              BALLERINA_EXTENSION_VERSION=$(read_property "ballerina.extension.version")
-              echo "Using pinned ballerina.extension.version=${BALLERINA_EXTENSION_VERSION}." >&2
-              ;;
-          esac
-          if [ -n "${BAL_SELECTOR}" ]; then
-            if [ -z "${RESOLVED_TAG}" ] || [ "${RESOLVED_TAG}" = "null" ]; then
-              echo "Error: no ${BAL_SELECTOR} wso2/ballerina-vscode release with a ballerina-*.vsix asset was found." >&2
-              exit 1
-            fi
-            BALLERINA_EXTENSION_VERSION="${RESOLVED_TAG#[vV]}"
-            echo "Resolved ballerina.extension.version=${BALLERINA_EXTENSION_VERSION} (from tag ${RESOLVED_TAG})." >&2
           fi
 
           if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
@@ -175,58 +180,42 @@ jobs:
             exit 1
           fi
 
-          # Derive the integrator version from the channel. Base = first 3 dotted fields of
-          # integrator.version (e.g. 5.1.0.1 -> 5.1.0). A dash-delimited suffix is required
-          # (never a dot): Windows MSI/WiX needs a numeric a.b.c.d and the build scripts strip
-          # at the first '-'; a dot suffix would overflow WiX's 65535 field limit.
-          #   nightly -> <base>-nightly   custom -> <base>-<UTC timestamp>   exact -> verbatim (GA)
-          CHANNEL="${VERSION_CHANNEL:-custom}"
-          BASE3=$(echo "${INTEGRATOR_VERSION}" | cut -d. -f1-3)
-          case "${CHANNEL}" in
-            exact)   : ;;
-            nightly) INTEGRATOR_VERSION="${BASE3}-nightly" ;;
-            custom)  INTEGRATOR_VERSION="${BASE3}-$(date -u +%Y%m%d%H%M)" ;;
-            *) echo "Error: unknown version_channel '${CHANNEL}' (expected nightly|custom|exact)." >&2; exit 1 ;;
-          esac
-          echo "Resolved integrator version: ${INTEGRATOR_VERSION} (channel=${CHANNEL})." >&2
-
           echo "ballerina_version=${BALLERINA_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_extension_version=${BALLERINA_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "ballerina_extension_tag=${BALLERINA_EXTENSION_TAG:-v${BALLERINA_EXTENSION_VERSION}}" >> "$GITHUB_OUTPUT"
           echo "mi_extension_version=${MI_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "mi_extension_tag=${MI_EXTENSION_TAG:-v${MI_EXTENSION_VERSION}}" >> "$GITHUB_OUTPUT"
           echo "icp_version=${ICP_VERSION}" >> "$GITHUB_OUTPUT"
           echo "integrator_version=${INTEGRATOR_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_jre_version=${BALLERINA_JRE_VERSION}" >> "$GITHUB_OUTPUT"
 
   compile:
-    needs: resolve-versions
+    needs: [stamp-version, resolve-versions]
     uses: ./.github/workflows/compile.yml
-    secrets: inherit  
+    secrets: inherit
     with:
-      runOnAWS: ${{ github.event.inputs.runner == 'codebuild' }}
-      ballerina_extension_source: ${{ github.event.inputs.ballerina_extension_source }}
-      # Pass the already-resolved concrete version (nightly/latest resolved once here) so the
-      # Linux build uses the exact same Ballerina release as mac/Windows.
-      ballerina_extension_version: ${{ needs.resolve-versions.outputs.ballerina_extension_version }}
-      integrator_version_override: ${{ needs.resolve-versions.outputs.integrator_version }}
-      mi_extension_source: ${{ github.event.inputs.mi_extension_source }}
-      build_packed_installers: ${{ github.event.inputs.build_packed_installers == 'true' }}
+      runOnAWS: ${{ inputs.runner == 'codebuild' }}
+      ballerina_extension_source: ${{ inputs.ballerina_extension_source }}
+      mi_extension_source: ${{ inputs.mi_extension_source }}
+      build_packed_installers: ${{ inputs.build_packed_installers == true }}
+      versions_artifact: build-versions
 
   smoke-test:
-    if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+    if: ${{ inputs.build_packed_installers == true }}
     needs: compile
     uses: ./.github/workflows/smoke-test.yml
     with:
       artifact_name: Product-Integrator-DEB
 
   smoke-test-windows:
-    if: ${{ github.event.inputs.build_windows == 'true' && github.event.inputs.build_packed_installers == 'true' }}
+    if: ${{ inputs.build_windows == true && inputs.build_packed_installers == true }}
     needs: build-windows
     uses: ./.github/workflows/smoke-test.yml
     with:
       windows_artifact_name: Product-Integrator-Windows
 
   build-macos:
-    if: ${{ github.event.inputs.build_macos == 'true' }}
+    if: ${{ inputs.build_macos == true }}
     name: Build (macOS)
     runs-on: ${{ matrix.runner }}
     needs: [resolve-versions, compile]
@@ -336,22 +325,30 @@ jobs:
           echo "BALLERINA_EXTENSION_VERSION=${{ needs.resolve-versions.outputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
 
       - name: Download archived Ballerina VSIX
-        if: ${{ github.event.inputs.ballerina_extension_source == 'github' && needs.resolve-versions.outputs.ballerina_extension_version != '' }}
+        if: ${{ inputs.ballerina_extension_source == 'github' && needs.resolve-versions.outputs.ballerina_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.ballerina_extension_tag }}")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Download archived MI VSIX
-        if: ${{ github.event.inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
+        if: ${{ inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "v${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD")
+          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.mi_extension_tag }}")
           echo "MI_VSIX_PATH=${MI_VSIX_PATH}" >> "$GITHUB_ENV"
+
+      # Deliberately after the cache steps: a timestamped version in
+      # hashFiles('ci/build/component-versions.properties') would bust the extensions cache every run.
+      - name: Download stamped versions
+        uses: actions/download-artifact@v4
+        with:
+          name: build-versions
+          path: .
 
       - name: Update product.json and branding
         working-directory: .
@@ -482,7 +479,7 @@ jobs:
           fi
 
       - name: Upload macOS artifacts
-        if: ${{ github.event.inputs.build_packed_installers == 'false' }}
+        if: ${{ inputs.build_packed_installers == false }}
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-darwin-${{ matrix.arch }}
@@ -491,14 +488,14 @@ jobs:
           if-no-files-found: error
       
       - name: Zip the artifacts and copy artifacts
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         run: |
           APP_DIR=$(find "../VSCode-darwin-${{ matrix.arch }}" -name "*.app" -type d | head -1)
           mkdir -p ../artifacts
           (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
           cp ../artifacts/VSCode-darwin-${{ matrix.arch }}.zip ../../installers/mac/
       - name: Build macOS installer packages
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
           ROOT_DIR=$(pwd)
@@ -537,14 +534,14 @@ jobs:
           aws-region: us-east-1
       
       - name: Upload macOS artifacts to S3
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         working-directory: .
         run: |
           S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
           aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.dmg"
       
       - name: Upload macOS DMG artifacts
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         uses: actions/upload-artifact@v4
         with:
           name: Product-Integrator-Darwin-DMG-${{ matrix.arch }}
@@ -553,28 +550,28 @@ jobs:
           if-no-files-found: error
 
       - name: cosign-installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         uses: sigstore/cosign-installer@v3.5.0
       - name: Sign the dmg installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
           cosign sign-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg --output-certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --output-signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --yes
 
       - name: Verify signature of the dmg installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
-          cosign verify-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg --certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg --certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 
       - name: Generate Hashes for dmg installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
           openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sha256 installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg
 
       - name: Upload Signatures and Hashes for mac installers
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         uses: actions/upload-artifact@v4
         with:
           name: Signatures-and-Hashes-MAC-${{ matrix.arch }}
@@ -585,7 +582,7 @@ jobs:
           if-no-files-found: error
 
   build-windows:
-    if: ${{ github.event.inputs.build_windows == 'true' }}
+    if: ${{ inputs.build_windows == true }}
     name: Build (Windows)
     runs-on: windows-2022
     needs: [resolve-versions, compile]
@@ -698,22 +695,30 @@ jobs:
           echo "BALLERINA_EXTENSION_VERSION=${{ needs.resolve-versions.outputs.ballerina_extension_version }}" >> "$GITHUB_ENV"
 
       - name: Download archived Ballerina VSIX
-        if: ${{ github.event.inputs.ballerina_extension_source == 'github' && needs.resolve-versions.outputs.ballerina_extension_version != '' }}
+        if: ${{ inputs.ballerina_extension_source == 'github' && needs.resolve-versions.outputs.ballerina_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.ballerina_extension_tag }}")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
       - name: Download archived MI VSIX
-        if: ${{ github.event.inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
+        if: ${{ inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "v${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD")
+          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.mi_extension_tag }}")
           echo "MI_VSIX_PATH=${MI_VSIX_PATH}" >> "$GITHUB_ENV"
+
+      # Deliberately after the cache steps: a timestamped version in
+      # hashFiles('ci/build/component-versions.properties') would bust the extensions cache every run.
+      - name: Download stamped versions
+        uses: actions/download-artifact@v4
+        with:
+          name: build-versions
+          path: .
 
       - name: Update product.json and branding
         shell: bash
@@ -854,7 +859,7 @@ jobs:
           Compress-Archive -Path ../VSCode-win32-x64/* -DestinationPath $archivePath -Force
 
       - name: Upload Windows artifacts
-        if: ${{ github.event.inputs.build_packed_installers == 'false' }}
+        if: ${{ inputs.build_packed_installers == false }}
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-win32
@@ -863,23 +868,23 @@ jobs:
           if-no-files-found: error
       
       - name: Copy Integrator artifact to build directory
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         run: |
           cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
       - name: Exclude build workspace from Windows Defender
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         continue-on-error: true
         shell: pwsh
         run: |
           Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE\installers\windows"
       - name: Enable long paths (Windows)
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         continue-on-error: true
         shell: pwsh
         run: |
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
       - name: Build Windows installer packages
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         shell: pwsh
         run: |
           cd ..\..
@@ -911,7 +916,7 @@ jobs:
           aws-region: us-east-1
 
       - name: Upload Windows artifacts to S3
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         shell: bash
         working-directory: .
         run: |
@@ -919,7 +924,7 @@ jobs:
           aws s3 cp installers/windows/WixPackage/bin/x64/Release/en-US/ "${S3_PATH}" --recursive --exclude "*" --include "*.msi"
 
       - name: Upload Windows artifacts
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         uses: actions/upload-artifact@v4
         with:
           name: Product-Integrator-Windows
@@ -928,28 +933,28 @@ jobs:
           if-no-files-found: error
       
       - name: cosign-installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         uses: sigstore/cosign-installer@v3.5.0
       - name: Sign the msi installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
           cosign sign-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi --output-certificate installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.pem --output-signature installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sig --yes
       - name: Verify signature of the msi installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
-          cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build-and-release.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 
           
       - name: Generate Hashes for msi installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
           openssl dgst -sha256 -out installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sha256 installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi 
 
       - name: Upload Signatures and Hashes for msi installer
-        if: ${{ github.event.inputs.build_packed_installers == 'true' }}
+        if: ${{ inputs.build_packed_installers == true }}
         uses: actions/upload-artifact@v4
         with:
           name: Signatures-and-Hashes-MSI
@@ -963,7 +968,7 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     needs: [resolve-versions, compile, build-macos, build-windows, smoke-test, smoke-test-windows]
-    if: always() && (needs.compile.result == 'success') && (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') && (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') && (github.event.inputs.build_packed_installers == 'false') && (github.event.inputs.delivery_mode == 'archive')
+    if: always() && (needs.compile.result == 'success') && (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') && (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') && (inputs.build_packed_installers == false) && (inputs.publish_tag == '')
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -1012,8 +1017,8 @@ jobs:
       (needs.compile.result == 'success') &&
       (needs.smoke-test.result == 'success') &&
       (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') &&
-      (github.event.inputs.delivery_mode == 'github-release') &&
-      (github.event.inputs.build_packed_installers == 'true')
+      (inputs.publish_tag != '') &&
+      (inputs.build_packed_installers == true)
     steps:
       - name: Download Linux DEB artifacts
         uses: actions/download-artifact@v4
@@ -1092,90 +1097,61 @@ jobs:
           path: release-files/
         continue-on-error: true
 
+      # The WI extension ships as a release asset: for nightly, the rolling tag is how the vsix is
+      # distributed (there is no Marketplace / Open VSX publish).
+      - name: Download WI extension VSIX
+        uses: actions/download-artifact@v4
+        with:
+          name: wi-extension-vsix
+          path: release-files/
+        continue-on-error: true
+
+      # The caller chose the tag; all that is derived here is the display name.
+      - name: Resolve release name
+        id: release-tag
+        shell: bash
+        env:
+          PUBLISH_TAG: ${{ inputs.publish_tag }}
+          INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
+        run: |
+          if [ "${PUBLISH_TAG}" = "nightly" ]; then
+            echo "name=WSO2 Integrator Nightly (${INTEGRATOR_VERSION})" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=WSO2 Integrator ${PUBLISH_TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # `nightly` is a rolling tag: every night's filenames carry a fresh timestamp, so re-uploading
+      # would let last night's assets pile up. Drop the release and its tag first so it always
+      # reflects exactly one build.
+      - name: Clear the previous nightly release
+        if: ${{ inputs.publish_tag == 'nightly' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release delete nightly --yes --cleanup-tag
+            echo "Deleted the previous nightly release and tag."
+          else
+            echo "No existing nightly release to delete."
+          fi
+
       - name: List release files
         run: |
-          echo "Files to be released under tag v${{ needs.resolve-versions.outputs.integrator_version }}:"
+          echo "Files to be released under tag ${{ inputs.publish_tag }}:"
           ls -la release-files/ || echo "No release files found"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.resolve-versions.outputs.integrator_version }}
-          name: WSO2 Integrator v${{ needs.resolve-versions.outputs.integrator_version }}
-          target_commitish: ${{ github.sha }}
+          tag_name: ${{ inputs.publish_tag }}
+          name: ${{ steps.release-tag.outputs.name }}
+          # Callers that prepared a branch pass its SHA, so the release points at the commit that
+          # actually carries the versions rather than at the ref the workflow was started from.
+          target_commitish: ${{ inputs.target_commitish != '' && inputs.target_commitish || github.sha }}
           draft: false
-          prerelease: ${{ github.event.inputs.version_channel != 'exact' }}
+          prerelease: ${{ inputs.is_prerelease }}
+          # Only a non-pre-release becomes the repository Latest.
+          make_latest: ${{ !inputs.is_prerelease }}
           files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  bump-version:
-    name: Bump Integrator Version
-    runs-on: ubuntu-latest
-    needs: [publish-github-release, resolve-versions]
-    # Only bump integrator.version after a real GA release (exact channel). nightly/custom
-    # builds carry a dash suffix and must never rewrite the pinned version.
-    if: needs.publish-github-release.result == 'success' && github.event.inputs.version_channel == 'exact'
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Increment alpha version
-        id: bump
-        run: |
-          VERSIONS_FILE="ci/build/component-versions.properties"
-          CURRENT_VERSION=$(awk -F= '$1 == "integrator.version" { print $2; exit }' "${VERSIONS_FILE}" | tr -d '\r')
-          echo "Current version: ${CURRENT_VERSION}"
-
-          # If version ends in a number, increment it (e.g. alpha11 -> alpha12, beta1 -> beta2)
-          # If not, append 1 (e.g. beta -> beta1, RC -> RC1)
-          if [[ "${CURRENT_VERSION}" =~ ^(.*[^0-9])([0-9]+)$ ]]; then
-            NEW_VERSION="${BASH_REMATCH[1]}$((BASH_REMATCH[2] + 1))"
-          elif [[ -n "${CURRENT_VERSION}" ]]; then
-            NEW_VERSION="${CURRENT_VERSION}1"
-          else
-            echo "Error: integrator.version is empty or invalid." >&2
-            exit 1
-          fi
-
-          echo "New version: ${NEW_VERSION}"
-          sed -i "s/^integrator\.version=.*/integrator.version=${NEW_VERSION}/" "${VERSIONS_FILE}"
-          echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Create PR with version bump
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Ensure the workflow was triggered on a branch, not a tag or detached SHA
-          if [[ "${{ github.ref_type }}" != "branch" ]]; then
-            echo "Error: expected ref_type=branch, got '${{ github.ref_type }}' (${{ github.ref_name }}). Skipping version bump." >&2
-            exit 1
-          fi
-          BASE_BRANCH="${{ github.ref_name }}"
-          BRANCH="bump-integrator-version-${{ steps.bump.outputs.new_version }}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          # -B resets the branch if it already exists (safe on reruns)
-          git checkout -B "$BRANCH"
-          git add ci/build/component-versions.properties
-          git commit -m "Bump integrator version to ${{ steps.bump.outputs.new_version }}"
-          # --force-with-lease is safe: only overwrites if no one else pushed to the branch
-          git push --force-with-lease origin "$BRANCH"
-
-          # Only open a new PR if one doesn't already exist for this branch
-          if gh pr view "$BRANCH" --json number -q .number 2>/dev/null; then
-            echo "PR already exists for branch $BRANCH, skipping creation."
-          else
-            gh pr create \
-              --base "$BASE_BRANCH" \
-              --head "$BRANCH" \
-              --title "Bump integrator version to ${{ steps.bump.outputs.new_version }}" \
-              --body "Automated version bump after successful release of \`v${{ needs.resolve-versions.outputs.integrator_version }}\`. Increments \`integrator.version\` to \`${{ steps.bump.outputs.new_version }}\` in \`ci/build/component-versions.properties\`."
-          fi
