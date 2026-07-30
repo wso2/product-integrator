@@ -14,3 +14,24 @@ Index: product-integrator/lib/vscode/build/gulpfile.vscode.ts
  	'out-build/vs/workbench/contrib/debug/browser/media/*.png',
  
  	// External Terminal
+Index: product-integrator/lib/vscode/build/next/index.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/build/next/index.ts
++++ product-integrator/lib/vscode/build/next/index.ts
+@@ -243,9 +243,13 @@
+ 	'vs/editor/common/languages/highlights/*.scm',
+ 	'vs/editor/common/languages/injections/*.scm',
+ 
+-	// SVGs referenced from CSS (needed for transpile/dev builds where CSS is copied as-is)
+-	'vs/workbench/browser/media/code-icon.svg',
+-	'vs/workbench/browser/parts/editor/media/letterpress*.svg',
++	// SVGs referenced from CSS (needed for transpile/dev builds where CSS is copied as-is).
++	// WSO2: widened from code-icon.svg / letterpress*.svg so that the branded SVGs layered in
++	// from the product `resources/vscode` overlay (e.g. integrator-activity-icon-dark.svg, used
++	// by the WSO2 login dialog) are packaged too. Referenced from TS via FileAccess, not CSS,
++	// so esbuild does not pick them up on its own.
++	'vs/workbench/browser/media/*.svg',
++	'vs/workbench/browser/parts/editor/media/*.svg',
+ 	'vs/sessions/contrib/chat/browser/media/*.svg',
+ 	'vs/sessions/contrib/welcome/browser/media/themePreviews/*.svg'
+ ];

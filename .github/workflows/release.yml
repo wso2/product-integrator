@@ -1,0 +1,168 @@
+name: Release
+
+# Cuts a release branch and builds it. Dispatch this on `main`.
+#
+#   1. create a branch named exactly after `version` (e.g. 5.1.0-alpha1, or 5.1.0 for GA)
+#   2. write `version` into ci/build/component-versions.properties, settle the WI extension version,
+#      mirror it into wi/wi-extension/package.json, and commit — so the branch records exactly what
+#      shipped and the build resolves nothing
+#   3. build that commit and publish it as v<version>
+#
+# `main` is never modified. After a GA release, bump it by hand to the next
+# <major>.<minor+1>.0-SNAPSHOT, and the extension to <major>.<minor+2>.0-SNAPSHOT.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, e.g. 5.1.0-alpha1 or 5.1.0. Also the release branch name.'
+        required: true
+        type: string
+      is_prerelease:
+        description: 'Pre-release (alpha/beta/rc): the WI extension ships a timestamped pre-release version and the GitHub release is flagged as a pre-release. Uncheck for GA.'
+        required: false
+        default: true
+        type: boolean
+      runner:
+        description: 'Select runner type'
+        required: true
+        default: 'codebuild'
+        type: choice
+        options:
+          - codebuild
+          - ubuntu-latest
+      build_linux:
+        description: 'Build for Linux'
+        required: false
+        default: true
+        type: boolean
+      build_macos:
+        description: 'Build for macOS (Apple Silicon and Intel)'
+        required: false
+        default: true
+        type: boolean
+      build_windows:
+        description: 'Build for Windows'
+        required: false
+        default: true
+        type: boolean
+      build_packed_installers:
+        description: 'Whether to build a Balleirna, ICP, and Integrator packed installers'
+        required: true
+        default: true
+        type: boolean
+      ballerina_extension_source:
+        description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
+        required: true
+        default: 'github'
+        type: choice
+        options:
+          - marketplace
+          - github
+      mi_extension_source:
+        description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
+        required: true
+        default: 'github'
+        type: choice
+        options:
+          - marketplace
+          - github
+
+permissions:
+  id-token: write
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-release-branch:
+    name: Prepare ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      wi_extension_version: ${{ steps.stamp.outputs.wi_extension_version }}
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - name: Validate version
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+            echo "Error: version '${VERSION}' must be <major>.<minor>.<patch>[-qualifier], e.g. 5.1.0-alpha1 or 5.1.0." >&2
+            exit 1
+          fi
+          if [[ "${VERSION}" == *-SNAPSHOT ]]; then
+            echo "Error: version must be a concrete release version, not a -SNAPSHOT." >&2
+            exit 1
+          fi
+
+      - name: Checkout ${{ github.ref_name }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # A release branch is written to exactly once. Re-running against an existing branch would
+      # silently rewrite a version that has already been tagged and published.
+      - name: Create the release branch
+        run: |
+          if git ls-remote --exit-code --heads origin "${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "Error: branch '${{ inputs.version }}' already exists. Pick a new version." >&2
+            exit 1
+          fi
+          git checkout -b "${{ inputs.version }}"
+
+      # Pre-release: --force-extension guarantees a fresh 1.<odd>.<yymmddHH> even when the branch was
+      # cut from something already concrete, so every alpha/beta/rc ships its own vsix version.
+      # GA: nothing is derived — -SNAPSHOT is stripped, and an odd extension minor fails because that
+      # is the pre-release line.
+      - name: Apply versions
+        id: stamp
+        run: |
+          chmod +x ./ci/build/apply-version.sh
+          if [ "${{ inputs.is_prerelease }}" = "true" ]; then
+            ./ci/build/apply-version.sh --version "${{ inputs.version }}" --force-extension
+          else
+            ./ci/build/apply-version.sh --version "${{ inputs.version }}" --mode release
+          fi
+
+      - name: Upload versions
+        uses: actions/upload-artifact@v4
+        with:
+          name: versions
+          path: |
+            ci/build/component-versions.properties
+            wi/wi-extension/package.json
+          if-no-files-found: error
+
+      - name: Commit and push the release branch
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ci/build/component-versions.properties wi/wi-extension/package.json
+          git commit -m "Set versions for ${{ inputs.version }}"
+          git push origin "${{ inputs.version }}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: prepare-release-branch
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      # The versions come from the branch that was just prepared; target_commitish points the release
+      # at that commit rather than at the ref this workflow was dispatched on.
+      versions_artifact: versions
+      publish_tag: v${{ inputs.version }}
+      is_prerelease: ${{ inputs.is_prerelease }}
+      target_commitish: ${{ needs.prepare-release-branch.outputs.sha }}
+      runner: ${{ inputs.runner }}
+      build_linux: ${{ inputs.build_linux }}
+      build_macos: ${{ inputs.build_macos }}
+      build_windows: ${{ inputs.build_windows }}
+      build_packed_installers: ${{ inputs.build_packed_installers }}
+      ballerina_extension_source: ${{ inputs.ballerina_extension_source }}
+      mi_extension_source: ${{ inputs.mi_extension_source }}
