@@ -191,13 +191,16 @@ jobs:
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
           key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
-          # Partial restore so a cold key doesn't mean a cold cache: this prefix keeps the component
-          # versions fixed and only drops the patch/wi/** hash, which is the churn we are absorbing.
-          # download-builtin-extensions then re-validates each extension by version string
-          # (isUpToDate) -- see the wso2.wso2-integrator removal in "Install builtin extensions" for
-          # the one extension that check cannot catch.
+          # Partial restore so a cold key doesn't mean a cold cache: this prefix is the exact key minus
+          # the file-hash component, so a patch or wi/** edit falls back to the previous run at the same
+          # component versions -- which is the churn being absorbed. The version components stay pinned
+          # deliberately: dropping them would let a restore cross a component upgrade, and while
+          # download-builtin-extensions re-validates by version string (isUpToDate) and would re-fetch,
+          # a fallback that crosses versions is harder to reason about than the cache it saves is worth.
+          # See the wso2.wso2-integrator removal in "Install builtin extensions" for the one extension
+          # that check cannot catch.
           restore-keys: |
-            extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-
+            extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-
 
       - name: Cache Rust toolchain
         uses: actions/cache@v4
