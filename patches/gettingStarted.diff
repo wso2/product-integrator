@@ -249,7 +249,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
-@@ -0,0 +1,779 @@
+@@ -0,0 +1,757 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -282,21 +282,26 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +}
 +
 +/**
-+ * Availability of the Ballerina-owned federated BI forms, mirrored from the
++ * Availability of an extension-owned federated form remote, mirrored from the
 + * wi-extension's webviewManager contract (`window.__WI_BI_FORM_REMOTE_STATE`).
-+ * `missing` = the Ballerina extension is not installed; `outdated` = installed
-+ * but its version predates the federated forms (no bundle on disk).
++ * `missing` = the owning extension is not installed; `outdated` = installed
++ * but its version predates the federated form (no bundle on disk).
 + */
-+interface IBiFormRemoteState {
++interface IFormRemoteState {
 +	status: 'ok' | 'missing' | 'outdated';
 +	version?: string;
 +}
 +
-+interface IBiFormRemote {
++interface IFormRemote {
 +	uri: string | null;
-+	state: IBiFormRemoteState;
++	state: IFormRemoteState;
 +	resourceRoot?: URI;
 +}
++
++/** Location of a federated form bundle inside its owning extension — the same
++ *  contract the wi-extension's webviewManager uses (BI_FORM_FEDERATION_SUBPATH). */
++const FORM_FEDERATION_SUBPATH = ['resources', 'jslibs', 'federation'] as const;
++const FORM_REMOTE_ENTRY = 'remoteEntry.js';
 +
 +interface IEmbeddedWelcomeThemeData {
 +	activeTheme: string;
@@ -568,8 +573,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +
 +		const resourcesRoot = joinPath(extension.extensionLocation, 'resources');
 +		const scriptUri = asWebviewUri(joinPath(resourcesRoot, 'jslibs', 'main.js')).toString(true);
-+		const biFormRemote = await this.resolveBiFormRemote();
-+		const miFormRemote = await this.resolveMiFormRemote();
++		const biFormRemote = await this.resolveFormRemote(WI_BALLERINA_EXTENSION_ID);
++		const miFormRemote = await this.resolveFormRemote(WI_MI_EXTENSION_ID);
 +
 +		if (!this.isCurrentRenderRequest(requestId)) {
 +			return;
@@ -608,47 +613,20 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +	}
 +
 +	/**
-+	 * Resolves the Ballerina-owned BI form federation remote (`remoteEntry.js`)
-+	 * the same way the wi-extension's webviewManager does for its own panel,
-+	 * so the embedded welcome can load the federated creation forms. Returns a
-+	 * null uri plus a reason (`missing`/`outdated`) when it cannot be served —
-+	 * the webview uses that to render an accurate, actionable message.
++	 * Resolves an extension-owned federated form remote (`remoteEntry.js`) the
++	 * same way the wi-extension's webviewManager does for its own panel, so the
++	 * embedded welcome can load the federated creation forms (BI and MI).
++	 * Returns a null uri plus a reason (`missing`/`outdated`) when it cannot be
++	 * served — the webview uses that to render an accurate, actionable message.
 +	 */
-+	private async resolveBiFormRemote(): Promise<IBiFormRemote> {
-+		const ballerina = await this.extensionService.getExtension(WI_BALLERINA_EXTENSION_ID);
-+		if (!ballerina) {
++	private async resolveFormRemote(extensionId: string): Promise<IFormRemote> {
++		const owner = await this.extensionService.getExtension(extensionId);
++		if (!owner) {
 +			return { uri: null, state: { status: 'missing' } };
 +		}
-+		const version = ballerina.version;
-+		const federationRoot = joinPath(ballerina.extensionLocation, 'resources', 'jslibs', 'federation');
-+		const remoteEntry = joinPath(federationRoot, 'remoteEntry.js');
-+		try {
-+			if (!(await this.fileService.exists(remoteEntry))) {
-+				return { uri: null, state: { status: 'outdated', version } };
-+			}
-+		} catch {
-+			return { uri: null, state: { status: 'outdated', version } };
-+		}
-+		return {
-+			uri: asWebviewUri(remoteEntry).toString(true),
-+			state: { status: 'ok', version },
-+			resourceRoot: federationRoot
-+		};
-+	}
-+
-+	/**
-+	 * Resolves the MI-owned project-form federation remote, mirroring the
-+	 * wi-extension webviewManager's `__WI_MI_FORM_REMOTE` contract (a null uri
-+	 * when the MI extension is absent or predates the federated form).
-+	 */
-+	private async resolveMiFormRemote(): Promise<IBiFormRemote> {
-+		const mi = await this.extensionService.getExtension(WI_MI_EXTENSION_ID);
-+		if (!mi) {
-+			return { uri: null, state: { status: 'missing' } };
-+		}
-+		const version = mi.version;
-+		const federationRoot = joinPath(mi.extensionLocation, 'resources', 'jslibs', 'federation');
-+		const remoteEntry = joinPath(federationRoot, 'remoteEntry.js');
++		const version = owner.version;
++		const federationRoot = joinPath(owner.extensionLocation, ...FORM_FEDERATION_SUBPATH);
++		const remoteEntry = joinPath(federationRoot, FORM_REMOTE_ENTRY);
 +		try {
 +			if (!(await this.fileService.exists(remoteEntry))) {
 +				return { uri: null, state: { status: 'outdated', version } };
@@ -700,7 +678,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		WSO2EditorGroupWatermark.activeLoginDialogPromise = loginDialogPromise;
 +	}
 +
-+	private getEmbeddedWelcomeHtml(scriptUri: string, bootstrap: IEmbeddedWelcomeBootstrap, themeData: IEmbeddedWelcomeThemeData, biFormRemote: IBiFormRemote, miFormRemote: IBiFormRemote): string {
++	private getEmbeddedWelcomeHtml(scriptUri: string, bootstrap: IEmbeddedWelcomeBootstrap, themeData: IEmbeddedWelcomeThemeData, biFormRemote: IFormRemote, miFormRemote: IFormRemote): string {
 +		const serializedBootstrap = JSON.stringify(bootstrap).replace(/</g, '\\u003c');
 +		const serializedThemeData = JSON.stringify(themeData).replace(/</g, '\\u003c');
 +		const serializedBiFormRemote = JSON.stringify(biFormRemote.uri).replace(/</g, '\\u003c');
