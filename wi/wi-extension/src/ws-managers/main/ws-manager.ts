@@ -30,9 +30,7 @@ import {
     GetSubFoldersRequest,
     GetSubFoldersResponse,
     ProjectDirResponse,
-    GetSupportedMIVersionsResponse,
-    CreateMiProjectRequest,
-    CreateMiProjectResponse,
+    MiFormWsBootstrap,
     CreateSiProjectRequest,
     CreateSiProjectResponse,
     GettingStartedData,
@@ -271,13 +269,6 @@ export class MainWsManager implements WIVisualizerAPI {
         await workspace.getConfiguration().update(params.section, params.value, target);
     }
 
-    async getSupportedMIVersionsHigherThan(version: string): Promise<GetSupportedMIVersionsResponse> {
-        return new Promise(async (resolve) => {
-            const versions = ["4.6.0", "4.5.0", "4.4.0", "4.3.0", "4.2.0", "4.1.0", "4.0.0"];
-            resolve({ versions });
-        });
-    }
-
     async getSubFolderNames(params: GetSubFoldersRequest): Promise<GetSubFoldersResponse> {
         return new Promise(async (resolve) => {
             const { path: folderPath } = params;
@@ -315,43 +306,23 @@ export class MainWsManager implements WIVisualizerAPI {
         });
     }
 
-    async createMiProject(params: CreateMiProjectRequest): Promise<CreateMiProjectResponse> {
-        return new Promise(async (resolve, reject) => {
-            try {
-                console.log("Creating MI project with params:", params);
-
-                const miCommandParams = {
-                    name: params.name,
-                    path: path.join(params.directory, params.name),
-                    scope: "user",
-                    open: params.open,
-                    miVersion: params.miVersion,
-                    isConsolidatedProject: params.isConsolidatedProject ?? false,
-                    subProjects: params.subProjects ?? [],
-                    groupId: params.groupID ?? "com.microintegrator.projects",
-                    artifactId: params.artifactID ?? params.name,
-                    version: params.version ?? "1.0.0",
-                };
-
-                const result = await commands.executeCommand("MI.project-explorer.create-project", miCommandParams);
-
-                if (result) {
-                    openInVSCode((result as CreateMiProjectResponse).filePath);
-                    resolve(result as CreateMiProjectResponse);
-                } else {
-                    resolve({ filePath: '' });
-                }
-            } catch (error) {
-                console.error("Error creating MI project:", error);
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                window.showErrorMessage(`Failed to create MI project: ${errorMessage}`);
-                reject(error);
-            }
-        });
-    }
-
     async importProjectFromCapp(): Promise<void> {
         await commands.executeCommand("MI.importProjectFromCapp");
+    }
+
+    async getMiFormWsBootstrap(): Promise<MiFormWsBootstrap> {
+        const miExtension = extensions.getExtension(EXTENSION_DEPENDENCIES.MI);
+        if (!miExtension) {
+            throw new Error("WSO2 Integrator: MI extension is not installed.");
+        }
+        if (!miExtension.isActive) {
+            await miExtension.activate();
+        }
+        const bootstrap = await commands.executeCommand<MiFormWsBootstrap>("MI.getMiFormWsBootstrap");
+        if (!bootstrap) {
+            throw new Error("Failed to obtain the MI form bridge bootstrap.");
+        }
+        return bootstrap;
     }
 
     async createSiProject(params: CreateSiProjectRequest): Promise<CreateSiProjectResponse> {

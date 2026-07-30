@@ -92,24 +92,12 @@ export interface ProjectDirResponse {
     path: string;
 }
 
-export interface GetSupportedMIVersionsResponse {
-    versions: string[];
-}
-
-export interface CreateMiProjectRequest {
-    directory: string;
-    name: string;
-    open: boolean;
-    groupID?: string;
-    artifactID?: string;
-    version?: string;
-    miVersion: string;
-    isConsolidatedProject?: boolean;
-    subProjects?: string[];
-}
-
-export interface CreateMiProjectResponse {
-    filePath: string;
+/** Websocket coordinates of the MI extension's giga-bridge server, relayed to
+ *  the federated MI project-creation form embedded in the welcome webview. */
+export interface MiFormWsBootstrap {
+    host: string;
+    port: number;
+    token: string;
 }
 
 export interface CreateSiProjectRequest {
@@ -281,10 +269,9 @@ export interface WIVisualizerAPI {
     getWorkspaceRoot: () => Promise<WorkspaceRootResponse>;
     getConfiguration: (params: GetConfigurationRequest) => Promise<GetConfigurationResponse>;
     setConfiguration: (params: SetConfigurationRequest) => Promise<void>;
-    getSupportedMIVersionsHigherThan: (version: string) => Promise<GetSupportedMIVersionsResponse>;
     getSubFolderNames: (params: GetSubFoldersRequest) => Promise<GetSubFoldersResponse>;
     askProjectDirPath: () => Promise<ProjectDirResponse>;
-    createMiProject: (params: CreateMiProjectRequest) => Promise<CreateMiProjectResponse>;
+    getMiFormWsBootstrap: () => Promise<MiFormWsBootstrap>;
     importProjectFromCapp: () => Promise<void>;
     createSiProject: (params: CreateSiProjectRequest) => Promise<CreateSiProjectResponse>;
     fetchSamplesFromGithub: (params: FetchSamplesRequest) => Promise<GettingStartedData>;

@@ -17,7 +17,7 @@
  */
 
 import * as vscode from "vscode";
-import { ViewType } from "@wso2/wi-core";
+import { EXTENSION_DEPENDENCIES, ViewType } from "@wso2/wi-core";
 import { ext } from "./extensionVariables";
 import { Uri } from "vscode";
 import * as fs from "fs";
@@ -86,6 +86,25 @@ function getBiFormRemoteState(webview: vscode.Webview): { uri: string | undefine
 	}
 	const uri = webview.asWebviewUri(Uri.file(path.join(dir, BI_FORM_REMOTE_ENTRY))).toString();
 	return { uri, state: { status: "ok", version } };
+}
+
+/**
+ * Root of the MI extension's Module Federation bundle (the federated MI
+ * project-creation form served by `wso2.micro-integrator`), or undefined when
+ * the MI extension is not installed.
+ */
+function getMiFederationRoot(): vscode.Uri | undefined {
+	const miExtension = vscode.extensions.getExtension(EXTENSION_DEPENDENCIES.MI);
+	if (!miExtension) {
+		return undefined;
+	}
+	return vscode.Uri.joinPath(miExtension.extensionUri, "resources", "jslibs", "federation");
+}
+
+/** localResourceRoots entry granting the webview access to the MI form bundle (empty if the MI extension is absent). */
+function getMiFormResourceRoots(): vscode.Uri[] {
+	const dir = getMiFederationRoot();
+	return dir ? [dir] : [];
 }
 
 /**
@@ -159,6 +178,8 @@ export class WebviewManager {
 					vscode.Uri.joinPath(ext.context.extensionUri, "resources"),
 					// Allow loading the Ballerina-owned BI form federation bundle.
 					...getBiFormResourceRoots(),
+					// Allow loading the MI-owned MI form federation bundle.
+					...getMiFormResourceRoots(),
 				],
 			},
 		);
@@ -255,6 +276,16 @@ export class WebviewManager {
 		const { uri: biFormRemoteUri, state: biFormRemoteState } = getBiFormRemoteState(webview);
 		const serializedBiFormRemote = JSON.stringify(biFormRemoteUri ?? null).replace(/</g, "\\u003c");
 		const serializedBiFormRemoteState = JSON.stringify(biFormRemoteState).replace(/</g, "\\u003c");
+
+		// The MI project-creation form is likewise a Module Federation remote,
+		// owned by and shipped inside the MI extension (wso2.micro-integrator). It
+		// loads via asWebviewUri from the MI federation dir added to
+		// localResourceRoots above; null when the MI extension is not installed.
+		const miFederationRoot = getMiFederationRoot();
+		const miFormRemoteUri = miFederationRoot
+			? webview.asWebviewUri(Uri.joinPath(miFederationRoot, "remoteEntry.js")).toString()
+			: undefined;
+		const serializedMiFormRemote = JSON.stringify(miFormRemoteUri ?? null).replace(/</g, "\\u003c");
 
 		// Content-Security-Policy. Inline bootstrap scripts are authorized by a
 		// per-render nonce; all bundles (the integrator's own and the Ballerina
@@ -390,9 +421,25 @@ export class WebviewManager {
 					</div>
 				</div>
 				<script nonce="${nonce}">
+					// acquireVsCodeApi() throws if called more than once per webview.
+					// Both the host bundle and the MI federated remote may acquire it
+					// at module scope, so make it idempotent before any bundle loads.
+					(function () {
+						if (typeof acquireVsCodeApi === 'function') {
+							const original = acquireVsCodeApi;
+							let instance;
+							window.acquireVsCodeApi = function () {
+								if (!instance) {
+									instance = original();
+								}
+								return instance;
+							};
+						}
+					})();
 					window.__WI_BRIDGE_BOOTSTRAP = ${serializedBridgeBootstrap};
 					window.__WI_BI_FORM_REMOTE = ${serializedBiFormRemote};
 					window.__WI_BI_FORM_REMOTE_STATE = ${serializedBiFormRemoteState};
+					window.__WI_MI_FORM_REMOTE = ${serializedMiFormRemote};
 				</script>
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 				<script nonce="${nonce}">

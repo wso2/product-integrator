@@ -60,7 +60,10 @@ async function getContainer(remoteUrl: string, globalName: string): Promise<Fede
     existing = (async () => {
         await loadScript(remoteUrl);
         if (!sharingInitialized) {
-            sharingInitialized = __webpack_init_sharing__("default");
+            sharingInitialized = Promise.resolve(__webpack_init_sharing__("default")).catch((err) => {
+                sharingInitialized = undefined;
+                throw err;
+            });
         }
         await sharingInitialized;
         const container = (window as any)[globalName] as FederationContainer | undefined;
@@ -68,10 +71,16 @@ async function getContainer(remoteUrl: string, globalName: string): Promise<Fede
             throw new Error(`Remote container "${globalName}" was not found after loading ${remoteUrl}.`);
         }
         // Wire the remote to the host's shared scope so React stays a singleton.
-        await container.init(__webpack_share_scopes__.default);
+        // init() may likewise return a non-Promise; await tolerates both.
+        await Promise.resolve(container.init(__webpack_share_scopes__.default));
         return container;
     })();
     initializedContainers.set(globalName, existing);
+    // Evict a failed initialization so callers can retry (e.g. the MI extension
+    // wasn't ready yet) instead of reusing the cached rejected promise.
+    existing.catch(() => {
+        initializedContainers.delete(globalName);
+    });
     return existing;
 }
 
