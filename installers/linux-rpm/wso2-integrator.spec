@@ -14,6 +14,13 @@ that brings together Ballerina language runtime, WSO2 Integration Control Plane,
 and low-code editor in one unified package.
 
 %global debug_package %{nil}
+# Disable RPM's automatic post-install processing (binary strip, etc.). This is a
+# bundled Electron app: resources/app/node_modules/@microsoft/mxc-sdk ships prebuilt
+# cross-platform binaries (e.g. bin/arm64/*), and the x86_64 build host's `strip`
+# cannot parse the ARM64 ELF files, which aborts the %install phase. Electron/Node
+# binaries must not be stripped anyway, so skip the whole brp step (matches deb, which
+# does not auto-strip).
+%global __os_install_post %{nil}
 %prep
 %setup -q -c
 

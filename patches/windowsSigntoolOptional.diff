@@ -1,0 +1,23 @@
+Index: product-integrator/lib/vscode/build/gulpfile.vscode.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/build/gulpfile.vscode.ts
++++ product-integrator/lib/vscode/build/gulpfile.vscode.ts
+@@ -534,7 +534,17 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
+ function hasAuthenticodeSignature(filePath: string): Promise<boolean> {
+ 	return new Promise((resolve, reject) => {
+ 		const proc = cp.spawn('signtool.exe', ['verify', '/pa', filePath]);
+-		proc.on('error', reject);
++		proc.on('error', (err: NodeJS.ErrnoException) => {
++			// signtool.exe ships with the Windows SDK and may not be on PATH (e.g. the
++			// WSO2 CI runners). It is only used to strip Microsoft ESRP signatures, which
++			// WSO2 builds do not produce, so treat "not found" as "no signature present"
++			// and skip the strip rather than failing the whole build.
++			if (err.code === 'ENOENT') {
++				resolve(false);
++			} else {
++				reject(err);
++			}
++		});
+ 		proc.on('exit', code => resolve(code === 0));
+ 	});
+ }
