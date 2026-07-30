@@ -192,13 +192,18 @@ jobs:
             lib/vscode/.build/extensions
           key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
           # Partial restore so a cold key doesn't mean a cold cache: this prefix is the exact key minus
-          # the file-hash component, so a patch or wi/** edit falls back to the previous run at the same
-          # component versions -- which is the churn being absorbed. The version components stay pinned
-          # deliberately: dropping them would let a restore cross a component upgrade, and while
-          # download-builtin-extensions re-validates by version string (isUpToDate) and would re-fetch,
-          # a fallback that crosses versions is harder to reason about than the cache it saves is worth.
-          # See the wso2.wso2-integrator removal in "Install builtin extensions" for the one extension
-          # that check cannot catch.
+          # the file-hash component, so a patch or wi/** edit falls back to the previous run instead of
+          # re-downloading every extension.
+          #
+          # What the fallback does and does not hold fixed, since it is not uniform: Ballerina and MI
+          # have their own key fields -- they are the two with a marketplace-vs-vsix source switch, and
+          # the version came along with the switch -- so a fallback cannot cross their versions. The
+          # streaming-integrator, hurl-client and mcp-server-inspector versions live only inside the
+          # dropped hash, so a fallback CAN cross those, as it can WI's. That is safe but not free:
+          # download-builtin-extensions re-validates by version string (isUpToDate), which catches those
+          # three because their versions move when their contents do. It cannot catch WI, whose version
+          # is hand-bumped and stays constant across content changes -- hence the explicit removal in
+          # "Install builtin extensions" below.
           restore-keys: |
             extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-
 
