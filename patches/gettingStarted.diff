@@ -219,7 +219,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2C
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,25 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -227,6 +227,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2C
 +
 +export const WI_MODE_SETTING_ID = 'integrator.defaultRuntime';
 +export const WI_EXTENSION_ID = 'wso2.wso2-integrator';
++export const WI_BALLERINA_EXTENSION_ID = 'wso2.ballerina';
++export const WI_MI_EXTENSION_ID = 'wso2.micro-integrator';
 +export const WI_CREATE_PROJECT_COMMAND_ID = 'wso2.integrator.createProject';
 +export const WI_EXPLORE_SAMPLES_COMMAND_ID = 'wso2.integrator.exploreSamples';
 +export const WI_IMPORT_PROJECT_COMMAND_ID = 'wso2.integrator.importProject';
@@ -247,7 +249,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
-@@ -0,0 +1,691 @@
+@@ -0,0 +1,782 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -256,6 +258,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +import { $, append, clearNode, getWindow } from '../../../../base/browser/dom.js';
 +import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 +import { joinPath } from '../../../../base/common/resources.js';
++import { URI } from '../../../../base/common/uri.js';
 +import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/workspace/common/workspace.js';
 +import { ICommandService } from '../../../../platform/commands/common/commands.js';
 +import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -269,7 +272,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +// eslint-disable-next-line local/code-import-patterns
 +import { WebviewThemeDataProvider } from '../../../contrib/webview/browser/themeing.js';
 +import { IExtensionService } from '../../../services/extensions/common/extensions.js';
-+import { WI_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND_ID, WI_EMBEDDED_WELCOME_VIEW_TYPE, WI_EXTENSION_ID } from './wso2Constants.js';
++import { IFileService } from '../../../../platform/files/common/files.js';
++import { WI_BALLERINA_EXTENSION_ID, WI_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND_ID, WI_EMBEDDED_WELCOME_VIEW_TYPE, WI_EXTENSION_ID, WI_MI_EXTENSION_ID } from './wso2Constants.js';
 +import { WSO2LoginDialog } from './wso2LoginDialog.js';
 +
 +interface IEmbeddedWelcomeBootstrap {
@@ -283,6 +287,28 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +	 */
 +	wsToken?: string;
 +}
++
++/**
++ * Availability of an extension-owned federated form remote, mirrored from the
++ * wi-extension's webviewManager contract (`window.__WI_BI_FORM_REMOTE_STATE`).
++ * `missing` = the owning extension is not installed; `outdated` = installed
++ * but its version predates the federated form (no bundle on disk).
++ */
++interface IFormRemoteState {
++	status: 'ok' | 'missing' | 'outdated';
++	version?: string;
++}
++
++interface IFormRemote {
++	uri: string | null;
++	state: IFormRemoteState;
++	resourceRoot?: URI;
++}
++
++/** Location of a federated form bundle inside its owning extension — the same
++ *  contract the wi-extension's webviewManager uses (BI_FORM_FEDERATION_SUBPATH). */
++const FORM_FEDERATION_SUBPATH = ['resources', 'jslibs', 'federation'] as const;
++const FORM_REMOTE_ENTRY = 'remoteEntry.js';
 +
 +interface IEmbeddedWelcomeThemeData {
 +	activeTheme: string;
@@ -373,7 +399,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		@IConfigurationService private readonly configurationService: IConfigurationService,
 +		@IEditorGroupsService private readonly editorGroupsService: IEditorGroupsService,
 +		@IExtensionService private readonly extensionService: IExtensionService,
-+		@IWebviewService private readonly webviewService: IWebviewService
++		@IWebviewService private readonly webviewService: IWebviewService,
++		@IFileService private readonly fileService: IFileService
 +	) {
 +		super();
 +
@@ -553,14 +580,28 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +
 +		const resourcesRoot = joinPath(extension.extensionLocation, 'resources');
 +		const scriptUri = asWebviewUri(joinPath(resourcesRoot, 'jslibs', 'main.js')).toString(true);
++		const biFormRemote = await this.resolveFormRemote(WI_BALLERINA_EXTENSION_ID);
++		const miFormRemote = await this.resolveFormRemote(WI_MI_EXTENSION_ID);
++
++		if (!this.isCurrentRenderRequest(requestId)) {
++			return;
++		}
++
 +		const themeData = this.getEmbeddedWelcomeThemeData();
++		const localResourceRoots = [resourcesRoot];
++		if (biFormRemote.resourceRoot) {
++			localResourceRoots.push(biFormRemote.resourceRoot);
++		}
++		if (miFormRemote.resourceRoot) {
++			localResourceRoots.push(miFormRemote.resourceRoot);
++		}
 +		const webview = this.webviewService.createWebviewElement({
 +			providedViewType: WI_EMBEDDED_WELCOME_VIEW_TYPE,
 +			title: 'WSO2 Integrator',
 +			options: {},
 +			contentOptions: {
 +				allowScripts: true,
-+				localResourceRoots: [resourcesRoot]
++				localResourceRoots
 +			},
 +			extension: {
 +				id: extension.identifier,
@@ -575,7 +616,36 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +
 +		this.embeddedWebview.value = webview;
 +		webview.mountTo(host, getWindow(host));
-+		webview.setHtml(this.getEmbeddedWelcomeHtml(scriptUri, bootstrap, themeData));
++		webview.setHtml(this.getEmbeddedWelcomeHtml(scriptUri, bootstrap, themeData, biFormRemote, miFormRemote));
++	}
++
++	/**
++	 * Resolves an extension-owned federated form remote (`remoteEntry.js`) the
++	 * same way the wi-extension's webviewManager does for its own panel, so the
++	 * embedded welcome can load the federated creation forms (BI and MI).
++	 * Returns a null uri plus a reason (`missing`/`outdated`) when it cannot be
++	 * served — the webview uses that to render an accurate, actionable message.
++	 */
++	private async resolveFormRemote(extensionId: string): Promise<IFormRemote> {
++		const owner = await this.extensionService.getExtension(extensionId);
++		if (!owner) {
++			return { uri: null, state: { status: 'missing' } };
++		}
++		const version = owner.version;
++		const federationRoot = joinPath(owner.extensionLocation, ...FORM_FEDERATION_SUBPATH);
++		const remoteEntry = joinPath(federationRoot, FORM_REMOTE_ENTRY);
++		try {
++			if (!(await this.fileService.exists(remoteEntry))) {
++				return { uri: null, state: { status: 'outdated', version } };
++			}
++		} catch {
++			return { uri: null, state: { status: 'outdated', version } };
++		}
++		return {
++			uri: asWebviewUri(remoteEntry).toString(true),
++			state: { status: 'ok', version },
++			resourceRoot: federationRoot
++		};
 +	}
 +
 +	private showLoginDialogIfNeeded(): void {
@@ -615,15 +685,13 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		WSO2EditorGroupWatermark.activeLoginDialogPromise = loginDialogPromise;
 +	}
 +
-+	private getEmbeddedWelcomeHtml(scriptUri: string, bootstrap: IEmbeddedWelcomeBootstrap, themeData: IEmbeddedWelcomeThemeData): string {
-+		const serializedBootstrap = JSON.stringify(bootstrap).replace(/</g, '\\u003c');
-+		const serializedThemeData = JSON.stringify(themeData).replace(/</g, '\\u003c');
-+
++	private getEmbeddedWelcomeHtml(scriptUri: string, bootstrap: IEmbeddedWelcomeBootstrap, themeData: IEmbeddedWelcomeThemeData, biFormRemote: IFormRemote, miFormRemote: IFormRemote): string {
 +		// Mirrors the policy the WSO2 Integrator extension applies to this same
 +		// bundle when it hosts it in an extension webview. Inline scripts are
-+		// authorized by a per-render nonce; `connect-src` allows the loopback
-+		// bridge socket this view talks to, and `img-src https:` covers the
-+		// remotely hosted sample icons the welcome page renders.
++		// authorized by a per-render nonce; the federated form bundles load from
++		// the webview resource origin, `connect-src` allows the loopback bridge
++		// socket this view talks to, and `img-src https:` covers the remotely
++		// hosted sample icons the welcome page renders.
 +		const nonce = generateUuid();
 +		const cspSource = `https://*.${webviewRootResourceAuthority}`;
 +		const csp = [
@@ -634,6 +702,12 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +			`img-src ${cspSource} data: https:`,
 +			`connect-src ${cspSource} ws://127.0.0.1:*`
 +		].join('; ');
++
++		const serializedBootstrap = JSON.stringify(bootstrap).replace(/</g, '\\u003c');
++		const serializedThemeData = JSON.stringify(themeData).replace(/</g, '\\u003c');
++		const serializedBiFormRemote = JSON.stringify(biFormRemote.uri).replace(/</g, '\\u003c');
++		const serializedBiFormRemoteState = JSON.stringify(biFormRemote.state).replace(/</g, '\\u003c');
++		const serializedMiFormRemote = JSON.stringify(miFormRemote.uri).replace(/</g, '\\u003c');
 +
 +		return `<!DOCTYPE html>
 +				<html lang="en">
@@ -802,7 +876,26 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +					</div>
 +					<div id="root"></div>
 +					<script nonce="${nonce}">
++						// acquireVsCodeApi() throws if called more than once per webview.
++						// Both the host bundle and the federated remotes (BI/MI forms) may
++						// acquire it at module scope, so make it idempotent before any
++						// bundle loads — mirrors the wi-extension webviewManager.
++						(function () {
++							if (typeof acquireVsCodeApi === 'function') {
++								const original = acquireVsCodeApi;
++								let instance;
++								window.acquireVsCodeApi = function () {
++									if (!instance) {
++										instance = original();
++									}
++									return instance;
++								};
++							}
++						})();
 +						window.__WI_BRIDGE_BOOTSTRAP = ${serializedBootstrap};
++						window.__WI_BI_FORM_REMOTE = ${serializedBiFormRemote};
++						window.__WI_BI_FORM_REMOTE_STATE = ${serializedBiFormRemoteState};
++						window.__WI_MI_FORM_REMOTE = ${serializedMiFormRemote};
 +						window.__WI_EMBEDDED_WELCOME_HIDE_LOADER = function () {
 +							document.body.classList.add('embedded-welcome-ready');
 +						};
