@@ -221,6 +221,12 @@ jobs:
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
           key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
+          # Partial restore so a cold key doesn't mean a cold cache. download-builtin-extensions
+          # re-validates versions (isUpToDate) and re-downloads only what actually changed, so a
+          # prefix-restored cache stays correct.
+          restore-keys: |
+            extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-
+            extensions-shared-${{ inputs.ballerina_extension_source }}-
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
@@ -563,6 +569,12 @@ jobs:
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
           key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
+          # Partial restore so a cold key doesn't mean a cold cache. download-builtin-extensions
+          # re-validates versions (isUpToDate) and re-downloads only what actually changed, so a
+          # prefix-restored cache stays correct.
+          restore-keys: |
+            extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-
+            extensions-shared-${{ inputs.ballerina_extension_source }}-
 
       - name: Download compilation artifact
         uses: actions/download-artifact@v4

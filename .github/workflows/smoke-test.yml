@@ -144,6 +144,28 @@ jobs:
           WSO2IPW_ELECTRON_ARGS: ${{ matrix.example == 'icp' && '--no-sandbox --password-store=basic' || '--no-sandbox' }}
         run: bash "$(npm root -g)/wso2ipw/examples/${{ matrix.example }}/run-all.sh"
 
+      - name: Collect editor logs on failure
+        if: failure()
+        run: |
+          set +e
+          mkdir -p editor-logs
+          # code-oss writes per-session logs (main.log, exthost.log, per-extension output) under
+          # its user-data-dir. We don't know the exact dir wso2ipw uses, so search likely roots.
+          for root in "$HOME/.wso2ipw" "$HOME/.config" "$HOME/.wso2-integrator" "$HOME/.vscode-oss"; do
+            [ -d "$root" ] || continue
+            find "$root" -type f \( -name "*.log" -o -name "*.err" \) 2>/dev/null \
+              -exec cp --parents {} editor-logs/ \; 2>/dev/null
+          done
+          echo "Collected log files:"; find editor-logs -type f 2>/dev/null || true
+
+      - name: Upload editor logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-editor-logs-${{ matrix.example }}-linux
+          path: editor-logs/**
+          if-no-files-found: warn
+
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -243,6 +265,29 @@ jobs:
       - name: Run ${{ matrix.example }}
         shell: bash
         run: bash "$(npm root -g)/wso2ipw/examples/${{ matrix.example }}/run-all.sh"
+
+      - name: Collect editor logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          mkdir -p editor-logs
+          # code-oss writes per-session logs (main.log, exthost.log, per-extension output) under
+          # its user-data-dir. We don't know the exact dir wso2ipw uses, so search likely roots.
+          for root in "$USERPROFILE/.wso2ipw" "$APPDATA" "$USERPROFILE/.wso2-integrator"; do
+            [ -d "$root" ] || continue
+            find "$root" -type f \( -name "*.log" -o -name "*.err" \) 2>/dev/null \
+              -exec cp --parents {} editor-logs/ \; 2>/dev/null
+          done
+          echo "Collected log files:"; find editor-logs -type f 2>/dev/null || true
+
+      - name: Upload editor logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-editor-logs-${{ matrix.example }}-windows
+          path: editor-logs/**
+          if-no-files-found: warn
 
       - name: Upload screenshots on failure
         if: failure()

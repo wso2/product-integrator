@@ -114,7 +114,10 @@ jobs:
   compile:
     needs: resolve-versions
     name: Build repo
-    timeout-minutes: 45
+    # 90 gives a fully cold-cache build room to finish and reach the post-step that SAVES the
+    # caches; warm runs finish well under this. 45 was too tight for a cold build, and a
+    # timeout there cancels the job before caches are saved -> every run stays cold (vicious cycle).
+    timeout-minutes: 90
     runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
     defaults:
       run:
@@ -188,6 +191,12 @@ jobs:
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
           key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
+          # Partial restore so a cold key doesn't mean a cold cache. download-builtin-extensions
+          # re-validates versions (isUpToDate) and re-downloads only what actually changed, so a
+          # prefix-restored cache stays correct.
+          restore-keys: |
+            extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-
+            extensions-shared-${{ inputs.ballerina_extension_source }}-
 
       - name: Cache Rust toolchain
         uses: actions/cache@v4
@@ -321,6 +330,12 @@ jobs:
 
       - name: Build WI extension
         working-directory: .
+        env:
+          # The wso2-integrator build downloads Choreo CLI binaries from the GitHub API
+          # (scripts/download-choreo-cli.js). Without a token those calls are unauthenticated
+          # and hit the 60 req/hour limit -> "HTTP 403: rate limit exceeded". Authenticate to
+          # raise the limit to 5000/hour, matching the other steps in this job.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           node common/scripts/install-run-rush.js build --verbose
 
@@ -356,12 +371,16 @@ jobs:
             echo "✅ TypeScript cache hit - using cached compilation"
             echo "Skipping core compilation, running validation only"
             npm run compile-extensions-build
-            npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            npm exec -- npm-run-all --max-parallel 1 -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           else
             echo "❌ TypeScript cache miss - full compilation required"
             echo "Running complete compilation pipeline"
             npm run core-ci
-            npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            # Run the validation checks serially (--max-parallel 1). Several carry large
+            # --max-old-space-size caps (define-class-fields and tsec use 8192 MB each);
+            # two 8 GB checks at once exceed the 14 GB runner and the kernel OOM-kills one
+            # (exit 137). Serial keeps peak memory to a single check at a time.
+            npm exec -- npm-run-all --max-parallel 1 -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
           fi
 
       - name: Compress compilation artifact
