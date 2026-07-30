@@ -23,7 +23,12 @@ on:
         description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
         default: 'marketplace'
         required: false
-        type: string  
+        type: string
+      versions_artifact:
+        description: 'Artifact holding the already-stamped component-versions.properties and wi-extension package.json. Empty (a direct call from pr-ci.yml) means stamp here instead.'
+        default: ''
+        required: false
+        type: string
 
 permissions:
   id-token: write
@@ -36,13 +41,42 @@ jobs:
     outputs:
       ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
       ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
+      ballerina_extension_tag: ${{ steps.read-versions.outputs.ballerina_extension_tag }}
       mi_extension_version: ${{ steps.read-versions.outputs.mi_extension_version }}
+      mi_extension_tag: ${{ steps.read-versions.outputs.mi_extension_tag }}
       icp_version: ${{ steps.read-versions.outputs.icp_version }}
       integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
       ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download stamped versions
+        if: ${{ inputs.versions_artifact != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.versions_artifact }}
+          path: .
+
+      # Called directly (pr-ci.yml): nothing has stamped yet, and `1.2.0-SNAPSHOT` is not a valid
+      # VS Code extension version, so the vsix would fail to package. Stamp here and publish the
+      # result so the compile job below builds exactly these versions.
+      - name: Stamp versions
+        if: ${{ inputs.versions_artifact == '' }}
+        shell: bash
+        run: |
+          chmod +x ./ci/build/apply-version.sh
+          ./ci/build/apply-version.sh
+
+      - name: Upload stamped versions
+        if: ${{ inputs.versions_artifact == '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: versions
+          path: |
+            ci/build/component-versions.properties
+            wi/wi-extension/package.json
+          if-no-files-found: error
 
       - name: Read versions file
         id: read-versions
@@ -66,6 +100,12 @@ jobs:
           INTEGRATOR_VERSION=$(read_property "integrator.version")
           BALLERINA_JRE_VERSION=$(read_property "ballerina.jre.version")
 
+          # A `<key>.tag` companion is only present when the upstream release tag cannot be derived
+          # from the version (a rolling tag such as wso2/ballerina-vscode's `nightly`, pinned by
+          # ci/build/resolve-nightly-versions.sh). Otherwise the conventional v<version> tag applies.
+          BALLERINA_EXTENSION_TAG=$(read_property "ballerina.extension.version.tag")
+          MI_EXTENSION_TAG=$(read_property "wso2.micro-integrator.extension.version.tag")
+
           if [ -z "${BALLERINA_VERSION}" ] || [ -z "${ICP_VERSION}" ] || [ -z "${INTEGRATOR_VERSION}" ] || [ -z "${BALLERINA_JRE_VERSION}" ]; then
             echo "Error: ballerina.version, icp.version, integrator.version, and ballerina.jre.version must be set in ${VERSIONS_FILE}." >&2
             exit 1
@@ -83,7 +123,9 @@ jobs:
 
           echo "ballerina_version=${BALLERINA_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_extension_version=${BALLERINA_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "ballerina_extension_tag=${BALLERINA_EXTENSION_TAG:-v${BALLERINA_EXTENSION_VERSION}}" >> "$GITHUB_OUTPUT"
           echo "mi_extension_version=${MI_EXTENSION_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "mi_extension_tag=${MI_EXTENSION_TAG:-v${MI_EXTENSION_VERSION}}" >> "$GITHUB_OUTPUT"
           echo "icp_version=${ICP_VERSION}" >> "$GITHUB_OUTPUT"
           echo "integrator_version=${INTEGRATOR_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_jre_version=${BALLERINA_JRE_VERSION}" >> "$GITHUB_OUTPUT"
@@ -291,7 +333,7 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "v${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD")
+          BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.ballerina_extension_tag }}")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
   
       - name: Set MI extension version
@@ -307,8 +349,18 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./ci/download-vsix.sh
-          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "v${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD")
+          MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.mi_extension_tag }}")
           echo "MI_VSIX_PATH=${MI_VSIX_PATH}" >> "$GITHUB_ENV"
+
+      # Deliberately after the cache steps: a timestamped version in
+      # hashFiles('ci/build/component-versions.properties') would bust the extensions cache every run.
+      # This also lands before `rush build`, so the .vsix filename, product.json and the installer
+      # names all carry the same stamp.
+      - name: Download stamped versions
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.versions_artifact != '' && inputs.versions_artifact || 'versions' }}
+          path: .
 
       - name: Update product.json and branding
         working-directory: .

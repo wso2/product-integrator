@@ -2,7 +2,7 @@
   "name": "wso2-integrator",
   "displayName": "WSO2 Integrator",
   "description": "Integration development environment for WSO2 Integrator",
-  "version": "1.0.1",
+  "version": "1.2.0-SNAPSHOT",
   "cliVersion": "v1.2.212606121500",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
