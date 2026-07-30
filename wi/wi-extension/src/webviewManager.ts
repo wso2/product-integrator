@@ -117,17 +117,21 @@ export class WebviewManager {
 
 	constructor(private projectUri: string) {
 		if (process.env.WEB_VIEW_DEV_MODE === "true") {
-			try {
-				const bootstrap = BridgeLayer.startWebSocketServer(projectUri);
-				vscode.window.showInformationMessage(
-					`Webview bridge server started on ws://${bootstrap.wsServer}:${bootstrap.wsPort}`,
-				);
-			} catch (error) {
-				ext.logError("Failed to start bridge server", error as Error);
-				vscode.window.showErrorMessage(
-					`Failed to start bridge server: ${error instanceof Error ? error.message : String(error)}`,
-				);
-			}
+			// The port is only known once the server is bound, and a constructor
+			// cannot await, so report the outcome when the start settles.
+			void BridgeLayer.startWebSocketServer(projectUri).then(
+				(bootstrap) => {
+					vscode.window.showInformationMessage(
+						`Webview bridge server started on ws://${bootstrap.wsServer}:${bootstrap.wsPort}`,
+					);
+				},
+				(error: unknown) => {
+					ext.logError("Failed to start bridge server", error as Error);
+					vscode.window.showErrorMessage(
+						`Failed to start bridge server: ${error instanceof Error ? error.message : String(error)}`,
+					);
+				},
+			);
 		}
 	}
 
