@@ -17,6 +17,7 @@
  */
 
 import { WebviewPanel } from "vscode";
+import { randomBytes } from "crypto";
 import { createExtensionTransportManager, createRequestRouter } from "@wso2/webview-giga-bridge";
 import {
     BIProjectRequest,
@@ -173,6 +174,11 @@ export class BridgeLayer {
         const transport = createExtensionTransportManager<WIBridgeRequest, WIBridgeResponse>({
             initialMode: "proxy",
             wsPort: this.resolveWebSocketPort(),
+            // Per-channel secret. The bridge rejects websocket upgrades that do
+            // not present it, so reaching the port is not enough to issue
+            // requests or receive broadcast events. Proxy mode is unaffected --
+            // it runs in-process over the trusted webview postMessage channel.
+            authToken: randomBytes(32).toString("hex"),
             handleRequest: (request) => router.handle(request),
         });
 

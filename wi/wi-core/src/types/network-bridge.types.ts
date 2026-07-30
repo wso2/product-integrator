@@ -271,4 +271,10 @@ export interface WITransportBootstrap {
     mode: WITransportMode;
     wsServer: string;
     wsPort: number;
+    /**
+     * Token the webview must present when opening the websocket connection.
+     * The extension rejects websocket upgrades that do not carry a matching
+     * token, so a client that merely reaches the port cannot drive the bridge.
+     */
+    wsToken?: string;
 }

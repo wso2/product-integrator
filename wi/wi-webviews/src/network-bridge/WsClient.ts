@@ -113,6 +113,10 @@ export function resolveBridgeBootstrap(): WITransportBootstrap {
         mode: explicitMode ?? (hasVsCodeApi ? "proxy" : "websocket"),
         wsServer: queryWsServer ?? runtimeBootstrap?.wsServer ?? "127.0.0.1",
         wsPort: resolvedWsPort,
+        // The extension injects the token via `window.__WI_BRIDGE_BOOTSTRAP`.
+        // The query-parameter form only exists for browser-based dev runs,
+        // where the token has to be supplied manually.
+        wsToken: runtimeBootstrap?.wsToken ?? urlParams.get("wsToken") ?? undefined,
     };
 }
 
@@ -122,6 +126,7 @@ export class WsClient {
         mode: this.bootstrap.mode,
         server: this.bootstrap.wsServer,
         port: this.bootstrap.wsPort,
+        token: this.bootstrap.wsToken,
     });
     private readonly stateChangedListeners = new Set<(context: WebviewContext) => void>();
     private readonly downloadProgressListeners = new Set<(progress: DownloadProgress) => void>();
