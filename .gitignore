@@ -58,5 +58,4 @@ common/autoinstallers/*/.npmrc
 **/.rush/temp/
 
 **/rush-logs/
-.github/workflows/release.yml
 installers/mac/dmg_mount/

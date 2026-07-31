@@ -1,0 +1,86 @@
+name: Development Build
+
+# An ad-hoc build of whatever ref you dispatch it on — "build my branch and give me an installer".
+#
+# Versions are timestamped for this run only: a `-SNAPSHOT` branch builds as 5.1.0-<yyyymmddHHmm>
+# with the extension at 1.1.<yymmddHH>. Nothing is committed to any branch and nothing is published
+# to GitHub Releases; you get the workflow artifacts and the usual S3 upload.
+#
+# The nightly is daily-build.yml; real releases are release.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Select runner type'
+        required: true
+        default: 'codebuild'
+        type: choice
+        options:
+          - codebuild
+          - ubuntu-latest
+      build_linux:
+        description: 'Build for Linux'
+        required: false
+        default: true
+        type: boolean
+      build_macos:
+        description: 'Build for macOS (Apple Silicon and Intel)'
+        required: false
+        default: true
+        type: boolean
+      build_windows:
+        description: 'Build for Windows'
+        required: false
+        default: true
+        type: boolean
+      build_packed_installers:
+        description: 'Whether to build Ballerina, ICP, and Integrator packed installers'
+        required: true
+        default: true
+        type: boolean
+      ballerina_extension_source:
+        description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
+        required: true
+        default: 'github'
+        type: choice
+        options:
+          - marketplace
+          - github
+      mi_extension_source:
+        description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
+        required: true
+        default: 'github'
+        type: choice
+        options:
+          - marketplace
+          - github
+
+# `contents: read` is enough: the versions are stamped in the runner's working copy and handed
+# between jobs as a workflow artifact, so nothing is ever committed or pushed and no release is
+# created. `id-token: write` is still required for cosign.
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: dev-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      # No artifact, so build.yml stamps the dispatched ref itself; no tag, so nothing is published.
+      versions_artifact: ''
+      publish_tag: ''
+      is_prerelease: true
+      runner: ${{ inputs.runner }}
+      build_linux: ${{ inputs.build_linux }}
+      build_macos: ${{ inputs.build_macos }}
+      build_windows: ${{ inputs.build_windows }}
+      build_packed_installers: ${{ inputs.build_packed_installers }}
+      ballerina_extension_source: ${{ inputs.ballerina_extension_source }}
+      mi_extension_source: ${{ inputs.mi_extension_source }}

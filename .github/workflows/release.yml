@@ -1,0 +1,202 @@
+name: Release
+
+# Cuts a release branch and builds it. Dispatch this on `main`.
+#
+#   1. create a branch named exactly after `version` (e.g. 5.1.0-alpha1, or 5.1.0 for GA)
+#   2. write `version` into ci/build/component-versions.properties, settle the WI extension version,
+#      mirror it into wi/wi-extension/package.json, and commit — so the branch records exactly what
+#      shipped and the build resolves nothing
+#   3. build that commit and publish it as v<version>
+#
+# `main` is never modified. After a GA release, bump it by hand to the next
+# <major>.<minor+1>.0-SNAPSHOT, and the extension to <major>.<minor+2>.0-SNAPSHOT. daily-build.yml
+# asserts this, so a missed bump fails the next nightly rather than silently republishing a version.
+#
+# Retrying a failed release: the branch is pushed in step 2, before the build runs, so a build
+# failure leaves the branch and its version commit behind and re-dispatching the same version then
+# fails the branch-exists guard below. Delete it first:
+#   git push origin --delete <version>
+# The tag and the GitHub release are only ever created after a fully successful build, so there is
+# nothing else to clean up.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, e.g. 5.1.0-alpha1 or 5.1.0. Also the release branch name.'
+        required: true
+        type: string
+      is_prerelease:
+        description: 'Pre-release (alpha/beta/rc): the WI extension ships a timestamped pre-release version and the GitHub release is flagged as a pre-release. Uncheck for GA.'
+        required: false
+        default: true
+        type: boolean
+      runner:
+        description: 'Select runner type'
+        required: true
+        default: 'codebuild'
+        type: choice
+        options:
+          - codebuild
+          - ubuntu-latest
+      build_linux:
+        description: 'Build for Linux'
+        required: false
+        default: true
+        type: boolean
+      build_macos:
+        description: 'Build for macOS (Apple Silicon and Intel)'
+        required: false
+        default: true
+        type: boolean
+      build_windows:
+        description: 'Build for Windows'
+        required: false
+        default: true
+        type: boolean
+      build_packed_installers:
+        description: 'Whether to build Ballerina, ICP, and Integrator packed installers'
+        required: true
+        default: true
+        type: boolean
+      ballerina_extension_source:
+        description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
+        required: true
+        default: 'github'
+        type: choice
+        options:
+          - marketplace
+          - github
+      mi_extension_source:
+        description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
+        required: true
+        default: 'github'
+        type: choice
+        options:
+          - marketplace
+          - github
+
+permissions:
+  id-token: write
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-release-branch:
+    name: Prepare ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      wi_extension_version: ${{ steps.stamp.outputs.wi_extension_version }}
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      # `version` is bound through `env` in every step that uses it, never interpolated into a `run:`
+      # body: `${{ }}` is expanded before bash parses the script, so the regex below could not
+      # protect its own step.
+      - name: Validate version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+            echo "Error: version '${VERSION}' must be <major>.<minor>.<patch>[-qualifier], e.g. 5.1.0-alpha1 or 5.1.0." >&2
+            exit 1
+          fi
+          if [[ "${VERSION}" == *-SNAPSHOT ]]; then
+            echo "Error: version must be a concrete release version, not a -SNAPSHOT." >&2
+            exit 1
+          fi
+
+      # Unlike the checkouts in build.yml and compile.yml, this one deliberately does NOT set
+      # `persist-credentials: false`: this job creates and pushes the release branch below, which
+      # needs the credential to survive the checkout.
+      - name: Checkout ${{ github.ref_name }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # A release version is published exactly once. The branch check alone is not enough: deleting
+      # the branch (or the release) and re-running would republish under a tag that already shipped,
+      # so the tag and the release are checked too.
+      - name: Create the release branch
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if git ls-remote --exit-code --heads origin "${VERSION}" >/dev/null 2>&1; then
+            echo "Error: branch '${VERSION}' already exists. Pick a new version." >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null 2>&1; then
+            echo "Error: tag 'v${VERSION}' already exists. Pick a new version." >&2
+            exit 1
+          fi
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "Error: release 'v${VERSION}' already exists. Pick a new version." >&2
+            exit 1
+          fi
+          git checkout -b "${VERSION}"
+
+      # Pre-release: --force-extension guarantees a fresh 1.<odd>.<yymmddHH> even when the branch was
+      # cut from something already concrete, so every alpha/beta/rc ships its own vsix version.
+      # GA: nothing is derived — -SNAPSHOT is stripped, and an odd extension minor fails because that
+      # is the pre-release line.
+      - name: Apply versions
+        id: stamp
+        env:
+          VERSION: ${{ inputs.version }}
+          IS_PRERELEASE: ${{ inputs.is_prerelease }}
+        run: |
+          chmod +x ./ci/build/apply-version.sh
+          if [ "${IS_PRERELEASE}" = "true" ]; then
+            ./ci/build/apply-version.sh --version "${VERSION}" --force-extension
+          else
+            ./ci/build/apply-version.sh --version "${VERSION}" --mode release
+          fi
+
+      - name: Upload versions
+        uses: actions/upload-artifact@v4
+        with:
+          name: versions
+          path: |
+            ci/build/component-versions.properties
+            wi/wi-extension/package.json
+          if-no-files-found: error
+
+      - name: Commit and push the release branch
+        id: commit
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ci/build/component-versions.properties wi/wi-extension/package.json
+          git commit -m "Set versions for ${VERSION}"
+          git push origin "${VERSION}"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: prepare-release-branch
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      # Build the prepared commit, not the ref this workflow was dispatched on: `ref` selects the
+      # tree that is compiled and `target_commitish` points the release at the same commit, so the
+      # release branch really does describe what shipped. The artifact carries the same two version
+      # files, which is what keeps every job in agreement even before checkout.
+      ref: ${{ needs.prepare-release-branch.outputs.sha }}
+      versions_artifact: versions
+      publish_tag: v${{ inputs.version }}
+      is_prerelease: ${{ inputs.is_prerelease }}
+      target_commitish: ${{ needs.prepare-release-branch.outputs.sha }}
+      runner: ${{ inputs.runner }}
+      build_linux: ${{ inputs.build_linux }}
+      build_macos: ${{ inputs.build_macos }}
+      build_windows: ${{ inputs.build_windows }}
+      build_packed_installers: ${{ inputs.build_packed_installers }}
+      ballerina_extension_source: ${{ inputs.ballerina_extension_source }}
+      mi_extension_source: ${{ inputs.mi_extension_source }}
