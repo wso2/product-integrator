@@ -249,7 +249,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
-@@ -0,0 +1,757 @@
+@@ -0,0 +1,782 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -267,7 +267,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +// eslint-disable-next-line local/code-import-patterns
 +import { IWebviewElement, IWebviewService } from '../../../contrib/webview/browser/webview.js';
 +// eslint-disable-next-line local/code-import-patterns
-+import { asWebviewUri } from '../../../contrib/webview/common/webview.js';
++import { asWebviewUri, webviewRootResourceAuthority } from '../../../contrib/webview/common/webview.js';
++import { generateUuid } from '../../../../base/common/uuid.js';
 +// eslint-disable-next-line local/code-import-patterns
 +import { WebviewThemeDataProvider } from '../../../contrib/webview/browser/themeing.js';
 +import { IExtensionService } from '../../../services/extensions/common/extensions.js';
@@ -279,6 +280,12 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +	mode: 'proxy' | 'websocket';
 +	wsServer: string;
 +	wsPort: number;
++	/**
++	 * Token the webview presents on the bridge websocket handshake. The extension
++	 * refuses upgrades without it, so this must survive into the injected
++	 * bootstrap or the embedded view cannot connect.
++	 */
++	wsToken?: string;
 +}
 +
 +/**
@@ -679,6 +686,23 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +	}
 +
 +	private getEmbeddedWelcomeHtml(scriptUri: string, bootstrap: IEmbeddedWelcomeBootstrap, themeData: IEmbeddedWelcomeThemeData, biFormRemote: IFormRemote, miFormRemote: IFormRemote): string {
++		// Mirrors the policy the WSO2 Integrator extension applies to this same
++		// bundle when it hosts it in an extension webview. Inline scripts are
++		// authorized by a per-render nonce; the federated form bundles load from
++		// the webview resource origin, `connect-src` allows the loopback bridge
++		// socket this view talks to, and `img-src https:` covers the remotely
++		// hosted sample icons the welcome page renders.
++		const nonce = generateUuid();
++		const cspSource = `https://*.${webviewRootResourceAuthority}`;
++		const csp = [
++			`default-src 'none'`,
++			`script-src 'nonce-${nonce}' ${cspSource}`,
++			`style-src ${cspSource} 'unsafe-inline'`,
++			`font-src ${cspSource} data:`,
++			`img-src ${cspSource} data: https:`,
++			`connect-src ${cspSource} ws://127.0.0.1:*`
++		].join('; ');
++
 +		const serializedBootstrap = JSON.stringify(bootstrap).replace(/</g, '\\u003c');
 +		const serializedThemeData = JSON.stringify(themeData).replace(/</g, '\\u003c');
 +		const serializedBiFormRemote = JSON.stringify(biFormRemote.uri).replace(/</g, '\\u003c');
@@ -689,6 +713,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +				<html lang="en">
 +					<head>
 +						<meta charset="utf-8">
++						<meta http-equiv="Content-Security-Policy" content="${csp}">
 +						<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
 +					<title>WSO2 Integrator</title>
 +					<style>
@@ -814,7 +839,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +					</style>
 +				</head>
 +				<body>
-+					<script>
++					<script nonce="${nonce}">
 +						(function () {
 +							var themeData = ${serializedThemeData};
 +							var rootStyle = document.documentElement.style;
@@ -850,7 +875,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +						<div class="embedded-welcome-loader-text">Loading WSO2 Integrator...</div>
 +					</div>
 +					<div id="root"></div>
-+					<script>
++					<script nonce="${nonce}">
 +						// acquireVsCodeApi() throws if called more than once per webview.
 +						// Both the host bundle and the federated remotes (BI/MI forms) may
 +						// acquire it at module scope, so make it idempotent before any
@@ -888,7 +913,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +							}
 +						});
 +					</script>
-+					<script defer src=${JSON.stringify(scriptUri)}></script>
++					<script defer nonce="${nonce}" src=${JSON.stringify(scriptUri)}></script>
 +					</body>
 +				</html>`;
 +	}

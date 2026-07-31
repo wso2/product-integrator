@@ -113,6 +113,8 @@ export function resolveBridgeBootstrap(): WITransportBootstrap {
         mode: explicitMode ?? (hasVsCodeApi ? "proxy" : "websocket"),
         wsServer: queryWsServer ?? runtimeBootstrap?.wsServer ?? "127.0.0.1",
         wsPort: resolvedWsPort,
+        // Injected by the extension; the query parameter is for browser dev runs.
+        wsToken: runtimeBootstrap?.wsToken ?? urlParams.get("wsToken") ?? undefined,
     };
 }
 
@@ -122,6 +124,7 @@ export class WsClient {
         mode: this.bootstrap.mode,
         server: this.bootstrap.wsServer,
         port: this.bootstrap.wsPort,
+        token: this.bootstrap.wsToken,
     });
     private readonly stateChangedListeners = new Set<(context: WebviewContext) => void>();
     private readonly downloadProgressListeners = new Set<(progress: DownloadProgress) => void>();

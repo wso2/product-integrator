@@ -278,7 +278,7 @@ const stateMachine = createMachine<MachineContext>({
                 });
             }
             vscode.commands.executeCommand('setContext', 'WI.projectType', 'none');
-            context.webviewManager.showWelcome();
+            void context.webviewManager.showWelcome().catch((error) => ext.logError("Failed to show welcome webview", error as Error));
             context.currentView = ViewType.WELCOME;
         },
         registerConfigChangeListener: (context) => {
@@ -477,7 +477,7 @@ export const StateMachine = {
         // Get the webview manager from context and show the view
         const context = stateService.getSnapshot().context;
         if (context.webviewManager) {
-            context.webviewManager.show(view);
+            void context.webviewManager.show(view).catch((error) => ext.logError("Failed to show webview", error as Error));
         } else {
             ext.log('WebviewManager not available in state machine context');
         }

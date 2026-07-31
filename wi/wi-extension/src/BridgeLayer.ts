@@ -17,6 +17,7 @@
  */
 
 import { WebviewPanel } from "vscode";
+import { randomBytes } from "crypto";
 import { createExtensionTransportManager, createRequestRouter } from "@wso2/webview-giga-bridge";
 import {
     BIProjectRequest,
@@ -85,12 +86,16 @@ export class BridgeLayer {
         return this.getOrCreateChannel(projectUri).transport.getWebviewBootstrap();
     }
 
-    static startWebSocketServer(projectUri: string): WITransportBootstrap {
+    /**
+     * Starts the websocket backend and returns its connection coordinates. The
+     * start must be awaited: the port is only known once the server is bound.
+     */
+    static async startWebSocketServer(projectUri: string): Promise<WITransportBootstrap> {
         const channel = this.getOrCreateChannel(projectUri);
         if (channel.transport.getMode() !== "websocket") {
-            channel.transport.switchMode("websocket");
+            await channel.transport.switchMode("websocket");
         } else if (!channel.transport.isWebSocketServerRunning()) {
-            channel.transport.startWebSocketServer();
+            await channel.transport.startWebSocketServer();
         }
         return channel.transport.getWebviewBootstrap();
     }
@@ -173,6 +178,9 @@ export class BridgeLayer {
         const transport = createExtensionTransportManager<WIBridgeRequest, WIBridgeResponse>({
             initialMode: "proxy",
             wsPort: this.resolveWebSocketPort(),
+            // Per-channel secret authenticating the websocket handshake. Unused
+            // by proxy mode, which runs in-process over postMessage.
+            authToken: randomBytes(32).toString("hex"),
             handleRequest: (request) => router.handle(request),
         });
 

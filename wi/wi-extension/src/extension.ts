@@ -88,7 +88,7 @@ function registerEmbeddedWelcomeBootstrapCommand(context: vscode.ExtensionContex
 		vscode.commands.registerCommand(GET_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND, async () => {
 			StateMachine.setCurrentView(ViewType.WELCOME);
 
-			const bootstrap = BridgeLayer.startWebSocketServer(EMBEDDED_WELCOME_PROJECT_URI);
+			const bootstrap = await BridgeLayer.startWebSocketServer(EMBEDDED_WELCOME_PROJECT_URI);
 			BridgeLayer.notifyStateChanged(EMBEDDED_WELCOME_PROJECT_URI, {
 				currentView: ViewType.WELCOME,
 				projectUri: EMBEDDED_WELCOME_PROJECT_URI,

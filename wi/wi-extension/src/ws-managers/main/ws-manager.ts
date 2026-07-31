@@ -51,6 +51,7 @@ import {
     BIRuntimeStatusResponse,
     EXTENSION_DEPENDENCIES,
 } from "@wso2/wi-core";
+import { WICommandIds } from "@wso2/wso2-platform-core";
 import { commands, extensions, window, workspace, MarkdownString, Uri, env, ConfigurationTarget } from "vscode";
 import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
 import { getDefaultCreationPath } from "../../utils/pathUtils";
@@ -66,6 +67,28 @@ import { ballerinaContext } from "../../bi/ballerinaContext";
 const platform = getPlatform();
 const SAMPLES_INFO_URL = process.env.SAMPLES_INFO_URL;
 const PREBUILT_INTEGRATIONS_URL = process.env.PREBUILT_INTEGRATIONS_URL;
+
+/**
+ * Command ids the webview may invoke via `runCommand`; anything else is refused.
+ * Keep in sync with the `wsClient.runCommand` call sites in `wi-webviews`.
+ *
+ * Note this gates ids only — `args` are forwarded to the command as given, so a
+ * compromised webview still controls the payloads of the commands listed here.
+ */
+const ALLOWED_WEBVIEW_COMMANDS: ReadonlySet<string> = new Set([
+    // Cloud auth / project flows
+    WICommandIds.SignIn,
+    WICommandIds.SignOut,
+    WICommandIds.CancelSignIn,
+    WICommandIds.CloneProject,
+    // Runtime setup
+    "ballerina.setup-ballerina",
+    // VS Code workbench actions used by the welcome and component form views
+    "workbench.action.openRecent",
+    "workbench.action.reloadWindow",
+    "workbench.scm.focus",
+    "git.push",
+]);
 
 export class MainWsManager implements WIVisualizerAPI {
     constructor(private projectUri?: string) { }
@@ -140,6 +163,15 @@ export class MainWsManager implements WIVisualizerAPI {
     }
 
     async runCommand(props: RunCommandRequest): Promise<RunCommandResponse> {
+        if (!ALLOWED_WEBVIEW_COMMANDS.has(props.command)) {
+            // Forwarding arbitrary ids would make this a general command-execution
+            // primitive for anything that can reach the bridge. Throw rather than
+            // return a failed response: callers cannot detect the latter, since the
+            // success path resolves with whatever the command returned.
+            ext.logError(`Blocked disallowed webview command: ${props.command}`);
+            throw new Error(`Command not allowed: ${props.command}`);
+        }
+
         return await commands.executeCommand(props.command, ...(props.args || []));
     }
 

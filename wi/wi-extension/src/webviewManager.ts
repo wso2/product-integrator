@@ -114,27 +114,37 @@ export class WebviewManager {
 	private currentPanel: vscode.WebviewPanel | undefined;
 	private currentViewType: ViewType | undefined;
 	private stateSubscription: any;
+	/** Resolves once the dev-mode bridge server is bound. */
+	private bridgeReady: Promise<void> = Promise.resolve();
 
 	constructor(private projectUri: string) {
 		if (process.env.WEB_VIEW_DEV_MODE === "true") {
-			try {
-				const bootstrap = BridgeLayer.startWebSocketServer(projectUri);
-				vscode.window.showInformationMessage(
-					`Webview bridge server started on ws://${bootstrap.wsServer}:${bootstrap.wsPort}`,
-				);
-			} catch (error) {
-				ext.logError("Failed to start bridge server", error as Error);
-				vscode.window.showErrorMessage(
-					`Failed to start bridge server: ${error instanceof Error ? error.message : String(error)}`,
-				);
-			}
+			// A constructor cannot await, so keep the startup so `show()` can wait
+			// for the port before embedding it in the webview HTML.
+			this.bridgeReady = BridgeLayer.startWebSocketServer(projectUri).then(
+				(bootstrap) => {
+					vscode.window.showInformationMessage(
+						`Webview bridge server started on ws://${bootstrap.wsServer}:${bootstrap.wsPort}`,
+					);
+				},
+				(error: unknown) => {
+					ext.logError("Failed to start bridge server", error as Error);
+					vscode.window.showErrorMessage(
+						`Failed to start bridge server: ${error instanceof Error ? error.message : String(error)}`,
+					);
+				},
+			);
 		}
 	}
 
 	/**
 	 * Show webview with specified type
 	 */
-	public show(viewType: ViewType = ViewType.WELCOME): void {
+	public async show(viewType: ViewType = ViewType.WELCOME): Promise<void> {
+		// The webview HTML embeds the bridge coordinates, and the dev-mode server
+		// is assigned its port asynchronously, so wait before rendering.
+		await this.bridgeReady;
+
 		const columnToShowIn = vscode.window.activeTextEditor
 			? vscode.window.activeTextEditor.viewColumn
 			: undefined;
@@ -221,8 +231,8 @@ export class WebviewManager {
 	/**
 	 * Show welcome webview
 	 */
-	public showWelcome(): void {
-		this.show(ViewType.WELCOME);
+	public showWelcome(): Promise<void> {
+		return this.show(ViewType.WELCOME);
 	}
 
 	public closeWebview(): void {

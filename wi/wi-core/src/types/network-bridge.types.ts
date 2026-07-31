@@ -271,4 +271,6 @@ export interface WITransportBootstrap {
     mode: WITransportMode;
     wsServer: string;
     wsPort: number;
+    /** Token the webview presents when opening the websocket connection. */
+    wsToken?: string;
 }
