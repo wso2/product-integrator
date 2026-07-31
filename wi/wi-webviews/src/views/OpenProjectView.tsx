@@ -46,6 +46,18 @@ const ProjectList = styled.div`
     flex-direction: column;
 `;
 
+const VisuallyHidden = styled.span`
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+`;
+
 const ProjectRow = styled.button`
     display: flex;
     align-items: center;
@@ -869,14 +881,14 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
 
     // Placeholder rows shown while the project list loads.
     const renderRowSkeleton = (count: number) => (
-        <>
+        <div aria-hidden="true">
             {Array.from({ length: count }).map((_, i) => (
                 <SkeletonRow key={i}>
                     <SkeletonCircle />
                     <SkeletonBar w={i % 2 === 0 ? "55%" : "40%"} />
                 </SkeletonRow>
             ))}
-        </>
+        </div>
     );
 
     const renderList = () => {
@@ -932,7 +944,12 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
             );
         }
         if (loading) {
-            return <ProjectList>{renderRowSkeleton(5)}</ProjectList>;
+            return (
+                <ProjectList aria-busy="true">
+                    <VisuallyHidden role="status">Loading projects...</VisuallyHidden>
+                    {renderRowSkeleton(5)}
+                </ProjectList>
+            );
         }
         if (error) {
             return (

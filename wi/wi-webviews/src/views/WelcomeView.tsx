@@ -548,9 +548,12 @@ const MoreChevron = styled.span`
     line-height: 1;
 `;
 
+// Collapsed state hides the subtree with `visibility` as well as clipping it, so
+// nothing inside stays focusable while the section is aria-hidden. Transitioning
+// `visibility` keeps it visible for the duration of the collapse animation.
 const SecondaryCardsSection = styled.div`
     overflow: hidden;
-    transition: max-height 0.4s ease, opacity 0.3s ease;
+    transition: max-height 0.4s ease, opacity 0.3s ease, visibility 0.4s;
 `;
 
 const SecondaryActionRow = styled.div`
@@ -1226,6 +1229,7 @@ export const WelcomeView: React.FC = () => {
 											style={{
 												maxHeight: showSecondary ? "200px" : "0",
 												opacity: showSecondary ? 1 : 0,
+												visibility: showSecondary ? "visible" : "hidden",
 											}}
 										>
 											<SecondaryCardsGrid>
@@ -1286,6 +1290,7 @@ export const WelcomeView: React.FC = () => {
 									style={{
 										maxHeight: showSecondary ? "300px" : "0",
 										opacity: showSecondary ? 1 : 0,
+										visibility: showSecondary ? "visible" : "hidden",
 									}}
 								>
 									<SecondaryCardsGrid>
