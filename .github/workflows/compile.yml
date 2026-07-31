@@ -114,7 +114,10 @@ jobs:
   compile:
     needs: resolve-versions
     name: Build repo
-    timeout-minutes: 45
+    # 90 gives a fully cold-cache build room to finish and reach the post-step that SAVES the
+    # caches; warm runs finish well under this. 45 was too tight for a cold build, and a
+    # timeout there cancels the job before caches are saved -> every run stays cold (vicious cycle).
+    timeout-minutes: 90
     runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
     defaults:
       run:
@@ -188,6 +191,21 @@ jobs:
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
           key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
+          # Partial restore so a cold key doesn't mean a cold cache: this prefix is the exact key minus
+          # the file-hash component, so a patch or wi/** edit falls back to the previous run instead of
+          # re-downloading every extension.
+          #
+          # What the fallback does and does not hold fixed, since it is not uniform: Ballerina and MI
+          # have their own key fields -- they are the two with a marketplace-vs-vsix source switch, and
+          # the version came along with the switch -- so a fallback cannot cross their versions. The
+          # streaming-integrator, hurl-client and mcp-server-inspector versions live only inside the
+          # dropped hash, so a fallback CAN cross those, as it can WI's. That is safe but not free:
+          # download-builtin-extensions re-validates by version string (isUpToDate), which catches those
+          # three because their versions move when their contents do. It cannot catch WI, whose version
+          # is hand-bumped and stays constant across content changes -- hence the explicit removal in
+          # "Install builtin extensions" below.
+          restore-keys: |
+            extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-
 
       - name: Cache Rust toolchain
         uses: actions/cache@v4
@@ -321,6 +339,12 @@ jobs:
 
       - name: Build WI extension
         working-directory: .
+        env:
+          # The wso2-integrator build downloads Choreo CLI binaries from the GitHub API
+          # (scripts/download-choreo-cli.js). Without a token those calls are unauthenticated
+          # and hit the 60 req/hour limit -> "HTTP 403: rate limit exceeded". Authenticate to
+          # raise the limit to 5000/hour, matching the other steps in this job.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           node common/scripts/install-run-rush.js build --verbose
 
@@ -345,6 +369,13 @@ jobs:
             echo "✅ Extensions cache hit - using cached extensions"
           else
             echo "⬇️ Downloading built-in extensions"
+            # wso2.wso2-integrator is pinned in product.json to the hand-bumped version in
+            # wi/wi-extension/package.json, which does not move when wi/** content changes.
+            # isUpToDate() (lib/vscode/build/lib/builtInExtensions.ts) compares only that version
+            # string, so a prefix-restored copy would be judged current and the vsix just built
+            # would never be unpacked. Reaching this branch means the exact key missed, so drop it
+            # and force a re-unpack.
+            rm -rf .build/builtInExtensions/wso2.wso2-integrator
             npm run download-builtin-extensions
           fi
 
@@ -356,12 +387,20 @@ jobs:
             echo "✅ TypeScript cache hit - using cached compilation"
             echo "Skipping core compilation, running validation only"
             npm run compile-extensions-build
-            npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            npm exec -- npm-run-all -lp eslint vscode-dts-compile-check
+            npm exec -- npm-run-all -ls valid-layers-check define-class-fields-check tsec-compile-check
           else
             echo "❌ TypeScript cache miss - full compilation required"
             echo "Running complete compilation pipeline"
             npm run core-ci
-            npm exec -- npm-run-all -lp eslint valid-layers-check define-class-fields-check vscode-dts-compile-check tsec-compile-check
+            # patches/increaseHeap.diff caps the node heap for three of these five checks:
+            # tsec-compile-check at 8192 MB, define-class-fields-check at 4096 then 8192, and
+            # valid-layers-check at 4096. Running two capped checks at once exceeds the runner and
+            # the kernel OOM-kills one, surfacing as a bare exit 137 with no useful log. So the
+            # three capped checks run serially (-ls) and only the two uncapped ones -- eslint and
+            # vscode-dts-compile-check, the latter being tsgo -- run in parallel.
+            npm exec -- npm-run-all -lp eslint vscode-dts-compile-check
+            npm exec -- npm-run-all -ls valid-layers-check define-class-fields-check tsec-compile-check
           fi
 
       - name: Compress compilation artifact

@@ -144,6 +144,33 @@ jobs:
           WSO2IPW_ELECTRON_ARGS: ${{ matrix.example == 'icp' && '--no-sandbox --password-store=basic' || '--no-sandbox' }}
         run: bash "$(npm root -g)/wso2ipw/examples/${{ matrix.example }}/run-all.sh"
 
+      - name: Collect editor logs on failure
+        if: failure()
+        run: |
+          set +e
+          mkdir -p editor-logs
+          # code-oss writes per-session logs (main.log, exthost.log, per-extension output) under
+          # <user-data-dir>/logs. The user-data-dir is not a guess: main.ts passes
+          # product.nameShort to getUserDataPath(), and getDefaultUserDataPath() joins it onto
+          # $XDG_CONFIG_HOME (or ~/.config) on Linux. nameShort is set in ci/build/update-product.sh.
+          # Copying only that tree keeps unrelated logs out of the artifact.
+          USER_DATA="${XDG_CONFIG_HOME:-$HOME/.config}/WSO2 Integrator"
+          if [ -d "${USER_DATA}/logs" ]; then
+            cp -R "${USER_DATA}/logs" editor-logs/
+          else
+            echo "No log directory at ${USER_DATA}/logs"
+          fi
+          echo "Collected log files:"; find editor-logs -type f 2>/dev/null || true
+
+      - name: Upload editor logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-editor-logs-${{ matrix.example }}-linux
+          path: editor-logs/**
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -243,6 +270,37 @@ jobs:
       - name: Run ${{ matrix.example }}
         shell: bash
         run: bash "$(npm root -g)/wso2ipw/examples/${{ matrix.example }}/run-all.sh"
+
+      - name: Collect editor logs on failure
+        if: failure()
+        # pwsh, not bash: $env:APPDATA is a Windows path, and Git Bash cannot test or traverse it
+        # without cygpath. The rest of this job's native steps already use pwsh.
+        shell: pwsh
+        run: |
+          # Same path as the Linux collector, via getDefaultUserDataPath()'s win32 branch:
+          # $APPDATA joined with product.nameShort ("WSO2 Integrator", set in update-product.sh).
+          $logs = Join-Path $env:APPDATA 'WSO2 Integrator\logs'
+          New-Item -ItemType Directory -Path editor-logs -Force | Out-Null
+          if (Test-Path $logs) {
+            # SilentlyContinue for the same reason the Linux collector uses `set +e`: GitHub runs
+            # pwsh steps with $ErrorActionPreference='stop', and a locked log file must not turn
+            # diagnostics collection into a second failure.
+            Copy-Item $logs -Destination editor-logs -Recurse -Force -ErrorAction SilentlyContinue
+          } else {
+            Write-Host "No log directory at $logs"
+          }
+          Write-Host 'Collected log files:'
+          Get-ChildItem editor-logs -Recurse -File -ErrorAction SilentlyContinue |
+            ForEach-Object { $_.FullName }
+
+      - name: Upload editor logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-editor-logs-${{ matrix.example }}-windows
+          path: editor-logs/**
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload screenshots on failure
         if: failure()
