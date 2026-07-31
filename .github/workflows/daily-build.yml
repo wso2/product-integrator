@@ -56,6 +56,29 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # apply-version.sh is shape-based: it only rewrites `-SNAPSHOT`, and passes a concrete version
+      # through verbatim. That is what makes it safe to run everywhere, but it also means a `main`
+      # left on a concrete version after a release (the manual bump documented in release.yml) would
+      # make every nightly publish that same un-timestamped version indefinitely — and because the
+      # rolling release is deleted and recreated each run, it would still look like it worked. Fail
+      # before anything is pushed instead.
+      - name: Assert main still declares SNAPSHOT versions
+        shell: bash
+        run: |
+          for key in integrator.version wi.extension.version; do
+            value=$(awk -F= -v k="${key}" '$1 == k { print substr($0, index($0, "=") + 1); exit }' \
+              ci/build/component-versions.properties | tr -d '\r')
+            case "${value}" in
+              *-SNAPSHOT) echo "  ${key}=${value}" ;;
+              "") echo "Error: ${key} is not set in ci/build/component-versions.properties." >&2
+                  exit 1 ;;
+              *)  echo "Error: main declares ${key}=${value}, expected a -SNAPSHOT." >&2
+                  echo "       A post-release bump was probably missed; every nightly would" >&2
+                  echo "       otherwise publish this same version." >&2
+                  exit 1 ;;
+            esac
+          done
+
       - name: Reset builds/nightly branch to main
         run: |
           git push --force origin "HEAD:refs/heads/builds/nightly"

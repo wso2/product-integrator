@@ -60,6 +60,9 @@ done
 NOW_LONG=$(date -u +%Y%m%d%H%M)   # product:   5.1.0-202607301412
 # yymmddHH, not yymmddHHmm: a 10-digit stamp (2607301412) exceeds 2^31, which the Marketplace
 # rejects. Matches ballerina-vscode's convention (5.12.26061907).
+# Consequence of the hour granularity: two builds in the same UTC hour derive the same extension
+# version. Harmless for the once-daily nightly and for dev-builds (never published), but space
+# consecutive release.yml pre-releases more than an hour apart.
 NOW_SHORT=$(date -u +%y%m%d%H)    # extension: 1.1.26073014
 
 read_version() {

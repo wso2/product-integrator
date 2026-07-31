@@ -9,7 +9,15 @@ name: Release
 #   3. build that commit and publish it as v<version>
 #
 # `main` is never modified. After a GA release, bump it by hand to the next
-# <major>.<minor+1>.0-SNAPSHOT, and the extension to <major>.<minor+2>.0-SNAPSHOT.
+# <major>.<minor+1>.0-SNAPSHOT, and the extension to <major>.<minor+2>.0-SNAPSHOT. daily-build.yml
+# asserts this, so a missed bump fails the next nightly rather than silently republishing a version.
+#
+# Retrying a failed release: the branch is pushed in step 2, before the build runs, so a build
+# failure leaves the branch and its version commit behind and re-dispatching the same version then
+# fails the branch-exists guard below. Delete it first:
+#   git push origin --delete <version>
+# The tag and the GitHub release are only ever created after a fully successful build, so there is
+# nothing else to clean up.
 
 on:
   workflow_dispatch:

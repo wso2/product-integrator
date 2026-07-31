@@ -425,20 +425,48 @@ jobs:
           node build/azure-pipelines/distro/mixin-quality.ts || true
 
       - name: Install builtin extensions
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CACHE_HIT: ${{ steps.cache-extensions.outputs.cache-hit }}
+          BALLERINA_EXTENSION_VERSION: ${{ needs.resolve-versions.outputs.ballerina_extension_version }}
+          BALLERINA_EXTENSION_TAG: ${{ needs.resolve-versions.outputs.ballerina_extension_tag }}
+          MI_EXTENSION_VERSION: ${{ needs.resolve-versions.outputs.mi_extension_version }}
+          MI_EXTENSION_TAG: ${{ needs.resolve-versions.outputs.mi_extension_tag }}
         run: |
-          if [ "${{ steps.cache-extensions.outputs.cache-hit }}" = "true" ]; then
+          # An extension pinned to a ROLLING upstream tag (the nightly's `nightly`) keeps one version
+          # string while its content changes daily, so isUpToDate()
+          # (lib/vscode/build/lib/builtInExtensions.ts) judges any cached copy current and never
+          # unpacks the vsix that was just downloaded — the nightly would ship the first night's
+          # extension forever. The `<key>.tag` companion is written by
+          # ci/build/resolve-nightly-versions.sh ONLY when the tag is not v<version>, which is
+          # exactly the rolling case, so it is the precise signal here.
+          #
+          # These must force the download path rather than just be deleted: on a cache hit
+          # download-builtin-extensions never runs, so deleting without downloading would leave the
+          # extension missing altogether.
+          rolling=()
+          if [ -n "${BALLERINA_EXTENSION_VERSION}" ] && [ "${BALLERINA_EXTENSION_TAG}" != "v${BALLERINA_EXTENSION_VERSION}" ]; then
+            rolling+=(wso2.ballerina)
+          fi
+          if [ -n "${MI_EXTENSION_VERSION}" ] && [ "${MI_EXTENSION_TAG}" != "v${MI_EXTENSION_VERSION}" ]; then
+            rolling+=(wso2.micro-integrator)
+          fi
+
+          if [ "${CACHE_HIT}" = "true" ] && [ ${#rolling[@]} -eq 0 ]; then
             echo "✅ Extensions cache hit - using cached extensions"
           else
             echo "⬇️ Downloading built-in extensions"
             # wso2.wso2-integrator is pinned in product.json to the hand-bumped version in
             # wi/wi-extension/package.json, which does not move when wi/** content changes.
-            # isUpToDate() (lib/vscode/build/lib/builtInExtensions.ts) compares only that version
-            # string, so a prefix-restored copy would be judged current and the vsix just built
-            # would never be unpacked. Reaching this branch means the exact key missed, so drop it
-            # and force a re-unpack.
+            # isUpToDate() compares only that version string, so a prefix-restored copy would be
+            # judged current and the vsix just built would never be unpacked. Reaching this branch
+            # means the exact key missed, so drop it and force a re-unpack.
             rm -rf .build/builtInExtensions/wso2.wso2-integrator
+            for ext in "${rolling[@]}"; do
+              echo "   dropping ${ext}: pinned to a rolling tag, so its version cannot prove freshness"
+              rm -rf ".build/builtInExtensions/${ext}"
+            done
             npm run download-builtin-extensions
           fi
 
