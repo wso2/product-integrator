@@ -65,6 +65,7 @@ import { BridgeLayer } from "../../BridgeLayer";
 import { StateMachine } from "../../stateMachine";
 import { ext } from "../../extensionVariables";
 import { ballerinaContext } from "../../bi/ballerinaContext";
+import { SHARED_COMMANDS } from "../../bi/types";
 const platform = getPlatform();
 const SAMPLES_INFO_URL = process.env.SAMPLES_INFO_URL;
 const PREBUILT_INTEGRATIONS_URL = process.env.PREBUILT_INTEGRATIONS_URL;
@@ -509,8 +510,8 @@ export class MainWsManager implements WIVisualizerAPI {
      * front of the user's very first interaction with the product.
      */
     async getBiFormWsBootstrap(): Promise<BiFormWsBootstrap> {
-        await waitForBallerinaCommand('ballerina.getBiFormWsBootstrap');
-        const bootstrap = await commands.executeCommand<BiFormWsBootstrap>('ballerina.getBiFormWsBootstrap');
+        await waitForBallerinaCommand(SHARED_COMMANDS.GET_BI_FORM_WS_BOOTSTRAP);
+        const bootstrap = await commands.executeCommand<BiFormWsBootstrap>(SHARED_COMMANDS.GET_BI_FORM_WS_BOOTSTRAP);
         if (!bootstrap) {
             throw new Error(
                 'The Ballerina extension did not return BI form WS coordinates. ' +

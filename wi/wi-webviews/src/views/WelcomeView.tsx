@@ -1335,7 +1335,7 @@ export const WelcomeView: React.FC = () => {
 						<BottomSection>
 							<RecentProjectsSection>
 								<RecentProjectsHeader>
-									<RecentProjectsTitle>Recent Integrations and Projects</RecentProjectsTitle>
+									<RecentProjectsTitle>Recent Projects</RecentProjectsTitle>
 									<ViewAllButton type="button" onClick={openRecentProjectsPicker}>
 										See more
 									</ViewAllButton>
