@@ -2,12 +2,19 @@ name: Daily Build
 
 # The nightly, and nothing else. Once a day it:
 #
-#   1. resets `nightly` to `main`
-#   2. pins every dependency to its newest nightly build, or its newest release when the upstream
+#   1. resets the `builds/nightly` branch to `main`
+#   2. pins every dependency to its newest nightly build, or its newest GA release when the upstream
 #      repo publishes none
-#   3. stamps the timestamped product and extension versions and commits, so `git diff main nightly`
-#      is exactly the pin and the build is reproducible from that commit
-#   4. builds and replaces the rolling `nightly` release
+#   3. stamps the timestamped product and extension versions and commits, so
+#      `git diff main builds/nightly` is exactly the pin and the build is reproducible from that
+#      commit
+#   4. builds that commit and replaces the rolling `nightly` release
+#
+# Branch and tag are named differently on purpose. `builds/nightly` is the source: force-pushed
+# every night, only ever main plus one version-pin commit. The `nightly` *tag* is the published
+# artifact external consumers pin their download URLs to, so it must not change name. Using one
+# name for both would make `nightly` an ambiguous ref — `actions/checkout` silently prefers a
+# branch over a tag, and the two would drift apart after a partially failed run.
 #
 # There are no inputs: the nightly always builds the full matrix. Dispatching this by hand runs
 # exactly what the schedule runs, which is what you want when 06:30 fails.
@@ -30,11 +37,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # `nightly` only ever holds main plus a single version-pin commit, so last night's is discarded.
-  # That commit is the record of what was built; the build itself consumes the `versions` artifact,
-  # which carries the same two files.
+  # `builds/nightly` only ever holds main plus a single version-pin commit, so last night's is
+  # discarded. That commit is the record of what was built, and the build checks it out by SHA; the
+  # `versions` artifact carries the same two files so every job agrees even before checkout.
   prepare-nightly:
-    name: Sync nightly branch and pin versions
+    name: Sync builds/nightly branch and pin versions
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -49,10 +56,10 @@ jobs:
           ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Reset nightly branch to main
+      - name: Reset builds/nightly branch to main
         run: |
-          git push --force origin "HEAD:refs/heads/nightly"
-          echo "nightly now points at $(git rev-parse --short HEAD) (main)."
+          git push --force origin "HEAD:refs/heads/builds/nightly"
+          echo "builds/nightly now points at $(git rev-parse --short HEAD) (main)."
 
       - name: Pin dependency versions
         run: |
@@ -74,15 +81,15 @@ jobs:
             wi/wi-extension/package.json
           if-no-files-found: error
 
-      - name: Commit pinned versions to nightly
+      - name: Commit pinned versions to builds/nightly
         id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -B nightly
+          git checkout -B builds/nightly
           git add ci/build/component-versions.properties wi/wi-extension/package.json
           git commit -m "Pin nightly versions for ${{ steps.stamp.outputs.integrator_version }}"
-          git push --force origin nightly
+          git push --force origin builds/nightly
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build:
@@ -91,14 +98,18 @@ jobs:
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
-      # The versions come from the commit just pushed to `nightly`; `nightly` is the rolling tag, so
-      # build.yml deletes the previous release and its tag before publishing this one.
+      # Build the commit just pushed to `builds/nightly`, not the ref this workflow was dispatched
+      # on (main): `ref` selects the tree that is compiled and `target_commitish` points the tag at
+      # the same commit, which is what makes every nightly reproducible from it. Passing the SHA
+      # rather than the branch name also stops the next night's force-push from swapping the tree
+      # out from under a run that is still building.
+      ref: ${{ needs.prepare-nightly.outputs.sha }}
+      target_commitish: ${{ needs.prepare-nightly.outputs.sha }}
       versions_artifact: versions
+      # `nightly` is the rolling *tag* external consumers download from, so build.yml deletes the
+      # previous release and its tag before publishing this one.
       publish_tag: nightly
       is_prerelease: true
-      # Without this the tag would be created on the caller's ref (main), so checking out `nightly`
-      # would give main's -SNAPSHOT versions rather than the pin this run actually built.
-      target_commitish: ${{ needs.prepare-nightly.outputs.sha }}
       runner: codebuild
       build_linux: true
       build_macos: true

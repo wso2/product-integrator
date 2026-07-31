@@ -173,8 +173,11 @@ jobs:
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
-      # The versions come from the branch that was just prepared; target_commitish points the release
-      # at that commit rather than at the ref this workflow was dispatched on.
+      # Build the prepared commit, not the ref this workflow was dispatched on: `ref` selects the
+      # tree that is compiled and `target_commitish` points the release at the same commit, so the
+      # release branch really does describe what shipped. The artifact carries the same two version
+      # files, which is what keeps every job in agreement even before checkout.
+      ref: ${{ needs.prepare-release-branch.outputs.sha }}
       versions_artifact: versions
       publish_tag: v${{ inputs.version }}
       is_prerelease: ${{ inputs.is_prerelease }}

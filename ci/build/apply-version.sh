@@ -10,7 +10,7 @@
 #              1.1.26073014    -> 1.1.<yymmddHH>     (odd minor kept, so the rule is repeatable)
 #
 # With no flags it is shape-based and idempotent: anything already concrete passes through verbatim.
-# That is what makes it safe to run unconditionally in the build - on the `nightly` and release
+# That is what makes it safe to run unconditionally in the build - on `builds/nightly` and on release
 # branches the versions are already committed, so the build ships exactly what was pinned.
 #
 # Usage: ./ci/build/apply-version.sh [options]

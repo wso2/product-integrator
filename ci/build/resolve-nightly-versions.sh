@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Resolve every *dependent* component to its newest nightly build (or its newest release when the
+# Resolve every *dependent* component to its newest nightly build (or its newest GA release when the
 # upstream repo publishes no nightly) and pin the result into component-versions.properties.
 #
-# It runs on the `nightly` branch before the build is dispatched, so the build itself just reads the
-# committed file — which also makes every nightly reproducible from the commit this leaves behind.
+# It runs on the `builds/nightly` branch before the build is dispatched, so the build itself just
+# reads the committed file — which also makes every nightly reproducible from the commit this leaves
+# behind.
 # The product and extension versions are not touched here; ci/build/apply-version.sh owns those.
 #
 # Usage: ./ci/build/resolve-nightly-versions.sh [versions-file]
@@ -60,6 +61,21 @@ unset_property() {
 #
 # Filtering on the asset matters: a release without the file we need is useless to us, and it is
 # how wso2/ballerina-vscode's rolling `nightly` release is identified.
+#
+# The fallback skips alpha/beta/RC releases, so a repo that publishes no nightly pins to a real
+# release rather than to whatever pre-release happens to be newest. That matters most for
+# ballerina.version, icp.version and ballerina.jre.version, which are the runtime bits actually
+# bundled into the product rather than just an extension vsix.
+#
+# The filter is on the *tag qualifier*, deliberately not on GitHub's `prerelease` flag: the two
+# extension repos publish through the VS Code pre-release channel and so flag nearly everything
+# `prerelease=true` (93 of wso2/mi-vscode's last 100 releases, 98 of wso2/ballerina-vscode's).
+# Filtering on the flag would pin MI to v3.0.0 from Nov 2025 instead of the current v4.1.4. Tag
+# shape agrees with the flag on all three runtime repos, where the concern is real, and keeps the
+# newest genuine release on the two extension repos.
+#
+# It also cannot be filtered at the top of the pipeline, since the rolling `nightly` tag has to stay
+# selectable by the line above — hence a carried field applied to the fallback line alone.
 select_release() {
   local repo="$1" asset_regex="$2" candidates
   # The regex is embedded in a jq string literal, where a lone backslash is an invalid escape.
@@ -71,10 +87,11 @@ select_release() {
     [ .[] | select(.draft == false)
           | {tag: .tag_name,
              nightly: (.tag_name | test(\"nightly\"; \"i\")),
+             qualified: (.tag_name | test(\"-(alpha|beta|rc|m[0-9]|snapshot|pre)\"; \"i\")),
              asset: ([.assets[]? | select(.name | test(\"${jq_regex}\")) | .name][0])}
           | select(.asset != null) ]
     | (map(select(.nightly))[0] // empty | \"nightly\t\(.tag)\t\(.asset)\"),
-      (.[0] // empty | \"latest\t\(.tag)\t\(.asset)\")
+      (map(select(.qualified == false))[0] // empty | \"latest\t\(.tag)\t\(.asset)\")
   ")
 
   candidates=$(printf '%s\n' "${candidates}" | sed '/^[[:space:]]*$/d' | head -1)

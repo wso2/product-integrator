@@ -42,6 +42,20 @@ on:
         required: false
         default: 'github'
         type: string
+      # Under `workflow_call`, `github.ref` is the *caller's* triggering ref, so a dispatcher that
+      # prepares a branch and then calls this workflow would compile the ref it was dispatched on
+      # (main) rather than the branch it just prepared. Callers that prepare a branch pass its SHA
+      # here so the tree, the branch, the tag and `target_commitish` all describe the same commit.
+      #
+      # One thing this cannot fix: with `uses: ./.github/workflows/...` the reusable workflow
+      # *definitions* are always read from the caller's ref, never from this input. That is
+      # harmless here, since both dispatchers cut their branch from the ref they were dispatched
+      # on and add nothing but a version commit.
+      ref:
+        description: 'Ref or SHA to build. Empty builds the ref this workflow was called from.'
+        required: false
+        default: ''
+        type: string
       versions_artifact:
         description: 'Artifact holding the already-stamped component-versions.properties and wi-extension package.json. Empty means stamp here from the current ref.'
         required: false
@@ -75,7 +89,7 @@ jobs:
   # other job as an artifact. A VS Code extension version must be exactly three integers, so
   # `1.2.0-SNAPSHOT` can never be packaged and some job has to stamp on every path.
   #
-  # Callers that prepared a branch (dev-build.yml's nightly, release.yml) pass their own artifact and
+  # Callers that prepared a branch (daily-build.yml, release.yml) pass their own artifact and
   # this job just re-publishes it. A caller that passes nothing gets a stamp from the current ref:
   # apply-version.sh is shape-based, rewriting only `-SNAPSHOT` values, so a concrete version always
   # passes through verbatim and the build ships exactly what the branch declares.
@@ -88,6 +102,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Download the caller's versions
         if: ${{ inputs.versions_artifact != '' }}
@@ -130,6 +146,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Download stamped versions
         uses: actions/download-artifact@v4
@@ -199,6 +217,7 @@ jobs:
       mi_extension_source: ${{ inputs.mi_extension_source }}
       build_packed_installers: ${{ inputs.build_packed_installers == true }}
       versions_artifact: build-versions
+      ref: ${{ inputs.ref }}
 
   smoke-test:
     if: ${{ inputs.build_packed_installers == true }}
@@ -238,7 +257,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -612,7 +631,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -1222,8 +1241,9 @@ jobs:
         with:
           tag_name: ${{ inputs.publish_tag }}
           name: ${{ steps.release-tag.outputs.name }}
-          # Callers that prepared a branch pass its SHA, so the release points at the commit that
-          # actually carries the versions rather than at the ref the workflow was started from.
+          # Callers that prepared a branch pass its SHA as both `ref` and `target_commitish`, so the
+          # tag points at the very commit that was compiled rather than at the ref the workflow was
+          # started from.
           target_commitish: ${{ inputs.target_commitish != '' && inputs.target_commitish || github.sha }}
           draft: false
           prerelease: ${{ inputs.is_prerelease }}

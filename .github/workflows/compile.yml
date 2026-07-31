@@ -29,6 +29,14 @@ on:
         default: ''
         required: false
         type: string
+      # `github.ref` is the caller's triggering ref under `workflow_call`, which is not the branch
+      # build.yml's dispatchers prepare. build.yml forwards its own `ref` here; pr-ci.yml passes
+      # nothing and keeps building the ref that triggered it.
+      ref:
+        description: 'Ref or SHA to build. Empty builds the ref this workflow was called from.'
+        default: ''
+        required: false
+        type: string
 
 permissions:
   id-token: write
@@ -50,6 +58,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Download stamped versions
         if: ${{ inputs.versions_artifact != '' }}
@@ -170,6 +180,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Validate Ballerina extension input contract
         shell: bash
