@@ -28,7 +28,7 @@ on:
         default: true
         type: boolean
       build_packed_installers:
-        description: 'Whether to build a Balleirna, ICP, and Integrator packed installers'
+        description: 'Whether to build Ballerina, ICP, and Integrator packed installers'
         default: true
         required: false
         type: boolean
@@ -1046,9 +1046,14 @@ jobs:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
     needs: [resolve-versions, compile, build-macos, build-windows, smoke-test, smoke-test-windows]
+    # A published tag is permanent and user-visible, so every platform that was asked for must have
+    # succeeded. `skipped` is allowed because build-macos/build-windows are gated on their own
+    # inputs; a *failed* platform job skips this job, and the run is already red from that failure.
     if: |
       always() &&
       (needs.compile.result == 'success') &&
+      (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
+      (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
       (needs.smoke-test.result == 'success') &&
       (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') &&
       (inputs.publish_tag != '') &&
@@ -1170,9 +1175,47 @@ jobs:
           fi
 
       - name: List release files
+        env:
+          PUBLISH_TAG: ${{ inputs.publish_tag }}
         run: |
-          echo "Files to be released under tag ${{ inputs.publish_tag }}:"
+          echo "Files to be released under tag ${PUBLISH_TAG}:"
           ls -la release-files/ || echo "No release files found"
+
+      # Every download above is `continue-on-error` (a skipped platform produces no artifact), so a
+      # missing artifact would otherwise publish silently. Assert that everything the inputs asked
+      # for actually arrived, and fail the run rather than ship a partial release.
+      - name: Verify release assets
+        shell: bash
+        env:
+          BUILD_MACOS: ${{ inputs.build_macos }}
+          BUILD_WINDOWS: ${{ inputs.build_windows }}
+        run: |
+          shopt -s nullglob
+          missing=()
+          require() {
+            local label="$1"; shift
+            local found=("$@")
+            [ ${#found[@]} -gt 0 ] || missing+=("${label}")
+          }
+
+          require "Linux .deb"          release-files/*.deb
+          require "Linux .rpm"          release-files/*.rpm
+          require "Linux .tar.gz"       release-files/*.tar.gz
+          require "WI extension .vsix"  release-files/*.vsix
+          if [ "${BUILD_MACOS}" = "true" ]; then
+            require "macOS arm64 .dmg"  release-files/*arm64.dmg
+            require "macOS x64 .dmg"    release-files/*x64.dmg
+          fi
+          if [ "${BUILD_WINDOWS}" = "true" ]; then
+            require "Windows .msi"      release-files/*.msi
+          fi
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "Error: refusing to publish an incomplete release. Missing:" >&2
+            printf '  - %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+          echo "All expected release assets are present."
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

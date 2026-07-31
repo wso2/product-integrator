@@ -10,7 +10,7 @@ on:
         default: 'codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}'
         type: string
       build_packed_installers:
-        description: 'Whether to build a Balleirna, ICP, and Integrator packed installers'
+        description: 'Whether to build Ballerina, ICP, and Integrator packed installers'
         default: true
         required:  true
         type: boolean

@@ -22,19 +22,27 @@ fi
 
 # Replace `key=...` in place, preserving comments and ordering. When the key is absent it is
 # inserted after `anchor=...` (or appended when no anchor is given or found).
+#
+# Two passes, because a `<key>.tag` line sits *after* its own anchor (`<key>`): a single pass would
+# insert at the anchor and then hit the existing line further down, writing the key twice and growing
+# the file by one duplicate on every run. Pass 1 decides whether the key is already present; pass 2
+# replaces its first occurrence and drops any later duplicates, so this also repairs a file that has
+# already accumulated them.
 set_property() {
   local key="$1" value="$2" anchor="${3:-}" tmp
   tmp=$(mktemp)
   awk -v key="${key}" -v value="${value}" -v anchor="${anchor}" '
-    BEGIN { found = 0 }
+    NR == FNR { split($0, parts, "="); if (parts[1] == key) has_key = 1; next }
     {
       split($0, parts, "=")
-      if (parts[1] == key) { print key "=" value; found = 1; next }
+      if (parts[1] == key) { if (!written) { print key "=" value; written = 1 } next }
       print
-      if (!found && anchor != "" && parts[1] == anchor) { print key "=" value; found = 1 }
+      if (!has_key && !written && anchor != "" && parts[1] == anchor) {
+        print key "=" value; written = 1
+      }
     }
-    END { if (!found) print key "=" value }
-  ' "${VERSIONS_FILE}" > "${tmp}"
+    END { if (!written) print key "=" value }
+  ' "${VERSIONS_FILE}" "${VERSIONS_FILE}" > "${tmp}"
   mv "${tmp}" "${VERSIONS_FILE}"
 }
 

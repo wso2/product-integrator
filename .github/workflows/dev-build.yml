@@ -35,7 +35,7 @@ on:
         default: true
         type: boolean
       build_packed_installers:
-        description: 'Whether to build a Balleirna, ICP, and Integrator packed installers'
+        description: 'Whether to build Ballerina, ICP, and Integrator packed installers'
         required: true
         default: true
         type: boolean
@@ -56,9 +56,12 @@ on:
           - marketplace
           - github
 
+# `contents: read` is enough: the versions are stamped in the runner's working copy and handed
+# between jobs as a workflow artifact, so nothing is ever committed or pushed and no release is
+# created. `id-token: write` is still required for cosign.
 permissions:
   id-token: write
-  contents: write
+  contents: read
 
 concurrency:
   group: dev-build-${{ github.ref }}
