@@ -25,6 +25,7 @@ import { useVisualizerContext } from "../contexts";
 import { useCloudContext } from "../providers";
 import { UserAccountPopover } from "./UserAccountPopover";
 import { CreationView } from "./creationView";
+import { prefetchBiCreateFlow } from "./creationView/federation/biFormRemote";
 import { RemoteBIProjectForm } from "./creationView/federation/RemoteBIProjectForm";
 import { RemoteImportIntegration } from "./creationView/federation/RemoteImportIntegration";
 import { SamplesView } from "./samplesView";
@@ -764,6 +765,12 @@ export const WelcomeView: React.FC = () => {
             return;
         }
         biStatusCheckDone.current = true;
+
+        // Warm the Create flow now, using the seconds the user spends on this view, so
+        // clicking Create lands on the form instead of on a spinner. Deliberately not
+        // gated on the status check below: it needs the same Ballerina activation, and
+        // waiting for that answer would give away most of the head start.
+        prefetchBiCreateFlow(wsClient);
 
         wsClient.getBIRuntimeStatus().then(({ isAvailable }) => {
             setIsBallerinaUnavailable(!isAvailable);
