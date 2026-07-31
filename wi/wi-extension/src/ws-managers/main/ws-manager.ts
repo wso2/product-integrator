@@ -71,6 +71,9 @@ const PREBUILT_INTEGRATIONS_URL = process.env.PREBUILT_INTEGRATIONS_URL;
 /**
  * Command ids the webview may invoke via `runCommand`; anything else is refused.
  * Keep in sync with the `wsClient.runCommand` call sites in `wi-webviews`.
+ *
+ * Note this gates ids only — `args` are forwarded to the command as given, so a
+ * compromised webview still controls the payloads of the commands listed here.
  */
 const ALLOWED_WEBVIEW_COMMANDS: ReadonlySet<string> = new Set([
     // Cloud auth / project flows
@@ -162,9 +165,11 @@ export class MainWsManager implements WIVisualizerAPI {
     async runCommand(props: RunCommandRequest): Promise<RunCommandResponse> {
         if (!ALLOWED_WEBVIEW_COMMANDS.has(props.command)) {
             // Forwarding arbitrary ids would make this a general command-execution
-            // primitive for anything that can reach the bridge.
+            // primitive for anything that can reach the bridge. Throw rather than
+            // return a failed response: callers cannot detect the latter, since the
+            // success path resolves with whatever the command returned.
             ext.logError(`Blocked disallowed webview command: ${props.command}`);
-            return { success: false, error: `Command not allowed: ${props.command}` };
+            throw new Error(`Command not allowed: ${props.command}`);
         }
 
         return await commands.executeCommand(props.command, ...(props.args || []));
