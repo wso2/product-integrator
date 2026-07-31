@@ -53,7 +53,7 @@ import {
 } from "@wso2/wi-core";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { commands, extensions, window, workspace, MarkdownString, Uri, env, ConfigurationTarget } from "vscode";
-import { getActiveBallerinaExtension } from "../../utils/ballerinaExtension";
+import { getActiveBallerinaExtension, waitForBallerinaCommand } from "../../utils/ballerinaExtension";
 import { getDefaultCreationPath } from "../../utils/pathUtils";
 import { askFileOrFolderPath, askFilePath, askProjectPath, BALLERINA_INTEGRATOR_ISSUES_URL, getPlatform, getUsername, handleOpenSamples, isSupportedSLVersionUtil, openInVSCode, validateProjectPath } from "./utils";
 import * as fs from "fs";
@@ -64,6 +64,7 @@ import { BridgeLayer } from "../../BridgeLayer";
 import { StateMachine } from "../../stateMachine";
 import { ext } from "../../extensionVariables";
 import { ballerinaContext } from "../../bi/ballerinaContext";
+import { SHARED_COMMANDS } from "../../bi/types";
 const platform = getPlatform();
 const SAMPLES_INFO_URL = process.env.SAMPLES_INFO_URL;
 const PREBUILT_INTEGRATIONS_URL = process.env.PREBUILT_INTEGRATIONS_URL;
@@ -503,12 +504,17 @@ export class MainWsManager implements WIVisualizerAPI {
 
     /**
      * Returns the WebSocket coordinates the embedded BI form uses to talk
-     * directly to the Ballerina host (project-creation RPCs). Ensures the
-     * Ballerina extension is activated first so the command is registered.
+     * directly to the Ballerina host (project-creation RPCs).
+     *
+     * Waits only for the bootstrap command to be registered, NOT for the Ballerina
+     * extension to finish activating: activation resolves only once the language server
+     * is up and the project has been scanned, and this bridge — like the Create flow's
+     * first screen — needs none of that. Waiting for it put a multi-second spinner in
+     * front of the user's very first interaction with the product.
      */
     async getBiFormWsBootstrap(): Promise<BiFormWsBootstrap> {
-        await getActiveBallerinaExtension();
-        const bootstrap = await commands.executeCommand<BiFormWsBootstrap>('ballerina.getBiFormWsBootstrap');
+        await waitForBallerinaCommand(SHARED_COMMANDS.GET_BI_FORM_WS_BOOTSTRAP);
+        const bootstrap = await commands.executeCommand<BiFormWsBootstrap>(SHARED_COMMANDS.GET_BI_FORM_WS_BOOTSTRAP);
         if (!bootstrap) {
             throw new Error(
                 'The Ballerina extension did not return BI form WS coordinates. ' +

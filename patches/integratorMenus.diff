@@ -79,7 +79,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/workspaceA
  	command: {
  		id: OpenFolderAction.ID,
 -		title: localize({ key: 'miOpenFolder', comment: ['&& denotes a mnemonic'] }, "Open &&Folder...")
-+		title: localize({ key: 'miOpenFolder', comment: ['&& denotes a mnemonic'] }, "Open &&Integration...")
++		title: localize({ key: 'miOpenFolder', comment: ['&& denotes a mnemonic'] }, "Open &&Project...")
  	},
  	order: 2,
  	when: OpenFolderWorkspaceSupportContext
@@ -88,7 +88,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/workspaceA
  	command: {
  		id: OpenFolderViaWorkspaceAction.ID,
 -		title: localize({ key: 'miOpenFolder', comment: ['&& denotes a mnemonic'] }, "Open &&Folder...")
-+		title: localize({ key: 'miOpenFolder', comment: ['&& denotes a mnemonic'] }, "Open &&Integration...")
++		title: localize({ key: 'miOpenFolder', comment: ['&& denotes a mnemonic'] }, "Open &&Project...")
  	},
  	order: 2,
  	when: ContextKeyExpr.and(OpenFolderWorkspaceSupportContext.toNegated(), WorkbenchStateContext.isEqualTo('workspace'))
@@ -141,7 +141,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/actions/workspaceA
  	command: {
  		id: CloseWorkspaceAction.ID,
 -		title: localize({ key: 'miCloseFolder', comment: ['&& denotes a mnemonic'] }, "Close &&Folder")
-+		title: localize({ key: 'miCloseFolder', comment: ['&& denotes a mnemonic'] }, "Close &&Integration")
++		title: localize({ key: 'miCloseFolder', comment: ['&& denotes a mnemonic'] }, "Close &&Project")
  	},
  	order: 3,
  	when: ContextKeyExpr.and(WorkbenchStateContext.isEqualTo('folder'), EmptyWorkspaceSupportContext, IsSessionsWindowContext.negate())

@@ -22,11 +22,8 @@ import styled from "@emotion/styled";
 import { ProgressIndicator, Typography } from "@wso2/ui-toolkit";
 import { useEffect, useState } from "react";
 import { useVisualizerContext } from "../../../contexts";
-import { loadRemoteModule } from "./loadRemote";
+import { loadBiFormModule } from "./biFormRemote";
 import { describeBiFormRemoteUnavailable } from "./remoteStatus";
-
-const REMOTE_GLOBAL_NAME = "ballerinaBiForm";
-const REMOTE_MODULE = "./EmbeddedBIProjectForm";
 
 const StateContainer = styled.div`
     display: flex;
@@ -40,7 +37,7 @@ const StateContainer = styled.div`
 `;
 
 /** The BI creation variant the federated form should render. */
-type EmbeddedFormMode = "integration" | "project" | "library";
+type EmbeddedFormMode = "create" | "integration" | "project" | "library";
 
 /** Props of the federated form exposed by the Ballerina extension. */
 interface EmbeddedFormProps {
@@ -83,10 +80,10 @@ export function RemoteBIProjectForm({
         let cancelled = false;
         (async () => {
             try {
-                const module = await loadRemoteModule<{ default: React.ComponentType<EmbeddedFormProps> }>(
+                // Usually already resolved — `prefetchBiCreateFlow` starts this load while
+                // the welcome view is still on screen.
+                const module = await loadBiFormModule<{ default: React.ComponentType<EmbeddedFormProps> }>(
                     remoteUrl,
-                    REMOTE_GLOBAL_NAME,
-                    REMOTE_MODULE,
                 );
                 if (!cancelled) {
                     setFormComponent(() => module.default);

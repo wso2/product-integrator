@@ -99,11 +99,12 @@ function registerCoreCommands(context: ExtensionContext, dataProvider: ProjectEx
 function registerBallerinaCommands(isBallerinaWorkspace?: boolean, isEmptyWorkspace?: boolean): void {
     commands.executeCommand('setContext', 'BI.isWorkspaceSupported', ballerinaContext.isWorkspaceSupported ?? false);
 
-    if (isBallerinaWorkspace) {
-        commands.executeCommand('setContext', 'BI.isBallerinaWorkspace', true);
-        if (isEmptyWorkspace) {
-            commands.executeCommand('setContext', 'BI.project.empty', true);
-        }
+    // Always set an explicit boolean so `when` clauses can reliably distinguish a
+    // standalone integration/library (false) from a project/workspace (true) — e.g. to
+    // show "Convert to Project" only for standalone and "Add Integration" only in a project.
+    commands.executeCommand('setContext', 'BI.isBallerinaWorkspace', isBallerinaWorkspace ?? false);
+    if (isBallerinaWorkspace && isEmptyWorkspace) {
+        commands.executeCommand('setContext', 'BI.project.empty', true);
     }
     // Focus tree and show visualizer for BI projects
     commands.executeCommand(`${WI_PROJECT_EXPLORER_VIEW_ID}.focus`);

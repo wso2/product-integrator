@@ -46,6 +46,18 @@ const ProjectList = styled.div`
     flex-direction: column;
 `;
 
+const VisuallyHidden = styled.span`
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+`;
+
 const ProjectRow = styled.button`
     display: flex;
     align-items: center;
@@ -105,6 +117,48 @@ const ProjectRowDescription = styled.span`
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+`;
+
+// ── Loading skeleton styles ───────────────────────────────────────────────────
+
+const SkeletonBlock = styled.div`
+    background: color-mix(in srgb, var(--vscode-foreground) 12%, transparent);
+    border-radius: 4px;
+    animation: oiv-skeleton-pulse 1.4s ease-in-out infinite;
+
+    @keyframes oiv-skeleton-pulse {
+        0%,
+        100% {
+            opacity: 0.4;
+        }
+        50% {
+            opacity: 0.9;
+        }
+    }
+`;
+
+const SkeletonRow = styled.div`
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 50%, transparent);
+
+    &:last-child {
+        border-bottom: none;
+    }
+`;
+
+const SkeletonCircle = styled(SkeletonBlock)`
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    flex-shrink: 0;
+`;
+
+const SkeletonBar = styled(SkeletonBlock)<{ w?: string }>`
+    height: 10px;
+    width: ${(props: { w?: string }) => props.w ?? "60%"};
 `;
 
 // ── Confirmation panel styles ─────────────────────────────────────────────────
@@ -825,6 +879,18 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
 
     // ── Project list ──────────────────────────────────────────────────────────
 
+    // Placeholder rows shown while the project list loads.
+    const renderRowSkeleton = (count: number) => (
+        <div aria-hidden="true">
+            {Array.from({ length: count }).map((_, i) => (
+                <SkeletonRow key={i}>
+                    <SkeletonCircle />
+                    <SkeletonBar w={i % 2 === 0 ? "55%" : "40%"} />
+                </SkeletonRow>
+            ))}
+        </div>
+    );
+
     const renderList = () => {
         if (authStateLoading && !authState?.userInfo) {
             return (
@@ -879,10 +945,10 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
         }
         if (loading) {
             return (
-                <CenteredMessage>
-                    <ProgressRing color={ThemeColors.PRIMARY} />
-                    <span>Loading projects...</span>
-                </CenteredMessage>
+                <ProjectList aria-busy="true">
+                    <VisuallyHidden role="status">Loading projects...</VisuallyHidden>
+                    {renderRowSkeleton(5)}
+                </ProjectList>
             );
         }
         if (error) {
