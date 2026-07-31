@@ -110,6 +110,9 @@ jobs:
             exit 1
           fi
 
+      # Unlike the checkouts in build.yml and compile.yml, this one deliberately does NOT set
+      # `persist-credentials: false`: this job creates and pushes the release branch below, which
+      # needs the credential to survive the checkout.
       - name: Checkout ${{ github.ref_name }}
         uses: actions/checkout@v4
         with:

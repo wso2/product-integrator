@@ -50,6 +50,9 @@ jobs:
       wi_extension_version: ${{ steps.stamp.outputs.wi_extension_version }}
       sha: ${{ steps.commit.outputs.sha }}
     steps:
+      # Unlike the checkouts in build.yml and compile.yml, this one deliberately does NOT set
+      # `persist-credentials: false`: this job pushes `builds/nightly` below, which needs the
+      # credential to survive the checkout.
       - name: Checkout main
         uses: actions/checkout@v4
         with:
