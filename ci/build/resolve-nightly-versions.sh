@@ -9,7 +9,7 @@
 #
 # Usage: ./ci/build/resolve-nightly-versions.sh [versions-file]
 #        Defaults to the real file; pass a copy to dry-run against the live upstream repos.
-# Requires: gh (authenticated), curl, jq.
+# Requires: gh (authenticated), curl, jq, unzip.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -56,8 +56,9 @@ unset_property() {
   mv "${tmp}" "${VERSIONS_FILE}"
 }
 
-# Pick a release from `repo` that actually carries an asset matching `asset_regex`, preferring a
-# nightly-tagged one. Echoes "<nightly|latest>\t<tag>\t<asset-name>".
+# List releases from `repo` that carry an asset matching `asset_regex`, with a nightly-tagged one
+# first and then newest-to-oldest non-qualified releases. Each line is
+# "<nightly|latest>\t<tag>\t<asset-name>".
 #
 # Filtering on the asset matters: a release without the file we need is useless to us, and it is
 # how wso2/ballerina-vscode's rolling `nightly` release is identified.
@@ -76,13 +77,14 @@ unset_property() {
 #
 # It also cannot be filtered at the top of the pipeline, since the rolling `nightly` tag has to stay
 # selectable by the line above — hence a carried field applied to the fallback line alone.
-select_release() {
+release_candidates() {
   local repo="$1" asset_regex="$2" candidates
   # The regex is embedded in a jq string literal, where a lone backslash is an invalid escape.
   local jq_regex="${asset_regex//\\/\\\\}"
 
-  # Releases come back newest-first, so the head of each list is the newest match. The nightly line
-  # is emitted first, so `head -1` prefers a nightly and otherwise falls back to the latest release.
+  # Releases come back newest-first. Emit at most one rolling nightly, then every eligible fallback
+  # in API order. Keeping all fallbacks lets callers reject an asset whose contents do not satisfy
+  # a product-level compatibility contract.
   candidates=$(gh api "repos/${repo}/releases?per_page=100" --jq "
     [ .[] | select(.draft == false)
           | {tag: .tag_name,
@@ -91,23 +93,70 @@ select_release() {
              asset: ([.assets[]? | select(.name | test(\"${jq_regex}\")) | .name][0])}
           | select(.asset != null) ]
     | (map(select(.nightly))[0] // empty | \"nightly\t\(.tag)\t\(.asset)\"),
-      (map(select(.qualified == false))[0] // empty | \"latest\t\(.tag)\t\(.asset)\")
+      (map(select(.nightly == false and .qualified == false))[] | \"latest\t\(.tag)\t\(.asset)\")
   ")
 
-  candidates=$(printf '%s\n' "${candidates}" | sed '/^[[:space:]]*$/d' | head -1)
+  candidates=$(printf '%s\n' "${candidates}" | sed '/^[[:space:]]*$/d')
   [ -n "${candidates}" ] || return 1
   printf '%s\n' "${candidates}"
+}
+
+# Pick the preferred metadata-only candidate. Runtime distributions and extensions without an
+# embedded-form contract do not need their (potentially large) assets downloaded during resolution.
+select_release() {
+  local repo="$1" asset_regex="$2" candidates
+  candidates=$(release_candidates "${repo}" "${asset_regex}") || return 1
+  printf '%s\n' "${candidates}" | sed -n '1p'
+}
+
+# Pick the first VSIX candidate containing `required_entry`. A rolling release can retain its tag
+# while temporarily publishing an older/incomplete asset, so filename matching alone is not enough
+# for extensions whose files are consumed directly by the product's embedded creation UI.
+select_compatible_vsix_release() {
+  local repo="$1" asset_regex="$2" required_entry="$3"
+  local candidates source tag asset check_dir archive
+
+  candidates=$(release_candidates "${repo}" "${asset_regex}") || return 1
+  while IFS=$'\t' read -r source tag asset; do
+    [ -n "${tag}" ] || continue
+    check_dir=$(mktemp -d)
+    archive="${check_dir}/${asset}"
+    echo "  checking ${repo}@${tag} for ${required_entry}" >&2
+
+    if gh release download "${tag}" --repo "${repo}" --pattern "${asset}" \
+        --dir "${check_dir}" --clobber >&2 &&
+       unzip -Z1 "${archive}" | grep -Fx "${required_entry}" >/dev/null; then
+      rm -rf "${check_dir}"
+      printf '%s\t%s\t%s\n' "${source}" "${tag}" "${asset}"
+      return 0
+    fi
+
+    echo "  rejecting ${repo}@${tag}: ${asset} lacks ${required_entry}" >&2
+    rm -rf "${check_dir}"
+  done <<< "${candidates}"
+
+  return 1
 }
 
 # Resolve one GitHub-release-backed component.
 #   $1 property key   $2 owner/repo   $3 asset regex (one capture group = the version)
 #   $4 conventional tag prefix ("v" for most repos, "" for ballerina-custom-jre)
+#   $5 optional required VSIX entry; when set, incompatible candidates are skipped
 resolve_github_component() {
-  local key="$1" repo="$2" asset_regex="$3" tag_prefix="$4"
+  local key="$1" repo="$2" asset_regex="$3" tag_prefix="$4" required_entry="${5:-}"
   local selection source tag asset version
 
-  if ! selection=$(select_release "${repo}" "${asset_regex}"); then
-    echo "Error: no ${repo} release carries an asset matching ${asset_regex}." >&2
+  if [ -n "${required_entry}" ]; then
+    selection=$(select_compatible_vsix_release "${repo}" "${asset_regex}" "${required_entry}") || true
+  else
+    selection=$(select_release "${repo}" "${asset_regex}") || true
+  fi
+
+  if [ -z "${selection}" ]; then
+    echo "Error: no compatible ${repo} release carries an asset matching ${asset_regex}." >&2
+    if [ -n "${required_entry}" ]; then
+      echo "       Required VSIX entry: ${required_entry}" >&2
+    fi
     exit 1
   fi
 
@@ -162,7 +211,8 @@ echo "Resolving nightly component versions into ${VERSIONS_FILE}"
 echo "GitHub-release components:"
 
 resolve_github_component "ballerina.extension.version" \
-  "wso2/ballerina-vscode" '^ballerina-(.+)\.vsix$' "v"
+  "wso2/ballerina-vscode" '^ballerina-(.+)\.vsix$' "v" \
+  'extension/resources/jslibs/federation/remoteEntry.js'
 
 resolve_github_component "wso2.micro-integrator.extension.version" \
   "wso2/mi-vscode" '^micro-integrator-(.+)\.vsix$' "v"
