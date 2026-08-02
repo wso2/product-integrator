@@ -36,6 +36,11 @@ jobs:
     env:
       DISPLAY: ':99'
     steps:
+      - name: Checkout smoke-test support
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -136,7 +141,10 @@ jobs:
           node-version: '20'
 
       - name: Install wso2ipw
-        run: npm install -g wso2ipw@0.1.8
+        shell: bash
+        run: |
+          npm install -g wso2ipw@0.1.8
+          node ci/build/patch-wso2ipw-smoke-tests.js "$(npm root -g)/wso2ipw/examples"
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'
@@ -210,6 +218,11 @@ jobs:
       matrix:
         example: [hello-world-service, icp]
     steps:
+      - name: Checkout smoke-test support
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Download build artifact
         if: inputs.windows_artifact_name != ''
         uses: actions/download-artifact@v4
@@ -272,7 +285,10 @@ jobs:
           node-version: '20'
 
       - name: Install wso2ipw
-        run: npm install -g wso2ipw@0.1.8
+        shell: bash
+        run: |
+          npm install -g wso2ipw@0.1.8
+          node ci/build/patch-wso2ipw-smoke-tests.js "$(npm root -g)/wso2ipw/examples"
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'
