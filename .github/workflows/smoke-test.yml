@@ -13,12 +13,22 @@ on:
         required: false
         type: string
         default: ''
+      allow_failure:
+        description: 'Report smoke failures without failing the workflow'
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       integrator_version:
         description: 'Download from GitHub Release (e.g. 5.0.0-alpha14)'
         required: false
         type: string
+      allow_failure:
+        description: 'Report smoke failures without failing the workflow'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -36,6 +46,11 @@ jobs:
     env:
       DISPLAY: ':99'
     steps:
+      - name: Checkout smoke-test support
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -136,7 +151,10 @@ jobs:
           node-version: '20'
 
       - name: Install wso2ipw
-        run: npm install -g wso2ipw@0.1.8
+        shell: bash
+        run: |
+          npm install -g wso2ipw@0.1.8
+          node ci/build/patch-wso2ipw-smoke-tests.js "$(npm root -g)/wso2ipw/examples"
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'
@@ -151,12 +169,14 @@ jobs:
           echo '{"browser":{"contextOptions":{"ignoreHTTPSErrors":true}}}' > .playwright/cli.config.json
 
       - name: Run ${{ matrix.example }}
+        id: smoke
+        continue-on-error: ${{ inputs.allow_failure }}
         env:
           WSO2IPW_ELECTRON_ARGS: ${{ matrix.example == 'icp' && '--no-sandbox --password-store=basic' || '--no-sandbox' }}
         run: bash "$(npm root -g)/wso2ipw/examples/${{ matrix.example }}/run-all.sh"
 
       - name: Collect editor logs on failure
-        if: failure()
+        if: ${{ always() && steps.smoke.outcome == 'failure' }}
         run: |
           set +e
           mkdir -p editor-logs
@@ -174,7 +194,7 @@ jobs:
           echo "Collected log files:"; find editor-logs -type f 2>/dev/null || true
 
       - name: Upload editor logs on failure
-        if: failure()
+        if: ${{ always() && steps.smoke.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test-editor-logs-${{ matrix.example }}-linux
@@ -183,7 +203,7 @@ jobs:
           retention-days: 7
 
       - name: Upload logs on failure
-        if: failure()
+        if: ${{ always() && steps.smoke.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test-logs-${{ matrix.example }}-linux
@@ -193,7 +213,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload screenshots on failure
-        if: failure()
+        if: ${{ always() && steps.smoke.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test-screenshots-${{ matrix.example }}-linux
@@ -210,6 +230,11 @@ jobs:
       matrix:
         example: [hello-world-service, icp]
     steps:
+      - name: Checkout smoke-test support
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Download build artifact
         if: inputs.windows_artifact_name != ''
         uses: actions/download-artifact@v4
@@ -272,7 +297,10 @@ jobs:
           node-version: '20'
 
       - name: Install wso2ipw
-        run: npm install -g wso2ipw@0.1.8
+        shell: bash
+        run: |
+          npm install -g wso2ipw@0.1.8
+          node ci/build/patch-wso2ipw-smoke-tests.js "$(npm root -g)/wso2ipw/examples"
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'
@@ -289,11 +317,13 @@ jobs:
           echo '{"browser":{"contextOptions":{"ignoreHTTPSErrors":true}}}' > .playwright/cli.config.json
 
       - name: Run ${{ matrix.example }}
+        id: smoke
+        continue-on-error: ${{ inputs.allow_failure }}
         shell: bash
         run: bash "$(npm root -g)/wso2ipw/examples/${{ matrix.example }}/run-all.sh"
 
       - name: Collect editor logs on failure
-        if: failure()
+        if: ${{ always() && steps.smoke.outcome == 'failure' }}
         # pwsh, not bash: $env:APPDATA is a Windows path, and Git Bash cannot test or traverse it
         # without cygpath. The rest of this job's native steps already use pwsh.
         shell: pwsh
@@ -315,7 +345,7 @@ jobs:
             ForEach-Object { $_.FullName }
 
       - name: Upload editor logs on failure
-        if: failure()
+        if: ${{ always() && steps.smoke.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test-editor-logs-${{ matrix.example }}-windows
@@ -324,7 +354,7 @@ jobs:
           retention-days: 7
 
       - name: Upload screenshots on failure
-        if: failure()
+        if: ${{ always() && steps.smoke.outcome == 'failure' }}
         uses: actions/upload-artifact@v4
         with:
           name: smoke-test-screenshots-${{ matrix.example }}-windows
