@@ -13,6 +13,14 @@ on:
         required: false
         type: string
         default: ''
+      # This workflow now runs a script out of the repository, so it has to check out the commit that
+      # produced the artifact under test rather than whatever the caller happened to be triggered on.
+      # Empty means "whatever actions/checkout defaults to", which is the previous behaviour.
+      ref:
+        description: 'Commit to take the smoke-test support scripts from'
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       integrator_version:
@@ -39,6 +47,7 @@ jobs:
       - name: Checkout smoke-test support
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
 
       - name: Install system dependencies
@@ -144,7 +153,7 @@ jobs:
         shell: bash
         run: |
           npm install -g wso2ipw@0.1.8
-          node ci/build/patch-wso2ipw-smoke-tests.js "$(npm root -g)/wso2ipw/examples"
+          node ci/build/patch-wso2ipw-smoke-tests.js "$(npm root -g)/wso2ipw/examples" "${{ matrix.example }}"
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'
@@ -221,6 +230,7 @@ jobs:
       - name: Checkout smoke-test support
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
 
       - name: Download build artifact
@@ -288,7 +298,7 @@ jobs:
         shell: bash
         run: |
           npm install -g wso2ipw@0.1.8
-          node ci/build/patch-wso2ipw-smoke-tests.js "$(npm root -g)/wso2ipw/examples"
+          node ci/build/patch-wso2ipw-smoke-tests.js "$(npm root -g)/wso2ipw/examples" "${{ matrix.example }}"
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'

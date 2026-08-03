@@ -227,6 +227,9 @@ jobs:
     uses: ./.github/workflows/smoke-test.yml
     with:
       artifact_name: Product-Integrator-DEB
+      # Same reason `compile` gets it: the smoke test runs ci/build/patch-wso2ipw-smoke-tests.js, so it
+      # must read that script from the commit under test, not from the caller's triggering ref.
+      ref: ${{ inputs.ref }}
 
   smoke-test-windows:
     if: ${{ inputs.build_windows == true && inputs.build_packed_installers == true }}
@@ -234,6 +237,7 @@ jobs:
     uses: ./.github/workflows/smoke-test.yml
     with:
       windows_artifact_name: Product-Integrator-Windows
+      ref: ${{ inputs.ref }}
 
   build-macos:
     if: ${{ inputs.build_macos == true }}

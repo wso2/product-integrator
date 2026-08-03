@@ -113,17 +113,34 @@ select_release() {
 # while temporarily publishing an older/incomplete asset, so filename matching alone is not enough
 # for extensions whose files are consumed directly by the product's embedded creation UI.
 #
-# Returns 0 with the selection, 1 when every candidate was inspected and none qualified, or 2 when a
-# candidate could not be inspected at all. The distinction matters: a rate-limited download or a
-# truncated archive says nothing about that release's contents, and treating it as a rejection would
-# silently pin an older extension — the outcome this check exists to prevent.
+# Returns 0 with the selection, 1 when no inspected candidate qualified, or 2 when a candidate could
+# not be inspected at all. The distinction matters: a rate-limited download or a truncated archive says
+# nothing about that release's contents, and treating it as a rejection would silently pin an older
+# extension — the outcome this check exists to prevent.
+#
+# Only the first MAX_INSPECTED_CANDIDATES are inspected. Every candidate costs a full VSIX download
+# (tens of MB), and `release_candidates` can return up to a page of releases, so an unsatisfiable
+# contract would otherwise spend an hour and a chunk of the rate limit rediscovering that releases
+# predating the required entry do not contain it.
+MAX_INSPECTED_CANDIDATES=5
 select_compatible_vsix_release() {
   local repo="$1" asset_regex="$2" required_entry="$3"
   local candidates source tag asset check_dir archive entries
+  local total inspected=0
 
   candidates=$(release_candidates "${repo}" "${asset_regex}") || return 1
+  total=$(printf '%s\n' "${candidates}" | grep -c '' || true)
   while IFS=$'\t' read -r source tag asset; do
     [ -n "${tag}" ] || continue
+
+    if [ "${inspected}" -ge "${MAX_INSPECTED_CANDIDATES}" ]; then
+      echo "Error: none of the first ${inspected} ${repo} candidates contain ${required_entry}" >&2
+      echo "       ($(( total - inspected )) newer-to-older candidates were not inspected; raise" >&2
+      echo "       MAX_INSPECTED_CANDIDATES if an older release is genuinely expected to qualify)." >&2
+      return 1
+    fi
+    inspected=$(( inspected + 1 ))
+
     check_dir=$(mktemp -d)
     archive="${check_dir}/${asset}"
     echo "  checking ${repo}@${tag} for ${required_entry}" >&2
@@ -142,7 +159,12 @@ select_compatible_vsix_release() {
     fi
     rm -rf "${check_dir}"
 
-    if printf '%s\n' "${entries}" | grep -Fxq "${required_entry}"; then
+    # Matched from a here-string, not a pipe. `grep -q` exits on its first match, so piping the
+    # listing in leaves the writer with unread data: it takes SIGPIPE, the pipeline reports 141, and
+    # under `pipefail` the test reads as false *because* the entry was found. The listing only has to
+    # exceed the 64KB pipe buffer after the matched line for that to happen, which makes it depend on
+    # where the entry sits in the archive — a silent, layout-dependent rejection of a good release.
+    if grep -Fxq "${required_entry}" <<< "${entries}"; then
       printf '%s\t%s\t%s\n' "${source}" "${tag}" "${asset}"
       return 0
     fi
@@ -150,6 +172,7 @@ select_compatible_vsix_release() {
     echo "  rejecting ${repo}@${tag}: ${asset} lacks ${required_entry}" >&2
   done <<< "${candidates}"
 
+  echo "Error: all ${inspected} eligible ${repo} candidates lack ${required_entry}." >&2
   return 1
 }
 
