@@ -437,10 +437,6 @@
           "when": "false"
         },
         {
-          "command": "BI.project-explorer.view-agents",
-          "when": "false"
-        },
-        {
           "command": "BI.project-explorer.delete",
           "when": "false"
         },
@@ -532,11 +528,6 @@
         {
           "command": "BI.project-explorer.add-agent-definition",
           "when": "view == wso2-integrator.explorer && viewItem == agentDefinitions",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.view-agents",
-          "when": "view == wso2-integrator.explorer && viewItem == agents",
           "group": "inline"
         },
         {
