@@ -417,7 +417,9 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     agentDefinitions.contextValue = "agentDefinitions";
     agentDefinitions.children = getComponents(
         project.directoryMap[DIRECTORY_MAP.AGENT_DEFINITION], DIRECTORY_MAP.AGENT_DEFINITION, projectPath);
-    entries.push(agentDefinitions);
+    if (agentDefinitions.children.length > 0) {
+        entries.push(agentDefinitions);
+    }
 
     // ---------- Types ----------
     const types = new ProjectExplorerEntry(
