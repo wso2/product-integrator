@@ -227,6 +227,9 @@ jobs:
     uses: ./.github/workflows/smoke-test.yml
     with:
       artifact_name: Product-Integrator-DEB
+      # Same reason `compile` gets it: the smoke test runs ci/build/patch-wso2ipw-smoke-tests.js, so it
+      # must read that script from the commit under test, not from the caller's triggering ref.
+      ref: ${{ inputs.ref }}
 
   smoke-test-windows:
     if: ${{ inputs.build_windows == true && inputs.build_packed_installers == true }}
@@ -234,6 +237,7 @@ jobs:
     uses: ./.github/workflows/smoke-test.yml
     with:
       windows_artifact_name: Product-Integrator-Windows
+      ref: ${{ inputs.ref }}
 
   build-macos:
     if: ${{ inputs.build_macos == true }}
@@ -789,21 +793,39 @@ jobs:
       - name: Install OpenSSL (Windows)
         shell: pwsh
         run: |
-          # Install vcpkg if not already present, otherwise update it
+          # A non-zero exit from a native command is not an error to PowerShell by default, so a
+          # failed update would otherwise fall through to bootstrap and install and leave the step
+          # green on a stale checkout — the exact failure this step is meant to prevent.
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+
+          # Install vcpkg if not already present, otherwise update it.
+          # The repository and executable must move together: a cached vcpkg.exe can be too old to
+          # understand the schema used by the freshly pulled scripts/vcpkg-tools.json.
           if (Test-Path "C:\vcpkg\.git") {
             Write-Host "vcpkg already cloned, fetching latest..."
             cd C:\vcpkg
-            git fetch origin
-            git pull origin master
+            # --ff-only refuses to merge, so a diverged or detached preinstalled checkout fails
+            # here. Re-clone instead of aborting: the runner image's vcpkg is not ours to repair,
+            # and a clean clone reaches the same state.
+            try {
+              git fetch origin
+              git pull --ff-only origin master
+            } catch {
+              Write-Host "Could not fast-forward the existing vcpkg checkout; re-cloning. $_"
+              cd C:\
+              Remove-Item -Recurse -Force C:\vcpkg
+              git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+              cd C:\vcpkg
+            }
           } else {
             Write-Host "Cloning vcpkg..."
             git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
             cd C:\vcpkg
           }
-          # Bootstrap vcpkg (idempotent)
-          if (-not (Test-Path "C:\vcpkg\vcpkg.exe")) {
-            .\bootstrap-vcpkg.bat
-          }
+          # Always rebuild the executable after moving the checkout. This is idempotent and avoids
+          # combining a persisted, old executable with current registry/tool metadata.
+          .\bootstrap-vcpkg.bat -disableMetrics
           # Install OpenSSL (vcpkg skips if already installed)
           .\vcpkg.exe install openssl:x64-windows-static
           # Set environment variables for OpenSSL
