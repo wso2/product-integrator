@@ -112,9 +112,14 @@ select_release() {
 # Pick the first VSIX candidate containing `required_entry`. A rolling release can retain its tag
 # while temporarily publishing an older/incomplete asset, so filename matching alone is not enough
 # for extensions whose files are consumed directly by the product's embedded creation UI.
+#
+# Returns 0 with the selection, 1 when every candidate was inspected and none qualified, or 2 when a
+# candidate could not be inspected at all. The distinction matters: a rate-limited download or a
+# truncated archive says nothing about that release's contents, and treating it as a rejection would
+# silently pin an older extension — the outcome this check exists to prevent.
 select_compatible_vsix_release() {
   local repo="$1" asset_regex="$2" required_entry="$3"
-  local candidates source tag asset check_dir archive
+  local candidates source tag asset check_dir archive entries
 
   candidates=$(release_candidates "${repo}" "${asset_regex}") || return 1
   while IFS=$'\t' read -r source tag asset; do
@@ -123,16 +128,26 @@ select_compatible_vsix_release() {
     archive="${check_dir}/${asset}"
     echo "  checking ${repo}@${tag} for ${required_entry}" >&2
 
-    if gh release download "${tag}" --repo "${repo}" --pattern "${asset}" \
-        --dir "${check_dir}" --clobber >&2 &&
-       unzip -Z1 "${archive}" | grep -Fx "${required_entry}" >/dev/null; then
+    if ! gh release download "${tag}" --repo "${repo}" --pattern "${asset}" \
+        --dir "${check_dir}" --clobber >&2; then
       rm -rf "${check_dir}"
+      echo "Error: could not download ${asset} from ${repo}@${tag}." >&2
+      return 2
+    fi
+
+    if ! entries=$(unzip -Z1 "${archive}"); then
+      rm -rf "${check_dir}"
+      echo "Error: ${asset} from ${repo}@${tag} is not a readable zip archive." >&2
+      return 2
+    fi
+    rm -rf "${check_dir}"
+
+    if printf '%s\n' "${entries}" | grep -Fxq "${required_entry}"; then
       printf '%s\t%s\t%s\n' "${source}" "${tag}" "${asset}"
       return 0
     fi
 
     echo "  rejecting ${repo}@${tag}: ${asset} lacks ${required_entry}" >&2
-    rm -rf "${check_dir}"
   done <<< "${candidates}"
 
   return 1
@@ -144,12 +159,20 @@ select_compatible_vsix_release() {
 #   $5 optional required VSIX entry; when set, incompatible candidates are skipped
 resolve_github_component() {
   local key="$1" repo="$2" asset_regex="$3" tag_prefix="$4" required_entry="${5:-}"
-  local selection source tag asset version
+  local selection source tag asset version status
 
+  status=0
   if [ -n "${required_entry}" ]; then
-    selection=$(select_compatible_vsix_release "${repo}" "${asset_regex}" "${required_entry}") || true
+    selection=$(select_compatible_vsix_release "${repo}" "${asset_regex}" "${required_entry}") || status=$?
   else
-    selection=$(select_release "${repo}" "${asset_regex}") || true
+    selection=$(select_release "${repo}" "${asset_regex}") || status=$?
+  fi
+
+  # An inspection failure is not evidence that the candidate was unsuitable, so stop rather than
+  # fall through to an older release. The error itself has already been printed.
+  if [ "${status}" -eq 2 ]; then
+    echo "       Refusing to fall back to an older ${repo} release on an inconclusive check." >&2
+    exit 1
   fi
 
   if [ -z "${selection}" ]; then

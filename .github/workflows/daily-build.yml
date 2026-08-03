@@ -184,12 +184,17 @@ jobs:
 
       - name: Commit pinned versions to pinned-build branch
         id: commit
+        # Passed through the environment rather than interpolated into the script text: an
+        # expression is expanded before the shell sees it, so a quote in the value would change the
+        # command being run rather than the message it carries.
+        env:
+          INTEGRATOR_VERSION: ${{ steps.stamp.outputs.integrator_version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -B "${BUILD_BRANCH}"
           git add ci/build/component-versions.properties wi/wi-extension/package.json
-          git commit -m "Pin nightly versions for ${{ steps.stamp.outputs.integrator_version }}"
+          git commit -m "Pin nightly versions for ${INTEGRATOR_VERSION}"
           git push --force origin "HEAD:refs/heads/${BUILD_BRANCH}"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
