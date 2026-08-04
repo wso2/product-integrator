@@ -1204,21 +1204,6 @@ jobs:
             echo "name=WSO2 Integrator ${PUBLISH_TAG}" >> "$GITHUB_OUTPUT"
           fi
 
-      # `nightly` is a rolling tag: every night's filenames carry a fresh timestamp, so re-uploading
-      # would let last night's assets pile up. Drop the release and its tag first so it always
-      # reflects exactly one build.
-      - name: Clear the previous nightly release
-        if: ${{ inputs.publish_tag == 'nightly' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh release view nightly >/dev/null 2>&1; then
-            gh release delete nightly --yes --cleanup-tag
-            echo "Deleted the previous nightly release and tag."
-          else
-            echo "No existing nightly release to delete."
-          fi
-
       - name: List release files
         env:
           PUBLISH_TAG: ${{ inputs.publish_tag }}
@@ -1278,3 +1263,59 @@ jobs:
           files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # `nightly` is a rolling tag and every night's filenames carry a fresh timestamp, so the
+      # upload above adds to the previous night's assets instead of replacing them. They are cleared
+      # here rather than before the upload: the tag is what external consumers pin their download
+      # URLs to, and deleting first would leave it empty — or, if any step in between failed, gone —
+      # so a complete set is always downloadable. Everything this build produced is verified present
+      # before anything is removed, which is also what guarantees the release never ends up with no
+      # assets at all.
+      #
+      # The tag is moved for the same reason it is not deleted: `action-gh-release` only creates a
+      # tag that does not yet exist, so without this the rolling tag would stay pinned to whichever
+      # commit first published it while its assets moved on.
+      #
+      # GH_REPO is required, not belt-and-braces: this job never checks the repository out, so `gh`
+      # has no remote to infer the repository from and every call fails without it.
+      - name: Roll the nightly tag and drop superseded assets
+        if: ${{ inputs.publish_tag == 'nightly' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TARGET_SHA: ${{ inputs.target_commitish != '' && inputs.target_commitish || github.sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          published=$(for file in release-files/*; do basename "${file}"; done | sort)
+          if [ -z "${published}" ]; then
+            echo "Error: no files were published, so there is nothing to supersede." >&2
+            exit 1
+          fi
+          attached=$(gh release view nightly --json assets --jq '.assets[].name' | sed '/^$/d' | sort)
+
+          # An upload that silently dropped a file would otherwise be "fixed" by deleting the
+          # previous, complete set. Bail out and leave both sets attached instead.
+          missing=$(comm -23 <(printf '%s\n' "${published}") <(printf '%s\n' "${attached}"))
+          if [ -n "${missing}" ]; then
+            echo "Error: these files did not reach the nightly release:" >&2
+            printf '  - %s\n' ${missing} >&2
+            echo "       Keeping the previous assets; the release still holds a full set." >&2
+            exit 1
+          fi
+
+          gh api -X PATCH "repos/${GH_REPO}/git/refs/tags/nightly" \
+            -f sha="${TARGET_SHA}" -F force=true >/dev/null
+          echo "nightly now tags ${TARGET_SHA}."
+
+          superseded=$(comm -13 <(printf '%s\n' "${published}") <(printf '%s\n' "${attached}"))
+          if [ -z "${superseded}" ]; then
+            echo "No superseded assets to remove."
+            exit 0
+          fi
+          while IFS= read -r name; do
+            gh release delete-asset nightly "${name}" --yes
+            echo "Removed superseded asset ${name}"
+          done <<< "${superseded}"
