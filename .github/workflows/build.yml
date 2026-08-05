@@ -1264,8 +1264,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # `nightly` is a rolling tag and every night's filenames carry a fresh timestamp, so the
-      # upload above adds to the previous night's assets instead of replacing them. They are cleared
+      # A `nightly*` tag is rolling, and every build's filenames carry a fresh timestamp, so the
+      # upload above adds to the previous build's assets instead of replacing them. They are cleared
       # here rather than before the upload: the tag is what external consumers pin their download
       # URLs to, and deleting first would leave it empty — or, if any step in between failed, gone —
       # so a complete set is always downloadable. Everything this build produced is verified present
@@ -1276,14 +1276,26 @@ jobs:
       # tag that does not yet exist, so without this the rolling tag would stay pinned to whichever
       # commit first published it while its assets moved on.
       #
+      # The gate is a prefix match, not `== 'nightly'`, so a `nightly-test` dispatch of
+      # daily-build.yml exercises this exact path — including the delete loop, which is the only part
+      # here that can destroy something — against a disposable tag. Gating on the production tag
+      # alone would make the destructive branch unreachable outside production. It stays false for
+      # the other two callers: release.yml passes `v<version>` and dev-build.yml passes ''.
+      #
+      # PUBLISH_TAG is bound through `env` rather than interpolated into the script for the reason
+      # release.yml spells out: `${{ }}` is expanded before bash parses the body, so a value carrying
+      # shell syntax would change the commands being run rather than the tag they act on.
+      #
       # GH_REPO is required, not belt-and-braces: this job never checks the repository out, so `gh`
-      # has no remote to infer the repository from and every call fails without it.
+      # has no remote to infer the repository from and every call fails without it. That is exactly
+      # what silently disabled the delete-first step this replaces.
       - name: Roll the nightly tag and drop superseded assets
-        if: ${{ inputs.publish_tag == 'nightly' }}
+        if: ${{ startsWith(inputs.publish_tag, 'nightly') }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          PUBLISH_TAG: ${{ inputs.publish_tag }}
           TARGET_SHA: ${{ inputs.target_commitish != '' && inputs.target_commitish || github.sha }}
         run: |
           set -euo pipefail
@@ -1294,21 +1306,22 @@ jobs:
             echo "Error: no files were published, so there is nothing to supersede." >&2
             exit 1
           fi
-          attached=$(gh release view nightly --json assets --jq '.assets[].name' | sed '/^$/d' | sort)
+          attached=$(gh release view "${PUBLISH_TAG}" --json assets --jq '.assets[].name' \
+            | sed '/^$/d' | sort)
 
           # An upload that silently dropped a file would otherwise be "fixed" by deleting the
           # previous, complete set. Bail out and leave both sets attached instead.
           missing=$(comm -23 <(printf '%s\n' "${published}") <(printf '%s\n' "${attached}"))
           if [ -n "${missing}" ]; then
-            echo "Error: these files did not reach the nightly release:" >&2
+            echo "Error: these files did not reach the ${PUBLISH_TAG} release:" >&2
             printf '  - %s\n' ${missing} >&2
             echo "       Keeping the previous assets; the release still holds a full set." >&2
             exit 1
           fi
 
-          gh api -X PATCH "repos/${GH_REPO}/git/refs/tags/nightly" \
+          gh api -X PATCH "repos/${GH_REPO}/git/refs/tags/${PUBLISH_TAG}" \
             -f sha="${TARGET_SHA}" -F force=true >/dev/null
-          echo "nightly now tags ${TARGET_SHA}."
+          echo "${PUBLISH_TAG} now tags ${TARGET_SHA}."
 
           superseded=$(comm -13 <(printf '%s\n' "${published}") <(printf '%s\n' "${attached}"))
           if [ -z "${superseded}" ]; then
@@ -1316,6 +1329,6 @@ jobs:
             exit 0
           fi
           while IFS= read -r name; do
-            gh release delete-asset nightly "${name}" --yes
+            gh release delete-asset "${PUBLISH_TAG}" "${name}" --yes
             echo "Removed superseded asset ${name}"
           done <<< "${superseded}"
