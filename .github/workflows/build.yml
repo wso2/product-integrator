@@ -1264,31 +1264,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # A `nightly*` tag is rolling, and every build's filenames carry a fresh timestamp, so the
-      # upload above adds to the previous build's assets instead of replacing them. They are cleared
-      # here rather than before the upload: the tag is what external consumers pin their download
-      # URLs to, and deleting first would leave it empty — or, if any step in between failed, gone —
-      # so a complete set is always downloadable. Everything this build produced is verified present
-      # before anything is removed, which is also what guarantees the release never ends up with no
-      # assets at all.
+      # A `nightly*` tag is rolling: every build's filenames carry a fresh timestamp, so the upload
+      # above adds to the previous build's assets instead of replacing them. This step verifies the
+      # new set fully landed, moves the tag to the current commit (action-gh-release only creates a
+      # tag that doesn't yet exist), then removes the superseded assets — in that order, so the
+      # release is never left incomplete or empty.
       #
-      # The tag is moved for the same reason it is not deleted: `action-gh-release` only creates a
-      # tag that does not yet exist, so without this the rolling tag would stay pinned to whichever
-      # commit first published it while its assets moved on.
+      # The gate is a prefix match, not `== 'nightly'`, so a disposable `nightly-test` dispatch can
+      # exercise the delete loop without touching the production tag. It stays false for the other
+      # two callers: release.yml passes `v<version>` and dev-build.yml passes ''.
       #
-      # The gate is a prefix match, not `== 'nightly'`, so a `nightly-test` dispatch of
-      # daily-build.yml exercises this exact path — including the delete loop, which is the only part
-      # here that can destroy something — against a disposable tag. Gating on the production tag
-      # alone would make the destructive branch unreachable outside production. It stays false for
-      # the other two callers: release.yml passes `v<version>` and dev-build.yml passes ''.
-      #
-      # PUBLISH_TAG is bound through `env` rather than interpolated into the script for the reason
-      # release.yml spells out: `${{ }}` is expanded before bash parses the body, so a value carrying
-      # shell syntax would change the commands being run rather than the tag they act on.
-      #
-      # GH_REPO is required, not belt-and-braces: this job never checks the repository out, so `gh`
-      # has no remote to infer the repository from and every call fails without it. That is exactly
-      # what silently disabled the delete-first step this replaces.
+      # PUBLISH_TAG is bound through `env`, not interpolated directly, so a tag value containing
+      # shell syntax can't change the commands being run.
       - name: Roll the nightly tag and drop superseded assets
         if: ${{ startsWith(inputs.publish_tag, 'nightly') }}
         shell: bash
@@ -1314,7 +1301,9 @@ jobs:
           missing=$(comm -23 <(printf '%s\n' "${published}") <(printf '%s\n' "${attached}"))
           if [ -n "${missing}" ]; then
             echo "Error: these files did not reach the ${PUBLISH_TAG} release:" >&2
-            printf '  - %s\n' ${missing} >&2
+            while IFS= read -r name; do
+              echo "  - ${name}" >&2
+            done <<< "${missing}"
             echo "       Keeping the previous assets; the release still holds a full set." >&2
             exit 1
           fi
