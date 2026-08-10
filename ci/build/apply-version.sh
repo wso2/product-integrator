@@ -6,6 +6,7 @@
 # (package-vsix.js names the .vsix from there, so the two must never diverge).
 #
 #   product    5.1.0-SNAPSHOT  -> 5.1.0-<yyyymmddHHmm>
+#              5.1.0-alpha[N]  -> 5.1.0-<yyyymmddHHmm>     (qualifier dropped; same shape as -SNAPSHOT)
 #   extension  1.2.0-SNAPSHOT  -> 1.1.<yymmddHH>     (even minor -> the odd pre-release minor below)
 #              1.1.26073014    -> 1.1.<yymmddHH>     (odd minor kept, so the rule is repeatable)
 #
@@ -109,7 +110,7 @@ if [ -n "${EXPLICIT_VERSION}" ]; then
   fi
   require_semver "$(base_of "${EXPLICIT_VERSION}")" "--version"
   PRODUCT_VERSION="${EXPLICIT_VERSION}"
-elif [[ "${DECLARED_PRODUCT}" == *"-SNAPSHOT" ]]; then
+elif [[ "${DECLARED_PRODUCT}" =~ -(SNAPSHOT|alpha[0-9]*)$ ]]; then
   PRODUCT_BASE=$(base_of "${DECLARED_PRODUCT}")
   require_semver "${PRODUCT_BASE}" "integrator.version"
   if [ "${MODE}" = "release" ]; then
