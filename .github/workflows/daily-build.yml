@@ -97,10 +97,20 @@ jobs:
           # rather than `git ls-remote origin`, since no checkout — and so no `origin` remote —
           # exists yet at this point in the job.
           if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
-            mapfile -t staging_candidates < <(
+            # Captured outside the `mapfile` process substitution: a subshell's exit status is
+            # invisible to the parent, so `gh api` failing (outage, permissions) would otherwise
+            # look identical to "no staging branches" and silently fall back to main.
+            if ! staging_refs=$(
               gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/staging/" --jq '.[].ref' \
                 | sed 's#^refs/heads/##'
-            )
+            ); then
+              echo "Error: could not list staging/* branches." >&2
+              exit 1
+            fi
+            staging_candidates=()
+            if [ -n "${staging_refs}" ]; then
+              mapfile -t staging_candidates <<< "${staging_refs}"
+            fi
             if [ "${#staging_candidates[@]}" -eq 0 ]; then
               echo "No staging/* branch found; scheduled run stays on main."
             elif [ "${#staging_candidates[@]}" -gt 1 ]; then
