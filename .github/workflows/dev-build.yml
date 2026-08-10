@@ -39,6 +39,11 @@ on:
         required: true
         default: true
         type: boolean
+      run_smoke_tests:
+        description: 'Whether to run the UI smoke tests. Only takes effect when build_packed_installers is true.'
+        required: true
+        default: true
+        type: boolean
       ballerina_extension_source:
         description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
         required: true
@@ -64,12 +69,14 @@ on:
           - integrator
           - agent-builder
 
-# `contents: read` is enough: the versions are stamped in the runner's working copy and handed
-# between jobs as a workflow artifact, so nothing is ever committed or pushed and no release is
-# created. `id-token: write` is still required for cosign.
+# `contents: write` is required even though this dispatcher itself commits nothing: GitHub
+# statically checks that a caller's permissions are at least what a reusable workflow it calls
+# requests, and build.yml (called below) declares `contents: write`. `read` here makes every
+# dispatch fail at startup with "requesting 'contents: write', but is only allowed 'contents:
+# read'" before any job is scheduled. `id-token: write` is still required for cosign.
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 concurrency:
   group: dev-build-${{ github.ref }}
@@ -90,6 +97,7 @@ jobs:
       build_macos: ${{ inputs.build_macos }}
       build_windows: ${{ inputs.build_windows }}
       build_packed_installers: ${{ inputs.build_packed_installers }}
+      run_smoke_tests: ${{ inputs.run_smoke_tests }}
       ballerina_extension_source: ${{ inputs.ballerina_extension_source }}
       mi_extension_source: ${{ inputs.mi_extension_source }}
       product_flavor: ${{ inputs.product_flavor }}

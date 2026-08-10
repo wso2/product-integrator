@@ -13,6 +13,14 @@ on:
         required: false
         type: string
         default: ''
+      # This workflow now runs a script out of the repository, so it has to check out the commit that
+      # produced the artifact under test rather than whatever the caller happened to be triggered on.
+      # Empty means "whatever actions/checkout defaults to", which is the previous behaviour.
+      ref:
+        description: 'Commit to take the smoke-test support scripts from'
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       integrator_version:
@@ -36,6 +44,12 @@ jobs:
     env:
       DISPLAY: ':99'
     steps:
+      - name: Checkout smoke-test support
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -93,6 +107,17 @@ jobs:
           echo "wso2-integrator payload binary not found under /usr/share/wso2-integrator or /opt/wso2-integrator" >&2
           exit 1
 
+      - name: Validate embedded creation form dependencies
+        run: |
+          PRODUCT_ROOT=$(dirname "$WSO2_INTEGRATOR_PATH")
+          remote="${PRODUCT_ROOT}/resources/app/extensions/wso2.ballerina/resources/jslibs/federation/remoteEntry.js"
+          if [ ! -f "${remote}" ]; then
+            echo "Error: wso2.ballerina does not provide the embedded creation form (${remote})." >&2
+            echo "       Reject this extension version before running the UI smoke test." >&2
+            exit 1
+          fi
+          echo "Found Ballerina creation form: ${remote}"
+
       - name: Patch ICP script for dash compatibility
         if: matrix.example == 'icp'
         run: |
@@ -125,7 +150,10 @@ jobs:
           node-version: '20'
 
       - name: Install wso2ipw
-        run: npm install -g wso2ipw@0.1.8
+        shell: bash
+        run: |
+          npm install -g wso2ipw@0.1.8
+          node ci/build/patch-wso2ipw-smoke-tests.js "$(npm root -g)/wso2ipw/examples" "${{ matrix.example }}"
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'
@@ -199,6 +227,12 @@ jobs:
       matrix:
         example: [hello-world-service, icp]
     steps:
+      - name: Checkout smoke-test support
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
       - name: Download build artifact
         if: inputs.windows_artifact_name != ''
         uses: actions/download-artifact@v4
@@ -235,6 +269,16 @@ jobs:
           Add-MpPreference -ExclusionPath "$env:USERPROFILE\WSO2Integrator"
           Add-MpPreference -ExclusionPath "$env:USERPROFILE\.ballerina"
 
+      - name: Validate embedded creation form dependencies
+        shell: pwsh
+        run: |
+          $productRoot = Split-Path $env:WSO2_INTEGRATOR_PATH
+          $remote = Join-Path $productRoot 'resources\app\extensions\wso2.ballerina\resources\jslibs\federation\remoteEntry.js'
+          if (-not (Test-Path $remote -PathType Leaf)) {
+            throw "wso2.ballerina does not provide the embedded creation form ($remote). Reject this extension version before running the UI smoke test."
+          }
+          Write-Host "Found Ballerina creation form: $remote"
+
       - name: Pre-pull ICP Ballerina modules
         if: matrix.example == 'icp'
         shell: pwsh
@@ -251,7 +295,10 @@ jobs:
           node-version: '20'
 
       - name: Install wso2ipw
-        run: npm install -g wso2ipw@0.1.8
+        shell: bash
+        run: |
+          npm install -g wso2ipw@0.1.8
+          node ci/build/patch-wso2ipw-smoke-tests.js "$(npm root -g)/wso2ipw/examples" "${{ matrix.example }}"
 
       - name: Install playwright-cli and Chrome
         if: matrix.example == 'icp'

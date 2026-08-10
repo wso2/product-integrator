@@ -16,8 +16,9 @@ name: Daily Build
 # name for both would make `nightly` an ambiguous ref — `actions/checkout` silently prefers a
 # branch over a tag, and the two would drift apart after a partially failed run.
 #
-# There are no inputs: the nightly always builds the full matrix. Dispatching this by hand runs
-# exactly what the schedule runs, which is what you want when 06:30 fails.
+# Scheduled runs always use the production main/builds/nightly/nightly route. Manual runs expose an
+# isolated route for exercising this exact pin-and-build flow from another ref; their defaults use
+# test branch/tag names so clicking "Run workflow" cannot replace production nightly state.
 #
 # Ad-hoc builds of your own branch are dev-build.yml; real releases are release.yml. Neither this
 # workflow nor those ever write to `main`.
@@ -27,36 +28,115 @@ on:
     # 12:00 PM IST = 06:30 AM UTC
     - cron: '30 6 * * *'
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Branch, tag, or SHA to pin and build'
+        required: true
+        type: string
+        default: main
+      build_branch:
+        description: 'Force-updated branch that records the pinned build commit'
+        required: true
+        type: string
+        default: builds/nightly-test
+      publish_tag:
+        description: 'Rolling release tag to replace after every job succeeds'
+        required: true
+        type: string
+        default: nightly-test
+      run_smoke_tests:
+        description: 'Whether to run the UI smoke tests. Ignored on the scheduled production run, which always runs them.'
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   id-token: write
   contents: write
 
 concurrency:
-  group: daily-build
+  # Test routes do not block production, but two dispatches targeting the same branch serialize.
+  group: daily-build-${{ github.event_name == 'schedule' && 'builds/nightly' || inputs.build_branch }}
   cancel-in-progress: false
 
 jobs:
-  # `builds/nightly` only ever holds main plus a single version-pin commit, so last night's is
-  # discarded. That commit is the record of what was built, and the build checks it out by SHA; the
-  # `versions` artifact carries the same two files so every job agrees even before checkout.
+  # Each pinned-build branch only holds its source ref plus a single version-pin commit, so its
+  # previous run is discarded. That commit is the record of what was built, and the build checks it
+  # out by SHA; the `versions` artifact carries the same two files so every job agrees.
   prepare-nightly:
-    name: Sync builds/nightly branch and pin versions
+    name: Sync pinned-build branch and pin versions
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Ignore dispatch inputs completely on a scheduled run. This keeps the production route an
+      # invariant even if GitHub changes how absent workflow_dispatch inputs are represented.
+      SOURCE_REF: ${{ github.event_name == 'schedule' && 'main' || inputs.source_ref }}
+      BUILD_BRANCH: ${{ github.event_name == 'schedule' && 'builds/nightly' || inputs.build_branch }}
+      PUBLISH_TAG: ${{ github.event_name == 'schedule' && 'nightly' || inputs.publish_tag }}
     outputs:
       integrator_version: ${{ steps.stamp.outputs.integrator_version }}
       wi_extension_version: ${{ steps.stamp.outputs.wi_extension_version }}
       sha: ${{ steps.commit.outputs.sha }}
+      publish_tag: ${{ steps.configure.outputs.publish_tag }}
     steps:
+      - name: Validate build route
+        id: configure
+        shell: bash
+        run: |
+          : "${SOURCE_REF:?source_ref must not be empty}"
+          : "${BUILD_BRANCH:?build_branch must not be empty}"
+          : "${PUBLISH_TAG:?publish_tag must not be empty}"
+
+          git check-ref-format --branch "${SOURCE_REF}" >/dev/null
+          git check-ref-format --branch "${BUILD_BRANCH}" >/dev/null
+          git check-ref-format "refs/tags/${PUBLISH_TAG}" >/dev/null
+
+          case "${BUILD_BRANCH}" in
+            builds/*) ;;
+            *) echo "Error: build_branch must be below builds/; refusing to force-push ${BUILD_BRANCH}." >&2
+               exit 1 ;;
+          esac
+          case "${PUBLISH_TAG}" in
+            nightly|nightly-*) ;;
+            *) echo "Error: publish_tag must be nightly or start with nightly-." >&2
+               exit 1 ;;
+          esac
+
+          if [ "${BUILD_BRANCH}" = "${PUBLISH_TAG}" ]; then
+            echo "Error: build_branch and publish_tag must differ to avoid an ambiguous Git ref." >&2
+            exit 1
+          fi
+
+          production_branch=false
+          production_tag=false
+          if [ "${BUILD_BRANCH}" = "builds/nightly" ]; then
+            production_branch=true
+          fi
+          if [ "${PUBLISH_TAG}" = "nightly" ]; then
+            production_tag=true
+          fi
+          if [ "${production_branch}" != "${production_tag}" ]; then
+            echo "Error: builds/nightly and nightly are a protected branch/tag pair." >&2
+            echo "       Use both for production or neither for an isolated test run." >&2
+            exit 1
+          fi
+          if [ "${production_branch}" = "true" ] && [ "${SOURCE_REF}" != "main" ]; then
+            echo "Error: production nightly destinations may only be built from main." >&2
+            exit 1
+          fi
+
+          echo "source_ref=${SOURCE_REF}" >> "$GITHUB_OUTPUT"
+          echo "build_branch=${BUILD_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "publish_tag=${PUBLISH_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Route: ${SOURCE_REF} -> ${BUILD_BRANCH} -> ${PUBLISH_TAG}"
+
       # Unlike the checkouts in build.yml and compile.yml, this one deliberately does NOT set
-      # `persist-credentials: false`: this job pushes `builds/nightly` below, which needs the
+      # `persist-credentials: false`: this job pushes the pinned-build branch below, which needs the
       # credential to survive the checkout.
-      - name: Checkout main
+      - name: Checkout source ref
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ steps.configure.outputs.source_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       # apply-version.sh is shape-based: it only rewrites `-SNAPSHOT`, and passes a concrete version
@@ -65,7 +145,7 @@ jobs:
       # make every nightly publish that same un-timestamped version indefinitely — and because the
       # rolling release is deleted and recreated each run, it would still look like it worked. Fail
       # before anything is pushed instead.
-      - name: Assert main still declares SNAPSHOT versions
+      - name: Assert source ref still declares SNAPSHOT versions
         shell: bash
         run: |
           for key in integrator.version wi.extension.version; do
@@ -75,17 +155,17 @@ jobs:
               *-SNAPSHOT) echo "  ${key}=${value}" ;;
               "") echo "Error: ${key} is not set in ci/build/component-versions.properties." >&2
                   exit 1 ;;
-              *)  echo "Error: main declares ${key}=${value}, expected a -SNAPSHOT." >&2
+              *)  echo "Error: ${SOURCE_REF} declares ${key}=${value}, expected a -SNAPSHOT." >&2
                   echo "       A post-release bump was probably missed; every nightly would" >&2
                   echo "       otherwise publish this same version." >&2
                   exit 1 ;;
             esac
           done
 
-      - name: Reset builds/nightly branch to main
+      - name: Reset pinned-build branch to source ref
         run: |
-          git push --force origin "HEAD:refs/heads/builds/nightly"
-          echo "builds/nightly now points at $(git rev-parse --short HEAD) (main)."
+          git push --force origin "HEAD:refs/heads/${BUILD_BRANCH}"
+          echo "${BUILD_BRANCH} now points at $(git rev-parse --short HEAD) (${SOURCE_REF})."
 
       - name: Pin dependency versions
         run: |
@@ -107,15 +187,20 @@ jobs:
             wi/wi-extension/package.json
           if-no-files-found: error
 
-      - name: Commit pinned versions to builds/nightly
+      - name: Commit pinned versions to pinned-build branch
         id: commit
+        # Passed through the environment rather than interpolated into the script text: an
+        # expression is expanded before the shell sees it, so a quote in the value would change the
+        # command being run rather than the message it carries.
+        env:
+          INTEGRATOR_VERSION: ${{ steps.stamp.outputs.integrator_version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -B builds/nightly
+          git checkout -B "${BUILD_BRANCH}"
           git add ci/build/component-versions.properties wi/wi-extension/package.json
-          git commit -m "Pin nightly versions for ${{ steps.stamp.outputs.integrator_version }}"
-          git push --force origin builds/nightly
+          git commit -m "Pin nightly versions for ${INTEGRATOR_VERSION}"
+          git push --force origin "HEAD:refs/heads/${BUILD_BRANCH}"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build:
@@ -124,22 +209,24 @@ jobs:
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
-      # Build the commit just pushed to `builds/nightly`, not the ref this workflow was dispatched
-      # on (main): `ref` selects the tree that is compiled and `target_commitish` points the tag at
-      # the same commit, which is what makes every nightly reproducible from it. Passing the SHA
-      # rather than the branch name also stops the next night's force-push from swapping the tree
-      # out from under a run that is still building.
+      # Build the commit just pushed to the configured pinned-build branch, not the mutable source
+      # ref: `ref` selects the tree that is compiled and `target_commitish` points the tag at the
+      # same commit, which makes every route reproducible. Passing the SHA rather than the branch
+      # name also stops the next force-push from swapping the tree out under an active run.
       ref: ${{ needs.prepare-nightly.outputs.sha }}
       target_commitish: ${{ needs.prepare-nightly.outputs.sha }}
       versions_artifact: versions
-      # `nightly` is the rolling *tag* external consumers download from, so build.yml deletes the
-      # previous release and its tag before publishing this one.
-      publish_tag: nightly
+      # build.yml replaces only the configured rolling release/tag. Manual test routes therefore
+      # cannot touch `nightly`; the validation step permits that tag only with main/builds/nightly.
+      publish_tag: ${{ needs.prepare-nightly.outputs.publish_tag }}
       is_prerelease: true
       runner: codebuild
       build_linux: true
       build_macos: true
       build_windows: true
       build_packed_installers: true
+      # Ignore the dispatch input on a scheduled run, same as the route env vars above: the
+      # production nightly always exercises the smoke tests.
+      run_smoke_tests: ${{ github.event_name == 'schedule' && true || inputs.run_smoke_tests }}
       ballerina_extension_source: github
       mi_extension_source: github

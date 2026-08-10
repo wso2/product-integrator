@@ -48,14 +48,15 @@ export class ProjectExplorerEntry extends vscode.TreeItem {
         info: string | undefined = undefined,
         icon: string = 'folder',
         isCodicon: boolean = false,
-        position: NodePosition | undefined = undefined
+        position: NodePosition | undefined = undefined,
+        iconColor: vscode.ThemeColor | undefined = undefined
     ) {
         super(label, collapsibleState);
         this.tooltip = `${this.label}`;
         this.info = info;
         this.position = position;
         if (icon && isCodicon) {
-            this.iconPath = new vscode.ThemeIcon(icon);
+            this.iconPath = new vscode.ThemeIcon(icon, iconColor);
         } else if (icon) {
             // Load icon from WI extension's assets folder
             const extensionPath = ext.context.extensionPath;
@@ -386,6 +387,40 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     }
     entries.push(connections);
 
+    // ---------- Agents ----------
+    const agents = new ProjectExplorerEntry(
+        'Agents',
+        vscode.TreeItemCollapsibleState.Expanded,
+        null,
+        'bi-ai-agent',
+        false
+    );
+    agents.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+    agents.contextValue = "agents";
+    agents.children = getComponents(project.directoryMap[DIRECTORY_MAP.AGENT], DIRECTORY_MAP.AGENT, projectPath);
+    if (agents.children.length > 0) {
+        agents.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+    }
+    entries.push(agents);
+
+    // ---------- Agent Definitions ----------
+    const agentDefinitions = new ProjectExplorerEntry(
+        'Agent Definitions',
+        vscode.TreeItemCollapsibleState.Expanded,
+        null,
+        'symbol-class',
+        true,
+        undefined,
+        new vscode.ThemeColor('icon.foreground')
+    );
+    agentDefinitions.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+    agentDefinitions.contextValue = "agentDefinitions";
+    agentDefinitions.children = getComponents(
+        project.directoryMap[DIRECTORY_MAP.AGENT_DEFINITION], DIRECTORY_MAP.AGENT_DEFINITION, projectPath);
+    if (agentDefinitions.children.length > 0) {
+        entries.push(agentDefinitions);
+    }
+
     // ---------- Types ----------
     const types = new ProjectExplorerEntry(
         'Types',
@@ -513,9 +548,10 @@ function getComponents(
             comp.name,
             vscode.TreeItemCollapsibleState.None,
             comp.path,
-            comp.icon,
-            false,
-            comp.position
+            itemType === DIRECTORY_MAP.AGENT_DEFINITION ? 'symbol-class' : comp.icon,
+            itemType === DIRECTORY_MAP.AGENT_DEFINITION,
+            comp.position,
+            itemType === DIRECTORY_MAP.AGENT_DEFINITION ? new vscode.ThemeColor('icon.foreground') : undefined
         );
         fileEntry.resourceUri = Uri.parse(`bi-category:${projectPath}`);
         fileEntry.command = {

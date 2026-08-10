@@ -32,6 +32,11 @@ on:
         default: true
         required: false
         type: boolean
+      run_smoke_tests:
+        description: 'Whether to run the UI smoke tests. Only takes effect when build_packed_installers is true.'
+        default: true
+        required: false
+        type: boolean
       ballerina_extension_source:
         description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
         required: false
@@ -227,18 +232,22 @@ jobs:
       ref: ${{ inputs.ref }}
 
   smoke-test:
-    if: ${{ inputs.build_packed_installers == true }}
+    if: ${{ inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
     needs: compile
     uses: ./.github/workflows/smoke-test.yml
     with:
       artifact_name: Product-Integrator-DEB
+      # Same reason `compile` gets it: the smoke test runs ci/build/patch-wso2ipw-smoke-tests.js, so it
+      # must read that script from the commit under test, not from the caller's triggering ref.
+      ref: ${{ inputs.ref }}
 
   smoke-test-windows:
-    if: ${{ inputs.build_windows == true && inputs.build_packed_installers == true }}
+    if: ${{ inputs.build_windows == true && inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
     needs: build-windows
     uses: ./.github/workflows/smoke-test.yml
     with:
       windows_artifact_name: Product-Integrator-Windows
+      ref: ${{ inputs.ref }}
 
   build-macos:
     if: ${{ inputs.build_macos == true }}
@@ -798,21 +807,39 @@ jobs:
       - name: Install OpenSSL (Windows)
         shell: pwsh
         run: |
-          # Install vcpkg if not already present, otherwise update it
+          # A non-zero exit from a native command is not an error to PowerShell by default, so a
+          # failed update would otherwise fall through to bootstrap and install and leave the step
+          # green on a stale checkout — the exact failure this step is meant to prevent.
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+
+          # Install vcpkg if not already present, otherwise update it.
+          # The repository and executable must move together: a cached vcpkg.exe can be too old to
+          # understand the schema used by the freshly pulled scripts/vcpkg-tools.json.
           if (Test-Path "C:\vcpkg\.git") {
             Write-Host "vcpkg already cloned, fetching latest..."
             cd C:\vcpkg
-            git fetch origin
-            git pull origin master
+            # --ff-only refuses to merge, so a diverged or detached preinstalled checkout fails
+            # here. Re-clone instead of aborting: the runner image's vcpkg is not ours to repair,
+            # and a clean clone reaches the same state.
+            try {
+              git fetch origin
+              git pull --ff-only origin master
+            } catch {
+              Write-Host "Could not fast-forward the existing vcpkg checkout; re-cloning. $_"
+              cd C:\
+              Remove-Item -Recurse -Force C:\vcpkg
+              git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
+              cd C:\vcpkg
+            }
           } else {
             Write-Host "Cloning vcpkg..."
             git clone https://github.com/Microsoft/vcpkg.git C:\vcpkg
             cd C:\vcpkg
           }
-          # Bootstrap vcpkg (idempotent)
-          if (-not (Test-Path "C:\vcpkg\vcpkg.exe")) {
-            .\bootstrap-vcpkg.bat
-          }
+          # Always rebuild the executable after moving the checkout. This is idempotent and avoids
+          # combining a persisted, old executable with current registry/tool metadata.
+          .\bootstrap-vcpkg.bat -disableMetrics
           # Install OpenSSL (vcpkg skips if already installed)
           .\vcpkg.exe install openssl:x64-windows-static
           # Set environment variables for OpenSSL
@@ -1079,14 +1106,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: [resolve-versions, compile, build-macos, build-windows, smoke-test, smoke-test-windows]
     # A published tag is permanent and user-visible, so every platform that was asked for must have
-    # succeeded. `skipped` is allowed because build-macos/build-windows are gated on their own
-    # inputs; a *failed* platform job skips this job, and the run is already red from that failure.
+    # succeeded. `skipped` is allowed for build-macos/build-windows because they are gated on their
+    # own inputs, and for smoke-test/smoke-test-windows because run_smoke_tests can turn them off
+    # deliberately; a *failed* job of any of these skips this job, and the run is already red from
+    # that failure.
     if: |
       always() &&
       (needs.compile.result == 'success') &&
       (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
-      (needs.smoke-test.result == 'success') &&
+      (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') &&
       (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') &&
       (inputs.publish_tag != '') &&
       (inputs.build_packed_installers == true)
@@ -1191,21 +1220,6 @@ jobs:
             echo "name=WSO2 Integrator ${PUBLISH_TAG}" >> "$GITHUB_OUTPUT"
           fi
 
-      # `nightly` is a rolling tag: every night's filenames carry a fresh timestamp, so re-uploading
-      # would let last night's assets pile up. Drop the release and its tag first so it always
-      # reflects exactly one build.
-      - name: Clear the previous nightly release
-        if: ${{ inputs.publish_tag == 'nightly' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh release view nightly >/dev/null 2>&1; then
-            gh release delete nightly --yes --cleanup-tag
-            echo "Deleted the previous nightly release and tag."
-          else
-            echo "No existing nightly release to delete."
-          fi
-
       - name: List release files
         env:
           PUBLISH_TAG: ${{ inputs.publish_tag }}
@@ -1265,3 +1279,61 @@ jobs:
           files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # A `nightly*` tag is rolling: every build's filenames carry a fresh timestamp, so the upload
+      # above adds to the previous build's assets instead of replacing them. This step verifies the
+      # new set fully landed, moves the tag to the current commit (action-gh-release only creates a
+      # tag that doesn't yet exist), then removes the superseded assets — in that order, so the
+      # release is never left incomplete or empty.
+      #
+      # The gate is a prefix match, not `== 'nightly'`, so a disposable `nightly-test` dispatch can
+      # exercise the delete loop without touching the production tag. It stays false for the other
+      # two callers: release.yml passes `v<version>` and dev-build.yml passes ''.
+      #
+      # PUBLISH_TAG is bound through `env`, not interpolated directly, so a tag value containing
+      # shell syntax can't change the commands being run.
+      - name: Roll the nightly tag and drop superseded assets
+        if: ${{ startsWith(inputs.publish_tag, 'nightly') }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PUBLISH_TAG: ${{ inputs.publish_tag }}
+          TARGET_SHA: ${{ inputs.target_commitish != '' && inputs.target_commitish || github.sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          published=$(for file in release-files/*; do basename "${file}"; done | sort)
+          if [ -z "${published}" ]; then
+            echo "Error: no files were published, so there is nothing to supersede." >&2
+            exit 1
+          fi
+          attached=$(gh release view "${PUBLISH_TAG}" --json assets --jq '.assets[].name' \
+            | sed '/^$/d' | sort)
+
+          # An upload that silently dropped a file would otherwise be "fixed" by deleting the
+          # previous, complete set. Bail out and leave both sets attached instead.
+          missing=$(comm -23 <(printf '%s\n' "${published}") <(printf '%s\n' "${attached}"))
+          if [ -n "${missing}" ]; then
+            echo "Error: these files did not reach the ${PUBLISH_TAG} release:" >&2
+            while IFS= read -r name; do
+              echo "  - ${name}" >&2
+            done <<< "${missing}"
+            echo "       Keeping the previous assets; the release still holds a full set." >&2
+            exit 1
+          fi
+
+          gh api -X PATCH "repos/${GH_REPO}/git/refs/tags/${PUBLISH_TAG}" \
+            -f sha="${TARGET_SHA}" -F force=true >/dev/null
+          echo "${PUBLISH_TAG} now tags ${TARGET_SHA}."
+
+          superseded=$(comm -13 <(printf '%s\n' "${published}") <(printf '%s\n' "${attached}"))
+          if [ -z "${superseded}" ]; then
+            echo "No superseded assets to remove."
+            exit 0
+          fi
+          while IFS= read -r name; do
+            gh release delete-asset "${PUBLISH_TAG}" "${name}" --yes
+            echo "Removed superseded asset ${name}"
+          done <<< "${superseded}"
