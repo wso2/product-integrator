@@ -173,12 +173,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       # apply-version.sh is shape-based: it only rewrites `-SNAPSHOT` (or, on integrator.version
-      # only, an `-alpha`/`-alphaN` qualifier), and passes a concrete version through verbatim. That
-      # is what makes it safe to run everywhere, but it also means a source ref left on a concrete
-      # version after a release (the manual bump documented in release.yml) would make every nightly
-      # publish that same un-timestamped version indefinitely — and because the rolling release is
-      # deleted and recreated each run, it would still look like it worked. Fail before anything is
-      # pushed instead.
+      # only, any other alphabetic pre-release qualifier like `-alpha`/`-alpha2`/`-beta`/`-rc1`), and
+      # passes a concrete version through verbatim. That is what makes it safe to run everywhere,
+      # but it also means a source ref left on a concrete version after a release (the manual bump
+      # documented in release.yml) would make every nightly publish that same un-timestamped version
+      # indefinitely — and because the rolling release is deleted and recreated each run, it would
+      # still look like it worked. Fail before anything is pushed instead.
       - name: Assert source ref still declares pre-release versions
         shell: bash
         run: |
@@ -193,7 +193,7 @@ jobs:
             # it and stamps a timestamp exactly as it does for -SNAPSHOT. wi.extension.version has
             # no equivalent and stays -SNAPSHOT-only.
             if [ "${key}" = "integrator.version" ]; then
-              allowed='-(SNAPSHOT|alpha[0-9]*)$'
+              allowed='-[A-Za-z]+[0-9]*$'
             else
               allowed='-SNAPSHOT$'
             fi
