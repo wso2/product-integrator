@@ -2,8 +2,8 @@
 
 _Authors_: @NipunaRanasinghe \
 _Reviewers_: @isudana, @anupama-pathirage, @keizer619 \
-_Created_: 2026/06/09 \
-_Updated_: 2026/08/07
+_Created_: 2026/08/10 \
+_Updated_: 2026/08/10
 
 This document defines the component architecture of the WSO2 Integrator tooling: the main components, their responsibilities, and their dependencies. It serves as a reference for understanding the repo structure, the build process, and the impact of changes across repos.
 

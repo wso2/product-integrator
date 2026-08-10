@@ -1,9 +1,9 @@
 # Feature Release Process
 
 _Authors_: @NipunaRanasinghe \
-_Reviewers_: \
-_Created_: 2026/06/10 \
-_Updated_: 2026/07/16
+_Reviewers_: @keizer619, @anupama-pathirage, @samithkavishke \
+_Created_: 2026/08/10 \
+_Updated_: 2026/08/10
 
 A feature release delivers a new minor version of the WSO2 Integrator product, including new features, improvements, and bug fixes. Breaking changes are not permitted.
 

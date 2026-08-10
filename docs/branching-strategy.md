@@ -1,9 +1,9 @@
 # Branching Strategy
 
 _Authors_: @NipunaRanasinghe \
-_Reviewers_: \
-_Created_: 2026/06/09 \
-_Updated_: 2026/07/16
+_Reviewers_: @isudana, @keizer619, @anupama-pathirage, @dulajdilshan \
+_Created_: 2026/08/10 \
+_Updated_: 2026/08/10
 
 This document defines the branching model for all WSO2 Integrator repos: the shared UI libraries, product tooling, and product distribution layers.
 

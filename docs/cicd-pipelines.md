@@ -1,9 +1,9 @@
 # CI/CD Pipelines
 
 _Authors_: @NipunaRanasinghe \
-_Reviewers_: \
-_Created_: 2026/06/09 \
-_Updated_: 2026/07/16
+_Reviewers_: @keizer619, @anupama-pathirage, @samithkavishke \
+_Created_: 2026/08/10 \
+_Updated_: 2026/08/10
 
 This document describes the four GitHub Actions pipeline types used across all WSO2 Integrator repos:
 

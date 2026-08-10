@@ -1,9 +1,9 @@
 # Versioning Strategy
 
 _Authors_: @NipunaRanasinghe \
-_Reviewers_: \
-_Created_: 2026/06/09 \
-_Updated_: 2026/08/07
+_Reviewers_: @keizer619, @anupama-pathirage, @nipunayf, @samithkavishke \
+_Created_: 2026/08/10 \
+_Updated_: 2026/08/10
 
 This document defines the versioning scheme applied across all WSO2 Integrator repos. The common rule (SemVer) is stated first, followed by how each versioned unit applies it: shared UI library, language server, VS Code extension, and product distribution.
 

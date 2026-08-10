@@ -1,9 +1,9 @@
 # Patch Release Process
 
 _Authors_: @NipunaRanasinghe \
-_Reviewers_: \
-_Created_: 2026/06/10 \
-_Updated_: 2026/06/17
+_Reviewers_: @keizer619, @anupama-pathirage, @samithkavishke \
+_Created_: 2026/08/10 \
+_Updated_: 2026/08/10
 
 > For release types, schedule, and release order, see the [Release Process overview](README.md).
 

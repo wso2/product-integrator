@@ -1,9 +1,9 @@
 # Quality & Security Gates
 
 _Authors_: @NipunaRanasinghe \
-_Reviewers_: \
-_Created_: 2026/06/09 \
-_Updated_: 2026/07/16
+_Reviewers_: @keizer619, @anupama-pathirage \
+_Created_: 2026/08/10 \
+_Updated_: 2026/08/10
 
 This document defines the quality and security gates integrated into the PR pipeline across all WSO2 Integrator repos, the tools used to implement them, and the blocking criteria for each gate.
 

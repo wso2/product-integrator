@@ -1,9 +1,9 @@
 # Release Process
 
 _Authors_: @NipunaRanasinghe \
-_Reviewers_: \
-_Created_: 2026/06/10 \
-_Updated_: 2026/07/16
+_Reviewers_: @keizer619, @anupama-pathirage, @samithkavishke \
+_Created_: 2026/08/10 \
+_Updated_: 2026/08/10
 
 This document describes the manual process for deciding when and how to create a release. The goal is that any release manager can complete end-to-end releases with the help of this guide.
 
