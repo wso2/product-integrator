@@ -26,6 +26,7 @@ import { randomBytes } from "crypto";
 import { BridgeLayer } from "./BridgeLayer";
 import { StateMachine } from "./stateMachine";
 import { getPlatform } from "./ws-managers/main/utils";
+import { getProductMode, getProductName, isAgentBuilderMode } from "./productMode";
 import { findBallerinaExtension } from "./utils/ballerinaExtension";
 
 export const WEB_VIEW_TYPE = "wso2IntegratorWebview";
@@ -155,6 +156,8 @@ export class WebviewManager {
 				projectUri: this.projectUri,
 				platform: getPlatform(),
 				pathSeparator: path.sep,
+				productMode: getProductMode(),
+				productName: getProductName(),
 				env: {
 					MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
 					BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',
@@ -232,7 +235,7 @@ export class WebviewManager {
 	 * Show welcome webview
 	 */
 	public showWelcome(): Promise<void> {
-		return this.show(ViewType.WELCOME);
+		return this.show(isAgentBuilderMode() ? ViewType.AGENT_BUILDER_WELCOME : ViewType.WELCOME);
 	}
 
 	public closeWebview(): void {
@@ -258,6 +261,7 @@ export class WebviewManager {
 			case ViewType.SETUP_BALLERINA:
 				return "Setup Ballerina";
 			case ViewType.WELCOME:
+			case ViewType.AGENT_BUILDER_WELCOME:
 			default:
 				return "Welcome";
 		}
@@ -416,7 +420,7 @@ export class WebviewManager {
 				<meta http-equiv="Content-Security-Policy" content="${csp}">
 				<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
 				<meta name="theme-color" content="#000000">
-				<title>WSO2 Integrator</title>
+				<title>${getProductName()}</title>
 				<style>${styles}</style>
 			</head>
 			<body>

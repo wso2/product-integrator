@@ -63,6 +63,7 @@ import { stringify as stringifyYaml } from "yaml";
 import { BridgeLayer } from "../../BridgeLayer";
 import { StateMachine } from "../../stateMachine";
 import { ext } from "../../extensionVariables";
+import { getProductMode, getProductName } from "../../productMode";
 import { ballerinaContext } from "../../bi/ballerinaContext";
 import { SHARED_COMMANDS } from "../../bi/types";
 const platform = getPlatform();
@@ -102,6 +103,8 @@ export class MainWsManager implements WIVisualizerAPI {
                 projectUri: this.projectUri,
                 platform,
                 pathSeparator: path.sep,
+                productMode: getProductMode(),
+                productName: getProductName(),
                 env: {
                     MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || '',
                     BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || '',

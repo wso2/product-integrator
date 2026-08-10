@@ -19,6 +19,7 @@
 import axios from "axios";
 import * as vscode from "vscode";
 import { ext } from "../extensionVariables";
+import { getProductName } from "../productMode";
 import { ExternalUrlRequest, UpdateCheckRequest, UpdateCheckResponse } from "./updateServiceTypes";
 
 interface UpdateCheckConfig {
@@ -47,14 +48,14 @@ export class ProductUpdateServiceClient {
 		if (!config.enabled) {
 			return {
 				status: "disabled",
-				message: "WSO2 Integrator update checks are disabled in settings.",
+				message: `${getProductName()} update checks are disabled in settings.`,
 			};
 		}
 
 		if (!request.force && !config.checkOnStartup) {
 			return {
 				status: "disabled",
-				message: "Automatic WSO2 Integrator update checks are disabled in settings.",
+				message: `Automatic ${getProductName()} update checks are disabled in settings.`,
 			};
 		}
 
@@ -69,10 +70,10 @@ export class ProductUpdateServiceClient {
 		if (!installedVersion) {
 			return {
 				status: "unavailable",
-				message: "Unable to determine WSO2 Integrator app version.",
+				message: `Unable to determine ${getProductName()} app version.`,
 			};
 		}
-		ext.log(`Checking WSO2 Integrator updates. Installed version: ${installedVersion ?? "unknown"}`);
+		ext.log(`Checking ${getProductName()} updates. Installed version: ${installedVersion ?? "unknown"}`);
 
 		try {
 			const latestVersion = await this.fetchLatestVersion(config, installedVersion);
@@ -101,15 +102,15 @@ export class ProductUpdateServiceClient {
 				latestVersion: latestVersion.latestVersion,
 				releaseUrl: latestVersion.releaseUrl,
 				message: installedVersion
-					? `WSO2 Integrator ${latestVersion.latestVersion} is available. Current version: ${installedVersion}.`
-					: `A new WSO2 Integrator version ${latestVersion.latestVersion} is available.`,
+					? `${getProductName()} ${latestVersion.latestVersion} is available. Current version: ${installedVersion}.`
+					: `A new ${getProductName()} version ${latestVersion.latestVersion} is available.`,
 			};
 		} catch (error) {
 			ext.logError("Product update service check failed", error as Error);
 			return {
 				status: "error",
 				installedVersion,
-				message: `Failed to check for WSO2 Integrator updates: ${
+				message: `Failed to check for ${getProductName()} updates: ${
 					error instanceof Error ? error.message : String(error)
 				}`,
 			};

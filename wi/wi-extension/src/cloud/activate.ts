@@ -29,6 +29,7 @@ import { dataCacheStore } from "./stores/data-cache-store";
 import { locationStore } from "./stores/location-store";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { getExtVersion } from "../utils/commonUtils";
+import { getProductName } from "../productMode";
 import { WICloudExtensionAPI } from "./cloud-ext-api";
 
 /**
@@ -122,7 +123,7 @@ function registerPreInitHandlers(): void {
 			affectsConfiguration("integrator.advanced.cloudRpcPath")
 		) {
 			const selection = await window.showInformationMessage(
-				"WSO2 Integrator extension configuration changed. Please restart the editor for changes to take effect.",
+				`${getProductName()} extension configuration changed. Please restart the editor for changes to take effect.`,
 				"Restart Now",
 			);
 			if (selection === "Restart Now") {

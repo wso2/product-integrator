@@ -16,12 +16,24 @@
  * under the License.
  */
 
+import { ProductMode } from "./enums";
+
 /**
  * Extension constants
  */
 export const EXTENSION_ID = "wso2-integrator";
-export const EXTENSION_NAME = "WSO2 Integrator";
 export const EXTENSION_PUBLISHER = "wso2";
+
+/**
+ * Display names per product flavor. The built product overrides these via the
+ * WSO2_PRODUCT_NAME runtime env var; these are the fallbacks.
+ */
+export const PRODUCT_NAMES: Record<ProductMode, string> = {
+	[ProductMode.INTEGRATOR]: "WSO2 Integrator",
+	[ProductMode.AGENT_BUILDER]: "WSO2 Agent Builder",
+};
+
+export const EXTENSION_NAME = PRODUCT_NAMES[ProductMode.INTEGRATOR];
 
 /**
  * Command constants

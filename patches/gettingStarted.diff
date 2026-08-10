@@ -1,7 +1,7 @@
-Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
 ===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
-+++ product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
+--- agent-builder.orig/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
++++ agent-builder/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
 @@ -7,33 +7,27 @@ import { localize, localize2 } from '../
  import { GettingStartedInputSerializer, GettingStartedPage, inWelcomeContext } from './gettingStarted.js';
  import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -215,10 +215,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
  
  AccessibleViewRegistry.register(new GettingStartedAccessibleView());
  
-Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
 ===================================================================
 --- /dev/null
-+++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
++++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
 @@ -0,0 +1,25 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
@@ -245,11 +245,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2C
 +export const WSO2_PLATFORM_PROVIDER_ID = 'wso2-wi'; // Authentication provider ID
 +export const WSO2_PLATFORM_LOGOUT_COMMAND_ID = 'wso2.integrator.cloud.auth.signOut';
 +export const WSO2_PLATFORM_CANCEL_SIGN_IN_COMMAND = 'wso2.integrator.cloud.auth.cancelSignIn';
-Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
 ===================================================================
 --- /dev/null
-+++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
-@@ -0,0 +1,782 @@
++++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
+@@ -0,0 +1,784 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -273,6 +273,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +import { WebviewThemeDataProvider } from '../../../contrib/webview/browser/themeing.js';
 +import { IExtensionService } from '../../../services/extensions/common/extensions.js';
 +import { IFileService } from '../../../../platform/files/common/files.js';
++import { IProductService } from '../../../../platform/product/common/productService.js';
 +import { WI_BALLERINA_EXTENSION_ID, WI_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND_ID, WI_EMBEDDED_WELCOME_VIEW_TYPE, WI_EXTENSION_ID, WI_MI_EXTENSION_ID } from './wso2Constants.js';
 +import { WSO2LoginDialog } from './wso2LoginDialog.js';
 +
@@ -400,7 +401,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		@IEditorGroupsService private readonly editorGroupsService: IEditorGroupsService,
 +		@IExtensionService private readonly extensionService: IExtensionService,
 +		@IWebviewService private readonly webviewService: IWebviewService,
-+		@IFileService private readonly fileService: IFileService
++		@IFileService private readonly fileService: IFileService,
++		@IProductService private readonly productService: IProductService
 +	) {
 +		super();
 +
@@ -484,7 +486,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +			}
 +
 +			.wso2-editor-watermark .embedded-welcome-shell::after {
-+				content: 'Loading WSO2 Integrator...';
++				content: 'Loading ${this.productService.nameLong}...';
 +				position: absolute;
 +				left: 50%;
 +				top: 50%;
@@ -597,7 +599,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		}
 +		const webview = this.webviewService.createWebviewElement({
 +			providedViewType: WI_EMBEDDED_WELCOME_VIEW_TYPE,
-+			title: 'WSO2 Integrator',
++			title: this.productService.nameLong,
 +			options: {},
 +			contentOptions: {
 +				allowScripts: true,
@@ -715,7 +717,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +						<meta charset="utf-8">
 +						<meta http-equiv="Content-Security-Policy" content="${csp}">
 +						<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
-+					<title>WSO2 Integrator</title>
++					<title>${this.productService.nameLong}</title>
 +					<style>
 +						#root, body, html {
 +							width: 100%;
@@ -872,7 +874,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +								<path class="embedded-welcome-loader-wave-runner" d="M10 60 H41 L58 34 L75 84 L91 52 H110"></path>
 +							</svg>
 +						</div>
-+						<div class="embedded-welcome-loader-text">Loading WSO2 Integrator...</div>
++						<div class="embedded-welcome-loader-text">Loading ${this.productService.nameLong}...</div>
 +					</div>
 +					<div id="root"></div>
 +					<script nonce="${nonce}">
@@ -1032,10 +1034,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2E
 +		}
 +	}
 +}
-Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
 ===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
-+++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
+--- agent-builder.orig/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
++++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/editorGroupView.ts
 @@ -51,18 +51,23 @@ import { ILogService } from '../../../..
  import { TelemetryTrustedValue } from '../../../../platform/telemetry/common/telemetryUtils.js';
  import { defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -1115,10 +1117,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/edito
  		// Find target anchor
  		let anchor: HTMLElement | StandardMouseEvent = this.element;
  		if (e) {
-Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/browser/layout.ts
 ===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/browser/layout.ts
-+++ product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
+--- agent-builder.orig/lib/vscode/src/vs/workbench/browser/layout.ts
++++ agent-builder/lib/vscode/src/vs/workbench/browser/layout.ts
 @@ -14,10 +14,10 @@ import { PanelPart } from './parts/panel
  import { Position, Parts, PartOpensMaximizedOptions, IWorkbenchLayoutService, positionFromString, positionToString, partOpensMaximizedFromString, PanelAlignment, ActivityBarPosition, LayoutSettings, MULTI_WINDOW_PARTS, SINGLE_WINDOW_PARTS, ZenModeSettings, EditorTabsMode, EditorActionsLocation, shouldShowCustomTitleBar, isHorizontal, isMultiWindowPart, IPartVisibilityChangeEvent } from '../services/layout/browser/layoutService.js';
  import { isTemporaryWorkspace, IWorkspaceContextService, WorkbenchState } from '../../platform/workspace/common/workspace.js';
@@ -1288,10 +1290,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/layout.ts
  
  		// Set dynamic defaults: part sizing and side bar visibility
  		const auxiliaryBarForceMaximized = this.configurationService.getValue(WorkbenchLayoutSettings.AUXILIARYBAR_FORCE_MAXIMIZED);
-Index: product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
 ===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
-+++ product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
+--- agent-builder.orig/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
++++ agent-builder/lib/vscode/src/vs/workbench/electron-browser/parts/titlebar/titlebarPart.ts
 @@ -29,6 +29,7 @@ import { IEditorService } from '../../..
  import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
  import { CodeWindow, mainWindow } from '../../../../base/browser/window.js';
@@ -1340,10 +1342,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/tit
  	}
  
  	override get preventZoom(): boolean {
-Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationContribution.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationContribution.ts
 ===================================================================
 --- /dev/null
-+++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationContribution.ts
++++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationContribution.ts
 @@ -0,0 +1,96 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
@@ -1441,10 +1443,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 +		}));
 +	}
 +}
-Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationProvider.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationProvider.ts
 ===================================================================
 --- /dev/null
-+++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationProvider.ts
++++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthenticationProvider.ts
 @@ -0,0 +1,104 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
@@ -1550,11 +1552,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 +		}
 +	}
 +}
-Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
 ===================================================================
 --- /dev/null
-+++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
-@@ -0,0 +1,592 @@
++++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
+@@ -0,0 +1,594 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -1569,6 +1571,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +import { checkWSO2LoginStatus, signInWSO2 } from './wso2AuthUtils.js';
 +import { IAuthenticationService } from '../../../services/authentication/common/authentication.js';
 +import { ICommandService } from '../../../../platform/commands/common/commands.js';
++import { IProductService } from '../../../../platform/product/common/productService.js';
 +
 +export class WSO2LoginDialog extends Disposable {
 +
@@ -1580,6 +1583,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		@IStorageService private readonly storageService: IStorageService,
 +		@IAuthenticationService private readonly authenticationService: IAuthenticationService,
 +		@ICommandService private readonly commandService: ICommandService,
++		@IProductService private readonly productService: IProductService,
 +	) {
 +		super();
 +	}
@@ -1620,16 +1624,16 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		const logoContainer = append(leftSection, $('.logo-container'));
 +		const logo = append(logoContainer, $('img.logo')) as HTMLImageElement;
 +		logo.src = FileAccess.asBrowserUri('vs/workbench/browser/parts/editor/media/integrator-activity-icon-dark.svg').toString(true);
-+		logo.alt = 'WSO2 Integrator';
++		logo.alt = this.productService.nameLong;
 +
 +		const heroBadge = append(leftSection, $('div.login-badge'));
 +		heroBadge.textContent = 'Get Started';
 +
 +		const headline = append(leftSection, $('h1.login-headline'));
-+		headline.textContent = 'Welcome to\nWSO2 Integrator';
++		headline.textContent = `Welcome to\n${this.productService.nameLong}`;
 +
 +		const caption = append(leftSection, $('p.login-caption'));
-+		caption.textContent = 'Connect AI agents, APIs, data, and events across cloud, on-prem, and hybrid environments. Build any type of integration and AI agent with the 100% open source WSO2 Integrator.';
++		caption.textContent = `Connect AI agents, APIs, data, and events across cloud, on-prem, and hybrid environments. Build any type of integration and AI agent with the 100% open source ${this.productService.nameLong}.`;
 +
 +		// Right section with login form
 +		const rightSection = append(wrapper, $('.login-right-section'));
@@ -1637,7 +1641,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		const formContainer = append(rightSection, $('.login-form-container'));
 +
 +		const formOverline = append(formContainer, $('div.form-overline'));
-+		formOverline.textContent = 'WSO2 Integrator';
++		formOverline.textContent = this.productService.nameLong;
 +
 +		const formTitle = append(formContainer, $('h2.form-title'));
 +		formTitle.textContent = 'Get Started';
@@ -2147,10 +2151,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		this._register({ dispose: () => style.remove() });
 +	}
 +}
-Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
 ===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
-+++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
+--- agent-builder.orig/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
++++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/titlebar/titlebarPart.ts
 @@ -56,6 +56,7 @@ import { IHoverDelegate } from '../../..
  import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
  import { safeIntl } from '../../../../base/common/date.js';
@@ -2204,10 +2208,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/titlebar/tit
  	}
  
  	override get preventZoom(): boolean {
-Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthUtils.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthUtils.ts
 ===================================================================
 --- /dev/null
-+++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthUtils.ts
++++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthUtils.ts
 @@ -0,0 +1,81 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
@@ -2290,10 +2294,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2A
 +		throw error;
 +	}
 +}
-Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
 ===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
-+++ product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
+--- agent-builder.orig/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
++++ agent-builder/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
 @@ -43,6 +43,15 @@ const configurationKey = 'workbench.star
  const oldConfigurationKey = 'workbench.welcome.enabled';
  const telemetryOptOutStorageKey = 'workbench.telemetryOptOutShown';
@@ -2328,10 +2332,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/welcomeGettingStar
  		if (this.tryOpenWalkthroughForFolder()) {
  			return;
  		}
-Index: product-integrator/lib/vscode/src/vs/code/electron-browser/workbench/workbench.ts
+Index: agent-builder/lib/vscode/src/vs/code/electron-browser/workbench/workbench.ts
 ===================================================================
---- product-integrator.orig/lib/vscode/src/vs/code/electron-browser/workbench/workbench.ts
-+++ product-integrator/lib/vscode/src/vs/code/electron-browser/workbench/workbench.ts
+--- agent-builder.orig/lib/vscode/src/vs/code/electron-browser/workbench/workbench.ts
++++ agent-builder/lib/vscode/src/vs/code/electron-browser/workbench/workbench.ts
 @@ -22,6 +22,67 @@
  
  	//#region Splash Screen Helpers
@@ -2420,7 +2424,7 @@ Index: product-integrator/lib/vscode/src/vs/code/electron-browser/workbench/work
 +			}
 +
 +			body::after {
-+				content: 'Loading WSO2 Integrator...';
++				content: 'Loading ${configuration.product?.nameLong ?? 'WSO2 Integrator'}...';
 +				position: fixed;
 +				left: 50%;
 +				top: 50%;
@@ -2440,10 +2444,10 @@ Index: product-integrator/lib/vscode/src/vs/code/electron-browser/workbench/work
  
  		// set zoom level as soon as possible
  		if (typeof data?.zoomLevel === 'number' && typeof preloadGlobals?.webFrame?.setZoomLevel === 'function') {
-Index: product-integrator/lib/vscode/src/vs/workbench/workbench.common.main.ts
+Index: agent-builder/lib/vscode/src/vs/workbench/workbench.common.main.ts
 ===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/workbench.common.main.ts
-+++ product-integrator/lib/vscode/src/vs/workbench/workbench.common.main.ts
+--- agent-builder.orig/lib/vscode/src/vs/workbench/workbench.common.main.ts
++++ agent-builder/lib/vscode/src/vs/workbench/workbench.common.main.ts
 @@ -390,7 +390,8 @@ import './contrib/welcomeViews/common/vi
  import './contrib/welcomeViews/common/newFile.contribution.js';
  

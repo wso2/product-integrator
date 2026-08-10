@@ -21,6 +21,7 @@ import * as vscode from "vscode";
 import type { ChoreoRPCClient } from "./cloud/choreo-cli-rpc";
 import { defaultTerminologies, webviewStateStore } from "./cloud/stores/webview-state-store";
 import type { WSO2AuthenticationProvider } from "./cloud/auth/wso2-auth-provider";
+import { getProductName } from "./productMode";
 
 /**
  * Extension context wrapper
@@ -70,7 +71,7 @@ export class ExtensionVariables {
 
 	get outputChannel(): vscode.OutputChannel {
 		if (!this._outputChannel) {
-			this._outputChannel = vscode.window.createOutputChannel("WSO2 Integrator");
+			this._outputChannel = vscode.window.createOutputChannel(getProductName());
 		}
 		return this._outputChannel;
 	}

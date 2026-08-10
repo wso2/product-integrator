@@ -42,6 +42,11 @@ on:
         required: false
         default: 'github'
         type: string
+      product_flavor:
+        description: "Product flavor to build: 'integrator' (WSO2 Integrator) or 'agent-builder' (WSO2 Agent Builder)"
+        required: false
+        default: 'integrator'
+        type: string
       # Under `workflow_call`, `github.ref` is the *caller's* triggering ref, so a dispatcher that
       # prepares a branch and then calls this workflow would compile the ref it was dispatched on
       # (main) rather than the branch it just prepared. Callers that prepare a branch pass its SHA
@@ -310,7 +315,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
+          key: extensions-shared-${{ inputs.product_flavor || 'integrator' }}-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
           # Partial restore so a cold key doesn't mean a cold cache: this prefix is the exact key minus
           # the file-hash component, so a patch or wi/** edit falls back to the previous run instead of
           # re-downloading every extension.
@@ -384,6 +389,8 @@ jobs:
 
       - name: Update product.json and branding
         working-directory: .
+        env:
+          PRODUCT_FLAVOR: ${{ inputs.product_flavor || 'integrator' }}
         run: |
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
@@ -683,7 +690,7 @@ jobs:
           path: |
             lib/vscode/.build/builtInExtensions
             lib/vscode/.build/extensions
-          key: extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
+          key: extensions-shared-${{ inputs.product_flavor || 'integrator' }}-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'ci/build/component-versions.properties', 'lib/vscode/package.json', 'wi/**') }}
           # Partial restore so a cold key doesn't mean a cold cache: this prefix is the exact key minus
           # the file-hash component, so a patch or wi/** edit falls back to the previous run instead of
           # re-downloading every extension.
@@ -773,6 +780,8 @@ jobs:
       - name: Update product.json and branding
         shell: bash
         working-directory: .
+        env:
+          PRODUCT_FLAVOR: ${{ inputs.product_flavor || 'integrator' }}
         run: |
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"

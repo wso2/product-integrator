@@ -132,12 +132,22 @@
       {
         "view": "wso2-integrator.explorer",
         "contents": "$(loadingspin) Loading WSO2 Integrator...",
-        "when": "!WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
+        "when": "WI.productMode != 'agent-builder' && !WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
+      },
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": "$(loadingspin) Loading WSO2 Agent Builder...",
+        "when": "WI.productMode == 'agent-builder' && !WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
       },
       {
         "view": "wso2-integrator.explorer",
         "contents": "$(rocket) Build integration solutions with WSO2 Integrator.\n\nUse the welcome page to create a new project, explore samples, import external integrations, and manage profile settings.\n\nOpen an integration project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
-        "when": "WI.projectType == 'none'"
+        "when": "WI.productMode != 'agent-builder' && WI.projectType == 'none'"
+      },
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": "$(rocket) Build AI agents with WSO2 Agent Builder.\n\nUse the welcome page to create a new agent project or explore samples.\n\nOpen an agent project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
+        "when": "WI.productMode == 'agent-builder' && WI.projectType == 'none'"
       },
       {
         "view": "wso2-integrator.explorer",
@@ -147,12 +157,22 @@
       {
         "view": "wso2-integrator.explorer",
         "contents": "Welcome to WSO2 Integrator.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
-        "when": "(!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
+        "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
+      },
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": "Welcome to WSO2 Agent Builder.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+        "when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
       },
       {
         "view": "wso2-integrator.explorer",
         "contents": "Welcome to WSO2 Integrator.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
-        "when": "(!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
+        "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
+      },
+      {
+        "view": "wso2-integrator.explorer",
+        "contents": "Welcome to WSO2 Agent Builder.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+        "when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
       }
     ],
     "commands": [

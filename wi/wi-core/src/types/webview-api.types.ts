@@ -16,13 +16,17 @@
  * under the License.
  */
 
-import { ViewType, Platform } from "../enums";
+import { ViewType, Platform, ProductMode } from "../enums";
 
 export interface WebviewContext {
     currentView: ViewType;
     projectUri?: string;
     platform?: Platform;
     pathSeparator?: string;
+    /** Product flavor of the hosting build. Absent means ProductMode.INTEGRATOR. */
+    productMode?: ProductMode;
+    /** Display name of the hosting product, e.g. "WSO2 Agent Builder". */
+    productName?: string;
     env?: {
         [key: string]: string | undefined;
     };

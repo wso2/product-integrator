@@ -23,12 +23,14 @@ import {
     DEFAULT_PROFILE,
     EXTENSION_DEPENDENCIES,
     MI_PROFILE,
+    ProductMode,
     SELECTED_PROFILE_VALUES,
     SI_PROFILE,
     type SelectedProfileValue,
     ViewType
 } from '@wso2/wi-core';
 import { ext } from './extensionVariables';
+import { getProductMode, getProductName, isAgentBuilderMode } from './productMode';
 import { fetchProjectInfo, fetchExtendedProjectInfo } from './bi/utils';
 import { activateProjectExplorer } from './bi/project-explorer/activate';
 import { ProjectExplorerEntryProvider } from './bi/project-explorer/project-explorer-provider';
@@ -59,6 +61,7 @@ interface MachineContext {
     configChangeDisposable?: vscode.Disposable;
     currentView: ViewType;
     isInWi: boolean;
+    productMode: ProductMode;
 }
 
 const profileValueByProjectType: Partial<Record<ProjectType, SelectedProfileValue>> = {
@@ -106,6 +109,12 @@ function getStartupProfileFromInstalledExtensions(): SelectedProfileValue | unde
 }
 
 async function syncStartupSelectedProfile(): Promise<void> {
+    // The profile setting is shared across product flavors (same data folder);
+    // Agent Builder must never write it.
+    if (isAgentBuilderMode()) {
+        return;
+    }
+
     const config = vscode.workspace.getConfiguration("integrator");
     const selectedProfile = config.get<string>('selectedProfile');
     const startupProfile = getStartupProfileFromInstalledExtensions();
@@ -150,6 +159,10 @@ async function ensureSelectedProfileExtensionInstalled(
 }
 
 async function syncSelectedProfileWithDetectedProject(projectType: ProjectType): Promise<void> {
+    if (isAgentBuilderMode()) {
+        return;
+    }
+
     const config = vscode.workspace.getConfiguration('integrator');
     const selectedProfile = config.get<string>('selectedProfile');
     const expectedProfile = profileValueByProjectType[projectType];
@@ -168,6 +181,12 @@ async function syncSelectedProfileWithDetectedProject(projectType: ProjectType):
  * Get the selected integrator profile from configuration.
  */
 function getSelectedProfileMode(): ProjectType[] {
+    // Agent Builder is BI-only; ignore any MI/SI profile value that may have
+    // been persisted by an Integrator install sharing the same data folder.
+    if (isAgentBuilderMode()) {
+        return [ProjectType.BI_BALLERINA];
+    }
+
     const config = vscode.workspace.getConfiguration("integrator");
     const selectedProfile = config.get<string>('selectedProfile');
 
@@ -200,7 +219,8 @@ const stateMachine = createMachine<MachineContext>({
         projectType: ProjectType.NONE,
         extensionAPIs: new ExtensionAPIs(),
         currentView: ViewType.LOADING,
-        isInWi: process.env.WSO2_INTEGRATOR_RUNTIME === 'true'
+        isInWi: process.env.WSO2_INTEGRATOR_RUNTIME === 'true',
+        productMode: getProductMode()
     },
     states: {
         initialize: {
@@ -341,8 +361,13 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
         // if a folder/workspace is open but we couldn't detect the project type, we should show an popup warning the user that the extension couldn't detect the project type
         if (vscode.workspace.workspaceFolders?.length && context.isInWi) {
             ext.log('Workspace is open but project type is unknown');
-            if (selectedProfile !== MI_PROFILE) {
-                vscode.window.showWarningMessage('We couldn\'t detect the project type. Please ensure you have a valid WSO2 Integration Project open.', { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
+            const expectedProjectMessage = isAgentBuilderMode()
+                ? `We couldn't detect the project type. Please ensure you have a valid ${getProductName()} (Ballerina) project open.`
+                : 'We couldn\'t detect the project type. Please ensure you have a valid WSO2 Integration Project open.';
+            // Agent Builder ignores the shared profile setting, so a stale MI
+            // profile persisted by an Integrator install must not suppress it.
+            if (isAgentBuilderMode() || selectedProfile !== MI_PROFILE) {
+                vscode.window.showWarningMessage(expectedProjectMessage, { modal: true }, 'Go to Welcome Screen', 'Open another folder').then(selection => {
                     if (selection === 'Go to Welcome Screen') {
                         // close workspace
                         vscode.commands.executeCommand('workbench.action.closeFolder');
@@ -431,7 +456,7 @@ async function detectProjectType(): Promise<{
                 detect: async () => fetchProjectInfo().isBallerina,
                 logMessage: 'Detected BI/Ballerina project'
             }
-        ];
+        ].filter(check => !isAgentBuilderMode() || check.projectType === ProjectType.BI_BALLERINA);
 
     for (const projectCheck of projectChecks) {
         if (!await projectCheck.detect()) {

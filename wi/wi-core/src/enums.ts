@@ -25,6 +25,15 @@ export enum IntegrationType {
 }
 
 /**
+ * Product flavor the extension is running inside. Chosen by the product build
+ * (product.json runtimeEnv WSO2_PRODUCT_MODE), not by the user.
+ */
+export enum ProductMode {
+	INTEGRATOR = "integrator",
+	AGENT_BUILDER = "agent-builder",
+}
+
+/**
  * View types for webviews
  */
 export enum ViewType {
@@ -35,6 +44,7 @@ export enum ViewType {
     IMPORT_EXTERNAL = "import_external",
     CREATE_CLOUD_INTEGRATION = "create_cloud_integration",
     SETUP_BALLERINA = "setup_ballerina",
+    AGENT_BUILDER_WELCOME = "agent_builder_welcome",
 }
 
 /**

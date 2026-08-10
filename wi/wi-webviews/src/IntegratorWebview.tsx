@@ -18,6 +18,7 @@
 
 import { ViewType } from "@wso2/wi-core";
 import { WelcomeView } from "./views/WelcomeView";
+import { AgentBuilderWelcomeView } from "./views/agentBuilderWelcome";
 import { CreationView } from "./views/creationView";
 import { RemoteImportIntegration } from "./views/creationView/federation/RemoteImportIntegration";
 import { SamplesView } from "./views/samplesView";
@@ -43,6 +44,8 @@ function IntegratorWebview() {
 			);
 		case ViewType.WELCOME:
 			return <WelcomeView />;
+		case ViewType.AGENT_BUILDER_WELCOME:
+			return <AgentBuilderWelcomeView />;
 		case ViewType.CREATE_PROJECT:
 			return <CreationView onBack={goBackToWelcome} />;
 		case ViewType.SAMPLES:

@@ -27,6 +27,7 @@ import { IWso2PlatformExtensionAPI } from "@wso2/wso2-platform-core";
 import { BridgeLayer } from "./BridgeLayer";
 import { ViewType } from "@wso2/wi-core";
 import { getPlatform } from "./ws-managers/main/utils";
+import { getProductMode, getProductName, isAgentBuilderMode } from "./productMode";
 import { ProductUpdateServiceClient } from "./services/productUpdateServiceClient";
 import { UpdateCheckResponse } from "./services/updateServiceTypes";
 
@@ -86,14 +87,17 @@ async function showUpdateResult(
 function registerEmbeddedWelcomeBootstrapCommand(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(
 		vscode.commands.registerCommand(GET_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND, async () => {
-			StateMachine.setCurrentView(ViewType.WELCOME);
+			const welcomeView = isAgentBuilderMode() ? ViewType.AGENT_BUILDER_WELCOME : ViewType.WELCOME;
+			StateMachine.setCurrentView(welcomeView);
 
 			const bootstrap = await BridgeLayer.startWebSocketServer(EMBEDDED_WELCOME_PROJECT_URI);
 			BridgeLayer.notifyStateChanged(EMBEDDED_WELCOME_PROJECT_URI, {
-				currentView: ViewType.WELCOME,
+				currentView: welcomeView,
 				projectUri: EMBEDDED_WELCOME_PROJECT_URI,
 				platform: getPlatform(),
 				pathSeparator: path.sep,
+				productMode: getProductMode(),
+				productName: getProductName(),
 				env: {
 					MI_SAMPLE_ICONS_GITHUB_URL: process.env.MI_SAMPLE_ICONS_GITHUB_URL || "",
 					BI_SAMPLE_ICONS_GITHUB_URL: process.env.BI_SAMPLE_ICONS_GITHUB_URL || "",
@@ -118,11 +122,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 	try {
 		// set runtime to context
 		await vscode.commands.executeCommand('setContext', 'WI.isWiRuntime', process.env.WSO2_INTEGRATOR_RUNTIME === 'true');
+		await vscode.commands.executeCommand('setContext', 'WI.productMode', getProductMode());
 		const productUpdateService = new ProductUpdateServiceClient(context);
 
 		registerEmbeddedWelcomeBootstrapCommand(context);
 		context.subscriptions.push(
 			vscode.commands.registerCommand(COMMANDS.CHECK_FOR_UPDATES, async () => {
+				// The update service serves the Integrator release feed; there is
+				// no Agent Builder feed yet.
+				if (isAgentBuilderMode()) {
+					vscode.window.showInformationMessage(`Update checks are not available for ${getProductName()} yet.`);
+					return;
+				}
 				await showUpdateResult(productUpdateService, true, true, "Open Release Notes");
 			}),
 		);
@@ -137,19 +148,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 
 		// Run update checks independently from cloud startup so notification still works
 		// when the Choreo RPC client is unavailable in local/dev setups.
-		const startupUpdateCheck = setTimeout(() => {
-			void showUpdateResult(productUpdateService, true, false, "Open Release Notes");
-		}, STARTUP_UPDATE_CHECK_DELAY_MS);
-		context.subscriptions.push({
-			dispose: () => clearTimeout(startupUpdateCheck),
-		});
+		// Skipped in Agent Builder mode: the update service serves the Integrator feed.
+		if (!isAgentBuilderMode()) {
+			const startupUpdateCheck = setTimeout(() => {
+				void showUpdateResult(productUpdateService, true, false, "Open Release Notes");
+			}, STARTUP_UPDATE_CHECK_DELAY_MS);
+			context.subscriptions.push({
+				dispose: () => clearTimeout(startupUpdateCheck),
+			});
 
-		const backgroundUpdateCheck = setInterval(() => {
-			void showUpdateResult(productUpdateService, true, false, "Open Release Notes");
-		}, BACKGROUND_UPDATE_CHECK_INTERVAL_MS);
-		context.subscriptions.push({
-			dispose: () => clearInterval(backgroundUpdateCheck),
-		});
+			const backgroundUpdateCheck = setInterval(() => {
+				void showUpdateResult(productUpdateService, true, false, "Open Release Notes");
+			}, BACKGROUND_UPDATE_CHECK_INTERVAL_MS);
+			context.subscriptions.push({
+				dispose: () => clearInterval(backgroundUpdateCheck),
+			});
+		}
 
 		// Boot cloud/RPC/auth functionality in the background so product update
 		// notifications are not blocked by Choreo RPC startup in local/dev setups.

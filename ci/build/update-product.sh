@@ -17,6 +17,16 @@ read_version() {
 
 # Accept integrator version as first arg (optional), otherwise read from source-of-truth file.
 VERSION=${1:-"$(read_version "integrator.version")"}
+
+# Product flavor decides the app-shell display name only; all identity fields
+# (applicationName, data folders, bundle ids, urlProtocol, ...) stay
+# wso2-integrator so both flavors share extension/URI/session contracts.
+PRODUCT_FLAVOR=${PRODUCT_FLAVOR:-integrator}
+case "${PRODUCT_FLAVOR}" in
+  integrator)    PRODUCT_NAME="WSO2 Integrator" ;;
+  agent-builder) PRODUCT_NAME="WSO2 Agent Builder" ;;
+  *) echo "Error: unknown PRODUCT_FLAVOR '${PRODUCT_FLAVOR}' (expected 'integrator' or 'agent-builder')" >&2; exit 1 ;;
+esac
 BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH:-""}
 BALLERINA_EXTENSION_VERSION=${BALLERINA_EXTENSION_VERSION:-"$(read_version "ballerina.extension.version")"}
 MI_VSIX_PATH=${MI_VSIX_PATH:-""}
@@ -66,8 +76,8 @@ cat > lib/vscode/product.json <<EOF
 {
     "wiversion": "${VERSION}",
     "quality": "stable",
-    "nameShort": "WSO2 Integrator",
-    "nameLong": "WSO2 Integrator",
+    "nameShort": "${PRODUCT_NAME}",
+    "nameLong": "${PRODUCT_NAME}",
     "applicationName": "wso2-integrator",
     "dataFolderName": ".wso2-integrator",
     "sharedDataFolderName": ".wso2-integrator-shared",
@@ -184,6 +194,8 @@ fi)
       "common": {
         "WSO2_INTEGRATOR_RUNTIME": "true",
         "WSO2_INTEGRATOR_VERSION": "${VERSION}",
+        "WSO2_PRODUCT_MODE": "${PRODUCT_FLAVOR}",
+        "WSO2_PRODUCT_NAME": "${PRODUCT_NAME}",
         "__meta": {
           "pathRemovePattern": "ballerina"
         }

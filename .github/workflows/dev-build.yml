@@ -55,6 +55,14 @@ on:
         options:
           - marketplace
           - github
+      product_flavor:
+        description: 'Product flavor to build'
+        required: true
+        default: 'integrator'
+        type: choice
+        options:
+          - integrator
+          - agent-builder
 
 # `contents: read` is enough: the versions are stamped in the runner's working copy and handed
 # between jobs as a workflow artifact, so nothing is ever committed or pushed and no release is
@@ -84,3 +92,4 @@ jobs:
       build_packed_installers: ${{ inputs.build_packed_installers }}
       ballerina_extension_source: ${{ inputs.ballerina_extension_source }}
       mi_extension_source: ${{ inputs.mi_extension_source }}
+      product_flavor: ${{ inputs.product_flavor }}

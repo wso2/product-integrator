@@ -19,6 +19,7 @@
 import styled from "@emotion/styled";
 import {
     DEFAULT_PROFILE,
+    ProductMode,
     SELECTED_PROFILE_CONFIG_SECTION,
     SELECTED_PROFILE_VALUES,
     type SelectedProfileValue,
@@ -119,7 +120,11 @@ const SetupSeparator = styled.div`
 `;
 
 export function SettingsView({ onBack, ballerinaUnavailable }: { onBack?: () => void; ballerinaUnavailable?: boolean }) {
-    const { wsClient } = useVisualizerContext();
+    const { wsClient, webviewContext } = useVisualizerContext();
+    // Agent Builder is BI-only: hide the profile switcher (the shared
+    // integrator.selectedProfile setting must never be changed from this mode).
+    const isAgentBuilderMode = webviewContext?.productMode === ProductMode.AGENT_BUILDER;
+    const productName = webviewContext?.productName ?? "WSO2 Integrator";
     const [selectedProfile, setSelectedProfile] = useState<SelectedProfileValue>(DEFAULT_PROFILE);
     const [isLoading, setIsLoading] = useState(true);
     const [savingRuntime, setSavingRuntime] = useState<SelectedProfileValue | null>(null);
@@ -134,6 +139,14 @@ export function SettingsView({ onBack, ballerinaUnavailable }: { onBack?: () => 
     };
 
     useEffect(() => {
+        // Agent Builder pins the Default (BI) profile and never reads or writes
+        // the shared profile setting.
+        if (isAgentBuilderMode) {
+            setSelectedProfile(DEFAULT_PROFILE);
+            setIsLoading(false);
+            return;
+        }
+
         const loadRuntimeSettings = async () => {
             try {
                 const selectedProfileResponse = await wsClient.getConfiguration({
@@ -157,7 +170,7 @@ export function SettingsView({ onBack, ballerinaUnavailable }: { onBack?: () => 
         };
 
         loadRuntimeSettings();
-    }, [wsClient]);
+    }, [wsClient, isAgentBuilderMode]);
 
     useEffect(() => {
         if (selectedProfile !== DEFAULT_PROFILE || isLoading) {
@@ -227,28 +240,32 @@ export function SettingsView({ onBack, ballerinaUnavailable }: { onBack?: () => 
                             </BackButton>
                             <HeaderText>
                                 <HeaderTitle variant="h2">Configurations</HeaderTitle>
-                                <HeaderSubtitle>Configurations related to WSO2 Integrator.</HeaderSubtitle>
+                                <HeaderSubtitle>Configurations related to {productName}.</HeaderSubtitle>
                             </HeaderText>
                         </HeaderRow>
                     </FormPanelHeader>
                     <PanelBody>
-                        <div style={{ marginBottom: '5px'}}>Select your Integration Profile.</div>
-                        {error && <ErrorText>{error}</ErrorText>}
-                        <RuntimeField>
-                            <DropdownShell>
-                                <Dropdown
-                                    id="selected-runtime"
-                                    items={PROFILE_OPTIONS}
-                                    value={selectedProfile}
-                                    disabled={savingRuntime !== null}
-                                    onValueChange={(value: string) => {
-                                        void applyRuntimeSelection(value as SelectedProfileValue);
-                                    }}
-                                    sx={profileDropdownSx}
-                                    containerSx={profileDropdownContainerSx}
-                                />
-                            </DropdownShell>
-                        </RuntimeField>
+                        {!isAgentBuilderMode && (
+                            <>
+                                <div style={{ marginBottom: '5px'}}>Select your Integration Profile.</div>
+                                {error && <ErrorText>{error}</ErrorText>}
+                                <RuntimeField>
+                                    <DropdownShell>
+                                        <Dropdown
+                                            id="selected-runtime"
+                                            items={PROFILE_OPTIONS}
+                                            value={selectedProfile}
+                                            disabled={savingRuntime !== null}
+                                            onValueChange={(value: string) => {
+                                                void applyRuntimeSelection(value as SelectedProfileValue);
+                                            }}
+                                            sx={profileDropdownSx}
+                                            containerSx={profileDropdownContainerSx}
+                                        />
+                                    </DropdownShell>
+                                </RuntimeField>
+                            </>
+                        )}
                         {localBallerinaUnavailable && selectedProfile === DEFAULT_PROFILE && (
                             <SetupSeparator>
                                 <SetupContent />
