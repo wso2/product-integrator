@@ -50,12 +50,12 @@ The workflow takes a branch name as an input for each of the three plugin repos 
 
 ## Nightly Pipeline
 
-Runs automatically on a daily schedule from `main`.
+Runs automatically on a daily schedule. It triggers the plugin build workflow in each of the three plugin repos, then builds the IDE from the resulting VSIXs and runs smoke tests. The nightly IDE artifact is stored on the workflow run.
 
 ```mermaid
 %%{init: {"layout": "elk"}}%%
 graph LR
-    M["main branch"]:::trigger --> PL["Plugin builds (×3)"]:::stage
+    M["main/staging branch"]:::trigger --> PL["Plugin builds (×3)"]:::stage
     PL -->|nightly tags| AS["IDE build + smoke tests"]:::stage
     AS --> IA[("Workflow artifact")]:::artifact
     classDef trigger stroke:#818cf8,fill:#eef2ff
@@ -76,7 +76,7 @@ The Stable / GA pipeline runs all three stages for both pre-releases (alpha, bet
 ```mermaid
 %%{init: {"layout": "elk"}}%%
 graph LR
-    M["patch / hotfix branch"]:::trigger --> PB["Plugin build (×4)"]:::stage
+    M["staging / patch / hotfix branch"]:::trigger --> PB["Plugin build (×4)"]:::stage
     PB -->|review gate| PP["Plugin publish (×4, isPreRelease=true)"]:::stage
     PP --> MKP[("VS Code Marketplace<br>(pre-release channel)")]:::artifact
     PP --> AS["IDE release + smoke tests"]:::stage
@@ -91,7 +91,7 @@ graph LR
 ```mermaid
 %%{init: {"layout": "elk"}}%%
 graph LR
-    M["patch / hotfix branch"]:::trigger --> PB["Plugin build (×4)"]:::stage
+    M["staging / patch / hotfix branch"]:::trigger --> PB["Plugin build (×4)"]:::stage
     PB -->|review gate| PP["Plugin publish (×4, isPreRelease=false)"]:::stage
     PP --> MK[("VS Code Marketplace<br>OpenVSX Registry")]:::artifact
     PP --> BA["IDE release + smoke tests"]:::stage --> GR[("GitHub Releases<br>(stable tag)")]:::artifact
@@ -100,7 +100,7 @@ graph LR
     classDef artifact stroke:#fb923c,fill:#fff7ed
 ```
 
-**Stage 1 — Plugin build:** The release manager triggers the plugin build workflow in each of the four plugin repos (`ballerina-vscode`, `mi-vscode`, `si-vscode`, and the WSO2 Integrator extension in `product-integrator`), specifying the source branch as an input — the `<major>.<minor>.x` patch branch for feature and patch releases, or the hotfix branch for hotfixes. The workflow builds the VSIX and creates a draft GitHub Release. The draft artifact can be downloaded for internal verification (e.g. the fix author testing a hotfix locally) before Stage 2 publishes it.
+**Stage 1 — Plugin build:** The release manager triggers the plugin build workflow in each of the four plugin repos (`ballerina-vscode`, `mi-vscode`, `si-vscode`, and the WSO2 Integrator extension in `product-integrator`), specifying the source branch as an input — the `staging/<release-version>` branch for feature releases, the `<major>.<minor>.x` patch branch for patch releases, or the hotfix branch for hotfixes. The workflow builds the VSIX and creates a draft GitHub Release. The draft artifact can be downloaded for internal verification (e.g. the fix author testing a hotfix locally) before Stage 2 publishes it.
 
 **Stage 2 — Plugin publish:** After reviewing the draft release, the release manager triggers the plugin publish workflow, referencing the run ID from Stage 1. The `isPreRelease` flag controls where the VSIX is published:
 

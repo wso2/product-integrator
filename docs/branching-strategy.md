@@ -62,3 +62,11 @@ A hotfix branch collects one or more critical fixes that require an immediate pa
 - Hotfix branches must be created from the latest stable release tag and follow the `hotfix/<description>` naming convention (e.g. `hotfix/critical-auth-bypass`).
 - Once the fix is released, hotfix branches must be merged back into the active patch branch.
 - Repo maintainers should ensure hotfixes are also merged into `main` if they apply to the current development version.
+
+### Release Staging Branch (`staging/<release-version>`)
+
+A release staging branch controls change intake while a feature release stabilizes. The release manager creates it from `main` on the code freeze date and names it after the release version (e.g. `staging/5.1.0` for the `5.1.0` release), then produces all pre-release and GA builds for that release from it.
+
+- Only blocker-level issues and security fixes may be merged to a staging branch. Contributors must target the staging branch rather than `main` for such fixes.
+- Feature development continues on `main` while the release stabilizes.
+- Nightly builds switch to the staging branch for as long as it exists. See [CI/CD Pipelines](cicd-pipelines.md#nightly-pipeline).

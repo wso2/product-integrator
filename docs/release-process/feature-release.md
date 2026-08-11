@@ -32,17 +32,19 @@ Before triggering the release workflow, the release manager should verify:
 - [ ] All active patch branches are merged to the main branch (All bug fixes and security patches are merged to the active patch branch. See the [Branching-strategy](../branching-strategy.md#patch-branch-majorminorx) documentation for more details)
 - [ ] No critical issues or regressions are found in the latest nightly build and the build is stable enough for release
 
-Once the checklist is satisfied, the release manager must announce a code freeze on `main` and create the `<major>.<minor>.x` patch branch from the current `main` HEAD (e.g., for a `5.1.0` release, create `5.1.x`). From this point, only blocker-level issues and security fixes are permitted. Contributors must target `5.1.x`, not `main`, for any such fixes.
+Once the checklist is satisfied, the release manager must announce a code freeze on `main` and create the release staging branch from the current `main`, named `staging/<release-version>` (e.g., for a `5.1.0` release, create `staging/5.1.0`). From this point, only bug fixes and security fixes are permitted. Contributors must target the staging branch, not `main`, for any such fixes.
+
+Only the release manager and the product leads should have merge access to the staging branch. Feature development continues on `main` for the next release. See the [Branching Strategy](../branching-strategy.md#release-staging-branch-stagingrelease-version) documentation for more details.
 
 ### Step 5: Pre-Release Builds
 
 Feature releases progress through the below pre-release stages before the GA build.
 
-**Alpha:** Alpha builds are the first feature-complete builds from the patch branch, triggered once code freeze is in effect. They are intended for internal testing and early feedback from a broader audience. Alpha builds are named `<major>.<minor>.<patch>-alpha` (e.g., `5.1.0-alpha`) and are published to GitHub Releases as pre-release artifacts and to the VS Code Marketplace pre-release channel. They may contain known issues but should be stable enough for testing.
+**Alpha:** Alpha builds are the first feature-complete builds from the staging branch, triggered once code freeze is in effect. They are intended for internal testing and early feedback from a broader audience. Alpha builds are named `<major>.<minor>.<patch>-alpha` (e.g., `5.1.0-alpha`) and are published to GitHub Releases as pre-release artifacts and to the VS Code Marketplace pre-release channel. They may contain known issues but should be stable enough for testing.
 
 **Beta:** Beta builds are the broader pre-release testing builds, triggered once alpha blockers are resolved. They are named `<major>.<minor>.<patch>-beta` (e.g., `5.1.0-beta`) and are published to GitHub Releases as pre-release artifacts and to the VS Code Marketplace pre-release channel. Beta builds should be stable with no known critical issues.
 
-**RC:** RC builds are the final release candidates before GA, triggered once beta blockers are resolved. They are named `<major>.<minor>.<patch>-rc<n>` (e.g., `5.1.0-rc1`) and are published to GitHub Releases as pre-release artifacts and to the VS Code Marketplace pre-release channel. No known critical issues are permitted in an RC build; any blocker found during RC verification must be resolved on the patch branch before the release proceeds to GA.
+**RC:** RC builds are the final release candidates before GA, triggered once beta blockers are resolved. They are named `<major>.<minor>.<patch>-rc<n>` (e.g., `5.1.0-rc1`) and are published to GitHub Releases as pre-release artifacts and to the VS Code Marketplace pre-release channel. No known critical issues are permitted in an RC build; any blocker found during RC verification must be resolved on the staging branch before the release proceeds to GA.
 
 > See the [CI/CD Pipelines](../cicd-pipelines.md#release-pipelines) guide for the detailed steps of the pre-release pipeline.
 
@@ -66,8 +68,8 @@ Each product team member should install the pre-release build, verify their chan
 
 If a blocker-level issue is found during verification:
 
-1. The fix author merges the fix to `<major>.<minor>.x`.
-2. The release manager triggers a new RC build from the patch branch (RC2, RC3, …).
+1. The fix author merges the fix to `staging/<release-version>`.
+2. The release manager triggers a new RC build from the staging branch (RC2, RC3, …).
 3. The release manager adds a new RC section to the existing checklist issue (e.g. **RC2**) listing the additional PRs, and re-shares the link.
 4. The team should verify the new build and check off the new items.
 
@@ -84,9 +86,11 @@ The release manager triggers the plugin build workflow for each of the four plug
 After the GA artifacts are published:
 
 1. **Verify the tag:** confirm `v<major>.<minor>.<patch>` was created on the release commit.
-2. **Confirm the maintenance branch:** `<major>.<minor>.x` was created at Step 4; verify it points to the GA release commit and retire the previous maintenance branch (no further releases are created from it; the branch is kept for history).
-3. **Bump `main`:** open a PR on `main` incrementing to the next minor dev version (e.g. `1.3.0-dev`).
-4. **Confirm the GitHub Release:** verify the `product-integrator` bundle is published to [GitHub Releases](https://github.com/wso2/product-integrator/releases) with release notes.
-5. **Confirm documentation is live:** verify all documentation update PRs and the release notes PR are merged to [wso2/docs-integrator](https://github.com/wso2/docs-integrator) and published on the website.
-6. **Update the milestones:** close the release milestone and create the milestone for the next immediate patch release (e.g. `5.1.1`).
-7. **Communicate:** notify the team and any affected stakeholders.
+2. **Create the maintenance branch:** create `<major>.<minor>.x` from the GA release commit (e.g. `5.1.x`), and retire the previous maintenance branch (no further releases are created from it; the branch is kept for history).
+3. **Delete the staging branch:** delete `staging/<release-version>` once the maintenance branch is in place. Nightly builds return to `main`.
+4. **Merge the release changes back to `main`:** open a PR merging the GA release commit into `main`, so the fixes made during code freeze are not lost.
+5. **Bump `main`:** open a PR on `main` incrementing to the next minor dev version (e.g. `1.3.0-dev`).
+6. **Confirm the GitHub Release:** verify the `product-integrator` bundle is published to [GitHub Releases](https://github.com/wso2/product-integrator/releases) with release notes.
+7. **Confirm documentation is live:** verify all documentation update PRs and the release notes PR are merged to [wso2/docs-integrator](https://github.com/wso2/docs-integrator) and published on the website.
+8. **Update the milestones:** close the release milestone and create the milestone for the next immediate patch release (e.g. `5.1.1`).
+9. **Communicate:** notify the team and any affected stakeholders.
