@@ -7,65 +7,120 @@ _Updated_: 2026/08/10
 
 This document describes the four GitHub Actions pipeline types used across all WSO2 Integrator repos:
 
-- **PR pipelines:** run on every pull request to active branches; all gates must pass before merge.
-- **Custom IDE Build pipeline:** builds a complete IDE pack on demand from a specific set of plugin branches.
-- **Nightly pipeline:** runs daily from `main` and produces a tested IDE build.
+- **PR pipelines:** run on pull requests to active branches; the configured gates must pass before merge. The stages differ per repo.
+- **Custom build pipeline:** builds an IDE pack (or, in a plugin repo, a VSIX) on demand from any given branch.
+- **Nightly pipeline:** runs daily. Each repo builds its own nightly from `main` and publishes it for downstream repos to consume.
 - **Stable / GA pipeline:** a single three-stage pipeline (plugin build → plugin publish → IDE release) for both pre-release and GA releases; the `isPreRelease` flag controls the Marketplace channel and IDE artifact destination.
 
 ## Pull Request Pipelines
 
-PR pipelines run on every non-draft pull request targeting active branches (main + patch branches) and must pass before any merge is permitted.
+PR pipelines run on pull requests targeting active branches and must pass before a merge is permitted. The stages are not uniform across the two repo types.
+
+**Product tooling repos** build the full chain and scan dependencies. Change detection runs first, so a pull request touching nothing build-relevant skips the build entirely.
 
 ```mermaid
 %%{init: {"layout": "elk"}}%%
 graph LR
-    T(["pull_request → main / patch branch"]):::trigger --> S1["Compile"]:::stage
-    S1 --> S2["Unit tests"]:::stage
-    S2 --> S3["Integration tests"]:::stage
-    S3 --> S4["Quality gate"]:::stage
-    S4 --> S5["Dependency scan<br>(Trivy)"]:::stage
+    T(["pull_request → main / patch branch"]):::trigger --> CD{"Build-relevant<br>changes?"}:::gate
+    CD -->|no| SK(["Skipped"]):::skip
+    CD -->|yes| B["Language server<br>+ extension build"]:::stage
+    B --> FT["Unit, component<br>& contract tests"]:::stage
+    B -.->|on language server changes<br>or LS test label| LT["Language server tests"]:::stage
+    B -.->|on UI test label or<br>patch branch target| ET["UI end-to-end tests"]:::stage
+    FT --> SC["Dependency scan"]:::stage
+    LT --> SC
+    ET --> SC
     classDef trigger stroke:#818cf8,fill:#eef2ff
     classDef stage stroke:#38bdf8,fill:#f0f9ff
-    classDef artifact stroke:#fb923c,fill:#fff7ed
+    classDef gate stroke:#facc15,fill:#fefce8
+    classDef skip stroke:#94a3b8,fill:#f8fafc
 ```
 
-The quality gate and dependency scan steps are described in [Quality & Security Gates](quality-and-security-gates.md).
+The heavier suites are selective rather than unconditional, and each has its own trigger:
+
+- **Unit, component, and contract tests** run with every build.
+- **Language server tests** run when language server paths changed, or when the pull request carries the `Checks/Run LS Tests` label.
+- **UI end-to-end tests** run when the pull request carries the `Checks/Run Ballerina UI Tests` label, or when it targets a patch branch.
+
+**Product distribution repo** compiles the WSO2 Integrator extension, without building installers.
+
+```mermaid
+%%{init: {"layout": "elk"}}%%
+graph LR
+    T(["pull_request → main / patch branch"]):::trigger --> S1["Compile<br>(no installers)"]:::stage
+    classDef trigger stroke:#818cf8,fill:#eef2ff
+    classDef stage stroke:#38bdf8,fill:#f0f9ff
+```
 
 ## Custom IDE Build Pipeline
 
-Triggered manually to build a complete IDE pack from a specific set of plugin branches. This can be used for testing a custom set of plugin changes together before they are merged, or for producing an IDE build when testing a feature that spans multiple repos. 
+Triggered manually to build from the branch it is dispatched on, for testing unmerged changes or a feature that spans multiple repos. In both repo types, versions are timestamped for that run only, nothing is committed to any branch, and nothing is published to GitHub Releases or the Marketplace — the result is a workflow artifact.
+
+**Product tooling repos** build the dispatched branch into a timestamped pre-release VSIX.
 
 ```mermaid
 %%{init: {"layout": "elk"}}%%
 graph LR
-    B["any branch (per plugin)"]:::trigger --> PL["Plugin builds (×3)"]:::stage
-    PL --> AS["IDE build + smoke tests"]:::stage
-    AS --> IA[("Workflow artifact")]:::artifact
+    B["input branch"]:::trigger --> PB["Language server<br>+ extension build"]:::stage
+    PB --> VA[("Workflow artifact<br>(VSIX)")]:::artifact
     classDef trigger stroke:#818cf8,fill:#eef2ff
     classDef stage stroke:#38bdf8,fill:#f0f9ff
     classDef artifact stroke:#fb923c,fill:#fff7ed
 ```
 
-The workflow takes a branch name as an input for each of the three plugin repos and for `product-integrator` (defaulting to `main`). It triggers a build in each plugin repo from the specified branches, compiles the WSO2 Integrator extension from the specified `product-integrator` branch, builds the IDE for Linux, macOS, and Windows, and stores the result as a workflow artifact.
+**Product distribution repo** builds a complete IDE pack from the dispatched branch.
+
+```mermaid
+%%{init: {"layout": "elk"}}%%
+graph LR
+    B["input branch"]:::trigger --> AS["IDE build + smoke tests"]:::stage
+    AS --> IA[("Workflow artifact<br>(installers)")]:::artifact
+    classDef trigger stroke:#818cf8,fill:#eef2ff
+    classDef stage stroke:#38bdf8,fill:#f0f9ff
+    classDef artifact stroke:#fb923c,fill:#fff7ed
+```
+
+This build does not trigger builds in the plugin repos. Inputs select whether the Ballerina and MI extensions are taken from their pinned builds or from the Marketplace, and every other component comes from the pinned component versions. To include unmerged plugin changes, first run the plugin repo's custom build to produce a VSIX, then supply it to this build.
 
 ## Nightly Pipeline
 
-Runs automatically on a daily schedule. It triggers the plugin build workflow in each of the three plugin repos, then builds the IDE from the resulting VSIXs and runs smoke tests. The nightly IDE artifact is stored on the workflow run.
+Runs automatically on a daily schedule (06:30 UTC). Each repo runs its own nightly independently. The product distribution repo does not trigger plugin builds — it pins whatever nightly artifacts the plugin repos have already published.
+
+Both repo types follow the same shape: reset a dedicated `builds/nightly` branch from `main`, commit the versions for that night onto it, and build that commit. The diff between `main` and the build branch is therefore exactly the version commit, so every nightly is reproducible from a single commit.
+
+**Product tooling repos** stamp a timestamped pre-release version, then build and test from that commit.
 
 ```mermaid
 %%{init: {"layout": "elk"}}%%
 graph LR
-    M["main/staging branch"]:::trigger --> PL["Plugin builds (×3)"]:::stage
-    PL -->|nightly tags| AS["IDE build + smoke tests"]:::stage
-    AS --> IA[("Workflow artifact")]:::artifact
+    M["main"]:::trigger --> NB["builds/nightly<br>(reset + version stamp commit)"]:::stage
+    NB --> LS["Language server<br>pack/test matrix"]:::stage
+    NB --> EX["Extension build"]:::stage
+    LS --> PUB[("GitHub Releases<br>(rolling nightly)")]:::artifact
+    EX --> PUB
     classDef trigger stroke:#818cf8,fill:#eef2ff
     classDef stage stroke:#38bdf8,fill:#f0f9ff
     classDef artifact stroke:#fb923c,fill:#fff7ed
 ```
 
-**Stage 1 — Plugin builds (parallel):** The nightly build workflow triggers the build workflow in each of the three plugin repos (`ballerina-vscode`, `mi-vscode`, `si-vscode`) via the GitHub API and waits for all three to complete. Each plugin runs its full build and test suite, and on success uploads its VSIX to a `nightly` pre-release tag on its own GitHub Releases. If any plugin build fails, Stage 2 does not run.
+The rolling `nightly` release is replaced only after every validation job passes. The language server matrix is where Windows coverage runs; the pull request build does not cover it.
 
-**Stage 2 — IDE build:** Once all three plugin builds succeed, the workflow downloads the VSIX from each plugin's `nightly` tag. The `product-integrator` build then compiles the WSO2 Integrator extension from source, assembles the IDE for Linux, macOS, and Windows, runs smoke tests, and stores the nightly IDE artifact on the workflow run.
+**Product distribution repo** pins each component to the newest nightly published upstream, then builds the IDE from that pinned commit.
+
+```mermaid
+%%{init: {"layout": "elk"}}%%
+graph LR
+    M["main"]:::trigger --> NB["builds/nightly<br>(reset + version pin commit)"]:::stage
+    NB --> AS["IDE build + smoke tests"]:::stage
+    AS --> IA[("GitHub Releases<br>(rolling nightly tag)")]:::artifact
+    classDef trigger stroke:#818cf8,fill:#eef2ff
+    classDef stage stroke:#38bdf8,fill:#f0f9ff
+    classDef artifact stroke:#fb923c,fill:#fff7ed
+```
+
+**Stage 1 — Pin the component versions:** Every dependent component is pinned to the newest nightly its upstream repo publishes, falling back to that repo's newest GA release when it publishes no nightly. The product and extension versions are stamped alongside those pins in the same commit.
+
+**Stage 2 — IDE build:** That commit is built for Linux, macOS, and Windows, smoke tests run, and on success the rolling `nightly` GitHub Release is replaced. The build branch (`builds/nightly`) and the published tag (`nightly`) are named differently on purpose: the tag is what external consumers pin their download URLs to, and using one name for both would leave the ref ambiguous.
 
 ## Release Pipelines
 
@@ -115,6 +170,6 @@ graph LR
 |---|---|---|---|---|
 | Shared UI library | N/A (built from source via git submodules) | N/A (built from source via git submodules) | N/A (built from source via git submodules) | N/A (built from source via git submodules) |
 | Language server | N/A (bundled in parent extension) | N/A (bundled in parent extension) | N/A (bundled in parent extension) | N/A (bundled in parent extension) |
-| VS Code extension plugins (×3) | GitHub Releases (`nightly` tag per plugin) | N/A (built per run, not published) | VS Code Marketplace (pre-release channel) | VS Code Marketplace (stable) + OpenVSX Registry |
+| VS Code extension plugins (×3) | GitHub Releases (rolling `nightly` release per plugin) | N/A (built per run, not published) | VS Code Marketplace (pre-release channel) | VS Code Marketplace (stable) + OpenVSX Registry |
 | WSO2 Integrator extension | Compiled during IDE build (no separate nightly tag) | N/A (built per run, not published) | VS Code Marketplace (pre-release channel) | VS Code Marketplace (stable) + OpenVSX Registry |
-| WSO2 Integrator IDE | Workflow artifact (nightly build run) | Workflow artifact (custom build run) | Workflow artifact (IDE release) | GitHub Releases (stable tag) |
+| WSO2 Integrator IDE | GitHub Releases (rolling `nightly` tag) | Workflow artifact (custom build run) | Workflow artifact (IDE release) | GitHub Releases (stable tag) |
