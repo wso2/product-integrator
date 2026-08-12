@@ -21,6 +21,7 @@ import { VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react";
 import { Button, Codicon, Dropdown, SearchBox, Tooltip } from "@wso2/ui-toolkit";
 import {
 	GettingStartedCategory,
+	ProductMode,
 	SampleItem,
 	SampleDownloadRequest,
 } from "@wso2/wi-core";
@@ -29,6 +30,7 @@ import { useVisualizerContext } from "../../contexts/WsContext";
 import type { SampleSupportedRuntime } from "../shared/runtime";
 
 const ALL_CATEGORY_VALUE = "__all__";
+const AGENT_BUILDER_COMPONENT_TYPE = "ai-agent";
 
 type BrowseItemType = "sample" | "prebuilt";
 type CategoryOption = { key: string; content: string; value: string };
@@ -680,7 +682,11 @@ export function SamplesContainer(props: SamplesContainerProps) {
 		props.projectType === "WSO2: BI" ? "all" : "sample",
 	);
 	const [isLoading, setIsLoading] = useState<boolean>(true);
-	const showsTypeFilter = props.projectType === "WSO2: BI";
+	const isAgentBuilderMode = webviewContext?.productMode === ProductMode.AGENT_BUILDER;
+	const includesPrebuiltIntegrations = props.projectType === "WSO2: BI";
+	// Agent Builder only lists ai-agent samples, so the type/category will be hidden.
+	const showsTypeFilter = includesPrebuiltIntegrations && !isAgentBuilderMode;
+	const showsCategoryFilter = !isAgentBuilderMode;
 
 	useEffect(() => {
 		let cancelled = false;
@@ -732,7 +738,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
 	const allItems = useMemo(() => {
 		const items = samples.map((sample) => createSampleItem(sample));
 
-		if (showsTypeFilter) {
+		if (includesPrebuiltIntegrations) {
 			items.push(
 				...prebuiltIntegrations.map((prebuiltIntegration) =>
 					createPrebuiltItem(prebuiltIntegration),
@@ -740,17 +746,25 @@ export function SamplesContainer(props: SamplesContainerProps) {
 			);
 		}
 
-		return items.sort(compareBrowseItems);
-	}, [prebuiltIntegrations, samples, showsTypeFilter]);
+		const scopedItems = isAgentBuilderMode
+			? items.filter(
+					(item) =>
+						item.componentType.trim().toLowerCase() ===
+						AGENT_BUILDER_COMPONENT_TYPE,
+				)
+			: items;
+
+		return scopedItems.sort(compareBrowseItems);
+	}, [prebuiltIntegrations, samples, includesPrebuiltIntegrations, isAgentBuilderMode]);
 
 	const categoryItems = useMemo(() => {
 		return createCategoryOptions(
 			categories,
 			samples,
 			prebuiltIntegrations,
-			showsTypeFilter,
+			includesPrebuiltIntegrations,
 		);
-	}, [categories, samples, prebuiltIntegrations, showsTypeFilter]);
+	}, [categories, samples, prebuiltIntegrations, includesPrebuiltIntegrations]);
 
 	const filteredItems = useMemo(() => {
 		return allItems.filter((item) =>
@@ -760,13 +774,13 @@ export function SamplesContainer(props: SamplesContainerProps) {
 
 	const hasActiveFilters =
 		searchText.trim().length > 0 ||
-		selectedCategory !== ALL_CATEGORY_VALUE ||
+		(showsCategoryFilter && selectedCategory !== ALL_CATEGORY_VALUE) ||
 		(showsTypeFilter && selectedType !== "all");
 
 	function resetFilters() {
 		setSearchText("");
 		setSelectedCategory(ALL_CATEGORY_VALUE);
-		setSelectedType(showsTypeFilter ? "all" : "sample");
+		setSelectedType(includesPrebuiltIntegrations ? "all" : "sample");
 	}
 
 	function downloadItem(item: BrowseItem) {
@@ -786,6 +800,10 @@ export function SamplesContainer(props: SamplesContainerProps) {
 	function getEmptyMessage() {
 		if (hasActiveFilters) {
 			return "Try a different keyword or clear the active filters.";
+		}
+
+		if (isAgentBuilderMode) {
+			return "No AI agent samples are available at the moment.";
 		}
 
 		return showsTypeFilter
@@ -834,21 +852,23 @@ export function SamplesContainer(props: SamplesContainerProps) {
 							</TypeFilters>
 						</FilterGroup>
 					)}
-					<FilterGroup>
-						<FilterTitle>Category</FilterTitle>
-						<CategoryFilterWrap>
-							<Dropdown
-								id="sample-category-filter"
-								items={categoryItems}
-								onValueChange={(value: string) =>
-									setSelectedCategory(value || ALL_CATEGORY_VALUE)
-								}
-								value={selectedCategory}
-								sx={{ width: "100%" }}
-								dropdownContainerSx={categoryDropdownContainerSx}
-							/>
-						</CategoryFilterWrap>
-					</FilterGroup>
+					{showsCategoryFilter && (
+						<FilterGroup>
+							<FilterTitle>Category</FilterTitle>
+							<CategoryFilterWrap>
+								<Dropdown
+									id="sample-category-filter"
+									items={categoryItems}
+									onValueChange={(value: string) =>
+										setSelectedCategory(value || ALL_CATEGORY_VALUE)
+									}
+									value={selectedCategory}
+									sx={{ width: "100%" }}
+									dropdownContainerSx={categoryDropdownContainerSx}
+								/>
+							</CategoryFilterWrap>
+						</FilterGroup>
+					)}
 					<ClearFiltersButton
 						type="button"
 						onClick={resetFilters}
