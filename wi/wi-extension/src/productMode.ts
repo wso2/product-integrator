@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { ProductMode, PRODUCT_NAMES } from "@wso2/wi-core";
+import { ProductMode, PRODUCT_NAMES, VIEWS } from "@wso2/wi-core";
 
 /**
  * Resolves the product flavor this extension is running inside.
@@ -43,4 +43,13 @@ export function isAgentBuilderMode(): boolean {
  */
 export function getProductName(): string {
 	return process.env.WSO2_PRODUCT_NAME || PRODUCT_NAMES[getProductMode()];
+}
+
+/**
+ * The project explorer tree is contributed twice — once per activity-bar
+ * container — so each flavor's icon carries its own title. Only the active
+ * flavor's view is visible (`when` clauses on WI.productMode).
+ */
+export function getExplorerViewId(): string {
+	return isAgentBuilderMode() ? VIEWS.AGENT_BUILDER_EXPLORER : VIEWS.INTEGRATOR_EXPLORER;
 }

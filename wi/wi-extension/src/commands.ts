@@ -23,6 +23,7 @@ import { ext } from "./extensionVariables";
 import { WebviewManager } from "./webviewManager";
 import { ExtensionAPIs } from "./extensionAPIs";
 import { StateMachine, getBIProjectExplorerProvider } from "./stateMachine";
+import { isAgentBuilderMode } from "./productMode";
 import { BridgeLayer } from "./BridgeLayer";
 import type { DownloadProgress } from "@wso2/wi-core";
 
@@ -38,7 +39,7 @@ export function registerCommands(
 	context.subscriptions.push(
 		vscode.commands.registerCommand(COMMANDS.OPEN_WELCOME, () => {
 			try {
-				StateMachine.openWebview(ViewType.WELCOME);
+				StateMachine.openWebview(isAgentBuilderMode() ? ViewType.AGENT_BUILDER_WELCOME : ViewType.WELCOME);
 			} catch (error) {
 				ext.logError("Failed to open welcome page", error as Error);
 				vscode.window.showErrorMessage("Failed to open welcome page");

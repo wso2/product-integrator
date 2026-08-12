@@ -23,7 +23,9 @@ import { ballerinaContext } from '../ballerinaContext';
 import { COMMANDS, ViewType } from '@wso2/wi-core';
 import { StateMachine } from '../../stateMachine';
 
-const WI_PROJECT_EXPLORER_VIEW_ID = 'wso2-integrator.explorer';
+import { getExplorerViewId } from '../../productMode';
+
+const WI_PROJECT_EXPLORER_VIEW_ID = getExplorerViewId();
 
 export interface ExplorerActivationConfig {
     context: ExtensionContext;

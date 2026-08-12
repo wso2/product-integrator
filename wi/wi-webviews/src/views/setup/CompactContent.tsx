@@ -17,6 +17,7 @@
  */
 
 import styled from "@emotion/styled";
+import { ProductMode } from "@wso2/wi-core";
 import { Button, Codicon } from "@wso2/ui-toolkit";
 import { useVisualizerContext } from "../../contexts";
 import {
@@ -111,8 +112,13 @@ const CompactErrorSection = styled.div`
 `;
 
 export function SetupContent() {
-    const { wsClient } = useVisualizerContext();
+    const { wsClient, webviewContext } = useVisualizerContext();
     const { progress, setProgress, isStarting, setIsStarting, isSetupRunning, handleRestart } = useSetupProgress();
+    // Agent Builder is BI-only, so there is no profile to switch to.
+    const isAgentBuilderMode = webviewContext?.productMode === ProductMode.AGENT_BUILDER;
+    const requiresBallerinaCaption = isAgentBuilderMode
+        ? `${webviewContext?.productName ?? "WSO2 Agent Builder"} requires the Ballerina distribution. You can set it up now.`
+        : "The WSO2 Integrator: Default Profile requires the Ballerina distribution. You can switch to a different profile above, or set it up now.";
 
     const handleSetup = async () => {
         setIsStarting(true);
@@ -136,8 +142,7 @@ export function SetupContent() {
                 <CompactHeaderText>
                     <CompactTitle>Ballerina Distribution Not Found</CompactTitle>
                     <CompactCaption>
-                        The WSO2 Integrator: Default Profile requires the Ballerina distribution.
-                        You can switch to a different profile above, or set it up now.
+                        {requiresBallerinaCaption}
                     </CompactCaption>
                 </CompactHeaderText>
             </CompactHeader>

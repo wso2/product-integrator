@@ -123,6 +123,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 		// set runtime to context
 		await vscode.commands.executeCommand('setContext', 'WI.isWiRuntime', process.env.WSO2_INTEGRATOR_RUNTIME === 'true');
 		await vscode.commands.executeCommand('setContext', 'WI.productMode', getProductMode());
+		ext.log(`Product mode: ${getProductMode()} (display name: ${getProductName()})`);
 		const productUpdateService = new ProductUpdateServiceClient(context);
 
 		registerEmbeddedWelcomeBootstrapCommand(context);
