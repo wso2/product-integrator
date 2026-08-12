@@ -3,7 +3,7 @@
 _Authors_: @NipunaRanasinghe \
 _Reviewers_: @keizer619, @anupama-pathirage, @nipunayf, @samithkavishke \
 _Created_: 2026/08/10 \
-_Updated_: 2026/08/10
+_Updated_: 2026/08/12
 
 This document defines the versioning scheme applied across all WSO2 Integrator repos. The common rule (SemVer) is stated first, followed by how each versioned unit applies it: shared UI library, language server, VS Code extension, and product distribution.
 
@@ -28,7 +28,7 @@ The shared UI libraries have no independent version line and are never released 
 
 Language servers are versioned and released together with their parent extension. Each product version includes a specific language server build, so the extension and its language server are tested together and ship as one unit. 
 
-In addition to being bundled into the extension, each language server is published as a standalone artifact to an artifact repository on every release. This allows other external consumers to download and run the language server directly, without installing the VS Code extension.
+In addition to being bundled into the extension, each language server is published as a standalone artifact on every release: the JAR is attached to the extension's GitHub Release, and the same build is published as a Maven package. This allows external consumers to download and run the language server directly, without installing the VS Code extension.
 
 ## VS Code Extension Versioning
 

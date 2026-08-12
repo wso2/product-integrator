@@ -3,7 +3,7 @@
 _Authors_: @NipunaRanasinghe \
 _Reviewers_: @isudana, @keizer619, @anupama-pathirage, @dulajdilshan \
 _Created_: 2026/08/10 \
-_Updated_: 2026/08/10
+_Updated_: 2026/08/12
 
 This document defines the branching model for all WSO2 Integrator repos: the shared UI libraries, product tooling, and product distribution layers.
 
@@ -15,7 +15,7 @@ The WSO2 Integrator tooling spans multiple repos with contributors of varying ex
 
 - **Trunk-Based Development** — All commits go directly (or via very short branches) to `main`.
 - **GitFlow** — Parallel `main`/`develop` branches with dedicated release branches.
-- **GitHub Flow with Maintenance Branches** — A single `main` branch for features and a dedicated `<major>.<minor>.x` branches for patches.
+- **GitHub Flow with Maintenance Branches** — A single `main` branch for features and dedicated `<major>.<minor>.x` branches for patches.
 
 ### Selected Option: GitHub Flow with Maintenance Branches
 

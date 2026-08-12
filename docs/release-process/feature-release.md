@@ -3,7 +3,7 @@
 _Authors_: @NipunaRanasinghe \
 _Reviewers_: @keizer619, @anupama-pathirage, @samithkavishke \
 _Created_: 2026/08/10 \
-_Updated_: 2026/08/10
+_Updated_: 2026/08/12
 
 A feature release delivers a new minor version of the WSO2 Integrator product, including new features, improvements, and bug fixes. Breaking changes are not permitted.
 
@@ -17,7 +17,7 @@ The release cycle starts when the release manager creates a public release miles
 
 Milestone releases are pre-release builds published during active feature development to provide early access when a significant development phase is complete or major features are ready for testing. Milestone builds are named `<major>.<minor>.0-m<n>` and are published to GitHub Releases as pre-release artifacts only, not to the VS Code Marketplace. Milestone releases are intended for early feedback and testing, but are not stable enough for production use. There may be multiple milestone releases for a given feature release (e.g., `5.1.0-m1`, `5.1.0-m2`), with each subsequent build addressing issues found in the previous one and incorporating remaining planned features, before code freeze.
 
-To trigger a milestone release, the release manager runs the milestone release pipeline from `main`. Once the build is published to GitHub Releases, the release manager shares the link with the team and stakeholders for early feedback.
+Milestone builds go through the same release pipeline as any other release. To trigger one, the release manager runs the release pipeline from `main` with a milestone version (e.g. `5.1.0-m2`). Once the build is published to GitHub Releases, the release manager shares the link with the team and stakeholders for early feedback.
 
 ### Step 3: Initiate the Release Thread
 

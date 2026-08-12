@@ -3,7 +3,7 @@
 _Authors_: @NipunaRanasinghe \
 _Reviewers_: @keizer619, @anupama-pathirage, @samithkavishke \
 _Created_: 2026/08/10 \
-_Updated_: 2026/08/10
+_Updated_: 2026/08/12
 
 This document describes the four GitHub Actions pipeline types used across all WSO2 Integrator repos:
 
@@ -86,14 +86,16 @@ This build does not trigger builds in the plugin repos. Inputs select whether th
 
 Runs automatically on a daily schedule (06:30 UTC). Each repo runs its own nightly independently. The product distribution repo does not trigger plugin builds — it pins whatever nightly artifacts the plugin repos have already published.
 
-Both repo types follow the same shape: reset a dedicated `builds/nightly` branch from `main`, commit the versions for that night onto it, and build that commit. The diff between `main` and the build branch is therefore exactly the version commit, so every nightly is reproducible from a single commit.
+Nightlies build from `main`, and switch to the release staging branch for as long as one exists, so that during a release window the nightly exercises the branch the release will be cut from. See [Branching Strategy](branching-strategy.md#release-staging-branch-stagingrelease-version).
+
+Both repo types follow the same shape: reset a dedicated `builds/nightly` branch from the source branch, commit the versions for that night onto it, and build that commit. The diff between the source branch and the build branch is therefore exactly the version commit, so every nightly is reproducible from a single commit.
 
 **Product tooling repos** stamp a timestamped pre-release version, then build and test from that commit.
 
 ```mermaid
 %%{init: {"layout": "elk"}}%%
 graph LR
-    M["main"]:::trigger --> NB["builds/nightly<br>(reset + version stamp commit)"]:::stage
+    M["main branch"]:::trigger --> NB["builds/nightly<br>(reset + version stamp commit)"]:::stage
     NB --> LS["Language server<br>pack/test matrix"]:::stage
     NB --> EX["Extension build"]:::stage
     LS --> PUB[("GitHub Releases<br>(rolling nightly)")]:::artifact
@@ -110,7 +112,7 @@ The rolling `nightly` release is replaced only after every validation job passes
 ```mermaid
 %%{init: {"layout": "elk"}}%%
 graph LR
-    M["main"]:::trigger --> NB["builds/nightly<br>(reset + version pin commit)"]:::stage
+    M["main branch"]:::trigger --> NB["builds/nightly<br>(reset + version pin commit)"]:::stage
     NB --> AS["IDE build + smoke tests"]:::stage
     AS --> IA[("GitHub Releases<br>(rolling nightly tag)")]:::artifact
     classDef trigger stroke:#818cf8,fill:#eef2ff
@@ -169,7 +171,7 @@ graph LR
 | Component | Nightly | Custom Build | Pre-release | Stable/GA |
 |---|---|---|---|---|
 | Shared UI library | N/A (built from source via git submodules) | N/A (built from source via git submodules) | N/A (built from source via git submodules) | N/A (built from source via git submodules) |
-| Language server | N/A (bundled in parent extension) | N/A (bundled in parent extension) | N/A (bundled in parent extension) | N/A (bundled in parent extension) |
+| Language server | N/A (bundled in parent extension) | N/A (bundled in parent extension) | GitHub Releases (JAR alongside the VSIX) + Maven package | GitHub Releases (JAR alongside the VSIX) + Maven package |
 | VS Code extension plugins (×3) | GitHub Releases (rolling `nightly` release per plugin) | N/A (built per run, not published) | VS Code Marketplace (pre-release channel) | VS Code Marketplace (stable) + OpenVSX Registry |
 | WSO2 Integrator extension | Compiled during IDE build (no separate nightly tag) | N/A (built per run, not published) | VS Code Marketplace (pre-release channel) | VS Code Marketplace (stable) + OpenVSX Registry |
 | WSO2 Integrator IDE | GitHub Releases (rolling `nightly` tag) | Workflow artifact (custom build run) | Workflow artifact (IDE release) | GitHub Releases (stable tag) |
