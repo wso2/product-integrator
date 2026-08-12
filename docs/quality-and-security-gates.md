@@ -30,9 +30,9 @@ Codecov collects coverage reports uploaded from the test run in each PR and post
 
 ## Trivy
 
-Trivy scans dependency manifests (`npm` and Maven) for known vulnerabilities on every PR.
+Trivy runs a filesystem scan of the repository on every PR, covering every dependency manifest it finds — npm, Maven, and Gradle.
 
-- **Rationale:** Already configured in all repos, covers both ecosystems in use, and runs as a single GitHub Actions step at no cost.
+- **Rationale:** Covers every dependency ecosystem in use across the repos, and runs as a single GitHub Actions step at no cost.
 - **Blocking:** A finding of severity `HIGH` or `CRITICAL` fails the PR pipeline. Lower severities are reported in the scan output but do not block; maintainers should review them during routine dependency bumps.
 - **Suppressions:** A `HIGH`/`CRITICAL` finding with no released fix may be suppressed (e.g. via a `.trivyignore` entry) only with explicit approval from the repo maintainers, case by case. Each suppression must reference a tracking issue, and the entry must be removed once a fixed version is available.
 
@@ -41,4 +41,5 @@ Trivy scans dependency manifests (`npm` and Maven) for known vulnerabilities on 
 GitHub Secret Scanning detects committed credentials (API tokens, keys) at the platform level. It is enabled per repo under **Settings → Security**, with **push protection** turned on, and requires no pipeline step.
 
 - **Rationale:** Native to GitHub, no maintenance overhead, and free for public repos. Push protection rejects the push before the secret reaches the repository history, rather than detecting it after the commit lands.
-- **Blocking:** Push protection blocks any push containing a detected secret. Alerts on already-committed secrets must be triaged by repo maintainers, and the affected credential must be rotated. Removing it from history alone is not sufficient.
+- **Limits:** Push protection only detects secrets matching a supported provider pattern. Credentials outside those patterns — internal tokens, passwords, private keys in unrecognised formats — are not caught, so this is a safety net rather than a guarantee.
+- **Blocking:** Push protection blocks any push containing a detected secret. Contributors with bypass access can push through a block by declaring a reason, unless delegated bypass is configured to require approval; every bypass raises an alert that repo maintainers must triage. Alerts on already-committed secrets must likewise be triaged, and the affected credential must be rotated. Removing it from history alone is not sufficient.

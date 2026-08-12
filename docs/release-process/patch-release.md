@@ -23,7 +23,7 @@ The release manager confirms every change qualifies. The release includes bug fi
 
 ### Step 4: Create the Pre-Release Build
 
-The release manager triggers a pre-release build from the target commit on `<major>.<minor>.x`. This publishes to the VS Code Marketplace pre-release channel and creates a pre-release tag on GitHub Releases. The team installs and verifies this build.
+The release manager triggers a pre-release build from the target commit on `<major>.<minor>.x`. This publishes to the VS Code Marketplace pre-release channel and creates a pre-release tag on GitHub Releases. As with feature releases, the tag carries the product release name while the extensions are published under their own numeric pre-release versions. The team installs and verifies this build.
 
 > See the [CI/CD Pipelines](../cicd-pipelines.md#release-pipelines) guide for the detailed steps of the pre-release pipeline.
 

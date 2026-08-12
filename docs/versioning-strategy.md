@@ -40,6 +40,10 @@ Each product tooling repo carries its own SemVer line, applied at the **extensio
 
 ## Product Distribution Versioning
 
-The `product-integrator` artifacts (the WSO2 Integrator VS Code Extension and the WSO2 Integrator IDE) are versioned with the **WSO2 Integrator product version** (`5.0.0` for the first consolidated release).
+The `product-integrator` repo carries two independent version lines:
 
-The product version is managed at the WSO2 Integrator product level. Component versions evolve independently, and users upgrade WSO2 Integrator as a single product. In the repo, the product version is pinned alongside the component versions in its [properties file](https://github.com/wso2/product-integrator/blob/main/ci/build/component-versions.properties).
+**Product version:** the version of the WSO2 Integrator IDE distribution (`5.0.0` for the first consolidated release). It is managed at the WSO2 Integrator product level — component versions evolve independently, and users upgrade WSO2 Integrator as a single product. Because the IDE is published to GitHub Releases rather than the Marketplace, this version may carry a SemVer pre-release suffix (e.g. `5.1.0-rc1`).
+
+**Integrator VS Code Extension version:** the WSO2 Integrator VS Code Extension carries its own SemVer line, unrelated to the product version, and follows the same channel rules as the [product tooling extensions](#vs-code-extension-versioning) — even minors for stable, the odd minor below for pre-release.
+
+Both are pinned alongside the component versions in the repo's [properties file](https://github.com/wso2/product-integrator/blob/main/ci/build/component-versions.properties), and the extension version is mirrored into the extension manifest at build time.

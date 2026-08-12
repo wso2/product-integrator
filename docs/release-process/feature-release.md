@@ -40,6 +40,8 @@ Only the release manager and the product leads should have merge access to the s
 
 Feature releases progress through the below pre-release stages before the GA build.
 
+Each stage produces one build that is published in two forms under two different version strings. The stage name below (`5.1.0-alpha`, `5.1.0-rc1`) is the **product release** name — the git tag and the GitHub Release, which accept a SemVer pre-release suffix. The VS Code extensions in that same build cannot carry a suffix on the Marketplace, so they go to the pre-release channel under their own numeric version. See [Versioning Strategy](../versioning-strategy.md#vs-code-extension-versioning).
+
 **Alpha:** Alpha builds are the first feature-complete builds from the staging branch, triggered once code freeze is in effect. They are intended for internal testing and early feedback from a broader audience. Alpha builds are named `<major>.<minor>.<patch>-alpha` (e.g., `5.1.0-alpha`) and are published to GitHub Releases as pre-release artifacts and to the VS Code Marketplace pre-release channel. They may contain known issues but should be stable enough for testing.
 
 **Beta:** Beta builds are the broader pre-release testing builds, triggered once alpha blockers are resolved. They are named `<major>.<minor>.<patch>-beta` (e.g., `5.1.0-beta`) and are published to GitHub Releases as pre-release artifacts and to the VS Code Marketplace pre-release channel. Beta builds should be stable with no known critical issues.
