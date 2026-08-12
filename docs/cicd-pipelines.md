@@ -9,7 +9,7 @@ This document describes the four GitHub Actions pipeline types used across all W
 
 - **PR pipelines:** run on pull requests to active branches; the configured gates must pass before merge. The stages differ per repo.
 - **Custom build pipeline:** builds an IDE pack (or, in a plugin repo, a VSIX) on demand from any given branch.
-- **Nightly pipeline:** runs daily. Each repo builds its own nightly from `main` and publishes it for downstream repos to continue.
+- **Nightly pipeline:** runs daily. Each repo builds its own nightly from `main`, or from the release staging branch for as long as one exists, and publishes it for downstream repos to continue.
 - **Stable / GA pipeline:** a single three-stage flow (plugin build → plugin publish → IDE release) for both pre-release and GA releases; a pre-release flag controls the Marketplace channel and the artifact destinations.
 
 ## Pull Request Pipelines
@@ -54,7 +54,7 @@ graph LR
 
 ## Custom IDE Build Pipeline
 
-Triggered manually to build from the branch it is dispatched on, for testing unmerged changes or a feature that spans multiple repos. In every repo, versions are timestamped for that run only, nothing is committed to any branch, and nothing is published to GitHub Releases or the Marketplace — the result is a workflow artifact.
+Triggered manually to build from any branch. Use this to test unmerged changes or features spanning multiple repos. The build produces workflow artifacts containing IDE installers for download and testing. Versions are timestamped per run only—nothing is committed to branches or published to GitHub Releases or the Marketplace.
 
 ```mermaid
 %%{init: {"layout": "elk"}}%%
@@ -75,7 +75,7 @@ graph LR
     classDef artifact stroke:#fb923c,fill:#fff7ed
 ```
 
-Each repo's custom build stands alone: a plugin repo produces a timestamped pre-release VSIX, and `product-integrator` produces a complete IDE pack. The IDE build does not trigger the plugin builds. Inputs select whether the Ballerina and MI extensions are taken from their pinned builds or from the Marketplace, and every other component comes from the pinned component versions. To test unmerged plugin changes in a full IDE, run the plugin repo's custom build first and supply the resulting VSIX to the IDE build.
+Each repo's custom build stands alone: a plugin repo produces a timestamped pre-release VSIX, and `product-integrator` produces a complete IDE pack. The IDE build does not trigger the plugin builds. Inputs select whether the Ballerina and MI extensions are taken from their pinned builds or from the Marketplace, and every other component comes from the pinned component versions.
 
 ## Nightly Pipeline
 
@@ -106,9 +106,9 @@ graph LR
     classDef artifact stroke:#fb923c,fill:#fff7ed
 ```
 
-**Stage 1 — Plugin nightlies:** Each plugin repo runs its own nightly on its own schedule, stamping a timestamped pre-release version onto its build branch and publishing the resulting VSIX to its GitHub Releases. The plugin language server matrix is also where Windows coverage runs; the pull request build does not cover it. Coverage is uneven today: `ballerina-vscode` publishes a rolling `nightly` release, `mi-vscode` publishes timestamped pre-releases from its daily build, and `si-vscode` has no nightly pipeline at all.
+**Stage 1 — Plugin nightlies:** Each plugin repo runs its own nightly on its own schedule, stamping a timestamped pre-release version onto its build branch and publishing the resulting VSIX to its GitHub Releases. 
 
-**Stage 2 — Pin the component versions:** `product-integrator` does not trigger any of the above. It pins every dependent component to the newest nightly that repo publishes, falling back to that repo's newest GA release when it publishes none — which is what happens for `si-vscode` today. The product and extension versions are stamped alongside those pins in the same commit.
+**Stage 2 — Pin the component versions:** `product-integrator` does not trigger any of the above. It pins every dependent component to the newest nightly that repo publishes. The product and extension versions are stamped alongside those pins in the same commit.
 
 **Stage 3 — IDE build:** That commit is built for Linux, macOS, and Windows, smoke tests run, and on success the rolling `nightly` GitHub Release is replaced. The build branch (`builds/nightly`) and the published tag (`nightly`) are named differently on purpose: the tag is what external consumers pin their download URLs to, and using one name for both would leave the ref ambiguous.
 

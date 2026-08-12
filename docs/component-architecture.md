@@ -22,7 +22,7 @@ Each repo contains one or more components. A component is a unit of functionalit
 | Repo | Component | Description |
 |---|---|---|
 | [vscode-extensions](https://github.com/wso2/vscode-extensions) | **Common UI Libraries** | Shared TypeScript libraries: UI components, fonts and icons, AI utilities, UI test utilities, and platform core. Consumed by all product extensions via a git submodule; built from source in each consumer workspace. |
-| | **Hurl Client Extension** | VS Code extension for Hurl client based try-it capability. Published independently and consumed by `product-integrator` as a versioned built-in extension. |
+| | **Hurl Client Extension** | VS Code extension for Hurl client-based try-it capability. Published independently and consumed by `product-integrator` as a versioned built-in extension. |
 | | **MCP Server Inspector Extension** | VS Code extension for inspecting MCP servers. Published independently and consumed by `product-integrator` as a versioned built-in extension. |
 | [ballerina-vscode](https://github.com/wso2/ballerina-vscode/) | **Ballerina Language Server** | JVM service (Gradle) that provides language intelligence (completions, diagnostics, hover, and similar) for Ballerina source files. Bundled into the Ballerina VS Code Extension at build time. |
 | | **Grammar** | TextMate grammar for Ballerina syntax highlighting. Ballerina maintains its own grammar because it is a custom language with no upstream grammar. Bundled into the Ballerina VS Code Extension. |
