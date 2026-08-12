@@ -86,10 +86,10 @@ The release manager triggers the plugin build workflow for each of the four plug
 After the GA artifacts are published:
 
 1. **Verify the tag:** confirm `v<major>.<minor>.<patch>` was created on the release commit.
-2. **Create the maintenance branch:** create `<major>.<minor>.x` from the GA release commit (e.g. `5.1.x`), and retire the previous maintenance branch (no further releases are created from it; the branch is kept for history).
+2. **Create the maintenance branch:** create `<major>.<minor>.x` from the GA release commit (e.g. `5.1.x`). The previous maintenance branch stays active until its minor version reaches end of life, so multiple patch branches may be active at once (see [Branching Strategy](../branching-strategy.md#patch-branch-majorminorx)).
 3. **Delete the staging branch:** delete `staging/<release-version>` once the maintenance branch is in place. Nightly builds return to `main`.
 4. **Merge the release changes back to `main`:** open a PR merging the GA release commit into `main`, so the fixes made during code freeze are not lost.
-5. **Bump `main`:** open a PR on `main` incrementing to the next minor dev version (e.g. `1.3.0-dev`).
+5. **Bump `main`:** open a PR on `main`, updating the product version to the next minor `-SNAPSHOT` (e.g. `5.1.0-SNAPSHOT` → `5.2.0-SNAPSHOT`) and the WSO2 Integrator extension version two minors ahead (e.g. `1.2.0-SNAPSHOT` → `1.4.0-SNAPSHOT`), since the odd minor between them is the pre-release line. The nightly build asserts this bump, so a missed bump fails the next nightly.
 6. **Confirm the GitHub Release:** verify the `product-integrator` bundle is published to [GitHub Releases](https://github.com/wso2/product-integrator/releases) with release notes.
 7. **Confirm documentation is live:** verify all documentation update PRs and the release notes PR are merged to [wso2/docs-integrator](https://github.com/wso2/docs-integrator) and published on the website.
 8. **Update the milestones:** close the release milestone and create the milestone for the next immediate patch release (e.g. `5.1.1`).

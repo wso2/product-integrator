@@ -116,7 +116,7 @@ The dependency relationships above determine the build order: each product tooli
 
 1. **Shared UI libraries built from source:** Each consumer repo includes `vscode-extensions` as a git submodule. The shared libraries packages are built from source inside the consumer workspace before any extension package that depends on them. There is no independent libraries release. To adopt library changes, consumers move their submodule pointer forward and rebuild.
 
-2. **Language server built before extension packaging:** Each tooling repo builds its language server (Gradle) first, producing a JAR. The VS Code extension then packages that JAR into the VSIX artifact.
+2. **Language server built before extension packaging:** Each tooling repo builds its language server first, producing a JAR. The VS Code extension then packages that JAR into the VSIX artifact.
 
 Once each product tooling repo has produced its VSIX:
 
