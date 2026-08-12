@@ -25,11 +25,8 @@ import { UserAccountPopover } from "../UserAccountPopover";
 import { RemoteBIProjectForm } from "../creationView/federation/RemoteBIProjectForm";
 import { prefetchBiCreateFlow } from "../creationView/federation/biFormRemote";
 import { SamplesView } from "../samplesView";
-import { SettingsView } from "../settingsView";
 import {
 	ActionCard,
-	BALLERINA_MISSING_ACTION_TOOLTIP,
-	BALLERINA_MISSING_CONFIGURE_TOOLTIP,
 	ButtonContent,
 	Caption,
 	CardButtonRow,
@@ -40,7 +37,6 @@ import {
 	CardTitle,
 	CardsContainer,
 	CardsGrid,
-	ConfigureBtn,
 	GetStartedBadge,
 	Headline,
 	RecentProjectsPanel,
@@ -68,11 +64,15 @@ enum ViewState {
 	WELCOME = "welcome",
 	CREATE_PROJECT = "create_project",
 	SAMPLES = "samples",
-	SETTINGS = "settings",
 	OPEN_PROJECT = "open_project",
 }
 
 const DEFAULT_PRODUCT_NAME = "WSO2 Agent Builder";
+
+// The agent welcome has no Configure entry point yet, so the tooltip points at
+// the tree view's "Set Up Ballerina" flow instead of a Configure button.
+const BALLERINA_MISSING_TOOLTIP =
+	"Ballerina distribution is missing. Set it up to continue.";
 
 export const AgentBuilderWelcomeView: React.FC = () => {
 	const { wsClient, webviewContext } = useVisualizerContext();
@@ -120,7 +120,6 @@ export const AgentBuilderWelcomeView: React.FC = () => {
 
 	const goToCreate = () => setCurrentView(ViewState.CREATE_PROJECT);
 	const goToSamples = () => setCurrentView(ViewState.SAMPLES);
-	const goToSettings = () => setCurrentView(ViewState.SETTINGS);
 	const goToOpenProject = () => setCurrentView(ViewState.OPEN_PROJECT);
 	const goBackToWelcome = () => setCurrentView(ViewState.WELCOME);
 
@@ -188,27 +187,6 @@ export const AgentBuilderWelcomeView: React.FC = () => {
 									Sign In
 								</SigninBtn>
 							)}
-							<ConfigureBtn
-								type="button"
-								onClick={goToSettings}
-								title={
-									biUnavailable
-										? BALLERINA_MISSING_CONFIGURE_TOOLTIP
-										: undefined
-								}
-							>
-								<Codicon name="settings-gear" iconSx={{ fontSize: 16 }} />
-								<span>Configure</span>
-								{biUnavailable && (
-									<Codicon
-										name="warning"
-										iconSx={{
-											fontSize: 16,
-											color: "var(--vscode-editorWarning-foreground, #cca700)",
-										}}
-									/>
-								)}
-							</ConfigureBtn>
 						</TopBtnSection>
 					</TopControlsSection>
 					<GetStartedBadge>Get Started</GetStartedBadge>
@@ -224,9 +202,7 @@ export const AgentBuilderWelcomeView: React.FC = () => {
 					<CardsGrid>
 						<StaticActionCard
 							disabled={biUnavailable}
-							title={
-								biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined
-							}
+							title={biUnavailable ? BALLERINA_MISSING_TOOLTIP : undefined}
 						>
 							<CardIconContainer>
 								<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-primary-deep) 100%)">
@@ -264,9 +240,7 @@ export const AgentBuilderWelcomeView: React.FC = () => {
 						<ActionCard
 							disabled={biUnavailable}
 							onClick={biUnavailable ? undefined : goToSamples}
-							title={
-								biUnavailable ? BALLERINA_MISSING_ACTION_TOOLTIP : undefined
-							}
+							title={biUnavailable ? BALLERINA_MISSING_TOOLTIP : undefined}
 						>
 							<CardIconContainer>
 								<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-alt) 100%)">
@@ -329,13 +303,6 @@ export const AgentBuilderWelcomeView: React.FC = () => {
 				);
 			case ViewState.SAMPLES:
 				return <SamplesView onBack={goBackToWelcome} runtime="WSO2: BI" />;
-			case ViewState.SETTINGS:
-				return (
-					<SettingsView
-						onBack={goBackToWelcome}
-						ballerinaUnavailable={biUnavailable}
-					/>
-				);
 			case ViewState.OPEN_PROJECT:
 				return <OpenProjectView onBack={goBackToWelcome} />;
 			case ViewState.WELCOME:

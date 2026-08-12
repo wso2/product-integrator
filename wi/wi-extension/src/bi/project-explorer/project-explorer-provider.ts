@@ -34,8 +34,10 @@ import { ballerinaContext } from '../ballerinaContext';
 import { ext } from '../../extensionVariables';
 import { isSamePath } from '../../utils/pathUtils';
 
+import { getExplorerViewId } from '../../productMode';
+
 // View ID used for progress indicator
-const EXPLORER_VIEW_ID = 'wso2-integrator.explorer';
+const EXPLORER_VIEW_ID = getExplorerViewId();
 
 export class ProjectExplorerEntry extends vscode.TreeItem {
     children: ProjectExplorerEntry[] | undefined;

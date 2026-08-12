@@ -59,6 +59,9 @@ export const COMMANDS = {
  */
 export const VIEWS = {
 	INTEGRATOR_EXPLORER: "wso2-integrator.explorer",
+	// Same explorer tree, contributed under the Agent Builder activity-bar
+	// container so the icon/title match the product flavor.
+	AGENT_BUILDER_EXPLORER: "wso2-agent-builder.explorer",
 };
 
 /**

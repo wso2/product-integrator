@@ -115,6 +115,11 @@
           "id": "wso2-integrator",
           "title": "WSO2 Integrator",
           "icon": "resources/icons/integrator-activity-icon.svg"
+        },
+        {
+          "id": "wso2-agent-builder",
+          "title": "WSO2 Agent Builder",
+          "icon": "resources/icons/integrator-activity-icon.svg"
         }
       ]
     },
@@ -124,7 +129,15 @@
           "id": "wso2-integrator.explorer",
           "name": "Integrations",
           "contextualTitle": "WSO2 Integrator",
-          "when": "!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi')"
+          "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi'))"
+        }
+      ],
+      "wso2-agent-builder": [
+        {
+          "id": "wso2-agent-builder.explorer",
+          "name": "Agents",
+          "contextualTitle": "WSO2 Agent Builder",
+          "when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi'))"
         }
       ]
     },
@@ -135,7 +148,7 @@
         "when": "WI.productMode != 'agent-builder' && !WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
       },
       {
-        "view": "wso2-integrator.explorer",
+        "view": "wso2-agent-builder.explorer",
         "contents": "$(loadingspin) Loading WSO2 Agent Builder...",
         "when": "WI.productMode == 'agent-builder' && !WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
       },
@@ -145,7 +158,7 @@
         "when": "WI.productMode != 'agent-builder' && WI.projectType == 'none'"
       },
       {
-        "view": "wso2-integrator.explorer",
+        "view": "wso2-agent-builder.explorer",
         "contents": "$(rocket) Build AI agents with WSO2 Agent Builder.\n\nUse the welcome page to create a new agent project or explore samples.\n\nOpen an agent project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
         "when": "WI.productMode == 'agent-builder' && WI.projectType == 'none'"
       },
@@ -155,12 +168,17 @@
         "when": "BI.project.empty"
       },
       {
+        "view": "wso2-agent-builder.explorer",
+        "contents": "No integrations or libraries found in this project.\n\nGet started by adding your first integration or library.\n\n[$(add) Add Integration or Library](command:BI.project-explorer.add)",
+        "when": "BI.project.empty"
+      },
+      {
         "view": "wso2-integrator.explorer",
         "contents": "Welcome to WSO2 Integrator.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
         "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
       },
       {
-        "view": "wso2-integrator.explorer",
+        "view": "wso2-agent-builder.explorer",
         "contents": "Welcome to WSO2 Agent Builder.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
         "when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
       },
@@ -170,7 +188,7 @@
         "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
       },
       {
-        "view": "wso2-integrator.explorer",
+        "view": "wso2-agent-builder.explorer",
         "contents": "Welcome to WSO2 Agent Builder.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
         "when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
       }
@@ -512,134 +530,134 @@
       "view/item/context": [
         {
           "command": "ballerina.showVisualizer",
-          "when": "view == wso2-integrator.explorer && viewItem == bi-project",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project",
           "group": "inline"
         },
         {
           "command": "ballerina.force.update.artifacts",
-          "when": "view == wso2-integrator.explorer && viewItem == bi-project",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.convert",
-          "when": "view == wso2-integrator.explorer && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus != 'member' && BI.enclosingProjectStatus != 'orphaned'",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus != 'member' && BI.enclosingProjectStatus != 'orphaned'",
           "group": "navigation"
         },
         {
           "command": "BI.project-explorer.open-project",
-          "when": "view == wso2-integrator.explorer && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'member'",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'member'",
           "group": "navigation"
         },
         {
           "command": "BI.project-explorer.add-to-project",
-          "when": "view == wso2-integrator.explorer && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'orphaned'",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'orphaned'",
           "group": "navigation"
         },
         {
           "command": "BI.project-explorer.add-connection",
-          "when": "view == wso2-integrator.explorer && viewItem == connections",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == connections",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-agent",
-          "when": "view == wso2-integrator.explorer && viewItem == agents",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == agents",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-agent-definition",
-          "when": "view == wso2-integrator.explorer && viewItem == agentDefinitions",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == agentDefinitions",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.delete",
-          "when": "view == wso2-integrator.explorer && (viewItem == CONNECTION || viewItem == SERVICE || viewItem == FUNCTION || viewItem == AUTOMATION || viewItem == TYPE || viewItem == CONFIGURABLE || viewItem == DATA_MAPPER || viewItem == NP_FUNCTION || viewItem == localConnector || viewItem == WORKFLOW || viewItem == ACTIVITY || viewItem == AGENT || viewItem == AGENT_DEFINITION)",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && (viewItem == CONNECTION || viewItem == SERVICE || viewItem == FUNCTION || viewItem == AUTOMATION || viewItem == TYPE || viewItem == CONFIGURABLE || viewItem == DATA_MAPPER || viewItem == NP_FUNCTION || viewItem == localConnector || viewItem == WORKFLOW || viewItem == ACTIVITY || viewItem == AGENT || viewItem == AGENT_DEFINITION)",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-entry-point",
-          "when": "view == wso2-integrator.explorer && viewItem == entryPoint",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == entryPoint",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-type",
-          "when": "view == wso2-integrator.explorer && viewItem == types",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == types",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.view-type-diagram",
-          "when": "view == wso2-integrator.explorer && viewItem == types",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == types",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-function",
-          "when": "view == wso2-integrator.explorer && viewItem == functions",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == functions",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-configuration",
-          "when": "view == wso2-integrator.explorer && viewItem == configurations",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == configurations",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.view-configuration",
-          "when": "view == wso2-integrator.explorer && viewItem == configurations",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == configurations",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-data-mapper",
-          "when": "view == wso2-integrator.explorer && viewItem == dataMappers",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == dataMappers",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-natural-function",
-          "when": "view == wso2-integrator.explorer && viewItem == naturalFunctions",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == naturalFunctions",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-custom-connector",
-          "when": "view == wso2-integrator.explorer && viewItem == localConnectors",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == localConnectors",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-workflow",
-          "when": "view == wso2-integrator.explorer && viewItem == workflows",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == workflows",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-workflow-activity",
-          "when": "view == wso2-integrator.explorer && viewItem == workflowActivities",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == workflowActivities",
           "group": "inline"
         }
       ],
       "view/title": [
         {
           "command": "wso2-integrator.explorer.refresh",
-          "when": "view == wso2-integrator.explorer",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer)",
           "group": "navigation@2"
         },
         {
           "command": "BI.project-explorer.convert",
-          "when": "view == wso2-integrator.explorer && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus != 'member' && BI.enclosingProjectStatus != 'orphaned'",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus != 'member' && BI.enclosingProjectStatus != 'orphaned'",
           "group": "navigation"
         },
         {
           "command": "BI.project-explorer.open-project",
-          "when": "view == wso2-integrator.explorer && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'member'",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'member'",
           "group": "navigation"
         },
         {
           "command": "BI.project-explorer.add-to-project",
-          "when": "view == wso2-integrator.explorer && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'orphaned'",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'orphaned'",
           "group": "navigation"
         },
         {
           "command": "BI.project-explorer.add",
-          "when": "view == wso2-integrator.explorer && BI.isBallerinaWorkspace == true",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.isBallerinaWorkspace == true",
           "group": "navigation"
         },
         {
           "command": "BI.project-explorer.overview",
-          "when": "view == wso2-integrator.explorer && BI.project == true",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true",
           "group": "navigation"
         }
       ]

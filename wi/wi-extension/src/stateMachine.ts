@@ -30,7 +30,7 @@ import {
     ViewType
 } from '@wso2/wi-core';
 import { ext } from './extensionVariables';
-import { getProductMode, getProductName, isAgentBuilderMode } from './productMode';
+import { getExplorerViewId, getProductMode, getProductName, isAgentBuilderMode } from './productMode';
 import { fetchProjectInfo, fetchExtendedProjectInfo } from './bi/utils';
 import { activateProjectExplorer } from './bi/project-explorer/activate';
 import { ProjectExplorerEntryProvider } from './bi/project-explorer/project-explorer-provider';
@@ -299,7 +299,7 @@ const stateMachine = createMachine<MachineContext>({
             }
             vscode.commands.executeCommand('setContext', 'WI.projectType', 'none');
             void context.webviewManager.showWelcome().catch((error) => ext.logError("Failed to show welcome webview", error as Error));
-            context.currentView = ViewType.WELCOME;
+            context.currentView = isAgentBuilderMode() ? ViewType.AGENT_BUILDER_WELCOME : ViewType.WELCOME;
         },
         registerConfigChangeListener: (context) => {
             if (context.configChangeDisposable) {
@@ -388,7 +388,7 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
     await vscode.commands.executeCommand("setContext", CONTEXT_KEYS.MI_AVAILABLE, context.extensionAPIs.isMIAvailable());
 
     // focus avtivated extension view if a workspace is open
-    await vscode.commands.executeCommand('wso2-integrator.explorer.focus');
+    await vscode.commands.executeCommand(`${getExplorerViewId()}.focus`);
 
     ext.log('Extensions activated successfully');
 }

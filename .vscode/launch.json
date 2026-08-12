@@ -10,7 +10,28 @@
 			],
 			"env": {
 				"WEB_VIEW_DEV_MODE": "true",
+				"WEB_VIEW_DEV_HOST": "http://localhost:3000"
+			},
+			"outFiles": [
+				"${workspaceFolder}/wi/wi-extension/dist/**/*.js"
+			],
+			"preLaunchTask": "Watch WI extension"
+		},
+		{
+			// Same as "Run WI Extension" but launches in the WSO2 Agent Builder
+			// flavor. Agent Builder is an opt-in mode: every default (this
+			// extension, update-product.sh, CI inputs) stays 'integrator'.
+			"name": "Run WI Extension (Agent Builder)",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/wi/wi-extension",
+			],
+			"env": {
+				"WEB_VIEW_DEV_MODE": "true",
 				"WEB_VIEW_DEV_HOST": "http://localhost:3000",
+				"WSO2_PRODUCT_MODE": "agent-builder",
+				"WSO2_PRODUCT_NAME": "WSO2 Agent Builder"
 			},
 			"outFiles": [
 				"${workspaceFolder}/wi/wi-extension/dist/**/*.js"
