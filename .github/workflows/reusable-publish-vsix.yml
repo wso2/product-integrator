@@ -21,6 +21,11 @@ on:
         required: true
         type: boolean
         default: true
+    secrets:
+      VSCE_TOKEN:
+        required: false
+      OPENVSX_TOKEN:
+        required: false
 
 permissions:
   contents: read

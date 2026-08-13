@@ -29,7 +29,9 @@ permissions:
 jobs:
   publish:
     uses: ./.github/workflows/reusable-publish-vsix.yml
-    secrets: inherit
+    secrets:
+      VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
+      OPENVSX_TOKEN: ${{ secrets.OPENVSX_TOKEN }}
     with:
       tag: ${{ inputs.tag }}
       vscode: ${{ inputs.vscode }}
