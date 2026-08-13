@@ -12,11 +12,6 @@ on:
         description: 'Release tag to publish from, e.g. v5.1.0'
         required: true
         type: string
-      isPreRelease:
-        description: 'Publish as a pre-release'
-        required: true
-        type: boolean
-        default: false
       vscode:
         description: 'Publish to VS Code Marketplace'
         required: true
@@ -28,12 +23,14 @@ on:
         type: boolean
         default: true
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     uses: ./.github/workflows/reusable-publish-vsix.yml
     secrets: inherit
     with:
       tag: ${{ inputs.tag }}
-      isPreRelease: ${{ inputs.isPreRelease }}
       vscode: ${{ inputs.vscode }}
       openVSX: ${{ inputs.openVSX }}

@@ -216,13 +216,12 @@ jobs:
     name: Publish WI extension to marketplaces
     needs: build
     # The vsix only lands as a release asset when build_packed_installers produced the
-    # create-release-with-installers job's release (build.yml:1111); with it off, there is nothing
-    # for reusable-publish-vsix.yml to download.
+    # publish-github-release job's release (build.yml:1095); with it off, there is nothing for
+    # reusable-publish-vsix.yml to download.
     if: ${{ inputs.publish_to_marketplace && inputs.build_packed_installers }}
     uses: ./.github/workflows/reusable-publish-vsix.yml
     secrets: inherit
     with:
       tag: v${{ inputs.version }}
-      isPreRelease: ${{ inputs.is_prerelease }}
       vscode: true
       openVSX: true
