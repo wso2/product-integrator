@@ -225,6 +225,7 @@ jobs:
       build_packed_installers: ${{ inputs.build_packed_installers == true }}
       versions_artifact: build-versions
       ref: ${{ inputs.ref }}
+      is_prerelease: ${{ inputs.is_prerelease }}
 
   smoke-test:
     if: ${{ inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
