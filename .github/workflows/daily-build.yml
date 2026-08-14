@@ -30,8 +30,7 @@ name: Daily Build
 
 on:
   schedule:
-    # 12:00 PM IST = 06:30 AM UTC
-    - cron: '30 6 * * *'
+    - cron: '30 21 * * *'
   workflow_dispatch:
     inputs:
       source_ref:
