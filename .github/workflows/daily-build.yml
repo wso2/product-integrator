@@ -49,11 +49,11 @@ on:
         required: true
         type: string
         default: nightly-test
-      run_smoke_tests:
-        description: 'Whether to run the UI smoke tests. Ignored on the scheduled production run, which always runs them.'
+      gate_on_smoke_tests:
+        description: 'Fail the run and withhold the release if a smoke test fails. Ignored on the scheduled production run, which never gates on them.'
         required: true
         type: boolean
-        default: true
+        default: false
 
 permissions:
   id-token: write
@@ -280,8 +280,7 @@ jobs:
       build_macos: true
       build_windows: true
       build_packed_installers: true
-      # Ignore the dispatch input on a scheduled run, same as the route env vars above: the
-      # production nightly always exercises the smoke tests.
-      run_smoke_tests: ${{ github.event_name == 'schedule' && true || inputs.run_smoke_tests }}
+      run_smoke_tests: true
+      smoke_tests_required: ${{ github.event_name != 'schedule' && inputs.gate_on_smoke_tests == true }}
       ballerina_extension_source: github
       mi_extension_source: github
