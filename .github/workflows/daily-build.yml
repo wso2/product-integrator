@@ -21,9 +21,9 @@ name: Daily Build
 # `main`, unless exactly one `staging/<version>` branch exists on the remote — in which case that
 # branch is used instead, so the nightly tracks whichever release line is currently being staged.
 # More than one `staging/*` branch is treated as ambiguous and fails the run rather than guessing.
-# Manual runs expose an isolated route for exercising this exact pin-and-build flow from another
-# ref, with their own explicit `source_ref` (never auto-resolved); their defaults use test
-# branch/tag names so clicking "Run workflow" cannot replace production nightly state.
+# Manual runs build the `source_ref` you type (never auto-resolved) onto the destinations you type,
+# and default to the production pair — so a default "Run workflow" does replace the public nightly.
+# Pass builds/nightly-test / nightly-test for an isolated route that leaves production alone.
 #
 # Ad-hoc builds of your own branch are dev-build.yml; real releases are release.yml. Neither this
 # workflow nor those ever write to `main`.
@@ -130,42 +130,13 @@ jobs:
           git check-ref-format --branch "${BUILD_BRANCH}" >/dev/null
           git check-ref-format "refs/tags/${PUBLISH_TAG}" >/dev/null
 
+          # The only remaining restriction: build_branch is force-pushed verbatim, so a typo here
+          # would overwrite whatever branch was named.
           case "${BUILD_BRANCH}" in
             builds/*) ;;
             *) echo "Error: build_branch must be below builds/; refusing to force-push ${BUILD_BRANCH}." >&2
                exit 1 ;;
           esac
-          case "${PUBLISH_TAG}" in
-            nightly|nightly-*) ;;
-            *) echo "Error: publish_tag must be nightly or start with nightly-." >&2
-               exit 1 ;;
-          esac
-
-          if [ "${BUILD_BRANCH}" = "${PUBLISH_TAG}" ]; then
-            echo "Error: build_branch and publish_tag must differ to avoid an ambiguous Git ref." >&2
-            exit 1
-          fi
-
-          production_branch=false
-          production_tag=false
-          if [ "${BUILD_BRANCH}" = "builds/nightly" ]; then
-            production_branch=true
-          fi
-          if [ "${PUBLISH_TAG}" = "nightly" ]; then
-            production_tag=true
-          fi
-          if [ "${production_branch}" != "${production_tag}" ]; then
-            echo "Error: builds/nightly and nightly are a protected branch/tag pair." >&2
-            echo "       Use both for production or neither for an isolated test run." >&2
-            exit 1
-          fi
-          if [ "${production_branch}" = "true" ]; then
-            case "${SOURCE_REF}" in
-              main|staging/*) ;;
-              *) echo "Error: production nightly destinations may only be built from main or a staging/* branch." >&2
-                 exit 1 ;;
-            esac
-          fi
 
           echo "source_ref=${SOURCE_REF}" >> "$GITHUB_OUTPUT"
           echo "build_branch=${BUILD_BRANCH}" >> "$GITHUB_OUTPUT"
