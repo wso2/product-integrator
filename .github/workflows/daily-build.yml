@@ -181,15 +181,14 @@ jobs:
           ref: ${{ steps.configure.outputs.source_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # apply-version.sh re-stamps integrator.version only when it carries a pre-release qualifier
-      # (-SNAPSHOT/-alpha/-beta/-rc1/...); a concrete version passes through verbatim, so a missed
-      # post-release bump would make every nightly republish it. wi.extension.version needs no such
-      # check — the stamp step below forces it.
+      # The stamp step below would timestamp a bare `5.1.0` too, so this is not what makes the
+      # nightly safe — it is a tripwire: a source ref without a qualifier means a post-release bump
+      # was missed, and that should be seen rather than silently absorbed.
       - name: Assert source ref still declares a pre-release product version
         shell: bash
         run: |
           key=integrator.version
-          allowed='-[A-Za-z]+[0-9]*$'
+          allowed='-[A-Za-z][A-Za-z0-9.]*$'
           value=$(awk -F= -v k="${key}" '$1 == k { print substr($0, index($0, "=") + 1); exit }' \
             ci/build/component-versions.properties | tr -d '\r')
           if [ -z "${value}" ]; then
@@ -219,7 +218,7 @@ jobs:
         id: stamp
         run: |
           chmod +x ./ci/build/apply-version.sh
-          ./ci/build/apply-version.sh --force-extension
+          ./ci/build/apply-version.sh --force-product --force-extension
 
       - name: Upload versions
         uses: actions/upload-artifact@v4
