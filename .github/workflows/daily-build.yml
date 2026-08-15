@@ -42,12 +42,12 @@ on:
         description: 'Force-updated branch that records the pinned build commit'
         required: true
         type: string
-        default: builds/nightly-test
+        default: builds/nightly
       publish_tag:
         description: 'Rolling release tag to replace after every job succeeds'
         required: true
         type: string
-        default: nightly-test
+        default: nightly
       gate_on_smoke_tests:
         description: 'Fail the run and withhold the release if a smoke test fails. Ignored on the scheduled production run, which never gates on them.'
         required: true
