@@ -30,6 +30,7 @@ name: Daily Build
 
 on:
   schedule:
+    # 21:30 UTC = 03:00 AM IST the next day.
     - cron: '30 21 * * *'
   workflow_dispatch:
     inputs:
@@ -52,7 +53,7 @@ on:
         description: 'Fail the run and withhold the release if a smoke test fails. Ignored on the scheduled production run, which never gates on them.'
         required: true
         type: boolean
-        default: false
+        default: true
 
 permissions:
   id-token: write
@@ -119,9 +120,9 @@ jobs:
             else
               SOURCE_REF="${staging_candidates[0]}"
               echo "staging/* branch found; scheduled run uses ${SOURCE_REF}."
-              # job-level `env:` above was evaluated before this step ran and cannot see this
-              # value; every later step in this job reads $SOURCE_REF from the environment, so it
-              # must be re-exported here for them to see the resolved branch too.
+              # The checkout and the route output read steps.configure.outputs.source_ref, not this.
+              # Re-exported only so the later log and error lines that read $SOURCE_REF name the
+              # resolved branch instead of the job-level default.
               echo "SOURCE_REF=${SOURCE_REF}" >> "$GITHUB_ENV"
             fi
           fi

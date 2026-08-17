@@ -8,9 +8,6 @@
 #
 # Not touched here, on purpose:
 #   integrator.version, wi.extension.version   ci/build/apply-version.sh owns those
-#   ballerina.jre.version                      hand-maintained: the JRE has to match the distribution
-#                                              it ships with, so bump it together with
-#                                              ballerina.version rather than resolving it separately
 #
 # Usage: ./ci/build/resolve-nightly-versions.sh [versions-file]
 #        Defaults to the real file; pass a copy to dry-run against the live upstream repos.
@@ -68,9 +65,15 @@ unset_property() {
 # Filtering on the asset matters: a release without the file we need is useless to us, and it is
 # how wso2/ballerina-vscode's rolling `nightly` release is identified.
 #
-# No qualifier filtering. A staging line deliberately pins pre-releases (ballerina.version,
-# icp.version), and skipping alpha/beta/RC tags made the nightly resolve *backwards* to an older GA.
-# The rule is simply: the newest thing upstream published that carries the asset we need.
+# No qualifier filtering, on every route. Skipping alpha/beta/RC tags made the nightly resolve
+# *backwards*: a staging line deliberately pins pre-releases, so filtering dragged ballerina.version
+# and icp.version onto older GA builds the release line was not targeting. The rule is simply the
+# newest thing upstream published that carries the asset we need.
+#
+# There is no per-route switch, so this applies to the `main` fallback too, not just a staging source:
+# a nightly off `main` will bundle an upstream pre-release runtime as readily as a staging one. That is
+# intended — the nightly is itself a pre-release — but it is a wider blast radius than the staging
+# case that motivated it, so it is stated rather than implied.
 #
 # Sorted on the matched asset's `updated_at`, not on the API's default order: releases come back
 # ordered by `created_at`, a release object has no `updated_at` of its own, and the asset timestamp
@@ -268,7 +271,6 @@ resolve_github_component "ballerina.version" \
 resolve_github_component "icp.version" \
   "wso2/integration-control-plane" '^wso2-integration-control-plane-(.+)\.zip$' "v"
 
-# ballerina-custom-jre tags its releases without a leading "v" (e.g. 4.0.0).
 resolve_github_component "ballerina.jre.version" \
   "ballerina-platform/ballerina-custom-jre" '^ballerina-jre-linux-64-(.+)\.zip$' ""
 

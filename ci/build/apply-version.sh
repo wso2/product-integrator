@@ -18,8 +18,9 @@
 #
 # Usage: ./ci/build/apply-version.sh [options]
 #   --version <v>        set integrator.version explicitly (the release driver only)
-#   --mode <m>           pre-release (default) | release; `release` strips -SNAPSHOT instead of
-#                        timestamping, and rejects an odd extension minor (that is the pre-release line)
+#   --mode <m>           pre-release (default) | release; `release` strips any pre-release qualifier
+#                        (-SNAPSHOT, -alpha1, -rc.1, ...) instead of timestamping, and rejects an odd
+#                        extension minor (that is the pre-release line)
 #   --force-product      re-derive the product timestamp even when the current value is concrete
 #   --force-extension    re-derive the extension timestamp even when the current value is concrete
 #   --versions-file <p>  default ci/build/component-versions.properties
