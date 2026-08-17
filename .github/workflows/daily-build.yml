@@ -229,8 +229,7 @@ jobs:
       ref: ${{ needs.prepare-nightly.outputs.sha }}
       target_commitish: ${{ needs.prepare-nightly.outputs.sha }}
       versions_artifact: versions
-      # build.yml replaces only the configured rolling release/tag. Manual test routes therefore
-      # cannot touch `nightly`; the validation step permits that tag only with main/builds/nightly.
+      # build.yml replaces only the configured rolling release/tag, whichever that is.
       publish_tag: ${{ needs.prepare-nightly.outputs.publish_tag }}
       is_prerelease: true
       runner: codebuild

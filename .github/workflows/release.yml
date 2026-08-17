@@ -10,7 +10,14 @@ name: Release
 #
 # `main` is never modified. After a GA release, bump it by hand to the next
 # <major>.<minor+1>.0-SNAPSHOT, and the extension to <major>.<minor+2>.0-SNAPSHOT. daily-build.yml
-# asserts this, so a missed bump fails the next nightly rather than silently republishing a version.
+# asserts the integrator half, so a missed bump fails the next nightly rather than silently
+# republishing a version; the extension half is not asserted, because the nightly force-stamps it.
+#
+# That <minor+2> is load-bearing: apply-version.sh derives the pre-release extension line as
+# <minor-1>, so it only stays above the published stable while the declared version is the next
+# *feature* release. On a patch line it points backwards — 1.2.1-SNAPSHOT derives 1.1.<stamp>, below
+# an already-published 1.2.0 — so publish a patch as GA only, never as a --pre-release to the
+# Marketplace.
 #
 # Retrying a failed release: the branch is pushed in step 2, before the build runs, so a build
 # failure leaves the branch and its version commit behind and re-dispatching the same version then
