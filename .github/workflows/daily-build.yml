@@ -130,11 +130,17 @@ jobs:
           git check-ref-format --branch "${BUILD_BRANCH}" >/dev/null
           git check-ref-format "refs/tags/${PUBLISH_TAG}" >/dev/null
 
-          # The only remaining restriction: build_branch is force-pushed verbatim, so a typo here
-          # would overwrite whatever branch was named.
+          # build_branch is force-pushed verbatim, so a typo here would overwrite whatever branch
+          # was named.
           case "${BUILD_BRANCH}" in
             builds/*) ;;
             *) echo "Error: build_branch must be below builds/; refusing to force-push ${BUILD_BRANCH}." >&2
+               exit 1 ;;
+          esac
+          # publish_tag's release is deleted and recreated, so it must never name a GA release.
+          case "${PUBLISH_TAG}" in
+            nightly|nightly-*) ;;
+            *) echo "Error: publish_tag must be nightly or start with nightly-." >&2
                exit 1 ;;
           esac
 
