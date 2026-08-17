@@ -4,8 +4,8 @@ name: Daily Build
 #
 #   1. resets the `builds/nightly` branch to `main`, or to a `staging/<version>` branch if exactly
 #      one exists on the remote
-#   2. pins every dependency to its newest nightly build, or its newest GA release when the upstream
-#      repo publishes none
+#   2. pins each tracked dependency to its newest nightly build, or its newest release when the
+#      upstream repo publishes none
 #   3. stamps the timestamped product and extension versions and commits, so
 #      `git diff <source> builds/nightly` is exactly the pin and the build is reproducible from that
 #      commit
