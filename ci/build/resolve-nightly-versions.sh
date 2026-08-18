@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Resolve every *dependent* component to its newest nightly build (or its newest GA release when the
-# upstream repo publishes no nightly) and pin the result into component-versions.properties.
+# Resolve each tracked component to its newest nightly build (or its newest release when the upstream
+# repo publishes no nightly) and pin the result into component-versions.properties.
 #
 # It runs on the `builds/nightly` branch before the build is dispatched, so the build itself just
 # reads the committed file — which also makes every nightly reproducible from the commit this leaves
 # behind.
-# The product and extension versions are not touched here; ci/build/apply-version.sh owns those.
+#
+# Not touched here, on purpose:
+#   integrator.version, wi.extension.version   ci/build/apply-version.sh owns those
 #
 # Usage: ./ci/build/resolve-nightly-versions.sh [versions-file]
 #        Defaults to the real file; pass a copy to dry-run against the live upstream repos.
@@ -57,43 +59,43 @@ unset_property() {
 }
 
 # List releases from `repo` that carry an asset matching `asset_regex`, with a nightly-tagged one
-# first and then newest-to-oldest non-qualified releases. Each line is
+# first and then every other release most-recently-updated first. Each line is
 # "<nightly|latest>\t<tag>\t<asset-name>".
 #
 # Filtering on the asset matters: a release without the file we need is useless to us, and it is
 # how wso2/ballerina-vscode's rolling `nightly` release is identified.
 #
-# The fallback skips alpha/beta/RC releases, so a repo that publishes no nightly pins to a real
-# release rather than to whatever pre-release happens to be newest. That matters most for
-# ballerina.version, icp.version and ballerina.jre.version, which are the runtime bits actually
-# bundled into the product rather than just an extension vsix.
+# No qualifier filtering, on every route. Skipping alpha/beta/RC tags made the nightly resolve
+# *backwards*: a staging line deliberately pins pre-releases, so filtering dragged ballerina.version
+# and icp.version onto older GA builds the release line was not targeting. The rule is simply the
+# newest thing upstream published that carries the asset we need.
 #
-# The filter is on the *tag qualifier*, deliberately not on GitHub's `prerelease` flag: the two
-# extension repos publish through the VS Code pre-release channel and so flag nearly everything
-# `prerelease=true` (93 of wso2/mi-vscode's last 100 releases, 98 of wso2/ballerina-vscode's).
-# Filtering on the flag would pin MI to v3.0.0 from Nov 2025 instead of the current v4.1.4. Tag
-# shape agrees with the flag on all three runtime repos, where the concern is real, and keeps the
-# newest genuine release on the two extension repos.
+# There is no per-route switch, so this applies to the `main` fallback too, not just a staging source:
+# a nightly off `main` will bundle an upstream pre-release runtime as readily as a staging one. That is
+# intended — the nightly is itself a pre-release — but it is a wider blast radius than the staging
+# case that motivated it, so it is stated rather than implied.
 #
-# It also cannot be filtered at the top of the pipeline, since the rolling `nightly` tag has to stay
-# selectable by the line above — hence a carried field applied to the fallback line alone.
+# Sorted on the matched asset's `updated_at`, not on the API's default order: releases come back
+# ordered by `created_at`, a release object has no `updated_at` of its own, and the asset timestamp
+# is what actually moves when a rolling release republishes its file.
 release_candidates() {
   local repo="$1" asset_regex="$2" candidates
   # The regex is embedded in a jq string literal, where a lone backslash is an invalid escape.
   local jq_regex="${asset_regex//\\/\\\\}"
 
-  # Releases come back newest-first. Emit at most one rolling nightly, then every eligible fallback
-  # in API order. Keeping all fallbacks lets callers reject an asset whose contents do not satisfy
-  # a product-level compatibility contract.
+  # Emit at most one rolling nightly, then every eligible fallback. Keeping all fallbacks lets
+  # callers reject an asset whose contents do not satisfy a product-level compatibility contract.
   candidates=$(gh api "repos/${repo}/releases?per_page=100" --jq "
     [ .[] | select(.draft == false)
           | {tag: .tag_name,
              nightly: (.tag_name | test(\"nightly\"; \"i\")),
-             qualified: (.tag_name | test(\"-(alpha|beta|rc|m[0-9]|snapshot|pre)\"; \"i\")),
-             asset: ([.assets[]? | select(.name | test(\"${jq_regex}\")) | .name][0])}
-          | select(.asset != null) ]
-    | (map(select(.nightly))[0] // empty | \"nightly\t\(.tag)\t\(.asset)\"),
-      (map(select(.nightly == false and .qualified == false))[] | \"latest\t\(.tag)\t\(.asset)\")
+             published: .published_at,
+             asset: ([.assets[]? | select(.name | test(\"${jq_regex}\"))][0])}
+          | select(.asset != null)
+          | {tag, nightly, name: .asset.name, ts: (.asset.updated_at // .published)} ]
+    | sort_by(.ts) | reverse
+    | (map(select(.nightly))[0] // empty | \"nightly\t\(.tag)\t\(.name)\"),
+      (map(select(.nightly == false))[] | \"latest\t\(.tag)\t\(.name)\")
   ")
 
   candidates=$(printf '%s\n' "${candidates}" | sed '/^[[:space:]]*$/d')
@@ -269,7 +271,6 @@ resolve_github_component "ballerina.version" \
 resolve_github_component "icp.version" \
   "wso2/integration-control-plane" '^wso2-integration-control-plane-(.+)\.zip$' "v"
 
-# ballerina-custom-jre tags its releases without a leading "v" (e.g. 4.0.0).
 resolve_github_component "ballerina.jre.version" \
   "ballerina-platform/ballerina-custom-jre" '^ballerina-jre-linux-64-(.+)\.zip$' ""
 

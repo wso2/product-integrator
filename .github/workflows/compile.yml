@@ -37,6 +37,11 @@ on:
         default: ''
         required: false
         type: string
+      is_prerelease:
+        description: 'Package the WI extension vsix as a VS Code pre-release (embeds the Microsoft.VisualStudio.Code.PreRelease manifest property).'
+        default: false
+        required: false
+        type: boolean
 
 permissions:
   id-token: write
@@ -410,6 +415,10 @@ jobs:
           # and hit the 60 req/hour limit -> "HTTP 403: rate limit exceeded". Authenticate to
           # raise the limit to 5000/hour, matching the other steps in this job.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Read by external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js
+          # to decide whether to `vsce package --pre-release`. This is the only place that flag is
+          # set, so the vsix's embedded pre-release state always matches this input.
+          isPreRelease: ${{ inputs.is_prerelease }}
         run: |
           node common/scripts/install-run-rush.js build --verbose
 
