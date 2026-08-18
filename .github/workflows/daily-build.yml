@@ -2,31 +2,36 @@ name: Daily Build
 
 # The nightly, and nothing else. Once a day it:
 #
-#   1. resets the `builds/nightly` branch to `main`
-#   2. pins every dependency to its newest nightly build, or its newest GA release when the upstream
-#      repo publishes none
+#   1. resets the `builds/nightly` branch to `main`, or to a `staging/<version>` branch if exactly
+#      one exists on the remote
+#   2. pins each tracked dependency to its newest nightly build, or its newest release when the
+#      upstream repo publishes none
 #   3. stamps the timestamped product and extension versions and commits, so
-#      `git diff main builds/nightly` is exactly the pin and the build is reproducible from that
+#      `git diff <source> builds/nightly` is exactly the pin and the build is reproducible from that
 #      commit
 #   4. builds that commit and replaces the rolling `nightly` release
 #
 # Branch and tag are named differently on purpose. `builds/nightly` is the source: force-pushed
-# every night, only ever main plus one version-pin commit. The `nightly` *tag* is the published
-# artifact external consumers pin their download URLs to, so it must not change name. Using one
-# name for both would make `nightly` an ambiguous ref — `actions/checkout` silently prefers a
-# branch over a tag, and the two would drift apart after a partially failed run.
+# every night, only ever the resolved source ref plus one version-pin commit. The `nightly` *tag* is
+# the published artifact external consumers pin their download URLs to, so it must not change name.
+# Using one name for both would make `nightly` an ambiguous ref — `actions/checkout` silently
+# prefers a branch over a tag, and the two would drift apart after a partially failed run.
 #
-# Scheduled runs always use the production main/builds/nightly/nightly route. Manual runs expose an
-# isolated route for exercising this exact pin-and-build flow from another ref; their defaults use
-# test branch/tag names so clicking "Run workflow" cannot replace production nightly state.
+# Scheduled runs always use the production `builds/nightly`/`nightly` destinations. The source is
+# `main`, unless exactly one `staging/<version>` branch exists on the remote — in which case that
+# branch is used instead, so the nightly tracks whichever release line is currently being staged.
+# More than one `staging/*` branch is treated as ambiguous and fails the run rather than guessing.
+# Manual runs build the `source_ref` you type (never auto-resolved) onto the destinations you type,
+# and default to the production pair — so a default "Run workflow" does replace the public nightly.
+# Pass builds/nightly-test / nightly-test for an isolated route that leaves production alone.
 #
 # Ad-hoc builds of your own branch are dev-build.yml; real releases are release.yml. Neither this
 # workflow nor those ever write to `main`.
 
 on:
   schedule:
-    # 12:00 PM IST = 06:30 AM UTC
-    - cron: '30 6 * * *'
+    # 21:30 UTC = 03:00 AM IST the next day.
+    - cron: '30 21 * * *'
   workflow_dispatch:
     inputs:
       source_ref:
@@ -38,14 +43,14 @@ on:
         description: 'Force-updated branch that records the pinned build commit'
         required: true
         type: string
-        default: builds/nightly-test
+        default: builds/nightly
       publish_tag:
         description: 'Rolling release tag to replace after every job succeeds'
         required: true
         type: string
-        default: nightly-test
-      run_smoke_tests:
-        description: 'Whether to run the UI smoke tests. Ignored on the scheduled production run, which always runs them.'
+        default: nightly
+      gate_on_smoke_tests:
+        description: 'Fail the run and withhold the release if a smoke test fails. Ignored on the scheduled production run, which never gates on them.'
         required: true
         type: boolean
         default: true
@@ -87,43 +92,58 @@ jobs:
           : "${BUILD_BRANCH:?build_branch must not be empty}"
           : "${PUBLISH_TAG:?publish_tag must not be empty}"
 
+          # Manual dispatch always uses source_ref verbatim (job-level env above); only the
+          # scheduled/production route auto-selects a staging branch. Looked up via the GitHub API
+          # rather than `git ls-remote origin`, since no checkout — and so no `origin` remote —
+          # exists yet at this point in the job.
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            # Captured outside the `mapfile` process substitution: a subshell's exit status is
+            # invisible to the parent, so `gh api` failing (outage, permissions) would otherwise
+            # look identical to "no staging branches" and silently fall back to main.
+            if ! staging_refs=$(
+              gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/staging/" --jq '.[].ref' \
+                | sed 's#^refs/heads/##'
+            ); then
+              echo "Error: could not list staging/* branches." >&2
+              exit 1
+            fi
+            staging_candidates=()
+            if [ -n "${staging_refs}" ]; then
+              mapfile -t staging_candidates <<< "${staging_refs}"
+            fi
+            if [ "${#staging_candidates[@]}" -eq 0 ]; then
+              echo "No staging/* branch found; scheduled run stays on main."
+            elif [ "${#staging_candidates[@]}" -gt 1 ]; then
+              echo "Error: more than one staging/* branch exists; refusing to guess which to build." >&2
+              printf '  %s\n' "${staging_candidates[@]}" >&2
+              exit 1
+            else
+              SOURCE_REF="${staging_candidates[0]}"
+              echo "staging/* branch found; scheduled run uses ${SOURCE_REF}."
+              # The checkout and the route output read steps.configure.outputs.source_ref, not this.
+              # Re-exported only so the later log and error lines that read $SOURCE_REF name the
+              # resolved branch instead of the job-level default.
+              echo "SOURCE_REF=${SOURCE_REF}" >> "$GITHUB_ENV"
+            fi
+          fi
+
           git check-ref-format --branch "${SOURCE_REF}" >/dev/null
           git check-ref-format --branch "${BUILD_BRANCH}" >/dev/null
           git check-ref-format "refs/tags/${PUBLISH_TAG}" >/dev/null
 
+          # build_branch is force-pushed verbatim, so a typo here would overwrite whatever branch
+          # was named.
           case "${BUILD_BRANCH}" in
             builds/*) ;;
             *) echo "Error: build_branch must be below builds/; refusing to force-push ${BUILD_BRANCH}." >&2
                exit 1 ;;
           esac
+          # publish_tag's release is deleted and recreated, so it must never name a GA release.
           case "${PUBLISH_TAG}" in
             nightly|nightly-*) ;;
             *) echo "Error: publish_tag must be nightly or start with nightly-." >&2
                exit 1 ;;
           esac
-
-          if [ "${BUILD_BRANCH}" = "${PUBLISH_TAG}" ]; then
-            echo "Error: build_branch and publish_tag must differ to avoid an ambiguous Git ref." >&2
-            exit 1
-          fi
-
-          production_branch=false
-          production_tag=false
-          if [ "${BUILD_BRANCH}" = "builds/nightly" ]; then
-            production_branch=true
-          fi
-          if [ "${PUBLISH_TAG}" = "nightly" ]; then
-            production_tag=true
-          fi
-          if [ "${production_branch}" != "${production_tag}" ]; then
-            echo "Error: builds/nightly and nightly are a protected branch/tag pair." >&2
-            echo "       Use both for production or neither for an isolated test run." >&2
-            exit 1
-          fi
-          if [ "${production_branch}" = "true" ] && [ "${SOURCE_REF}" != "main" ]; then
-            echo "Error: production nightly destinations may only be built from main." >&2
-            exit 1
-          fi
 
           echo "source_ref=${SOURCE_REF}" >> "$GITHUB_OUTPUT"
           echo "build_branch=${BUILD_BRANCH}" >> "$GITHUB_OUTPUT"
@@ -139,28 +159,28 @@ jobs:
           ref: ${{ steps.configure.outputs.source_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # apply-version.sh is shape-based: it only rewrites `-SNAPSHOT`, and passes a concrete version
-      # through verbatim. That is what makes it safe to run everywhere, but it also means a `main`
-      # left on a concrete version after a release (the manual bump documented in release.yml) would
-      # make every nightly publish that same un-timestamped version indefinitely — and because the
-      # rolling release is deleted and recreated each run, it would still look like it worked. Fail
-      # before anything is pushed instead.
-      - name: Assert source ref still declares SNAPSHOT versions
+      # The stamp step below would timestamp a bare `5.1.0` too, so this is not what makes the
+      # nightly safe — it is a tripwire: a source ref without a qualifier means a post-release bump
+      # was missed, and that should be seen rather than silently absorbed.
+      - name: Assert source ref still declares a pre-release product version
         shell: bash
         run: |
-          for key in integrator.version wi.extension.version; do
-            value=$(awk -F= -v k="${key}" '$1 == k { print substr($0, index($0, "=") + 1); exit }' \
-              ci/build/component-versions.properties | tr -d '\r')
-            case "${value}" in
-              *-SNAPSHOT) echo "  ${key}=${value}" ;;
-              "") echo "Error: ${key} is not set in ci/build/component-versions.properties." >&2
-                  exit 1 ;;
-              *)  echo "Error: ${SOURCE_REF} declares ${key}=${value}, expected a -SNAPSHOT." >&2
-                  echo "       A post-release bump was probably missed; every nightly would" >&2
-                  echo "       otherwise publish this same version." >&2
-                  exit 1 ;;
-            esac
-          done
+          key=integrator.version
+          allowed='-[A-Za-z][A-Za-z0-9.]*$'
+          value=$(awk -F= -v k="${key}" '$1 == k { print substr($0, index($0, "=") + 1); exit }' \
+            ci/build/component-versions.properties | tr -d '\r')
+          if [ -z "${value}" ]; then
+            echo "Error: ${key} is not set in ci/build/component-versions.properties." >&2
+            exit 1
+          fi
+          if [[ "${value}" =~ ${allowed} ]]; then
+            echo "  ${key}=${value}"
+          else
+            echo "Error: ${SOURCE_REF} declares ${key}=${value}, expected a pre-release marker matching ${allowed}." >&2
+            echo "       A post-release bump was probably missed; every nightly would" >&2
+            echo "       otherwise publish this same version." >&2
+            exit 1
+          fi
 
       - name: Reset pinned-build branch to source ref
         run: |
@@ -176,7 +196,7 @@ jobs:
         id: stamp
         run: |
           chmod +x ./ci/build/apply-version.sh
-          ./ci/build/apply-version.sh
+          ./ci/build/apply-version.sh --force-product --force-extension
 
       - name: Upload versions
         uses: actions/upload-artifact@v4
@@ -216,8 +236,7 @@ jobs:
       ref: ${{ needs.prepare-nightly.outputs.sha }}
       target_commitish: ${{ needs.prepare-nightly.outputs.sha }}
       versions_artifact: versions
-      # build.yml replaces only the configured rolling release/tag. Manual test routes therefore
-      # cannot touch `nightly`; the validation step permits that tag only with main/builds/nightly.
+      # build.yml replaces only the configured rolling release/tag, whichever that is.
       publish_tag: ${{ needs.prepare-nightly.outputs.publish_tag }}
       is_prerelease: true
       runner: codebuild
@@ -225,8 +244,7 @@ jobs:
       build_macos: true
       build_windows: true
       build_packed_installers: true
-      # Ignore the dispatch input on a scheduled run, same as the route env vars above: the
-      # production nightly always exercises the smoke tests.
-      run_smoke_tests: ${{ github.event_name == 'schedule' && true || inputs.run_smoke_tests }}
+      run_smoke_tests: true
+      smoke_tests_required: ${{ github.event_name != 'schedule' && inputs.gate_on_smoke_tests == true }}
       ballerina_extension_source: github
       mi_extension_source: github

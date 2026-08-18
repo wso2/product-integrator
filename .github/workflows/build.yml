@@ -37,6 +37,11 @@ on:
         default: true
         required: false
         type: boolean
+      smoke_tests_required:
+        description: 'Whether a failing smoke test fails this build and blocks publishing.'
+        default: true
+        required: false
+        type: boolean
       ballerina_extension_source:
         description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
         required: false
@@ -236,6 +241,7 @@ jobs:
       # Same reason `compile` gets it: the smoke test runs ci/build/patch-wso2ipw-smoke-tests.js, so it
       # must read that script from the commit under test, not from the caller's triggering ref.
       ref: ${{ inputs.ref }}
+      allow_failure: ${{ inputs.smoke_tests_required == false }}
 
   smoke-test-windows:
     if: ${{ inputs.build_windows == true && inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
@@ -244,6 +250,7 @@ jobs:
     with:
       windows_artifact_name: Product-Integrator-Windows
       ref: ${{ inputs.ref }}
+      allow_failure: ${{ inputs.smoke_tests_required == false }}
 
   build-macos:
     if: ${{ inputs.build_macos == true }}
@@ -1102,13 +1109,24 @@ jobs:
     # own inputs, and for smoke-test/smoke-test-windows because run_smoke_tests can turn them off
     # deliberately; a *failed* job of any of these skips this job, and the run is already red from
     # that failure.
+    #
+    # The smoke_tests_required == false branch (the nightly) is deliberately redundant with the
+    # `allow_failure` passed to smoke-test.yml: continue-on-error there should already make the
+    # called workflow — and so `needs.smoke-test.result` here — conclude `success` even when a test
+    # fails, which would leave this clause unexercised. It is kept as the belt to that pair of braces
+    # because the two live in different files and the failure mode is silent: if the conclusion ever
+    # propagates as `failure` instead (a GitHub behaviour change, or a smoke-test job that is
+    # cancelled rather than failed, which continue-on-error does not cover), the nightly would stop
+    # publishing without anything saying why. Do not delete one half without re-testing the other.
     if: |
       always() &&
       (needs.compile.result == 'success') &&
       (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
-      (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') &&
-      (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') &&
+      (inputs.smoke_tests_required == false || (
+        (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') &&
+        (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped')
+      )) &&
       (inputs.publish_tag != '') &&
       (inputs.build_packed_installers == true)
     steps:

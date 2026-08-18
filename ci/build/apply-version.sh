@@ -6,6 +6,9 @@
 # (package-vsix.js names the .vsix from there, so the two must never diverge).
 #
 #   product    5.1.0-SNAPSHOT  -> 5.1.0-<yyyymmddHHmm>
+#              5.1.0-alpha[N]  -> 5.1.0-alpha[N]            (kept as-is unless --mode release, which
+#              5.1.0-rc.1      -> 5.1.0-rc.1                 strips to 5.1.0, or --force-product,
+#              5.1.0-beta      -> 5.1.0-beta                 which timestamps it like -SNAPSHOT)
 #   extension  1.2.0-SNAPSHOT  -> 1.1.<yymmddHH>     (even minor -> the odd pre-release minor below)
 #              1.1.26073014    -> 1.1.<yymmddHH>     (odd minor kept, so the rule is repeatable)
 #
@@ -15,8 +18,10 @@
 #
 # Usage: ./ci/build/apply-version.sh [options]
 #   --version <v>        set integrator.version explicitly (the release driver only)
-#   --mode <m>           pre-release (default) | release; `release` strips -SNAPSHOT instead of
-#                        timestamping, and rejects an odd extension minor (that is the pre-release line)
+#   --mode <m>           pre-release (default) | release; `release` strips any pre-release qualifier
+#                        (-SNAPSHOT, -alpha1, -rc.1, ...) instead of timestamping, and rejects an odd
+#                        extension minor (that is the pre-release line)
+#   --force-product      re-derive the product timestamp even when the current value is concrete
 #   --force-extension    re-derive the extension timestamp even when the current value is concrete
 #   --versions-file <p>  default ci/build/component-versions.properties
 #   --package-json <p>   default wi/wi-extension/package.json
@@ -31,12 +36,14 @@ PACKAGE_JSON="${REPO_ROOT}/wi/wi-extension/package.json"
 EXPLICIT_VERSION=""
 MODE="pre-release"
 FORCE_EXTENSION="false"
+FORCE_PRODUCT="false"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --version) EXPLICIT_VERSION="${2:?--version needs a value}"; shift 2 ;;
     --mode) MODE="${2:?--mode needs a value}"; shift 2 ;;
     --force-extension) FORCE_EXTENSION="true"; shift ;;
+    --force-product) FORCE_PRODUCT="true"; shift ;;
     --versions-file) VERSIONS_FILE="${2:?--versions-file needs a value}"; shift 2 ;;
     --package-json) PACKAGE_JSON="${2:?--package-json needs a value}"; shift 2 ;;
     *) echo "Error: unknown argument '$1'." >&2; exit 1 ;;
@@ -109,16 +116,17 @@ if [ -n "${EXPLICIT_VERSION}" ]; then
   fi
   require_semver "$(base_of "${EXPLICIT_VERSION}")" "--version"
   PRODUCT_VERSION="${EXPLICIT_VERSION}"
-elif [[ "${DECLARED_PRODUCT}" == *"-SNAPSHOT" ]]; then
-  PRODUCT_BASE=$(base_of "${DECLARED_PRODUCT}")
-  require_semver "${PRODUCT_BASE}" "integrator.version"
-  if [ "${MODE}" = "release" ]; then
-    PRODUCT_VERSION="${PRODUCT_BASE}"
-  else
-    PRODUCT_VERSION="${PRODUCT_BASE}-${NOW_LONG}"
-  fi
 else
-  PRODUCT_VERSION="${DECLARED_PRODUCT}"
+  PRODUCT_BASE=$(base_of "${DECLARED_PRODUCT}")
+  if [[ "${DECLARED_PRODUCT}" =~ -[A-Za-z][A-Za-z0-9.]*$ ]] && [ "${MODE}" = "release" ]; then
+    require_semver "${PRODUCT_BASE}" "integrator.version"
+    PRODUCT_VERSION="${PRODUCT_BASE}"
+  elif [[ "${DECLARED_PRODUCT}" == *"-SNAPSHOT" ]] || [ "${FORCE_PRODUCT}" = "true" ]; then
+    require_semver "${PRODUCT_BASE}" "integrator.version"
+    PRODUCT_VERSION="${PRODUCT_BASE}-${NOW_LONG}"
+  else
+    PRODUCT_VERSION="${DECLARED_PRODUCT}"
+  fi
 fi
 
 # --- extension ---------------------------------------------------------------------------------
