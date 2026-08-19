@@ -172,15 +172,32 @@ jobs:
   compile:
     needs: resolve-versions
     name: Build repo
-    # 90 gives a fully cold-cache build room to finish and reach the post-step that SAVES the
-    # caches; warm runs finish well under this. 45 was too tight for a cold build, and a
-    # timeout there cancels the job before caches are saved -> every run stays cold (vicious cycle).
-    timeout-minutes: 90
+    # A timeout here is self-perpetuating: the job is cancelled before the post-step that SAVES the
+    # caches, so the next run starts cold and times out again. That mechanism is unchanged by the
+    # bump, so keep the ceiling generous. 45 was too tight even for codebuild; raised 90 -> 120 when
+    # ubuntu-latest became the default, since it is slower and now also builds the installers.
+    timeout-minutes: 120
     runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
     defaults:
       run:
         working-directory: lib/vscode
     steps:
+      # ubuntu-latest ships ~14 GB free and the installer tail stages Ballerina + ICP + JRE three
+      # times over (deb/rpm/tar). Reclaims ~19 GB. tool-cache is kept (Node and Java come from it)
+      # and swap is kept (the gulp build runs an 8 GB heap); large-packages is slow for what it
+      # returns. Not needed on the larger codebuild runner.
+      - name: Free disk space
+        if: ${{ !inputs.runOnAWS }}
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -306,18 +323,18 @@ jobs:
         run: sudo apt-get update
 
       - name: Cache apt packages
-        uses: awalsh128/cache-apt-pkgs-action@latest
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
         with:
-          packages: build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3 quilt
+          packages: build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3 quilt rpm
           # Bumped from 1.0 to invalidate caches poisoned by the 404 above: when the
           # fetch failed, the action still saved an empty (2 KB) cache under the old
           # key, so every later run got a cache hit that installed nothing and failed
           # downstream with "quilt: command not found".
-          version: 1.1
+          version: 1.2
 
       - name: Verify apt packages installed
         run: |
-          for c in quilt g++; do
+          for c in quilt g++ rpmbuild; do
             command -v "$c" >/dev/null || { echo "::error::$c missing after apt install step"; exit 1; }
           done
 
@@ -617,6 +634,12 @@ jobs:
           wget -O jre.zip "$JRE_URL"
           ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
+      # Permanent diagnostic: the installer tail is the job's disk high-water mark, and headroom on
+      # ubuntu-latest is thin. always() so the numbers are there on the run that runs out.
+      - name: Report disk usage after packaging
+        if: ${{ always() && inputs.build_packed_installers == true }}
+        run: df -h
+
       - name: Upload TAR artifacts
         if: ${{ inputs.build_packed_installers == true}}
         uses: actions/upload-artifact@v4
@@ -790,20 +813,3 @@ jobs:
           name: wi-extension-vsix
           path: wi/wi-extension/wso2-integrator-*.vsix
           if-no-files-found: error
-
-      
-      - name: Login to AWS
-        if: ${{ inputs.build_packed_installers == true && github.event_name != 'pull_request' }}
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-      
-      - name: Upload linux artifacts to S3
-        if: ${{ inputs.build_packed_installers == true && github.event_name != 'pull_request' }}
-        working-directory: .
-        run: |
-          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
-          aws s3 cp installers/linux-deb/ "${S3_PATH}" --recursive --exclude "*" --include "*.deb"
-          aws s3 cp installers/linux-rpm/ "${S3_PATH}" --recursive --exclude "*" --include "*.rpm"

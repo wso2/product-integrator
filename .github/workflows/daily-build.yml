@@ -54,6 +54,14 @@ on:
         required: true
         type: boolean
         default: true
+      runner:
+        description: 'Select runner type. The scheduled nightly always uses the default; this only applies to manual dispatches.'
+        required: true
+        default: 'ubuntu-latest'
+        type: choice
+        options:
+          - ubuntu-latest
+          - codebuild
 
 permissions:
   id-token: write
@@ -239,7 +247,7 @@ jobs:
       # build.yml replaces only the configured rolling release/tag, whichever that is.
       publish_tag: ${{ needs.prepare-nightly.outputs.publish_tag }}
       is_prerelease: true
-      runner: codebuild
+      runner: ${{ inputs.runner || 'ubuntu-latest' }}
       build_linux: true
       build_macos: true
       build_windows: true
