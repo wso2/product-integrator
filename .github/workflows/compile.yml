@@ -172,15 +172,23 @@ jobs:
   compile:
     needs: resolve-versions
     name: Build repo
+    # A timeout here is self-perpetuating: the job is cancelled before the post-step that SAVES the
+    # caches, so the next run starts cold and times out again. That mechanism is unchanged by the
+    # bump, so keep the ceiling generous. 45 was too tight even for codebuild; raised 90 -> 120 when
+    # ubuntu-latest became the default, since it is slower and now also builds the installers.
     timeout-minutes: 120
     runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
     defaults:
       run:
         working-directory: lib/vscode
     steps:
+      # ubuntu-latest ships ~14 GB free and the installer tail stages Ballerina + ICP + JRE three
+      # times over (deb/rpm/tar). Reclaims ~19 GB. tool-cache is kept (Node and Java come from it)
+      # and swap is kept (the gulp build runs an 8 GB heap); large-packages is slow for what it
+      # returns. Not needed on the larger codebuild runner.
       - name: Free disk space
         if: ${{ !inputs.runOnAWS }}
-        uses: jlumbroso/free-disk-space@v1.3.1
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
         with:
           tool-cache: false
           android: true
@@ -315,7 +323,7 @@ jobs:
         run: sudo apt-get update
 
       - name: Cache apt packages
-        uses: awalsh128/cache-apt-pkgs-action@latest
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
         with:
           packages: build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3 quilt rpm
           # Bumped from 1.0 to invalidate caches poisoned by the 404 above: when the
@@ -626,7 +634,8 @@ jobs:
           wget -O jre.zip "$JRE_URL"
           ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
-      # always(): the point of this probe is the run where the installer tail ran out of disk.
+      # Permanent diagnostic: the installer tail is the job's disk high-water mark, and headroom on
+      # ubuntu-latest is thin. always() so the numbers are there on the run that runs out.
       - name: Report disk usage after packaging
         if: ${{ always() && inputs.build_packed_installers == true }}
         run: df -h
