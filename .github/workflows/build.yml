@@ -579,20 +579,6 @@ jobs:
           ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
 
-      - name: Login to AWS
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-      
-      - name: Upload macOS artifacts to S3
-        if: ${{ inputs.build_packed_installers == true }}
-        working-directory: .
-        run: |
-          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
-          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.dmg"
-      
       - name: Upload macOS DMG artifacts
         if: ${{ inputs.build_packed_installers == true }}
         uses: actions/upload-artifact@v4
@@ -996,21 +982,6 @@ jobs:
           Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
           Invoke-WebRequest -Uri $JRE_URL -OutFile "jre.zip"
           .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
-
-      - name: Login to AWS
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Upload Windows artifacts to S3
-        if: ${{ inputs.build_packed_installers == true }}
-        shell: bash
-        working-directory: .
-        run: |
-          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
-          aws s3 cp installers/windows/WixPackage/bin/x64/Release/en-US/ "${S3_PATH}" --recursive --exclude "*" --include "*.msi"
 
       - name: Upload Windows artifacts
         if: ${{ inputs.build_packed_installers == true }}

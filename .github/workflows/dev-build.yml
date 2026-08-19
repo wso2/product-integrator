@@ -4,7 +4,7 @@ name: Development Build
 #
 # Versions are timestamped for this run only: a `-SNAPSHOT` branch builds as 5.1.0-<yyyymmddHHmm>
 # with the extension at 1.1.<yymmddHH>. Nothing is committed to any branch and nothing is published
-# to GitHub Releases; you get the workflow artifacts and the usual S3 upload.
+# to GitHub Releases; you get the workflow artifacts.
 #
 # The nightly is daily-build.yml; real releases are release.yml.
 
