@@ -270,7 +270,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		if (isMcpProxyFromExistingApi(component)) {
 			// if its an MCP proxy over an existing API, attach the sources to its existing track instead of
 			// creating a new component. This converts the proxy into an MCP server built from source.
-			return await handleMcpProxyRepositoryAttach(workspaceCompId, component!, org, project, createParams[0], workspaceFsPath, gitRoot!);
+			return await handleMcpProxyRepositoryAttach(workspaceCompId, component, org, project, createParams[0], workspaceFsPath, gitRoot!);
 		}
 	}
 
@@ -519,6 +519,22 @@ async function handleMcpProxyRepositoryAttach(
 	gitRoot: string,
 ): Promise<WICloudSubmitComponentsResp> {
 	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: 1 };
+	const componentName = component.metadata?.name || "Unknown";
+
+	const missing = !createParam
+		? ["integration details"]
+		: [
+			!gitRoot && "git repository root",
+			!createParam.repoUrl && "repository URL",
+			!createParam.branch && "repository branch",
+		].filter((item): item is string => typeof item === "string");
+	if (missing.length > 0) {
+		const error = `Cannot attach sources to the MCP proxy: missing ${missing.join(", ")}.`;
+		ext.logError(error, new Error(error));
+		result.failed.push({ name: componentName, error });
+		return result;
+	}
+
 	try {
 		await window.withProgress(
 			{ title: "Attaching sources to MCP proxy...", location: ProgressLocation.Notification },
@@ -552,8 +568,8 @@ async function handleMcpProxyRepositoryAttach(
 			showReloadWorkspaceMessage(successMessage, workspaceFsPath);
 		}
 	} catch (err) {
-		ext.logError(`Failed to attach the repository to MCP proxy component ${component.metadata?.name}`, err as Error);
-		result.failed.push({ name: component.metadata?.name || "Unknown", error: `Failed to attach the repository to the MCP proxy: ${(err as Error).message}` });
+		ext.logError(`Failed to attach the repository to MCP proxy component ${componentName}`, err as Error);
+		result.failed.push({ name: componentName, error: `Failed to attach the repository to the MCP proxy: ${(err as Error).message}` });
 	}
 	return result;
 }

@@ -52,7 +52,7 @@ export const MCP_PROXY_FROM_EXISTING_API = "MCPProxyFromExistingAPI";
  * flips the sub-type to `MCPProxyFromExistingAPIWithSource` once a repository is attached, so this
  * only matches components that have not been converted yet.
  */
-export const isMcpProxyFromExistingApi = (component?: ComponentKind): boolean =>
+export const isMcpProxyFromExistingApi = (component?: ComponentKind): component is ComponentKind =>
 	component?.spec?.subType === MCP_PROXY_FROM_EXISTING_API;
 
 interface GraphqlResponse<T> {
