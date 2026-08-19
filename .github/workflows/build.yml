@@ -10,7 +10,7 @@ on:
       runner:
         description: 'Select runner type'
         required: false
-        default: 'codebuild'
+        default: 'ubuntu-latest'
         type: string
       build_linux:
         description: 'Build for Linux'
@@ -90,9 +90,6 @@ on:
 permissions:
   id-token: write
   contents: write     
-
-env:
-  awsRunnerId: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}  
 
 jobs:
   # Settle the product and extension versions ONCE, up front, and hand the resulting files to every

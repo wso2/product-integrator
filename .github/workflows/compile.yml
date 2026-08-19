@@ -172,15 +172,24 @@ jobs:
   compile:
     needs: resolve-versions
     name: Build repo
-    # 90 gives a fully cold-cache build room to finish and reach the post-step that SAVES the
-    # caches; warm runs finish well under this. 45 was too tight for a cold build, and a
-    # timeout there cancels the job before caches are saved -> every run stays cold (vicious cycle).
-    timeout-minutes: 90
+    timeout-minutes: 120
     runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
     defaults:
       run:
         working-directory: lib/vscode
     steps:
+      - name: Free disk space
+        if: ${{ !inputs.runOnAWS }}
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -308,16 +317,16 @@ jobs:
       - name: Cache apt packages
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3 quilt
+          packages: build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3 quilt rpm
           # Bumped from 1.0 to invalidate caches poisoned by the 404 above: when the
           # fetch failed, the action still saved an empty (2 KB) cache under the old
           # key, so every later run got a cache hit that installed nothing and failed
           # downstream with "quilt: command not found".
-          version: 1.1
+          version: 1.2
 
       - name: Verify apt packages installed
         run: |
-          for c in quilt g++; do
+          for c in quilt g++ rpmbuild; do
             command -v "$c" >/dev/null || { echo "::error::$c missing after apt install step"; exit 1; }
           done
 
@@ -617,6 +626,11 @@ jobs:
           wget -O jre.zip "$JRE_URL"
           ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
+      # always(): the point of this probe is the run where the installer tail ran out of disk.
+      - name: Report disk usage after packaging
+        if: ${{ always() && inputs.build_packed_installers == true }}
+        run: df -h
+
       - name: Upload TAR artifacts
         if: ${{ inputs.build_packed_installers == true}}
         uses: actions/upload-artifact@v4
