@@ -42,6 +42,8 @@ const GRAPHQL_TIMEOUT_MS = 60000;
 /** Repository type sent for a user-owned repository that already contains sources. */
 const REPOSITORY_TYPE_USER_MANAGED_NON_EMPTY = "UserManagedNonEmpty";
 
+const ATTACH_MCP_PROXY_REPOSITORY_OPERATION = "attachMCPProxyRepositoryToExistingTrack";
+
 /** Component sub-type of an MCP proxy that has no source repository attached yet. */
 export const MCP_PROXY_FROM_EXISTING_API = "MCPProxyFromExistingAPI";
 
@@ -157,8 +159,15 @@ export async function attachMCPProxyRepositoryToExistingTrack(params: AttachMCPP
   )
 }`;
 
-	await executeCpGraphql<{ attachMCPProxyRepositoryToExistingTrack: string | null }>(
+	const data = await executeCpGraphql<{ attachMCPProxyRepositoryToExistingTrack: string | null }>(
 		query,
-		"attachMCPProxyRepositoryToExistingTrack",
+		ATTACH_MCP_PROXY_REPOSITORY_OPERATION,
 	);
+
+	// A null or empty result means the attachment was not confirmed, so do not report success.
+	if (!data.attachMCPProxyRepositoryToExistingTrack) {
+		throw new Error(
+			`${ATTACH_MCP_PROXY_REPOSITORY_OPERATION} returned no confirmation. The MCP proxy may not have been converted — verify the component in the console before retrying.`,
+		);
+	}
 }
