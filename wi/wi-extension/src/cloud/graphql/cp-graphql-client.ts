@@ -136,15 +136,10 @@ export async function executeCpGraphql<T>(query: string, operationName: string):
  * the source APIM API and flips the component's sub-type to `MCPProxyFromExistingAPIWithSource`.
  */
 export async function attachMCPProxyRepositoryToExistingTrack(params: AttachMCPProxyRepositoryReq): Promise<void> {
-	const orgId = Number(params.orgId);
-	if (!Number.isFinite(orgId)) {
-		throw new Error(`Invalid organization id '${params.orgId}' for MCP proxy repository attachment`);
-	}
-
 	const query = `mutation {
   attachMCPProxyRepositoryToExistingTrack(
     repository: {
-      orgId: ${orgId}
+      orgId: ${params.orgId}
       orgHandler: ${gqlString(params.orgHandler)}
       projectId: ${gqlString(params.projectId)}
       componentId: ${gqlString(params.componentId)}

@@ -60,7 +60,7 @@ export interface WICloudSubmitComponentsResp {
  * MCP proxy component gains a source repository (MCP proxy → MCP server conversion).
  */
 export interface AttachMCPProxyRepositoryReq {
-	orgId: string;
+	orgId: number;
 	orgHandler: string;
 	projectId: string;
 	componentId: string;

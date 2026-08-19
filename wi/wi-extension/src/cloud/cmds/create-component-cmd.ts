@@ -543,7 +543,7 @@ async function handleMcpProxyRepositoryAttach(
 					componentId: workspaceCompId,
 					isPublicRepo: false,
 					orgHandler: org.handle,
-					orgId: org.id.toString(),
+					orgId: org.id,
 					projectId: project.id,
 					srcGitRepoUrl: createParam.repoUrl,
 					repositorySubPath: relativePath(gitRoot, createParam.componentDir),
