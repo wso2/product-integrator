@@ -44,11 +44,11 @@ on:
       runner:
         description: 'Select runner type'
         required: true
-        default: 'codebuild'
+        default: 'ubuntu-latest'
         type: choice
         options:
-          - codebuild
           - ubuntu-latest
+          - codebuild
       build_linux:
         description: 'Build for Linux'
         required: false
