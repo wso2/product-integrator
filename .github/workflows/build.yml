@@ -244,6 +244,7 @@ jobs:
       # must read that script from the commit under test, not from the caller's triggering ref.
       ref: ${{ inputs.ref }}
       allow_failure: ${{ inputs.smoke_tests_required == false }}
+      product_name: ${{ inputs.product_flavor == 'agent-builder' && 'WSO2 Agent Builder' || 'WSO2 Integrator' }}
 
   smoke-test-windows:
     if: ${{ inputs.build_windows == true && inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
@@ -253,6 +254,7 @@ jobs:
       windows_artifact_name: Product-Integrator-Windows
       ref: ${{ inputs.ref }}
       allow_failure: ${{ inputs.smoke_tests_required == false }}
+      product_name: ${{ inputs.product_flavor == 'agent-builder' && 'WSO2 Agent Builder' || 'WSO2 Integrator' }}
 
   build-macos:
     if: ${{ inputs.build_macos == true }}
@@ -1200,11 +1202,12 @@ jobs:
         env:
           PUBLISH_TAG: ${{ inputs.publish_tag }}
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
+          PRODUCT_NAME: ${{ inputs.product_flavor == 'agent-builder' && 'WSO2 Agent Builder' || 'WSO2 Integrator' }}
         run: |
           if [ "${PUBLISH_TAG}" = "nightly" ]; then
-            echo "name=WSO2 Integrator Nightly (${INTEGRATOR_VERSION})" >> "$GITHUB_OUTPUT"
+            echo "name=${PRODUCT_NAME} Nightly (${INTEGRATOR_VERSION})" >> "$GITHUB_OUTPUT"
           else
-            echo "name=WSO2 Integrator ${PUBLISH_TAG}" >> "$GITHUB_OUTPUT"
+            echo "name=${PRODUCT_NAME} ${PUBLISH_TAG}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: List release files

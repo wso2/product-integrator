@@ -12,7 +12,7 @@
         <key>BundleOverwriteAction</key>
         <string>upgrade</string>
         <key>RootRelativeBundlePath</key>
-        <string>Applications/WSO2 Integrator.app</string>
+        <string>Applications/__PRODUCT_NAME__.app</string>
     </dict>
 </array>
 </plist>

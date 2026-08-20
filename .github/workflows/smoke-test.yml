@@ -26,6 +26,11 @@ on:
         required: false
         type: boolean
         default: false
+      product_name:
+        description: "Product display name (product.json nameShort/nameLong) — names the Windows exe and the user-data directory. 'WSO2 Integrator' or 'WSO2 Agent Builder'."
+        required: false
+        type: string
+        default: 'WSO2 Integrator'
   workflow_dispatch:
     inputs:
       integrator_version:
@@ -200,7 +205,7 @@ jobs:
           # product.nameShort to getUserDataPath(), and getDefaultUserDataPath() joins it onto
           # $XDG_CONFIG_HOME (or ~/.config) on Linux. nameShort is set in ci/build/update-product.sh.
           # Copying only that tree keeps unrelated logs out of the artifact.
-          USER_DATA="${XDG_CONFIG_HOME:-$HOME/.config}/WSO2 Integrator"
+          USER_DATA="${XDG_CONFIG_HOME:-$HOME/.config}/${{ inputs.product_name || 'WSO2 Integrator' }}"
           if [ -d "${USER_DATA}/logs" ]; then
             cp -R "${USER_DATA}/logs" editor-logs/
           else
@@ -279,9 +284,10 @@ jobs:
           $proc = Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /norestart INTEGRATORFOLDER=`"$installDir`"" -Wait -PassThru
           Write-Host "msiexec exit code: $($proc.ExitCode)"
           if ($proc.ExitCode -ne 0) { throw "msiexec failed with exit code $($proc.ExitCode)" }
-          $binary = Get-ChildItem $installDir -Recurse -Filter 'WSO2 Integrator.exe' -Depth 2 |
+          $exeName = '${{ inputs.product_name || 'WSO2 Integrator' }}.exe'
+          $binary = Get-ChildItem $installDir -Recurse -Filter $exeName -Depth 2 |
             Select-Object -First 1
-          if (-not $binary) { throw 'WSO2 Integrator.exe not found' }
+          if (-not $binary) { throw "$exeName not found" }
           "WSO2_INTEGRATOR_PATH=$($binary.FullName)" | Out-File -Append $env:GITHUB_ENV
           # Exclude from Defender to avoid I/O throttling
           Add-MpPreference -ExclusionPath $installDir

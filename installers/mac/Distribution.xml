@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
-    <title>WSO2 Integrator</title>
+    <title>__PRODUCT_NAME__</title>
     <organization>com.wso2.integrator</organization>
     <domains enable_localSystem="true" enable_currentUserOnly="false" enable_currentUserHome="false" />
     <options customize="never" require-scripts="false" rootVolumeOnly="true" />
@@ -13,7 +13,7 @@
         function checkSystem() {
             if(!(system.compareVersions(system.version.ProductVersion, '10.13.0') >= 0)){
                 my.result.title = 'Unable to install';
-                my.result.message = 'WSO2 Integrator requires Mac OS X 10.13 or later.';
+                my.result.message = '__PRODUCT_NAME__ requires Mac OS X 10.13 or later.';
                 my.result.type = 'Fatal';
                 return false;
             }
@@ -30,5 +30,5 @@
     <choice id="com.wso2.integrator" visible="false">
         <pkg-ref id="com.wso2.integrator" />
     </choice>
-    <pkg-ref id="com.wso2.integrator" version="__VERSION__" onConclusion="none" auth="none">WSO2 Integrator.pkg</pkg-ref>
+    <pkg-ref id="com.wso2.integrator" version="__VERSION__" onConclusion="none" auth="none">__PRODUCT_NAME__.pkg</pkg-ref>
 </installer-gui-script>

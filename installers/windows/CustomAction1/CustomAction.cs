@@ -254,7 +254,10 @@ namespace CustomAction1
                         if (System.IO.Directory.Exists(appDataRoaming))
                         {
                             session.Log($"AppData\\Roaming directory found: {appDataRoaming}");
-                            string targetDir = System.IO.Path.Combine(appDataRoaming, "WSO2 Integrator", "User");
+                            // The app's user-data dir is named after product.json nameShort,
+                            // which depends on the product flavor. build.bat resolves the
+                            // placeholder from the payload's exe name before compiling.
+                            string targetDir = System.IO.Path.Combine(appDataRoaming, "@PRODUCT_NAME@", "User");
                             if (!System.IO.Directory.Exists(targetDir))
                             {
                                 System.IO.Directory.CreateDirectory(targetDir);
