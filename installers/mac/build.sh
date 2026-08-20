@@ -50,8 +50,20 @@ WSO2_UNZIPPED_FOLDER=$(unzip -Z1 "$WSO2_ZIP" | head -1 | cut -d/ -f1)
 WSO2_UNZIPPED_PATH="$EXTRACTION_TARGET/$WSO2_UNZIPPED_FOLDER"
 mv "$WSO2_UNZIPPED_PATH"/* "$WSO2_TARGET"
 rm -rf "$WSO2_UNZIPPED_PATH"
-chmod +x "$WSO2_TARGET/WSO2 Integrator.app/Contents/MacOS"/* 2>/dev/null || true
-xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
+
+# The .app bundle is named after product.json nameLong, which depends on the
+# product flavor ("WSO2 Integrator" / "WSO2 Agent Builder"), so detect it from
+# the payload instead of hardcoding it.
+APP_BUNDLE=$(cd "$WSO2_TARGET" && ls -d *.app 2>/dev/null | head -1)
+if [ -z "$APP_BUNDLE" ]; then
+    print_error "No .app bundle found in $WSO2_TARGET"
+    exit 1
+fi
+APP_NAME="${APP_BUNDLE%.app}"
+print_info "Detected app bundle: $APP_BUNDLE"
+
+chmod +x "$WSO2_TARGET/$APP_BUNDLE/Contents/MacOS"/* 2>/dev/null || true
+xattr -cr "$WSO2_TARGET/$APP_BUNDLE"
 
 rm -rf "$EXTRACTION_TARGET/__MACOSX"
 
@@ -66,7 +78,7 @@ if [ "$ARCH" = "x64" ]; then
 else
     CHOREO_ARCH="$ARCH"
 fi
-CHOREO_CLI_DIR="$WSO2_TARGET/WSO2 Integrator.app/Contents/Resources/app/extensions/wso2.wso2-integrator/resources/choreo-cli"
+CHOREO_CLI_DIR="$WSO2_TARGET/$APP_BUNDLE/Contents/Resources/app/extensions/wso2.wso2-integrator/resources/choreo-cli"
 if [ -d "$CHOREO_CLI_DIR" ]; then
     print_info "Pruning choreo-cli binaries to darwin/$CHOREO_ARCH only"
     for VERSION_DIR in "$CHOREO_CLI_DIR"/*/; do
@@ -88,7 +100,7 @@ fi
 
 # Extract Ballerina zip
 print_info "Extracting Ballerina to package resources"
-COMPONENTS_DIR="$WORK_DIR/payload/Applications/WSO2 Integrator.app/Contents/components"
+COMPONENTS_DIR="$WORK_DIR/payload/Applications/$APP_BUNDLE/Contents/components"
 BALLERINA_TARGET="$COMPONENTS_DIR/ballerina"
 rm -rf "$BALLERINA_TARGET"
 mkdir -p "$BALLERINA_TARGET"
@@ -160,7 +172,14 @@ if [ -f "$ICP_SCRIPT" ]; then
 fi
 
 # Fix ZIP epoch timestamps — unzip preserves 1980-01-01 dates from ZIP archives
-find "$WSO2_TARGET/WSO2 Integrator.app" -exec touch {} +
+find "$WSO2_TARGET/$APP_BUNDLE" -exec touch {} +
+
+# Resolve the product-name placeholder in packaging metadata (same in-place
+# substitute/restore pattern as __VERSION__ in Distribution.xml).
+sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/component.plist"
+sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/Distribution.xml"
+sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/welcome.html"
+sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/conclusion.html"
 
 # Build the component package
 pkgbuild --root "$EXTRACTION_TARGET" \
@@ -169,7 +188,7 @@ pkgbuild --root "$EXTRACTION_TARGET" \
          --install-location "/" \
          --ownership preserve \
          --component-plist "$WORK_DIR/component.plist" \
-         "$WORK_DIR/WSO2 Integrator.pkg"
+         "$WORK_DIR/$APP_NAME.pkg"
 
 sed -i '' "s/version=\"__VERSION__\"/version=\"$VERSION\"/g" "$WORK_DIR/Distribution.xml"
 
@@ -181,6 +200,12 @@ productbuild --distribution "$WORK_DIR/Distribution.xml" \
              "wso2-integrator-$VERSION-$ARCH.pkg"
 
 sed -i '' "s/version=\"$VERSION\"/version=\"__VERSION__\"/g" "$WORK_DIR/Distribution.xml"
+
+# Restore the product-name placeholders
+sed -i '' "s/$APP_NAME/__PRODUCT_NAME__/g" "$WORK_DIR/component.plist"
+sed -i '' "s/$APP_NAME/__PRODUCT_NAME__/g" "$WORK_DIR/Distribution.xml"
+sed -i '' "s/$APP_NAME/__PRODUCT_NAME__/g" "$WORK_DIR/welcome.html"
+sed -i '' "s/$APP_NAME/__PRODUCT_NAME__/g" "$WORK_DIR/conclusion.html"
 
 
 # Check if the build was successful
@@ -196,7 +221,7 @@ fi
 # Build the DMG
 # -------------------------------------------------------------------
 
-APP_NAME="WSO2 Integrator"
+# APP_NAME was detected from the payload above (flavor-dependent).
 DMG_NAME="wso2-integrator-$VERSION-$ARCH.dmg"
 DMG_STAGING="$WORK_DIR/dmg_staging"
 
@@ -322,6 +347,6 @@ rm -rf "${ICP_TARGET:?}"/*
 rm -rf "${BALLERINA_TARGET:?}"/*
 rm -rf "$EXTRACTION_TARGET/Library"
 rm -rf "$EXTRACTION_TARGET/Applications"
-rm -rf "$WORK_DIR/WSO2 Integrator.pkg"
+rm -rf "$WORK_DIR/$APP_NAME.pkg"
 
 print_info "Done!"

@@ -3,7 +3,7 @@
   <Fragment>
     <ComponentGroup Id="IntegratorComponents" Directory="INTEGRATORFOLDER">
       <Files Include=".\payload\Integrator\**">
-        <Exclude Files=".\payload\Integrator\WSO2 Integrator.exe" />
+        <Exclude Files=".\payload\Integrator\@PRODUCT_NAME@.exe" />
       </Files>
     </ComponentGroup>
 
@@ -13,14 +13,14 @@
         Type="integer" Value="1" KeyPath="yes" />
 
       <File Id="IntegratorExe"
-        Source=".\payload\Integrator\WSO2 Integrator.exe" />
+        Source=".\payload\Integrator\@PRODUCT_NAME@.exe" />
 
       <!-- Desktop Shortcut -->
       <Shortcut Id="DesktopShortcut"
         Directory="DesktopFolder"
-        Name="WSO2 Integrator"
-        Description="Launch WSO2 Integrator"
-        Target="[INTEGRATORFOLDER]WSO2 Integrator.exe"
+        Name="@PRODUCT_NAME@"
+        Description="Launch @PRODUCT_NAME@"
+        Target="[INTEGRATORFOLDER]@PRODUCT_NAME@.exe"
         WorkingDirectory="INTEGRATORFOLDER"
         Icon="Integrator.exe"
         IconIndex="0" />
@@ -28,9 +28,9 @@
       <!-- Start Menu Shortcut -->
       <Shortcut Id="StartMenuShortcut"
         Directory="ProgramMenuFolder"
-        Name="WSO2 Integrator"
-        Description="Launch WSO2 Integrator"
-        Target="[INTEGRATORFOLDER]WSO2 Integrator.exe"
+        Name="@PRODUCT_NAME@"
+        Description="Launch @PRODUCT_NAME@"
+        Target="[INTEGRATORFOLDER]@PRODUCT_NAME@.exe"
         WorkingDirectory="INTEGRATORFOLDER"
         Icon="Integrator.exe"
         IconIndex="0" />

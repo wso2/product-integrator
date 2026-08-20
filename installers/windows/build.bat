@@ -101,6 +101,18 @@ for /f "delims=" %%v in ('powershell -nologo -noprofile -command "('%~6' -split 
 REM Update version in Package.wxs
 powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%WIX_VERSION%' | Set-Content '.\WixPackage\Package.wxs'"
 
+REM The main executable is named after product.json nameShort, which depends on
+REM the product flavor ("WSO2 Integrator" / "WSO2 Agent Builder"). Detect it
+REM from the payload and resolve the @PRODUCT_NAME@ placeholders. Placeholder
+REM sources are backed up and restored via :restore_name on every exit path.
+for /f "delims=" %%p in ('powershell -nologo -noprofile -command "(Get-ChildItem '.\WixPackage\payload\Integrator' -Filter *.exe -File | Select-Object -First 1).BaseName"') do set "PRODUCT_NAME=%%p"
+if not defined PRODUCT_NAME set "PRODUCT_NAME=WSO2 Integrator"
+echo Product name: %PRODUCT_NAME%
+copy /y ".\WixPackage\Package.wxs" ".\WixPackage\Package.wxs.bak" >nul
+copy /y ".\WixPackage\IntegratorComponents.wxs" ".\WixPackage\IntegratorComponents.wxs.bak" >nul
+copy /y ".\CustomAction1\CustomAction.cs" ".\CustomAction1\CustomAction.cs.bak" >nul
+powershell -Command "foreach ($f in '.\WixPackage\Package.wxs','.\WixPackage\IntegratorComponents.wxs','.\CustomAction1\CustomAction.cs') { (Get-Content -Raw $f).Replace('@PRODUCT_NAME@', '%PRODUCT_NAME%') | Set-Content $f }"
+
 REM Map build directory to a short drive letter to keep file paths under 260 chars.
 REM wixnative.exe lacks a longPathAware manifest, so it crashes on paths > 260 chars.
 set "SCRIPT_DIR=%~dp0"
@@ -116,6 +128,7 @@ for %%L in (W X Y Z) do (
 )
 if not defined BUILD_DRIVE (
     echo ERROR: No available drive letter found ^(W-Z all in use or subst failed^)
+    call :restore_name
     powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
     exit /b 1
@@ -124,6 +137,7 @@ pushd %BUILD_DRIVE%:\
 if errorlevel 1 (
     echo ERROR: pushd into %BUILD_DRIVE%:\ failed
     subst %BUILD_DRIVE%: /D >nul 2>&1
+    call :restore_name
     powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
     exit /b 1
@@ -134,6 +148,7 @@ if errorlevel 1 (
     echo CustomAction1 build failed
     popd
     subst %BUILD_DRIVE%: /D
+    call :restore_name
     powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
@@ -142,6 +157,7 @@ if errorlevel 1 (
     echo WixPackage build failed
     popd
     subst %BUILD_DRIVE%: /D
+    call :restore_name
     powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
     exit /b 1
 )
@@ -159,8 +175,19 @@ if exist "%MSI_ORIG%" (
     echo MSI file not found: %MSI_ORIG%
 )
 
-REM Revert version placeholder in Package.wxs
+REM Revert product-name and version placeholders
+call :restore_name
 powershell -Command "(Get-Content -Raw '.\WixPackage\Package.wxs').Replace('%WIX_VERSION%', '@VERSION@') | Set-Content '.\WixPackage\Package.wxs'"
 REM Remove payload and resources directories after build
 if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
 endlocal
+exit /b 0
+
+REM Restores the @PRODUCT_NAME@ placeholder sources backed up before substitution.
+REM The backups were taken after the @VERSION@ substitution, so the caller's
+REM version-restore step still applies afterwards.
+:restore_name
+if exist ".\WixPackage\Package.wxs.bak" move /y ".\WixPackage\Package.wxs.bak" ".\WixPackage\Package.wxs" >nul
+if exist ".\WixPackage\IntegratorComponents.wxs.bak" move /y ".\WixPackage\IntegratorComponents.wxs.bak" ".\WixPackage\IntegratorComponents.wxs" >nul
+if exist ".\CustomAction1\CustomAction.cs.bak" move /y ".\CustomAction1\CustomAction.cs.bak" ".\CustomAction1\CustomAction.cs" >nul
+exit /b 0
