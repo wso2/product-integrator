@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: ''
+      allow_failure:
+        description: 'Report a failing smoke test without failing this workflow'
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       integrator_version:
@@ -36,6 +41,7 @@ jobs:
     if: inputs.artifact_name != '' || inputs.integrator_version != ''
     name: ${{ matrix.example }} (Linux)
     runs-on: ubuntu-latest
+    continue-on-error: ${{ inputs.allow_failure == true }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -172,6 +178,18 @@ jobs:
           WSO2IPW_ELECTRON_ARGS: ${{ matrix.example == 'icp' && '--no-sandbox --password-store=basic' || '--no-sandbox' }}
         run: bash "$(npm root -g)/wso2ipw/examples/${{ matrix.example }}/run-all.sh"
 
+      - name: Report non-blocking failure
+        if: ${{ failure() && inputs.allow_failure == true }}
+        shell: bash
+        run: |
+          echo "::warning title=Smoke test failed (non-blocking)::${{ matrix.example }} (Linux) failed. The build was published anyway; see this job's log and the uploaded screenshots."
+          {
+            echo "### :warning: Smoke test failed (non-blocking)"
+            echo ""
+            echo '`${{ matrix.example }}` (Linux) failed and did not block the build.'
+            echo "Logs, editor logs and screenshots are attached to this run as artifacts."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Collect editor logs on failure
         if: failure()
         run: |
@@ -221,6 +239,7 @@ jobs:
     if: inputs.windows_artifact_name != '' || inputs.integrator_version != ''
     name: ${{ matrix.example }} (Windows)
     runs-on: windows-2022
+    continue-on-error: ${{ inputs.allow_failure == true }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -317,6 +336,18 @@ jobs:
       - name: Run ${{ matrix.example }}
         shell: bash
         run: bash "$(npm root -g)/wso2ipw/examples/${{ matrix.example }}/run-all.sh"
+
+      - name: Report non-blocking failure
+        if: ${{ failure() && inputs.allow_failure == true }}
+        shell: bash
+        run: |
+          echo "::warning title=Smoke test failed (non-blocking)::${{ matrix.example }} (Windows) failed. The build was published anyway; see this job's log and the uploaded screenshots."
+          {
+            echo "### :warning: Smoke test failed (non-blocking)"
+            echo ""
+            echo '`${{ matrix.example }}` (Windows) failed and did not block the build.'
+            echo "Logs, editor logs and screenshots are attached to this run as artifacts."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect editor logs on failure
         if: failure()

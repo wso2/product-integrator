@@ -10,7 +10,17 @@ name: Release
 #
 # `main` is never modified. After a GA release, bump it by hand to the next
 # <major>.<minor+1>.0-SNAPSHOT, and the extension to <major>.<minor+2>.0-SNAPSHOT. daily-build.yml
-# asserts this, so a missed bump fails the next nightly rather than silently republishing a version.
+# asserts the integrator half, so a missed bump fails the next nightly rather than silently
+# republishing a version. The extension half is deliberately not asserted, and force-stamping does not
+# cover it: bumping only the integrator line leaves the extension on the even minor just released, from
+# which the rule below derives <minor-1> — a version *below* the published stable, republished every
+# night on a green run. Nothing catches that, so do both lines together.
+#
+# That <minor+2> is load-bearing: apply-version.sh derives the pre-release extension line as
+# <minor-1>, so it only stays above the published stable while the declared version is the next
+# *feature* release. On a patch line it points backwards — 1.2.1-SNAPSHOT derives 1.1.<stamp>, below
+# an already-published 1.2.0 — so publish a patch as GA only, never as a --pre-release to the
+# Marketplace.
 #
 # Retrying a failed release: the branch is pushed in step 2, before the build runs, so a build
 # failure leaves the branch and its version commit behind and re-dispatching the same version then
@@ -34,11 +44,11 @@ on:
       runner:
         description: 'Select runner type'
         required: true
-        default: 'codebuild'
+        default: 'ubuntu-latest'
         type: choice
         options:
-          - codebuild
           - ubuntu-latest
+          - codebuild
       build_linux:
         description: 'Build for Linux'
         required: false
@@ -88,6 +98,11 @@ on:
         options:
           - integrator
           - agent-builder
+      publish_to_marketplace:
+        description: 'After a successful build, publish the WI extension vsix to the VS Code Marketplace and Open VSX'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   id-token: write
@@ -215,3 +230,19 @@ jobs:
       ballerina_extension_source: ${{ inputs.ballerina_extension_source }}
       mi_extension_source: ${{ inputs.mi_extension_source }}
       product_flavor: ${{ inputs.product_flavor }}
+
+  publish-marketplace:
+    name: Publish WI extension to marketplaces
+    needs: build
+    # The vsix only lands as a release asset when build_packed_installers produced the
+    # publish-github-release job's release (build.yml:1095); with it off, there is nothing for
+    # reusable-publish-vsix.yml to download.
+    if: ${{ inputs.publish_to_marketplace && inputs.build_packed_installers }}
+    uses: ./.github/workflows/reusable-publish-vsix.yml
+    secrets:
+      VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
+      OPENVSX_TOKEN: ${{ secrets.OPENVSX_TOKEN }}
+    with:
+      tag: v${{ inputs.version }}
+      vscode: true
+      openVSX: true

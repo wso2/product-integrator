@@ -1,0 +1,38 @@
+name: Publish WI Extension
+
+# Ad-hoc, manual publish of a vsix already attached to a GitHub Release (created by release.yml)
+# to the VS Code Marketplace and/or Open VSX. release.yml can also trigger this same logic
+# automatically right after a build via its own `publish_to_marketplace` input — both share
+# reusable-publish-vsix.yml so the publish steps aren't duplicated.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish from, e.g. v5.1.0'
+        required: true
+        type: string
+      vscode:
+        description: 'Publish to VS Code Marketplace'
+        required: true
+        type: boolean
+        default: true
+      openVSX:
+        description: 'Publish to Open VSX marketplace'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    uses: ./.github/workflows/reusable-publish-vsix.yml
+    secrets:
+      VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
+      OPENVSX_TOKEN: ${{ secrets.OPENVSX_TOKEN }}
+    with:
+      tag: ${{ inputs.tag }}
+      vscode: ${{ inputs.vscode }}
+      openVSX: ${{ inputs.openVSX }}

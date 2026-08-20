@@ -1,0 +1,101 @@
+name: Reusable Publish WI Extension
+
+# Shared by publish-vsix.yml (manual, ad-hoc publish from any existing tag) and release.yml's
+# optional marketplace-publish step (publish the tag a release just cut). Keeping the actual
+# vsce/ovsx logic here means both callers stay in sync instead of drifting apart.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Release tag to publish from, e.g. v5.1.0'
+        required: true
+        type: string
+      # No defaults: a workflow_call input that is `required` can never fall back to one, and
+      # both callers pass these explicitly.
+      vscode:
+        description: 'Publish to VS Code Marketplace'
+        required: true
+        type: boolean
+      openVSX:
+        description: 'Publish to Open VSX marketplace'
+        required: true
+        type: boolean
+    secrets:
+      VSCE_TOKEN:
+        required: false
+      OPENVSX_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish vsix to marketplaces
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Download WI extension VSIX from release
+        env:
+          TAG: ${{ inputs.tag }}
+        run: gh release download "${TAG}" --repo "${{ github.repository }}" --pattern 'wso2-integrator-*.vsix'
+
+      - name: Get vsix path
+        id: vsix
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(wso2-integrator-*.vsix)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "Error: expected exactly one wso2-integrator-*.vsix, found ${#files[@]}:" >&2
+            printf '  - %s\n' "${files[@]}" >&2
+            exit 1
+          fi
+          echo "vsixName=${files[0]}" >> "$GITHUB_OUTPUT"
+
+      # The GitHub release's own prerelease flag is editable after the fact and can drift from
+      # what was actually packaged, so read the ground truth out of the vsix itself: this is the
+      # same Microsoft.VisualStudio.Code.PreRelease manifest property @vscode/vsce's own `publish`
+      # command checks before it will accept `--pre-release --packagePath`.
+      - name: Detect pre-release from vsix manifest
+        id: prerelease
+        shell: bash
+        env:
+          VSIX_NAME: ${{ steps.vsix.outputs.vsixName }}
+        run: |
+          set -euo pipefail
+          if unzip -p "${VSIX_NAME}" extension.vsixmanifest | grep -q 'Id="Microsoft.VisualStudio.Code.PreRelease"'; then
+            echo "releaseMode=--pre-release" >> "$GITHUB_OUTPUT"
+          else
+            echo "releaseMode=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      # Pinned: these run with marketplace tokens, so the version that publishes should be the
+      # version that was reviewed, not whatever npm resolves that morning.
+      - name: Install publishing CLIs
+        run: |
+          npm install -g @vscode/vsce@3.9.2 ovsx@1.1.1
+
+      - name: Publish to VS Code Marketplace
+        if: ${{ inputs.vscode }}
+        env:
+          VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
+          VSIX_NAME: ${{ steps.vsix.outputs.vsixName }}
+          RELEASE_MODE: ${{ steps.prerelease.outputs.releaseMode }}
+        run: vsce publish -p "${VSCE_TOKEN}" --packagePath "${VSIX_NAME}" ${RELEASE_MODE}
+
+      - name: Publish to Open VSX marketplace
+        if: ${{ inputs.openVSX }}
+        env:
+          OPENVSX_TOKEN: ${{ secrets.OPENVSX_TOKEN }}
+          VSIX_NAME: ${{ steps.vsix.outputs.vsixName }}
+          RELEASE_MODE: ${{ steps.prerelease.outputs.releaseMode }}
+        run: ovsx publish -p "${OPENVSX_TOKEN}" --packagePath "${VSIX_NAME}" ${RELEASE_MODE}

@@ -10,7 +10,7 @@ on:
       runner:
         description: 'Select runner type'
         required: false
-        default: 'codebuild'
+        default: 'ubuntu-latest'
         type: string
       build_linux:
         description: 'Build for Linux'
@@ -34,6 +34,11 @@ on:
         type: boolean
       run_smoke_tests:
         description: 'Whether to run the UI smoke tests. Only takes effect when build_packed_installers is true.'
+        default: true
+        required: false
+        type: boolean
+      smoke_tests_required:
+        description: 'Whether a failing smoke test fails this build and blocks publishing.'
         default: true
         required: false
         type: boolean
@@ -90,9 +95,6 @@ on:
 permissions:
   id-token: write
   contents: write     
-
-env:
-  awsRunnerId: codebuild-wso2_product-integrator-${{ github.run_id }}-${{ github.run_attempt }}  
 
 jobs:
   # Settle the product and extension versions ONCE, up front, and hand the resulting files to every
@@ -230,6 +232,7 @@ jobs:
       build_packed_installers: ${{ inputs.build_packed_installers == true }}
       versions_artifact: build-versions
       ref: ${{ inputs.ref }}
+      is_prerelease: ${{ inputs.is_prerelease }}
 
   smoke-test:
     if: ${{ inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
@@ -240,6 +243,7 @@ jobs:
       # Same reason `compile` gets it: the smoke test runs ci/build/patch-wso2ipw-smoke-tests.js, so it
       # must read that script from the commit under test, not from the caller's triggering ref.
       ref: ${{ inputs.ref }}
+      allow_failure: ${{ inputs.smoke_tests_required == false }}
 
   smoke-test-windows:
     if: ${{ inputs.build_windows == true && inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
@@ -248,6 +252,7 @@ jobs:
     with:
       windows_artifact_name: Product-Integrator-Windows
       ref: ${{ inputs.ref }}
+      allow_failure: ${{ inputs.smoke_tests_required == false }}
 
   build-macos:
     if: ${{ inputs.build_macos == true }}
@@ -581,20 +586,6 @@ jobs:
           ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
 
-      - name: Login to AWS
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-      
-      - name: Upload macOS artifacts to S3
-        if: ${{ inputs.build_packed_installers == true }}
-        working-directory: .
-        run: |
-          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
-          aws s3 cp installers/mac/ "${S3_PATH}" --recursive --exclude "*" --include "*.dmg"
-      
       - name: Upload macOS DMG artifacts
         if: ${{ inputs.build_packed_installers == true }}
         uses: actions/upload-artifact@v4
@@ -1001,21 +992,6 @@ jobs:
           Invoke-WebRequest -Uri $JRE_URL -OutFile "jre.zip"
           .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
 
-      - name: Login to AWS
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Upload Windows artifacts to S3
-        if: ${{ inputs.build_packed_installers == true }}
-        shell: bash
-        working-directory: .
-        run: |
-          S3_PATH="s3://${{ secrets.AWS_S3_BUCKET }}/wi/${{ github.run_id }}/"
-          aws s3 cp installers/windows/WixPackage/bin/x64/Release/en-US/ "${S3_PATH}" --recursive --exclude "*" --include "*.msi"
-
       - name: Upload Windows artifacts
         if: ${{ inputs.build_packed_installers == true }}
         uses: actions/upload-artifact@v4
@@ -1110,13 +1086,24 @@ jobs:
     # own inputs, and for smoke-test/smoke-test-windows because run_smoke_tests can turn them off
     # deliberately; a *failed* job of any of these skips this job, and the run is already red from
     # that failure.
+    #
+    # The smoke_tests_required == false branch (the nightly) is deliberately redundant with the
+    # `allow_failure` passed to smoke-test.yml: continue-on-error there should already make the
+    # called workflow — and so `needs.smoke-test.result` here — conclude `success` even when a test
+    # fails, which would leave this clause unexercised. It is kept as the belt to that pair of braces
+    # because the two live in different files and the failure mode is silent: if the conclusion ever
+    # propagates as `failure` instead (a GitHub behaviour change, or a smoke-test job that is
+    # cancelled rather than failed, which continue-on-error does not cover), the nightly would stop
+    # publishing without anything saying why. Do not delete one half without re-testing the other.
     if: |
       always() &&
       (needs.compile.result == 'success') &&
       (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
-      (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') &&
-      (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') &&
+      (inputs.smoke_tests_required == false || (
+        (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') &&
+        (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped')
+      )) &&
       (inputs.publish_tag != '') &&
       (inputs.build_packed_installers == true)
     steps:
