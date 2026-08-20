@@ -55,6 +55,23 @@ export interface WICloudSubmitComponentsResp {
 	total: number;
 }
 
+/**
+ * Input for the control-plane `attachMCPProxyRepositoryToExistingTrack` mutation, used when an
+ * MCP proxy component gains a source repository (MCP proxy → MCP server conversion).
+ */
+export interface AttachMCPProxyRepositoryReq {
+	orgId: number;
+	orgHandler: string;
+	projectId: string;
+	componentId: string;
+	srcGitRepoUrl: string;
+	repositorySubPath: string;
+	repositoryBranch: string;
+	secretRef: string;
+	originCloud: string;
+	isPublicRepo: boolean;
+}
+
 export interface GetCloudProjectsReq {
 	orgId: string;
 	orgHandle: string;

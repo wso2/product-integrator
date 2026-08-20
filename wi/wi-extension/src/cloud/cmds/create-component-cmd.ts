@@ -42,6 +42,7 @@ import { dataCacheStore } from "../stores/data-cache-store";
 import { isSamePath, isSubpath } from "../../utils/pathUtils";
 import { getUserInfoForCmd, isRpcActive, selectOrg, selectProjectWithCreateNew, setExtensionName } from "./cmd-utils";
 import { updateContextFile } from "./create-directory-context-cmd";
+import { attachMCPProxyRepositoryToExistingTrack, isMcpProxyFromExistingApi } from "../graphql/cp-graphql-client";
 import { WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 import { ProjectType, StateMachine, stateService } from "../../stateMachine";
@@ -265,6 +266,11 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		if (component?.metadata?.isPrebuilt) {
 			// if its pre-built integration, we need to update the existing component with new repo details instead of creating a new component.
 			return await handlePrebuiltComponentUpdate(workspaceCompId, component, org, project, createParams[0], workspaceFsPath, gitRoot!);
+		}
+		if (isMcpProxyFromExistingApi(component)) {
+			// if its an MCP proxy over an existing API, attach the sources to its existing track instead of
+			// creating a new component. This converts the proxy into an MCP server built from source.
+			return await handleMcpProxyRepositoryAttach(workspaceCompId, component, org, project, createParams[0], workspaceFsPath, gitRoot!);
 		}
 	}
 
@@ -495,6 +501,75 @@ async function handlePrebuiltComponentUpdate(
 	} catch (err) {
 		ext.logError(`Failed to update prebuilt integration repository for component ${component.metadata?.name}`, err as Error);
 		result.failed.push({ name: component.metadata?.name || "Unknown", error: `Failed to update prebuilt integration repository: ${(err as Error).message}` });
+	}
+	return result;
+}
+
+/**
+ * Convert an MCP proxy component into an MCP server built from source, by attaching the pushed
+ * repository to the component's existing deployment track. 
+ */
+async function handleMcpProxyRepositoryAttach(
+	workspaceCompId: string,
+	component: ComponentKind,
+	org: Organization,
+	project: Project,
+	createParam: WICloudSubmitComponentsReq['createParams'][number],
+	workspaceFsPath: string,
+	gitRoot: string,
+): Promise<WICloudSubmitComponentsResp> {
+	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: 1 };
+	const componentName = component.metadata?.name || "Unknown";
+
+	const missing = !createParam
+		? ["integration details"]
+		: [
+			!gitRoot && "git repository root",
+			!createParam.repoUrl && "repository URL",
+			!createParam.branch && "repository branch",
+		].filter((item): item is string => typeof item === "string");
+	if (missing.length > 0) {
+		const error = `Cannot attach sources to the MCP proxy: missing ${missing.join(", ")}.`;
+		ext.logError(error, new Error(error));
+		result.failed.push({ name: componentName, error });
+		return result;
+	}
+
+	try {
+		await window.withProgress(
+			{ title: "Attaching sources to MCP proxy...", location: ProgressLocation.Notification },
+			() =>
+				attachMCPProxyRepositoryToExistingTrack({
+					componentId: workspaceCompId,
+					isPublicRepo: false,
+					orgHandler: org.handle,
+					orgId: org.id,
+					projectId: project.id,
+					srcGitRepoUrl: createParam.repoUrl,
+					repositorySubPath: relativePath(gitRoot, createParam.componentDir),
+					originCloud: "devant",
+					repositoryBranch: createParam.branch,
+					secretRef: createParam.gitCredRef,
+				}),
+		);
+		result.created.push(component);
+		await ext.context.workspaceState.update("SOURCE_COMPONENT_ID", null);
+
+		clearCodeServerLocalStorage();
+		const projectCache = dataCacheStore.getState().getProjects(org?.handle);
+		updateContextFile(gitRoot, ext.authProvider?.getState().state.userInfo!, project, org, projectCache);
+		contextStore.getState().refreshState();
+
+		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
+		const successMessage = "Successfully attached the sources to the MCP proxy";
+		if (isWithinWorkspace) {
+			showViewInConsoleMessage(successMessage, org, project, result.created);
+		} else {
+			showReloadWorkspaceMessage(successMessage, workspaceFsPath);
+		}
+	} catch (err) {
+		ext.logError(`Failed to attach the repository to MCP proxy component ${componentName}`, err as Error);
+		result.failed.push({ name: componentName, error: `Failed to attach the repository to the MCP proxy: ${(err as Error).message}` });
 	}
 	return result;
 }
