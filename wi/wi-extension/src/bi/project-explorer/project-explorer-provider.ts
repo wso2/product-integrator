@@ -34,7 +34,7 @@ import { ballerinaContext } from '../ballerinaContext';
 import { ext } from '../../extensionVariables';
 import { isSamePath } from '../../utils/pathUtils';
 
-import { getExplorerViewId } from '../../productMode';
+import { getExplorerViewId, isAgentBuilderMode } from '../../productMode';
 
 // View ID used for progress indicator
 const EXPLORER_VIEW_ID = getExplorerViewId();
@@ -403,7 +403,11 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     if (agents.children.length > 0) {
         agents.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
     }
-    entries.push(agents);
+    if (isAgentBuilderMode()) {
+        entries.unshift(agents);
+    } else {
+        entries.push(agents);
+    }
 
     // ---------- Agent Definitions ----------
     const agentDefinitions = new ProjectExplorerEntry(
@@ -420,7 +424,7 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     agentDefinitions.children = getComponents(
         project.directoryMap[DIRECTORY_MAP.AGENT_DEFINITION], DIRECTORY_MAP.AGENT_DEFINITION, projectPath);
     if (agentDefinitions.children.length > 0) {
-        entries.push(agentDefinitions);
+        entries.splice(entries.indexOf(agents) + 1, 0, agentDefinitions);
     }
 
     // ---------- Types ----------
