@@ -108,10 +108,21 @@ REM sources are backed up and restored via :restore_name on every exit path.
 for /f "delims=" %%p in ('powershell -nologo -noprofile -command "(Get-ChildItem '.\WixPackage\payload\Integrator' -Filter *.exe -File | Select-Object -First 1).BaseName"') do set "PRODUCT_NAME=%%p"
 if not defined PRODUCT_NAME set "PRODUCT_NAME=WSO2 Integrator"
 echo Product name: %PRODUCT_NAME%
+
+REM Each flavor needs its own MSI UpgradeCode and install folder, otherwise
+REM installing one flavor upgrades/replaces the other.
+if "%PRODUCT_NAME%"=="WSO2 Agent Builder" (
+    set "UPGRADE_CODE=56138e5c-e9ef-499b-8a21-54e2cfc09ba3"
+    set "PRODUCT_DIR=Agent Builder"
+) else (
+    set "UPGRADE_CODE=344b046a-fa6a-4452-be40-2794f59fe7b0"
+    set "PRODUCT_DIR=Integrator"
+)
 copy /y ".\WixPackage\Package.wxs" ".\WixPackage\Package.wxs.bak" >nul
 copy /y ".\WixPackage\IntegratorComponents.wxs" ".\WixPackage\IntegratorComponents.wxs.bak" >nul
+copy /y ".\WixPackage\Folders.wxs" ".\WixPackage\Folders.wxs.bak" >nul
 copy /y ".\CustomAction1\CustomAction.cs" ".\CustomAction1\CustomAction.cs.bak" >nul
-powershell -Command "foreach ($f in '.\WixPackage\Package.wxs','.\WixPackage\IntegratorComponents.wxs','.\CustomAction1\CustomAction.cs') { (Get-Content -Raw $f).Replace('@PRODUCT_NAME@', '%PRODUCT_NAME%') | Set-Content $f }"
+powershell -Command "foreach ($f in '.\WixPackage\Package.wxs','.\WixPackage\IntegratorComponents.wxs','.\WixPackage\Folders.wxs','.\CustomAction1\CustomAction.cs') { (Get-Content -Raw $f).Replace('@PRODUCT_NAME@', '%PRODUCT_NAME%').Replace('@UPGRADE_CODE@', '%UPGRADE_CODE%').Replace('@PRODUCT_DIR@', '%PRODUCT_DIR%') | Set-Content $f }"
 
 REM Map build directory to a short drive letter to keep file paths under 260 chars.
 REM wixnative.exe lacks a longPathAware manifest, so it crashes on paths > 260 chars.
@@ -189,5 +200,6 @@ REM version-restore step still applies afterwards.
 :restore_name
 if exist ".\WixPackage\Package.wxs.bak" move /y ".\WixPackage\Package.wxs.bak" ".\WixPackage\Package.wxs" >nul
 if exist ".\WixPackage\IntegratorComponents.wxs.bak" move /y ".\WixPackage\IntegratorComponents.wxs.bak" ".\WixPackage\IntegratorComponents.wxs" >nul
+if exist ".\WixPackage\Folders.wxs.bak" move /y ".\WixPackage\Folders.wxs.bak" ".\WixPackage\Folders.wxs" >nul
 if exist ".\CustomAction1\CustomAction.cs.bak" move /y ".\CustomAction1\CustomAction.cs.bak" ".\CustomAction1\CustomAction.cs" >nul
 exit /b 0

@@ -18,13 +18,30 @@ read_version() {
 # Accept integrator version as first arg (optional), otherwise read from source-of-truth file.
 VERSION=${1:-"$(read_version "integrator.version")"}
 
-# Product flavor decides the app-shell display name only; all identity fields
-# (applicationName, data folders, bundle ids, urlProtocol, ...) stay
-# wso2-integrator so both flavors share extension/URI/session contracts.
+# Product flavor decides the display name and the OS-level identity so the two
+# apps keep ALL data separate and install/run side by side:
+#  - DATA_FOLDER: user-installed extensions + CLI data (a shared folder lets an
+#    Integrator-installed WI extension shadow the Agent Builder built-in)
+#  - BUNDLE_ID: macOS Launch Services / Keychain / pkg receipts
+#  - APP_SLUG: Windows mutex (side-by-side run), AppUserModelId (taskbar), and
+#    the URL protocol (sign-in callbacks must reopen the SAME app; the
+#    extension builds callbacks from vscode.env.uriScheme, so this is safe)
+# applicationName and the extension/command ids stay wso2-integrator: one VSIX
+# serves both flavors.
 PRODUCT_FLAVOR=${PRODUCT_FLAVOR:-integrator}
 case "${PRODUCT_FLAVOR}" in
-  integrator)    PRODUCT_NAME="WSO2 Integrator" ;;
-  agent-builder) PRODUCT_NAME="WSO2 Agent Builder" ;;
+  integrator)
+    PRODUCT_NAME="WSO2 Integrator"
+    DATA_FOLDER=".wso2-integrator"
+    APP_SLUG="wso2-integrator"
+    BUNDLE_ID="com.wso2.integrator"
+    ;;
+  agent-builder)
+    PRODUCT_NAME="WSO2 Agent Builder"
+    DATA_FOLDER=".wso2-agent-builder"
+    APP_SLUG="wso2-agent-builder"
+    BUNDLE_ID="com.wso2.agentbuilder"
+    ;;
   *) echo "Error: unknown PRODUCT_FLAVOR '${PRODUCT_FLAVOR}' (expected 'integrator' or 'agent-builder')" >&2; exit 1 ;;
 esac
 BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH:-""}
@@ -79,10 +96,10 @@ cat > lib/vscode/product.json <<EOF
     "nameShort": "${PRODUCT_NAME}",
     "nameLong": "${PRODUCT_NAME}",
     "applicationName": "wso2-integrator",
-    "dataFolderName": ".wso2-integrator",
-    "sharedDataFolderName": ".wso2-integrator-shared",
+    "dataFolderName": "${DATA_FOLDER}",
+    "sharedDataFolderName": "${DATA_FOLDER}-shared",
     "builtInExtensionsEnabledWithAutoUpdates": [],
-    "win32MutexName": "wso2-integrator",
+    "win32MutexName": "${APP_SLUG}",
     "licenseName": "MIT",
     "licenseUrl": "https://wso2.com/licenses/",
     "serverLicenseUrl": "https://wso2.com/licenses/",
@@ -90,15 +107,15 @@ cat > lib/vscode/product.json <<EOF
     "serverLicense": [],
     "serverLicensePrompt": "",
     "serverApplicationName": "wso2-integrator",
-    "serverDataFolderName": ".wso2-integrator",
+    "serverDataFolderName": "${DATA_FOLDER}",
     "tunnelApplicationName": "wso2-integrator-tunnel",
-    "win32DirName": "wso2-integrator",
-    "win32NameVersion": "wso2-integrator",
-    "win32AppUserModelId": "wso2.wso2-integrator",
+    "win32DirName": "${APP_SLUG}",
+    "win32NameVersion": "${APP_SLUG}",
+    "win32AppUserModelId": "wso2.${APP_SLUG}",
     "win32ShellNameShort": "w&so2-integrator",
-    "darwinBundleIdentifier": "com.wso2.integrator",
-    "linuxIconName": "com.wso2.integrator",
-    "urlProtocol": "wso2-integrator",
+    "darwinBundleIdentifier": "${BUNDLE_ID}",
+    "linuxIconName": "${BUNDLE_ID}",
+    "urlProtocol": "${APP_SLUG}",
     "licenseFileName": "LICENSE.txt",
     "reportIssueUrl": "https://github.com/wso2/product-integrator/issues",
     "documentationUrl": "https://wso2.com/integration-platform/docs/",

@@ -3,7 +3,7 @@
 		<StandardDirectory Id="LocalAppDataFolder">
 			<Directory Id="LocalProgramsDir" Name="Programs">
 				<Directory Id="INSTALLFOLDER" Name="WSO2">
-					<Directory Id="INTEGRATORFOLDER" Name="Integrator" />
+					<Directory Id="INTEGRATORFOLDER" Name="@PRODUCT_DIR@" />
 				</Directory>
 			</Directory>
 		</StandardDirectory>

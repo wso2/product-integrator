@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
     <title>__PRODUCT_NAME__</title>
-    <organization>com.wso2.integrator</organization>
+    <organization>__BUNDLE_ID__</organization>
     <domains enable_localSystem="true" enable_currentUserOnly="false" enable_currentUserHome="false" />
     <options customize="never" require-scripts="false" rootVolumeOnly="true" />
     <welcome file="welcome.html" />
@@ -23,12 +23,12 @@
     </script>
     <choices-outline>
         <line choice="default">
-            <line choice="com.wso2.integrator" />
+            <line choice="__BUNDLE_ID__" />
         </line>
     </choices-outline>
     <choice id="default" />
-    <choice id="com.wso2.integrator" visible="false">
-        <pkg-ref id="com.wso2.integrator" />
+    <choice id="__BUNDLE_ID__" visible="false">
+        <pkg-ref id="__BUNDLE_ID__" />
     </choice>
-    <pkg-ref id="com.wso2.integrator" version="__VERSION__" onConclusion="none" auth="none">__PRODUCT_NAME__.pkg</pkg-ref>
+    <pkg-ref id="__BUNDLE_ID__" version="__VERSION__" onConclusion="none" auth="none">__PRODUCT_NAME__.pkg</pkg-ref>
 </installer-gui-script>
