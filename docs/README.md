@@ -28,4 +28,3 @@ Refer to the individual guides for detailed information on each topic:
 | [CI/CD Pipelines](cicd-pipelines.md) | PR, custom build, nightly, and release pipeline structures |
 | [Quality & Security Gates](quality-and-security-gates.md) | Quality and security gates applied across the product distribution |
 | [Versioning Strategy](versioning-strategy.md) | Versioning rules per component type and how version changes propagate across repos |
-| [Release Process](release-process/) | Feature, patch, and hotfix release procedures; release schedule, ownership, and release order across repos |
