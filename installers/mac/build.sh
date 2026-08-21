@@ -38,7 +38,6 @@ VERSION="$6"
 ARCH="$7"
 
 OUTPUT_PKG="WSO2_Integrator.pkg"
-BUNDLE_IDENTIFIER="com.wso2.integrator"
 EXTRACTION_TARGET="$WORK_DIR/payload"
 
 # Extract wso2 zip
@@ -61,6 +60,14 @@ if [ -z "$APP_BUNDLE" ]; then
 fi
 APP_NAME="${APP_BUNDLE%.app}"
 print_info "Detected app bundle: $APP_BUNDLE"
+
+# The pkg identifier must match the app's darwinBundleIdentifier so each
+# flavor keeps its own installer receipts (side-by-side installs).
+case "$APP_NAME" in
+    "WSO2 Agent Builder") BUNDLE_IDENTIFIER="com.wso2.agentbuilder" ;;
+    *)                    BUNDLE_IDENTIFIER="com.wso2.integrator" ;;
+esac
+print_info "Package identifier: $BUNDLE_IDENTIFIER"
 
 chmod +x "$WSO2_TARGET/$APP_BUNDLE/Contents/MacOS"/* 2>/dev/null || true
 xattr -cr "$WSO2_TARGET/$APP_BUNDLE"
@@ -178,6 +185,7 @@ find "$WSO2_TARGET/$APP_BUNDLE" -exec touch {} +
 # substitute/restore pattern as __VERSION__ in Distribution.xml).
 sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/component.plist"
 sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/Distribution.xml"
+sed -i '' "s/__BUNDLE_ID__/$BUNDLE_IDENTIFIER/g" "$WORK_DIR/Distribution.xml"
 sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/welcome.html"
 sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/conclusion.html"
 
@@ -201,8 +209,9 @@ productbuild --distribution "$WORK_DIR/Distribution.xml" \
 
 sed -i '' "s/version=\"$VERSION\"/version=\"__VERSION__\"/g" "$WORK_DIR/Distribution.xml"
 
-# Restore the product-name placeholders
+# Restore the product-name and bundle-id placeholders
 sed -i '' "s/$APP_NAME/__PRODUCT_NAME__/g" "$WORK_DIR/component.plist"
+sed -i '' "s/$BUNDLE_IDENTIFIER/__BUNDLE_ID__/g" "$WORK_DIR/Distribution.xml"
 sed -i '' "s/$APP_NAME/__PRODUCT_NAME__/g" "$WORK_DIR/Distribution.xml"
 sed -i '' "s/$APP_NAME/__PRODUCT_NAME__/g" "$WORK_DIR/welcome.html"
 sed -i '' "s/$APP_NAME/__PRODUCT_NAME__/g" "$WORK_DIR/conclusion.html"

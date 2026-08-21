@@ -4,7 +4,7 @@
   <Package Name="@PRODUCT_NAME@"
     Version="@VERSION@"
     Manufacturer="WSO2"
-    UpgradeCode="344b046a-fa6a-4452-be40-2794f59fe7b0"
+    UpgradeCode="@UPGRADE_CODE@"
     InstallerVersion="500"
     Compressed="yes"
     Scope="perUser"
