@@ -32,6 +32,15 @@ on:
         default: true
         required: false
         type: boolean
+      # Publishing an update makes this build the one clients on its line are offered, so it is a
+      # release decision and every other caller must opt in explicitly. Defaults to false because a
+      # nightly also produces installers and a publish_tag, and would otherwise claim the release
+      # line by default.
+      publish_update_source:
+        description: 'Publish the update source document for this build. Release only.'
+        default: false
+        required: false
+        type: boolean
       run_smoke_tests:
         description: 'Whether to run the UI smoke tests. Only takes effect when build_packed_installers is true.'
         default: true
@@ -51,6 +60,24 @@ on:
         description: 'Choose whether to bundle MI from GitHub VSIX or use marketplace flow'
         required: false
         default: 'github'
+        type: string
+      # Update channel the component-update manifest is published to (insider | beta | stable).
+      # New builds land in `insider` first; promote-channel.yml moves a manifest down the ladder.
+      channel:
+        description: 'Update channel to publish the update manifest to'
+        required: false
+        default: 'insider'
+        type: string
+      # Which clients this release serves. Each release publishes its own source-<version>.json and
+      # claims a line in the index, so a 5.2 release never overwrites the document 5.1.x clients are
+      # still served from. Accepts a wildcard (5.1.x), an exact version (5.1.4), a range
+      # (">=5.1.0 <5.2.0") or "*" for everything. Defaults to this build's own <major>.<minor>.x,
+      # which is what a normal release wants; set it explicitly for a hotfix that should reach only
+      # one version, or to hand an old line its migration build.
+      update_line_selector:
+        description: 'Client versions this release serves (e.g. 5.1.x). Defaults to <major>.<minor>.x of this build.'
+        required: false
+        default: ''
         type: string
       # Under `workflow_call`, `github.ref` is the *caller's* triggering ref, so a dispatcher that
       # prepares a branch and then calls this workflow would compile the ref it was dispatched on
@@ -91,6 +118,10 @@ permissions:
   id-token: write
   contents: write     
 
+env:
+  # product.commit = product-integrator root sha (not the lib/vscode submodule sha) so each release
+  # has a distinct commit for update checks. getVersion() prefers BUILD_SOURCEVERSION.
+  BUILD_SOURCEVERSION: ${{ github.sha }}
 jobs:
   # Settle the product and extension versions ONCE, up front, and hand the resulting files to every
   # other job as an artifact. A VS Code extension version must be exactly three integers, so
@@ -254,10 +285,18 @@ jobs:
     name: Build (macOS)
     runs-on: ${{ matrix.runner }}
     needs: [resolve-versions, compile]
+    env:
+      # secrets can't be referenced from a step `if:`. HAS_AWS says credentials exist;
+      # HAS_INSTALLER_BUCKET says a target bucket does. They are different secrets.
+      HAS_AWS: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+      HAS_INSTALLER_BUCKET: ${{ secrets.AWS_S3_BUCKET != '' }}
     defaults:
       run:
         working-directory: lib/vscode
     strategy:
+      # The two arches are independent ~40-minute builds; with fail-fast a stumble on one
+      # cancels a perfectly good build of the other and both have to be redone.
+      fail-fast: false
       matrix:
         include:
           - arch: arm64
@@ -398,6 +437,25 @@ jobs:
 
       - name: Update product.json and branding
         working-directory: .
+        env:
+          # Component update mechanism (all platforms): the manifest server the client polls and
+          # the public key it verifies signed manifests with. Empty when unset → the in-app
+          # component updater stays disabled and manifest signature checks are skipped.
+          WSO2_UPDATE_URL: ${{ secrets.WSO2_UPDATE_URL }}
+          WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
+          # Reject an artifact that ships no signed statement. Without this, a missing statement is
+          # only logged and the artifact installs on its sha256 alone — so anyone able to serve a
+          # document skips verification entirely by just omitting the signature block.
+          # Enabled only when this build BOTH pins a key and mirrors its artifacts: statements are
+          # written for mirrored artifacts only, so requiring them while the document still points at
+          # third-party source URLs would fail every update on a check it could never pass.
+          WSO2_UPDATE_REQUIRE_ARTIFACT_SIGNATURE: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY != '' && secrets.WSO2_UPDATE_ARTIFACTS_URL != '' }}
+          # macOS-only: stock Squirrel.Mac core-app updates, served by the SAME update server —
+          # darwinUpdateService polls {updateUrl}/api/update/{darwin|darwin-arm64}/{quality}/{commit}
+          # (the server derives the response from the darwin manifest's app.commit/app.squirrel)
+          # and gets back the editor-only .app zip CDN URL. Windows/Linux never set this, so their
+          # stock update paths stay off.
+          STOCK_UPDATE_URL: ${{ secrets.WSO2_UPDATE_URL }}
         run: |
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
@@ -646,7 +704,8 @@ jobs:
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
           wget -O jre.zip "$JRE_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
+          # editor-update profile: full DMG/PKG (first install) + EDITOR-ONLY Squirrel zip (§D8).
+          INSTALLER_PROFILE=editor-update ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
 
       # Apple-ID (app-specific password) notarytool auth. NOTARY_APP_PASSWORD is an
@@ -688,6 +747,27 @@ jobs:
             echo "::error::No DMG or PKG found to notarize under $(pwd)/installers/mac" >&2
             exit 1
           fi
+      - name: Publish Squirrel.Mac update payload to update bucket
+        if: ${{ inputs.build_packed_installers == true && env.HAS_AWS == 'true' }}
+        working-directory: .
+        run: |
+          V="${{ needs.resolve-versions.outputs.integrator_version }}"
+          ZIP="installers/mac/wso2-integrator-${V}-${{ matrix.arch }}-mac.zip"
+          # Bucket first: a deployment that publishes no updates skips cleanly here, and only a
+          # deployment that WOULD upload treats a missing payload as the failure it is.
+          if [ -z "${{ secrets.AWS_UPDATE_S3_BUCKET }}" ]; then
+            echo "AWS_UPDATE_S3_BUCKET not set — skipping Squirrel.Mac payload upload."
+            exit 0
+          fi
+          if [ ! -f "$ZIP" ]; then
+            echo "Squirrel.Mac payload not found at $ZIP" >&2
+            exit 1
+          fi
+          # Same artifacts layout as everything else; the darwin manifest's app.squirrel.url
+          # (embedded by generate-update-manifest.mjs) points at this exact versioned CDN URL.
+          DEST="s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/artifacts/app/${V}/"
+          aws s3 cp "$ZIP" "${DEST}wso2-integrator-${V}-${{ matrix.arch }}-mac.zip" --content-type application/zip --cache-control no-cache
+          echo "Published Squirrel.Mac payload for darwin/${{ matrix.arch }} (v${V})"
 
       - name: Upload macOS DMG artifacts
         if: ${{ inputs.build_packed_installers == true }}
@@ -696,6 +776,7 @@ jobs:
           name: Product-Integrator-Darwin-DMG-${{ matrix.arch }}
           path: |
             installers/mac/*.dmg
+            installers/mac/*-mac.zip
           if-no-files-found: error
 
       - name: cosign-installer
@@ -711,7 +792,9 @@ jobs:
         if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
-          cosign verify-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg --certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          # `github.repository` (not a hardcoded wso2/product-integrator) so signature verification
+          # also works on forks and the enterprise mirror, where the OIDC identity differs.
+          cosign verify-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg --certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --certificate-identity=https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 
       - name: Generate Hashes for dmg installer
         if: ${{ inputs.build_packed_installers == true }}
@@ -735,6 +818,11 @@ jobs:
     name: Build (Windows)
     runs-on: windows-2022
     needs: [resolve-versions, compile]
+    env:
+      # secrets can't be referenced from a step `if:`. HAS_AWS says credentials exist;
+      # HAS_INSTALLER_BUCKET says a target bucket does. They are different secrets.
+      HAS_AWS: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+      HAS_INSTALLER_BUCKET: ${{ secrets.AWS_S3_BUCKET != '' }}
     defaults:
       run:
         working-directory: lib/vscode
@@ -883,6 +971,14 @@ jobs:
       - name: Update product.json and branding
         shell: bash
         working-directory: .
+        env:
+          # Component update mechanism (manifest server + verification key). Empty when unset →
+          # in-app component updates disabled. STOCK_UPDATE_URL is intentionally NOT set here so
+          # the stock (Squirrel/Win/Linux) update path stays off outside the macOS job.
+          WSO2_UPDATE_URL: ${{ secrets.WSO2_UPDATE_URL }}
+          WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
+          # See the macOS job for why this is gated on mirroring as well as on the key.
+          WSO2_UPDATE_REQUIRE_ARTIFACT_SIGNATURE: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY != '' && secrets.WSO2_UPDATE_ARTIFACTS_URL != '' }}
         run: |
           chmod +x ./ci/build/update-product.sh
           ./ci/build/update-product.sh "${{ needs.resolve-versions.outputs.integrator_version }}"
@@ -949,7 +1045,17 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm ci
+          # `npm ci` runs postinstall (build/npm/postinstall.ts), which npm-installs each
+          # bundled/.vscode extension. On GitHub-hosted runners these sub-installs intermittently
+          # fail on transient registry/network hiccups, failing the whole build. Retry a few times.
+          $ok = $false
+          for ($i = 1; $i -le 3; $i++) {
+            npm ci
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Write-Host "npm ci failed (attempt $i/3); retrying in 20s..."
+            Start-Sleep -Seconds 20
+          }
+          if (-not $ok) { Write-Error "npm ci failed after 3 attempts"; exit 1 }
 
       - name: Mixin distro modules
         run: |
@@ -984,6 +1090,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # patchWin32DependenciesTask (rcedit re-branding) shells out to signtool.exe
+          # to strip/verify Authenticode signatures. signtool ships with the Windows SDK
+          # but is not on PATH on GitHub-hosted runners, so prepend the newest SDK bin dir
+          # (self-hosted runners already have it on PATH; the pinned version differs).
+          # Sorted by parsed SDK version, not by name: string ordering ranks 10.0.9... above
+          # 10.0.10..., which would pick an older signtool once two SDKs are installed.
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending | Select-Object -First 1
+          if ($signtool) {
+            $env:PATH = "$($signtool.DirectoryName);$env:PATH"
+            Write-Host "Added Windows SDK to PATH: $($signtool.DirectoryName)"
+          } else {
+            Write-Host "WARNING: signtool.exe not found under Windows Kits; build may fail in patchWin32DependenciesTask"
+          }
           npm run gulp "vscode-win32-x64-min-ci"
 
       - name: Build CLI (Windows)
@@ -1091,7 +1211,16 @@ jobs:
           Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
           Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
           Invoke-WebRequest -Uri $JRE_URL -OutFile "jre.zip"
+          # Full first-install MSI (editor + Ballerina + ICP + JRE) -> wso2-integrator-<v>.msi
+          $env:INSTALLER_PROFILE = "full"
           .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
+          if ($LASTEXITCODE -ne 0) { throw "full MSI build failed" }
+          # Editor-only update MSI (§D8) -> wso2-integrator-<v>-update.msi. Ballerina is dropped;
+          # the client seeds/resolves it from the per-user data folder so the upgrade can't strand it.
+          $env:INSTALLER_PROFILE = "editor-update"
+          .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
+          if ($LASTEXITCODE -ne 0) { throw "editor-update MSI build failed" }
+          Remove-Item Env:\INSTALLER_PROFILE
 
       - name: Upload Windows artifacts
         if: ${{ inputs.build_packed_installers == true }}
@@ -1105,23 +1234,38 @@ jobs:
       - name: cosign-installer
         if: ${{ inputs.build_packed_installers == true }}
         uses: sigstore/cosign-installer@v3.5.0
-      - name: Sign the msi installer
+      # Both MSIs are signed: the full first-install installer AND the small editor-only
+      # `-update` MSI the in-place update mechanism downloads (§D8).
+      - name: Sign the msi installers
         if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
-          cosign sign-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi --output-certificate installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.pem --output-signature installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sig --yes
-      - name: Verify signature of the msi installer
+          $V = "${{ needs.resolve-versions.outputs.integrator_version }}"
+          foreach ($name in @("wso2-integrator-$V", "wso2-integrator-$V-update")) {
+            $msi = "installers\windows\WixPackage\bin\x64\Release\en-US\$name.msi"
+            cosign sign-blob $msi --output-certificate "installers\windows\$name.msi.pem" --output-signature "installers\windows\$name.msi.sig" --yes
+            if ($LASTEXITCODE -ne 0) { throw "cosign sign-blob failed for $name.msi" }
+          }
+      - name: Verify signatures of the msi installers
         if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
-          cosign verify-blob installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi --certificate installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.pem --signature installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sig --certificate-identity=https://github.com/wso2/product-integrator/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          $V = "${{ needs.resolve-versions.outputs.integrator_version }}"
+          foreach ($name in @("wso2-integrator-$V", "wso2-integrator-$V-update")) {
+            $msi = "installers\windows\WixPackage\bin\x64\Release\en-US\$name.msi"
+            cosign verify-blob $msi --certificate "installers\windows\$name.msi.pem" --signature "installers\windows\$name.msi.sig" --certificate-identity=https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+            if ($LASTEXITCODE -ne 0) { throw "cosign verify-blob failed for $name.msi" }
+          }
 
-          
-      - name: Generate Hashes for msi installer
+
+      - name: Generate Hashes for msi installers
         if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
-          openssl dgst -sha256 -out installers\windows\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi.sha256 installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi 
+          $V = "${{ needs.resolve-versions.outputs.integrator_version }}"
+          foreach ($name in @("wso2-integrator-$V", "wso2-integrator-$V-update")) {
+            openssl dgst -sha256 -out "installers\windows\$name.msi.sha256" "installers\windows\WixPackage\bin\x64\Release\en-US\$name.msi"
+          }
 
       - name: Upload Signatures and Hashes for msi installer
         if: ${{ inputs.build_packed_installers == true }}
@@ -1425,3 +1569,263 @@ jobs:
             gh release delete-asset "${PUBLISH_TAG}" "${name}" --yes
             echo "Removed superseded asset ${name}"
           done <<< "${superseded}"
+
+  publish-update-source:
+    name: Publish Update Source
+    runs-on: ubuntu-latest
+    # Shared with the Publish Component Updates workflow: both read-modify-write the same
+    # index.json, and two at once would drop one of the two lines they repointed.
+    concurrency:
+      group: update-index-${{ inputs.channel || 'insider' }}
+      cancel-in-progress: false
+    needs: [resolve-versions, publish-github-release]
+    if: |
+      always() &&
+      (inputs.publish_update_source == true) &&
+      (needs.publish-github-release.result == 'success') &&
+      (inputs.publish_tag != '') &&
+      (inputs.build_packed_installers == true)
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      # secrets can't be referenced from a step `if:`, so their presence is hoisted here — the same
+      # reason HAS_AWS exists on the build jobs.
+      HAS_PINNED_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY != '' && secrets.COSIGN_PUBLIC_KEY != '' }}
+      # New builds publish to the channel chosen at dispatch (default insider); the
+      # promote-channel workflow later copies a source document down the ladder.
+      CHANNEL: ${{ inputs.channel || 'insider' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Same ref every other job builds from. A caller that stamps a version branch passes it
+          # as `ref`, and the source document is generated from ci/build/* plus
+          # component-versions.properties — so checking out anything else would describe a build
+          # that was never produced.
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The WI extension is built in-repo (no public download URL); its VSIX is mirrored to the
+      # update bucket from this artifact (config `sourceFile`).
+      - name: Download WI extension VSIX
+        uses: actions/download-artifact@v4
+        with:
+          name: wi-extension-vsix
+          path: wi/wi-extension
+
+      # ONE document describes every platform this run actually built. A target that was not built
+      # is left out entirely rather than published with URLs to release assets that never existed.
+      - name: Resolve published targets
+        id: targets
+        shell: bash
+        run: |
+          TARGETS=()
+          if [ "${{ inputs.build_macos }}" = "true" ]; then
+            TARGETS+=("darwin-arm64" "darwin-x64")
+          fi
+          if [ "${{ inputs.build_windows }}" = "true" ]; then
+            TARGETS+=("win32-x64")
+          fi
+          if [ "${{ inputs.build_linux }}" = "true" ]; then
+            TARGETS+=("linux-x64")
+          fi
+          if [ ${#TARGETS[@]} -eq 0 ]; then
+            echo "No platforms were built; nothing to publish."
+            echo "targets=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf -v JOINED '%s,' "${TARGETS[@]}"
+          echo "targets=${JOINED%,}" >> "$GITHUB_OUTPUT"
+          echo "publishing targets: ${JOINED%,}"
+
+      # WSO2_UPDATE_ARTIFACTS_URL = the CDN base fronting s3://$AWS_UPDATE_S3_BUCKET/artifacts.
+      # When set, every artifact is mirrored into artifacts-mirror/ and the document points clients
+      # at the CDN only — no open-vsx/github in client URLs.
+      - name: Generate source document
+        if: ${{ steps.targets.outputs.targets != '' }}
+        env:
+          # Lets the generator hash release assets on a private repo (the enterprise mirror);
+          # public repos serve them unauthenticated and ignore this.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # A UTC clock read, not the run number: publish-components.yml writes the same channels with
+          # independent numbering, and the promotion guard compares sequences per line.
+          SEQUENCE=$(date -u +%s)
+          echo "SEQUENCE=${SEQUENCE}" >> "$GITHUB_ENV"
+          echo "document sequence ${SEQUENCE} (run ${{ github.run_number }})"
+
+          MIRROR_ARGS=()
+          if [ -n "${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}" ]; then
+            MIRROR_ARGS=(--artifacts-base "${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}" --mirror-dir artifacts-mirror)
+          fi
+          node ci/build/generate-update-manifest.mjs \
+            --targets "${{ steps.targets.outputs.targets }}" \
+            --sequence "${SEQUENCE}" \
+            --app-version "${{ needs.resolve-versions.outputs.integrator_version }}" \
+            --app-release-base "https://github.com/${{ github.repository }}/releases/download/${{ inputs.publish_tag }}" \
+            --app-commit "${{ github.sha }}" \
+            --source-flavors "wso2.ballerina=${{ inputs.ballerina_extension_source || 'marketplace' }},wso2.micro-integrator=${{ inputs.mi_extension_source || 'marketplace' }}" \
+            "${MIRROR_ARGS[@]}" \
+            --out source.json
+          echo "----- source.json -----"
+          cat source.json
+
+      - name: cosign-installer
+        if: ${{ steps.targets.outputs.targets != '' }}
+        uses: sigstore/cosign-installer@v3
+
+      # The client verifies artifacts against WSO2_UPDATE_PUBLIC_KEY, baked into product.json at
+      # build time; CI signs with COSIGN_PRIVATE_KEY. Nothing downstream compares the two, so if they
+      # are not the same key pair every client rejects every artifact — and the signing steps below
+      # still pass, because they verify against COSIGN_PUBLIC_KEY. That failure would only surface on
+      # a user's machine, after the release. One base64 decode catches it here instead.
+      - name: Check the pinned key matches the signing key
+        if: ${{ steps.targets.outputs.targets != '' && env.HAS_PINNED_KEY == 'true' }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$WSO2_UPDATE_PUBLIC_KEY" | base64 -d > pinned.pem 2>/dev/null || {
+            echo "::error::WSO2_UPDATE_PUBLIC_KEY is not valid base64. It must be 'base64 < cosign.pub'." >&2
+            exit 1
+          }
+          printf '%s' "$COSIGN_PUBLIC_KEY" > signing.pem
+          # Compare the DER of each, so PEM line wrapping or a trailing newline cannot fail a
+          # correctly configured pair.
+          openssl pkey -pubin -in pinned.pem  -outform DER -out pinned.der
+          openssl pkey -pubin -in signing.pem -outform DER -out signing.der
+          if ! cmp -s pinned.der signing.der; then
+            echo "::error::WSO2_UPDATE_PUBLIC_KEY does not match COSIGN_PUBLIC_KEY. Clients built here would reject every artifact this run signs." >&2
+            exit 1
+          fi
+          echo "Pinned client key matches the signing key."
+          rm -f pinned.pem signing.pem pinned.der signing.der
+        env:
+          WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+
+      - name: Sign source document
+        if: ${{ steps.targets.outputs.targets != '' }}
+        run: cosign sign-blob --key env://COSIGN_PRIVATE_KEY source.json --output-signature source.json.sig --yes
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+
+      - name: Verify source signature
+        if: ${{ steps.targets.outputs.targets != '' }}
+        run: |
+          printf '%s' "$COSIGN_PUBLIC_KEY" > cosign.pub
+          cosign verify-blob --key cosign.pub --signature source.json.sig source.json
+          rm -f cosign.pub
+        env:
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+
+      - name: Upload source artifact
+        if: ${{ steps.targets.outputs.targets != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-source-${{ env.CHANNEL }}
+          path: |
+            source.json
+            source.json.sig
+
+      - name: Login to AWS
+        if: ${{ steps.targets.outputs.targets != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      # Every mirrored artifact is cosigned so the CLIENT can verify provenance per artifact,
+      # independently of who described it. That is what allows the source document to be composed
+      # per client by the server without ever putting the signing key on the update server.
+      - name: Sign mirrored artifacts
+        if: ${{ steps.targets.outputs.targets != '' }}
+        run: |
+          if [ ! -d artifacts-mirror ]; then
+            echo "No mirrored artifacts to sign."
+            exit 0
+          fi
+          # Public key as a file, matching the source verify step: cosign's env:// keyref is used
+          # for the private key, and the proven pattern here for verification is a key file.
+          printf '%s' "$COSIGN_PUBLIC_KEY" > cosign.pub
+          # Sign the STATEMENTS the generator wrote, not the artifacts themselves. A signature over
+          # artifact bytes proves only "WSO2 produced this file", which would leave the document free
+          # to offer an old signed artifact under a new version label; the statement binds
+          # id + version + sha256 (+ requires) so the client can check the claim it was given.
+          # -print0/-d '' so a path containing spaces or newlines cannot split into two arguments.
+          find artifacts-mirror -type f -name '*.statement.json' -print0 | while IFS= read -r -d '' file; do
+            cosign sign-blob --key env://COSIGN_PRIVATE_KEY "${file}" --output-signature "${file}.sig" --yes
+            # Verify immediately: a signature that cannot be checked here would ship as one the
+            # client rejects, turning a signing misconfiguration into a failed update for users.
+            cosign verify-blob --key cosign.pub --signature "${file}.sig" "${file}"
+            echo "signed $(basename "${file}")"
+          done
+          rm -f cosign.pub
+          # Every mirrored artifact must have one: an unsigned artifact would be served with a
+          # statement URL that 404s, which the client treats as a hard failure.
+          artifacts=$(find artifacts-mirror -type f ! -name '*.statement.json' ! -name '*.sig' | wc -l | tr -d ' ')
+          statements=$(find artifacts-mirror -type f -name '*.statement.json' | wc -l | tr -d ' ')
+          echo "artifacts=${artifacts} statements=${statements}"
+          if [ "${artifacts}" != "${statements}" ]; then
+            echo "Error: every mirrored artifact needs a signed statement (${artifacts} artifacts, ${statements} statements)." >&2
+            exit 1
+          fi
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+
+      - name: Upload mirrored artifacts to update bucket
+        if: ${{ steps.targets.outputs.targets != '' }}
+        run: |
+          if [ -d artifacts-mirror ]; then
+            aws s3 cp artifacts-mirror/ "s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/artifacts/" --recursive
+          else
+            echo "WSO2_UPDATE_ARTIFACTS_URL unset — no mirrored artifacts; the document points at source URLs."
+          fi
+
+      - name: Upload source document to update bucket
+        if: ${{ steps.targets.outputs.targets != '' }}
+        env:
+          APP_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
+          LINE_SELECTOR: ${{ inputs.update_line_selector }}
+        run: |
+          set -euo pipefail
+          # The server reads these; clients never do. Keep the manifests/ prefix PRIVATE — a publicly
+          # readable source document would let a client bypass the server and with it the
+          # kill-switch, rollout and entitlement decisions.
+          DEST="s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/manifests/${CHANNEL}/"
+
+          # Published under this release's own name, so a newer release never overwrites the document an
+          # older line is still served from.
+          DOC="source-${APP_VERSION}.json"
+          aws s3 cp source.json "${DEST}${DOC}" --content-type application/json --cache-control no-cache
+          aws s3 cp source.json.sig "${DEST}${DOC}.sig" --content-type text/plain --cache-control no-cache
+
+          # Default to this build's own line, so an ordinary release needs no extra input.
+          SELECTOR="${LINE_SELECTOR}"
+          if [ -z "${SELECTOR}" ]; then
+            SELECTOR="$(printf '%s' "${APP_VERSION}" | awk -F. '{print $1"."$2".x"}')"
+          fi
+
+          # The index is small, unsigned and hand-editable, so a read-modify-write is safe here in a way
+          # rewriting a signed document is not. The guards live in the script, shared with
+          # publish-components.yml so the two publishers cannot drift apart.
+          if aws s3 cp "${DEST}index.json" index.json 2>/dev/null; then
+            echo "Existing index:"; cat index.json
+          else
+            echo '{"schemaVersion":1,"entries":[]}' > index.json
+            echo "No index yet; creating one."
+          fi
+          python3 ci/build/upsert-source-index.py \
+            --index index.json \
+            --selector "${SELECTOR}" \
+            --manifest "${DOC}" \
+            --sequence "${SEQUENCE}"
+          aws s3 cp index.json "${DEST}index.json" --content-type application/json --cache-control no-cache
+          echo "Published ${CHANNEL} ${DOC} (sequence ${SEQUENCE}, targets ${{ steps.targets.outputs.targets }}) serving ${SELECTOR}"

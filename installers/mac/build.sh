@@ -418,6 +418,41 @@ if [ -n "${MAC_SIGNING_IDENTITY:-}" ]; then
     codesign --force --timestamp --sign "$MAC_SIGNING_IDENTITY" "$WORK_DIR/$DMG_NAME"
 fi
 
+# -------------------------------------------------------------------
+# Create the Squirrel.Mac auto-update payload: a zip of the SIGNED app.
+# Squirrel verifies that the Developer ID signature matches on update, so a
+# signed app zip is sufficient — it does not need to be notarized/stapled for
+# the update mechanism (the DMG covers first-install Gatekeeper). Built with
+# `ditto` to preserve symlinks and resource forks in the bundle.
+# -------------------------------------------------------------------
+MAC_ZIP="wso2-integrator-$VERSION-$ARCH-mac.zip"
+print_info "Creating Squirrel.Mac update payload: $MAC_ZIP"
+rm -f "$WORK_DIR/$MAC_ZIP"
+# INSTALLER_PROFILE=editor-update (§D8): the Squirrel update payload is EDITOR-ONLY — strip the
+# bundled Ballerina from a copy and re-sign it (the DMG/PKG first-install artifacts stay full).
+# After Squirrel swaps the app, the seeded Ballerina in ~/.wso2-integrator survives the swap.
+# Default (full) keeps the current behaviour for local/dev builds.
+ZIP_SRC="$SIGN_APP"
+if [ "${INSTALLER_PROFILE:-full}" = "editor-update" ]; then
+    # W-B: truly editor-only Squirrel payload — drop the entire components tree (Ballerina, ICP,
+    # JRE). All are seeded to ~/.wso2-integrator and survive the whole-.app swap; ICP requires the
+    # MI extension to read WSO2_INTEGRATOR_ICP_HOME before this payload is published (go-live gate).
+    print_info "editor-update profile: building editor-only Squirrel payload (runtimes relocated)"
+    EDITOR_APP="$WORK_DIR/editor_update/WSO2 Integrator.app"
+    rm -rf "$WORK_DIR/editor_update"
+    mkdir -p "$WORK_DIR/editor_update"
+    ditto "$SIGN_APP" "$EDITOR_APP"
+    rm -rf "$EDITOR_APP/Contents/components"
+    sign_app_bundle "$EDITOR_APP"
+    ZIP_SRC="$EDITOR_APP"
+fi
+ditto -c -k --sequesterRsrc --keepParent "$ZIP_SRC" "$WORK_DIR/$MAC_ZIP"
+if [ -f "$WORK_DIR/$MAC_ZIP" ]; then
+    print_info "Successfully created: $MAC_ZIP ($(du -h "$WORK_DIR/$MAC_ZIP" | cut -f1))"
+else
+    print_error "Failed to create Squirrel.Mac update zip"
+    exit 1
+fi
 
 # Temp files cleaned by the EXIT trap
 trap - EXIT
