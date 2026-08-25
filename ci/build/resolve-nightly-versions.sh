@@ -239,7 +239,9 @@ resolve_github_component() {
 resolve_openvsx_component() {
   local key="$1" extension="$2" payload version
 
-  if ! payload=$(curl -fsS --retry 3 --retry-delay 2 --max-time 60 \
+  # --retry-all-errors so a connection reset retries: --retry alone covers timeouts and transient
+  # HTTP statuses only, and this single call decides every version a nightly builds.
+  if ! payload=$(curl -fsS --retry 5 --retry-delay 3 --retry-all-errors --max-time 60 \
       "https://open-vsx.org/api/wso2/${extension}/latest"); then
     echo "Error: failed to query Open VSX for wso2.${extension}." >&2
     exit 1

@@ -33,9 +33,14 @@ VSIX_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${VSIX_NAM
 mkdir -p "${VSIX_DIR}"
 
 echo "Downloading ${VSIX_NAME} from ${VSIX_URL}" >&2
+# --retry-all-errors is what makes the retry meaningful here: plain --retry covers timeouts and
+# transient HTTP statuses, NOT connection-level failures, so a "curl: (35) Recv failure: Connection
+# reset by peer" was fatal on the first attempt. GitHub resets connections under load, and this
+# download sits a minute into a release build that then throws away everything downstream.
 if ! curl -fL \
-  --retry 3 \
-  --retry-delay 2 \
+  --retry 5 \
+  --retry-delay 3 \
+  --retry-all-errors \
   --connect-timeout 15 \
   --max-time 300 \
   -o "${VSIX_DIR}/${VSIX_NAME}" \

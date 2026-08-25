@@ -72,10 +72,14 @@ rm -rf %{buildroot}
 %post
 # Change ownership and permissions for integrator files
 chown -R root:root /usr/share/wso2-integrator
-chmod -R a+rwX /usr/share/wso2-integrator/components/icp/bin/database/ 2>/dev/null || true
-mkdir -p /usr/share/wso2-integrator/components/icp/logs
-chmod -R a+rwX /usr/share/wso2-integrator/components/icp/logs/
-chmod a+rw /usr/share/wso2-integrator/components/icp/www/config.json 2>/dev/null || true
+# Guarded: the editor-update package ships no components/icp, and recreating the directory here
+# (even just logs/) would make first-run seeding register a broken ICP baseline.
+if [ -d /usr/share/wso2-integrator/components/icp ]; then
+    chmod -R a+rwX /usr/share/wso2-integrator/components/icp/bin/database/ 2>/dev/null || true
+    mkdir -p /usr/share/wso2-integrator/components/icp/logs
+    chmod -R a+rwX /usr/share/wso2-integrator/components/icp/logs/
+    chmod a+rw /usr/share/wso2-integrator/components/icp/www/config.json 2>/dev/null || true
+fi
 chmod 4755 /usr/share/wso2-integrator/chrome-sandbox 2>/dev/null || true
 
 # Create symlink to /usr/bin
