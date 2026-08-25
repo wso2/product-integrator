@@ -151,16 +151,82 @@ mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
 
-# Modify icp.sh to use the JRE from shared dependencies directory
+# Make icp.sh resolve the JVM env-aware (§D8): prefer the resolved JDK home advertised by the
+# product runtime environment (WSO2_INTEGRATOR_JRE_HOME — set once ICP/JRE are seeded to the data
+# folder), else fall back to the JRE bundled next to ICP (../../dependencies). Replace icp's bare
+# `java` calls with $WSO2_ICP_JAVA, then prepend a resolver that sets it (added AFTER the replace
+# so its own `bin/java` isn't itself rewritten). Backward-compatible: with the env var unset it
+# resolves to exactly the previous relative path.
 ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
 if [ -f "$ICP_SCRIPT" ]; then
-    print_info "Modifying icp.sh to use JRE from dependencies ($JRE_FOLDER)"
-    # Replace standalone 'java' invocations with the full path to the JRE java (word-boundary match)
-    sed -i '' -E "s|[[:<:]]java[[:>:]]|\"\$SCRIPT_DIR\"/../../dependencies/$JRE_FOLDER/bin/java|g" "$ICP_SCRIPT"
+    print_info "Modifying icp.sh to use JRE (env-aware, fallback $JRE_FOLDER)"
+    sed -i '' -E "s|[[:<:]]java[[:>:]]|\"\$WSO2_ICP_JAVA\"|g" "$ICP_SCRIPT"
+    ICP_TMP="$(mktemp)"
+    {
+        head -n 1 "$ICP_SCRIPT"
+        cat <<EOF
+WSO2_ICP_JAVA=""
+_wso2_icp_sd="\$(cd "\$(dirname "\$0")" && pwd)"
+if [ -n "\$WSO2_INTEGRATOR_JRE_HOME" ] && [ -x "\$WSO2_INTEGRATOR_JRE_HOME/bin/java" ]; then
+  WSO2_ICP_JAVA="\$WSO2_INTEGRATOR_JRE_HOME/bin/java"
+else
+  WSO2_ICP_JAVA="\$_wso2_icp_sd/../../dependencies/$JRE_FOLDER/bin/java"
+fi
+EOF
+        tail -n +2 "$ICP_SCRIPT"
+    } > "$ICP_TMP"
+    mv "$ICP_TMP" "$ICP_SCRIPT"
+    # 755 explicitly, not +x: the temp file was created 0600, and an icp.sh that group/other cannot
+    # READ cannot be executed by them either (the interpreter has to read it). Root-owned installs
+    # (deb/rpm) would otherwise ship an ICP that only root can launch.
+    chmod 755 "$ICP_SCRIPT"
 fi
 
 # Fix ZIP epoch timestamps — unzip preserves 1980-01-01 dates from ZIP archives
 find "$WSO2_TARGET/WSO2 Integrator.app" -exec touch {} +
+
+# -------------------------------------------------------------------
+# Code-sign a fully-assembled app bundle (Developer ID + hardened runtime), inside-out:
+# loose Mach-O + component executables, then nested bundles deepest-first, then the top
+# app. Falls back to ad-hoc signing when no identity is configured (local/dev builds) so
+# the app still launches. Reused for the full app and the stripped editor-only update
+# bundle (§D8) — stripping files breaks the seal, so the editor-only copy is re-signed.
+# -------------------------------------------------------------------
+ENTITLEMENTS="$WORK_DIR/entitlements.plist"
+sign_app_bundle() {
+    local app="$1"
+    if [ -n "${MAC_SIGNING_IDENTITY:-}" ]; then
+        print_info "Signing app with Developer ID identity: $MAC_SIGNING_IDENTITY ($app)"
+        local SIGN_OPTS=(--force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$MAC_SIGNING_IDENTITY")
+
+        # 1) Loose Mach-O content: libraries, native node addons, and executables inside the
+        #    bundled components (Ballerina/JVM/ICP). Sign these before the bundles that contain them.
+        find "$app" -type f \( -name "*.dylib" -o -name "*.so" -o -name "*.node" -o -name "*.jnilib" \) -print0 \
+            | while IFS= read -r -d '' f; do codesign "${SIGN_OPTS[@]}" "$f"; done
+        if [ -d "$app/Contents/components" ]; then
+            find "$app/Contents/components" -type f -perm +111 ! -name "*.jar" -print0 \
+                | while IFS= read -r -d '' f; do codesign "${SIGN_OPTS[@]}" "$f"; done
+        fi
+
+        # 2) Nested bundles (Electron frameworks + helper .apps), deepest path first.
+        find "$app" -type d \( -name "*.framework" -o -name "*.app" \) | awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2- \
+            | while IFS= read -r bundle; do
+                [ "$bundle" = "$app" ] && continue
+                codesign "${SIGN_OPTS[@]}" "$bundle"
+              done
+
+        # 3) The top-level app last, then verify the seal.
+        codesign "${SIGN_OPTS[@]}" "$app"
+        codesign --verify --deep --strict --verbose=2 "$app"
+        print_info "App signed and verified: $app"
+    else
+        print_warning "MAC_SIGNING_IDENTITY not set — ad-hoc signing (not distributable or notarizable)"
+        codesign --force --deep --sign - "$app"
+    fi
+}
+
+SIGN_APP="$WSO2_TARGET/WSO2 Integrator.app"
+sign_app_bundle "$SIGN_APP"
 
 # Build the component package
 pkgbuild --root "$EXTRACTION_TARGET" \
@@ -174,11 +240,24 @@ pkgbuild --root "$EXTRACTION_TARGET" \
 sed -i '' "s/version=\"__VERSION__\"/version=\"$VERSION\"/g" "$WORK_DIR/Distribution.xml"
 
 
-# Build the final product archive
-productbuild --distribution "$WORK_DIR/Distribution.xml" \
-             --resources "$WORK_DIR" \
-             --package-path "$WORK_DIR" \
-             "wso2-integrator-$VERSION-$ARCH.pkg"
+# Build the final product archive. Signed with the Developer ID Installer identity
+# when available — an unsigned .pkg cannot be notarized. (App bundles inside are
+# already codesigned with the Application identity; the pkg wrapper needs its own.)
+if [ -n "${MAC_INSTALLER_SIGNING_IDENTITY:-}" ]; then
+    print_info "Signing installer package with: $MAC_INSTALLER_SIGNING_IDENTITY"
+    productbuild --distribution "$WORK_DIR/Distribution.xml" \
+                 --resources "$WORK_DIR" \
+                 --package-path "$WORK_DIR" \
+                 --sign "$MAC_INSTALLER_SIGNING_IDENTITY" \
+                 --timestamp \
+                 "wso2-integrator-$VERSION-$ARCH.pkg"
+else
+    print_warning "MAC_INSTALLER_SIGNING_IDENTITY not set — .pkg will be unsigned (not notarizable)"
+    productbuild --distribution "$WORK_DIR/Distribution.xml" \
+                 --resources "$WORK_DIR" \
+                 --package-path "$WORK_DIR" \
+                 "wso2-integrator-$VERSION-$ARCH.pkg"
+fi
 
 sed -i '' "s/version=\"$VERSION\"/version=\"__VERSION__\"/g" "$WORK_DIR/Distribution.xml"
 
@@ -287,15 +366,35 @@ APPLESCRIPT
 print_info "Finalising DMG"
 sync
 sleep 3
+# Something transiently holds a freshly-written volume — Spotlight indexing, fsevents, or the
+# Finder used for the window layout above. Three attempts two seconds apart was not enough on a
+# real arm64 runner: the build failed here after the app had been signed and the pkg written.
+#
+# So: escalate the backoff to ~30s total, name the holder when it fails (otherwise the next
+# occurrence is just as mysterious as this one was), and fall back to diskutil, which can evict a
+# volume hdiutil will not.
 _detach_ok=0
-for _retry in 1 2 3; do
+for _retry in 1 2 3 4 5 6; do
     if hdiutil detach "$DMG_MOUNT_DIR" -force -quiet; then
         _detach_ok=1; break
     fi
-    [ "$_retry" -lt 3 ] && { print_info "Detach attempt $_retry failed, retrying in 2s..."; sleep 2; }
+    if [ "$_retry" -lt 6 ]; then
+        _wait=$((_retry * 2))
+        print_info "Detach attempt $_retry failed; who is holding it:"
+        lsof +D "$DMG_MOUNT_DIR" 2>/dev/null | head -8 || true
+        print_info "Retrying in ${_wait}s..."
+        sleep "$_wait"
+    fi
 done
 if [ "$_detach_ok" -eq 0 ]; then
-    print_error "Could not unmount $DMG_MOUNT_DIR after 3 attempts; aborting before DMG conversion"
+    print_info "hdiutil could not detach; trying diskutil unmount force"
+    if diskutil unmount force "$DMG_MOUNT_DIR" >/dev/null 2>&1; then
+        _detach_ok=1
+    fi
+fi
+if [ "$_detach_ok" -eq 0 ]; then
+    print_error "Could not unmount $DMG_MOUNT_DIR; aborting before DMG conversion"
+    lsof +D "$DMG_MOUNT_DIR" 2>/dev/null | head -20 || true
     exit 1
 fi
 DMG_MOUNT_DIR=""  # Clear only after successful detach so the trap can still retry on failure
@@ -311,6 +410,14 @@ else
     print_error "Failed to create DMG package"
     exit 1
 fi
+
+# Sign the DMG container itself with the Application identity (the app inside is
+# already signed); recommended for notarization and a cleaner Gatekeeper experience.
+if [ -n "${MAC_SIGNING_IDENTITY:-}" ]; then
+    print_info "Signing DMG with: $MAC_SIGNING_IDENTITY"
+    codesign --force --timestamp --sign "$MAC_SIGNING_IDENTITY" "$WORK_DIR/$DMG_NAME"
+fi
+
 
 # Temp files cleaned by the EXIT trap
 trap - EXIT

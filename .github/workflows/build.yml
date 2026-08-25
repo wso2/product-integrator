@@ -547,6 +547,76 @@ jobs:
           mkdir -p ../artifacts
           (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
           cp ../artifacts/VSCode-darwin-${{ matrix.arch }}.zip ../../installers/mac/
+      # Imports the Developer ID Application cert (codesign: app bundles + DMG) and the
+      # Developer ID Installer cert (productbuild: the .pkg — an unsigned pkg cannot be
+      # notarized) into a temp keychain, then derives the identity names from the imported
+      # certs so no separate identity secret is needed.
+      - name: Import signing certificates (macOS)
+        if: ${{ inputs.build_packed_installers == true }}
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_INSTALLER_CERTIFICATE: ${{ secrets.MACOS_INSTALLER_CERTIFICATE }}
+          MACOS_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          if [ -z "$MACOS_CERTIFICATE" ]; then
+            echo "MACOS_CERTIFICATE not set — skipping import; build.sh will ad-hoc sign (not distributable)."
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/wso2-signing.keychain-db"
+          KC_PASS="${KEYCHAIN_PASSWORD:-ci-$RANDOM-$RANDOM-$RANDOM}"
+          security create-keychain -p "$KC_PASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KC_PASS" "$KEYCHAIN"
+          # Sanity-check the decoded secret before importing: a PKCS#12 is a DER SEQUENCE, so it
+          # must start with 0x30. This separates "secret was mangled/truncated in transit" from
+          # "password does not match" — `security import` reports both as MAC verification failed.
+          check_p12() {
+            local f="$1" label="$2"
+            local size; size=$(wc -c < "$f" | tr -d ' ')
+            echo "$label: decoded $size bytes"
+            if [ "$size" -lt 100 ]; then
+              echo "::error::$label decoded to only $size bytes — the secret is empty or truncated, not base64 of a .p12"
+              exit 1
+            fi
+            if [ "$(head -c1 "$f" | od -An -tx1 | tr -d ' \n')" != "30" ]; then
+              echo "::error::$label does not look like a PKCS#12/DER file — check the secret holds base64 of a .p12 (not a .cer, and no stray characters)"
+              exit 1
+            fi
+          }
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/app_cert.p12"
+          check_p12 "$RUNNER_TEMP/app_cert.p12" "MACOS_CERTIFICATE"
+          if ! security import "$RUNNER_TEMP/app_cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign; then
+            echo "::error::Importing MACOS_CERTIFICATE failed. The file decoded correctly, so MACOS_CERTIFICATE_PASSWORD does not match this .p12."
+            exit 1
+          fi
+          if [ -n "$MACOS_INSTALLER_CERTIFICATE" ]; then
+            echo "$MACOS_INSTALLER_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/installer_cert.p12"
+            check_p12 "$RUNNER_TEMP/installer_cert.p12" "MACOS_INSTALLER_CERTIFICATE"
+            if ! security import "$RUNNER_TEMP/installer_cert.p12" -k "$KEYCHAIN" -P "$MACOS_INSTALLER_CERTIFICATE_PASSWORD" -T /usr/bin/productbuild -T /usr/bin/productsign; then
+              echo "::error::Importing MACOS_INSTALLER_CERTIFICATE failed. The file decoded correctly, so MACOS_INSTALLER_CERTIFICATE_PASSWORD does not match this .p12."
+              exit 1
+            fi
+          fi
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PASS" "$KEYCHAIN" >/dev/null
+          rm -f "$RUNNER_TEMP/app_cert.p12" "$RUNNER_TEMP/installer_cert.p12"
+          APP_ID=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"')
+          INST_ID=$(security find-identity -v "$KEYCHAIN" | grep -o '"Developer ID Installer: [^"]*"' | head -1 | tr -d '"')
+          if [ -z "$APP_ID" ]; then
+            echo "No Developer ID Application identity found after import" >&2
+            exit 1
+          fi
+          echo "MAC_SIGNING_IDENTITY=$APP_ID" >> "$GITHUB_ENV"
+          if [ -n "$INST_ID" ]; then
+            echo "MAC_INSTALLER_SIGNING_IDENTITY=$INST_ID" >> "$GITHUB_ENV"
+          fi
+          echo "Imported certificates. App identity: $APP_ID | Installer identity: ${INST_ID:-none}"
+
+      # MAC_SIGNING_IDENTITY / MAC_INSTALLER_SIGNING_IDENTITY come from the import step
+      # via GITHUB_ENV (derived from the imported certificates).
+
       - name: Build macOS installer packages
         if: ${{ inputs.build_packed_installers == true }}
         run: |
@@ -578,6 +648,46 @@ jobs:
           wget -O jre.zip "$JRE_URL"
           ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
+
+      # Apple-ID (app-specific password) notarytool auth. NOTARY_APP_PASSWORD is an
+      # app-specific password generated at appleid.apple.com, not the account password.
+      - name: Notarize and staple (macOS ${{ matrix.arch }})
+        if: ${{ inputs.build_packed_installers == true }}
+        # The job's default working-directory is lib/vscode, where installers/mac does not exist —
+        # without this override the loop below finds nothing, skips everything, and exits 0: a green
+        # step that notarized nothing.
+        working-directory: .
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          V="${{ needs.resolve-versions.outputs.integrator_version }}"
+          DMG="installers/mac/wso2-integrator-${V}-${{ matrix.arch }}.dmg"
+          PKG="installers/mac/wso2-integrator-${V}-${{ matrix.arch }}.pkg"
+          if [ -z "$NOTARY_APPLE_ID" ] || [ -z "$NOTARY_APP_PASSWORD" ] || [ -z "$NOTARY_TEAM_ID" ]; then
+            echo "Notarization credentials not set — skipping notarization (build is signed but not notarized)."
+            exit 0
+          fi
+          NOTARIZED=0
+          for ARTIFACT in "$DMG" "$PKG"; do
+            [ -f "$ARTIFACT" ] || continue
+            echo "Notarizing $ARTIFACT"
+            xcrun notarytool submit "$ARTIFACT" \
+              --apple-id "$NOTARY_APPLE_ID" \
+              --password "$NOTARY_APP_PASSWORD" \
+              --team-id "$NOTARY_TEAM_ID" \
+              --wait
+            xcrun stapler staple "$ARTIFACT"
+            NOTARIZED=$((NOTARIZED + 1))
+          done
+          # Credentials were provided, so notarizing nothing is a failure, not a skip: it means the
+          # artifacts are not where this step expects them.
+          if [ "$NOTARIZED" -eq 0 ]; then
+            echo "::error::No DMG or PKG found to notarize under $(pwd)/installers/mac" >&2
+            exit 1
+          fi
 
       - name: Upload macOS DMG artifacts
         if: ${{ inputs.build_packed_installers == true }}
