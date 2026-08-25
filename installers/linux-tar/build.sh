@@ -150,11 +150,33 @@ mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
 
-# Modify icp.sh to use the JRE from shared dependencies directory
+# Make icp.sh resolve the JVM env-aware (§D8): prefer the resolved JDK home in WSO2_INTEGRATOR_JRE_HOME
+# (set once ICP/JRE are seeded to the data folder), else the JRE bundled next to ICP. Backward-compatible: with the
+# env var unset it resolves to the previous relative path. The resolver is prepended AFTER the
+# replace so its own `bin/java` is not itself rewritten.
 ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
 if [ -f "$ICP_SCRIPT" ]; then
-    print_info "Modifying icp.sh to use JRE from dependencies ($JRE_FOLDER)"
-    sed -i "s|\bjava\b|\"\$SCRIPT_DIR\"/../../dependencies/$JRE_FOLDER/bin/java|g" "$ICP_SCRIPT"
+    print_info "Modifying icp.sh to use JRE (env-aware, fallback $JRE_FOLDER)"
+    sed -i "s|\bjava\b|\"\$WSO2_ICP_JAVA\"|g" "$ICP_SCRIPT"
+    ICP_TMP="$(mktemp)"
+    {
+        head -n 1 "$ICP_SCRIPT"
+        cat <<EOF
+WSO2_ICP_JAVA=""
+_wso2_icp_sd="\$(cd "\$(dirname "\$0")" && pwd)"
+if [ -n "\$WSO2_INTEGRATOR_JRE_HOME" ] && [ -x "\$WSO2_INTEGRATOR_JRE_HOME/bin/java" ]; then
+  WSO2_ICP_JAVA="\$WSO2_INTEGRATOR_JRE_HOME/bin/java"
+else
+  WSO2_ICP_JAVA="\$_wso2_icp_sd/../../dependencies/$JRE_FOLDER/bin/java"
+fi
+EOF
+        tail -n +2 "$ICP_SCRIPT"
+    } > "$ICP_TMP"
+    mv "$ICP_TMP" "$ICP_SCRIPT"
+    # 755 explicitly, not +x: the temp file was created 0600, and an icp.sh that group/other cannot
+    # READ cannot be executed by them either (the interpreter has to read it). Root-owned installs
+    # (deb/rpm) would otherwise ship an ICP that only root can launch.
+    chmod 755 "$ICP_SCRIPT"
 fi
 
 # Set executable permissions
@@ -163,7 +185,18 @@ find "$INTEGRATOR_TARGET/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
 chmod +x "$INTEGRATOR_TARGET/wso2-integrator" 2>/dev/null || true
 
 # Pack into tar.gz
-OUTPUT_TAR="$WORK_DIR/wso2-integrator-${VERSION}-linux-x64.tar.gz"
+# INSTALLER_PROFILE=editor-update (§D8): drop the bundled Ballerina — the client seeds/resolves
+# it from the per-user data folder. (A tar extract-over never deletes, so this is purely a
+# smaller download; seeding still guarantees the runtime survives.)
+TAR_SUFFIX=""
+if [ "${INSTALLER_PROFILE:-full}" = "editor-update" ]; then
+    # W-B: truly editor-only — drop Ballerina, ICP and the JRE (all seeded to the data folder;
+    # ICP requires the MI extension to read WSO2_INTEGRATOR_ICP_HOME before this build is published).
+    rm -rf "$BALLERINA_TARGET" "$ICP_TARGET" "$DEPENDENCIES_DIR"
+    TAR_SUFFIX="-update"
+    print_info "editor-update profile: removed bundled Ballerina/ICP/JRE from archive"
+fi
+OUTPUT_TAR="$WORK_DIR/wso2-integrator-${VERSION}-linux-x64${TAR_SUFFIX}.tar.gz"
 print_info "Creating TAR.GZ archive: $OUTPUT_TAR"
 tar -czf "$OUTPUT_TAR" -C "$STAGE_DIR" wso2-integrator
 

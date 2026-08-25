@@ -1,0 +1,432 @@
+# Publishes component updates without an app release.
+#
+# Component versions come from ci/build/component-versions.properties on the dispatched ref. Only the
+# WI extension is built here; every other component is downloaded.
+#
+# This publishes a new source document and repoints one index line at it. The index serves one
+# document per line, so the new document must carry the previous one's app entries and describe the
+# full component set — anything left out stops being offered to that line.
+name: Publish Component Updates
+
+run-name: >-
+  Components -> ${{ inputs.channel }}${{ inputs.line_selector && format(' ({0})', inputs.line_selector) || '' }}${{ inputs.dry_run && ' [dry run]' || '' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Channel to publish to'
+        type: choice
+        options: [insider, beta, stable]
+        default: insider
+      line_selector:
+        description: 'Client line to repoint (e.g. 5.1.x). Optional when the channel serves one line.'
+        type: string
+        default: ''
+      requires_app_version:
+        description: 'App version these components require. Defaults to the app the line already serves.'
+        type: string
+        default: ''
+      rebuild_wi_extension:
+        description: 'Rebuild the WI extension. Turn off for a fix in a downloaded component only - its previous entry is carried forward.'
+        type: boolean
+        default: true
+      carry_components:
+        description: 'Component ids to copy from the current document instead of re-publishing, e.g. jre,icp. Saves re-mirroring what did not change.'
+        type: string
+        default: ''
+      ballerina_extension_source:
+        description: 'Where to publish the Ballerina extension from. Must match what the app build bundled.'
+        type: choice
+        options: [github, marketplace]
+        default: github
+      mi_extension_source:
+        description: 'Where to publish the MI extension from. Must match what the app build bundled.'
+        type: choice
+        options: [github, marketplace]
+        default: github
+      ref:
+        description: 'Branch or tag to publish component versions from (default: this workflow ref)'
+        type: string
+        default: ''
+      dry_run:
+        description: 'Resolve and generate only — nothing is signed, uploaded or repointed'
+        type: boolean
+        default: false
+
+concurrency:
+  # Shared with the Release workflow's publish job: both do a read-modify-write of the same
+  # index.json, and two at once would drop one of the two lines they repointed.
+  group: update-index-${{ inputs.channel }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish components to ${{ inputs.channel }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      BUCKET: ${{ secrets.AWS_UPDATE_S3_BUCKET }}
+      ARTIFACTS_URL: ${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}
+      # A step `if:` cannot see `secrets`, so presence is hoisted to job env.
+      HAS_PINNED_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY != '' }}
+    steps:
+      # Checked before the build rather than after it. All four are required: without mirroring or
+      # signing, the resulting document is one every client rejects.
+      - name: Check the publish path is configured
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${BUCKET}" ] || missing+=("AWS_UPDATE_S3_BUCKET")
+          [ -n "${ARTIFACTS_URL}" ] || missing+=("WSO2_UPDATE_ARTIFACTS_URL (components must be mirrored; clients refuse upstream hosts)")
+          [ -n "${COSIGN_PRIVATE_KEY}" ] || missing+=("COSIGN_PRIVATE_KEY")
+          [ -n "${COSIGN_PUBLIC_KEY}" ] || missing+=("COSIGN_PUBLIC_KEY")
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf '::error::missing required secret: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+          echo "publish path configured for channel ${CHANNEL}"
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Read-only job with signing and cloud credentials in later steps: the checkout token
+          # must not persist into .git/config.
+          persist-credentials: false
+          # The dispatched ref supplies both the component versions and the WI extension source.
+          ref: ${{ inputs.ref || github.ref }}
+          submodules: recursive
+
+      # A ref without the publish tooling (an old release tag, say) would otherwise fail several
+      # steps later on a missing module, which reads as a broken workflow rather than a wrong ref.
+      - name: Check this ref carries the publish tooling
+        run: |
+          set -euo pipefail
+          missing=()
+          for f in ci/build/generate-update-manifest.mjs ci/build/update-manifest.config.json \
+                   ci/build/plan-component-publish.py ci/build/upsert-source-index.py \
+                   ci/build/update_index_common.py; do
+            [ -f "$f" ] || missing+=("$f")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf '::error::%s is not on this ref\n' "${missing[@]}" >&2
+            echo "::error::Dispatch this workflow with a ref that carries the update mechanism (Run workflow -> Branch)." >&2
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+          cache: npm
+          cache-dependency-path: lib/vscode/package-lock.json
+
+      # Stamps wi.extension.version into wi/wi-extension/package.json: package-vsix.js names the
+      # .vsix from it, and the generator reads the component version there. Not committed.
+      - name: Stamp the extension version
+        if: ${{ inputs.rebuild_wi_extension }}
+        run: |
+          chmod +x ./ci/build/apply-version.sh
+          ./ci/build/apply-version.sh --force-extension
+          echo "wi.extension.version=$(grep '^wi.extension.version' ci/build/component-versions.properties)"
+
+      - name: Copy .env.example to .env
+        if: ${{ inputs.rebuild_wi_extension }}
+        run: |
+          find . -type f -name ".env.example" | while read -r example; do
+            cp "${example}" "$(dirname "${example}")/.env"
+          done
+
+      - name: Setup WI
+        if: ${{ inputs.rebuild_wi_extension }}
+        uses: gigara/setup-rush@v1.2.0
+        with:
+          pnpm: 10.11.0
+
+      # --to wso2-integrator: the extension and the workspace projects it depends on, not the whole
+      # monorepo. lib/vscode is not a rush project, so no patches are needed here.
+      - name: Build WI extension
+        if: ${{ inputs.rebuild_wi_extension }}
+        env:
+          # scripts/download-choreo-cli.js calls the GitHub API; unauthenticated it hits the 60/hour
+          # limit and fails the build with a 403.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node common/scripts/install-run-rush.js build --to wso2-integrator --verbose
+
+      - name: Verify the extension VSIX was produced
+        if: ${{ inputs.rebuild_wi_extension }}
+        run: |
+          set -euo pipefail
+          # The generator reads this component from a local file (config `sourceFile`); a missing
+          # VSIX would otherwise surface later as a hashing error.
+          ls -la wi/wi-extension/*.vsix
+
+      - name: Login to AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Resolve the line this publish replaces
+        id: plan
+        env:
+          SELECTOR_INPUT: ${{ inputs.line_selector }}
+        run: |
+          set -euo pipefail
+          DEST="s3://${BUCKET}/manifests/${CHANNEL}/"
+          if ! aws s3 cp "${DEST}index.json" index.json; then
+            echo "::error::${CHANNEL} has no index.json. A components publish repoints an existing line; release an app to this channel first." >&2
+            exit 1
+          fi
+          echo "current index:"; cat index.json
+
+          python3 ci/build/plan-component-publish.py resolve --index index.json --selector "${SELECTOR_INPUT}" > resolved.env
+          . ./resolved.env
+          echo "line ${selector} is served by ${current_doc}"
+          aws s3 cp "${DEST}${current_doc}" current.json
+
+          # The sequence orders documents within a channel. Two workflows publish into the same
+          # channel with independent numbering, so both take a UTC clock read.
+          SEQUENCE=$(date -u +%s)
+          python3 ci/build/plan-component-publish.py plan --index index.json --selector "${selector}" \
+            --current current.json --stamp "$(date -u -d "@${SEQUENCE}" +%y%m%d%H%M)" > planned.env
+          . ./planned.env
+          {
+            echo "selector=${selector}"
+            echo "current_doc=${current_doc}"
+            echo "current_sequence=${current_sequence}"
+            echo "sequence=${SEQUENCE}"
+            echo "doc=${doc}"
+            echo "app_version=${app_version}"
+          } >> "$GITHUB_OUTPUT"
+          echo "publishing ${doc} (sequence ${SEQUENCE}, up from ${current_sequence}) for line ${selector}"
+
+      # Every target in the config: no installers are built here, so there is no per-run platform
+      # set to narrow to. Carried app entries keep the targets they were published with.
+      - name: Generate source document
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUIRES_APP: ${{ inputs.requires_app_version }}
+          # Free-form dispatch input: bound through env, never expanded into the script, so shell
+          # syntax in the value stays data in a job that holds signing and cloud credentials.
+          CARRY_INPUT: ${{ inputs.carry_components }}
+        run: |
+          set -euo pipefail
+          EXTRA=()
+          if [ -n "${REQUIRES_APP}" ]; then
+            EXTRA+=(--requires-app-version "${REQUIRES_APP}")
+          fi
+          # Publish each extension from the SAME source the app build bundled, so the artifact a
+          # client is offered cannot diverge from the one it already has.
+          EXTRA+=(--source-flavors "wso2.ballerina=${{ inputs.ballerina_extension_source }},wso2.micro-integrator=${{ inputs.mi_extension_source }}")
+          # Unchanged components are copied from the current document instead of re-mirrored. The
+          # WI extension has its own toggle because carrying it also skips the build.
+          CARRY="${CARRY_INPUT}"
+          if [ "${{ inputs.rebuild_wi_extension }}" != "true" ]; then
+            CARRY="${CARRY:+${CARRY},}wso2.wso2-integrator"
+          fi
+          if [ -n "${CARRY}" ]; then
+            EXTRA+=(--carry-components "${CARRY}")
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            # Structure only — a dry run need not download and hash every artifact.
+            EXTRA+=(--no-download)
+          fi
+          node ci/build/generate-update-manifest.mjs \
+            --sequence "${{ steps.plan.outputs.sequence }}" \
+            --components-only \
+            --carry-apps-from current.json \
+            --artifacts-base "${ARTIFACTS_URL}" \
+            --mirror-dir artifacts-mirror \
+            "${EXTRA[@]}" \
+            --out source.json
+          echo "----- source.json -----"
+          cat source.json
+
+      # Dropping a component the current document offers would stop its updates silently, so the
+      # new document is compared against the one it replaces.
+      - name: Check the document still covers every component
+        id: coverage
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, sys
+          new = json.load(open("source.json"))
+          old = json.load(open("current.json"))
+          new_ids = {c["id"] for c in new.get("components", [])}
+          old_ids = {c["id"] for c in old.get("components", [])}
+          if not new_ids:
+              sys.exit("error: the generated document has no components; there is nothing to publish.")
+          dropped = sorted(old_ids - new_ids)
+          if dropped:
+              sys.exit(f"error: this document drops components the current one offers: {', '.join(dropped)}. "
+                       f"It replaces that document, so those components would stop being offered.")
+          added = sorted(new_ids - old_ids)
+          print(f"{len(new_ids)} components covered" + (f"; new: {', '.join(added)}" if added else ""))
+          changed = 0
+          for c in sorted(new.get("components", []), key=lambda c: c["id"]):
+              was = next((o.get("version") for o in old.get("components", []) if o["id"] == c["id"]), None)
+              differs = bool(was) and was != c.get("version")
+              changed += differs
+              print(f"  {c['id']}: {was} -> {c.get('version')}" + (" <-- changed" if differs else ""))
+          if not changed and not added:
+              # Legitimate when re-emitting a document deliberately; usually it means the version
+              # bump is not on the dispatched ref.
+              print("::warning::no component version changed. Clients will be offered nothing new. "
+                    "Check the version bump is committed on the ref you dispatched.")
+
+          # True when every entry was carried, so nothing needs mirroring — otherwise
+          # indistinguishable from a mirror that failed to populate.
+          identical = new.get("components") == old.get("components")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"identical_components={str(identical).lower()}\n")
+          PY
+
+      - name: Dry run — nothing published
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "Dry run: generated ${{ steps.plan.outputs.doc }} for line ${{ steps.plan.outputs.selector }}."
+          echo "Nothing was signed, uploaded or repointed. Hashes are placeholders (--no-download)."
+
+      - name: Upload generated document for inspection
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-source-${{ inputs.channel }}
+          path: source.json
+
+      - name: cosign-installer
+        if: ${{ !inputs.dry_run }}
+        uses: sigstore/cosign-installer@v3
+
+      # Clients verify against WSO2_UPDATE_PUBLIC_KEY baked into product.json; CI signs with
+      # COSIGN_PRIVATE_KEY. Nothing else compares them, and a mismatch rejects every artifact.
+      - name: Check the pinned key matches the signing key
+        if: ${{ !inputs.dry_run && env.HAS_PINNED_KEY == 'true' }}
+        env:
+          WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$WSO2_UPDATE_PUBLIC_KEY" | base64 -d > pinned.pem 2>/dev/null || {
+            echo "::error::WSO2_UPDATE_PUBLIC_KEY is not valid base64. It must be 'base64 < cosign.pub'." >&2
+            exit 1
+          }
+          printf '%s' "$COSIGN_PUBLIC_KEY" > signing.pem
+          openssl pkey -pubin -in pinned.pem  -outform DER -out pinned.der
+          openssl pkey -pubin -in signing.pem -outform DER -out signing.der
+          if ! cmp -s pinned.der signing.der; then
+            echo "::error::WSO2_UPDATE_PUBLIC_KEY does not match COSIGN_PUBLIC_KEY. Clients would reject every artifact this run signs." >&2
+            exit 1
+          fi
+          echo "Pinned client key matches the signing key."
+          rm -f pinned.pem signing.pem pinned.der signing.der
+
+      - name: Sign source document
+        if: ${{ !inputs.dry_run }}
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: cosign sign-blob --key env://COSIGN_PRIVATE_KEY source.json --output-signature source.json.sig --yes
+
+      - name: Verify source signature
+        if: ${{ !inputs.dry_run }}
+        env:
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+        run: |
+          printf '%s' "$COSIGN_PUBLIC_KEY" > cosign.pub
+          cosign verify-blob --key cosign.pub --signature source.json.sig source.json
+          rm -f cosign.pub
+
+      # Statements, not artifact bytes: signing bytes alone would let a document offer an old
+      # artifact under a new version label. The statement binds id + version + sha256 + requires.
+      - name: Sign mirrored artifacts
+        if: ${{ !inputs.dry_run }}
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          if [ ! -d artifacts-mirror ]; then
+            # Every entry carried: the artifacts they name are already in the bucket with signed
+            # statements, so there is nothing to mirror or sign.
+            if [ "${{ steps.coverage.outputs.identical_components }}" = "true" ]; then
+              echo "Nothing re-mirrored: this document names the same artifacts as the one it replaces."
+              exit 0
+            fi
+            echo "::error::no artifacts-mirror directory, but this document names artifacts the current one does not; it would point at URLs with no bytes behind them." >&2
+            exit 1
+          fi
+          printf '%s' "$COSIGN_PUBLIC_KEY" > cosign.pub
+          find artifacts-mirror -type f -name '*.statement.json' -print0 | while IFS= read -r -d '' file; do
+            cosign sign-blob --key env://COSIGN_PRIVATE_KEY "${file}" --output-signature "${file}.sig" --yes
+            cosign verify-blob --key cosign.pub --signature "${file}.sig" "${file}"
+            echo "signed $(basename "${file}")"
+          done
+          rm -f cosign.pub
+          artifacts=$(find artifacts-mirror -type f ! -name '*.statement.json' ! -name '*.sig' | wc -l | tr -d ' ')
+          statements=$(find artifacts-mirror -type f -name '*.statement.json' | wc -l | tr -d ' ')
+          echo "artifacts=${artifacts} statements=${statements}"
+          if [ "${artifacts}" != "${statements}" ]; then
+            echo "::error::every mirrored artifact needs a signed statement (${artifacts} artifacts, ${statements} statements)." >&2
+            exit 1
+          fi
+
+      - name: Upload mirrored artifacts to update bucket
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ ! -d artifacts-mirror ]; then
+            echo "Nothing to upload; every artifact this document names is already in the bucket."
+            exit 0
+          fi
+          aws s3 cp artifacts-mirror/ "s3://${BUCKET}/artifacts/" --recursive
+
+      # Artifacts, then the document, then the index: nothing becomes reachable before what it
+      # names is in place.
+      - name: Publish document and repoint the line
+        if: ${{ !inputs.dry_run }}
+        env:
+          DOC: ${{ steps.plan.outputs.doc }}
+          SELECTOR: ${{ steps.plan.outputs.selector }}
+          SEQUENCE: ${{ steps.plan.outputs.sequence }}
+          CURRENT_SEQUENCE: ${{ steps.plan.outputs.current_sequence }}
+        run: |
+          set -euo pipefail
+          DEST="s3://${BUCKET}/manifests/${CHANNEL}/"
+          aws s3 cp source.json "${DEST}${DOC}" --content-type application/json --cache-control no-cache
+          aws s3 cp source.json.sig "${DEST}${DOC}.sig" --content-type text/plain --cache-control no-cache
+
+          # Re-read rather than reuse the plan step's copy: the index is read-modify-written and
+          # the concurrency group makes a concurrent publish unlikely, not impossible.
+          aws s3 cp "${DEST}index.json" index.json
+          python3 ci/build/upsert-source-index.py \
+            --index index.json \
+            --selector "${SELECTOR}" \
+            --manifest "${DOC}" \
+            --sequence "${SEQUENCE}" \
+            --current-sequence "${CURRENT_SEQUENCE}"
+          aws s3 cp index.json "${DEST}index.json" --content-type application/json --cache-control no-cache
+
+      - name: Summary
+        if: ${{ !inputs.dry_run }}
+        run: |
+          {
+            echo "### Components published to \`${CHANNEL}\`"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| line | \`${{ steps.plan.outputs.selector }}\` |"
+            echo "| document | \`${{ steps.plan.outputs.doc }}\` |"
+            echo "| replaces | \`${{ steps.plan.outputs.current_doc }}\` |"
+            echo "| sequence | ${{ steps.plan.outputs.current_sequence }} → ${{ steps.plan.outputs.sequence }} |"
+            echo "| app carried | \`${{ steps.plan.outputs.app_version }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

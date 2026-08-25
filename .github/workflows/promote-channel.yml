@@ -1,0 +1,83 @@
+name: Promote Update Channel
+
+# Promotes already-published, signed source documents down the channel ladder
+# (insider → beta → stable) by copying them between channel prefixes in the update bucket.
+#
+# A channel is not one source.json: each release publishes source-<version>.json and claims a line
+# in index.json. So promotion copies the documents the source channel currently serves and upserts
+# the matching index entries in the target, per line — a line the target serves and the source does
+# not is left alone rather than dropped. See ci/build/promote-update-channel.py.
+#
+# Documents and their detached signatures are copied verbatim, so the signature stays valid and
+# nothing is re-signed; the client resolves by channel PATH and never reads a document's own
+# `channel` field.
+#
+# This is the manual-approval gate for promotion (a human dispatches it). For a hard gate on stable,
+# protect this workflow with a GitHub Environment that requires reviewers.
+on:
+  workflow_dispatch:
+    inputs:
+      from_channel:
+        description: 'Source channel to promote FROM'
+        required: true
+        default: 'insider'
+        type: choice
+        options:
+          - insider
+          - beta
+          - stable
+      to_channel:
+        description: 'Target channel to promote TO'
+        required: true
+        default: 'beta'
+        type: choice
+        options:
+          - insider
+          - beta
+          - stable
+
+# Same group as the two publishers: promotion read-modify-writes the TARGET channel's index.json,
+# and racing a publish to that channel would drop whichever line the loser had repointed.
+concurrency:
+  group: update-index-${{ github.event.inputs.to_channel }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  promote:
+    name: Promote ${{ github.event.inputs.from_channel }} to ${{ github.event.inputs.to_channel }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate promotion
+        env:
+          FROM: ${{ github.event.inputs.from_channel }}
+          TO: ${{ github.event.inputs.to_channel }}
+        run: |
+          # Enforce the one-way ladder. Any other pairing (skipping a rung, promoting backwards, or
+          # from == to) is rejected: a release reaches stable by having survived the rungs below it.
+          case "${FROM}->${TO}" in
+            "insider->beta"|"beta->stable") echo "Promoting ${FROM} -> ${TO}" ;;
+            *) echo "::error::Only insider->beta and beta->stable are allowed (got ${FROM} -> ${TO})"; exit 1 ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Login to AWS
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Promote documents and index entries
+        run: |
+          python3 ci/build/promote-update-channel.py \
+            "${{ secrets.AWS_UPDATE_S3_BUCKET }}" \
+            "${{ github.event.inputs.from_channel }}" \
+            "${{ github.event.inputs.to_channel }}"
