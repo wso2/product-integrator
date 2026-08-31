@@ -325,6 +325,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 
 	if (result.created.length > 0) {
 		clearCodeServerLocalStorage();
+		markCodeServerDeployed();
 		const projectCache = dataCacheStore.getState().getProjects(org?.handle);
 		updateContextFile(gitRoot, ext.authProvider?.getState().state.userInfo!, project, org, projectCache);
 		contextStore.getState().refreshState();
@@ -633,6 +634,25 @@ const clearCodeServerLocalStorage = async () => {
 			await commands.executeCommand("devantEditor.clearLocalStorage");
 		} catch (err) {
 			ext.logError(`Failed to execute devantEditor.clearLocalStorage command: ${err}`, err as Error);
+		}
+	}
+}
+
+/**
+ * Tell the cloud editor that the work in this session has been deployed, so it drops the
+ * project's "undeployed changes" entry and the console stops showing a draft row for it.
+ *
+ * Not awaited by the caller: the command is only registered by the cloud editor build, and
+ * an unknown command id is resolved against a `*` activation race before it rejects, which
+ * can take a while in a cold window. An older editor image without the command logs here
+ * and leaves the console's draft row in place until the user starts a new session.
+ */
+const markCodeServerDeployed = async () => {
+	if (ext.isDevantCloudEditor) {
+		try {
+			await commands.executeCommand("devantEditor.markDeployed");
+		} catch (err) {
+			ext.logError(`Failed to execute devantEditor.markDeployed command: ${err}`, err as Error);
 		}
 	}
 }
