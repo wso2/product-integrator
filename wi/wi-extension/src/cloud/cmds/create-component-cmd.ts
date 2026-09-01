@@ -260,13 +260,10 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	const dotGit = await newGit?.getRepositoryDotGit(workspaceFsPath);
 	const repo = newGit.open(gitRoot, dotGit);
 
-	// The cloud editor injects the source component through the environment, while the clone and
-	// prebuilt flows persist it in workspace state, so both have to be consulted.
 	const stateCompId: string | null | undefined = ext.context.workspaceState.get("SOURCE_COMPONENT_ID");
 	const envCompId: string | undefined = process.env.SOURCE_COMPONENT_ID;
 	const workspaceCompId: string | null | undefined = stateCompId || envCompId;
-	// Logged unconditionally: an absent line here means this build predates the source-component
-	// handling, which is otherwise indistinguishable from the id simply not being set.
+	
 	ext.log(
 		`Resolving source component: workspaceState='${stateCompId ?? ""}', env='${envCompId ?? ""}', ` +
 			`resolved='${workspaceCompId ?? ""}', cloudEditor=${ext.isDevantCloudEditor}, cloudEnv=${ext.cloudEnv}`,
@@ -278,10 +275,6 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 			return await handlePrebuiltComponentUpdate(workspaceCompId, component, org, project, createParams[0], workspaceFsPath, gitRoot!);
 		}
 
-		// Prefer the sub-type from the component list. Only the CLI's `withSystemComponents` query
-		// selects `componentSubType`, so if `component/getList` used the plain query it arrives empty —
-		// in that case ask the control plane directly. A lookup failure must not block a normal
-		// deployment, so fall through to creating a component.
 		let componentSubType: string | undefined = component?.spec?.subType || undefined;
 		let subTypeSource = "component list";
 		if (!componentSubType) {
@@ -301,7 +294,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				`isPrebuilt=${component?.metadata?.isPrebuilt}, foundInList=${!!component}`,
 		);
 
-		if (isMcpProxyFromExistingApi(componentSubType)) {
+		if (isMcpProxyFromExistingApi(componentSubType) && component) {
 			// if its an MCP proxy over an existing API, attach the sources to its existing track instead of
 			// creating a new component. This converts the proxy into an MCP server built from source.
 			return await handleMcpProxyRepositoryAttach(workspaceCompId, component, org, project, createParams[0], workspaceFsPath, gitRoot!);
@@ -545,7 +538,7 @@ async function handlePrebuiltComponentUpdate(
  */
 async function handleMcpProxyRepositoryAttach(
 	workspaceCompId: string,
-	component: ComponentKind | undefined,
+	component: ComponentKind,
 	org: Organization,
 	project: Project,
 	createParam: WICloudSubmitComponentsReq['createParams'][number],
@@ -553,16 +546,7 @@ async function handleMcpProxyRepositoryAttach(
 	gitRoot: string,
 ): Promise<WICloudSubmitComponentsResp> {
 	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: 1 };
-	const componentName = component?.metadata?.name || createParam?.displayName || "Unknown";
-
-	// The control plane confirmed this is an MCP proxy, so never fall through to the create path:
-	// that would leave a duplicate component alongside the proxy.
-	if (!component) {
-		const error = `MCP proxy ${workspaceCompId} was not found in the loaded integrations of ${org.handle}/${project.handler}, so its sources cannot be attached.`;
-		ext.logError(error, new Error(error));
-		result.failed.push({ name: componentName, error });
-		return result;
-	}
+	const componentName = component.metadata?.name || createParam?.displayName || "Unknown";
 
 	const missing = !createParam
 		? ["integration details"]
