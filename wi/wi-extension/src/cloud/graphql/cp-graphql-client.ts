@@ -16,7 +16,6 @@
  * under the License.
  */
 
-import type { ComponentKind } from "@wso2/wso2-platform-core";
 import type { AttachMCPProxyRepositoryReq } from "@wso2/wi-core";
 import axios, { type AxiosError } from "axios";
 import { ext } from "../../extensionVariables";
@@ -48,12 +47,12 @@ const ATTACH_MCP_PROXY_REPOSITORY_OPERATION = "attachMCPProxyRepositoryToExistin
 export const MCP_PROXY_FROM_EXISTING_API = "MCPProxyFromExistingAPI";
 
 /**
- * True when the component is an MCP proxy still awaiting a source repository. The control plane
- * flips the sub-type to `MCPProxyFromExistingAPIWithSource` once a repository is attached, so this
- * only matches components that have not been converted yet.
+ * True when the sub-type is an MCP proxy still awaiting a source repository. The control plane flips
+ * it to `MCPProxyFromExistingAPIWithSource` once a repository is attached, so this only matches
+ * components that have not been converted yet.
  */
-export const isMcpProxyFromExistingApi = (component?: ComponentKind): component is ComponentKind =>
-	component?.spec?.subType === MCP_PROXY_FROM_EXISTING_API;
+export const isMcpProxyFromExistingApi = (componentSubType?: string): boolean =>
+	componentSubType === MCP_PROXY_FROM_EXISTING_API;
 
 interface GraphqlResponse<T> {
 	data?: T;
@@ -128,6 +127,34 @@ export async function executeCpGraphql<T>(query: string, operationName: string):
 		throw new Error(`${operationName} returned no data`);
 	}
 	return body.data;
+}
+
+/**
+ * Read a component's `componentSubType` straight from the control plane.
+ *
+ * This cannot come from the cached component list: the CLI's `component/getList` resolves to
+ * `GetProjectComponentsQuery`, and `component/getItem` to `GetComponentQuery`, neither of which
+ * selects `componentSubType` (only `GetProjectComponentsWithSystemQuery` does, and no RPC path uses
+ * it). So `ComponentKind.spec.subType` is always an empty string on this side and is useless for
+ * detection. Returns undefined when the component is not found.
+ */
+export async function fetchComponentSubType(params: {
+	orgHandler: string;
+	projectId: string;
+	componentId: string;
+}): Promise<string | undefined> {
+	const query = `query {
+  components(orgHandler: ${gqlString(params.orgHandler)}, projectId: ${gqlString(params.projectId)}, options: { filter: { withSystemComponents: true }}) {
+    id
+    componentSubType
+  }
+}`;
+
+	const data = await executeCpGraphql<{ components: Array<{ id: string; componentSubType: string | null }> | null }>(
+		query,
+		"components",
+	);
+	return data.components?.find((item) => item.id === params.componentId)?.componentSubType ?? undefined;
 }
 
 /**
