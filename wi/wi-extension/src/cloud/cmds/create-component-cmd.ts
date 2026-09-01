@@ -42,13 +42,20 @@ import { dataCacheStore } from "../stores/data-cache-store";
 import { isSamePath, isSubpath } from "../../utils/pathUtils";
 import { getUserInfoForCmd, isRpcActive, selectOrg, selectProjectWithCreateNew, setExtensionName } from "./cmd-utils";
 import { updateContextFile } from "./create-directory-context-cmd";
-import { attachMCPProxyRepositoryToExistingTrack, isMcpProxyFromExistingApi } from "../graphql/cp-graphql-client";
+import { attachMCPProxyRepositoryToExistingTrack, fetchComponentSummary, isMcpProxyFromExistingApi } from "../graphql/cp-graphql-client";
 import { WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 import { ProjectType, StateMachine, stateService } from "../../stateMachine";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import * as yaml from "js-yaml";
 
+
+/**
+ * Source component ids already acted on. Clearing `SOURCE_COMPONENT_ID` from workspace state cannot
+ * clear the environment variable the cloud editor injects, so a consumed id would otherwise be
+ * re-resolved by every later deploy in the same session.
+ */
+const consumedSourceCompIds = new Set<string>();
 
 const allIntegrationTypes = [
 	DevantScopes.AUTOMATION,
@@ -260,17 +267,82 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	const dotGit = await newGit?.getRepositoryDotGit(workspaceFsPath);
 	const repo = newGit.open(gitRoot, dotGit);
 
-	const workspaceCompId: string | null | undefined = ext.context.workspaceState.get("SOURCE_COMPONENT_ID");
+	// The clone and prebuilt flows persist the source component in workspace state, while the cloud
+	// editor only injects it into the environment. `context-store.ts` reads the env var too, but only
+	// as a list filter, and its state write is reached via a git-remote match that an MCP proxy — which
+	// has no repository yet — can never satisfy. So both have to be consulted here.
+	const stateCompId: string | null | undefined = ext.context.workspaceState.get("SOURCE_COMPONENT_ID");
+	const envCompId: string | undefined = consumedSourceCompIds.has(process.env.SOURCE_COMPONENT_ID ?? "")
+		? undefined
+		: process.env.SOURCE_COMPONENT_ID;
+	const workspaceCompId: string | null | undefined = stateCompId || envCompId;
+	// Logged unconditionally: an absent line here means this build predates the source-component
+	// handling, which is otherwise indistinguishable from the id simply not being set.
+	ext.log(
+		`Resolving source component: workspaceState='${stateCompId ?? ""}', env='${envCompId ?? ""}', ` +
+			`resolved='${workspaceCompId ?? ""}', cloudEditor=${ext.isDevantCloudEditor}, cloudEnv=${ext.cloudEnv}`,
+	);
 	if (workspaceCompId) {
 		const component = dataCacheStore.getState().getComponents(org.handle, project.handler)?.find(comp => comp.metadata?.id === workspaceCompId);
 		if (component?.metadata?.isPrebuilt) {
 			// if its pre-built integration, we need to update the existing component with new repo details instead of creating a new component.
 			return await handlePrebuiltComponentUpdate(workspaceCompId, component, org, project, createParams[0], workspaceFsPath, gitRoot!);
 		}
-		if (isMcpProxyFromExistingApi(component)) {
+
+		// Prefer the sub-type from the component list, which is empty unless the CLI's list query
+		// selects `componentSubType`. Only then ask the control plane, which also supplies the
+		// identity needed when the component is missing from the list altogether.
+		let componentSubType: string | undefined = component?.spec?.subType || undefined;
+		let subTypeSource = "component list";
+		let summary: Awaited<ReturnType<typeof fetchComponentSummary>>;
+		if (!componentSubType) {
+			subTypeSource = "control plane";
+			try {
+				summary = await window.withProgress(
+					{ title: "Checking integration type...", location: ProgressLocation.Notification },
+					() => fetchComponentSummary({ orgHandler: org.handle, projectId: project.id, componentId: workspaceCompId }),
+				);
+			} catch (err) {
+				// A failed lookup is not the same as "not an MCP proxy", and guessing wrong creates a
+				// component beside an unconverted proxy, which cannot be undone from the editor. Stop
+				// instead, and let the user retry.
+				ext.logError(`Failed to resolve the sub-type of component ${workspaceCompId}`, err as Error);
+				return {
+					created: [],
+					failed: createParams.map((item) => ({
+						name: item.displayName || item.name,
+						error: `Could not determine whether the linked integration is an MCP proxy: ${(err as Error).message}. Nothing was deployed, please retry.`,
+					})),
+					total: totalCount,
+				};
+			}
+			componentSubType = summary?.componentSubType ?? undefined;
+		}
+		ext.log(
+			`Source component ${workspaceCompId} has sub-type '${componentSubType ?? "<unknown>"}' (from ${subTypeSource}), ` +
+				`isPrebuilt=${component?.metadata?.isPrebuilt}, foundInList=${!!component}`,
+		);
+
+		if (isMcpProxyFromExistingApi(componentSubType)) {
 			// if its an MCP proxy over an existing API, attach the sources to its existing track instead of
 			// creating a new component. This converts the proxy into an MCP server built from source.
-			return await handleMcpProxyRepositoryAttach(workspaceCompId, component, org, project, createParams[0], workspaceFsPath, gitRoot!);
+			// The list may not carry the component, so fall back to the control plane's identity for it
+			// rather than creating a duplicate alongside the proxy.
+			const proxyComponent: ComponentKind | undefined = component ?? (summary && ({
+				apiVersion: "",
+				kind: "Component",
+				metadata: {
+					id: summary.id,
+					name: summary.name,
+					displayName: summary.displayName,
+					handler: summary.handler,
+					projectName: project.name,
+				},
+				spec: { type: "", subType: summary.componentSubType ?? "", source: {}, build: {} },
+			} as unknown as ComponentKind));
+			if (proxyComponent) {
+				return await handleMcpProxyRepositoryAttach(workspaceCompId, proxyComponent, org, project, createParams[0], workspaceFsPath, gitRoot!);
+			}
 		}
 	}
 
@@ -508,7 +580,7 @@ async function handlePrebuiltComponentUpdate(
 
 /**
  * Convert an MCP proxy component into an MCP server built from source, by attaching the pushed
- * repository to the component's existing deployment track. 
+ * repository to the component's existing deployment track.
  */
 async function handleMcpProxyRepositoryAttach(
 	workspaceCompId: string,
@@ -520,7 +592,7 @@ async function handleMcpProxyRepositoryAttach(
 	gitRoot: string,
 ): Promise<WICloudSubmitComponentsResp> {
 	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: 1 };
-	const componentName = component.metadata?.name || "Unknown";
+	const componentName = component.metadata?.name || createParam?.displayName || "Unknown";
 
 	const missing = !createParam
 		? ["integration details"]
@@ -536,6 +608,9 @@ async function handleMcpProxyRepositoryAttach(
 		return result;
 	}
 
+	const repositorySubPath = relativePath(gitRoot, createParam.componentDir);
+	ext.log(`Attaching git repository to MCP proxy component '${componentName}' instead of creating a new component`);
+
 	try {
 		await window.withProgress(
 			{ title: "Attaching sources to MCP proxy...", location: ProgressLocation.Notification },
@@ -547,13 +622,15 @@ async function handleMcpProxyRepositoryAttach(
 					orgId: org.id,
 					projectId: project.id,
 					srcGitRepoUrl: createParam.repoUrl,
-					repositorySubPath: relativePath(gitRoot, createParam.componentDir),
+					repositorySubPath,
 					originCloud: "devant",
 					repositoryBranch: createParam.branch,
 					secretRef: createParam.gitCredRef,
 				}),
 		);
+		ext.log(`Attached git repository to MCP proxy component '${componentName}'`);
 		result.created.push(component);
+		consumedSourceCompIds.add(workspaceCompId);
 		await ext.context.workspaceState.update("SOURCE_COMPONENT_ID", null);
 
 		clearCodeServerLocalStorage();

@@ -16,7 +16,6 @@
  * under the License.
  */
 
-import type { ComponentKind } from "@wso2/wso2-platform-core";
 import type { AttachMCPProxyRepositoryReq } from "@wso2/wi-core";
 import axios, { type AxiosError } from "axios";
 import { ext } from "../../extensionVariables";
@@ -48,12 +47,12 @@ const ATTACH_MCP_PROXY_REPOSITORY_OPERATION = "attachMCPProxyRepositoryToExistin
 export const MCP_PROXY_FROM_EXISTING_API = "MCPProxyFromExistingAPI";
 
 /**
- * True when the component is an MCP proxy still awaiting a source repository. The control plane
- * flips the sub-type to `MCPProxyFromExistingAPIWithSource` once a repository is attached, so this
- * only matches components that have not been converted yet.
+ * True when the sub-type is an MCP proxy still awaiting a source repository. The control plane flips
+ * it to `MCPProxyFromExistingAPIWithSource` once a repository is attached, so this only matches
+ * components that have not been converted yet.
  */
-export const isMcpProxyFromExistingApi = (component?: ComponentKind): component is ComponentKind =>
-	component?.spec?.subType === MCP_PROXY_FROM_EXISTING_API;
+export const isMcpProxyFromExistingApi = (componentSubType?: string): boolean =>
+	componentSubType === MCP_PROXY_FROM_EXISTING_API;
 
 interface GraphqlResponse<T> {
 	data?: T;
@@ -101,7 +100,7 @@ const getStsToken = async (): Promise<string> => {
 const gqlString = (value: string | undefined): string => JSON.stringify(value ?? "");
 
 /** POST a GraphQL document to the control plane and return its `data`, surfacing GraphQL errors. */
-export async function executeCpGraphql<T>(query: string, operationName: string): Promise<T> {
+export async function executeCpGraphql<T>(query: string, operationName: string, timeoutMs = GRAPHQL_TIMEOUT_MS): Promise<T> {
 	const endpoint = getCpGraphqlEndpoint();
 	const token = await getStsToken();
 
@@ -112,7 +111,7 @@ export async function executeCpGraphql<T>(query: string, operationName: string):
 			{ query },
 			{
 				headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-				timeout: GRAPHQL_TIMEOUT_MS,
+				timeout: timeoutMs,
 			},
 		);
 		body = response.data;
@@ -128,6 +127,52 @@ export async function executeCpGraphql<T>(query: string, operationName: string):
 		throw new Error(`${operationName} returned no data`);
 	}
 	return body.data;
+}
+
+/** Identity and sub-type of a component, as the control plane sees it. */
+export interface CpComponentSummary {
+	id: string;
+	name: string;
+	displayName: string;
+	handler: string;
+	componentSubType: string | null;
+}
+
+/** Lookups block a deploy, so keep them well under the default mutation timeout. */
+const COMPONENT_LOOKUP_TIMEOUT_MS = 15000;
+
+/**
+ * Read a component's identity and `componentSubType` from the control plane.
+ *
+ * Needed because the cached list cannot answer this: the CLI's `component/getList` resolves to
+ * `GetProjectComponentsQuery`, which does not select `componentSubType` (only its
+ * `withSystemComponents` variant does, and no RPC path uses it), so `ComponentKind.spec.subType`
+ * arrives empty. The `component` query takes a `componentId` directly — `ComponentsFilterOptions`
+ * has no id filter, so the list query would have to be fetched whole and filtered client-side.
+ *
+ * Returns undefined when the control plane has no such component.
+ */
+export async function fetchComponentSummary(params: {
+	orgHandler: string;
+	projectId: string;
+	componentId: string;
+}): Promise<CpComponentSummary | undefined> {
+	const query = `query {
+  component(orgHandler: ${gqlString(params.orgHandler)}, projectId: ${gqlString(params.projectId)}, componentId: ${gqlString(params.componentId)}) {
+    id
+    name
+    displayName
+    handler
+    componentSubType
+  }
+}`;
+
+	const data = await executeCpGraphql<{ component: CpComponentSummary | null }>(
+		query,
+		"component",
+		COMPONENT_LOOKUP_TIMEOUT_MS,
+	);
+	return data.component ?? undefined;
 }
 
 /**
