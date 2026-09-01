@@ -100,7 +100,7 @@ const getStsToken = async (): Promise<string> => {
 const gqlString = (value: string | undefined): string => JSON.stringify(value ?? "");
 
 /** POST a GraphQL document to the control plane and return its `data`, surfacing GraphQL errors. */
-export async function executeCpGraphql<T>(query: string, operationName: string): Promise<T> {
+export async function executeCpGraphql<T>(query: string, operationName: string, timeoutMs = GRAPHQL_TIMEOUT_MS): Promise<T> {
 	const endpoint = getCpGraphqlEndpoint();
 	const token = await getStsToken();
 
@@ -111,7 +111,7 @@ export async function executeCpGraphql<T>(query: string, operationName: string):
 			{ query },
 			{
 				headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-				timeout: GRAPHQL_TIMEOUT_MS,
+				timeout: timeoutMs,
 			},
 		);
 		body = response.data;
@@ -129,32 +129,50 @@ export async function executeCpGraphql<T>(query: string, operationName: string):
 	return body.data;
 }
 
+/** Identity and sub-type of a component, as the control plane sees it. */
+export interface CpComponentSummary {
+	id: string;
+	name: string;
+	displayName: string;
+	handler: string;
+	componentSubType: string | null;
+}
+
+/** Lookups block a deploy, so keep them well under the default mutation timeout. */
+const COMPONENT_LOOKUP_TIMEOUT_MS = 15000;
+
 /**
- * Read a component's `componentSubType` straight from the control plane.
+ * Read a component's identity and `componentSubType` from the control plane.
  *
- * This cannot come from the cached component list: the CLI's `component/getList` resolves to
- * `GetProjectComponentsQuery`, and `component/getItem` to `GetComponentQuery`, neither of which
- * selects `componentSubType` (only `GetProjectComponentsWithSystemQuery` does, and no RPC path uses
- * it). So `ComponentKind.spec.subType` is always an empty string on this side and is useless for
- * detection. Returns undefined when the component is not found.
+ * Needed because the cached list cannot answer this: the CLI's `component/getList` resolves to
+ * `GetProjectComponentsQuery`, which does not select `componentSubType` (only its
+ * `withSystemComponents` variant does, and no RPC path uses it), so `ComponentKind.spec.subType`
+ * arrives empty. The `component` query takes a `componentId` directly — `ComponentsFilterOptions`
+ * has no id filter, so the list query would have to be fetched whole and filtered client-side.
+ *
+ * Returns undefined when the control plane has no such component.
  */
-export async function fetchComponentSubType(params: {
+export async function fetchComponentSummary(params: {
 	orgHandler: string;
 	projectId: string;
 	componentId: string;
-}): Promise<string | undefined> {
+}): Promise<CpComponentSummary | undefined> {
 	const query = `query {
-  components(orgHandler: ${gqlString(params.orgHandler)}, projectId: ${gqlString(params.projectId)}, options: { filter: { withSystemComponents: true }}) {
+  component(orgHandler: ${gqlString(params.orgHandler)}, projectId: ${gqlString(params.projectId)}, componentId: ${gqlString(params.componentId)}) {
     id
+    name
+    displayName
+    handler
     componentSubType
   }
 }`;
 
-	const data = await executeCpGraphql<{ components: Array<{ id: string; componentSubType: string | null }> | null }>(
+	const data = await executeCpGraphql<{ component: CpComponentSummary | null }>(
 		query,
-		"components",
+		"component",
+		COMPONENT_LOOKUP_TIMEOUT_MS,
 	);
-	return data.components?.find((item) => item.id === params.componentId)?.componentSubType ?? undefined;
+	return data.component ?? undefined;
 }
 
 /**
