@@ -195,6 +195,8 @@ jobs:
           set -euo pipefail
           missing=()
           [ -n "${AWS_UPDATE_S3_BUCKET}" ] || missing+=("AWS_UPDATE_S3_BUCKET")
+          [ -n "${AWS_ACCESS_KEY_ID}" ] || missing+=("AWS_ACCESS_KEY_ID (nothing could be uploaded to the update bucket)")
+          [ -n "${AWS_SECRET_ACCESS_KEY}" ] || missing+=("AWS_SECRET_ACCESS_KEY")
           [ -n "${WSO2_UPDATE_ARTIFACTS_URL}" ] || missing+=("WSO2_UPDATE_ARTIFACTS_URL (artifacts must be mirrored; clients refuse upstream hosts)")
           [ -n "${WSO2_UPDATE_URL}" ] || missing+=("WSO2_UPDATE_URL (clients built here would have no update endpoint)")
           [ -n "${WSO2_UPDATE_PUBLIC_KEY}" ] || missing+=("WSO2_UPDATE_PUBLIC_KEY (clients built here would pin no key and accept unverified artifacts)")
@@ -206,6 +208,8 @@ jobs:
           echo "publish path configured for channel ${{ inputs.channel || 'insider' }}"
         env:
           AWS_UPDATE_S3_BUCKET: ${{ secrets.AWS_UPDATE_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           WSO2_UPDATE_ARTIFACTS_URL: ${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}
           WSO2_UPDATE_URL: ${{ secrets.WSO2_UPDATE_URL }}
           WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
