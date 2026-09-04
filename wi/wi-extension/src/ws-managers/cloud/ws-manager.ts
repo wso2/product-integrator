@@ -330,7 +330,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 		await window.withProgress({ title: "Pushing the changes to your remote repository...", location: ProgressLocation.Notification }, async () => {
 			await repo.add(["."]);
-			await repo.commit(`Add source for new Devant Integration`);
+			await repo.commit(`Add integration source`);
 			const headRef = await repo.getHEADRef();
 			await repo.push(headRef?.upstream?.remote || "origin", headRef?.name || params.repo.branch);
 		});
