@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- One entitlements file signs everything in the bundle: the Electron app AND the deep-signed
+     runtime components (the JVM, Ballerina's native tools). The set below is the union both need;
+     it deliberately matches what notarized JDK distributions ship, since the JVM is the most
+     demanding signee. Sandbox-only keys (network.*, files.*) are omitted — without
+     com.apple.security.app-sandbox they are ignored, and listing them only misleads. -->
+<dict>
+	<!-- Electron / V8 and the JVM's JIT need writable+executable memory. -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<!-- The JVM loads JNI libraries that are not signed by us, and both it and Electron
+	     read DYLD_* environment variables. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<key>com.apple.security.cs.allow-dyld-environment-variables</key>
+	<true/>
+	<!-- Opening URLs / revealing files through other apps. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+</dict>
+</plist>
