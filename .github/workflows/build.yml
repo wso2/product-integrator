@@ -357,11 +357,6 @@ jobs:
     name: Build (macOS)
     runs-on: ${{ matrix.runner }}
     needs: [resolve-versions, compile]
-    env:
-      # secrets can't be referenced from a step `if:`. HAS_AWS says credentials exist;
-      # HAS_INSTALLER_BUCKET says a target bucket does. They are different secrets.
-      HAS_AWS: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
-      HAS_INSTALLER_BUCKET: ${{ secrets.AWS_S3_BUCKET != '' }}
     defaults:
       run:
         working-directory: lib/vscode
@@ -828,25 +823,42 @@ jobs:
               --wait
             xcrun stapler staple "$ARTIFACT"
           done
+
+      # This is the only AWS consumer in the job, so the credentials go in its own `env:` rather
+      # than through configure-aws-credentials, which writes them to $GITHUB_ENV and would leave
+      # live S3 write credentials in scope for every step that follows.
+      #
+      # It fails rather than skips on a half-configured run: publish-update-source embeds
+      # app.squirrel.url into the darwin manifest regardless, so skipping here would ship a
+      # manifest pointing at an object nobody uploaded — a 404 for every macOS client at apply
+      # time, from a green build.
       - name: Publish Squirrel.Mac update payload to update bucket
-        if: ${{ inputs.build_packed_installers == true && env.HAS_AWS == 'true' }}
+        if: ${{ inputs.publish_update_source == true && inputs.build_packed_installers == true }}
         working-directory: .
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          AWS_UPDATE_S3_BUCKET: ${{ secrets.AWS_UPDATE_S3_BUCKET }}
         run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${AWS_UPDATE_S3_BUCKET}" ] || missing+=("AWS_UPDATE_S3_BUCKET")
+          [ -n "${AWS_ACCESS_KEY_ID}" ] || missing+=("AWS_ACCESS_KEY_ID")
+          [ -n "${AWS_SECRET_ACCESS_KEY}" ] || missing+=("AWS_SECRET_ACCESS_KEY")
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf '::error::missing required secret: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
           V="${{ needs.resolve-versions.outputs.integrator_version }}"
           ZIP="installers/mac/wso2-integrator-${V}-${{ matrix.arch }}-mac.zip"
-          # Bucket first: a deployment that publishes no updates skips cleanly here, and only a
-          # deployment that WOULD upload treats a missing payload as the failure it is.
-          if [ -z "${{ secrets.AWS_UPDATE_S3_BUCKET }}" ]; then
-            echo "AWS_UPDATE_S3_BUCKET not set — skipping Squirrel.Mac payload upload."
-            exit 0
-          fi
           if [ ! -f "$ZIP" ]; then
-            echo "Squirrel.Mac payload not found at $ZIP" >&2
+            echo "::error::Squirrel.Mac payload not found at $ZIP" >&2
             exit 1
           fi
           # Same artifacts layout as everything else; the darwin manifest's app.squirrel.url
           # (embedded by generate-update-manifest.mjs) points at this exact versioned CDN URL.
-          DEST="s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/artifacts/app/${V}/"
+          DEST="s3://${AWS_UPDATE_S3_BUCKET}/artifacts/app/${V}/"
           aws s3 cp "$ZIP" "${DEST}wso2-integrator-${V}-${{ matrix.arch }}-mac.zip" --content-type application/zip --cache-control no-cache
           echo "Published Squirrel.Mac payload for darwin/${{ matrix.arch }} (v${V})"
 
@@ -899,11 +911,6 @@ jobs:
     name: Build (Windows)
     runs-on: windows-2022
     needs: [resolve-versions, compile]
-    env:
-      # secrets can't be referenced from a step `if:`. HAS_AWS says credentials exist;
-      # HAS_INSTALLER_BUCKET says a target bucket does. They are different secrets.
-      HAS_AWS: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
-      HAS_INSTALLER_BUCKET: ${{ secrets.AWS_S3_BUCKET != '' }}
     defaults:
       run:
         working-directory: lib/vscode
