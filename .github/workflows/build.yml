@@ -187,8 +187,10 @@ jobs:
       # bake WSO2_UPDATE_URL and WSO2_UPDATE_PUBLIC_KEY into product.json long before that job
       # runs. A late check cannot stop a run from shipping installers that pin no key and skip
       # signature verification; this one can, and it costs seconds instead of a full build.
+      # Conditions mirror the Publish Update Source job's own `if:`, so a run that would not
+      # publish anyway is never failed for missing publish secrets.
       - name: Check the publish path is configured
-        if: ${{ inputs.publish_update_source == true }}
+        if: ${{ inputs.publish_update_source == true && inputs.build_packed_installers == true && inputs.publish_tag != '' }}
         run: |
           set -euo pipefail
           missing=()
