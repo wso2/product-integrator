@@ -183,6 +183,32 @@ jobs:
       integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
       ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
     steps:
+      # Checked here rather than in Publish Update Source, because build-macos and build-windows
+      # bake WSO2_UPDATE_URL and WSO2_UPDATE_PUBLIC_KEY into product.json long before that job
+      # runs. A late check cannot stop a run from shipping installers that pin no key and skip
+      # signature verification; this one can, and it costs seconds instead of a full build.
+      - name: Check the publish path is configured
+        if: ${{ inputs.publish_update_source == true }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${AWS_UPDATE_S3_BUCKET}" ] || missing+=("AWS_UPDATE_S3_BUCKET")
+          [ -n "${WSO2_UPDATE_ARTIFACTS_URL}" ] || missing+=("WSO2_UPDATE_ARTIFACTS_URL (artifacts must be mirrored; clients refuse upstream hosts)")
+          [ -n "${WSO2_UPDATE_URL}" ] || missing+=("WSO2_UPDATE_URL (clients built here would have no update endpoint)")
+          [ -n "${WSO2_UPDATE_PUBLIC_KEY}" ] || missing+=("WSO2_UPDATE_PUBLIC_KEY (clients built here would pin no key and accept unverified artifacts)")
+          [ -n "${COSIGN_PRIVATE_KEY}" ] || missing+=("COSIGN_PRIVATE_KEY")
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf '::error::missing required secret: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+          echo "publish path configured for channel ${{ inputs.channel || 'insider' }}"
+        env:
+          AWS_UPDATE_S3_BUCKET: ${{ secrets.AWS_UPDATE_S3_BUCKET }}
+          WSO2_UPDATE_ARTIFACTS_URL: ${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}
+          WSO2_UPDATE_URL: ${{ secrets.WSO2_UPDATE_URL }}
+          WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -1598,9 +1624,6 @@ jobs:
       id-token: write
       contents: read
     env:
-      # secrets can't be referenced from a step `if:`, so their presence is hoisted here — the same
-      # reason HAS_AWS exists on the build jobs.
-      HAS_PINNED_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY != '' }}
       # New builds publish to the channel chosen at dispatch (default insider); the
       # promote-channel workflow later copies a source document down the ladder.
       CHANNEL: ${{ inputs.channel || 'insider' }}
@@ -1712,7 +1735,7 @@ jobs:
       # still pass, because they verify against the signing key itself. That failure would only surface on
       # a user's machine, after the release. One base64 decode catches it here instead.
       - name: Check the pinned key matches the signing key
-        if: ${{ steps.targets.outputs.targets != '' && env.HAS_PINNED_KEY == 'true' }}
+        if: ${{ steps.targets.outputs.targets != '' }}
         run: |
           set -euo pipefail
           printf '%s' "$WSO2_UPDATE_PUBLIC_KEY" | base64 -d > pinned.pem 2>/dev/null || {

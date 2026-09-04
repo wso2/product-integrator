@@ -71,11 +71,10 @@ jobs:
       CHANNEL: ${{ inputs.channel }}
       BUCKET: ${{ secrets.AWS_UPDATE_S3_BUCKET }}
       ARTIFACTS_URL: ${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}
-      # A step `if:` cannot see `secrets`, so presence is hoisted to job env.
-      HAS_PINNED_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY != '' }}
     steps:
-      # Checked before the build rather than after it. All three are required: without mirroring or
-      # signing, the resulting document is one every client rejects.
+      # Checked before the build rather than after it. All four are required: without mirroring or
+      # signing, the resulting document is one every client rejects, and without the pinned key
+      # nothing proves the signature matches what released clients actually verify against.
       - name: Check the publish path is configured
         run: |
           set -euo pipefail
@@ -83,6 +82,7 @@ jobs:
           [ -n "${BUCKET}" ] || missing+=("AWS_UPDATE_S3_BUCKET")
           [ -n "${ARTIFACTS_URL}" ] || missing+=("WSO2_UPDATE_ARTIFACTS_URL (components must be mirrored; clients refuse upstream hosts)")
           [ -n "${COSIGN_PRIVATE_KEY}" ] || missing+=("COSIGN_PRIVATE_KEY")
+          [ -n "${WSO2_UPDATE_PUBLIC_KEY}" ] || missing+=("WSO2_UPDATE_PUBLIC_KEY (nothing would prove the signature matches the key released clients pin)")
           if [ ${#missing[@]} -gt 0 ]; then
             printf '::error::missing required secret: %s\n' "${missing[@]}" >&2
             exit 1
@@ -90,6 +90,7 @@ jobs:
           echo "publish path configured for channel ${CHANNEL}"
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -322,7 +323,7 @@ jobs:
       # is what proves the two are the same pair — a mismatch rejects every artifact, on the user's
       # machine, after release.
       - name: Check the pinned key matches the signing key
-        if: ${{ !inputs.dry_run && env.HAS_PINNED_KEY == 'true' }}
+        if: ${{ !inputs.dry_run }}
         env:
           WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
         run: |
