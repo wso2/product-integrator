@@ -23,8 +23,7 @@
     "installers": {
       "darwin-arm64": "wso2-integrator-{version}-arm64.dmg",
       "darwin-x64": "wso2-integrator-{version}-x64.dmg",
-      "win32-x64": "wso2-integrator-{version}-update.msi",
-      "linux-x64": "wso2-integrator_{version}_amd64-update.deb"
+      "win32-x64": "wso2-integrator-{version}-update.msi"
     },
     "squirrel": {
       "darwin-arm64": "wso2-integrator-{version}-arm64-mac.zip",
