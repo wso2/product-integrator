@@ -183,6 +183,78 @@ jobs:
       integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
       ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
     steps:
+      # Checked here rather than in Publish Update Source, because build-macos and build-windows
+      # bake WSO2_UPDATE_URL and WSO2_UPDATE_PUBLIC_KEY into product.json long before that job
+      # runs. A late check cannot stop a run from shipping installers that pin no key and skip
+      # signature verification; this one can, and it costs seconds instead of a full build.
+      # Conditions mirror the Publish Update Source job's own `if:`, so a run that would not
+      # publish anyway is never failed for missing publish secrets.
+      - name: Check the publish path is configured
+        if: ${{ inputs.publish_update_source == true && inputs.build_packed_installers == true && inputs.publish_tag != '' }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${AWS_UPDATE_S3_BUCKET}" ] || missing+=("AWS_UPDATE_S3_BUCKET")
+          [ -n "${AWS_ACCESS_KEY_ID}" ] || missing+=("AWS_ACCESS_KEY_ID (nothing could be uploaded to the update bucket)")
+          [ -n "${AWS_SECRET_ACCESS_KEY}" ] || missing+=("AWS_SECRET_ACCESS_KEY")
+          [ -n "${WSO2_UPDATE_ARTIFACTS_URL}" ] || missing+=("WSO2_UPDATE_ARTIFACTS_URL (artifacts must be mirrored; clients refuse upstream hosts)")
+          [ -n "${WSO2_UPDATE_URL}" ] || missing+=("WSO2_UPDATE_URL (clients built here would have no update endpoint)")
+          [ -n "${WSO2_UPDATE_PUBLIC_KEY}" ] || missing+=("WSO2_UPDATE_PUBLIC_KEY (clients built here would pin no key and accept unverified artifacts)")
+          [ -n "${COSIGN_PRIVATE_KEY}" ] || missing+=("COSIGN_PRIVATE_KEY")
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf '::error::missing required secret: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+          echo "publish path configured for channel ${{ inputs.channel || 'insider' }}"
+        env:
+          AWS_UPDATE_S3_BUCKET: ${{ secrets.AWS_UPDATE_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          WSO2_UPDATE_ARTIFACTS_URL: ${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}
+          WSO2_UPDATE_URL: ${{ secrets.WSO2_UPDATE_URL }}
+          WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+
+      - name: cosign-installer
+        if: ${{ inputs.publish_update_source == true && inputs.build_packed_installers == true && inputs.publish_tag != '' }}
+        uses: sigstore/cosign-installer@v3
+
+      # Presence is not enough: a pinned key from the wrong pair passes every check downstream,
+      # because the signing steps verify against the signing key itself. Only comparing the two
+      # catches it, and it has to happen here — build-macos and build-windows bake the pinned key
+      # into product.json, so a comparison in Publish Update Source runs after the installers that
+      # carry the wrong key already exist. Deriving here also exercises COSIGN_PASSWORD, which
+      # would otherwise fail a full build later.
+      - name: Verify the pinned client key matches the signing key
+        if: ${{ inputs.publish_update_source == true && inputs.build_packed_installers == true && inputs.publish_tag != '' }}
+        run: |
+          set -euo pipefail
+          cosign public-key --key env://COSIGN_PRIVATE_KEY > signing.pub
+          grep -q 'BEGIN PUBLIC KEY' signing.pub
+          printf '%s' "$WSO2_UPDATE_PUBLIC_KEY" | base64 -d > pinned.pem 2>/dev/null || {
+            echo "::error::WSO2_UPDATE_PUBLIC_KEY is not valid base64. It must be 'base64 -w0 < cosign.pub'." >&2
+            exit 1
+          }
+          # base64 -d accepts the empty string, so an empty secret would otherwise reach openssl
+          # and die there with an opaque parse error instead of this one.
+          [ -s pinned.pem ] || {
+            echo "::error::WSO2_UPDATE_PUBLIC_KEY decoded to nothing." >&2
+            exit 1
+          }
+          # DER, so PEM wrapping or a trailing newline cannot fail a correctly configured pair.
+          openssl pkey -pubin -in pinned.pem  -outform DER -out pinned.der
+          openssl pkey -pubin -in signing.pub -outform DER -out signing.der
+          if ! cmp -s pinned.der signing.der; then
+            echo "::error::WSO2_UPDATE_PUBLIC_KEY is not the public half of COSIGN_PRIVATE_KEY. Clients built here would reject every artifact this run signs." >&2
+            exit 1
+          fi
+          echo "pinned client key matches the signing key"
+          rm -f signing.pub pinned.pem pinned.der signing.der
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -1598,9 +1670,6 @@ jobs:
       id-token: write
       contents: read
     env:
-      # secrets can't be referenced from a step `if:`, so their presence is hoisted here — the same
-      # reason HAS_AWS exists on the build jobs.
-      HAS_PINNED_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY != '' && secrets.COSIGN_PUBLIC_KEY != '' }}
       # New builds publish to the channel chosen at dispatch (default insider); the
       # promote-channel workflow later copies a source document down the ladder.
       CHANNEL: ${{ inputs.channel || 'insider' }}
@@ -1691,33 +1760,20 @@ jobs:
         if: ${{ steps.targets.outputs.targets != '' }}
         uses: sigstore/cosign-installer@v3
 
-      # The client verifies artifacts against WSO2_UPDATE_PUBLIC_KEY, baked into product.json at
-      # build time; CI signs with COSIGN_PRIVATE_KEY. Nothing downstream compares the two, so if they
-      # are not the same key pair every client rejects every artifact — and the signing steps below
-      # still pass, because they verify against COSIGN_PUBLIC_KEY. That failure would only surface on
-      # a user's machine, after the release. One base64 decode catches it here instead.
-      - name: Check the pinned key matches the signing key
-        if: ${{ steps.targets.outputs.targets != '' && env.HAS_PINNED_KEY == 'true' }}
+      # The public half is DERIVED from the signing key rather than configured separately. A second
+      # public-key secret can only agree or disagree with this one, and when it disagreed the
+      # signatures still verified in-run -- so the mismatch that matters (pinned key vs the key that
+      # actually signs) was the one the old check could not see.
+      - name: Derive the signing public key
+        if: ${{ steps.targets.outputs.targets != '' }}
         run: |
           set -euo pipefail
-          printf '%s' "$WSO2_UPDATE_PUBLIC_KEY" | base64 -d > pinned.pem 2>/dev/null || {
-            echo "::error::WSO2_UPDATE_PUBLIC_KEY is not valid base64. It must be 'base64 < cosign.pub'." >&2
-            exit 1
-          }
-          printf '%s' "$COSIGN_PUBLIC_KEY" > signing.pem
-          # Compare the DER of each, so PEM line wrapping or a trailing newline cannot fail a
-          # correctly configured pair.
-          openssl pkey -pubin -in pinned.pem  -outform DER -out pinned.der
-          openssl pkey -pubin -in signing.pem -outform DER -out signing.der
-          if ! cmp -s pinned.der signing.der; then
-            echo "::error::WSO2_UPDATE_PUBLIC_KEY does not match COSIGN_PUBLIC_KEY. Clients built here would reject every artifact this run signs." >&2
-            exit 1
-          fi
-          echo "Pinned client key matches the signing key."
-          rm -f pinned.pem signing.pem pinned.der signing.der
+          cosign public-key --key env://COSIGN_PRIVATE_KEY > signing.pub
+          grep -q 'BEGIN PUBLIC KEY' signing.pub
+          echo "derived the public half of COSIGN_PRIVATE_KEY"
         env:
-          WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
-          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
 
       - name: Sign source document
         if: ${{ steps.targets.outputs.targets != '' }}
@@ -1729,11 +1785,7 @@ jobs:
       - name: Verify source signature
         if: ${{ steps.targets.outputs.targets != '' }}
         run: |
-          printf '%s' "$COSIGN_PUBLIC_KEY" > cosign.pub
-          cosign verify-blob --key cosign.pub --signature source.json.sig source.json
-          rm -f cosign.pub
-        env:
-          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+          cosign verify-blob --key signing.pub --signature source.json.sig source.json
 
       - name: Upload source artifact
         if: ${{ steps.targets.outputs.targets != '' }}
@@ -1762,9 +1814,6 @@ jobs:
             echo "No mirrored artifacts to sign."
             exit 0
           fi
-          # Public key as a file, matching the source verify step: cosign's env:// keyref is used
-          # for the private key, and the proven pattern here for verification is a key file.
-          printf '%s' "$COSIGN_PUBLIC_KEY" > cosign.pub
           # Sign the STATEMENTS the generator wrote, not the artifacts themselves. A signature over
           # artifact bytes proves only "WSO2 produced this file", which would leave the document free
           # to offer an old signed artifact under a new version label; the statement binds
@@ -1774,10 +1823,9 @@ jobs:
             cosign sign-blob --key env://COSIGN_PRIVATE_KEY "${file}" --output-signature "${file}.sig" --yes
             # Verify immediately: a signature that cannot be checked here would ship as one the
             # client rejects, turning a signing misconfiguration into a failed update for users.
-            cosign verify-blob --key cosign.pub --signature "${file}.sig" "${file}"
+            cosign verify-blob --key signing.pub --signature "${file}.sig" "${file}"
             echo "signed $(basename "${file}")"
           done
-          rm -f cosign.pub
           # Every mirrored artifact must have one: an unsigned artifact would be served with a
           # statement URL that 404s, which the client treats as a hard failure.
           artifacts=$(find artifacts-mirror -type f ! -name '*.statement.json' ! -name '*.sig' | wc -l | tr -d ' ')
@@ -1790,7 +1838,6 @@ jobs:
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
 
       - name: Upload mirrored artifacts to update bucket
         if: ${{ steps.targets.outputs.targets != '' }}
