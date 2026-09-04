@@ -1600,7 +1600,7 @@ jobs:
     env:
       # secrets can't be referenced from a step `if:`, so their presence is hoisted here — the same
       # reason HAS_AWS exists on the build jobs.
-      HAS_PINNED_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY != '' && secrets.COSIGN_PUBLIC_KEY != '' }}
+      HAS_PINNED_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY != '' }}
       # New builds publish to the channel chosen at dispatch (default insider); the
       # promote-channel workflow later copies a source document down the ladder.
       CHANNEL: ${{ inputs.channel || 'insider' }}
@@ -1691,33 +1691,47 @@ jobs:
         if: ${{ steps.targets.outputs.targets != '' }}
         uses: sigstore/cosign-installer@v3
 
+      # The public half is DERIVED from the signing key rather than configured separately. A second
+      # public-key secret can only agree or disagree with this one, and when it disagreed the
+      # signatures still verified in-run -- so the mismatch that matters (pinned key vs the key that
+      # actually signs) was the one the old check could not see.
+      - name: Derive the signing public key
+        if: ${{ steps.targets.outputs.targets != '' }}
+        run: |
+          set -euo pipefail
+          cosign public-key --key env://COSIGN_PRIVATE_KEY > signing.pub
+          grep -q 'BEGIN PUBLIC KEY' signing.pub
+          echo "derived the public half of COSIGN_PRIVATE_KEY"
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+
       # The client verifies artifacts against WSO2_UPDATE_PUBLIC_KEY, baked into product.json at
       # build time; CI signs with COSIGN_PRIVATE_KEY. Nothing downstream compares the two, so if they
       # are not the same key pair every client rejects every artifact — and the signing steps below
-      # still pass, because they verify against COSIGN_PUBLIC_KEY. That failure would only surface on
+      # still pass, because they verify against the signing key itself. That failure would only surface on
       # a user's machine, after the release. One base64 decode catches it here instead.
       - name: Check the pinned key matches the signing key
         if: ${{ steps.targets.outputs.targets != '' && env.HAS_PINNED_KEY == 'true' }}
         run: |
           set -euo pipefail
           printf '%s' "$WSO2_UPDATE_PUBLIC_KEY" | base64 -d > pinned.pem 2>/dev/null || {
-            echo "::error::WSO2_UPDATE_PUBLIC_KEY is not valid base64. It must be 'base64 < cosign.pub'." >&2
+            echo "::error::WSO2_UPDATE_PUBLIC_KEY is not valid base64. It must be 'base64 -w0 < cosign.pub'." >&2
             exit 1
           }
-          printf '%s' "$COSIGN_PUBLIC_KEY" > signing.pem
-          # Compare the DER of each, so PEM line wrapping or a trailing newline cannot fail a
-          # correctly configured pair.
+          # Compared against the key derived from COSIGN_PRIVATE_KEY, so this proves the pinned key
+          # matches the key that actually signs. DER, so PEM wrapping or a trailing newline cannot
+          # fail a correctly configured pair.
           openssl pkey -pubin -in pinned.pem  -outform DER -out pinned.der
-          openssl pkey -pubin -in signing.pem -outform DER -out signing.der
+          openssl pkey -pubin -in signing.pub -outform DER -out signing.der
           if ! cmp -s pinned.der signing.der; then
-            echo "::error::WSO2_UPDATE_PUBLIC_KEY does not match COSIGN_PUBLIC_KEY. Clients built here would reject every artifact this run signs." >&2
+            echo "::error::WSO2_UPDATE_PUBLIC_KEY is not the public half of COSIGN_PRIVATE_KEY. Clients built here would reject every artifact this run signs." >&2
             exit 1
           fi
           echo "Pinned client key matches the signing key."
-          rm -f pinned.pem signing.pem pinned.der signing.der
+          rm -f pinned.pem pinned.der signing.der
         env:
           WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
-          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
 
       - name: Sign source document
         if: ${{ steps.targets.outputs.targets != '' }}
@@ -1729,11 +1743,7 @@ jobs:
       - name: Verify source signature
         if: ${{ steps.targets.outputs.targets != '' }}
         run: |
-          printf '%s' "$COSIGN_PUBLIC_KEY" > cosign.pub
-          cosign verify-blob --key cosign.pub --signature source.json.sig source.json
-          rm -f cosign.pub
-        env:
-          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+          cosign verify-blob --key signing.pub --signature source.json.sig source.json
 
       - name: Upload source artifact
         if: ${{ steps.targets.outputs.targets != '' }}
@@ -1764,7 +1774,7 @@ jobs:
           fi
           # Public key as a file, matching the source verify step: cosign's env:// keyref is used
           # for the private key, and the proven pattern here for verification is a key file.
-          printf '%s' "$COSIGN_PUBLIC_KEY" > cosign.pub
+
           # Sign the STATEMENTS the generator wrote, not the artifacts themselves. A signature over
           # artifact bytes proves only "WSO2 produced this file", which would leave the document free
           # to offer an old signed artifact under a new version label; the statement binds
@@ -1774,10 +1784,9 @@ jobs:
             cosign sign-blob --key env://COSIGN_PRIVATE_KEY "${file}" --output-signature "${file}.sig" --yes
             # Verify immediately: a signature that cannot be checked here would ship as one the
             # client rejects, turning a signing misconfiguration into a failed update for users.
-            cosign verify-blob --key cosign.pub --signature "${file}.sig" "${file}"
+            cosign verify-blob --key signing.pub --signature "${file}.sig" "${file}"
             echo "signed $(basename "${file}")"
           done
-          rm -f cosign.pub
           # Every mirrored artifact must have one: an unsigned artifact would be served with a
           # statement URL that 404s, which the client treats as a hard failure.
           artifacts=$(find artifacts-mirror -type f ! -name '*.statement.json' ! -name '*.sig' | wc -l | tr -d ' ')
@@ -1790,7 +1799,6 @@ jobs:
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
 
       - name: Upload mirrored artifacts to update bucket
         if: ${{ steps.targets.outputs.targets != '' }}
