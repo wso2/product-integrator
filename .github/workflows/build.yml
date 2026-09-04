@@ -286,10 +286,10 @@ jobs:
     runs-on: ${{ matrix.runner }}
     needs: [resolve-versions, compile]
     env:
-      # secrets can't be referenced from a step `if:`. HAS_AWS says credentials exist;
-      # HAS_INSTALLER_BUCKET says a target bucket does. They are different secrets.
+      # secrets can't be referenced from a step `if:`, so their presence is hoisted here. Both are
+      # needed to publish the Squirrel.Mac payload: credentials to write, and a bucket to write to.
       HAS_AWS: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
-      HAS_INSTALLER_BUCKET: ${{ secrets.AWS_S3_BUCKET != '' }}
+      HAS_UPDATE_BUCKET: ${{ secrets.AWS_UPDATE_S3_BUCKET != '' }}
     defaults:
       run:
         working-directory: lib/vscode
@@ -756,18 +756,25 @@ jobs:
               --wait
             xcrun stapler staple "$ARTIFACT"
           done
+
+      # Only the two steps below touch AWS in this job, and only on a publishing release, so the
+      # credentials are configured immediately before the upload rather than for the whole job.
+      - name: Configure AWS credentials for the update bucket
+        if: ${{ inputs.publish_update_source == true && inputs.build_packed_installers == true && env.HAS_AWS == 'true' && env.HAS_UPDATE_BUCKET == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
       - name: Publish Squirrel.Mac update payload to update bucket
-        if: ${{ inputs.build_packed_installers == true && env.HAS_AWS == 'true' }}
+        if: ${{ inputs.publish_update_source == true && inputs.build_packed_installers == true && env.HAS_AWS == 'true' && env.HAS_UPDATE_BUCKET == 'true' }}
         working-directory: .
         run: |
           V="${{ needs.resolve-versions.outputs.integrator_version }}"
           ZIP="installers/mac/wso2-integrator-${V}-${{ matrix.arch }}-mac.zip"
-          # Bucket first: a deployment that publishes no updates skips cleanly here, and only a
-          # deployment that WOULD upload treats a missing payload as the failure it is.
-          if [ -z "${{ secrets.AWS_UPDATE_S3_BUCKET }}" ]; then
-            echo "AWS_UPDATE_S3_BUCKET not set — skipping Squirrel.Mac payload upload."
-            exit 0
-          fi
+          # The step only runs when this build publishes updates, so a missing payload is the
+          # failure it looks like rather than a deployment that simply uploads nothing.
           if [ ! -f "$ZIP" ]; then
             echo "Squirrel.Mac payload not found at $ZIP" >&2
             exit 1
@@ -827,11 +834,6 @@ jobs:
     name: Build (Windows)
     runs-on: windows-2022
     needs: [resolve-versions, compile]
-    env:
-      # secrets can't be referenced from a step `if:`. HAS_AWS says credentials exist;
-      # HAS_INSTALLER_BUCKET says a target bucket does. They are different secrets.
-      HAS_AWS: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
-      HAS_INSTALLER_BUCKET: ${{ secrets.AWS_S3_BUCKET != '' }}
     defaults:
       run:
         working-directory: lib/vscode
