@@ -41,14 +41,33 @@ on:
         required: false
         default: true
         type: boolean
+      channel:
+        description: 'Update channel the component-update manifest is published to. New releases normally land in insider and are promoted later (promote-channel.yml).'
+        required: false
+        default: 'insider'
+        type: choice
+        options:
+          - insider
+          - beta
+          - stable
+      publish_update_source:
+        description: 'Publish the update source document, so existing clients on this line are offered this release. Turn off to ship installers only.'
+        required: false
+        default: true
+        type: boolean
+      update_line_selector:
+        description: 'Client versions this release serves (e.g. 5.1.x). Blank uses <major>.<minor>.x of this version, which is what a normal release wants. Set it for a hotfix pinned to one version, or to move an older line onto this build.'
+        required: false
+        default: ''
+        type: string
       runner:
         description: 'Select runner type'
         required: true
-        default: 'ubuntu-latest'
+        default: 'codebuild'
         type: choice
         options:
-          - ubuntu-latest
           - codebuild
+          - ubuntu-latest
       build_linux:
         description: 'Build for Linux'
         required: false
@@ -212,6 +231,10 @@ jobs:
       versions_artifact: versions
       publish_tag: v${{ inputs.version }}
       is_prerelease: ${{ inputs.is_prerelease }}
+      channel: ${{ inputs.channel }}
+      update_line_selector: ${{ inputs.update_line_selector }}
+      # Release is the only caller that sets this; build.yml defaults it to false.
+      publish_update_source: ${{ inputs.publish_update_source }}
       target_commitish: ${{ needs.prepare-release-branch.outputs.sha }}
       runner: ${{ inputs.runner }}
       build_linux: ${{ inputs.build_linux }}

@@ -18,7 +18,6 @@
 
 import * as vscode from "vscode";
 import path from "path";
-import { COMMANDS } from "@wso2/wi-core";
 import { activateCloudFunctionality } from "./cloud/activate";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
@@ -27,61 +26,13 @@ import { IWso2PlatformExtensionAPI } from "@wso2/wso2-platform-core";
 import { BridgeLayer } from "./BridgeLayer";
 import { ViewType } from "@wso2/wi-core";
 import { getPlatform } from "./ws-managers/main/utils";
-import { ProductUpdateServiceClient } from "./services/productUpdateServiceClient";
-import { UpdateCheckResponse } from "./services/updateServiceTypes";
 
 interface ExtensionExports {
 	cloudAPIs: IWso2PlatformExtensionAPI;
 }
 
-interface UpdateNotifier {
-	checkForUpdates: (request: { force?: boolean }) => Promise<UpdateCheckResponse>;
-	openExternalUrl: (request: { url: string }) => Promise<void>;
-}
-
 const EMBEDDED_WELCOME_PROJECT_URI = "__wso2_integrator_embedded_welcome__";
 const GET_EMBEDDED_WELCOME_BOOTSTRAP_COMMAND = "wso2.integrator.getEmbeddedWelcomeBootstrap";
-const BACKGROUND_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-const STARTUP_UPDATE_CHECK_DELAY_MS = 5 * 1000;
-
-async function showUpdateResult(
-	updateService: UpdateNotifier,
-	force: boolean,
-	showNonUpdateMessages: boolean,
-	openReleaseNotesLabel: string,
-): Promise<void> {
-	const result = await updateService.checkForUpdates({ force });
-
-	if (result.status === "update-available" && result.releaseUrl) {
-		const selection = await vscode.window.showInformationMessage(
-			result.message,
-			openReleaseNotesLabel,
-			"Dismiss",
-		);
-		if (selection === openReleaseNotesLabel) {
-			await updateService.openExternalUrl({ url: result.releaseUrl });
-		}
-		return;
-	}
-
-	if (showNonUpdateMessages && (result.status === "up-to-date" || result.status === "disabled")) {
-		vscode.window.showInformationMessage(result.message);
-		return;
-	}
-
-	if (showNonUpdateMessages && result.status === "error") {
-		vscode.window.showErrorMessage(result.message);
-		return;
-	}
-
-	if (
-		showNonUpdateMessages &&
-		result.status !== "already-notified" &&
-		result.status !== "throttled"
-	) {
-		vscode.window.showWarningMessage(result.message);
-	}
-}
 
 function registerEmbeddedWelcomeBootstrapCommand(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(
@@ -118,14 +69,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 	try {
 		// set runtime to context
 		await vscode.commands.executeCommand('setContext', 'WI.isWiRuntime', process.env.WSO2_INTEGRATOR_RUNTIME === 'true');
-		const productUpdateService = new ProductUpdateServiceClient(context);
 
 		registerEmbeddedWelcomeBootstrapCommand(context);
-		context.subscriptions.push(
-			vscode.commands.registerCommand(COMMANDS.CHECK_FOR_UPDATES, async () => {
-				await showUpdateResult(productUpdateService, true, true, "Open Release Notes");
-			}),
-		);
 
 		// Initialize state machine - this will handle everything:
 		// 1. Project type detection
@@ -135,24 +80,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 		// 5. Webview manager setup
 		StateMachine.initialize();
 
-		// Run update checks independently from cloud startup so notification still works
-		// when the Choreo RPC client is unavailable in local/dev setups.
-		const startupUpdateCheck = setTimeout(() => {
-			void showUpdateResult(productUpdateService, true, false, "Open Release Notes");
-		}, STARTUP_UPDATE_CHECK_DELAY_MS);
-		context.subscriptions.push({
-			dispose: () => clearTimeout(startupUpdateCheck),
-		});
-
-		const backgroundUpdateCheck = setInterval(() => {
-			void showUpdateResult(productUpdateService, true, false, "Open Release Notes");
-		}, BACKGROUND_UPDATE_CHECK_INTERVAL_MS);
-		context.subscriptions.push({
-			dispose: () => clearInterval(backgroundUpdateCheck),
-		});
-
-		// Boot cloud/RPC/auth functionality in the background so product update
-		// notifications are not blocked by Choreo RPC startup in local/dev setups.
+		// Boot cloud/RPC/auth functionality in the background.
 		const cloudAPIs = new WICloudExtensionAPI();
 		void activateCloudFunctionality(context, cloudAPIs).catch((error) => {
 			ext.logError("Cloud functionality failed to activate", error as Error);
