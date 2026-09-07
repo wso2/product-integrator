@@ -1027,9 +1027,8 @@ export const WelcomeView: React.FC = () => {
 				<GetStartedBadge>Get Started</GetStartedBadge>
 				<Headline>WSO2 Integrator</Headline>
 				<Caption>
-                    Connect AI agents, APIs, data, and events across cloud, on-prem,
-                    and hybrid environments. Build any type of integration and AI agent
-                    with the 100% open source WSO2 Integrator.
+                    Build and connect integrations, long-running workflows, MCP servers,
+                    and AI agents with the 100% open source WSO2 Integrator.
 				</Caption>
 			</TopSection>
 
@@ -1058,9 +1057,9 @@ export const WelcomeView: React.FC = () => {
 													</CardIcon>
 												</CardIconContainer>
 												<CardContent>
-													<CardTitle>Start your Integration Project</CardTitle>
+													<CardTitle>Create a Project</CardTitle>
 													<CardDescription>
-														Create and manage your integrations to connect services, APIs, and data sources.
+                                                        Build integrations, long-running workflows, MCP servers, and AI agents.
 													</CardDescription>
 													<CardButtonRow>
 														<StyledButton
@@ -1074,7 +1073,7 @@ export const WelcomeView: React.FC = () => {
 															disabled={biUnavailable}
 															onClick={handleProjectDirSelection}
 														>
-															<ButtonContent>Open</ButtonContent>
+															<ButtonContent>Open Existing</ButtonContent>
 														</StyledButton>
 													</CardButtonRow>
 												</CardContent>
@@ -1097,7 +1096,7 @@ export const WelcomeView: React.FC = () => {
 												<CardContent>
 													<CardTitle>Pre-built Integrations and Samples</CardTitle>
 													<CardDescription>
-														Ready-to-use pre-built integrations and samples to accelerate your development.
+                                                        Get started faster with pre-built integrations and samples.
 													</CardDescription>
 													<StyledButton
 														disabled={biUnavailable}
@@ -1256,7 +1255,7 @@ export const WelcomeView: React.FC = () => {
 															Migrate Integrations from Other Vendors
 														</SecondaryRowTitle>
 														<SecondaryRowDescription>
-															Import integrations from other vendors and convert them to WSO2 Integrator format.
+                                                            Import and convert integrations from other vendors.
 														</SecondaryRowDescription>
 													</SecondaryRowContent>
 													<Codicon
