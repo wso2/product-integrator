@@ -45,6 +45,11 @@ on:
         required: true
         default: true
         type: boolean
+      smoke_tests_required:
+        description: 'Whether a failing smoke test fails this build.'
+        required: false
+        default: true
+        type: boolean
       ballerina_extension_source:
         description: 'Choose whether to bundle Ballerina from GitHub VSIX or use marketplace flow'
         required: true
@@ -112,7 +117,7 @@ on:
       smoke_tests_required:
         description: 'Fail the build when the smoke tests fail.'
         required: false
-        default: false
+        default: true
         type: boolean
       ballerina_extension_source:
         required: false
@@ -154,6 +159,6 @@ jobs:
       build_windows: ${{ inputs.build_windows }}
       build_packed_installers: ${{ inputs.build_packed_installers }}
       run_smoke_tests: ${{ inputs.run_smoke_tests }}
-      smoke_tests_required: ${{ inputs.smoke_tests_required || false }}
+      smoke_tests_required: ${{ inputs.smoke_tests_required }}
       ballerina_extension_source: ${{ inputs.ballerina_extension_source }}
       mi_extension_source: ${{ inputs.mi_extension_source }}
