@@ -20,3 +20,4 @@ skipCopilotRipgrepShim.diff
 coreCiSerializeBundles.diff
 increaseHeap.diff
 windowsSigntoolOptional.diff
+wso2ComponentUpdate.diff
