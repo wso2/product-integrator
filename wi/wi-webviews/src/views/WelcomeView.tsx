@@ -1059,7 +1059,8 @@ export const WelcomeView: React.FC = () => {
 												<CardContent>
 													<CardTitle>Create a Project</CardTitle>
 													<CardDescription>
-                                                        Build integrations, long-running workflows, MCP servers, and AI agents.
+                                                        Create a new project for your integrations, long-running workflows,
+                                                        MCP servers and AI agents, or open an existing project.
 													</CardDescription>
 													<CardButtonRow>
 														<StyledButton
