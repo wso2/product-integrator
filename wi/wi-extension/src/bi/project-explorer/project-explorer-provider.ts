@@ -58,7 +58,9 @@ export class ProjectExplorerEntry extends vscode.TreeItem {
         this.tooltip = `${this.label}`;
         this.info = info;
         this.position = position;
-        if (iconLight && iconDark) {
+        if (icon && isCodicon) {
+            this.iconPath = new vscode.ThemeIcon(icon, iconColor);
+        } else if (iconLight && iconDark) {
             const tint = (svg: string) => iconSvgColor
                 ? svg.replace(/((?:fill|stroke)\s*=\s*["'])(currentColor|black|white|#000(?:000)?|#fff(?:fff)?)(["'])/gi,
                     `$1${iconSvgColor}$3`)
@@ -67,8 +69,6 @@ export class ProjectExplorerEntry extends vscode.TreeItem {
                 light: vscode.Uri.parse(`data:image/svg+xml;base64,${Buffer.from(tint(iconLight)).toString('base64')}`),
                 dark: vscode.Uri.parse(`data:image/svg+xml;base64,${Buffer.from(tint(iconDark)).toString('base64')}`)
             };
-        } else if (icon && isCodicon) {
-            this.iconPath = new vscode.ThemeIcon(icon, iconColor);
         } else if (icon) {
             // Load icon from WI extension's assets folder
             const extensionPath = ext.context.extensionPath;
