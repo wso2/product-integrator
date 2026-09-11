@@ -31,6 +31,7 @@ import { activateURIHandlers } from "./cloud-uri-handlers";
 import { getExtVersion } from "../utils/commonUtils";
 import { WICloudExtensionAPI } from "./cloud-ext-api";
 import { SETTING_CLOUD_API_BASE_URL, SETTING_CLOUD_BACKEND, resolveBackend } from "./ipaas/config";
+import { IpaasRpcClient } from "./ipaas/client";
 
 /**
  * Boot the cloud-connected functionality — mirrors the platform extension's activate():
@@ -77,7 +78,10 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	// Commands are self-guarded by isRpcActive and will return a graceful error until
 	// the client finishes connecting; waitUntilActive() below can now throw without
 	// leaving them permanently absent.
-	const rpcClient = new ChoreoRPCClient();
+	// The Integration Platform client still extends the RPC client, so the CLI
+	// keeps serving everything the platform has no endpoint for.
+	const rpcClient =
+		ext.cloudBackend === "ipaas" ? new IpaasRpcClient(ext.ipaasBaseUrl) : new ChoreoRPCClient();
 	ext.clients = { rpcClient };
 
 	// 14. Register VS Code commands and URI handlers early — before waiting for RPC
