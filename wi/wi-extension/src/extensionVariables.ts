@@ -21,6 +21,7 @@ import * as vscode from "vscode";
 import type { ChoreoRPCClient } from "./cloud/choreo-cli-rpc";
 import { defaultTerminologies, webviewStateStore } from "./cloud/stores/webview-state-store";
 import type { WSO2AuthenticationProvider } from "./cloud/auth/wso2-auth-provider";
+import type { CloudBackend } from "./cloud/ipaas/config";
 
 /**
  * Extension context wrapper
@@ -42,6 +43,16 @@ export class ExtensionVariables {
 
 	/** True when running inside the Devant cloud editor (CLOUD_STS_TOKEN is set). */
 	public isDevantCloudEditor: boolean = !!process.env.CLOUD_STS_TOKEN;
+
+	/**
+	 * Which cloud backend the deploy path talks to — resolved during activation.
+	 * Defaults to the Choreo control plane so every code path that predates the
+	 * Integration Platform keeps its behaviour when resolution has not run.
+	 */
+	public cloudBackend: CloudBackend = "choreo";
+
+	/** Integration Platform BFF base URL, without a trailing slash. Empty unless `cloudBackend` is "ipaas". */
+	public ipaasBaseUrl = "";
 
 	/** Extension config with console URLs and GitHub app config — populated during activation. */
 	public config?: GetCliRpcResp;

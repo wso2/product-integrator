@@ -53,6 +53,28 @@
           "description": "The WSO2 Cloud Environment to use",
           "scope": "machine"
         },
+        "integrator.advanced.cloudBackend": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ipaas",
+            "choreo"
+          ],
+          "enumDescriptions": [
+            "Use the Integration Platform when the editor supplies both a platform token and an API base URL; otherwise use Choreo.",
+            "Always use the Integration Platform. Requires an API base URL.",
+            "Always use the Choreo control plane via the bundled CLI."
+          ],
+          "default": "auto",
+          "description": "Which cloud backend to deploy integrations to.",
+          "scope": "machine"
+        },
+        "integrator.advanced.cloudApiBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL of the Integration Platform API. Overrides the CLOUD_API_BASE_URL supplied by the cloud editor; set it only to target a different deployment.",
+          "scope": "machine"
+        },
         "integrator.advanced.cloudRpcPath": {
           "type": "string",
           "default": "",
@@ -600,6 +622,7 @@
     "watch": "webpack --mode development --watch",
     "compile": "webpack --mode development",
     "compile-tests": "tsc -p . --outDir out",
+    "test:unit": "tsc -p . --outDir out && node --test \"out/**/*.test.js\"",
     "test": "node ./out/test/runTest.js",
     "package": "node ../../external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js",
     "download-choreo-cli": "node scripts/download-choreo-cli.js"

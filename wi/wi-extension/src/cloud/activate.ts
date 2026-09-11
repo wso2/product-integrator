@@ -30,6 +30,7 @@ import { locationStore } from "./stores/location-store";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { getExtVersion } from "../utils/commonUtils";
 import { WICloudExtensionAPI } from "./cloud-ext-api";
+import { SETTING_CLOUD_API_BASE_URL, SETTING_CLOUD_BACKEND, resolveBackend } from "./ipaas/config";
 
 /**
  * Boot the cloud-connected functionality — mirrors the platform extension's activate():
@@ -43,9 +44,20 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		workspace.getConfiguration().get<string>("integrator.advanced.cloudEnv") ||
 		"prod";
 
+	// 1b. Resolve which cloud backend the deploy path talks to. Done before the
+	// RPC server starts so the log line explains a session that never uses it.
+	const resolved = resolveBackend({
+		setting: workspace.getConfiguration().get<string>(SETTING_CLOUD_BACKEND),
+		baseUrlSetting: workspace.getConfiguration().get<string>(SETTING_CLOUD_API_BASE_URL),
+		env: process.env,
+	});
+	ext.cloudBackend = resolved.backend;
+	ext.ipaasBaseUrl = resolved.baseUrl;
+
 	// 2. Log versions
 	ext.log(`Extension version: ${getExtVersion(context)}`);
 	ext.log(`CLI version: ${getCliVersion()}`);
+	ext.log(`Cloud backend: ${ext.cloudBackend}${ext.ipaasBaseUrl ? ` (${ext.ipaasBaseUrl})` : ""}`);
 
 	// 3. Rehydrate persistent stores
 	await contextStore.persist.rehydrate();
@@ -119,7 +131,9 @@ function registerPreInitHandlers(): void {
 	workspace.onDidChangeConfiguration(async ({ affectsConfiguration }: ConfigurationChangeEvent) => {
 		if (
 			affectsConfiguration("integrator.advanced.cloudEnv") ||
-			affectsConfiguration("integrator.advanced.cloudRpcPath")
+			affectsConfiguration("integrator.advanced.cloudRpcPath") ||
+			affectsConfiguration(SETTING_CLOUD_BACKEND) ||
+			affectsConfiguration(SETTING_CLOUD_API_BASE_URL)
 		) {
 			const selection = await window.showInformationMessage(
 				"WSO2 Integrator extension configuration changed. Please restart the editor for changes to take effect.",
