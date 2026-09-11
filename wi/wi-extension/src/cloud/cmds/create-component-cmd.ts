@@ -48,6 +48,8 @@ import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 import { ProjectType, StateMachine, stateService } from "../../stateMachine";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import * as yaml from "js-yaml";
+import type { IpaasRpcClient } from "../ipaas/client";
+import { reportOutcome, watchCreatedIntegration } from "../ipaas/watch-command";
 
 
 /**
@@ -351,6 +353,10 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	// Verify if the source code has been pushed to remote repo
 	await checkIfSourcePushedToRemoteRepo(createParams, org, gitRoot!);
 
+	// Taken before anything is created: it is what separates this deploy's
+	// builds from any the component already had.
+	const startedAt = Date.now();
+
 	await window.withProgress(
 		{
 			title: totalCount === 1
@@ -394,6 +400,25 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 			}
 		},
 	);
+
+	// The platform builds and deploys after the create, so the command only
+	// finishes once that has been watched to a terminal state. On Choreo the
+	// create is the whole operation and there is nothing further to follow.
+	if (ext.cloudBackend === "ipaas" && result.created.length > 0) {
+		for (const created of result.created) {
+			const label = created.metadata.displayName || created.metadata.name;
+			try {
+				reportOutcome(label, await watchCreatedIntegration(ext.clients.rpcClient as IpaasRpcClient, created, startedAt));
+			} catch (err) {
+				// The integration exists either way; losing sight of it is not the
+				// same as failing to deploy it, so say which happened.
+				ext.logError(`Failed to follow the deployment of ${label}`, err as Error);
+				window.showWarningMessage(
+					`${label} was created, but its deployment could not be followed: ${(err as Error).message}`,
+				);
+			}
+		}
+	}
 
 	if (result.created.length > 0) {
 		clearCodeServerLocalStorage();

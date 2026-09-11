@@ -50,7 +50,6 @@ function clientWith(
 			config,
 		};
 	};
-	// biome-ignore lint/suspicious/noExplicitAny: the adapter seam is untyped in axios' public surface.
 	axios.defaults.adapter = adapter as any;
 	return {
 		client: new BffClient({
