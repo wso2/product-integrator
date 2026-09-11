@@ -5,6 +5,13 @@ All notable changes to the **WSO2 Integrator** extension will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [Unreleased]
+
+### Added
+
+- **Integration Platform deployment** — Added the WSO2 Integration Platform as a second cloud backend for deploying integrations, selected automatically inside the Integration Platform cloud editor. Deploying now follows the build and the deployment to completion and reports the outcome, instead of finishing once the integration had been created. Ballerina integrations only; Choreo deployment and every other cloud feature are unchanged.
+- **Cloud backend settings** — Added `integrator.advanced.cloudBackend` and `integrator.advanced.cloudApiBaseUrl` to select the cloud backend and, for the Integration Platform, where it is.
+
 ## [1.0.0](https://github.com/wso2/product-integrator/compare/v5.0.0-alpha...v5.0.0-rc1) - 2026-05-18
 
 ### Added
