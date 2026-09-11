@@ -112,6 +112,16 @@ export function createNewComponentCommand(context: ExtensionContext) {
 						}
 					}
 
+					// The Integration Platform build is wired to the Ballerina
+					// workflow. Sending an MI project would create a component that
+					// builds with the wrong buildpack and fails opaquely, so refuse
+					// before anything exists on the platform.
+					if (ext.cloudBackend === "ipaas" && buildPackLang !== "ballerina") {
+						throw new Error(
+							"Only Ballerina integrations can be deployed to the Integration Platform. Switch to the WSO2 Integrator: Default profile, or deploy this integration from the cloud console.",
+						);
+					}
+
 					if (ext.isDevantCloudEditor && params?.integrations?.length > 1) {
 						// todo: need to add support for workspace deployments in cloud editor
 						throw new Error(`Workspace deployments are not yet supported in the cloud editor. Please select individual integration to deploy.`);
