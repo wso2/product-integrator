@@ -75,6 +75,12 @@
           "description": "Base URL of the Integration Platform API. Overrides the CLOUD_API_BASE_URL supplied by the cloud editor; set it only to target a different deployment.",
           "scope": "machine"
         },
+        "integrator.advanced.cloudConsoleUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL of the Integration Platform console, used for \"View in console\" links. Overrides the CLOUD_CONSOLE_URL supplied by the cloud editor.",
+          "scope": "machine"
+        },
         "integrator.advanced.cloudRpcPath": {
           "type": "string",
           "default": "",

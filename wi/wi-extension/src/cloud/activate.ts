@@ -30,7 +30,13 @@ import { locationStore } from "./stores/location-store";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { getExtVersion } from "../utils/commonUtils";
 import { WICloudExtensionAPI } from "./cloud-ext-api";
-import { SETTING_CLOUD_API_BASE_URL, SETTING_CLOUD_BACKEND, resolveBackend } from "./ipaas/config";
+import {
+	SETTING_CLOUD_API_BASE_URL,
+	SETTING_CLOUD_BACKEND,
+	SETTING_CLOUD_CONSOLE_URL,
+	resolveBackend,
+	resolveConsoleUrl,
+} from "./ipaas/config";
 import { IpaasRpcClient } from "./ipaas/client";
 
 /**
@@ -54,6 +60,10 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	});
 	ext.cloudBackend = resolved.backend;
 	ext.ipaasBaseUrl = resolved.baseUrl;
+	ext.ipaasConsoleUrl = resolveConsoleUrl({
+		setting: workspace.getConfiguration().get<string>(SETTING_CLOUD_CONSOLE_URL),
+		env: process.env,
+	});
 
 	// 2. Log versions
 	ext.log(`Extension version: ${getExtVersion(context)}`);
@@ -137,7 +147,8 @@ function registerPreInitHandlers(): void {
 			affectsConfiguration("integrator.advanced.cloudEnv") ||
 			affectsConfiguration("integrator.advanced.cloudRpcPath") ||
 			affectsConfiguration(SETTING_CLOUD_BACKEND) ||
-			affectsConfiguration(SETTING_CLOUD_API_BASE_URL)
+			affectsConfiguration(SETTING_CLOUD_API_BASE_URL) ||
+			affectsConfiguration(SETTING_CLOUD_CONSOLE_URL)
 		) {
 			const selection = await window.showInformationMessage(
 				"WSO2 Integrator extension configuration changed. Please restart the editor for changes to take effect.",

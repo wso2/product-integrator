@@ -54,6 +54,13 @@ export class ExtensionVariables {
 	/** Integration Platform BFF base URL, without a trailing slash. Empty unless `cloudBackend` is "ipaas". */
 	public ipaasBaseUrl = "";
 
+	/**
+	 * Integration Platform console base URL, without a trailing slash. A separate
+	 * deployment from the API, so it is supplied separately; empty when nothing
+	 * supplies one, which leaves console links unavailable rather than broken.
+	 */
+	public ipaasConsoleUrl = "";
+
 	/** Extension config with console URLs and GitHub app config — populated during activation. */
 	public config?: GetCliRpcResp;
 

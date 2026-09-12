@@ -28,10 +28,12 @@ export type CloudBackend = "choreo" | "ipaas";
 /** Setting keys, kept here so the resolution rules and package.json cannot drift apart. */
 export const SETTING_CLOUD_BACKEND = "integrator.advanced.cloudBackend";
 export const SETTING_CLOUD_API_BASE_URL = "integrator.advanced.cloudApiBaseUrl";
+export const SETTING_CLOUD_CONSOLE_URL = "integrator.advanced.cloudConsoleUrl";
 
 /** The environment the Integration Platform editor boots its tooling against. */
 export const ENV_STS_TOKEN = "CLOUD_STS_TOKEN";
 export const ENV_API_BASE_URL = "CLOUD_API_BASE_URL";
+export const ENV_CONSOLE_URL = "CLOUD_CONSOLE_URL";
 
 /** Inputs to backend resolution, passed explicitly so the rules are testable without vscode. */
 export interface BackendResolutionInput {
@@ -93,4 +95,22 @@ export function resolveBackend(input: BackendResolutionInput): ResolvedBackend {
 		return { backend: "ipaas", baseUrl };
 	}
 	return { backend: "choreo", baseUrl: "" };
+}
+
+/**
+ * Console base URL for the Integration Platform.
+ *
+ * Resolved separately from the API base URL because the two are unrelated
+ * deployments behind the gateway — neither host can be derived from the other.
+ * Empty when nothing supplies one, which leaves console links unavailable
+ * rather than broken.
+ */
+export function resolveConsoleUrl(input: {
+	setting?: string;
+	env: Record<string, string | undefined>;
+}): string {
+	return (
+		normalizeBaseUrl(input.setting) ||
+		normalizeBaseUrl(input.env[ENV_CONSOLE_URL])
+	);
 }

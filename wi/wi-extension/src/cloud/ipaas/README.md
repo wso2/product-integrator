@@ -35,6 +35,7 @@ The cloud editor injects these; the deploy path reads the first two.
 | --- | --- |
 | `CLOUD_STS_TOKEN` | Bearer token on every request. Also half the backend signal |
 | `CLOUD_API_BASE_URL` | API base URL. The other half |
+| `CLOUD_CONSOLE_URL` | Console base URL, for "View in console" links |
 | `CLOUD_INITIAL_ORG_ID`, `CLOUD_INITIAL_PROJECT_ID` | Preselecting org and project |
 | `SOURCE_COMPONENT_ID`, `COMMIT_HASH`, `CLOUD_ENV` | Existing flows, unchanged |
 
@@ -102,8 +103,18 @@ Development, verified against that file:
 | | |
 | --- | --- |
 | API (`CLOUD_API_BASE_URL`) | `https://development-wso2cloud.gateway.dev.cloud.wso2.com/ipaas-service-ipaas-api-endpoint` |
-| Console | `https://ipaas-console-development.gateway.dev.cloud.wso2.com` |
+| Console (`CLOUD_CONSOLE_URL`) | `https://ipaas-console-development.gateway.dev.cloud.wso2.com` |
 | IdP | `https://platform-idp-development.gateway.dev.cloud.wso2.com` |
+
+The API and the console are **separate deployments on unrelated hosts**, so
+neither is derivable from the other — both are injected, and both have a
+setting that overrides them.
+
+Console links follow the same route shape on either backend:
+
+```
+{console}/organizations/{orgHandle}/projects/{projectHandler}/components/{componentHandler}/overview
+```
 
 `/integration-platform-api/v1.0` is the **internal** context path the gateway
 strips before forwarding (see the comment on `NewHandler`); it is not part of
@@ -121,7 +132,8 @@ Point an editor at a different deployment without rebuilding its container:
 ```jsonc
 {
   "integrator.advanced.cloudBackend": "ipaas",
-  "integrator.advanced.cloudApiBaseUrl": "https://development-wso2cloud.gateway.dev.cloud.wso2.com/ipaas-service-ipaas-api-endpoint"
+  "integrator.advanced.cloudApiBaseUrl": "https://development-wso2cloud.gateway.dev.cloud.wso2.com/ipaas-service-ipaas-api-endpoint",
+  "integrator.advanced.cloudConsoleUrl": "https://ipaas-console-development.gateway.dev.cloud.wso2.com"
 }
 ```
 

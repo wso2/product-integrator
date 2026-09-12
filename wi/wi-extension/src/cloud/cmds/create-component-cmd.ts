@@ -49,6 +49,7 @@ import { ProjectType, StateMachine, stateService } from "../../stateMachine";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import * as yaml from "js-yaml";
 import type { IpaasRpcClient } from "../ipaas/client";
+import { consoleLink } from "../ipaas/console";
 import { reportOutcome, watchCreatedIntegration } from "../ipaas/watch-command";
 
 
@@ -730,11 +731,14 @@ const showReloadWorkspaceMessage = (message: string, workspaceFsPath: string) =>
 const showViewInConsoleMessage = (successMessage: string, org: Organization, project: Project, created: ComponentKind[]) => {
 	window.showInformationMessage(successMessage, `View in console`).then(async (resp) => {
 		if (resp === `View in console`) {
-			let consoleProjectPath = `${ext.config?.devantConsoleUrl}/organizations/${org.handle}/projects/${project.handler}`;
-			if (created.length === 1) {
-				consoleProjectPath += `/components/${created[0]?.metadata.handler}/overview`;
+			const consoleProjectPath = consoleLink(
+				org.handle,
+				project.handler,
+				created.length === 1 ? created[0]?.metadata.handler : undefined,
+			);
+			if (consoleProjectPath) {
+				commands.executeCommand("vscode.open", consoleProjectPath);
 			}
-			commands.executeCommand("vscode.open", consoleProjectPath,);
 		}
 	});
 }

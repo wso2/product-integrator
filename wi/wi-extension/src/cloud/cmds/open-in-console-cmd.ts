@@ -24,6 +24,7 @@ import { dataCacheStore } from "../stores/data-cache-store";
 import { webviewStateStore } from "../stores/webview-state-store";
 import { isSamePath } from '../../utils';
 import { getUserInfoForCmd, isRpcActive, quickPickWithLoader, selectOrg, selectProject, setExtensionName } from "./cmd-utils";
+import { consoleLink } from "../ipaas/console";
 
 export function openInConsoleCommand(context: ExtensionContext) {
 	context.subscriptions.push(
@@ -58,7 +59,7 @@ export function openInConsoleCommand(context: ExtensionContext) {
 						}
 					}
 
-					let projectBaseUrl = `${ext.config?.devantConsoleUrl}/organizations/${selectedOrg?.handle}/projects/${selectedProject.handler}`;
+					const projectBaseUrl = consoleLink(selectedOrg?.handle!, selectedProject.handler);
 
 					if (params?.component) {
 						env.openExternal(Uri.parse(`${projectBaseUrl}/components/${params?.component.metadata.handler}/overview`));
