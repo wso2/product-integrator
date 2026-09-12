@@ -29,10 +29,12 @@ import {
 	ChoreoComponentSubType,
 	ChoreoComponentType,
 	type ComponentKind,
+	type ComponentKindSource,
 	type CreateComponentReq,
 	type Organization,
 	type Project,
 } from "@wso2/wso2-platform-core";
+import { parseGitHubOwnerRepo } from "./repo-url";
 import type {
 	IpaasComponent,
 	IpaasCreateComponentBody,
@@ -123,15 +125,21 @@ export function toAppPath(subPath: string | undefined): string {
  * repository, which a pure function has no business reaching for. The caller
  * resolves it.
  *
- * No `githubApp` binding is sent. That binding needs a GitHub App installation
- * id, and this request shape carries none, so a private repository cannot be
- * bound here — the build would fail to clone it. Adding it means plumbing an
- * installation id through the create flow first.
+ * `githubApp` is sent only when an App installation covers the repository. It
+ * is what lets the build clone a private repository, and it travels with an
+ * explicit empty `secretRef` — that pair tells the platform to render no secret
+ * of its own because the git integration mints a per-build one. Omitting the
+ * field and sending "" are different instructions, so neither appears without
+ * the other.
  */
 export function toCreateComponentBody(
 	req: CreateComponentReq,
 	repoSubPath: string,
+	githubInstallationId?: number,
 ): IpaasCreateComponentBody {
+	const gitHubRepo = githubInstallationId
+		? parseGitHubOwnerRepo(req.repoUrl)
+		: null;
 	return {
 		metadata: {
 			name: req.name,
@@ -161,10 +169,23 @@ export function toCreateComponentBody(
 						url: req.repoUrl ?? "",
 						revision: { branch: req.branch ?? "" },
 						appPath: toAppPath(repoSubPath),
+						...(gitHubRepo ? { secretRef: "" } : {}),
 					},
 				},
 			},
 		},
+		...(gitHubRepo && githubInstallationId
+			? {
+					githubApp: {
+						installationId: githubInstallationId,
+						owner: gitHubRepo.owner,
+						repo: gitHubRepo.repo,
+						branch: req.branch ?? "",
+						appPath: toAppPath(repoSubPath),
+						repositoryUrl: req.repoUrl ?? "",
+					},
+				}
+			: {}),
 	};
 }
 
@@ -289,4 +310,63 @@ export function newestRunSince(
 		}
 	}
 	return best;
+}
+
+/** A component's bound repository, as the platform reports it. */
+export interface IpaasComponentRepository {
+	gitProvider?: string;
+	organizationApp?: string;
+	nameApp?: string;
+	branch?: string;
+	appSubPath?: string;
+	serverUrl?: string;
+}
+
+/**
+ * Present a bound repository as a ComponentKind source.
+ *
+ * `repository` carries a full URL rather than "org/name" because consumers feed
+ * it straight to parseGitURL — the directory-to-component match that decides
+ * whether an integration is already deployed depends on it parsing.
+ *
+ * Returns an empty source when the component has no repository or its provider
+ * is unrecognised; an entry under the wrong provider key would read as a
+ * repository that does not exist.
+ */
+export function toComponentSource(
+	repo: IpaasComponentRepository | null | undefined,
+): ComponentKindSource {
+	const owner = repo?.organizationApp;
+	const name = repo?.nameApp;
+	if (!owner || !name) {
+		return {};
+	}
+	const provider = (repo?.gitProvider ?? "github").toLowerCase();
+	const host =
+		provider === "github"
+			? "https://github.com"
+			: provider === "gitlab"
+				? "https://gitlab.com"
+				: provider === "bitbucket"
+					? "https://bitbucket.org"
+					: (repo?.serverUrl ?? "").replace(/\/+$/, "");
+	if (!host) {
+		return {};
+	}
+	const entry = {
+		repository: `${host}/${owner}/${name}`,
+		branch: repo?.branch ?? "",
+		// Stored without a leading slash, which is how the match joins it to the git root.
+		path: (repo?.appSubPath ?? "").replace(/^\/+/, ""),
+	};
+	switch (provider) {
+		case "gitlab":
+			return { gitlab: entry };
+		case "bitbucket":
+			return { bitbucket: entry };
+		case "github":
+			return { github: entry };
+		default:
+			return {};
+	}
 }

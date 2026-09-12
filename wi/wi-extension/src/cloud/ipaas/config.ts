@@ -29,11 +29,17 @@ export type CloudBackend = "choreo" | "ipaas";
 export const SETTING_CLOUD_BACKEND = "integrator.advanced.cloudBackend";
 export const SETTING_CLOUD_API_BASE_URL = "integrator.advanced.cloudApiBaseUrl";
 export const SETTING_CLOUD_CONSOLE_URL = "integrator.advanced.cloudConsoleUrl";
+export const SETTING_GITHUB_APP_CLIENT_ID =
+	"integrator.advanced.cloudGithubAppClientId";
+export const SETTING_GITHUB_APP_SLUG = "integrator.advanced.cloudGithubAppSlug";
 
 /** The environment the Integration Platform editor boots its tooling against. */
 export const ENV_STS_TOKEN = "CLOUD_STS_TOKEN";
 export const ENV_API_BASE_URL = "CLOUD_API_BASE_URL";
 export const ENV_CONSOLE_URL = "CLOUD_CONSOLE_URL";
+/** GitHub App identifiers, injected per deployment because each registers its own App. */
+export const ENV_GITHUB_APP_CLIENT_ID = "CLOUD_GITHUB_APP_CLIENT_ID";
+export const ENV_GITHUB_APP_SLUG = "CLOUD_GITHUB_APP_SLUG";
 
 /** Inputs to backend resolution, passed explicitly so the rules are testable without vscode. */
 export interface BackendResolutionInput {
@@ -113,4 +119,31 @@ export function resolveConsoleUrl(input: {
 		normalizeBaseUrl(input.setting) ||
 		normalizeBaseUrl(input.env[ENV_CONSOLE_URL])
 	);
+}
+
+/** GitHub App the editor authorizes against. Empty fields disable in-editor authorization. */
+export interface GitHubAppConfig {
+	clientId: string;
+	slug: string;
+}
+
+/**
+ * Resolve the GitHub App identifiers.
+ *
+ * Each deployment registers its own App, so these are supplied rather than
+ * compiled in. Both are public values that appear in URLs the user is sent to.
+ */
+export function resolveGitHubApp(input: {
+	clientIdSetting?: string;
+	slugSetting?: string;
+	env: Record<string, string | undefined>;
+}): GitHubAppConfig {
+	return {
+		clientId: (
+			input.clientIdSetting ||
+			input.env[ENV_GITHUB_APP_CLIENT_ID] ||
+			""
+		).trim(),
+		slug: (input.slugSetting || input.env[ENV_GITHUB_APP_SLUG] || "").trim(),
+	};
 }

@@ -215,3 +215,17 @@ export interface IpaasCreateProjectBody {
 	description?: string;
 	deploymentPipeline: string;
 }
+
+/** One subscription as the platform reports it for an organization. */
+export interface IpaasOrgSubscription {
+	tierId?: string;
+	subscriptionId?: string;
+	subscriptionType?: string;
+	subscriptionStatus?: string;
+}
+
+/** Component counts the organization's quota is measured against. */
+export interface IpaasOrgComponentLimits {
+	billableComponentCount?: number;
+	componentCount?: number;
+}

@@ -21,7 +21,7 @@ import * as vscode from "vscode";
 import type { ChoreoRPCClient } from "./cloud/choreo-cli-rpc";
 import { defaultTerminologies, webviewStateStore } from "./cloud/stores/webview-state-store";
 import type { WSO2AuthenticationProvider } from "./cloud/auth/wso2-auth-provider";
-import type { CloudBackend } from "./cloud/ipaas/config";
+import type { CloudBackend, GitHubAppConfig } from "./cloud/ipaas/config";
 
 /**
  * Extension context wrapper
@@ -60,6 +60,13 @@ export class ExtensionVariables {
 	 * supplies one, which leaves console links unavailable rather than broken.
 	 */
 	public ipaasConsoleUrl = "";
+
+	/**
+	 * GitHub App the editor authorizes against. Empty when the deployment
+	 * supplies none, which leaves in-editor GitHub authorization unavailable;
+	 * reading a public repository does not depend on it.
+	 */
+	public githubApp: GitHubAppConfig = { clientId: "", slug: "" };
 
 	/** Extension config with console URLs and GitHub app config — populated during activation. */
 	public config?: GetCliRpcResp;

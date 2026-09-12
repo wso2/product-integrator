@@ -132,11 +132,17 @@ export class RPCClient {
 			this._conn.trace(Trace.Verbose, new ChoreoTracer());
 			this._conn.listen();
 
+			// The CLI exchanges this token for a Choreo session. An Integration
+			// Platform token is not one, so handing it over makes the CLI report
+			// "token not valid" instead of the accurate "no session", and sends
+			// it to a control plane that never issued it.
+			const cloudStsToken =
+				ext.cloudBackend === "ipaas" ? "" : process.env.CLOUD_STS_TOKEN || "";
 			// biome-ignore lint/complexity/noBannedTypes:
 			const resp = await this._conn.sendRequest<{}>("initialize", {
 				clientName: "vscode",
 				clientVersion: "1.0.0",
-				cloudStsToken: process.env.CLOUD_STS_TOKEN || "",
+				cloudStsToken,
 			});
 			console.log("Initialized RPC server", resp);
 		} catch (e) {

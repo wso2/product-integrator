@@ -75,6 +75,21 @@ function describe(status: number, body: string): string {
 	return body ? `HTTP ${status}: ${body}` : `HTTP ${status}`;
 }
 
+/**
+ * Reduce a configured token to the credential itself.
+ *
+ * The platform injects a bare JWT, but the variable is also set by hand, and
+ * pasting it with the "Bearer " prefix already attached is easy to do and
+ * invisible afterwards — the request then carries "Bearer Bearer <jwt>" and the
+ * gateway rejects it with a 401 that says only "Authentication failed", naming
+ * nothing that would lead you here. Accept either form.
+ */
+export function normalizeBearerToken(token: string | undefined): string {
+	const trimmed = (token ?? "").trim();
+	const withoutScheme = trimmed.replace(/^bearer\s+/i, "");
+	return withoutScheme.trim();
+}
+
 export interface BffOptions {
 	/** Base URL without a trailing slash. */
 	baseUrl: string;
@@ -91,7 +106,7 @@ export class BffClient {
 		path: string,
 		body?: unknown,
 	): Promise<T> {
-		const token = this.options.getToken();
+		const token = normalizeBearerToken(this.options.getToken());
 		const config: AxiosRequestConfig = {
 			method,
 			url: `${this.options.baseUrl}${path}`,

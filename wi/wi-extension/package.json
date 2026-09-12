@@ -81,6 +81,18 @@
           "description": "Base URL of the Integration Platform console, used for \"View in console\" links. Overrides the CLOUD_CONSOLE_URL supplied by the cloud editor.",
           "scope": "machine"
         },
+        "integrator.advanced.cloudGithubAppClientId": {
+          "type": "string",
+          "default": "",
+          "description": "Client ID of the Integration Platform's GitHub App, used to authorize access to private repositories. Overrides the CLOUD_GITHUB_APP_CLIENT_ID supplied by the cloud editor.",
+          "scope": "machine"
+        },
+        "integrator.advanced.cloudGithubAppSlug": {
+          "type": "string",
+          "default": "",
+          "description": "Slug of the Integration Platform's GitHub App, used to open its installation page. Overrides the CLOUD_GITHUB_APP_SLUG supplied by the cloud editor.",
+          "scope": "machine"
+        },
         "integrator.advanced.cloudRpcPath": {
           "type": "string",
           "default": "",

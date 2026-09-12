@@ -31,6 +31,7 @@ import {
 	runStamp,
 	toAppPath,
 	toComponentKind,
+	toComponentSource,
 	toComponentTypeName,
 	toCreateComponentBody,
 	toEnvironmentName,
@@ -183,12 +184,38 @@ describe("toCreateComponentBody", () => {
 	});
 
 	// Omitting secretRef and sending "" are different instructions to the
-	// platform, and "" is only correct alongside a GitHub App binding, which
-	// this request shape cannot carry.
-	it("sends no secretRef and no githubApp binding", () => {
+	// platform, and "" is only correct alongside a GitHub App binding.
+	it("sends no secretRef and no githubApp binding without an installation", () => {
 		const body = toCreateComponentBody(req(), "");
 		assert.ok(!("secretRef" in body.spec.workflow.parameters.repository));
 		assert.equal(body.githubApp, undefined);
+	});
+
+	// The binding is what lets the build clone a private repository, and the
+	// empty secretRef is what stops the platform rendering a secret of its own.
+	it("binds the App installation when one covers the repository", () => {
+		const body = toCreateComponentBody(req(), "src/orders", 4242);
+		assert.deepEqual(body.githubApp, {
+			installationId: 4242,
+			owner: "acme",
+			repo: "repo",
+			branch: "main",
+			appPath: "src/orders",
+			repositoryUrl: "https://github.com/acme/repo",
+		});
+		assert.equal(body.spec.workflow.parameters.repository.secretRef, "");
+	});
+
+	// An installation id cannot be attached to a repository it does not cover,
+	// and a non-GitHub remote has no installation at all.
+	it("sends no binding for a non-GitHub remote even with an installation", () => {
+		const body = toCreateComponentBody(
+			req({ repoUrl: "https://gitlab.com/acme/repo" }),
+			"",
+			4242,
+		);
+		assert.equal(body.githubApp, undefined);
+		assert.ok(!("secretRef" in body.spec.workflow.parameters.repository));
 	});
 
 	it("always builds with the Ballerina workflow", () => {
@@ -369,4 +396,78 @@ describe("newestRunSince", () => {
 			newestRunSince(descending, 0)?.name,
 		);
 	});
+});
+
+describe("toComponentSource", () => {
+	// The match that decides whether a directory is already deployed parses this
+	// with parseGitURL, so it has to be a URL, not "owner/name".
+	it("builds a parseable GitHub URL", () => {
+		const source = toComponentSource({
+			gitProvider: "github",
+			organizationApp: "acme",
+			nameApp: "repo",
+			branch: "main",
+			appSubPath: "src/orders",
+		});
+		assert.deepEqual(source.github, {
+			repository: "https://github.com/acme/repo",
+			branch: "main",
+			path: "src/orders",
+		});
+	});
+
+	it("defaults an unstated provider to GitHub", () => {
+		assert.equal(
+			toComponentSource({ organizationApp: "acme", nameApp: "repo" }).github
+				?.repository,
+			"https://github.com/acme/repo",
+		);
+	});
+
+	it("places gitlab and bitbucket under their own keys", () => {
+		assert.equal(
+			toComponentSource({
+				gitProvider: "gitlab",
+				organizationApp: "a",
+				nameApp: "b",
+			}).gitlab?.repository,
+			"https://gitlab.com/a/b",
+		);
+		assert.equal(
+			toComponentSource({
+				gitProvider: "BitBucket",
+				organizationApp: "a",
+				nameApp: "b",
+			}).bitbucket?.repository,
+			"https://bitbucket.org/a/b",
+		);
+	});
+
+	// The stored path is joined to the git root, so a leading slash would escape it.
+	it("strips a leading slash from the sub-path", () => {
+		assert.equal(
+			toComponentSource({
+				organizationApp: "a",
+				nameApp: "b",
+				appSubPath: "/src",
+			}).github?.path,
+			"src",
+		);
+	});
+
+	// An entry under the wrong key reads as a repository that does not exist,
+	// which would match the wrong directory or none at all.
+	const empty: Array<[string, Parameters<typeof toComponentSource>[0]]> = [
+		["no repository at all", null],
+		["no owner", { nameApp: "repo" }],
+		["no name", { organizationApp: "acme" }],
+		[
+			"an unrecognised provider with no server URL",
+			{ gitProvider: "svn", organizationApp: "a", nameApp: "b" },
+		],
+	];
+	for (const [name, input] of empty) {
+		it(`returns an empty source for ${name}`, () =>
+			assert.deepEqual(toComponentSource(input), {}));
+	}
 });

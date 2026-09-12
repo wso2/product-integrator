@@ -19,7 +19,14 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import axios, { type AxiosRequestConfig } from "axios";
-import { BffClient, IpaasError, items, q, seg } from "./bff";
+import {
+	BffClient,
+	IpaasError,
+	items,
+	normalizeBearerToken,
+	q,
+	seg,
+} from "./bff";
 
 /**
  * Requests are intercepted at the adapter, which is the lowest seam axios
@@ -74,6 +81,29 @@ describe("q", () => {
 	});
 });
 
+describe("normalizeBearerToken", () => {
+	const JWT = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.sig";
+	// The platform injects a bare token, but the variable is also set by hand and
+	// a pasted "Bearer " prefix produces "Bearer Bearer <jwt>" on the wire — a 401
+	// whose message names nothing that would lead you to the cause.
+	const cases: Array<[string, string | undefined, string]> = [
+		["passes a bare token through", JWT, JWT],
+		["strips a Bearer prefix", `Bearer ${JWT}`, JWT],
+		["strips it case-insensitively", `bearer ${JWT}`, JWT],
+		["strips it with odd spacing", `  BEARER   ${JWT}  `, JWT],
+		[
+			"strips only the scheme, not a token starting with the letters",
+			"bearerish",
+			"bearerish",
+		],
+		["treats an absent token as empty", undefined, ""],
+		["treats whitespace as empty", "   ", ""],
+	];
+	for (const [name, input, want] of cases) {
+		it(name, () => assert.equal(normalizeBearerToken(input), want));
+	}
+});
+
 describe("seg", () => {
 	it("encodes a path segment", () => assert.equal(seg("a/b"), "a%2Fb"));
 });
@@ -98,6 +128,20 @@ describe("BffClient", () => {
 		const result = await client.get<{ ok: boolean }>("/projects");
 		assert.deepEqual(result, { ok: true });
 		assert.equal(captured[0].config.url, "https://api.test/projects");
+		assert.equal(
+			(captured[0].config.headers as Record<string, string>).Authorization,
+			"Bearer tok",
+		);
+	});
+
+	// End-to-end through the real request path: whichever form the environment
+	// supplies, exactly one scheme reaches the wire.
+	it("sends one Bearer scheme even when the token already carries one", async () => {
+		const { client, captured } = clientWith(
+			[{ status: 200, data: "{}" }],
+			"Bearer tok",
+		);
+		await client.get("/projects");
 		assert.equal(
 			(captured[0].config.headers as Record<string, string>).Authorization,
 			"Bearer tok",

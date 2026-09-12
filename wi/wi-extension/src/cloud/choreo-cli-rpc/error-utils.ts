@@ -65,19 +65,23 @@ export function handlerError(err: any) {
 				ext.logError("InternalError", err as Error);
 				break;
 			case ErrorCode.UnauthorizedError:
-				if (ext.authProvider?.getState().state?.userInfo) {
+			// The bundled CLI keeps its own Choreo session. On the Integration
+			// Platform it has none and cannot get one -- identity there is the
+			// editor's token -- so treating a CLI auth failure as "this user is
+			// signed out" would sign them out of a session the CLI never owned.
+				if (ext.cloudBackend !== "ipaas" && ext.authProvider?.getState().state?.userInfo) {
 					ext.authProvider?.getState().logout();
 					w.showErrorMessage("Unauthorized. Please sign in again.");
 				}
 				break;
 			case ErrorCode.TokenNotFoundError:
-				if (ext.authProvider?.getState().state?.userInfo) {
+				if (ext.cloudBackend !== "ipaas" && ext.authProvider?.getState().state?.userInfo) {
 					ext.authProvider?.getState().logout();
 					w.showErrorMessage("Token not found. Please sign in again.");
 				}
 				break;
 			case ErrorCode.InvalidTokenError:
-				if (ext.authProvider?.getState().state?.userInfo) {
+				if (ext.cloudBackend !== "ipaas" && ext.authProvider?.getState().state?.userInfo) {
 					ext.authProvider?.getState().logout();
 					w.showErrorMessage("Invalid token. Please sign in again.");
 				}
@@ -86,7 +90,7 @@ export function handlerError(err: any) {
 				ext.logError("ForbiddenError", err as Error);
 				break;
 			case ErrorCode.RefreshTokenError:
-				if (ext.authProvider?.getState().state?.userInfo) {
+				if (ext.cloudBackend !== "ipaas" && ext.authProvider?.getState().state?.userInfo) {
 					ext.authProvider?.getState().logout();
 					w.showErrorMessage("Failed to refresh user session. Please sign in again.");
 				}

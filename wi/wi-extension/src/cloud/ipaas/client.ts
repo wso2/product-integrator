@@ -27,15 +27,39 @@
  */
 
 import type {
+	ComponentEP,
 	ComponentKind,
+	ConnectionDetailed,
+	ConnectionListItem,
 	CreateComponentReq,
 	CreateProjectReq,
+	CredentialItem,
+	DatabaseAdminCredential,
+	DatabaseCredential,
+	DatabaseServer,
 	DeleteCompReq,
 	Environment,
+	GetBranchesReq,
+	GetCliRpcResp,
 	GetComponentItemReq,
+	GetComponentUsageResp,
 	GetComponentsReq,
+	GetGitMetadataReq,
+	GetGitMetadataResp,
+	GetGitTokenForRepositoryResp,
 	GetProjectEnvsReq,
+	GithubOrganization,
+	IsRepoAuthorizedReq,
+	IsRepoAuthorizedResp,
+	MarketplaceDatabaseListResp,
+	MarketplaceIdlResp,
+	MarketplaceItem,
+	MarketplaceListResp,
 	Project,
+	ResolveConnectionSecretsResp,
+	StartProxyServerResp,
+	SubscriptionsResp,
+	UpdateProjectReq,
 	UserInfo,
 } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
@@ -44,17 +68,36 @@ import { BffClient, IpaasError, items, q, seg } from "./bff";
 import { decodeClaims } from "./claims";
 import { ENV_STS_TOKEN } from "./config";
 import {
+	type GitInstallation,
+	type GitRepo,
+	type OwnerIndexEntry,
+	indexInstallations,
+	installationFor,
+	isGitHubAuthRequired,
+} from "./github";
+import {
+	type IpaasComponentRepository,
 	toComponentKind,
+	toComponentSource,
 	toCreateComponentBody,
 	toEnvironmentName,
 	toOrganization,
 	toProject,
 } from "./mappers";
+import {
+	type RepoTreeNode,
+	flattenTree,
+	hasFileInPath,
+	isSubPathEmpty,
+} from "./repo";
+import { parseGitHubOwnerRepo } from "./repo-url";
 import type {
 	IpaasComponent,
 	IpaasComponentDeployment,
 	IpaasEnvironment,
+	IpaasOrgComponentLimits,
 	IpaasOrgEntry,
+	IpaasOrgSubscription,
 	IpaasProject,
 	IpaasTriggerBuildResponse,
 	IpaasWorkflowRun,
@@ -63,6 +106,7 @@ import type {
 
 export class IpaasRpcClient extends ChoreoRPCClient {
 	private readonly bff: BffClient;
+	private ownerIndex: Map<string, OwnerIndexEntry> | null = null;
 
 	constructor(baseUrl: string) {
 		super();
@@ -137,8 +181,56 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 		};
 	}
 
+	/**
+	 * Regions are a Choreo concept the platform does not have, but the sign-in
+	 * path treats a missing one as fatal: initAuth throws, resets the state and
+	 * leaves the session looking signed out, with the real cause only in the log.
+	 * Report a fixed value — it is carried as a session label and nothing here
+	 * branches on it.
+	 */
+	override async getCurrentRegion(): Promise<"US" | "EU"> {
+		return "US";
+	}
+
+	/**
+	 * Nothing to switch: the organization is fixed by the token, and every
+	 * request is scoped to it server-side. Inherited, this reaches the CLI
+	 * un-awaited, so a rejection surfaces as an unhandled promise rejection
+	 * rather than anything actionable.
+	 */
+	override async changeOrgContext(_orgId: string): Promise<void> {}
+
+	/**
+	 * Console URLs, which on this backend are configured rather than fetched.
+	 * The inherited version asks the CLI, whose answer points at Choreo and
+	 * whose failure aborts activation.
+	 */
+	override async getConfigFromCli(): Promise<GetCliRpcResp> {
+		return {
+			billingConsoleUrl: "",
+			choreoConsoleUrl: ext.ipaasConsoleUrl,
+			devantConsoleUrl: ext.ipaasConsoleUrl,
+			ghApp: { installUrl: "", authUrl: "", clientId: "" },
+		};
+	}
+
+	/**
+	 * Withheld, deliberately.
+	 *
+	 * This is what the extension hands to other extensions through
+	 * WICloudExtensionAPI.getStsToken, and Ballerina's copilot is the caller
+	 * (ballerina-extension/src/utils/ai/auth.ts). It spends the token against
+	 * the Choreo copilot backend, which does not accept an Integration Platform
+	 * token -- so returning the real one would send a credential to a service
+	 * that never issued it and still fail. Returning nothing fails closed.
+	 *
+	 * The deploy path is unaffected: BffClient reads the token from the
+	 * environment directly rather than through here.
+	 *
+	 * Revert this to the real token once the consumers accept it.
+	 */
 	override async getStsToken(): Promise<string> {
-		return process.env[ENV_STS_TOKEN] ?? "";
+		return "";
 	}
 
 	override async getProjects(orgID: string): Promise<Project[]> {
@@ -161,6 +253,15 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 		return toProject(created, params.orgId);
 	}
 
+	/**
+	 * The project's components, each carrying its bound repository.
+	 *
+	 * The repository is fetched per component because the list does not include
+	 * it, and without it nothing can tell which local directory an integration
+	 * belongs to — which is what decides whether a directory offers "deploy" or
+	 * shows its already-deployed state. A component whose repository cannot be
+	 * read keeps an empty source rather than failing the whole list.
+	 */
 	override async getComponentList(
 		params: GetComponentsReq,
 	): Promise<ComponentKind[]> {
@@ -169,7 +270,41 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 				`/projects/${seg(params.projectHandle)}/components`,
 			),
 		);
-		return components.map(toComponentKind);
+		return Promise.all(
+			components.map(async (component) => {
+				const kind = toComponentKind(component);
+				kind.spec.source = toComponentSource(
+					await this.componentRepository(
+						component.handler || component.id,
+						params.projectHandle,
+					),
+				);
+				return kind;
+			}),
+		);
+	}
+
+	/** A component's bound repository, or null when it has none or cannot be read. */
+	private async componentRepository(
+		componentName: string,
+		projectName: string,
+	): Promise<IpaasComponentRepository | null> {
+		if (!componentName) {
+			return null;
+		}
+		try {
+			return (
+				(await this.bff.get<IpaasComponentRepository | null>(
+					`/components/${seg(componentName)}/repository${q({ projectName })}`,
+				)) ?? null
+			);
+		} catch (err) {
+			ext.logError(
+				`Could not read the repository of ${componentName}`,
+				err as Error,
+			);
+			return null;
+		}
 	}
 
 	/**
@@ -209,9 +344,14 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 		params: CreateComponentReq,
 	): Promise<ComponentKind> {
 		const repoSubPath = await resolveRepoSubPath(params.componentDir);
+		// A private repository builds only when the component is bound to the App
+		// installation covering it. A public one needs no binding, and sending one
+		// it does not have would name an installation that cannot reach it.
+		const owner = parseGitHubOwnerRepo(params.repoUrl)?.owner;
+		const installation = installationFor(await this.installationIndex(), owner);
 		const created = await this.bff.post<IpaasComponent>(
 			`/projects/${seg(params.projectHandle)}/components`,
-			toCreateComponentBody(params, repoSubPath),
+			toCreateComponentBody(params, repoSubPath, installation?.installationId),
 		);
 		if (created?.warning) {
 			ext.log(
@@ -249,6 +389,434 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 					critical: environment.critical,
 				}) as Environment,
 		);
+	}
+
+	// --- Features the platform does not serve ---------------------------------
+	//
+	// These reach the bundled CLI when not overridden, and the CLI needs a
+	// Choreo session it cannot obtain inside this editor — identity here is the
+	// platform token. Every one of them then fails with "not logged in", which
+	// read as a broken session rather than an absent feature, and which the
+	// shared error handler used to escalate into a forced sign-out.
+	//
+	// Reads answer empty so the UI shows "nothing here" instead of an error.
+	// Writes refuse, because quietly succeeding at nothing is worse than saying
+	// so. Nothing is fabricated either way.
+
+	private unsupported(feature: string): never {
+		throw new Error(
+			`${feature} is not available on the Integration Platform yet.`,
+		);
+	}
+
+	override async getConnections(): Promise<ConnectionListItem[]> {
+		return [];
+	}
+	override async getConnectionItem(): Promise<ConnectionDetailed> {
+		return this.unsupported("Connections");
+	}
+	override async createComponentConnection(): Promise<ConnectionDetailed> {
+		return this.unsupported("Creating connections");
+	}
+	override async createThirdPartyConnection(): Promise<ConnectionDetailed> {
+		return this.unsupported("Creating connections");
+	}
+	override async createDatabaseConnection(): Promise<ConnectionDetailed> {
+		return this.unsupported("Creating database connections");
+	}
+	override async deleteConnection(): Promise<void> {
+		return this.unsupported("Deleting connections");
+	}
+
+	override async getMarketplaceItems(): Promise<MarketplaceListResp> {
+		return {
+			count: 0,
+			pagination: { offset: 0, limit: 0, total: 0 } as never,
+			data: [],
+		};
+	}
+	override async getMarketplaceDatabases(): Promise<MarketplaceDatabaseListResp> {
+		return {
+			count: 0,
+			pagination: { offset: 0, limit: 0, total: 0 } as never,
+			data: [],
+		};
+	}
+
+	/**
+	 * Branches of a public repository.
+	 *
+	 * The platform proxies GitHub unauthenticated here, so a private repository
+	 * answers empty rather than failing — which `isRepoAuthorized` below turns
+	 * into an honest "no access" for the form.
+	 */
+	override async getRepoBranches(params: GetBranchesReq): Promise<string[]> {
+		const repo = parseGitHubOwnerRepo(params.repoUrl);
+		if (!repo) {
+			return [];
+		}
+		// A private repository is only reachable through the App installation
+		// covering its owner; a public one is readable either way, so the
+		// anonymous route is the fallback rather than the first choice.
+		const installation = installationFor(
+			await this.installationIndex(),
+			repo.owner,
+		);
+		if (installation) {
+			try {
+				const names = items(
+					await this.bff.get<ListResponse<string>>(
+						`/git/github/branches${q({ installationId: installation.installationId, owner: repo.owner, repo: repo.repo })}`,
+					),
+				);
+				if (names.length > 0) {
+					return names.filter(Boolean);
+				}
+			} catch (err) {
+				ext.logError(
+					`Could not list branches of ${repo.owner}/${repo.repo} via the GitHub App`,
+					err as Error,
+				);
+			}
+		}
+		const branches = items(
+			await this.bff.get<ListResponse<{ name: string; isDefault?: boolean }>>(
+				`/repos/${seg(repo.owner)}/${seg(repo.repo)}/branches`,
+			),
+		);
+		return branches.map((branch) => branch.name).filter(Boolean);
+	}
+
+	/**
+	 * Owner-to-installation index, built once per session.
+	 *
+	 * Cached because every repository lookup consults it and rebuilding costs one
+	 * call per installation. Authorizing or installing resets it, which is the
+	 * only thing that changes the answer.
+	 */
+	private async installationIndex(): Promise<Map<
+		string,
+		OwnerIndexEntry
+	> | null> {
+		if (this.ownerIndex) {
+			return this.ownerIndex;
+		}
+		try {
+			const installations = items(
+				await this.bff.get<ListResponse<GitInstallation>>(
+					"/git/github/installations",
+				),
+			);
+			const entries = await Promise.all(
+				installations.map(async (installation) => ({
+					installation,
+					repos: await this.installationRepos(installation.installationId),
+				})),
+			);
+			this.ownerIndex = indexInstallations(entries);
+			return this.ownerIndex;
+		} catch (err) {
+			// No authorization yet is the ordinary case, not a failure: public
+			// repositories still work without one.
+			if (!(err instanceof IpaasError && isGitHubAuthRequired(err.status))) {
+				ext.logError("Could not list GitHub App installations", err as Error);
+			}
+			return null;
+		}
+	}
+
+	private async installationRepos(installationId: number): Promise<GitRepo[]> {
+		try {
+			return items(
+				await this.bff.get<ListResponse<GitRepo>>(
+					`/git/github/repos${q({ installationId })}`,
+				),
+			);
+		} catch (err) {
+			// One suspended installation drops only its own repositories.
+			ext.logError(
+				`Could not list repositories of installation ${installationId}`,
+				err as Error,
+			);
+			return [];
+		}
+	}
+
+	/** Forget the cached index, after anything that can change which repositories are reachable. */
+	resetGitHubInstallations(): void {
+		this.ownerIndex = null;
+	}
+
+	/**
+	 * Bind the GitHub App installations behind an OAuth code.
+	 *
+	 * A 409 means the user authorized the App but has not installed it on any
+	 * account, which is a different remedy — the install page, not the authorize
+	 * page — so it is reported rather than treated as a failure.
+	 */
+	override async obtainGithubToken(params: {
+		code: string;
+		orgId: string;
+	}): Promise<void> {
+		try {
+			await this.bff.post("/git/github/installations", { code: params.code });
+			this.resetGitHubInstallations();
+		} catch (err) {
+			if (err instanceof IpaasError && isGitHubAuthRequired(err.status)) {
+				throw new Error(
+					"The GitHub App is not installed on any of your accounts. Install it, then try again.",
+				);
+			}
+			throw err;
+		}
+	}
+
+	/**
+	 * Whether the platform can read the repository.
+	 *
+	 * There is no "is authorized" endpoint, so this is answered by doing the
+	 * read: branches come back for a public repository and not for anything
+	 * else. `retrievedRepos` stays true because the lookup itself worked — that
+	 * is what steers the form to "WSO2 lacks access to this repository" rather
+	 * than "authorize WSO2", and the former is the accurate advice while the
+	 * GitHub App flow is not wired.
+	 */
+	override async isRepoAuthorized(
+		params: IsRepoAuthorizedReq,
+	): Promise<IsRepoAuthorizedResp> {
+		try {
+			const branches = await this.getRepoBranches(params as GetBranchesReq);
+			return { retrievedRepos: true, isAccessible: branches.length > 0 };
+		} catch (err) {
+			ext.logError("Could not read repository branches", err as Error);
+			return { retrievedRepos: true, isAccessible: false };
+		}
+	}
+
+	/**
+	 * Repository facts the create form checks before it will submit.
+	 *
+	 * Only the fields it actually reads are derived — chiefly `isSubPathEmpty`,
+	 * which blocks creating an integration over an occupied path. The rest are
+	 * reported permissively rather than invented: a false negative here blocks a
+	 * legitimate create, and the build validates the real constraints anyway.
+	 */
+	override async getGitRepoMetadata(
+		params: GetGitMetadataReq,
+	): Promise<GetGitMetadataResp> {
+		const paths = await this.repoTreePaths(
+			params.gitOrgName,
+			params.gitRepoName,
+			params.branch,
+		);
+		const subPath = params.relativePath ?? "";
+		return {
+			metadata: {
+				isBareRepo: paths.length === 0,
+				isSubPathEmpty: isSubPathEmpty(paths, subPath),
+				isSubPathValid: true,
+				isValidRepo: true,
+				hasBallerinaTomlInPath: hasFileInPath(paths, subPath, "Ballerina.toml"),
+				hasBallerinaTomlInRoot: hasFileInPath(paths, "", "Ballerina.toml"),
+				isDockerfilePathValid: true,
+				hasDockerfileInPath: hasFileInPath(paths, subPath, "Dockerfile"),
+				isDockerContextPathValid: true,
+				isOpenApiFilePathValid: true,
+				hasOpenApiFileInPath: false,
+				hasPomXmlInPath: hasFileInPath(paths, subPath, "pom.xml"),
+			} as GetGitMetadataResp["metadata"],
+		};
+	}
+
+	/** Every path in a public repository's tree, or [] when it cannot be read. */
+	private async repoTreePaths(
+		owner: string,
+		repo: string,
+		branch?: string,
+	): Promise<string[]> {
+		if (!owner || !repo) {
+			return [];
+		}
+		try {
+			const tree = await this.bff.get<{ items?: RepoTreeNode[] }>(
+				`/repos/${seg(owner)}/${seg(repo)}/contents${q({ branch })}`,
+			);
+			return flattenTree(tree?.items);
+		} catch (err) {
+			ext.logError(`Could not read the tree of ${owner}/${repo}`, err as Error);
+			return [];
+		}
+	}
+
+	// Git credentials and organizations belong to the GitHub App flow, which is
+	// not wired yet. Empty keeps the pickers quiet rather than erroring.
+	override async getAuthorizedGitOrgs(): Promise<{
+		gitOrgs: GithubOrganization[];
+	}> {
+		return { gitOrgs: [] };
+	}
+	override async getCredentials(): Promise<CredentialItem[]> {
+		return [];
+	}
+
+	// Endpoints belong to a release, and nothing on this path has one yet.
+	override async getComponentEndpoints(): Promise<ComponentEP[]> {
+		return [];
+	}
+
+	/**
+	 * The editor is keyed on (user, project, component) and provisioned by the
+	 * platform, so pointing it at a newly created component would provision a
+	 * second editor rather than re-point this one. There is nothing to update.
+	 */
+	override async updateCodeServer(): Promise<void> {}
+
+	/**
+	 * Sign-out is meaningless here: the session is the token the platform
+	 * injected, and no local credential exists to discard. Inherited, this
+	 * reaches a CLI that is not signed in and times out.
+	 */
+	override async signOut(): Promise<void> {}
+
+	/**
+	 * The organization's subscriptions, as the create flow's quota check reads
+	 * them.
+	 *
+	 * Both this and getComponentUsage below are keyed on the organization UUID,
+	 * which the request does not carry — GetSubscriptionsReq has only `orgId`,
+	 * and on this backend that is 0 unless a billing service is wired. The UUID
+	 * is taken from the token's ouId claim instead, which is the same value the
+	 * platform resolves the organization from server-side.
+	 */
+	override async getSubscriptions(): Promise<SubscriptionsResp> {
+		const orgUuid = decodeClaims(process.env[ENV_STS_TOKEN] ?? "")?.ouId ?? "";
+		const subscriptions = items(
+			await this.bff.get<ListResponse<IpaasOrgSubscription>>(
+				`/orgs/${seg(orgUuid)}/subscriptions`,
+			),
+		);
+		return {
+			count: subscriptions.length,
+			cloudType: "",
+			emailType: "",
+			list: subscriptions.map(
+				(subscription) =>
+					({
+						subscriptionId: subscription.subscriptionId ?? "",
+						tierId: subscription.tierId ?? "",
+						supportPlanId: "",
+						cloudType: "",
+						subscriptionType: subscription.subscriptionType ?? "",
+						subscriptionBillingProvider: "",
+						subscriptionBillingProviderStatus:
+							subscription.subscriptionStatus ?? "",
+					}) as SubscriptionsResp["list"][number],
+			),
+		};
+	}
+
+	/**
+	 * Component usage against the organization's quota. Only the billable count
+	 * is populated, because it is the only field the quota check reads and the
+	 * platform reports no breakdown to fill the rest from.
+	 */
+	override async getComponentUsage(): Promise<GetComponentUsageResp> {
+		const orgUuid = decodeClaims(process.env[ENV_STS_TOKEN] ?? "")?.ouId ?? "";
+		const limits = await this.bff.get<IpaasOrgComponentLimits>(
+			`/orgs/${seg(orgUuid)}/component-limits`,
+		);
+		return {
+			success: true,
+			message: "",
+			data: {
+				billableComponentCount: limits?.billableComponentCount ?? 0,
+				componentCount: limits?.componentCount ?? 0,
+				externalConsumerComponentCount: 0,
+				systemComponentCount: 0,
+				orgId: 0,
+				isWebappConstrained: false,
+				distinctTypeCount: [],
+			},
+		} as GetComponentUsageResp;
+	}
+
+	// Everything below has no platform endpoint. Each would otherwise reach the
+	// bundled CLI and fail with "not logged in", which reads as a broken session
+	// rather than an absent feature. Refusing by name says which feature is
+	// missing, and keeps the failure at the call rather than in a later log.
+
+	override async getMarketplaceItem(): Promise<MarketplaceItem> {
+		return this.unsupported("The connection marketplace");
+	}
+	override async getMarketplaceIdl(): Promise<MarketplaceIdlResp> {
+		return this.unsupported("The connection marketplace");
+	}
+	override async getMarketplaceDatabaseItem(): Promise<MarketplaceItem> {
+		return this.unsupported("Managed databases");
+	}
+	override async getDatabaseServer(): Promise<DatabaseServer> {
+		return this.unsupported("Managed databases");
+	}
+	override async getDatabaseAdminCredential(): Promise<DatabaseAdminCredential> {
+		return this.unsupported("Managed databases");
+	}
+	override async getDatabaseCredentials(): Promise<DatabaseCredential[]> {
+		return this.unsupported("Managed databases");
+	}
+	override async registerMarketplaceConnection(): Promise<MarketplaceItem> {
+		return this.unsupported("The connection marketplace");
+	}
+	override async resolveConnectionSecrets(): Promise<ResolveConnectionSecretsResp> {
+		return this.unsupported("Connection secrets");
+	}
+	override async getCredentialDetails(): Promise<CredentialItem> {
+		return this.unsupported("Git credentials");
+	}
+
+	// Git write access. Reading a public repository works (see getRepoBranches);
+	// pushing and private-repository access both need a GitHub App installation,
+	// which is not wired yet.
+	override async getGitTokenForRepository(): Promise<GetGitTokenForRepositoryResp> {
+		return this.unsupported("Git push credentials");
+	}
+
+	// Sign-in is not a step here: identity is the token the platform injected
+	// when it provisioned this editor, and there is no flow to start.
+	override async getSignInUrl(): Promise<string | undefined> {
+		return this.unsupported("Signing in");
+	}
+	override async getDevantSignInUrl(): Promise<string | undefined> {
+		return this.unsupported("Signing in");
+	}
+	override async signInWithAuthCode(): Promise<UserInfo | undefined> {
+		return this.unsupported("Signing in");
+	}
+	override async signInDevantWithAuthCode(): Promise<UserInfo | undefined> {
+		return this.unsupported("Signing in");
+	}
+
+	override async startProxyServer(): Promise<StartProxyServerResp> {
+		return this.unsupported("The connection proxy");
+	}
+	override async stopProxyServer(): Promise<void> {
+		return this.unsupported("The connection proxy");
+	}
+	override async changePrebuiltIntegrationRepository(): Promise<void> {
+		return this.unsupported("Changing a prebuilt integration's repository");
+	}
+
+	/** Renaming and re-describing a project, which the platform does serve. */
+	override async updateProject(params: UpdateProjectReq): Promise<Project> {
+		// Only displayName is sent: the request carries no description, and the
+		// platform's PUT replaces what it is given, so including an empty one
+		// would erase the stored description.
+		const updated = await this.bff.put<IpaasProject>(
+			`/projects/${seg(params.projectId)}`,
+			{
+				displayName: params.name,
+			},
+		);
+		return toProject(updated, params.orgId);
 	}
 
 	// --- Operations with no platform-core equivalent ---------------------------
