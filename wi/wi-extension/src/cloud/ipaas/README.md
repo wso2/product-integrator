@@ -87,6 +87,33 @@ way rather than leaving it pending.
 - **One environment.** Deploys go to the organization's first environment, the
   same one the platform itself picks when nothing selects one.
 
+## Base URLs
+
+The API is behind the platform gateway, on its own host and route — not on the
+console's host, and not on the editor's. Read the value for an environment out
+of the console's own runtime config rather than assembling one:
+
+```bash
+curl -s https://<console-host>/config.json | jq -r .CHOREO_BASE_API_URL
+```
+
+Development, verified against that file:
+
+| | |
+| --- | --- |
+| API (`CLOUD_API_BASE_URL`) | `https://development-wso2cloud.gateway.dev.cloud.wso2.com/ipaas-service-ipaas-api-endpoint` |
+| Console | `https://ipaas-console-development.gateway.dev.cloud.wso2.com` |
+| IdP | `https://platform-idp-development.gateway.dev.cloud.wso2.com` |
+
+`/integration-platform-api/v1.0` is the **internal** context path the gateway
+strips before forwarding (see the comment on `NewHandler`); it is not part of
+the URL a client sends to.
+
+The gateway authenticates every route, including `/health`, so an
+unauthenticated request answers 401 rather than reaching the service. A
+mistyped route prefix answers 404 — which is how to tell "wrong base URL" from
+"no token".
+
 ## Local development
 
 Point an editor at a different deployment without rebuilding its container:
@@ -94,12 +121,16 @@ Point an editor at a different deployment without rebuilding its container:
 ```jsonc
 {
   "integrator.advanced.cloudBackend": "ipaas",
-  "integrator.advanced.cloudApiBaseUrl": "https://<host>/integration-platform-api/v1.0"
+  "integrator.advanced.cloudApiBaseUrl": "https://development-wso2cloud.gateway.dev.cloud.wso2.com/ipaas-service-ipaas-api-endpoint"
 }
 ```
 
 `CLOUD_STS_TOKEN` must still be set in the environment. Reload the window after
 changing either setting.
+
+Nothing is derived from the editor's own URL. An editor is served on a
+per-component subdomain that differs per user, project and component, so it
+identifies no API — which is why the base URL is injected rather than computed.
 
 ## Tests
 
