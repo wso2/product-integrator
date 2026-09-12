@@ -48,7 +48,7 @@ import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 import { ProjectType, StateMachine, stateService } from "../../stateMachine";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import * as yaml from "js-yaml";
-import type { IpaasRpcClient } from "../ipaas/client";
+import { IpaasRpcClient } from "../ipaas/client";
 import { consoleLink } from "../ipaas/console";
 import { reportOutcome, watchCreatedIntegration } from "../ipaas/watch-command";
 
@@ -412,22 +412,22 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		},
 	);
 
-	// The platform builds and deploys after the create, so the command only
-	// finishes once that has been watched to a terminal state. On Choreo the
-	// create is the whole operation and there is nothing further to follow.
-	if (ext.cloudBackend === "ipaas" && result.created.length > 0) {
+	// The platform builds and deploys on its own after the create, so the
+	// command does not wait for it: creating the integration is what the user
+	// asked for, and the console link below is where the rest is watched. The
+	// follow is still started, unawaited, so its progress and outcome reach the
+	// notification area and the output channel for anyone who wants them.
+	const ipaasClient = ext.clients.rpcClient instanceof IpaasRpcClient ? ext.clients.rpcClient : undefined;
+	if (ipaasClient) {
 		for (const created of result.created) {
 			const label = created.metadata.displayName || created.metadata.name;
-			try {
-				reportOutcome(label, await watchCreatedIntegration(ext.clients.rpcClient as IpaasRpcClient, created, startedAt));
-			} catch (err) {
-				// The integration exists either way; losing sight of it is not the
-				// same as failing to deploy it, so say which happened.
-				ext.logError(`Failed to follow the deployment of ${label}`, err as Error);
-				window.showWarningMessage(
-					`${label} was created, but its deployment could not be followed: ${(err as Error).message}`,
-				);
-			}
+			void watchCreatedIntegration(ipaasClient, created, startedAt)
+				.then((outcome) => reportOutcome(label, outcome))
+				.catch((err) => {
+					// The integration exists either way; losing sight of it is not
+					// the same as failing to deploy it, so say which happened.
+					ext.logError(`Failed to follow the deployment of ${label}`, err as Error);
+				});
 		}
 	}
 
@@ -729,16 +729,29 @@ const showReloadWorkspaceMessage = (message: string, workspaceFsPath: string) =>
 }
 
 const showViewInConsoleMessage = (successMessage: string, org: Organization, project: Project, created: ComponentKind[]) => {
+	const consoleProjectPath = consoleLink(
+		org.handle,
+		project.handler,
+		created.length === 1 ? created[0]?.metadata.handler : undefined,
+	);
+	// Logged as well as offered: a notification is dismissed easily and taken
+	// away on its own timer, and this is the one link that shows what happened
+	// to the integration after the command returned.
+	if (consoleProjectPath) {
+		ext.log(`View in console: ${consoleProjectPath}`);
+	} else {
+		ext.log(
+			"No console URL is configured, so no console link is available. Set CLOUD_CONSOLE_URL, or integrator.advanced.cloudConsoleUrl.",
+		);
+	}
+
+	if (!consoleProjectPath) {
+		window.showInformationMessage(successMessage);
+		return;
+	}
 	window.showInformationMessage(successMessage, `View in console`).then(async (resp) => {
 		if (resp === `View in console`) {
-			const consoleProjectPath = consoleLink(
-				org.handle,
-				project.handler,
-				created.length === 1 ? created[0]?.metadata.handler : undefined,
-			);
-			if (consoleProjectPath) {
-				commands.executeCommand("vscode.open", consoleProjectPath);
-			}
+			commands.executeCommand("vscode.open", consoleProjectPath);
 		}
 	});
 }

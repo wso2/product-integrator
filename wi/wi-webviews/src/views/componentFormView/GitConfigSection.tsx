@@ -84,6 +84,25 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		},
 		enabled: !!workspaceFsPath,
 		refetchOnWindowFocus: true,
+		// A remote is usually added from a terminal inside this same window, so
+		// focus never changes and nothing would prompt a refetch. Poll until one
+		// appears, then stop.
+		refetchInterval: (query) => (query.state.data?.remotes?.length ? false : 3000),
+	});
+
+	// Whether anything is uncommitted or unpushed. The cloud builds from the
+	// remote, so work that only exists locally would not be in the build.
+	const {
+		data: hasUnpushedWork,
+		refetch: refetchDirty,
+		isFetching: isFetchingDirty,
+	} = useQuery({
+		queryKey: ["git-dirty", { directoryFsPath: workspaceFsPath }],
+		queryFn: () => wsClient.hasDirtyRepo(workspaceFsPath),
+		enabled: !!workspaceFsPath,
+		refetchOnWindowFocus: true,
+		// Same reason as above: a push happens in a terminal, not in this webview.
+		refetchInterval: 3000,
 	});
 
 	useEffect(() => {
@@ -248,6 +267,16 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		onInvalidRepoRefreshClick = refetchGitCred;
 		onInvalidRepoRefreshing = isFetchingGitCred;
 		blockCreation = true;
+	}
+
+	if (!invalidRepoMsg && hasUnpushedWork) {
+		invalidRepoMsg =
+			"This directory has changes that are not pushed to the remote repository. The cloud builds from the remote, so anything unpushed will not be included.";
+		invalidRepoAction = "Source Control";
+		onInvalidRepoActionClick = openSourceControl;
+		onInvalidRepoRefreshClick = refetchDirty;
+		onInvalidRepoRefreshing = isFetchingDirty;
+		invalidRepoBannerType = "warning";
 	}
 
 	if (!invalidRepoMsg && !isLoadingRepoAccess && gitRemote && !isRepoAuthorizedResp?.isAccessible && gitProvider) {

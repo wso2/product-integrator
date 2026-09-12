@@ -45,6 +45,7 @@ import {
 } from "@wso2/wi-core";
 import { buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
+import { buildAuthorizeUrl, buildInstallUrl } from "../../cloud/ipaas/github";
 import { StateMachine } from "../../stateMachine";
 import { contextStore } from "../../cloud/stores/context-store";
 import { webviewStateStore } from "../../cloud/stores/webview-state-store";
@@ -224,6 +225,9 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async triggerGithubAuthFlow(orgId: string): Promise<void> {
+		if (ext.cloudBackend === "ipaas") {
+			return this.triggerIpaasGithubFlow(orgId, "authorize");
+		}
 		const extName = webviewStateStore.getState().state?.extensionName;
 		const baseUrl = extName === "Devant" ? ext.config?.devantConsoleUrl : ext.config?.choreoConsoleUrl;
 		const callbackUrl = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
@@ -238,6 +242,9 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async triggerGithubInstallFlow(orgId: string): Promise<void> {
+		if (ext.cloudBackend === "ipaas") {
+			return this.triggerIpaasGithubFlow(orgId, "install");
+		}
 		const extName = webviewStateStore.getState().state?.extensionName;
 		const callbackUrl = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
 		const state = Buffer.from(
@@ -246,6 +253,44 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		).toString("base64");
 		const ghURL = Uri.parse(`${ext.config?.ghApp.installUrl}?state=${state}`);
 		await env.openExternal(ghURL);
+	}
+
+	/**
+	 * Send the user to GitHub to authorize the App, or to install it.
+	 *
+	 * The editor cannot be GitHub's redirect target — the App registers one
+	 * callback URL, and it points at the console — so the editor's own URI
+	 * travels inside `state` and the console forwards the result back to it.
+	 * The callback lands on the /ghapp URI handler.
+	 */
+	private async triggerIpaasGithubFlow(orgId: string, kind: "authorize" | "install"): Promise<void> {
+		const { clientId, slug } = ext.githubApp;
+		const needed = kind === "authorize" ? clientId : slug;
+		if (!needed) {
+			window.showErrorMessage(
+				"This deployment has no GitHub App configured, so GitHub cannot be connected from the editor. Connect the repository from the cloud console instead.",
+			);
+			return;
+		}
+		if (!ext.ipaasConsoleUrl) {
+			window.showErrorMessage(
+				"No console URL is configured, and GitHub returns its result by way of the console. Connect the repository from the cloud console instead.",
+			);
+			return;
+		}
+
+		const callbackUri = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
+		const state = Buffer.from(
+			JSON.stringify({ origin: "vscode.wso2-integrator", orgId, callbackUri: callbackUri.toString() }),
+			"binary",
+		).toString("base64");
+
+		const url =
+			kind === "authorize"
+				? buildAuthorizeUrl(clientId, `${ext.ipaasConsoleUrl}/ghapp`, state)
+				: buildInstallUrl(slug, state);
+		ext.log(`Opening GitHub ${kind} flow`);
+		await env.openExternal(Uri.parse(url));
 	}
 
 	async getBranches(params: GetBranchesReq): Promise<string[]> {

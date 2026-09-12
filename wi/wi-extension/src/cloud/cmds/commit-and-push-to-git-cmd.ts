@@ -193,6 +193,16 @@ export const enrichGitUsernamePassword = async (
 	fetchUrl: string,
 	secretRef: string,
 ) => {
+	// On the Integration Platform the push credential is the user's own GitHub
+	// session: git/github/session.ts asks VS Code's built-in provider for it and
+	// git/main.ts registers that as a credential provider, so an unauthenticated
+	// URL is answered through askpass. Embedding a token here would bypass that,
+	// and prompting for a username and password below would ask the user for a
+	// credential the editor can already obtain.
+	if (ext.cloudBackend === "ipaas" && provider === GitProvider.GITHUB) {
+		return;
+	}
+
 	if (ext.isDevantCloudEditor && provider === GitProvider.GITHUB && !urlObj.password) {
 		try {
 			ext.log(`Fetching PAT for org ${repoOrg} and repo ${repoName}`);

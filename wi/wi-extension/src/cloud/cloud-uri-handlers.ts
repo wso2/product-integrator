@@ -41,6 +41,7 @@ import { locationStore } from "./stores/location-store";
 import { webviewStateStore } from "./stores/webview-state-store";
 import { isSamePath, openDirectory } from "../utils/pathUtils";
 import { BridgeLayer } from "../BridgeLayer";
+import { IpaasRpcClient } from "./ipaas/client";
 
 export function activateURIHandlers() {
 	window.registerUriHandler({
@@ -106,8 +107,28 @@ export function activateURIHandlers() {
 					const urlParams = new URLSearchParams(uri.query);
 					const authCode = urlParams.get("code");
 					const orgId = urlParams.get("orgId");
-					if (authCode && orgId) {
-						ext.clients.rpcClient.obtainGithubToken({ code: authCode, orgId });
+					// Returning from the App's install page carries an installation
+					// instead of a code: the user has just granted access to further
+					// repositories, and nothing needs exchanging — only the cached
+					// view of which repositories are reachable is now stale.
+					const installationId = urlParams.get("installation_id");
+
+					if (authCode && (orgId || ext.cloudBackend === "ipaas")) {
+						ext.clients.rpcClient
+							.obtainGithubToken({ code: authCode, orgId: orgId ?? "" })
+							.then(() => window.showInformationMessage("GitHub connected."))
+							.catch((err: Error) => {
+								ext.logError("Failed to connect GitHub", err);
+								window.showErrorMessage(err.message);
+							});
+					}
+					if (ext.clients.rpcClient instanceof IpaasRpcClient) {
+						if (installationId) {
+							ext.log(`GitHub App installation ${installationId} updated`);
+							window.showInformationMessage("GitHub repository access updated.");
+						}
+						ext.clients.rpcClient.resetGitHubInstallations();
+						contextStore.getState().refreshState();
 					}
 				} catch (err: any) {
 					console.error("Failed to handle /ghapp uri handler", err);

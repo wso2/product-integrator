@@ -34,8 +34,11 @@ import {
 	SETTING_CLOUD_API_BASE_URL,
 	SETTING_CLOUD_BACKEND,
 	SETTING_CLOUD_CONSOLE_URL,
+	SETTING_GITHUB_APP_CLIENT_ID,
+	SETTING_GITHUB_APP_SLUG,
 	resolveBackend,
 	resolveConsoleUrl,
+	resolveGitHubApp,
 } from "./ipaas/config";
 import { IpaasRpcClient } from "./ipaas/client";
 
@@ -62,6 +65,11 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	ext.ipaasBaseUrl = resolved.baseUrl;
 	ext.ipaasConsoleUrl = resolveConsoleUrl({
 		setting: workspace.getConfiguration().get<string>(SETTING_CLOUD_CONSOLE_URL),
+		env: process.env,
+	});
+	ext.githubApp = resolveGitHubApp({
+		clientIdSetting: workspace.getConfiguration().get<string>(SETTING_GITHUB_APP_CLIENT_ID),
+		slugSetting: workspace.getConfiguration().get<string>(SETTING_GITHUB_APP_SLUG),
 		env: process.env,
 	});
 
@@ -148,7 +156,9 @@ function registerPreInitHandlers(): void {
 			affectsConfiguration("integrator.advanced.cloudRpcPath") ||
 			affectsConfiguration(SETTING_CLOUD_BACKEND) ||
 			affectsConfiguration(SETTING_CLOUD_API_BASE_URL) ||
-			affectsConfiguration(SETTING_CLOUD_CONSOLE_URL)
+			affectsConfiguration(SETTING_CLOUD_CONSOLE_URL) ||
+			affectsConfiguration(SETTING_GITHUB_APP_CLIENT_ID) ||
+			affectsConfiguration(SETTING_GITHUB_APP_SLUG)
 		) {
 			const selection = await window.showInformationMessage(
 				"WSO2 Integrator extension configuration changed. Please restart the editor for changes to take effect.",
