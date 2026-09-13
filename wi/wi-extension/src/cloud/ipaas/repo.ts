@@ -81,3 +81,24 @@ export function hasFileInPath(
 	const target = prefix ? `${prefix}/${fileName}` : fileName;
 	return paths.includes(target);
 }
+
+/**
+ * Whether a clone failed because the branch it asked for does not exist.
+ *
+ * A repository created for this integration a moment ago has no commits, and
+ * therefore no branches at all — not even the default one the picker offers.
+ * Asking for one fails outright, which is a repository to be filled rather
+ * than an error: the first push creates the branch.
+ */
+export function isMissingRemoteBranch(err: unknown): boolean {
+	const text = [
+		(err as { stderr?: unknown })?.stderr,
+		(err as { message?: unknown })?.message,
+	]
+		.filter((part): part is string => typeof part === "string")
+		.join("\n");
+	return (
+		/Remote branch .* not found in upstream/i.test(text) ||
+		/Could not find remote branch/i.test(text)
+	);
+}

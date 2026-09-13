@@ -46,6 +46,7 @@ import {
 import { buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
 import { buildAuthorizeUrl, buildInstallUrl } from "../../cloud/ipaas/github";
+import { isMissingRemoteBranch } from "../../cloud/ipaas/repo";
 import { IpaasRpcClient } from "../../cloud/ipaas/client";
 import { StateMachine } from "../../stateMachine";
 import { contextStore } from "../../cloud/stores/context-store";
@@ -356,25 +357,39 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 		const repoUrl = urlObj.href;
 
-		const clonedPath = await window.withProgress(
-			{
-				title: `Cloning repository ${params.repo.orgHandler}/${params.repo.repo}`,
-				location: ProgressLocation.Notification,
-			},
-			async (progress, cancellationToken) =>
-				newGit.clone(
-					repoUrl,
-					{
-						recursive: true,
-						ref: params.repo.branch,
-						parentPath: join(params.cwd, ".."),
-						progress: {
-							report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }),
+		const cloneInto = async (ref?: string) =>
+			window.withProgress(
+				{
+					title: `Cloning repository ${params.repo.orgHandler}/${params.repo.repo}`,
+					location: ProgressLocation.Notification,
+				},
+				async (progress, cancellationToken) =>
+					newGit.clone(
+						repoUrl,
+						{
+							recursive: true,
+							...(ref ? { ref } : {}),
+							parentPath: join(params.cwd, ".."),
+							progress: {
+								report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }),
+							},
 						},
-					},
-					cancellationToken,
-				),
-		);
+						cancellationToken,
+					),
+			);
+
+		let clonedPath: string;
+		try {
+			clonedPath = await cloneInto(params.repo.branch);
+		} catch (err) {
+			// A repository with no commits has no branches to check out. That is
+			// the ordinary state of one created for this integration moments
+			// ago, so take it as it is and let the first push create the branch.
+			if (!isMissingRemoteBranch(err)) {
+				throw err;
+			}
+			clonedPath = await cloneInto();
+		}
 
 		// Move everything from cwd into the cloned directory at subpath
 		const cwdFiles = readdirSync(params.cwd);
@@ -391,11 +406,20 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		const dotGit = await newGit.getRepositoryDotGit(newPath);
 		const repo = newGit.open(repoRoot, dotGit);
 
+		// An empty clone leaves HEAD unborn on whatever name the local git
+		// defaults to, which need not be the branch the component was told to
+		// build from. Point it at that branch before the first commit, or the
+		// push creates one nobody is looking for.
+		const startedEmpty = await newGit.isEmptyRepository(repoRoot);
 		await window.withProgress({ title: "Pushing the changes to your remote repository...", location: ProgressLocation.Notification }, async () => {
+			const branch = params.repo.branch || "main";
+			if (startedEmpty) {
+				await repo.exec(["symbolic-ref", "HEAD", `refs/heads/${branch}`]);
+			}
 			await repo.add(["."]);
 			await repo.commit(`Add integration source`);
 			const headRef = await repo.getHEADRef();
-			await repo.push(headRef?.upstream?.remote || "origin", headRef?.name || params.repo.branch);
+			await repo.push(headRef?.upstream?.remote || "origin", headRef?.name || branch, startedEmpty);
 		});
 
 		return newPath;

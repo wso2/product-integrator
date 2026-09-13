@@ -24,6 +24,7 @@ import {
 	hasFileInPath,
 	isSubPathEmpty,
 	normalizeSubPath,
+	isMissingRemoteBranch,
 } from "./repo";
 import { parseGitHubOwnerRepo } from "./repo-url";
 
@@ -136,4 +137,43 @@ describe("hasFileInPath", () => {
 		assert.equal(hasFileInPath(paths, "", "Ballerina.toml"), false));
 	it("finds one at the root", () =>
 		assert.equal(hasFileInPath(paths, "", "README.md"), true));
+});
+
+describe("isMissingRemoteBranch", () => {
+	// The shape the git wrapper throws: exitCode/gitCommand/stderr.
+	it("recognises the clone failure for a branch that does not exist", () => {
+		assert.strictEqual(
+			isMissingRemoteBranch({
+				exitCode: 128,
+				gitCommand: "clone",
+				stdout: "",
+				stderr: "fatal: Remote branch main not found in upstream origin",
+			}),
+			true,
+		);
+	});
+
+	it("recognises the message wherever it is carried", () => {
+		assert.strictEqual(
+			isMissingRemoteBranch(new Error("fatal: Remote branch develop not found in upstream origin")),
+			true,
+		);
+		assert.strictEqual(isMissingRemoteBranch({ stderr: "fatal: Could not find remote branch main" }), true);
+	});
+
+	// Everything else has to keep failing the clone: a missing branch is the
+	// one case where carrying on is right.
+	it("does not swallow other failures", () => {
+		for (const err of [
+			{ stderr: "fatal: Authentication failed for 'https://github.com/x/y.git/'" },
+			{ stderr: "fatal: repository 'https://github.com/x/y.git/' not found" },
+			{ stderr: "fatal: could not read Username" },
+			new Error("connect ETIMEDOUT"),
+			null,
+			undefined,
+			"a string",
+		]) {
+			assert.strictEqual(isMissingRemoteBranch(err), false, `should not match: ${JSON.stringify(err)}`);
+		}
+	});
 });
