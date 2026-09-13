@@ -41,6 +41,7 @@ import {
 	resolveGitHubApp,
 } from "./ipaas/config";
 import { IpaasRpcClient } from "./ipaas/client";
+import { restoreIntegrationSource } from "./cmds/restore-source-cmd";
 
 /**
  * Boot the cloud-connected functionality — mirrors the platform extension's activate():
@@ -144,6 +145,12 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 
 	// 13. Prompt restart when Advanced configuration keys change
 	registerPreInitHandlers();
+
+	// 15. Fetch the source of the integration this editor was opened for, if it
+	// has one and no working copy yet. Not awaited: the editor is usable while
+	// the clone runs, and a repository the user cannot reach must not hold up
+	// activation.
+	void restoreIntegrationSource();
 
 	// 16. Mark cloud Cloud functionality APIs as active
 	cloudAPIs.setActive(true);
