@@ -37,6 +37,7 @@ import {
 	toEnvironmentName,
 	toOrganization,
 	toProject,
+	toComponentHandle,
 } from "./mappers";
 import type { IpaasComponent, IpaasProject, IpaasWorkflowRun } from "./types";
 
@@ -470,4 +471,35 @@ describe("toComponentSource", () => {
 		it(`returns an empty source for ${name}`, () =>
 			assert.deepEqual(toComponentSource(input), {}));
 	}
+});
+
+describe("toComponentHandle", () => {
+	// The name addresses a cluster resource, so what the user typed has to be
+	// reduced to an RFC 1123 label before it is sent.
+	it("reduces a typed name to a resource name", () => {
+		const cases: Array<[string, string]> = [
+			["Sample-3", "sample-3"],
+			["My Integration", "my-integration"],
+			["already-fine", "already-fine"],
+			["Order_Service v2", "order-service-v2"],
+			["  spaced  ", "spaced"],
+			["--dashes--", "dashes"],
+			["UPPER", "upper"],
+		];
+		for (const [input, want] of cases) {
+			assert.strictEqual(toComponentHandle(input), want, `for ${JSON.stringify(input)}`);
+		}
+	});
+
+	// Rejected here, where the name is still in front of the user, rather than
+	// by the platform which can only say the component could not be created.
+	it("refuses a name with nothing to build on", () => {
+		for (const input of ["", "---", "!!!", "   "]) {
+			assert.throws(
+				() => toComponentHandle(input),
+				/at least one letter or digit/,
+				`for ${JSON.stringify(input)}`,
+			);
+		}
+	});
 });

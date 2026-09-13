@@ -132,6 +132,28 @@ export function toAppPath(subPath: string | undefined): string {
  * field and sending "" are different instructions, so neither appears without
  * the other.
  */
+/**
+ * The platform name for an integration, derived from what the user typed.
+ *
+ * The name addresses a cluster resource, so it must be an RFC 1123 label:
+ * lowercase alphanumerics and dashes. What the user typed is kept as the
+ * display name. Without this a capital letter or a space is rejected on
+ * create, and the platform can only answer that the component could not be
+ * made — never that its name was the problem.
+ */
+export function toComponentHandle(name: string): string {
+	const handle = name
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+	if (!handle) {
+		throw new Error(
+			`"${name}" cannot be used as an integration name: it needs at least one letter or digit.`,
+		);
+	}
+	return handle;
+}
+
 export function toCreateComponentBody(
 	req: CreateComponentReq,
 	repoSubPath: string,
@@ -142,7 +164,7 @@ export function toCreateComponentBody(
 		: null;
 	return {
 		metadata: {
-			name: req.name,
+			name: toComponentHandle(req.name),
 			annotations: {
 				[ANN_DISPLAY_NAME]: req.displayName || req.name,
 				[ANN_DESCRIPTION]: "",

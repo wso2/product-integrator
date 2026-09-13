@@ -194,6 +194,8 @@ describe("BffClient", () => {
 		assert.equal(await client.delete("/projects/p/components/c"), undefined);
 	});
 
+	// The status travels with the message: the platform's wording says what went
+	// wrong, never whether it refused the request or broke on its own.
 	it("raises the platform's message rather than the raw body", async () => {
 		const { client } = clientWith([
 			{
@@ -204,7 +206,7 @@ describe("BffClient", () => {
 		await assert.rejects(client.get("/components/x"), (err: unknown) => {
 			assert.ok(err instanceof IpaasError);
 			assert.equal(err.status, 404);
-			assert.equal(err.message, "component not found");
+			assert.equal(err.message, "component not found (HTTP 404)");
 			assert.equal(err.isNotFound, true);
 			assert.equal(err.isUnauthorized, false);
 			return true;

@@ -62,12 +62,22 @@ export class IpaasError extends Error {
 	}
 }
 
-/** Extract the platform's `message` field, falling back to the raw body. */
+/**
+ * Extract the platform's `message` field, falling back to the raw body.
+ *
+ * The status is kept alongside it. The platform's own wording says what went
+ * wrong but never how it failed, and the difference between a request it
+ * refused and one that broke on its side is the first thing anyone reading a
+ * report of the error needs.
+ */
 function describe(status: number, body: string): string {
 	try {
 		const parsed = JSON.parse(body);
 		if (parsed && typeof parsed.message === "string" && parsed.message) {
-			return parsed.message;
+			return `${parsed.message} (HTTP ${status})`;
+		}
+		if (parsed && typeof parsed.error === "string" && parsed.error) {
+			return `${parsed.error} (HTTP ${status})`;
 		}
 	} catch {
 		// Not JSON — a gateway error page or an empty body. Use it as-is.

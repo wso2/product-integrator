@@ -102,3 +102,20 @@ export function isMissingRemoteBranch(err: unknown): boolean {
 		/Could not find remote branch/i.test(text)
 	);
 }
+
+/**
+ * Files the editor writes into the workspace for its own use, which are not
+ * part of the integration and must not reach the user's repository.
+ *
+ * The container excludes these from git, but only when the workspace is
+ * already a repository. A cloud editor starts without one — the repository is
+ * chosen later, at deploy — so by the time there is something to exclude from,
+ * the source has already been copied into the clone. Filtering the copy is
+ * what holds in both cases.
+ */
+const EDITOR_LOCAL_ENTRIES = new Set([".mcp.json", ".vscode"]);
+
+/** Whether a workspace entry belongs to the editor rather than to the integration. */
+export function isEditorLocalEntry(name: string): boolean {
+	return EDITOR_LOCAL_ENTRIES.has(name);
+}

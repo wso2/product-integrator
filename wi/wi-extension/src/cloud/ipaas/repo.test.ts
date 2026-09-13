@@ -25,6 +25,7 @@ import {
 	isSubPathEmpty,
 	normalizeSubPath,
 	isMissingRemoteBranch,
+	isEditorLocalEntry,
 } from "./repo";
 import { parseGitHubOwnerRepo } from "./repo-url";
 
@@ -174,6 +175,22 @@ describe("isMissingRemoteBranch", () => {
 			"a string",
 		]) {
 			assert.strictEqual(isMissingRemoteBranch(err), false, `should not match: ${JSON.stringify(err)}`);
+		}
+	});
+});
+
+describe("isEditorLocalEntry", () => {
+	// These are written by the container for the editor's own use; a cloud
+	// editor has no repository when they are created, so nothing excludes them
+	// from git later.
+	it("excludes the editor's own workspace files", () => {
+		assert.strictEqual(isEditorLocalEntry(".mcp.json"), true);
+		assert.strictEqual(isEditorLocalEntry(".vscode"), true);
+	});
+
+	it("keeps everything belonging to the integration", () => {
+		for (const name of ["Ballerina.toml", "main.bal", "src", ".gitignore", "Config.toml", "mcp.json", ".vscoderc"]) {
+			assert.strictEqual(isEditorLocalEntry(name), false, `should keep: ${name}`);
 		}
 	});
 });

@@ -46,7 +46,7 @@ import {
 import { buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
 import { buildAuthorizeUrl, buildInstallUrl } from "../../cloud/ipaas/github";
-import { isMissingRemoteBranch } from "../../cloud/ipaas/repo";
+import { isEditorLocalEntry, isMissingRemoteBranch } from "../../cloud/ipaas/repo";
 import { IpaasRpcClient } from "../../cloud/ipaas/client";
 import { StateMachine } from "../../stateMachine";
 import { contextStore } from "../../cloud/stores/context-store";
@@ -397,6 +397,9 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		fs.mkdirSync(newPath, { recursive: true });
 
 		for (const file of cwdFiles) {
+			if (isEditorLocalEntry(file)) {
+				continue;
+			}
 			const cwdFilePath = join(params.cwd, file);
 			const destFilePath = join(newPath, file);
 			fs.cpSync(cwdFilePath, destFilePath, { recursive: true });
