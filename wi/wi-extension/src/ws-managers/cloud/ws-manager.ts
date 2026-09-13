@@ -296,11 +296,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			kind === "authorize"
 				? buildAuthorizeUrl(clientId, `${ext.ipaasConsoleUrl}/ghapp`, state)
 				: buildInstallUrl(slug, state);
-		// The exchange happens server-side, so a rejected code says nothing about
-		// which parameter GitHub disagreed with. Log what was actually asked for:
-		// redirect_uri must match byte-for-byte at exchange time, and it is the
-		// one parameter here that a deployment can get wrong.
-		ext.log(`Opening GitHub ${kind} flow: ${url}`);
+		ext.log(`Opening GitHub ${kind} flow`);
 		await env.openExternal(Uri.parse(url));
 		// Whatever the user does on that page changes which repositories are
 		// reachable, and GitHub returns here only when the App is configured
@@ -379,15 +375,19 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			);
 
 		let clonedPath: string;
+		let branchMissing = false;
 		try {
 			clonedPath = await cloneInto(params.repo.branch);
 		} catch (err) {
-			// A repository with no commits has no branches to check out. That is
-			// the ordinary state of one created for this integration moments
-			// ago, so take it as it is and let the first push create the branch.
+			// The branch does not exist yet — either the repository holds no
+			// commits at all, which is the ordinary state of one created for
+			// this integration moments ago, or it holds some but not under this
+			// name. Neither is a failure: take the repository as it is and
+			// create the branch on the way out.
 			if (!isMissingRemoteBranch(err)) {
 				throw err;
 			}
+			branchMissing = true;
 			clonedPath = await cloneInto();
 		}
 
@@ -414,12 +414,22 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		await window.withProgress({ title: "Pushing the changes to your remote repository...", location: ProgressLocation.Notification }, async () => {
 			const branch = params.repo.branch || "main";
 			if (startedEmpty) {
+				// An empty clone leaves HEAD unborn on whatever name the local
+				// git defaults to. symbolic-ref names it without needing a
+				// commit to branch from, which checkout has no way to do.
 				await repo.exec(["symbolic-ref", "HEAD", `refs/heads/${branch}`]);
+			} else if (branchMissing) {
+				// The repository has history but not this branch, so start it
+				// from whatever was checked out.
+				await repo.branch(branch, true);
 			}
 			await repo.add(["."]);
 			await repo.commit(`Add integration source`);
 			const headRef = await repo.getHEADRef();
-			await repo.push(headRef?.upstream?.remote || "origin", headRef?.name || branch, startedEmpty);
+			// A branch the remote has never seen needs its upstream set here;
+			// one that was cloned already has it.
+			const isNew = startedEmpty || branchMissing;
+			await repo.push(headRef?.upstream?.remote || "origin", headRef?.name || branch, isNew);
 		});
 
 		return newPath;
