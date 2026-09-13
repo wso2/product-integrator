@@ -46,6 +46,7 @@ import {
 import { buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
 import { buildAuthorizeUrl, buildInstallUrl } from "../../cloud/ipaas/github";
+import { IpaasRpcClient } from "../../cloud/ipaas/client";
 import { StateMachine } from "../../stateMachine";
 import { contextStore } from "../../cloud/stores/context-store";
 import { webviewStateStore } from "../../cloud/stores/webview-state-store";
@@ -300,6 +301,14 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		// one parameter here that a deployment can get wrong.
 		ext.log(`Opening GitHub ${kind} flow: ${url}`);
 		await env.openExternal(Uri.parse(url));
+		// Whatever the user does on that page changes which repositories are
+		// reachable, and GitHub returns here only when the App is configured
+		// with a setup URL. Forgetting now means the next look asks the
+		// platform again, so newly granted repositories appear on their own
+		// rather than after a window reload.
+		if (ext.clients.rpcClient instanceof IpaasRpcClient) {
+			ext.clients.rpcClient.resetGitHubInstallations();
+		}
 	}
 
 	async getBranches(params: GetBranchesReq): Promise<string[]> {
