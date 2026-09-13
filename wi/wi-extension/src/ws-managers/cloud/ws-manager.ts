@@ -280,8 +280,13 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		}
 
 		const callbackUri = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
+		// toString(true) — without it the query is percent-encoded a second time.
+		// In the browser the external URI is an http callback carrying the target
+		// as query parameters, and re-encoding turns "?a=1&b=2" into one
+		// parameter named "a%3D1%26b%3D2": the editor's own callback endpoint
+		// then reads none of them and drops the code instead of routing it.
 		const state = Buffer.from(
-			JSON.stringify({ origin: "vscode.wso2-integrator", orgId, callbackUri: callbackUri.toString() }),
+			JSON.stringify({ origin: "vscode.wso2-integrator", orgId, callbackUri: callbackUri.toString(true) }),
 			"binary",
 		).toString("base64");
 
@@ -289,7 +294,11 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			kind === "authorize"
 				? buildAuthorizeUrl(clientId, `${ext.ipaasConsoleUrl}/ghapp`, state)
 				: buildInstallUrl(slug, state);
-		ext.log(`Opening GitHub ${kind} flow`);
+		// The exchange happens server-side, so a rejected code says nothing about
+		// which parameter GitHub disagreed with. Log what was actually asked for:
+		// redirect_uri must match byte-for-byte at exchange time, and it is the
+		// one parameter here that a deployment can get wrong.
+		ext.log(`Opening GitHub ${kind} flow: ${url}`);
 		await env.openExternal(Uri.parse(url));
 	}
 

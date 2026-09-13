@@ -80,6 +80,59 @@ export function indexInstallations(
 	return index;
 }
 
+/** An owner the App can reach, in the shape the repository pickers render. */
+export interface GitOrg {
+	orgName: string;
+	orgHandler: string;
+	repositories: Array<{ name: string }>;
+}
+
+/**
+ * The owners the App can reach, each with its repositories.
+ *
+ * Built from the same installations the owner index is: an installation names
+ * the account it was installed on, and each repository names its own owner,
+ * which differs when a repository is shared into the installation from
+ * elsewhere. Both are listed, so a shared repository is reachable under the
+ * owner its URL actually carries.
+ *
+ * GitHub has no separate display name for an account here, so the login serves
+ * as both: it is what the picker shows and what the clone URL is built from.
+ */
+export function toGitOrgs(
+	entries: Array<{ installation: GitInstallation; repos: GitRepo[] }>,
+): GitOrg[] {
+	const byOwner = new Map<string, { login: string; repos: Set<string> }>();
+	const entryFor = (login: string) => {
+		const key = login.toLowerCase();
+		let existing = byOwner.get(key);
+		if (!existing) {
+			existing = { login, repos: new Set() };
+			byOwner.set(key, existing);
+		}
+		return existing;
+	};
+
+	for (const { installation, repos } of entries) {
+		if (!installation?.githubAccount) {
+			continue;
+		}
+		entryFor(installation.githubAccount);
+		for (const repo of repos ?? []) {
+			if (!repo?.name) {
+				continue;
+			}
+			entryFor(repo.owner || installation.githubAccount).repos.add(repo.name);
+		}
+	}
+
+	return [...byOwner.values()].map(({ login, repos }) => ({
+		orgName: login,
+		orgHandler: login,
+		repositories: [...repos].sort().map((name) => ({ name })),
+	}));
+}
+
 /** The installation covering an owner, matched case-insensitively as GitHub does. */
 export function installationFor(
 	index: Map<string, OwnerIndexEntry> | null,

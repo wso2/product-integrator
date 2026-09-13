@@ -24,6 +24,7 @@ import {
 	indexInstallations,
 	installationFor,
 	isGitHubAuthRequired,
+	toGitOrgs,
 } from "./github";
 
 describe("indexInstallations", () => {
@@ -130,5 +131,80 @@ describe("buildInstallUrl", () => {
 			"https://github.com/apps/wso2-cloud-git-connect-dev/installations/new",
 		);
 		assert.equal(url.searchParams.get("state"), "abc+def");
+	});
+});
+
+describe("toGitOrgs", () => {
+	const inst = (id: number, account: string) => ({
+		installationId: id,
+		githubAccount: account,
+	});
+
+	it("lists each installation account with its repositories", () => {
+		const orgs = toGitOrgs([
+			{
+				installation: inst(1, "acme"),
+				repos: [
+					{ name: "zebra", defaultBranch: "main" },
+					{ name: "apples", defaultBranch: "main" },
+				],
+			},
+		]);
+		assert.deepStrictEqual(orgs, [
+			{
+				orgName: "acme",
+				orgHandler: "acme",
+				repositories: [{ name: "apples" }, { name: "zebra" }],
+			},
+		]);
+	});
+
+	// A repository shared into an installation carries its own owner, and the
+	// clone URL is built from that owner, so it has to be listed under it.
+	it("lists a shared repository under its own owner", () => {
+		const orgs = toGitOrgs([
+			{
+				installation: inst(1, "acme"),
+				repos: [{ name: "shared", owner: "partner" }],
+			},
+		]);
+		const owners = orgs.map((o) => o.orgName).sort();
+		assert.deepStrictEqual(owners, ["acme", "partner"]);
+		assert.deepStrictEqual(
+			orgs.find((o) => o.orgName === "partner")?.repositories,
+			[{ name: "shared" }],
+		);
+	});
+
+	// The account is listed even with no repositories: the user has installed
+	// the App but granted it nothing yet, and the picker has to show the
+	// account so they can see that.
+	it("lists an installation with no repositories", () => {
+		assert.deepStrictEqual(toGitOrgs([{ installation: inst(1, "acme"), repos: [] }]), [
+			{ orgName: "acme", orgHandler: "acme", repositories: [] },
+		]);
+	});
+
+	it("merges installations that share an owner, case-insensitively", () => {
+		const orgs = toGitOrgs([
+			{ installation: inst(1, "Acme"), repos: [{ name: "one" }] },
+			{ installation: inst(2, "acme"), repos: [{ name: "two" }] },
+		]);
+		assert.strictEqual(orgs.length, 1);
+		assert.deepStrictEqual(orgs[0].repositories, [{ name: "one" }, { name: "two" }]);
+	});
+
+	it("skips an installation with no account and repositories with no name", () => {
+		const orgs = toGitOrgs([
+			{ installation: { installationId: 1, githubAccount: "" }, repos: [{ name: "x" }] },
+			{ installation: inst(2, "acme"), repos: [{ name: "" }, { name: "real" }] },
+		]);
+		assert.deepStrictEqual(orgs, [
+			{ orgName: "acme", orgHandler: "acme", repositories: [{ name: "real" }] },
+		]);
+	});
+
+	it("returns nothing when there are no installations", () => {
+		assert.deepStrictEqual(toGitOrgs([]), []);
 	});
 });

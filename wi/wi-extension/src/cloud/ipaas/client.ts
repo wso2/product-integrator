@@ -73,6 +73,7 @@ import {
 	type OwnerIndexEntry,
 	indexInstallations,
 	installationFor,
+	toGitOrgs,
 	isGitHubAuthRequired,
 } from "./github";
 import {
@@ -106,7 +107,10 @@ import type {
 
 export class IpaasRpcClient extends ChoreoRPCClient {
 	private readonly bff: BffClient;
-	private ownerIndex: Map<string, OwnerIndexEntry> | null = null;
+	private installations: Array<{
+		installation: GitInstallation;
+		repos: GitRepo[];
+	}> | null = null;
 
 	constructor(baseUrl: string) {
 		super();
@@ -498,8 +502,35 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 		string,
 		OwnerIndexEntry
 	> | null> {
-		if (this.ownerIndex) {
-			return this.ownerIndex;
+		try {
+			const entries = await this.installationEntries();
+			return entries && indexInstallations(entries);
+		} catch {
+			// Resolving a repository tolerates not knowing: a public repository
+			// needs no installation, so an unusable index is "unknown", not a
+			// failure to report here. The pickers report it instead, because
+			// there the answer is the whole point.
+			return null;
+		}
+	}
+
+	/**
+	 * The App's installations and their repositories, as fetched.
+	 *
+	 * Cached rather than the index built from it, because the repository
+	 * pickers need the repositories themselves and rebuilding costs one call
+	 * per installation either way.
+	 */
+	private async installationEntries(): Promise<Array<{
+		installation: GitInstallation;
+		repos: GitRepo[];
+	}> | null> {
+		// An empty result is not cached. Empty is what a user sees right before
+		// they go and install the App, so caching it would survive the install
+		// and leave the pickers permanently empty — the callback that would
+		// clear it does not arrive when GitHub has no setup URL to return to.
+		if (this.installations?.length) {
+			return this.installations;
 		}
 		try {
 			const installations = items(
@@ -513,14 +544,16 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 					repos: await this.installationRepos(installation.installationId),
 				})),
 			);
-			this.ownerIndex = indexInstallations(entries);
-			return this.ownerIndex;
+			this.installations = entries;
+			return entries;
 		} catch (err) {
-			// No authorization yet is the ordinary case, not a failure: public
-			// repositories still work without one.
-			if (!(err instanceof IpaasError && isGitHubAuthRequired(err.status))) {
-				ext.logError("Could not list GitHub App installations", err as Error);
+			// Missing authorization is a state with a remedy, not a failure, so
+			// it travels to the caller: the pickers turn it into the authorize
+			// prompt, and swallowing it here leaves them with nothing to show.
+			if (err instanceof IpaasError && isGitHubAuthRequired(err.status)) {
+				throw err;
 			}
+			ext.logError("Could not list GitHub App installations", err as Error);
 			return null;
 		}
 	}
@@ -533,6 +566,14 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 				),
 			);
 		} catch (err) {
+			// Missing authorization is not this installation's problem: the App
+			// is installed, but the user has never granted it, so every
+			// installation answers the same way and the remedy is the authorize
+			// flow. Reported rather than absorbed, or the pickers show an
+			// account whose repositories are silently always empty.
+			if (err instanceof IpaasError && isGitHubAuthRequired(err.status)) {
+				throw err;
+			}
 			// One suspended installation drops only its own repositories.
 			ext.logError(
 				`Could not list repositories of installation ${installationId}`,
@@ -544,7 +585,7 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 
 	/** Forget the cached index, after anything that can change which repositories are reachable. */
 	resetGitHubInstallations(): void {
-		this.ownerIndex = null;
+		this.installations = null;
 	}
 
 	/**
@@ -560,7 +601,6 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	}): Promise<void> {
 		try {
 			await this.bff.post("/git/github/installations", { code: params.code });
-			this.resetGitHubInstallations();
 		} catch (err) {
 			if (err instanceof IpaasError && isGitHubAuthRequired(err.status)) {
 				throw new Error(
@@ -568,6 +608,15 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 				);
 			}
 			throw err;
+		} finally {
+			// Also on failure. Binding is several steps — exchanging the code,
+			// then discovering the installations — and an error in a later one
+			// still leaves the authorization granted, so what is known about
+			// the reachable repositories is stale either way. Keeping the old
+			// answer here is what makes a failed bind look permanent when the
+			// grant actually went through, and sends the user to reload the
+			// window to see their repositories.
+			this.resetGitHubInstallations();
 		}
 	}
 
@@ -650,11 +699,20 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 
 	// Git credentials and organizations belong to the GitHub App flow, which is
 	// not wired yet. Empty keeps the pickers quiet rather than erroring.
+	/**
+	 * The GitHub accounts the App is installed on, with their repositories.
+	 *
+	 * Empty is the answer whenever the App has not been authorized or installed
+	 * yet, which is the state a fresh editor starts in — the pickers show
+	 * nothing and the user is sent to the install flow, rather than an error.
+	 */
 	override async getAuthorizedGitOrgs(): Promise<{
 		gitOrgs: GithubOrganization[];
 	}> {
-		return { gitOrgs: [] };
+		const entries = await this.installationEntries();
+		return { gitOrgs: entries ? toGitOrgs(entries) : [] };
 	}
+
 	override async getCredentials(): Promise<CredentialItem[]> {
 		return [];
 	}

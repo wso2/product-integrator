@@ -358,6 +358,16 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
                                     onChange={(e) => setOrg(e.target.value)}
                                 />
                                 <SmVSCodeLink onClick={() => wsClient.triggerGithubInstallFlow(orgId)}>Add Organization</SmVSCodeLink>
+                                {/* An empty list is the state a new editor starts in, and an
+                                    empty dropdown reads as a failure rather than as a step the
+                                    user has not taken yet. Say which step it is. */}
+                                {!loadingGitOrgs && !errorFetchingOrgs && gitOrgs.length === 0 && (
+                                    <div style={{ marginTop: 4, opacity: 0.8 }}>
+                                        No GitHub organization is connected yet. Choose <b>Add Organization</b> to
+                                        install the GitHub App, grant it the repository you want to use, then return
+                                        here — the list refreshes when this window regains focus.
+                                    </div>
+                                )}
                             </div>
 
                             <div style={{ position: "relative" }}>
