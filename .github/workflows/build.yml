@@ -923,6 +923,17 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
+      - name: Exclude build workspace from Windows Defender
+        # Whole workspace, applied up front, and verified — avoids Defender file-locking flakes in rcedit/cosign later.
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE"
+          $exclusions = (Get-MpPreference).ExclusionPath
+          if ($exclusions -notcontains "$env:GITHUB_WORKSPACE") {
+            throw "Windows Defender exclusion for $env:GITHUB_WORKSPACE did not apply (current exclusions: $exclusions)"
+          }
+          Write-Host "Windows Defender exclusion active for $env:GITHUB_WORKSPACE"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -1264,12 +1275,6 @@ jobs:
         if: ${{ inputs.build_packed_installers == true }}
         run: |
           cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
-      - name: Exclude build workspace from Windows Defender
-        if: ${{ inputs.build_packed_installers == true }}
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE\installers\windows"
       - name: Enable long paths (Windows)
         if: ${{ inputs.build_packed_installers == true }}
         continue-on-error: true
