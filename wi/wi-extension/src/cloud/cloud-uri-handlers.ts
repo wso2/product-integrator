@@ -61,6 +61,16 @@ export function activateURIHandlers() {
 					// request it made: `state` reaches here by way of the provider and
 					// the console, neither of which this editor controls.
 					const signInState = urlParams.get("state") || undefined;
+					// A provider that refused says so instead of returning a code. Said
+					// out loud here, because the alternative is an editor that shows
+					// nothing and looks as though the sign-in is still running.
+					const signInError = urlParams.get("error");
+					if (signInError) {
+						const detail = urlParams.get("error_description") || signInError;
+						ext.logError(`Sign in was not completed: ${detail}`, new Error(detail));
+						window.showErrorMessage(`Sign in was not completed: ${detail}`);
+						return;
+					}
 					if (authCode) {
 						ext.log("Initiating WSO2 Integrator sign in flow from auth code");
 						window.withProgress(
