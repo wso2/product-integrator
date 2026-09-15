@@ -65,7 +65,22 @@ import type {
 import { ext } from "../../extensionVariables";
 import { ChoreoRPCClient } from "../choreo-cli-rpc";
 import { BffClient, IpaasError, items, q, seg } from "./bff";
+import axios from "axios";
+import type { SecretStorage } from "vscode";
 import { decodeClaims } from "./claims";
+import {
+	buildAuthorizeUrl,
+	buildTokenBody,
+	decodeSignInNonce,
+	encodeSignInState,
+	generatePkce,
+	type IdpConfig,
+	newNonce,
+	type PendingSignIn,
+	type TokenResponse,
+	toStoredSession,
+} from "./oidc";
+import { SessionStore } from "./session";
 import { ENV_STS_TOKEN } from "./config";
 import {
 	type GitInstallation,
@@ -107,17 +122,50 @@ import type {
 
 export class IpaasRpcClient extends ChoreoRPCClient {
 	private readonly bff: BffClient;
+	/** The editor's own session, once the user has signed in. */
+	private readonly sessions: SessionStore;
+	/** The signed-in access token, "" when the injected one is still in use. */
+	private sessionToken = "";
+	/** What a sign-in in progress is waiting for; null when none is. */
+	private pendingSignIn: PendingSignIn | null = null;
+	/** undefined = not looked up yet, null = this deployment publishes none. */
+	private idp: IdpConfig | null | undefined = undefined;
 	private installations: Array<{
 		installation: GitInstallation;
 		repos: GitRepo[];
 	}> | null = null;
 
-	constructor(baseUrl: string) {
+	constructor(baseUrl: string, secrets: SecretStorage) {
 		super();
+		this.sessions = new SessionStore(secrets, (body) => this.exchangeForSession(body));
 		this.bff = new BffClient({
 			baseUrl,
-			getToken: () => process.env[ENV_STS_TOKEN] ?? "",
+			// The signed-in session when there is one, and the token the platform
+			// injected otherwise. The injected token is what makes a freshly
+			// provisioned editor work without asking anyone to sign in; it is
+			// also what expires, which is what signing in is for.
+			getToken: () => this.sessionToken || (process.env[ENV_STS_TOKEN] ?? ""),
 		});
+	}
+
+	/**
+	 * Bring the cached access token up to date.
+	 *
+	 * The transport reads the token synchronously on every request, so renewal
+	 * cannot happen there. It happens here instead, at the moments that precede
+	 * a burst of calls: activation, signing in, and the assistant asking.
+	 */
+	async refreshSession(): Promise<void> {
+		this.sessionToken = await this.sessions.accessToken(await this.idpConfig());
+	}
+
+	/** The token endpoint, for the session store's renewals. */
+	private async exchangeForSession(body: string): Promise<TokenResponse> {
+		const idp = await this.idpConfig();
+		if (!idp) {
+			throw new Error("no sign-in configuration");
+		}
+		return this.postToken(idp, body);
 	}
 
 	/** The raw transport, for callers that need an endpoint with no platform-core equivalent. */
@@ -219,22 +267,20 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	}
 
 	/**
-	 * Withheld, deliberately.
+	 * The platform token, for other extensions.
 	 *
-	 * This is what the extension hands to other extensions through
-	 * WICloudExtensionAPI.getStsToken, and Ballerina's copilot is the caller
-	 * (ballerina-extension/src/utils/ai/auth.ts). It spends the token against
-	 * the Choreo copilot backend, which does not accept an Integration Platform
-	 * token -- so returning the real one would send a credential to a service
-	 * that never issued it and still fail. Returning nothing fails closed.
+	 * Handed out through WICloudExtensionAPI.getStsToken, whose caller is
+	 * Ballerina's copilot (ballerina-extension/src/utils/ai/auth.ts): it
+	 * exchanges this at the copilot backend for a token of its own, and
+	 * re-exchanges when that one expires.
 	 *
-	 * The deploy path is unaffected: BffClient reads the token from the
-	 * environment directly rather than through here.
-	 *
-	 * Revert this to the real token once the consumers accept it.
+	 * Read from the environment on each call rather than captured, because the
+	 * copilot asks again after its own token expires, and by then the editor's
+	 * copy may have been replaced.
 	 */
 	override async getStsToken(): Promise<string> {
-		return "";
+		await this.refreshSession();
+		return this.sessionToken || (process.env[ENV_STS_TOKEN] ?? "");
 	}
 
 	override async getProjects(orgID: string): Promise<Project[]> {
@@ -406,6 +452,61 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	// Reads answer empty so the UI shows "nothing here" instead of an error.
 	// Writes refuse, because quietly succeeding at nothing is worse than saying
 	// so. Nothing is fabricated either way.
+
+	/**
+	 * The platform's OIDC endpoints, as the console publishes them.
+	 *
+	 * Read from the console's own config rather than configured again here: the
+	 * editor is told where the console is, the console already states which
+	 * provider and client it uses, and a second copy is one that can disagree.
+	 */
+	private async idpConfig(): Promise<IdpConfig | null> {
+		if (this.idp !== undefined) {
+			return this.idp;
+		}
+		this.idp = null;
+		if (!ext.ipaasConsoleUrl) {
+			return null;
+		}
+		try {
+			const response = await axios.get<Record<string, string>>(
+				`${ext.ipaasConsoleUrl}/config.json`,
+				{ timeout: 15_000, responseType: "json" },
+			);
+			const config = response.data ?? {};
+			const authorizeEndpoint = config.ASGARDEO_AUTHORIZE_ENDPOINT ?? "";
+			const tokenEndpoint = config.ASGARDEO_TOKEN_ENDPOINT ?? "";
+			const clientId = config.ASGARDEO_CLIENT_ID ?? "";
+			if (authorizeEndpoint && tokenEndpoint && clientId) {
+				this.idp = {
+					authorizeEndpoint,
+					tokenEndpoint,
+					clientId,
+					scope: config.ASGARDEO_SCOPE ?? "",
+				};
+			}
+		} catch (err) {
+			ext.logError("Could not read the console's sign-in configuration", err as Error);
+		}
+		return this.idp;
+	}
+
+	/** POST a form body to the provider's token endpoint. */
+	private async postToken(idp: IdpConfig, body: string): Promise<TokenResponse> {
+		const response = await axios.post<TokenResponse>(idp.tokenEndpoint, body, {
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			timeout: 30_000,
+			validateStatus: () => true,
+		});
+		if (response.status < 200 || response.status >= 300) {
+			throw new IpaasError(
+				response.status,
+				typeof response.data === "string" ? response.data : JSON.stringify(response.data ?? ""),
+				`Signing in failed (HTTP ${response.status})`,
+			);
+		}
+		return response.data ?? {};
+	}
 
 	private unsupported(feature: string): never {
 		throw new Error(
@@ -838,19 +939,90 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 		return this.unsupported("Git push credentials");
 	}
 
-	// Sign-in is not a step here: identity is the token the platform injected
-	// when it provisioned this editor, and there is no flow to start.
-	override async getSignInUrl(): Promise<string | undefined> {
-		return this.unsupported("Signing in");
+	/**
+	 * Where to send the user to sign in.
+	 *
+	 * The identity provider redirects only to an address registered against the
+	 * client, and an editor's address is a per-component subdomain that cannot
+	 * be. The console's callback is registered, so the editor asks to be
+	 * returned there and names itself in `state` for the console to forward —
+	 * the detour the GitHub App flow already takes, for the same reason.
+	 */
+	override async getSignInUrl({
+		callbackUrl,
+	}: { callbackUrl: string }): Promise<string | undefined> {
+		const idp = await this.idpConfig();
+		if (!idp) {
+			throw new Error(
+				"This deployment publishes no sign-in configuration, so the editor cannot start one. Reload the editor to obtain a fresh token.",
+			);
+		}
+		const redirectUri = `${ext.ipaasConsoleUrl}/signin`;
+		const pkce = generatePkce();
+		const nonce = newNonce();
+		this.pendingSignIn = { pkce, nonce, redirectUri };
+		return buildAuthorizeUrl(
+			idp,
+			redirectUri,
+			encodeSignInState(callbackUrl, nonce),
+			pkce.challenge,
+		);
 	}
-	override async getDevantSignInUrl(): Promise<string | undefined> {
-		return this.unsupported("Signing in");
+
+	/** One platform, one sign-in: the Devant entry point leads to the same place. */
+	override async getDevantSignInUrl(params: {
+		callbackUrl: string;
+	}): Promise<string | undefined> {
+		return this.getSignInUrl(params);
 	}
-	override async signInWithAuthCode(): Promise<UserInfo | undefined> {
-		return this.unsupported("Signing in");
+
+	/**
+	 * Redeem the code the console forwarded, and keep the session.
+	 *
+	 * The nonce is checked first: `state` travels by way of the provider and the
+	 * console, so a code arriving with one this editor never issued answers no
+	 * request it made.
+	 */
+	override async signInWithAuthCode(
+		authCode: string,
+		_region?: string,
+		_orgId?: string,
+		state?: string,
+	): Promise<UserInfo | undefined> {
+		const pending = this.pendingSignIn;
+		this.pendingSignIn = null;
+		if (!pending) {
+			throw new Error("No sign-in is in progress. Start one from the editor and try again.");
+		}
+		if (state !== undefined && decodeSignInNonce(state) !== pending.nonce) {
+			throw new Error("This sign-in does not answer a request from this editor.");
+		}
+		const idp = await this.idpConfig();
+		if (!idp) {
+			throw new Error("This deployment publishes no sign-in configuration.");
+		}
+		const session = toStoredSession(
+			await this.postToken(
+				idp,
+				buildTokenBody(idp, authCode, pending.redirectUri, pending.pkce.verifier),
+			),
+			Date.now(),
+		);
+		if (!session) {
+			throw new Error("Signing in returned no token.");
+		}
+		await this.sessions.write(session);
+		this.sessionToken = session.accessToken;
+		return this.getUserInfo();
 	}
-	override async signInDevantWithAuthCode(): Promise<UserInfo | undefined> {
-		return this.unsupported("Signing in");
+
+	override async signInDevantWithAuthCode(
+		authCode: string,
+		region?: string,
+		orgId?: string,
+		state?: string,
+	): Promise<UserInfo | undefined> {
+		return this.signInWithAuthCode(authCode, region, orgId, state);
 	}
 
 	override async startProxyServer(): Promise<StartProxyServerResp> {

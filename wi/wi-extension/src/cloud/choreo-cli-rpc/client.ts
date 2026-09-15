@@ -356,7 +356,8 @@ export class ChoreoRPCClient implements IChoreoRPCClient {
 		return response.loginUrl;
 	}
 
-	async signInWithAuthCode(authCode: string, region?: string, orgId?: string): Promise<UserInfo | undefined> {
+	/** `state` is accepted for the platform client, which checks it; the CLI has its own. */
+	async signInWithAuthCode(authCode: string, region?: string, orgId?: string, _state?: string): Promise<UserInfo | undefined> {
 		if (!this.client) {
 			throw new Error("RPC client is not initialized");
 		}
@@ -368,7 +369,8 @@ export class ChoreoRPCClient implements IChoreoRPCClient {
 		return response.userInfo;
 	}
 
-	async signInDevantWithAuthCode(authCode: string, region?: string, orgId?: string): Promise<UserInfo | undefined> {
+	/** `state` is accepted for the platform client, which checks it; the CLI has its own. */
+	async signInDevantWithAuthCode(authCode: string, region?: string, orgId?: string, _state?: string): Promise<UserInfo | undefined> {
 		if (!this.client) {
 			throw new Error("RPC client is not initialized");
 		}

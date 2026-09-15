@@ -100,7 +100,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	// The Integration Platform client still extends the RPC client, so the CLI
 	// keeps serving everything the platform has no endpoint for.
 	const rpcClient =
-		ext.cloudBackend === "ipaas" ? new IpaasRpcClient(ext.ipaasBaseUrl) : new ChoreoRPCClient();
+		ext.cloudBackend === "ipaas" ? new IpaasRpcClient(ext.ipaasBaseUrl, context.secrets) : new ChoreoRPCClient();
 	ext.clients = { rpcClient };
 
 	// 14. Register VS Code commands and URI handlers early — before waiting for RPC
@@ -129,6 +129,12 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	});
 
 	// 9. Initialize authentication (restores session from CLI if already signed in)
+	// A stored platform session is restored first, so the calls initAuth makes
+	// use it rather than the token injected at provisioning, which may have
+	// expired while the editor sat idle.
+	if (rpcClient instanceof IpaasRpcClient) {
+		await rpcClient.refreshSession();
+	}
 	await authProvider.getState().initAuth();
 
 	// 10. Sync auth state when the login dialog signs in via the wso2-platform provider.

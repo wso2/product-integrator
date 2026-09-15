@@ -57,6 +57,10 @@ export function activateURIHandlers() {
 					const urlParams = new URLSearchParams(uri.query);
 					const authCode = urlParams.get("code");
 					const region = urlParams.get("region") || "";
+					// Carried through so the client can check the callback answers a
+					// request it made: `state` reaches here by way of the provider and
+					// the console, neither of which this editor controls.
+					const signInState = urlParams.get("state") || undefined;
 					if (authCode) {
 						ext.log("Initiating WSO2 Integrator sign in flow from auth code");
 						window.withProgress(
@@ -69,9 +73,9 @@ export function activateURIHandlers() {
 									const orgId = contextStore?.getState().state?.selected?.org?.id?.toString();
 									let userInfo: UserInfo | undefined;
 									if (extName === "Devant") {
-										userInfo = await ext.clients.rpcClient.signInDevantWithAuthCode(authCode, region, orgId);
+										userInfo = await ext.clients.rpcClient.signInDevantWithAuthCode(authCode, region, orgId, signInState);
 									} else {
-										userInfo = await ext.clients.rpcClient.signInWithAuthCode(authCode, region, orgId);
+										userInfo = await ext.clients.rpcClient.signInWithAuthCode(authCode, region, orgId, signInState);
 									}
 									if (userInfo) {
 										if (contextStore?.getState().state?.selected) {
