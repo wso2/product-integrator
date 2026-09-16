@@ -106,12 +106,15 @@ export interface BffOptions {
 	/** Returns the bearer token for the next request, or "" when there is none. */
 	getToken: () => string;
 	/**
-	 * Called when the platform refuses the credential, before the error is
-	 * thrown. The editor's token expires an hour after it is provisioned, so
-	 * this is the ordinary end of a session rather than an exceptional one, and
-	 * the user needs to be offered the way back rather than left reading a 401.
+	 * Called when the platform refuses the credential. Returns whether a new one
+	 * was obtained, in which case the request is sent again with it.
+	 *
+	 * An access token lasts an hour and the editor holds the means to renew it,
+	 * so a refusal is usually a token that aged out mid-session rather than a
+	 * user who must sign in again. Renewing and retrying here keeps that
+	 * invisible; only a refusal that survives the renewal reaches the caller.
 	 */
-	onUnauthorized?: () => void;
+	onUnauthorized?: () => Promise<boolean> | boolean;
 	timeoutMs?: number;
 }
 
@@ -122,6 +125,7 @@ export class BffClient {
 		method: Method,
 		path: string,
 		body?: unknown,
+		retried = false,
 	): Promise<T> {
 		const token = normalizeBearerToken(this.options.getToken());
 		const config: AxiosRequestConfig = {
@@ -165,8 +169,12 @@ export class BffClient {
 
 		if (status < 200 || status >= 300) {
 			const error = new IpaasError(status, text, describe(status, text));
-			if (error.isUnauthorized) {
-				this.options.onUnauthorized?.();
+			// Once only. A credential the platform refuses twice is not one more
+			// renewal away from working, and retrying on would spin.
+			if (error.isUnauthorized && !retried) {
+				if (await this.options.onUnauthorized?.()) {
+					return this.request<T>(method, path, body, true);
+				}
 			}
 			throw error;
 		}

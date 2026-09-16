@@ -40,7 +40,7 @@ interface Captured {
 function clientWith(
 	responses: Array<{ status: number; data: string } | Error>,
 	token = "tok",
-	onUnauthorized?: () => void,
+	onUnauthorized?: () => Promise<boolean> | boolean,
 ): { client: BffClient; captured: Captured[] } {
 	const captured: Captured[] = [];
 	let call = 0;
@@ -257,16 +257,20 @@ describe("BffClient onUnauthorized", () => {
 	// than left reading a 401 from whatever they were doing.
 	it("reports a refused credential, and still throws", async () => {
 		const refusals: number[] = [];
-		const { client } = clientWith([{ status: 401, data: '{"message":"Authentication failed."}' }], "tok", () =>
-			refusals.push(1),
-		);
+		const { client } = clientWith([{ status: 401, data: '{"message":"Authentication failed."}' }], "tok", () => {
+			refusals.push(1);
+			return false;
+		});
 		await assert.rejects(client.get("/orgs"));
 		assert.equal(refusals.length, 1);
 	});
 
 	it("reports a forbidden credential too", async () => {
 		const refusals: number[] = [];
-		const { client } = clientWith([{ status: 403, data: "" }], "tok", () => refusals.push(1));
+		const { client } = clientWith([{ status: 403, data: "" }], "tok", () => {
+			refusals.push(1);
+			return false;
+		});
 		await assert.rejects(client.get("/orgs"));
 		assert.equal(refusals.length, 1);
 	});
@@ -281,10 +285,57 @@ describe("BffClient onUnauthorized", () => {
 				{ status: 500, data: "" },
 			],
 			"tok",
-			() => refusals.push(1),
+			() => {
+				refusals.push(1);
+				return false;
+			},
 		);
 		await assert.rejects(client.get("/a"));
 		await assert.rejects(client.get("/b"));
 		assert.equal(refusals.length, 0);
+	});
+});
+
+describe("BffClient renewal", () => {
+	// An access token lives an hour and the editor holds the means to renew it,
+	// so a refusal mid-session is usually a token that aged out. Renewing and
+	// sending the request again keeps that invisible to whoever asked.
+	it("sends the request again once the credential is renewed", async () => {
+		let renewals = 0;
+		const { client, captured } = clientWith(
+			[
+				{ status: 401, data: "" },
+				{ status: 200, data: '{"ok":true}' },
+			],
+			"tok",
+			() => {
+				renewals++;
+				return true;
+			},
+		);
+		assert.deepEqual(await client.get("/orgs"), { ok: true });
+		assert.equal(renewals, 1);
+		assert.equal(captured.length, 2, "the request should have been sent twice");
+	});
+
+	// A credential refused after a renewal is not one more renewal away from
+	// working, and retrying on would spin.
+	it("gives up after one renewal", async () => {
+		let renewals = 0;
+		const { client, captured } = clientWith(
+			[
+				{ status: 401, data: "" },
+				{ status: 401, data: "" },
+				{ status: 401, data: "" },
+			],
+			"tok",
+			() => {
+				renewals++;
+				return true;
+			},
+		);
+		await assert.rejects(client.get("/orgs"));
+		assert.equal(renewals, 1);
+		assert.equal(captured.length, 2);
 	});
 });

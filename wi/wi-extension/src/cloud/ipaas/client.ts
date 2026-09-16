@@ -148,7 +148,7 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 			// provisioned editor work without asking anyone to sign in; it is
 			// also what expires, which is what signing in is for.
 			getToken: () => this.sessionToken || (process.env[ENV_STS_TOKEN] ?? ""),
-			onUnauthorized: () => this.offerSignIn(),
+			onUnauthorized: () => this.renewOrOfferSignIn(),
 		});
 	}
 
@@ -161,6 +161,26 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	 */
 	async refreshSession(): Promise<void> {
 		this.sessionToken = await this.sessions.accessToken(await this.idpConfig());
+	}
+
+	/**
+	 * Renew the session if it can be renewed, and ask the user to sign in only
+	 * when it cannot.
+	 *
+	 * An access token lives an hour and the refresh token that replaces it lives
+	 * far longer, so most refusals are a token that aged out while the editor
+	 * was open — renewable without telling anyone. Signing in is for when there
+	 * is nothing left to renew from: no session at all, or a refresh token that
+	 * has itself expired or been revoked.
+	 */
+	private async renewOrOfferSignIn(): Promise<boolean> {
+		const before = this.sessionToken;
+		await this.refreshSession();
+		if (this.sessionToken && this.sessionToken !== before) {
+			return true;
+		}
+		this.offerSignIn();
+		return false;
 	}
 
 	/**
