@@ -96,13 +96,23 @@ export function activateURIHandlers() {
 										}
 										const region = await ext.clients.rpcClient.getCurrentRegion();
 										await ext.authProvider?.getState().loginSuccess(userInfo, region);
+										ext.log(`Signed in as ${userInfo.userEmail || userInfo.userId || "the returned user"}`);
 										window.showInformationMessage(`Successfully signed into ${ext.terminologies?.cloudName}`);
+									} else {
+										// The exchange resolved without a user. Nothing above throws in
+										// that case, so without this line the flow ends in silence.
+										ext.logError(
+											"WSO2 Integrator sign in returned no user details",
+											new Error("No user info"),
+										);
+										window.showErrorMessage("Sign in failed. Please check the logs for more details.");
 									}
 								} catch (error: any) {
 									if (!(error instanceof ResponseError) || ![ErrorCode.NoOrgsAvailable, ErrorCode.NoAccountAvailable].includes(error.code)) {
 										window.showErrorMessage("Sign in failed. Please check the logs for more details.");
 									}
-									ext.logError(`WSO2 Integrator sign in Failed: ${error.message}`, error as Error);
+									const status = typeof error?.status === "number" ? ` (HTTP ${error.status})` : "";
+									ext.logError(`WSO2 Integrator sign in Failed${status}: ${error.message}`, error as Error);
 								}
 							},
 						);

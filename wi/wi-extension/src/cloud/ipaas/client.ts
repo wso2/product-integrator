@@ -1071,6 +1071,9 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 		if (!idp) {
 			throw new Error("This deployment publishes no sign-in configuration.");
 		}
+		// Each stage is logged: when one of them stalls rather than fails, the
+		// last line written is the only evidence of where it stopped.
+		ext.log("Exchanging the authorization code for a session token");
 		const session = toStoredSession(
 			await this.postToken(
 				idp,
@@ -1083,6 +1086,9 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 		}
 		await this.sessions.write(session);
 		this.sessionToken = session.accessToken;
+		ext.log(
+			`Session stored, valid until ${new Date(session.expiresAt).toISOString()}${session.refreshToken ? " and renewable" : " with no refresh token"}; reading the signed-in user`,
+		);
 		return this.getUserInfo();
 	}
 
