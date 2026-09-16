@@ -40,6 +40,7 @@ interface Captured {
 function clientWith(
 	responses: Array<{ status: number; data: string } | Error>,
 	token = "tok",
+	onUnauthorized?: () => void,
 ): { client: BffClient; captured: Captured[] } {
 	const captured: Captured[] = [];
 	let call = 0;
@@ -62,6 +63,7 @@ function clientWith(
 		client: new BffClient({
 			baseUrl: "https://api.test",
 			getToken: () => token,
+			onUnauthorized,
 		}),
 		captured,
 	};
@@ -246,5 +248,43 @@ describe("BffClient", () => {
 			assert.match(err.message, /connect ECONNREFUSED/);
 			return true;
 		});
+	});
+});
+
+describe("BffClient onUnauthorized", () => {
+	// The editor's token expires an hour after it is provisioned, so a refusal
+	// is the ordinary end of a session. The user is offered the way back rather
+	// than left reading a 401 from whatever they were doing.
+	it("reports a refused credential, and still throws", async () => {
+		const refusals: number[] = [];
+		const { client } = clientWith([{ status: 401, data: '{"message":"Authentication failed."}' }], "tok", () =>
+			refusals.push(1),
+		);
+		await assert.rejects(client.get("/orgs"));
+		assert.equal(refusals.length, 1);
+	});
+
+	it("reports a forbidden credential too", async () => {
+		const refusals: number[] = [];
+		const { client } = clientWith([{ status: 403, data: "" }], "tok", () => refusals.push(1));
+		await assert.rejects(client.get("/orgs"));
+		assert.equal(refusals.length, 1);
+	});
+
+	// Nothing about a missing component or a broken upstream says the user needs
+	// to sign in, and prompting then would train them to dismiss it.
+	it("says nothing for failures that are not about the credential", async () => {
+		const refusals: number[] = [];
+		const { client } = clientWith(
+			[
+				{ status: 404, data: "" },
+				{ status: 500, data: "" },
+			],
+			"tok",
+			() => refusals.push(1),
+		);
+		await assert.rejects(client.get("/a"));
+		await assert.rejects(client.get("/b"));
+		assert.equal(refusals.length, 0);
 	});
 });

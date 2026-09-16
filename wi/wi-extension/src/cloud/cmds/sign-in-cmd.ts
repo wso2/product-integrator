@@ -32,14 +32,19 @@ export function signInCommand(context: ExtensionContext) {
 				// Cancel any pending session creation from accounts menu
 				ext.authProvider?.cancelPendingSessionCreation();
 				ext.log("Signing in to WSO2 Integrator");
+				// toString(true) -- without it the query is percent-encoded a second
+				// time. In the browser the external URI is an http callback carrying
+				// the target as query parameters, and re-encoding collapses them into
+				// one nameless parameter: the editor's own callback endpoint then
+				// reads none of them and drops the result instead of routing it.
 				const callbackUrl = await vscode.env.asExternalUri(vscode.Uri.parse(`${vscode.env.uriScheme}://wso2.wso2-integrator/signin`));
 
-				ext.log("Generating WSO2 Integrator login URL for " + callbackUrl.toString());
+				ext.log("Generating WSO2 Integrator login URL for " + callbackUrl.toString(true));
 				const loginUrl = await window.withProgress({ title: "Generating Login URL...", location: ProgressLocation.Notification }, async () => {
 					if (webviewStateStore.getState().state?.extensionName === "Devant") {
-						return ext.clients.rpcClient.getDevantSignInUrl({ callbackUrl: callbackUrl.toString() });
+						return ext.clients.rpcClient.getDevantSignInUrl({ callbackUrl: callbackUrl.toString(true) });
 					}
-					return ext.clients.rpcClient.getSignInUrl({ callbackUrl: callbackUrl.toString() });
+					return ext.clients.rpcClient.getSignInUrl({ callbackUrl: callbackUrl.toString(true) });
 				});
 
 				if (loginUrl) {

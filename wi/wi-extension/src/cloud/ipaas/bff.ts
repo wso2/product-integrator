@@ -105,6 +105,13 @@ export interface BffOptions {
 	baseUrl: string;
 	/** Returns the bearer token for the next request, or "" when there is none. */
 	getToken: () => string;
+	/**
+	 * Called when the platform refuses the credential, before the error is
+	 * thrown. The editor's token expires an hour after it is provisioned, so
+	 * this is the ordinary end of a session rather than an exceptional one, and
+	 * the user needs to be offered the way back rather than left reading a 401.
+	 */
+	onUnauthorized?: () => void;
 	timeoutMs?: number;
 }
 
@@ -157,7 +164,11 @@ export class BffClient {
 		}
 
 		if (status < 200 || status >= 300) {
-			throw new IpaasError(status, text, describe(status, text));
+			const error = new IpaasError(status, text, describe(status, text));
+			if (error.isUnauthorized) {
+				this.options.onUnauthorized?.();
+			}
+			throw error;
 		}
 		// A 204, or a 200 with an empty body, is a legitimate "nothing to return".
 		return text ? (JSON.parse(text) as T) : (undefined as unknown as T);

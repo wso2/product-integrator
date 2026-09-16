@@ -62,11 +62,12 @@ import type {
 	UpdateProjectReq,
 	UserInfo,
 } from "@wso2/wso2-platform-core";
+import { WICommandIds } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
 import { ChoreoRPCClient } from "../choreo-cli-rpc";
 import { BffClient, IpaasError, items, q, seg } from "./bff";
 import axios from "axios";
-import type { SecretStorage } from "vscode";
+import { type SecretStorage, commands, window } from "vscode";
 import { decodeClaims } from "./claims";
 import {
 	buildAuthorizeUrl,
@@ -124,6 +125,8 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	private readonly bff: BffClient;
 	/** The editor's own session, once the user has signed in. */
 	private readonly sessions: SessionStore;
+	/** True while a sign-in prompt is on screen, so only one is. */
+	private signInOffered = false;
 	/** The signed-in access token, "" when the injected one is still in use. */
 	private sessionToken = "";
 	/** What a sign-in in progress is waiting for; null when none is. */
@@ -145,6 +148,7 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 			// provisioned editor work without asking anyone to sign in; it is
 			// also what expires, which is what signing in is for.
 			getToken: () => this.sessionToken || (process.env[ENV_STS_TOKEN] ?? ""),
+			onUnauthorized: () => this.offerSignIn(),
 		});
 	}
 
@@ -157,6 +161,38 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	 */
 	async refreshSession(): Promise<void> {
 		this.sessionToken = await this.sessions.accessToken(await this.idpConfig());
+	}
+
+	/**
+	 * Offer the user the way back when the platform stops accepting them.
+	 *
+	 * Once per refusal at a time, not once per failed request: a single action
+	 * can put several calls in flight, and a prompt for each would bury the
+	 * editor under identical dialogs. Signing in is the recovery because the
+	 * token this editor was provisioned with cannot be renewed -- it arrived
+	 * without anything to renew it from.
+	 */
+	private offerSignIn(): void {
+		if (this.signInOffered) {
+			return;
+		}
+		this.signInOffered = true;
+		window
+			.showWarningMessage(
+				"Your Integration Platform session has expired. Sign in to continue.",
+				"Sign In",
+			)
+			.then(
+				(choice) => {
+					this.signInOffered = false;
+					if (choice === "Sign In") {
+						commands.executeCommand(WICommandIds.SignIn);
+					}
+				},
+				() => {
+					this.signInOffered = false;
+				},
+			);
 	}
 
 	/** The token endpoint, for the session store's renewals. */
