@@ -130,7 +130,14 @@ export function commitAndPushToGitCommand(context: ExtensionContext) {
 								selectedComp.component?.spec?.source?.secretRef || "",
 							);
 							await window.withProgress({ title: "Setting new remote...", location: ProgressLocation.Notification }, async () => {
-								await repo.addRemote("cloud-editor-remote", urlObj.href);
+								// An earlier attempt that failed later on -- a rejected push,
+								// say -- leaves this remote behind, and adding it again is an
+								// error that would end the retry before it reached the push
+								// that is actually being retried.
+								const existing = await repo.getRemotes();
+								if (!existing.some((item) => item.name === "cloud-editor-remote")) {
+									await repo.addRemote("cloud-editor-remote", urlObj.href);
+								}
 								const remotes = await repo.getRemotes();
 								matchingRemote = remotes.find((item) => item.name === "cloud-editor-remote");
 							});
