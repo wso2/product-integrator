@@ -466,7 +466,19 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 				`Integration "${created.name}" was created with a warning: ${created.warning}`,
 			);
 		}
-		return toComponentKind(created);
+		const kind = toComponentKind(created);
+		// The repository the platform just bound, read back the way the listing
+		// reads it. Without it the component goes into the cache with no source,
+		// and the editor -- which decides whether an integration is the one open
+		// in front of it by matching that source against the workspace -- cannot
+		// recognise the integration it has only just created.
+		kind.spec.source = toComponentSource(
+			await this.componentRepository(
+				created?.handler || created?.name || "",
+				params.projectHandle,
+			),
+		);
+		return kind;
 	}
 
 	/**
