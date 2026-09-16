@@ -27,7 +27,6 @@
  */
 
 import type { SecretStorage } from "vscode";
-import { ext } from "../../extensionVariables";
 import {
 	buildRefreshBody,
 	type IdpConfig,
@@ -47,6 +46,8 @@ export class SessionStore {
 		private readonly secrets: SecretStorage,
 		private readonly exchange: (body: string) => Promise<TokenResponse>,
 		private readonly now: () => number = () => Date.now(),
+		/** Where a failed renewal is reported. Injected so this stays testable. */
+		private readonly logError: (message: string, error: Error) => void = () => undefined,
 	) {}
 
 	async read(): Promise<StoredSession | null> {
@@ -111,7 +112,7 @@ export class SessionStore {
 				// A failure that is not the provider's answer -- offline, a gateway
 				// hiccup -- leaves the session alone, so a network blip does not
 				// sign the user out.
-				ext.logError("Could not renew the platform session", err as Error);
+				this.logError("Could not renew the platform session", err as Error);
 				return null;
 			} finally {
 				this.refreshing = null;

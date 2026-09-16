@@ -140,7 +140,9 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 
 	constructor(baseUrl: string, secrets: SecretStorage) {
 		super();
-		this.sessions = new SessionStore(secrets, (body) => this.exchangeForSession(body));
+		this.sessions = new SessionStore(secrets, (body) => this.exchangeForSession(body), undefined, (message, error) =>
+			ext.logError(message, error),
+		);
 		this.bff = new BffClient({
 			baseUrl,
 			// The signed-in session when there is one, and the token the platform
