@@ -74,3 +74,16 @@ export function secondsUntilExpiry(
 	}
 	return Math.floor((claims.exp * 1000 - nowMs) / 1000);
 }
+
+/**
+ * Whether a token is past its expiry.
+ *
+ * A token carrying no readable expiry is reported as *not* expired: it cannot be
+ * judged from here, and refusing it would strand a deployment whose IdP issues
+ * tokens in a shape this code does not read. The caller finds out from the first
+ * refusal instead, which is the behaviour it had anyway.
+ */
+export function tokenExpired(token: string, nowMs: number): boolean {
+	const remaining = secondsUntilExpiry(decodeClaims(token), nowMs);
+	return remaining !== null && remaining <= 0;
+}

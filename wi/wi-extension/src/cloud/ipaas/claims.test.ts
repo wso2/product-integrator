@@ -18,7 +18,7 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { decodeClaims, secondsUntilExpiry } from "./claims";
+import { decodeClaims, secondsUntilExpiry, tokenExpired } from "./claims";
 
 /** Assemble a token with the given payload. Only the payload segment is read. */
 function token(payload: unknown): string {
@@ -87,5 +87,38 @@ describe("secondsUntilExpiry", () => {
 	it("returns null when there is no expiry to read", () => {
 		assert.equal(secondsUntilExpiry({}, now), null);
 		assert.equal(secondsUntilExpiry(null, now), null);
+	});
+});
+
+describe("tokenExpired", () => {
+	const now = 1_700_000_000_000;
+
+	it("reports a token past its expiry", () => {
+		assert.equal(tokenExpired(token({ sub: "u", exp: now / 1000 - 1 }), now), true);
+	});
+
+	it("reports a token still within its expiry", () => {
+		assert.equal(tokenExpired(token({ sub: "u", exp: now / 1000 + 600 }), now), false);
+	});
+
+	// The boundary is the moment it stops being usable, not the moment after.
+	it("treats the exact expiry instant as expired", () => {
+		assert.equal(tokenExpired(token({ sub: "u", exp: now / 1000 }), now), true);
+	});
+
+	// An expired token still carries a subject. Anything deciding "is this user
+	// signed in" from the claims alone would say yes.
+	it("is expired even though the claims still name a user", () => {
+		const dead = token({ sub: "user-1", email: "a@b.c", exp: now / 1000 - 3600 });
+		assert.equal(decodeClaims(dead)?.sub, "user-1");
+		assert.equal(tokenExpired(dead, now), true);
+	});
+
+	// Unreadable is not the same as expired: refusing a token whose shape this
+	// code cannot parse would strand a deployment whose IdP issues another.
+	it("does not call an unreadable or expiry-less token expired", () => {
+		assert.equal(tokenExpired(token({ sub: "u" }), now), false);
+		assert.equal(tokenExpired("not-a-jwt", now), false);
+		assert.equal(tokenExpired("", now), false);
 	});
 });

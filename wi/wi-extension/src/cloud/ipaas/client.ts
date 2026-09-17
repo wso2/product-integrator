@@ -68,7 +68,7 @@ import { ChoreoRPCClient } from "../choreo-cli-rpc";
 import { BffClient, IpaasError, items, q, seg } from "./bff";
 import axios from "axios";
 import { type SecretStorage, commands, window } from "vscode";
-import { decodeClaims } from "./claims";
+import { decodeClaims, tokenExpired } from "./claims";
 import {
 	buildAuthorizeUrl,
 	buildTokenBody,
@@ -194,6 +194,33 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	 * token this editor was provisioned with cannot be renewed -- it arrived
 	 * without anything to renew it from.
 	 */
+	/**
+	 * The token in force: a stored session when there is one, otherwise the token
+	 * the editor was provisioned with. Those are different credentials with
+	 * different lifetimes, and only the session one survives a sign-in, so
+	 * anything reasoning about "am I signed in" has to read this rather than the
+	 * environment.
+	 */
+	private async currentToken(): Promise<string> {
+		await this.refreshSession();
+		return this.sessionToken || (process.env[ENV_STS_TOKEN] ?? "");
+	}
+
+	/**
+	 * The token to authenticate with, prompting when there is nothing usable
+	 * left. An expired token is not a quieter kind of signed-in: without this the
+	 * editor carries a dead credential into every call and the user sees a series
+	 * of unexplained failures instead of one offer to sign in.
+	 */
+	private async usableToken(): Promise<string> {
+		const token = await this.currentToken();
+		if (!token || tokenExpired(token, Date.now())) {
+			this.offerSignIn();
+			return "";
+		}
+		return token;
+	}
+
 	private offerSignIn(): void {
 		if (this.signInOffered) {
 			return;
@@ -249,11 +276,19 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	 * platform token is issued for one organization.
 	 */
 	override async getUserInfo(): Promise<UserInfo> {
-		const token = process.env[ENV_STS_TOKEN] ?? "";
+		// The live token, not the provisioned one: after a sign-in the session
+		// holds the user's identity and the environment still holds whatever the
+		// editor booted with.
+		const token = await this.currentToken();
 		const claims = decodeClaims(token);
-		if (!claims?.sub) {
+		// An expired token still carries a subject, so checking the claims alone
+		// would report a signed-in user whose every request is about to be
+		// refused — the editor would look connected and behave as though it were
+		// not. Treat it as signed out, and say so once.
+		if (!claims?.sub || tokenExpired(token, Date.now())) {
+			this.offerSignIn();
 			throw new Error(
-				"No Integration Platform session was found. Reload the editor to obtain a fresh token, then try again.",
+				"Your Integration Platform session has expired. Sign in to continue.",
 			);
 		}
 
@@ -337,8 +372,17 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	 * copy may have been replaced.
 	 */
 	override async getStsToken(): Promise<string> {
-		await this.refreshSession();
-		return this.sessionToken || (process.env[ENV_STS_TOKEN] ?? "");
+		// Handed to other extensions (the assistant, the Ballerina tooling), which
+		// authenticate with it against their own services. They cannot prompt for
+		// this editor's session, so a dead token has to be caught here or it
+		// surfaces as an unexplained failure inside whichever of them used it
+		// next. The token is still returned: this is the same value as before,
+		// with the offer to sign in added.
+		const token = await this.currentToken();
+		if (!token || tokenExpired(token, Date.now())) {
+			this.offerSignIn();
+		}
+		return token;
 	}
 
 	override async getProjects(orgID: string): Promise<Project[]> {
