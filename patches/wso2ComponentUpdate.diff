@@ -1984,7 +1984,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,695 @@
+@@ -0,0 +1,711 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2527,7 +2527,10 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +					stampSeedMarker(target, version);
 +					log?.(`Adopted existing seed ${id}@${version} (contains the bundled payload)`);
 +				} catch (err) {
-+					log?.(`Failed to stamp adopted seed ${id}@${version} (will retry next launch): ${err}`);
++					// A permanently unstampable seed (read-only components home) is a real failure
++					// state: the containment walk re-runs synchronously on EVERY launch until the
++					// stamp succeeds, not just once.
++					log?.(`ERROR: failed to stamp adopted seed ${id}@${version}; the containment walk will repeat on every launch until this succeeds: ${err}`);
 +				}
 +				continue;
 +			}
@@ -2551,15 +2554,28 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +			// Copy first, swap after: an incomplete target survives until a full replacement is
 +			// ready, so a copy failure (disk full, an antivirus holding a handle) can never turn
 +			// a partially working install into one with no runtime at all. The swap claims the
-+			// old tree with an atomic rename — exactly one process wins, so a process stalled
-+			// between its marker check and this point cannot remove a tree a faster instance
-+			// completed — and restores it if putting the new tree in place fails. A crashed swap
-+			// leaves `<target>.repair-<pid>`, swept as stale above.
++			// old tree with an atomic rename (one winner per tree) and restores it if putting
++			// the new tree in place fails. A crashed swap leaves `<target>.repair-<pid>`, swept
++			// as stale above. The marker re-check below skips the swap when a faster instance
++			// completed the seed while this one was copying; a completion landing in the
++			// remaining window is replaced with identical content, which is harmless.
++			if (fs.existsSync(marker)) {
++				fs.rmSync(path.toNamespacedPath(staging), { recursive: true, force: true });
++				log?.(`Another instance completed seeding ${id}@${version} while this one was copying; discarding own copy`);
++				continue;
++			}
 +			let claimed: string | undefined;
 +			if (fs.existsSync(target)) {
 +				claimed = `${target}.repair-${process.pid}`;
 +				try {
 +					fs.renameSync(path.toNamespacedPath(target), path.toNamespacedPath(claimed));
++					// rename() keeps the renamed tree's own mtime, which on a real install is
++					// weeks old — without a refresh, the age guard in isActiveSeedingDir reads
++					// the claim as stale the moment it exists, and a concurrent sweep/GC could
++					// delete it in the claim-to-swap window, leaving the restore below with
++					// nothing to rename back.
++					const now = new Date();
++					fs.utimesSync(path.toNamespacedPath(claimed), now, now);
 +				} catch {
 +					claimed = undefined; // a racing instance owns or replaced it; our rename below decides
 +				}
@@ -3714,7 +3730,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,208 @@
+@@ -0,0 +1,225 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3921,6 +3937,23 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		strictEqual(isActiveSeedingDir(componentDir, '1.0.0.seeding-999999999'), false);
 +		strictEqual(isActiveSeedingDir(componentDir, '1.0.0.seeding'), false);
 +		strictEqual(isActiveSeedingDir(componentDir, '1.0.0'), false);
++	});
++
++	test('a repair claim made by rename must refresh its mtime to stay protected', () => {
++		// rename() keeps the renamed tree's own (old) mtime, so a claim over a real seed reads
++		// as stale to the age guard the moment it exists — the seeder must utimes it after
++		// claiming, or a concurrent sweep/GC can delete the claimed tree mid-swap.
++		const componentDir = join(componentsHome, 'ballerina-runtime');
++		const oldSeed = join(componentDir, '1.0.0');
++		fs.mkdirSync(oldSeed, { recursive: true });
++		const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
++		fs.utimesSync(oldSeed, twoDaysAgo, twoDaysAgo);
++		const claimName = `1.0.0.repair-${process.pid}`;
++		fs.renameSync(oldSeed, join(componentDir, claimName));
++		strictEqual(isActiveSeedingDir(componentDir, claimName), false); // the trap
++		const now = new Date();
++		fs.utimesSync(join(componentDir, claimName), now, now);
++		strictEqual(isActiveSeedingDir(componentDir, claimName), true); // the required refresh
 +	});
 +});
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/update/browser/postUpdateWidget.ts
