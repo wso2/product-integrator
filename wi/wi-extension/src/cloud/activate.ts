@@ -42,8 +42,6 @@ import {
 } from "./ipaas/config";
 import { IpaasRpcClient } from "./ipaas/client";
 import { restoreIntegrationSource } from "./cmds/restore-source-cmd";
-import { ENV_ACTIVITY_FILE, startActivityReporter } from "./ipaas/activity";
-import { writeFile } from "node:fs/promises";
 
 /**
  * Boot the cloud-connected functionality — mirrors the platform extension's activate():
@@ -160,28 +158,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	// activation.
 	void restoreIntegrationSource();
 
-	// 16. Tell the container someone is looking at this editor, so it can tell an
-	// abandoned tab from a backgrounded one. Only a Cloud Editor sets the
-	// variable; everywhere else this is inert.
-	const activityFile = process.env[ENV_ACTIVITY_FILE];
-	if (activityFile) {
-		const reporter = startActivityReporter(activityFile, {
-			touch: async (path) => {
-				await writeFile(path, `${Date.now()}\n`);
-			},
-			isFocused: () => window.state.focused,
-			onFocusChange: (listener) => {
-				const subscription = window.onDidChangeWindowState(listener);
-				return () => subscription.dispose();
-			},
-			setInterval: (handler, ms) => setInterval(handler, ms),
-			clearInterval: (handle) => clearInterval(handle),
-			logError: ext.logError.bind(ext),
-		});
-		context.subscriptions.push({ dispose: () => reporter.stop() });
-	}
-
-	// 17. Mark cloud Cloud functionality APIs as active
+	// 16. Mark cloud Cloud functionality APIs as active
 	cloudAPIs.setActive(true);
 }
 
