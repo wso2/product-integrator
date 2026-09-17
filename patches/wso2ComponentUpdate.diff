@@ -588,7 +588,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	getStagingHome,
 +	ILocalComponentEntry,
 +	ILocalComponentsManifest,
-+	isLiveSeedingDir,
++	isActiveSeedingDir,
 +	LOCAL_MANIFEST_SCHEMA_VERSION,
 +	readLocalManifest,
 +	reconcileBundledVersions,
@@ -1661,8 +1661,8 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			// A `<version>.seeding-<pid>` staging (or `.repair-<pid>` claim) directory owned by a
 +			// live process is a second instance's copy in flight (seeding runs before the
 +			// single-instance lock). Deleting it mid-copy re-opens the partial-seed race; stale
-+			// ones are collected as usual.
-+			if (isLiveSeedingDir(version)) {
++			// or aged ones are collected as usual.
++			if (isActiveSeedingDir(componentDir, version)) {
 +				continue;
 +			}
 +			try {
@@ -1984,7 +1984,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,608 @@
+@@ -0,0 +1,695 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2358,16 +2358,30 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 + */
 +const SEEDING_DIR_RE = /\.(?:seeding|repair)(?:-(?<pid>\d+))?$/;
 +
++/** A staging directory older than this cannot be a live copy (a first-run seed takes minutes). */
++const MAX_SEEDING_AGE_MS = 24 * 60 * 60 * 1000;
++
 +/**
-+ * Whether a directory name under `components/<id>/` is a seeding staging (or repair-claim)
-+ * directory that a LIVE process still owns. The garbage collector must skip these: deleting
-+ * one mid-copy re-opens the partial-seed race the per-pid staging protocol closes. A
-+ * pid-less name (the pre-pid staging format) or a dead owner marks the directory as stale
-+ * and collectable.
++ * Whether a directory under `components/<id>/` is a seeding staging (or repair-claim)
++ * directory that a LIVE process still owns. The garbage collector and the stale sweep must
++ * skip these: deleting one mid-copy re-opens the partial-seed race the per-pid staging
++ * protocol closes. A pid-less name (the pre-pid staging format) or a dead owner marks the
++ * directory as stale and collectable — and so does age: pids are recycled (quickly, on
++ * Windows), so a leftover from before a reboot can carry the pid of an unrelated live
++ * process and would otherwise be skipped forever. The staging root's mtime is set when the
++ * copy starts, so a >1-day-old "live" dir is treated as stale; a copy that genuinely spans
++ * that (hibernation mid-first-boot) loses its rename and retries on the next launch.
 + */
-+export function isLiveSeedingDir(name: string): boolean {
++export function isActiveSeedingDir(parentDir: string, name: string): boolean {
 +	const pid = SEEDING_DIR_RE.exec(name)?.groups?.pid;
-+	return !!pid && isPidAlive(parseInt(pid, 10));
++	if (!pid || !isPidAlive(parseInt(pid, 10))) {
++		return false;
++	}
++	try {
++		return Date.now() - fs.statSync(path.toNamespacedPath(path.join(parentDir, name))).mtimeMs < MAX_SEEDING_AGE_MS;
++	} catch {
++		return false;
++	}
 +}
 +
 +function isPidAlive(pid: number): boolean {
@@ -2380,7 +2394,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +	}
 +}
 +
-+/** Removes leftover `*.seeding*` staging directories whose owning process is gone. */
++/** Removes leftover `*.seeding*` / `*.repair-*` directories whose owning process is gone. */
 +function sweepStaleSeedingDirs(componentDir: string, log?: (message: string) => void): void {
 +	let entries: fs.Dirent[];
 +	try {
@@ -2389,13 +2403,70 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		return; // component dir doesn't exist yet
 +	}
 +	for (const entry of entries) {
-+		if (!entry.isDirectory() || !SEEDING_DIR_RE.test(entry.name) || isLiveSeedingDir(entry.name)) {
++		if (!entry.isDirectory() || !SEEDING_DIR_RE.test(entry.name) || isActiveSeedingDir(componentDir, entry.name)) {
 +			continue;
 +		}
 +		try {
 +			fs.rmSync(path.toNamespacedPath(path.join(componentDir, entry.name)), { recursive: true, force: true });
 +			log?.(`Swept stale seeding directory ${entry.name}`);
 +		} catch { /* best effort; the seeder never reuses another pid's staging path */ }
++	}
++}
++
++/**
++ * Cheap structural check that `target` contains everything `srcDir` does: every source
++ * entry exists in the target with the same kind, and no file with content in the source is
++ * empty in the target. Extra target entries, sizes and file contents are deliberately NOT
++ * compared — component homes gain and change files at runtime (ICP writes its logs and
++ * database into its home, the Ballerina home gains a `dependencies` link), so equality
++ * checks would reject healthy seeds and delete live data.
++ */
++function seedContainsSource(srcDir: string, target: string): boolean {
++	let entries: fs.Dirent[];
++	try {
++		entries = fs.readdirSync(path.toNamespacedPath(srcDir), { withFileTypes: true });
++	} catch {
++		return false;
++	}
++	for (const entry of entries) {
++		const srcPath = path.join(srcDir, entry.name);
++		const dstPath = path.join(target, entry.name);
++		try {
++			if (entry.isSymbolicLink()) {
++				fs.lstatSync(path.toNamespacedPath(dstPath)); // must exist in some form
++			} else if (entry.isDirectory()) {
++				if (!fs.statSync(path.toNamespacedPath(dstPath)).isDirectory() || !seedContainsSource(srcPath, dstPath)) {
++					return false;
++				}
++			} else if (entry.isFile()) {
++				const dstStat = fs.statSync(path.toNamespacedPath(dstPath));
++				if (!dstStat.isFile() || (dstStat.size === 0 && fs.statSync(path.toNamespacedPath(srcPath)).size > 0)) {
++					return false;
++				}
++			}
++		} catch {
++			return false; // missing or unreadable counterpart
++		}
++	}
++	return true;
++}
++
++/**
++ * Writes the completion marker into `dir`, fsync'd so the marker cannot itself be the torn
++ * file. The payload is NOT fsync'd — per-file fsync of a multi-hundred-MB tree stalls the
++ * first boot — so a power cut in the write-back seconds after the promoting rename can in
++ * principle persist the rename and marker while losing payload data. Accepted residual
++ * risk: closing it by verifying payload stats against the marker on later boots would
++ * false-positive on the runtime mutations described on `seedContainsSource` and delete
++ * live data, which is worse than the narrow window it would guard.
++ */
++function stampSeedMarker(dir: string, version: string): void {
++	const fd = fs.openSync(path.toNamespacedPath(path.join(dir, SEED_COMPLETE_MARKER)), 'w');
++	try {
++		fs.writeSync(fd, version);
++		fs.fsyncSync(fd);
++	} finally {
++		fs.closeSync(fd);
 +	}
 +}
 +
@@ -2415,10 +2486,11 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 + * directory — never a shared one, which a second instance's cleanup used to gut mid-copy,
 + * letting the first instance rename a tree with holes into place, permanently (the
 + * existence check then trusted it forever; only a manual delete recovered). The marker is
-+ * written last, so a committed directory without it is recognized as partial and re-seeded
-+ * on the next launch (unless the bundled source is gone after an editor-only update, when a
-+ * partial tree is still the best available). The rename loser fails on "target exists" and
-+ * just cleans up its own staging.
++ * written last, so a committed directory without it is recognized as suspect on the next
++ * launch and either adopted in place (when it still contains the bundled payload) or
++ * replaced copy-first (unless the bundled source is gone after an editor-only update, when
++ * a partial tree is still the best available). The rename loser fails on "target exists"
++ * and just cleans up its own staging.
 + */
 +export function seedBundledComponents(
 +	componentsHome: string,
@@ -2445,23 +2517,21 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +				log?.(`Seed ${id}@${version} lacks its completion marker but no bundled source remains; leaving it in place`);
 +				continue;
 +			}
-+			// Claim the partial tree by atomically renaming it aside before deleting: exactly
-+			// one process wins the rename, and the delete then acts on a private name. Without
-+			// the claim, a process stalled between the marker check above and an rm of `target`
-+			// could delete a tree that a faster instance completed in the meantime
-+			// (check-then-act). A crashed repair leaves `<target>.repair-<pid>`, swept as stale
-+			// above; a lost claim (another instance got there first) just falls through to the
-+			// copy path, whose own rename loses cleanly if that instance completes the seed.
-+			const claimed = `${target}.repair-${process.pid}`;
-+			try {
-+				fs.renameSync(path.toNamespacedPath(target), path.toNamespacedPath(claimed));
-+				log?.(`Claimed incomplete seed ${id}@${version}; re-seeding`);
-+			} catch (err) {
-+				log?.(`Could not claim incomplete seed ${id}@${version} for repair (racing instance, or files in use): ${err}`);
++			// Adopt a marker-less tree in place when it already contains everything the bundle
++			// does: every install seeded before the marker existed is marker-less, and making
++			// them all delete + re-copy hundreds of MB on the first launch after an update —
++			// synchronously, before any window — is a cost healthy installs must not pay. This
++			// also keeps a verified updater download whose version equals the bundled one.
++			if (seedContainsSource(srcDir, target)) {
++				try {
++					stampSeedMarker(target, version);
++					log?.(`Adopted existing seed ${id}@${version} (contains the bundled payload)`);
++				} catch (err) {
++					log?.(`Failed to stamp adopted seed ${id}@${version} (will retry next launch): ${err}`);
++				}
++				continue;
 +			}
-+			try {
-+				fs.rmSync(path.toNamespacedPath(claimed), { recursive: true, force: true });
-+			} catch { /* leftover .repair dir is swept as stale on the next run */ }
++			log?.(`Seed ${id}@${version} is missing bundled payload; re-seeding`);
 +		}
 +		if (!srcExists) {
 +			continue;
@@ -2477,21 +2547,38 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +			fs.mkdirSync(path.dirname(target), { recursive: true });
 +			fs.cpSync(path.toNamespacedPath(srcDir), path.toNamespacedPath(staging), { recursive: true });
 +			ensureExecutablePermissions(staging);
-+			// The marker is fsync'd so it cannot itself be the torn file. The payload is NOT
-+			// fsync'd — per-file fsync of a multi-hundred-MB tree stalls the first boot — so a
-+			// power cut in the write-back seconds after the rename can in principle persist the
-+			// rename and marker while losing payload data. Accepted residual risk: closing it by
-+			// verifying payload stats against the marker on later boots would false-positive
-+			// and delete LIVE data, because component homes mutate at runtime (ICP writes its
-+			// logs and database into its home; the Ballerina home gains a `dependencies` link).
-+			const fd = fs.openSync(path.toNamespacedPath(path.join(staging, SEED_COMPLETE_MARKER)), 'w');
-+			try {
-+				fs.writeSync(fd, version);
-+				fs.fsyncSync(fd);
-+			} finally {
-+				fs.closeSync(fd);
++			stampSeedMarker(staging, version);
++			// Copy first, swap after: an incomplete target survives until a full replacement is
++			// ready, so a copy failure (disk full, an antivirus holding a handle) can never turn
++			// a partially working install into one with no runtime at all. The swap claims the
++			// old tree with an atomic rename — exactly one process wins, so a process stalled
++			// between its marker check and this point cannot remove a tree a faster instance
++			// completed — and restores it if putting the new tree in place fails. A crashed swap
++			// leaves `<target>.repair-<pid>`, swept as stale above.
++			let claimed: string | undefined;
++			if (fs.existsSync(target)) {
++				claimed = `${target}.repair-${process.pid}`;
++				try {
++					fs.renameSync(path.toNamespacedPath(target), path.toNamespacedPath(claimed));
++				} catch {
++					claimed = undefined; // a racing instance owns or replaced it; our rename below decides
++				}
 +			}
-+			fs.renameSync(path.toNamespacedPath(staging), path.toNamespacedPath(target));
++			try {
++				fs.renameSync(path.toNamespacedPath(staging), path.toNamespacedPath(target));
++			} catch (err) {
++				if (claimed) {
++					try {
++						fs.renameSync(path.toNamespacedPath(claimed), path.toNamespacedPath(target));
++					} catch { /* target was replaced by a racing instance; the claimed dir is swept as stale */ }
++				}
++				throw err;
++			}
++			if (claimed) {
++				try {
++					fs.rmSync(path.toNamespacedPath(claimed), { recursive: true, force: true });
++				} catch { /* leftover .repair dir is swept as stale on the next run */ }
++			}
 +			log?.(`Seeded ${id}@${version} from ${srcDir}`);
 +		} catch (err) {
 +			// Best-effort cleanup: a failing rm here must not escape the catch, or one broken
@@ -2500,7 +2587,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +				fs.rmSync(path.toNamespacedPath(staging), { recursive: true, force: true });
 +			} catch { /* best effort */ }
 +			if (fs.existsSync(marker)) {
-+				log?.(`Another instance completed seeding ${id}@${version} first`);
++				log?.(`Another instance completed seeding ${id}@${version} first (own attempt failed with: ${err})`);
 +			} else {
 +				log?.(`Failed to seed ${id}@${version}: ${err}`);
 +			}
@@ -3627,7 +3714,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,154 @@
+@@ -0,0 +1,208 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3651,7 +3738,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +import * as os from 'os';
 +import { join } from '../../../../base/common/path.js';
 +import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-+import { compareVersions, isLiveSeedingDir, SEED_COMPLETE_MARKER, seedBundledComponents } from '../../node/wso2ComponentsManifest.js';
++import { compareVersions, isActiveSeedingDir, SEED_COMPLETE_MARKER, seedBundledComponents } from '../../node/wso2ComponentsManifest.js';
 +
 +suite('wso2ComponentsManifest - compareVersions', () => {
 +	ensureNoDisposablesAreLeakedInTestSuite();
@@ -3735,7 +3822,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		strictEqual(fs.readFileSync(join(target(), 'readme.txt'), 'utf8'), 'user-modified');
 +	});
 +
-+	test('a partial seed (no marker) is deleted and re-seeded when the source remains', () => {
++	test('a partial seed (no marker) is replaced when the source remains', () => {
 +		// The field failure: a racing second instance (or power loss after the rename) commits
 +		// a versioned directory with holes; existence alone must never count as seeded.
 +		fs.mkdirSync(join(target(), 'bin'), { recursive: true });
@@ -3744,6 +3831,47 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		strictEqual(fs.readFileSync(join(target(), 'bin', 'bal'), 'utf8'), 'launcher');
 +		strictEqual(fs.readFileSync(join(target(), 'readme.txt'), 'utf8'), 'hello');
 +		strictEqual(fs.existsSync(join(target(), SEED_COMPLETE_MARKER)), true);
++	});
++
++	test('a marker-less seed containing the bundled payload is adopted in place, not re-copied', () => {
++		// Every install seeded before the marker existed is marker-less; a healthy one must be
++		// stamped, not deleted and re-copied — runtime mutations (extra files, changed content)
++		// must survive the adoption.
++		fs.cpSync(srcDir, target(), { recursive: true });
++		fs.writeFileSync(join(target(), 'readme.txt'), 'mutated at runtime');
++		fs.writeFileSync(join(target(), 'icp.log'), 'runtime-created');
++		seedBundledComponents(componentsHome, seeds());
++		strictEqual(fs.readFileSync(join(target(), SEED_COMPLETE_MARKER), 'utf8'), '1.0.0');
++		strictEqual(fs.readFileSync(join(target(), 'readme.txt'), 'utf8'), 'mutated at runtime');
++		strictEqual(fs.readFileSync(join(target(), 'icp.log'), 'utf8'), 'runtime-created');
++	});
++
++	test('a marker-less seed with a truncated file is re-seeded, not adopted', () => {
++		// A zero-length counterpart of a non-empty source file is the signature of a torn
++		// power-loss write; containment must reject it.
++		fs.cpSync(srcDir, target(), { recursive: true });
++		fs.writeFileSync(join(target(), 'bin', 'bal'), '');
++		seedBundledComponents(componentsHome, seeds());
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'bal'), 'utf8'), 'launcher');
++		strictEqual(fs.existsSync(join(target(), SEED_COMPLETE_MARKER)), true);
++	});
++
++	test('a failed re-seed keeps the existing tree instead of leaving no runtime', function () {
++		if (process.platform === 'win32') {
++			this.skip(); // read-only dir semantics differ; the protocol is copy-first on all platforms
++		}
++		// Copy-first, swap-after: when staging cannot even be created, the incomplete-but-present
++		// tree must survive (the old delete-then-copy order destroyed it).
++		fs.mkdirSync(join(target(), 'bin'), { recursive: true });
++		fs.writeFileSync(join(target(), 'bin', 'bal'), 'incomplete but present');
++		const componentDir = join(componentsHome, 'ballerina-runtime');
++		fs.chmodSync(componentDir, 0o555);
++		try {
++			seedBundledComponents(componentsHome, seeds());
++		} finally {
++			fs.chmodSync(componentDir, 0o755);
++		}
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'bal'), 'utf8'), 'incomplete but present');
 +	});
 +
 +	test('a marker-less seed is left in place when the bundled source is gone', () => {
@@ -3762,24 +3890,37 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		const stalePidless = join(componentDir, '1.0.0.seeding');
 +		const staleDeadPid = join(componentDir, '1.0.0.seeding-999999999');
 +		const staleRepair = join(componentDir, '1.0.0.repair-999999999');
++		const staleReusedPid = join(componentDir, '0.8.0.seeding-' + process.pid); // live pid, but aged
 +		const liveOwnPid = join(componentDir, '0.9.0.seeding-' + process.pid);
-+		for (const dir of [stalePidless, staleDeadPid, staleRepair, liveOwnPid]) {
++		for (const dir of [stalePidless, staleDeadPid, staleRepair, staleReusedPid, liveOwnPid]) {
 +			fs.mkdirSync(dir, { recursive: true });
 +		}
++		const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
++		fs.utimesSync(staleReusedPid, twoDaysAgo, twoDaysAgo);
 +		seedBundledComponents(componentsHome, seeds());
 +		strictEqual(fs.existsSync(stalePidless), false);
 +		strictEqual(fs.existsSync(staleDeadPid), false);
 +		strictEqual(fs.existsSync(staleRepair), false);
++		strictEqual(fs.existsSync(staleReusedPid), false);
 +		strictEqual(fs.existsSync(liveOwnPid), true);
 +	});
 +
-+	test('isLiveSeedingDir recognizes only live-pid staging and repair names', () => {
-+		strictEqual(isLiveSeedingDir(`1.0.0.seeding-${process.pid}`), true);
-+		strictEqual(isLiveSeedingDir(`1.0.0.repair-${process.pid}`), true);
-+		strictEqual(isLiveSeedingDir('1.0.0.seeding-999999999'), false);
-+		strictEqual(isLiveSeedingDir('1.0.0.repair-999999999'), false);
-+		strictEqual(isLiveSeedingDir('1.0.0.seeding'), false);
-+		strictEqual(isLiveSeedingDir('1.0.0'), false);
++	test('isActiveSeedingDir requires a live pid AND a recent directory', () => {
++		// Also the guard `garbageCollectComponentVersions` relies on to leave a second
++		// instance's in-flight copy alone (the service itself needs the electron-main harness,
++		// so the wiring is not testable from this layer).
++		const componentDir = join(componentsHome, 'ballerina-runtime');
++		const fresh = '1.0.0.seeding-' + process.pid;
++		const aged = '1.1.0.repair-' + process.pid; // pid reuse: live pid must not keep an old dir alive
++		fs.mkdirSync(join(componentDir, fresh), { recursive: true });
++		fs.mkdirSync(join(componentDir, aged), { recursive: true });
++		const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
++		fs.utimesSync(join(componentDir, aged), twoDaysAgo, twoDaysAgo);
++		strictEqual(isActiveSeedingDir(componentDir, fresh), true);
++		strictEqual(isActiveSeedingDir(componentDir, aged), false);
++		strictEqual(isActiveSeedingDir(componentDir, '1.0.0.seeding-999999999'), false);
++		strictEqual(isActiveSeedingDir(componentDir, '1.0.0.seeding'), false);
++		strictEqual(isActiveSeedingDir(componentDir, '1.0.0'), false);
 +	});
 +});
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/update/browser/postUpdateWidget.ts
