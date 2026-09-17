@@ -23,6 +23,7 @@
       <ComponentGroupRef Id="IntegratorComponents" />
       <ComponentRef Id="IntegratorShortcutComponent" />
       <ComponentRef Id="CleanupFoldersComponent" />
+      <ComponentRef Id="CleanupUserDataComponent" />
     </Feature>
 
   </Package>
