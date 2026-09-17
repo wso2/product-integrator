@@ -83,6 +83,7 @@ export interface ProjectStructureArtifactResponse {
     type: DIRECTORY_MAP;
     path: string;
     icon: string;
+    moduleName?: string;
     position?: NodePosition;
     context?: string;
     resources?: ProjectStructureArtifactResponse[];
