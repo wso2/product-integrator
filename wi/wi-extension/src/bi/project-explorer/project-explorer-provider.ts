@@ -332,6 +332,7 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     const entries: ProjectExplorerEntry[] = [];
     const projectPath = project.projectPath;
     const isLibrary = project.isLibrary ?? false;
+    const agentBuilder = isAgentBuilderMode();
 
     // ---------- Entry Points ----------
     if (!isLibrary) {
@@ -345,10 +346,15 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
         entryPoints.resourceUri = Uri.parse(`bi-category:${projectPath}`);
         entryPoints.contextValue = 'entryPoint';
         entryPoints.children = [];
-        if (project.directoryMap[DIRECTORY_MAP.AUTOMATION].length > 0) {
+        // Agent Builder exposes MCP services as its only entry point. Automations and
+        // every other service protocol (HTTP, GraphQL, ...) stay hidden so they cannot
+        // be opened from the tree.
+        if (!agentBuilder && project.directoryMap[DIRECTORY_MAP.AUTOMATION].length > 0) {
             entryPoints.children.push(...getComponents(project.directoryMap[DIRECTORY_MAP.AUTOMATION], DIRECTORY_MAP.AUTOMATION, projectPath));
         }
-        entryPoints.children.push(...getComponents(project.directoryMap[DIRECTORY_MAP.SERVICE], DIRECTORY_MAP.SERVICE, projectPath));
+        const services = project.directoryMap[DIRECTORY_MAP.SERVICE] ?? [];
+        entryPoints.children.push(...getComponents(
+            agentBuilder ? services.filter(isMcpService) : services, DIRECTORY_MAP.SERVICE, projectPath));
         if (entryPoints.children.length > 0) {
             entryPoints.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
         }
@@ -403,7 +409,7 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     if (agents.children.length > 0) {
         agents.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
     }
-    if (isAgentBuilderMode()) {
+    if (agentBuilder) {
         entries.unshift(agents);
     } else {
         entries.push(agents);
@@ -534,6 +540,13 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     }
 
     return entries;
+}
+
+/**
+ * A service artifact is an MCP service when it is backed by the `mcp` module.
+ */
+function isMcpService(service: ProjectStructureArtifactResponse): boolean {
+    return service.moduleName === 'mcp';
 }
 
 function getComponents(

@@ -575,7 +575,7 @@
         },
         {
           "command": "BI.project-explorer.add-entry-point",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == entryPoint",
+          "when": "view == wso2-integrator.explorer && viewItem == entryPoint",
           "group": "inline"
         },
         {
