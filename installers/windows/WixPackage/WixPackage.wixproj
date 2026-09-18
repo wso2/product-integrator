@@ -2,8 +2,9 @@
 <PropertyGroup>
   <Platform>x64</Platform>
   <OutputName>WSO2-Integrator</OutputName>
-  <!-- ICE38/ICE64/ICE91: per-user install false positives; ICE57/ICE30/ICE33: triggered by perUser shortcut/directory layout -->
-  <SuppressIces>ICE38;ICE64;ICE91;ICE57;ICE30;ICE33</SuppressIces>
+  <!-- ICE38/ICE64/ICE91: per-user install false positives; ICE57/ICE30/ICE33: triggered by perUser shortcut/directory layout;
+       ICE61: intentional — AllowSameVersionUpgrades makes the upgrade range include this product's own version (see Package.wxs) -->
+  <SuppressIces>ICE38;ICE64;ICE91;ICE57;ICE30;ICE33;ICE61</SuppressIces>
 </PropertyGroup>
 
   <ItemGroup>
