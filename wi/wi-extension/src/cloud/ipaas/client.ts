@@ -127,6 +127,12 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	private readonly sessions: SessionStore;
 	/** True while a sign-in prompt is on screen, so only one is. */
 	private signInOffered = false;
+	/**
+	 * The credential the unprompted offer was last made for. A check the user did
+	 * not ask for offers once per dead credential; a refusal of something they
+	 * did ask for always offers, because that is the moment the offer is useful.
+	 */
+	private signInOfferedFor: string | null = null;
 	/** The signed-in access token, "" when the injected one is still in use. */
 	private sessionToken = "";
 	/** What a sign-in in progress is waiting for; null when none is. */
@@ -181,7 +187,7 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 		if (this.sessionToken && this.sessionToken !== before) {
 			return true;
 		}
-		this.offerSignIn();
+		this.offerSignInForAction();
 		return false;
 	}
 
@@ -207,18 +213,27 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	}
 
 	/**
-	 * The token to authenticate with, prompting when there is nothing usable
-	 * left. An expired token is not a quieter kind of signed-in: without this the
-	 * editor carries a dead credential into every call and the user sees a series
-	 * of unexplained failures instead of one offer to sign in.
+	 * Offer because a check the user did not ask for found no usable session --
+	 * activation, most often. Offered once per dead credential: these run on
+	 * their own schedule, and repeating the same dialog for the same dead token
+	 * is noise the user cannot act on any better the third time.
 	 */
-	private async usableToken(): Promise<string> {
-		const token = await this.currentToken();
-		if (!token || tokenExpired(token, Date.now())) {
-			this.offerSignIn();
-			return "";
+	private offerSignInOnce(token: string): void {
+		if (this.signInOfferedFor === token) {
+			return;
 		}
-		return token;
+		this.signInOfferedFor = token;
+		this.offerSignIn();
+	}
+
+	/**
+	 * Offer because something the user asked for was refused. Always offered:
+	 * this is the moment signing in is worth their attention, and suppressing it
+	 * would leave the action failing with no way forward -- including for a user
+	 * who dismissed the offer at startup and has now come back to work.
+	 */
+	private offerSignInForAction(): void {
+		this.offerSignIn();
 	}
 
 	private offerSignIn(): void {
@@ -286,7 +301,7 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 		// refused — the editor would look connected and behave as though it were
 		// not. Treat it as signed out, and say so once.
 		if (!claims?.sub || tokenExpired(token, Date.now())) {
-			this.offerSignIn();
+			this.offerSignInOnce(token);
 			throw new Error(
 				"Your Integration Platform session has expired. Sign in to continue.",
 			);
@@ -372,17 +387,14 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	 * copy may have been replaced.
 	 */
 	override async getStsToken(): Promise<string> {
-		// Handed to other extensions (the assistant, the Ballerina tooling), which
-		// authenticate with it against their own services. They cannot prompt for
-		// this editor's session, so a dead token has to be caught here or it
-		// surfaces as an unexplained failure inside whichever of them used it
-		// next. The token is still returned: this is the same value as before,
-		// with the offer to sign in added.
-		const token = await this.currentToken();
-		if (!token || tokenExpired(token, Date.now())) {
-			this.offerSignIn();
-		}
-		return token;
+		// Deliberately silent. This is handed out through the extension API to
+		// other extensions, which read it on their own schedule rather than
+		// because the user did anything; prompting here turns a background poll
+		// into a dialog, and a poll that repeats turns it into a dialog that
+		// will not go away. The session is renewed first, so a caller gets the
+		// best token there is; a dead one is reported when a request made with
+		// it is refused.
+		return this.currentToken();
 	}
 
 	override async getProjects(orgID: string): Promise<Project[]> {
@@ -1130,6 +1142,8 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 		}
 		await this.sessions.write(session);
 		this.sessionToken = session.accessToken;
+		// The offer was made against the credential this one replaces.
+		this.signInOfferedFor = null;
 		ext.log(
 			`Session stored, valid until ${new Date(session.expiresAt).toISOString()}${session.refreshToken ? " and renewable" : " with no refresh token"}; reading the signed-in user`,
 		);
