@@ -66,6 +66,15 @@ on:
         required: false
         default: 'integrator'
         type: string
+      # Repo the GitHub release is created in. Empty = this repo. Only release.yml sets it
+      # (to wso2/product-agent-builder for the agent-builder flavor), so dev/nightly runs can
+      # never publish cross-repo. Needs secrets.AGENT_BUILDER_RELEASE_TOKEN (contents:write
+      # on the target repo).
+      release_repository:
+        description: 'Repository (owner/name) to create the GitHub release in. Empty = the repository this workflow runs in.'
+        required: false
+        default: ''
+        type: string
       # Update channel the component-update manifest is published to (insider | beta | stable).
       # New builds land in `insider` first; promote-channel.yml moves a manifest down the ladder.
       channel:
@@ -1559,6 +1568,28 @@ jobs:
             echo "no update-only artifacts to prune"
           fi
 
+      # A cross-repo release (agent builder -> wso2/product-agent-builder) tags the TARGET
+      # repo, so target_commitish must be a commit over there — omit it and the tag lands on
+      # the target's default-branch HEAD; the SOURCE commit that was actually built is recorded
+      # in the release body instead. Same-repo releases keep tagging the built commit.
+      - name: Resolve release target
+        id: release-target
+        shell: bash
+        env:
+          RELEASE_REPOSITORY: ${{ inputs.release_repository }}
+          TARGET_COMMITISH: ${{ inputs.target_commitish != '' && inputs.target_commitish || github.sha }}
+        run: |
+          if [ -n "${RELEASE_REPOSITORY}" ]; then
+            echo "repository=${RELEASE_REPOSITORY}" >> "$GITHUB_OUTPUT"
+            echo "commitish=" >> "$GITHUB_OUTPUT"
+            echo "body=Built from \`${{ github.repository }}@${TARGET_COMMITISH}\` ([source](https://github.com/${{ github.repository }}/commit/${TARGET_COMMITISH}))." >> "$GITHUB_OUTPUT"
+            echo "Release repo: ${RELEASE_REPOSITORY} (source ${{ github.repository }}@${TARGET_COMMITISH})" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "repository=${{ github.repository }}" >> "$GITHUB_OUTPUT"
+            echo "commitish=${TARGET_COMMITISH}" >> "$GITHUB_OUTPUT"
+            echo "body=" >> "$GITHUB_OUTPUT"
+          fi
+
       # The caller chose the tag; all that is derived here is the display name.
       - name: Resolve release name
         id: release-tag
@@ -1633,17 +1664,21 @@ jobs:
         with:
           tag_name: ${{ inputs.publish_tag }}
           name: ${{ steps.release-tag.outputs.name }}
-          # Callers that prepared a branch pass its SHA as both `ref` and `target_commitish`, so the
-          # tag points at the very commit that was compiled rather than at the ref the workflow was
-          # started from.
-          target_commitish: ${{ inputs.target_commitish != '' && inputs.target_commitish || github.sha }}
+          repository: ${{ steps.release-target.outputs.repository }}
+          # Same-repo: the SHA of the very commit that was compiled (callers that prepared a
+          # branch pass it as both `ref` and `target_commitish`). Cross-repo: empty — see the
+          # Resolve release target step.
+          target_commitish: ${{ steps.release-target.outputs.commitish }}
+          body: ${{ steps.release-target.outputs.body }}
           draft: false
           prerelease: ${{ inputs.is_prerelease }}
           # Only a non-pre-release becomes the repository Latest.
           make_latest: ${{ !inputs.is_prerelease }}
           files: release-files/*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITHUB_TOKEN cannot write to another repo; cross-repo releases use the dedicated
+          # fine-grained token (preflighted by release.yml before anything builds).
+          GITHUB_TOKEN: ${{ inputs.release_repository != '' && secrets.AGENT_BUILDER_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       # A `nightly*` tag is rolling: every build's filenames carry a fresh timestamp, so the upload
       # above adds to the previous build's assets instead of replacing them. This step verifies the
@@ -1658,7 +1693,7 @@ jobs:
       # PUBLISH_TAG is bound through `env`, not interpolated directly, so a tag value containing
       # shell syntax can't change the commands being run.
       - name: Roll the nightly tag and drop superseded assets
-        if: ${{ startsWith(inputs.publish_tag, 'nightly') }}
+        if: ${{ startsWith(inputs.publish_tag, 'nightly') && inputs.release_repository == '' }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
