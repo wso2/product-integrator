@@ -36,6 +36,28 @@ ICP_ZIP="$4"
 JRE_ZIP="$5"
 VERSION="${6:-1.0.0}"
 
+# Product flavor drives the PACKAGE identity (package name, install dir, desktop
+# entries, /usr/bin symlink); the payload binary name (applicationName) stays
+# "wso2-integrator" for BOTH flavors on purpose — only the identity is flavored.
+PRODUCT_FLAVOR="${PRODUCT_FLAVOR:-integrator}"
+case "$PRODUCT_FLAVOR" in
+    integrator)
+        ARTIFACT_SLUG="wso2-integrator"
+        PRODUCT_NAME="WSO2 Integrator"
+        ICON_ID="com.wso2.integrator"
+        ;;
+    agent-builder)
+        ARTIFACT_SLUG="wso2-agent-builder"
+        PRODUCT_NAME="WSO2 Agent Builder"
+        ICON_ID="com.wso2.agentbuilder"
+        ;;
+    *)
+        print_error "Unknown PRODUCT_FLAVOR '$PRODUCT_FLAVOR' (expected 'integrator' or 'agent-builder')"
+        exit 1
+        ;;
+esac
+print_info "Product flavor: $PRODUCT_FLAVOR (slug: $ARTIFACT_SLUG)"
+
 # Check if input files exist
 if [ ! -f "$BALLERINA_ZIP" ]; then
     print_error "Ballerina ZIP file not found: $BALLERINA_ZIP"
@@ -58,7 +80,8 @@ if [ ! -f "$JRE_ZIP" ]; then
 fi
 
 # Define paths
-INTEGRATOR_TARGET="$WORK_DIR/package/usr/share/wso2-integrator"
+STAGE_DIR="$WORK_DIR/package_stage"
+INTEGRATOR_TARGET="$STAGE_DIR/usr/share/$ARTIFACT_SLUG"
 COMPONENTS_DIR="$INTEGRATOR_TARGET/components"
 BALLERINA_TARGET="$COMPONENTS_DIR/ballerina"
 DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
@@ -69,7 +92,28 @@ print_info "Starting DEB package build process..."
 
 # Clean and recreate package directories
 print_info "Preparing package structure..."
-rm -rf "$INTEGRATOR_TARGET"
+# Render the committed package template into a fresh staging tree. Flavor
+# placeholders (@SLUG@/@PRODUCT_NAME@/@ICON_ID@) resolve in the staged copy
+# only, so the committed tree stays flavor-neutral and is never edited in place.
+rm -rf "$STAGE_DIR"
+cp -a "$WORK_DIR/package" "$STAGE_DIR"
+# Payloads left behind by older in-place builds must not leak into the package.
+rm -rf "$STAGE_DIR/usr/share/wso2-integrator" "$STAGE_DIR/usr/share/wso2-agent-builder"
+print_info "Rendering package metadata for flavor '$PRODUCT_FLAVOR'..."
+find "$STAGE_DIR/usr/share/applications" "$STAGE_DIR/usr/share/appdata" \
+     "$STAGE_DIR/usr/share/bash-completion/completions" "$STAGE_DIR/DEBIAN" -type f -print0 |
+    xargs -0 sed -i "s|@SLUG@|$ARTIFACT_SLUG|g; s|@PRODUCT_NAME@|$PRODUCT_NAME|g; s|@ICON_ID@|$ICON_ID|g"
+if [ "$ARTIFACT_SLUG" != "wso2-integrator" ]; then
+    APPS_DIR="$STAGE_DIR/usr/share/applications"
+    mv "$APPS_DIR/wso2-integrator.desktop" "$APPS_DIR/$ARTIFACT_SLUG.desktop"
+    mv "$APPS_DIR/wso2-integrator-url-handler.desktop" "$APPS_DIR/$ARTIFACT_SLUG-url-handler.desktop"
+    mv "$STAGE_DIR/usr/share/appdata/wso2-integrator.appdata.xml" "$STAGE_DIR/usr/share/appdata/$ARTIFACT_SLUG.appdata.xml"
+    mv "$STAGE_DIR/usr/share/bash-completion/completions/wso2-integrator" "$STAGE_DIR/usr/share/bash-completion/completions/$ARTIFACT_SLUG"
+    # No dedicated Agent Builder artwork exists yet — ship the existing art under
+    # the flavored names so Icon= and the appdata screenshot resolve.
+    mv "$STAGE_DIR/usr/share/pixmaps/com.wso2.integrator.svg" "$STAGE_DIR/usr/share/pixmaps/$ICON_ID.svg"
+    mv "$STAGE_DIR/usr/share/pixmaps/wso2-integrator-front.png" "$STAGE_DIR/usr/share/pixmaps/$ARTIFACT_SLUG-front.png"
+fi
 rm -rf "$EXTRACTION_TARGET"
 mkdir -p "$INTEGRATOR_TARGET"
 mkdir -p "$EXTRACTION_TARGET"
@@ -208,13 +252,13 @@ find "$INTEGRATOR_TARGET/bin" -type f -exec chmod +x {} \; 2>/dev/null || true
 chmod +x "$INTEGRATOR_TARGET/wso2-integrator" 2>/dev/null || true
 
 # Make DEBIAN scripts executable
-chmod 755 "$WORK_DIR/package/DEBIAN/postinst"
-chmod 755 "$WORK_DIR/package/DEBIAN/postrm"
-chmod 755 "$WORK_DIR/package/DEBIAN/prerm"
+chmod 755 "$STAGE_DIR/DEBIAN/postinst"
+chmod 755 "$STAGE_DIR/DEBIAN/postrm"
+chmod 755 "$STAGE_DIR/DEBIAN/prerm"
 
 # Update version in control file
 print_info "Updating version in control file to $VERSION..."
-sed -i "s/@VERSION@/$VERSION/" "$WORK_DIR/package/DEBIAN/control"
+sed -i "s/@VERSION@/$VERSION/" "$STAGE_DIR/DEBIAN/control"
 
 # INSTALLER_PROFILE=editor-update (§D8): drop the bundled Ballerina to produce the small
 # editor-only update package. The client seeds/resolves Ballerina from the per-user data
@@ -231,19 +275,19 @@ if [ "${INSTALLER_PROFILE:-full}" = "editor-update" ]; then
 fi
 
 # Get the installed size
-INSTALLED_SIZE=$(du -sk "$WORK_DIR/package" | cut -f1)
+INSTALLED_SIZE=$(du -sk "$STAGE_DIR" | cut -f1)
 
 # Update or add Installed-Size field
-if grep -q "^Installed-Size:" "$WORK_DIR/package/DEBIAN/control"; then
-    sed -i "s/^Installed-Size:.*/Installed-Size: $INSTALLED_SIZE/" "$WORK_DIR/package/DEBIAN/control"
+if grep -q "^Installed-Size:" "$STAGE_DIR/DEBIAN/control"; then
+    sed -i "s/^Installed-Size:.*/Installed-Size: $INSTALLED_SIZE/" "$STAGE_DIR/DEBIAN/control"
 else
-    echo "Installed-Size: $INSTALLED_SIZE" >> "$WORK_DIR/package/DEBIAN/control"
+    echo "Installed-Size: $INSTALLED_SIZE" >> "$STAGE_DIR/DEBIAN/control"
 fi
 
 # Build DEB package
-OUTPUT_DEB="$WORK_DIR/wso2-integrator_${VERSION}_amd64${DEB_SUFFIX}.deb"
+OUTPUT_DEB="$WORK_DIR/${ARTIFACT_SLUG}_${VERSION}_amd64${DEB_SUFFIX}.deb"
 print_info "Building DEB package..."
-dpkg-deb -b "$WORK_DIR/package" "$OUTPUT_DEB"
+dpkg-deb -b "$STAGE_DIR" "$OUTPUT_DEB"
 
 # Check if the build was successful
 if [ -f "$OUTPUT_DEB" ]; then
@@ -257,8 +301,6 @@ fi
 # Cleanup extracted files
 rm -rf "$EXTRACTION_TARGET"
 
-# Revert version in control file back to @VERSION@
-sed -i "s/^Version: $VERSION$/Version: @VERSION@/" "$WORK_DIR/package/DEBIAN/control"
 
 print_info "DEB package build completed successfully!"
 print_info "You can install the package using: sudo dpkg -i $OUTPUT_DEB"

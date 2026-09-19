@@ -3,7 +3,7 @@
 # Copyright (c) WSO2. All rights reserved.
 
 # Remove symlinks
-rm -f /usr/bin/wso2-integrator
+rm -f /usr/bin/@SLUG@
 
 # Remove environment variable file
 rm -f /etc/profile.d/wso2.sh

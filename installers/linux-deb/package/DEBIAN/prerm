@@ -4,5 +4,5 @@
 
 # Deregister wso2-integrator from the alternatives system
 if update-alternatives --display editor >/dev/null 2>&1; then
-	update-alternatives --remove editor /usr/bin/wso2-integrator || true
+	update-alternatives --remove editor /usr/bin/@SLUG@ || true
 fi

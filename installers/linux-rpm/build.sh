@@ -36,6 +36,28 @@ ICP_ZIP="$4"
 JRE_ZIP="$5"
 VERSION="${6:-1.0.0}"
 
+# Product flavor drives the PACKAGE identity (package name, install dir, desktop
+# entries, /usr/bin symlink); the payload binary name (applicationName) stays
+# "wso2-integrator" for BOTH flavors on purpose — only the identity is flavored.
+PRODUCT_FLAVOR="${PRODUCT_FLAVOR:-integrator}"
+case "$PRODUCT_FLAVOR" in
+    integrator)
+        ARTIFACT_SLUG="wso2-integrator"
+        PRODUCT_NAME="WSO2 Integrator"
+        ICON_ID="com.wso2.integrator"
+        ;;
+    agent-builder)
+        ARTIFACT_SLUG="wso2-agent-builder"
+        PRODUCT_NAME="WSO2 Agent Builder"
+        ICON_ID="com.wso2.agentbuilder"
+        ;;
+    *)
+        print_error "Unknown PRODUCT_FLAVOR '$PRODUCT_FLAVOR' (expected 'integrator' or 'agent-builder')"
+        exit 1
+        ;;
+esac
+print_info "Product flavor: $PRODUCT_FLAVOR (slug: $ARTIFACT_SLUG)"
+
 # Check if input files exist
 if [ ! -f "$BALLERINA_ZIP" ]; then
     print_error "Ballerina ZIP file not found: $BALLERINA_ZIP"
@@ -58,7 +80,8 @@ if [ ! -f "$JRE_ZIP" ]; then
 fi
 
 # Define paths
-INTEGRATOR_TARGET="$WORK_DIR/package/usr/share/wso2-integrator"
+STAGE_DIR="$WORK_DIR/package_stage"
+INTEGRATOR_TARGET="$STAGE_DIR/usr/share/$ARTIFACT_SLUG"
 COMPONENTS_DIR="$INTEGRATOR_TARGET/components"
 BALLERINA_TARGET="$COMPONENTS_DIR/ballerina"
 DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
@@ -78,7 +101,28 @@ mkdir -p "$BUILD_DIR"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 
 # Clean and recreate package directories
 print_info "Preparing package structure..."
-rm -rf "$INTEGRATOR_TARGET"
+# Render the committed package template into a fresh staging tree. Flavor
+# placeholders (@SLUG@/@PRODUCT_NAME@/@ICON_ID@) resolve in the staged copy
+# only, so the committed tree stays flavor-neutral and is never edited in place.
+rm -rf "$STAGE_DIR"
+cp -a "$WORK_DIR/package" "$STAGE_DIR"
+# Payloads left behind by older in-place builds must not leak into the package.
+rm -rf "$STAGE_DIR/usr/share/wso2-integrator" "$STAGE_DIR/usr/share/wso2-agent-builder"
+print_info "Rendering package metadata for flavor '$PRODUCT_FLAVOR'..."
+find "$STAGE_DIR/usr/share/applications" "$STAGE_DIR/usr/share/appdata" \
+     "$STAGE_DIR/usr/share/bash-completion/completions" -type f -print0 |
+    xargs -0 sed -i "s|@SLUG@|$ARTIFACT_SLUG|g; s|@PRODUCT_NAME@|$PRODUCT_NAME|g; s|@ICON_ID@|$ICON_ID|g"
+if [ "$ARTIFACT_SLUG" != "wso2-integrator" ]; then
+    APPS_DIR="$STAGE_DIR/usr/share/applications"
+    mv "$APPS_DIR/wso2-integrator.desktop" "$APPS_DIR/$ARTIFACT_SLUG.desktop"
+    mv "$APPS_DIR/wso2-integrator-url-handler.desktop" "$APPS_DIR/$ARTIFACT_SLUG-url-handler.desktop"
+    mv "$STAGE_DIR/usr/share/appdata/wso2-integrator.appdata.xml" "$STAGE_DIR/usr/share/appdata/$ARTIFACT_SLUG.appdata.xml"
+    mv "$STAGE_DIR/usr/share/bash-completion/completions/wso2-integrator" "$STAGE_DIR/usr/share/bash-completion/completions/$ARTIFACT_SLUG"
+    # No dedicated Agent Builder artwork exists yet — ship the existing art under
+    # the flavored names so Icon= and the appdata screenshot resolve.
+    mv "$STAGE_DIR/usr/share/pixmaps/com.wso2.integrator.svg" "$STAGE_DIR/usr/share/pixmaps/$ICON_ID.svg"
+    mv "$STAGE_DIR/usr/share/pixmaps/wso2-integrator-front.png" "$STAGE_DIR/usr/share/pixmaps/$ARTIFACT_SLUG-front.png"
+fi
 rm -rf "$EXTRACTION_TARGET"
 mkdir -p "$INTEGRATOR_TARGET"
 mkdir -p "$EXTRACTION_TARGET"
@@ -195,7 +239,7 @@ chmod +x "$INTEGRATOR_TARGET/wso2-integrator" 2>/dev/null || true
 # Create source tarball
 print_info "Creating source tarball for version $VERSION..."
 cd "$WORK_DIR"
-tar -czf "$SOURCES_DIR/wso2-integrator-$VERSION.tar.gz" -C package .
+tar -czf "$SOURCES_DIR/$ARTIFACT_SLUG-$VERSION.tar.gz" -C package_stage .
 
 # Prepare spec file with version and release
 # RPM Version field doesn't allow hyphens, so split version and pre-release
@@ -210,7 +254,9 @@ else
     RPM_RELEASE="1"
     print_info "Preparing spec file with version $RPM_VERSION and release $RPM_RELEASE..."
 fi
-sed -e "s/@VERSION@/$RPM_VERSION/g" -e "s/@RELEASE@/$RPM_RELEASE/g" -e "s/@FULLVERSION@/$VERSION/g" "$WORK_DIR/wso2-integrator.spec" > "$SPECS_DIR/wso2-integrator.spec"
+sed -e "s/@VERSION@/$RPM_VERSION/g" -e "s/@RELEASE@/$RPM_RELEASE/g" -e "s/@FULLVERSION@/$VERSION/g" \
+    -e "s|@SLUG@|$ARTIFACT_SLUG|g" -e "s|@PRODUCT_NAME@|$PRODUCT_NAME|g" -e "s|@ICON_ID@|$ICON_ID|g" \
+    "$WORK_DIR/wso2-integrator.spec" > "$SPECS_DIR/$ARTIFACT_SLUG.spec"
 
 # Build RPM package
 print_info "Building RPM package..."
@@ -231,7 +277,7 @@ rpmbuild --define "_topdir $BUILD_DIR" \
          --define "_specdir $SPECS_DIR" \
          --define "_srcrpmdir $BUILD_DIR/SRPMS" \
          --define "_buildrootdir $BUILD_DIR/BUILDROOT" \
-         -ba "$SPECS_DIR/wso2-integrator.spec"
+         -ba "$SPECS_DIR/$ARTIFACT_SLUG.spec"
 
 # Cleanup package staging directory
 rm -rf "${INTEGRATOR_TARGET:?}"
@@ -259,4 +305,4 @@ print_info "Built RPM packages:"
 ls -la "$WORK_DIR"/*.rpm 2>/dev/null || print_warning "No RPM files found in current directory"
 
 print_info "RPM package build completed successfully!"
-print_info "You can install the package using: sudo rpm -ivh wso2-integrator-*.rpm"
+print_info "You can install the package using: sudo rpm -ivh $ARTIFACT_SLUG-*.rpm"

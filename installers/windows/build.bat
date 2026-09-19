@@ -157,9 +157,11 @@ REM installing one flavor upgrades/replaces the other.
 if "%PRODUCT_NAME%"=="WSO2 Agent Builder" (
     set "UPGRADE_CODE=56138e5c-e9ef-499b-8a21-54e2cfc09ba3"
     set "PRODUCT_DIR=Agent Builder"
+    set "MSI_BASE=wso2-agent-builder"
 ) else (
     set "UPGRADE_CODE=344b046a-fa6a-4452-be40-2794f59fe7b0"
     set "PRODUCT_DIR=Integrator"
+    set "MSI_BASE=wso2-integrator"
 )
 copy /y ".\WixPackage\Package.wxs" ".\WixPackage\Package.wxs.bak" >nul
 copy /y ".\WixPackage\IntegratorComponents.wxs" ".\WixPackage\IntegratorComponents.wxs.bak" >nul
@@ -225,9 +227,9 @@ REM first-install MSI. Both share the same UpgradeCode, so -update cleanly upgra
 set "MSI_SUFFIX="
 if /i "%INSTALLER_PROFILE%"=="editor-update" set "MSI_SUFFIX=-update"
 set "MSI_ORIG=WixPackage\bin\x64\Release\en-US\WSO2-Integrator.msi"
-set "MSI_NEW=WixPackage\bin\x64\Release\en-US\wso2-integrator-%~6%MSI_SUFFIX%.msi"
+set "MSI_NEW=WixPackage\bin\x64\Release\en-US\%MSI_BASE%-%~6%MSI_SUFFIX%.msi"
 if exist "%MSI_ORIG%" (
-    ren "%MSI_ORIG%" "wso2-integrator-%~6%MSI_SUFFIX%.msi"
+    ren "%MSI_ORIG%" "%MSI_BASE%-%~6%MSI_SUFFIX%.msi"
     echo Renamed MSI to %MSI_NEW%
 ) else (
     echo MSI file not found: %MSI_ORIG%

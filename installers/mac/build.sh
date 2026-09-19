@@ -69,6 +69,14 @@ case "$APP_NAME" in
 esac
 print_info "Package identifier: $BUNDLE_IDENTIFIER"
 
+# Artifact file names carry the flavor slug so the two products' installers
+# never collide on a release page or in the update bucket.
+case "$APP_NAME" in
+    "WSO2 Agent Builder") ARTIFACT_SLUG="wso2-agent-builder" ;;
+    *)                    ARTIFACT_SLUG="wso2-integrator" ;;
+esac
+print_info "Artifact slug: $ARTIFACT_SLUG"
+
 chmod +x "$WSO2_TARGET/$APP_BUNDLE/Contents/MacOS"/* 2>/dev/null || true
 xattr -cr "$WSO2_TARGET/$APP_BUNDLE"
 
@@ -265,7 +273,7 @@ sign_app_bundle() {
     fi
 }
 
-SIGN_APP="$WSO2_TARGET/WSO2 Integrator.app"
+SIGN_APP="$WSO2_TARGET/$APP_BUNDLE"
 sign_app_bundle "$SIGN_APP"
 
 # Build the component package
@@ -290,13 +298,13 @@ if [ -n "${MAC_INSTALLER_SIGNING_IDENTITY:-}" ]; then
                  --package-path "$WORK_DIR" \
                  --sign "$MAC_INSTALLER_SIGNING_IDENTITY" \
                  --timestamp \
-                 "wso2-integrator-$VERSION-$ARCH.pkg"
+                 "$ARTIFACT_SLUG-$VERSION-$ARCH.pkg"
 else
     print_warning "MAC_INSTALLER_SIGNING_IDENTITY not set — .pkg will be unsigned (not notarizable)"
     productbuild --distribution "$WORK_DIR/Distribution.xml" \
                  --resources "$WORK_DIR" \
                  --package-path "$WORK_DIR" \
-                 "wso2-integrator-$VERSION-$ARCH.pkg"
+                 "$ARTIFACT_SLUG-$VERSION-$ARCH.pkg"
 fi
 
 sed -i '' "s/version=\"$VERSION\"/version=\"__VERSION__\"/g" "$WORK_DIR/Distribution.xml"
@@ -310,9 +318,9 @@ sed -i '' "s/$APP_NAME/__PRODUCT_NAME__/g" "$WORK_DIR/conclusion.html"
 
 
 # Check if the build was successful
-if [ -f "wso2-integrator-$VERSION-$ARCH.pkg" ]; then
-    print_info "Successfully created: wso2-integrator-$VERSION-$ARCH.pkg"
-    print_info "Package size: $(du -h "wso2-integrator-$VERSION-$ARCH.pkg" | cut -f1)"
+if [ -f "$ARTIFACT_SLUG-$VERSION-$ARCH.pkg" ]; then
+    print_info "Successfully created: $ARTIFACT_SLUG-$VERSION-$ARCH.pkg"
+    print_info "Package size: $(du -h "$ARTIFACT_SLUG-$VERSION-$ARCH.pkg" | cut -f1)"
 else
     print_error "Failed to create pkg package"
     exit 1
@@ -323,7 +331,7 @@ fi
 # -------------------------------------------------------------------
 
 # APP_NAME was detected from the payload above (flavor-dependent).
-DMG_NAME="wso2-integrator-$VERSION-$ARCH.dmg"
+DMG_NAME="$ARTIFACT_SLUG-$VERSION-$ARCH.dmg"
 DMG_STAGING="$WORK_DIR/dmg_staging"
 
 # Fix #4: include $ARCH in temp filename to avoid collisions across architectures
@@ -472,7 +480,7 @@ fi
 # the update mechanism (the DMG covers first-install Gatekeeper). Built with
 # `ditto` to preserve symlinks and resource forks in the bundle.
 # -------------------------------------------------------------------
-MAC_ZIP="wso2-integrator-$VERSION-$ARCH-mac.zip"
+MAC_ZIP="$ARTIFACT_SLUG-$VERSION-$ARCH-mac.zip"
 print_info "Creating Squirrel.Mac update payload: $MAC_ZIP"
 rm -f "$WORK_DIR/$MAC_ZIP"
 # INSTALLER_PROFILE=editor-update (§D8): the Squirrel update payload is EDITOR-ONLY — strip the
@@ -485,7 +493,7 @@ if [ "${INSTALLER_PROFILE:-full}" = "editor-update" ]; then
     # JRE). All are seeded to ~/.wso2-integrator and survive the whole-.app swap; ICP requires the
     # MI extension to read WSO2_INTEGRATOR_ICP_HOME before this payload is published (go-live gate).
     print_info "editor-update profile: building editor-only Squirrel payload (runtimes relocated)"
-    EDITOR_APP="$WORK_DIR/editor_update/WSO2 Integrator.app"
+    EDITOR_APP="$WORK_DIR/editor_update/$APP_BUNDLE"
     rm -rf "$WORK_DIR/editor_update"
     mkdir -p "$WORK_DIR/editor_update"
     ditto "$SIGN_APP" "$EDITOR_APP"

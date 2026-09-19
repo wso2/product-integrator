@@ -36,6 +36,19 @@ ICP_ZIP="$4"
 JRE_ZIP="$5"
 VERSION="${6:-1.0.0}"
 
+# Product flavor drives the archive name and top-level directory; the payload
+# binary name (applicationName) stays "wso2-integrator" for both flavors.
+PRODUCT_FLAVOR="${PRODUCT_FLAVOR:-integrator}"
+case "$PRODUCT_FLAVOR" in
+    integrator)    ARTIFACT_SLUG="wso2-integrator" ;;
+    agent-builder) ARTIFACT_SLUG="wso2-agent-builder" ;;
+    *)
+        print_error "Unknown PRODUCT_FLAVOR '$PRODUCT_FLAVOR' (expected 'integrator' or 'agent-builder')"
+        exit 1
+        ;;
+esac
+print_info "Product flavor: $PRODUCT_FLAVOR (slug: $ARTIFACT_SLUG)"
+
 # Check if input files exist
 if [ ! -f "$BALLERINA_ZIP" ]; then
     print_error "Ballerina ZIP file not found: $BALLERINA_ZIP"
@@ -59,7 +72,7 @@ fi
 
 # Define paths
 STAGE_DIR="$WORK_DIR/staging"
-INTEGRATOR_TARGET="$STAGE_DIR/wso2-integrator"
+INTEGRATOR_TARGET="$STAGE_DIR/$ARTIFACT_SLUG"
 COMPONENTS_DIR="$INTEGRATOR_TARGET/components"
 BALLERINA_TARGET="$COMPONENTS_DIR/ballerina"
 DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
@@ -196,9 +209,9 @@ if [ "${INSTALLER_PROFILE:-full}" = "editor-update" ]; then
     TAR_SUFFIX="-update"
     print_info "editor-update profile: removed bundled Ballerina/ICP/JRE from archive"
 fi
-OUTPUT_TAR="$WORK_DIR/wso2-integrator-${VERSION}-linux-x64${TAR_SUFFIX}.tar.gz"
+OUTPUT_TAR="$WORK_DIR/${ARTIFACT_SLUG}-${VERSION}-linux-x64${TAR_SUFFIX}.tar.gz"
 print_info "Creating TAR.GZ archive: $OUTPUT_TAR"
-tar -czf "$OUTPUT_TAR" -C "$STAGE_DIR" wso2-integrator
+tar -czf "$OUTPUT_TAR" -C "$STAGE_DIR" "$ARTIFACT_SLUG"
 
 # Verify output
 if [ -f "$OUTPUT_TAR" ]; then

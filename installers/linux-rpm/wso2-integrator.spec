@@ -1,7 +1,7 @@
-Name:           wso2-integrator
+Name:           @SLUG@
 Version:        @VERSION@
 Release:        @RELEASE@
-Summary:        WSO2 Integrator - Low Code Integration
+Summary:        @PRODUCT_NAME@ - Low Code Integration
 License:        MIT
 URL:            https://wso2.com/integration/
 Source0:        %{name}-@FULLVERSION@.tar.gz
@@ -9,7 +9,7 @@ Source0:        %{name}-@FULLVERSION@.tar.gz
 AutoReqProv: no
 
 %description
-WSO2 Integrator is a comprehensive integration development environment
+@PRODUCT_NAME@ is a comprehensive integration development environment
 that brings together Ballerina language runtime, WSO2 Integration Control Plane,
 and low-code editor in one unified package.
 
@@ -30,7 +30,7 @@ and low-code editor in one unified package.
 rm -rf %{buildroot}
 
 # Create directory structure
-mkdir -p %{buildroot}/usr/share/wso2-integrator
+mkdir -p %{buildroot}/usr/share/@SLUG@
 mkdir -p %{buildroot}/usr/share/applications
 mkdir -p %{buildroot}/usr/share/appdata
 mkdir -p %{buildroot}/usr/share/bash-completion/completions
@@ -39,7 +39,7 @@ mkdir -p %{buildroot}/usr/share/pixmaps
 mkdir -p %{buildroot}/usr/bin
 
 # Copy application files (includes components/ballerina, components/dependencies, components/icp)
-cp -r usr/share/wso2-integrator/* %{buildroot}/usr/share/wso2-integrator/
+cp -r usr/share/wso2-integrator/* %{buildroot}/usr/share/@SLUG@/
 
 # Copy desktop and system integration files (if they exist)
 if [ -d usr/share/applications ]; then
@@ -59,35 +59,35 @@ if [ -d usr/share/bash-completion/completions ]; then
 fi
 
 # Ensure executable permissions
-chmod +x %{buildroot}/usr/share/wso2-integrator/bin/wso2-integrator
-chmod +x %{buildroot}/usr/share/wso2-integrator/wso2-integrator
-find %{buildroot}/usr/share/wso2-integrator/components/ballerina/bin -type f -exec chmod +x {} \; 2>/dev/null || true
-chmod +x %{buildroot}/usr/share/wso2-integrator/components/icp/bin/ciphertool.sh 2>/dev/null || true
-chmod +x %{buildroot}/usr/share/wso2-integrator/components/icp/bin/dashboard.sh 2>/dev/null || true
-chmod +x %{buildroot}/usr/share/wso2-integrator/components/icp/bin/update_tool_setup.sh 2>/dev/null || true
+chmod +x %{buildroot}/usr/share/@SLUG@/bin/wso2-integrator
+chmod +x %{buildroot}/usr/share/@SLUG@/wso2-integrator
+find %{buildroot}/usr/share/@SLUG@/components/ballerina/bin -type f -exec chmod +x {} \; 2>/dev/null || true
+chmod +x %{buildroot}/usr/share/@SLUG@/components/icp/bin/ciphertool.sh 2>/dev/null || true
+chmod +x %{buildroot}/usr/share/@SLUG@/components/icp/bin/dashboard.sh 2>/dev/null || true
+chmod +x %{buildroot}/usr/share/@SLUG@/components/icp/bin/update_tool_setup.sh 2>/dev/null || true
 
 %clean
 rm -rf %{buildroot}
 
 %post
 # Change ownership and permissions for integrator files
-chown -R root:root /usr/share/wso2-integrator
+chown -R root:root /usr/share/@SLUG@
 # Guarded: the editor-update package ships no components/icp, and recreating the directory here
 # (even just logs/) would make first-run seeding register a broken ICP baseline.
-if [ -d /usr/share/wso2-integrator/components/icp ]; then
-    chmod -R a+rwX /usr/share/wso2-integrator/components/icp/bin/database/ 2>/dev/null || true
-    mkdir -p /usr/share/wso2-integrator/components/icp/logs
-    chmod -R a+rwX /usr/share/wso2-integrator/components/icp/logs/
-    chmod a+rw /usr/share/wso2-integrator/components/icp/www/config.json 2>/dev/null || true
+if [ -d /usr/share/@SLUG@/components/icp ]; then
+    chmod -R a+rwX /usr/share/@SLUG@/components/icp/bin/database/ 2>/dev/null || true
+    mkdir -p /usr/share/@SLUG@/components/icp/logs
+    chmod -R a+rwX /usr/share/@SLUG@/components/icp/logs/
+    chmod a+rw /usr/share/@SLUG@/components/icp/www/config.json 2>/dev/null || true
 fi
-chmod 4755 /usr/share/wso2-integrator/chrome-sandbox 2>/dev/null || true
+chmod 4755 /usr/share/@SLUG@/chrome-sandbox 2>/dev/null || true
 
 # Create symlink to /usr/bin
-rm -f /usr/bin/wso2-integrator
-ln -s /usr/share/wso2-integrator/bin/wso2-integrator /usr/bin/wso2-integrator
+rm -f /usr/bin/@SLUG@
+ln -s /usr/share/@SLUG@/bin/wso2-integrator /usr/bin/@SLUG@
 
 # Register in alternatives system
-/usr/sbin/update-alternatives --install /usr/bin/editor editor /usr/bin/wso2-integrator 0 2>/dev/null || true
+/usr/sbin/update-alternatives --install /usr/bin/editor editor /usr/bin/@SLUG@ 0 2>/dev/null || true
 
 # Update desktop database
 if command -v update-desktop-database >/dev/null 2>&1; then
@@ -102,12 +102,12 @@ fi
 %preun
 # Remove from alternatives system
 if /usr/sbin/update-alternatives --display editor >/dev/null 2>&1; then
-    /usr/sbin/update-alternatives --remove editor /usr/bin/wso2-integrator || true
+    /usr/sbin/update-alternatives --remove editor /usr/bin/@SLUG@ || true
 fi
 
 %postun
 # Remove symlinks
-rm -f /usr/bin/wso2-integrator
+rm -f /usr/bin/@SLUG@
 
 # Remove environment variable file
 rm -f /etc/profile.d/wso2.sh
@@ -123,7 +123,7 @@ if command -v update-mime-database >/dev/null 2>&1; then
 fi
 
 %files
-/usr/share/wso2-integrator/*
+/usr/share/@SLUG@/*
 /usr/share/applications/*
 /usr/share/appdata/*
 /usr/share/bash-completion/completions/*

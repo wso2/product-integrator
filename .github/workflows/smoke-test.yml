@@ -31,6 +31,11 @@ on:
         required: false
         type: string
         default: 'WSO2 Integrator'
+      artifact_slug:
+        description: "Artifact/package slug — names the Linux install dir (/usr/share/<slug>). 'wso2-integrator' or 'wso2-agent-builder'. The payload binary inside stays wso2-integrator for both."
+        required: false
+        type: string
+        default: 'wso2-integrator'
   workflow_dispatch:
     inputs:
       integrator_version:
@@ -106,16 +111,20 @@ jobs:
           curl -fSL -o "artifact/${DEB_NAME}" "$DEB_URL"
 
       - name: Install DEB and locate binary
+        env:
+          ARTIFACT_SLUG: ${{ inputs.artifact_slug || 'wso2-integrator' }}
         run: |
           sudo apt-get install -y ./artifact/*.deb
-          for ROOT in /usr/share/wso2-integrator /opt/wso2-integrator; do
+          # The install dir is flavored (<slug>); the payload binary inside is
+          # always wso2-integrator (shared applicationName).
+          for ROOT in "/usr/share/$ARTIFACT_SLUG" "/opt/$ARTIFACT_SLUG"; do
             BINARY="$ROOT/wso2-integrator"
             if [ -x "$BINARY" ] && [ -d "$ROOT/components" ]; then
               echo "WSO2_INTEGRATOR_PATH=$(realpath "$BINARY")" >> "$GITHUB_ENV"
               exit 0
             fi
           done
-          echo "wso2-integrator payload binary not found under /usr/share/wso2-integrator or /opt/wso2-integrator" >&2
+          echo "wso2-integrator payload binary not found under /usr/share/$ARTIFACT_SLUG or /opt/$ARTIFACT_SLUG" >&2
           exit 1
 
       - name: Validate embedded creation form dependencies
