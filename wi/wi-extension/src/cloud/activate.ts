@@ -123,9 +123,20 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		}),
 	);
 
-	// 8. Sync auth state to VS Code context key
+	// 8. Sync auth state to VS Code context key.
+	//
+	// The key decides whether Sign In or Sign Out is offered, so it has to be
+	// published before anything can be offered, not only when it next changes.
+	// A session that activates signed out and stays that way never changes
+	// state, so the subscription alone would leave the key unset for the whole
+	// session, and the commands correct only because an unset key happens to
+	// read as false.
+	const publishLoginState = (loggedIn: boolean): void => {
+		void vscode.commands.executeCommand("setContext", "isLoggedIn", loggedIn);
+	};
+	publishLoginState(!!authProvider.getState().state?.userInfo);
 	authProvider.subscribe(({ state }) => {
-		vscode.commands.executeCommand("setContext", "isLoggedIn", !!state.userInfo);
+		publishLoginState(!!state.userInfo);
 	});
 
 	// 9. Initialize authentication (restores session from CLI if already signed in)
