@@ -21,13 +21,13 @@
   },
   "app": {
     "installers": {
-      "darwin-arm64": "wso2-integrator-{version}-arm64.dmg",
-      "darwin-x64": "wso2-integrator-{version}-x64.dmg",
-      "win32-x64": "wso2-integrator-{version}-update.msi"
+      "darwin-arm64": "{slug}-{version}-arm64.dmg",
+      "darwin-x64": "{slug}-{version}-x64.dmg",
+      "win32-x64": "{slug}-{version}-update.msi"
     },
     "squirrel": {
-      "darwin-arm64": "wso2-integrator-{version}-arm64-mac.zip",
-      "darwin-x64": "wso2-integrator-{version}-x64-mac.zip"
+      "darwin-arm64": "{slug}-{version}-arm64-mac.zip",
+      "darwin-x64": "{slug}-{version}-x64-mac.zip"
     }
   },
   "components": [

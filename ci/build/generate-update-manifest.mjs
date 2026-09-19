@@ -51,6 +51,7 @@
 //   node ci/build/generate-update-manifest.mjs \
 //     --sequence 42 [--targets darwin-arm64,win32-x64] \
 //     --app-version 5.0.1.0 [--app-commit SHA] [--app-release-base URL] \
+//     [--artifact-slug wso2-agent-builder] \
 //     [--app-applies-to '>=5.0.0'] [--app-rollout 25] [--out source.json] \
 //     [--artifacts-base https://cdn/artifacts --mirror-dir artifacts-mirror] [--no-download]
 //
@@ -272,6 +273,8 @@ async function main() {
 	}
 
 	const appVersion = args['app-version'] || versions['integrator.version'];
+	// Flavors share every name template; only the {slug} differs (wso2-integrator vs wso2-agent-builder).
+	const artifactSlug = safeSegment(args['artifact-slug'] || 'wso2-integrator', 'artifact slug');
 
 	// A components-only publish ships component updates without a new app.
 	const componentsOnly = !!args['components-only'];
@@ -541,7 +544,7 @@ async function main() {
 			if (!installerName) {
 				continue; // no core-app installer published for this target
 			}
-			const fileName = safeSegment(substitute(installerName, { version: appVersion, appVersion }), 'installer file name');
+			const fileName = safeSegment(substitute(installerName, { version: appVersion, appVersion, slug: artifactSlug }), 'installer file name');
 			const relPath = `app/${safeSegment(appVersion, 'app version')}/${fileName}`;
 			const entry = {
 				installer: await resolveArtifact({
@@ -554,7 +557,7 @@ async function main() {
 			// which Squirrel enforces itself, so it carries a URL only.
 			const squirrelName = squirrelNames[target];
 			if (squirrelName) {
-				const zip = safeSegment(substitute(squirrelName, { version: appVersion, appVersion }), 'squirrel file name');
+				const zip = safeSegment(substitute(squirrelName, { version: appVersion, appVersion, slug: artifactSlug }), 'squirrel file name');
 				entry.squirrel = { url: `${artifactsBase || releaseBase}/${artifactsBase ? `app/${appVersion}/${zip}` : zip}` };
 			}
 			perTarget[target] = entry;

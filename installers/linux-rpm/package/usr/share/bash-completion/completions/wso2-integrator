@@ -57,4 +57,4 @@ _wso2-integrator()
 
 	_filedir
 } &&
-complete -F _wso2-integrator wso2-integrator
+complete -F _wso2-integrator @SLUG@

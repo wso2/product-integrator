@@ -336,6 +336,7 @@ jobs:
       versions_artifact: build-versions
       ref: ${{ inputs.ref }}
       is_prerelease: ${{ inputs.is_prerelease }}
+      product_flavor: ${{ inputs.product_flavor }}
 
   smoke-test:
     if: ${{ inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
@@ -348,6 +349,7 @@ jobs:
       ref: ${{ inputs.ref }}
       allow_failure: ${{ inputs.smoke_tests_required == false }}
       product_name: ${{ inputs.product_flavor == 'agent-builder' && 'WSO2 Agent Builder' || 'WSO2 Integrator' }}
+      artifact_slug: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
 
   smoke-test-windows:
     if: ${{ inputs.build_windows == true && inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
@@ -364,6 +366,8 @@ jobs:
     name: Build (macOS)
     runs-on: ${{ matrix.runner }}
     needs: [resolve-versions, compile]
+    env:
+      ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
     defaults:
       run:
         working-directory: lib/vscode
@@ -802,8 +806,8 @@ jobs:
         run: |
           set -euo pipefail
           V="$INTEGRATOR_VERSION"
-          DMG="installers/mac/wso2-integrator-${V}-${{ matrix.arch }}.dmg"
-          PKG="installers/mac/wso2-integrator-${V}-${{ matrix.arch }}.pkg"
+          DMG="installers/mac/${ARTIFACT_SLUG}-${V}-${{ matrix.arch }}.dmg"
+          PKG="installers/mac/${ARTIFACT_SLUG}-${V}-${{ matrix.arch }}.pkg"
           if [ -z "$NOTARY_APPLE_ID" ] || [ -z "$NOTARY_APP_PASSWORD" ] || [ -z "$NOTARY_TEAM_ID" ]; then
             echo "Notarization credentials not set — skipping notarization (build is signed but not notarized)."
             exit 0
@@ -859,7 +863,7 @@ jobs:
             exit 1
           fi
           V="${{ needs.resolve-versions.outputs.integrator_version }}"
-          ZIP="installers/mac/wso2-integrator-${V}-${{ matrix.arch }}-mac.zip"
+          ZIP="installers/mac/${ARTIFACT_SLUG}-${V}-${{ matrix.arch }}-mac.zip"
           if [ ! -f "$ZIP" ]; then
             echo "::error::Squirrel.Mac payload not found at $ZIP" >&2
             exit 1
@@ -867,7 +871,7 @@ jobs:
           # Same artifacts layout as everything else; the darwin manifest's app.squirrel.url
           # (embedded by generate-update-manifest.mjs) points at this exact versioned CDN URL.
           DEST="s3://${AWS_UPDATE_S3_BUCKET}/artifacts/app/${V}/"
-          aws s3 cp "$ZIP" "${DEST}wso2-integrator-${V}-${{ matrix.arch }}-mac.zip" --content-type application/zip --cache-control no-cache
+          aws s3 cp "$ZIP" "${DEST}${ARTIFACT_SLUG}-${V}-${{ matrix.arch }}-mac.zip" --content-type application/zip --cache-control no-cache
           echo "Published Squirrel.Mac payload for darwin/${{ matrix.arch }} (v${V})"
 
       - name: Upload macOS DMG artifacts
@@ -887,7 +891,7 @@ jobs:
         if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
-          cosign sign-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg --output-certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --output-signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --yes
+          cosign sign-blob installers/mac/${ARTIFACT_SLUG}-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg --output-certificate installers/mac/${ARTIFACT_SLUG}-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --output-signature installers/mac/${ARTIFACT_SLUG}-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --yes
 
       - name: Verify signature of the dmg installer
         if: ${{ inputs.build_packed_installers == true }}
@@ -895,13 +899,13 @@ jobs:
           cd ../..
           # `github.repository` (not a hardcoded wso2/product-integrator) so signature verification
           # also works on forks and the enterprise mirror, where the OIDC identity differs.
-          cosign verify-blob installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg --certificate installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --signature installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --certificate-identity=https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          cosign verify-blob installers/mac/${ARTIFACT_SLUG}-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg --certificate installers/mac/${ARTIFACT_SLUG}-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.pem --signature installers/mac/${ARTIFACT_SLUG}-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sig --certificate-identity=https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
 
       - name: Generate Hashes for dmg installer
         if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
-          openssl dgst -sha256 -out installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sha256 installers/mac/wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg
+          openssl dgst -sha256 -out installers/mac/${ARTIFACT_SLUG}-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg.sha256 installers/mac/${ARTIFACT_SLUG}-${{ needs.resolve-versions.outputs.integrator_version }}-${{ matrix.arch }}.dmg
 
       - name: Upload Signatures and Hashes for mac installers
         if: ${{ inputs.build_packed_installers == true }}
@@ -919,6 +923,8 @@ jobs:
     name: Build (Windows)
     runs-on: windows-2022
     needs: [resolve-versions, compile]
+    env:
+      ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
     defaults:
       run:
         working-directory: lib/vscode
@@ -1308,11 +1314,11 @@ jobs:
           Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
           Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
           Invoke-WebRequest -Uri $JRE_URL -OutFile "jre.zip"
-          # Full first-install MSI (editor + Ballerina + ICP + JRE) -> wso2-integrator-<v>.msi
+          # Full first-install MSI (editor + Ballerina + ICP + JRE) -> <slug>-<v>.msi
           $env:INSTALLER_PROFILE = "full"
           .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
           if ($LASTEXITCODE -ne 0) { throw "full MSI build failed" }
-          # Editor-only update MSI (§D8) -> wso2-integrator-<v>-update.msi. Ballerina is dropped;
+          # Editor-only update MSI (§D8) -> <slug>-<v>-update.msi. Ballerina is dropped;
           # the client seeds/resolves it from the per-user data folder so the upgrade can't strand it.
           $env:INSTALLER_PROFILE = "editor-update"
           .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
@@ -1338,7 +1344,7 @@ jobs:
         run: |
           cd ../..
           $V = "${{ needs.resolve-versions.outputs.integrator_version }}"
-          foreach ($name in @("wso2-integrator-$V", "wso2-integrator-$V-update")) {
+          foreach ($name in @("$env:ARTIFACT_SLUG-$V", "$env:ARTIFACT_SLUG-$V-update")) {
             $msi = "installers\windows\WixPackage\bin\x64\Release\en-US\$name.msi"
             cosign sign-blob $msi --output-certificate "installers\windows\$name.msi.pem" --output-signature "installers\windows\$name.msi.sig" --yes
             if ($LASTEXITCODE -ne 0) { throw "cosign sign-blob failed for $name.msi" }
@@ -1348,7 +1354,7 @@ jobs:
         run: |
           cd ../..
           $V = "${{ needs.resolve-versions.outputs.integrator_version }}"
-          foreach ($name in @("wso2-integrator-$V", "wso2-integrator-$V-update")) {
+          foreach ($name in @("$env:ARTIFACT_SLUG-$V", "$env:ARTIFACT_SLUG-$V-update")) {
             $msi = "installers\windows\WixPackage\bin\x64\Release\en-US\$name.msi"
             cosign verify-blob $msi --certificate "installers\windows\$name.msi.pem" --signature "installers\windows\$name.msi.sig" --certificate-identity=https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
             if ($LASTEXITCODE -ne 0) { throw "cosign verify-blob failed for $name.msi" }
@@ -1360,7 +1366,7 @@ jobs:
         run: |
           cd ../..
           $V = "${{ needs.resolve-versions.outputs.integrator_version }}"
-          foreach ($name in @("wso2-integrator-$V", "wso2-integrator-$V-update")) {
+          foreach ($name in @("$env:ARTIFACT_SLUG-$V", "$env:ARTIFACT_SLUG-$V-update")) {
             openssl dgst -sha256 -out "installers\windows\$name.msi.sha256" "installers\windows\WixPackage\bin\x64\Release\en-US\$name.msi"
           }
 
@@ -1565,6 +1571,7 @@ jobs:
         env:
           BUILD_MACOS: ${{ inputs.build_macos }}
           BUILD_WINDOWS: ${{ inputs.build_windows }}
+          ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
         run: |
           shopt -s nullglob
           missing=()
@@ -1574,16 +1581,18 @@ jobs:
             [ ${#found[@]} -gt 0 ] || missing+=("${label}")
           }
 
-          require "Linux .deb"          release-files/*.deb
-          require "Linux .rpm"          release-files/*.rpm
-          require "Linux .tar.gz"       release-files/*.tar.gz
+          # Anchored on the flavor slug: an artifact carrying the wrong product's
+          # name fails the publish instead of shipping under the wrong release.
+          require "Linux .deb"          release-files/"${ARTIFACT_SLUG}"_*.deb
+          require "Linux .rpm"          release-files/"${ARTIFACT_SLUG}"-*.rpm
+          require "Linux .tar.gz"       release-files/"${ARTIFACT_SLUG}"-*.tar.gz
           require "WI extension .vsix"  release-files/*.vsix
           if [ "${BUILD_MACOS}" = "true" ]; then
-            require "macOS arm64 .dmg"  release-files/*arm64.dmg
-            require "macOS x64 .dmg"    release-files/*x64.dmg
+            require "macOS arm64 .dmg"  release-files/"${ARTIFACT_SLUG}"-*arm64.dmg
+            require "macOS x64 .dmg"    release-files/"${ARTIFACT_SLUG}"-*x64.dmg
           fi
           if [ "${BUILD_WINDOWS}" = "true" ]; then
-            require "Windows .msi"      release-files/*.msi
+            require "Windows .msi"      release-files/"${ARTIFACT_SLUG}"-*.msi
           fi
 
           if [ ${#missing[@]} -gt 0 ]; then
@@ -1767,6 +1776,7 @@ jobs:
             --app-version "${{ needs.resolve-versions.outputs.integrator_version }}" \
             --app-release-base "https://github.com/${{ github.repository }}/releases/download/${{ inputs.publish_tag }}" \
             --app-commit "${{ github.sha }}" \
+            --artifact-slug "${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}" \
             --source-flavors "wso2.ballerina=${{ inputs.ballerina_extension_source || 'marketplace' }},wso2.micro-integrator=${{ inputs.mi_extension_source || 'marketplace' }}" \
             "${MIRROR_ARGS[@]}" \
             --out source.json
