@@ -38,8 +38,10 @@ mkdir -p %{buildroot}/usr/share/mime/packages
 mkdir -p %{buildroot}/usr/share/pixmaps
 mkdir -p %{buildroot}/usr/bin
 
-# Copy application files (includes components/ballerina, components/dependencies, components/icp)
-cp -r usr/share/wso2-integrator/* %{buildroot}/usr/share/@SLUG@/
+# Copy application files (includes components/ballerina, components/dependencies, components/icp).
+# The SOURCE path is relative — it reads the extracted source tarball, whose tree is staged under
+# the flavored slug by build.sh — so it must be templated exactly like the buildroot side.
+cp -r usr/share/@SLUG@/* %{buildroot}/usr/share/@SLUG@/
 
 # Copy desktop and system integration files (if they exist)
 if [ -d usr/share/applications ]; then
