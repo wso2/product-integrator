@@ -2,9 +2,13 @@ name: PR CI (Integrator Build)
 
 on:
   pull_request:
+    # The branch types a PR can target, per docs/branching-strategy.md.
     branches:
       - main
-      - 5.0.x
+      - 'feat/**'
+      - '[0-9]+.[0-9]+.x'
+      - 'hotfix/**'
+      - 'staging/**'
   workflow_dispatch:
 
 concurrency:

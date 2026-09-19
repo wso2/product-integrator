@@ -1,4 +1,4 @@
-name: Daily Build
+name: Nightly Build
 
 # The nightly, and nothing else. Once a day it:
 #
@@ -234,7 +234,8 @@ jobs:
   build:
     name: Build
     needs: prepare-nightly
-    uses: ./.github/workflows/build.yml
+    # Via dev-build.yml so both routes reach build.yml through one place.
+    uses: ./.github/workflows/dev-build.yml
     secrets: inherit
     with:
       # Build the commit just pushed to the configured pinned-build branch, not the mutable source
@@ -246,7 +247,6 @@ jobs:
       versions_artifact: versions
       # build.yml replaces only the configured rolling release/tag, whichever that is.
       publish_tag: ${{ needs.prepare-nightly.outputs.publish_tag }}
-      is_prerelease: true
       runner: ${{ inputs.runner || 'ubuntu-latest' }}
       build_linux: true
       build_macos: true
