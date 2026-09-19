@@ -37,9 +37,25 @@ rem ----- if JAVA_HOME is not set we're not happy ------------------------------
 
 setlocal enabledelayedexpansion
 set "SCRIPT_DIR=%~dp0"
+rem Prefer the shared JRE that ships next to Ballerina (../../dependencies). When Ballerina
+rem has been relocated out of the app install tree (component update / editor-only build,
+rem see design doc D8), that relative path no longer resolves, so fall back to the JRE
+rem directory advertised by the product runtime environment (WSO2_INTEGRATOR_JRE_DIR).
+rem A candidate only counts if it contains bin\java.exe: a stale or half-deleted jdk-* directory
+rem must fall through to the next resolver rather than winning and failing later.
 for /d %%D in  ("%SCRIPT_DIR%..\..\dependencies\jdk-*") do (
-    set "JAVA_HOME=%%D"
-    goto :jdkFound
+    if exist "%%D\bin\java.exe" (
+        set "JAVA_HOME=%%D"
+        goto :jdkFound
+    )
+)
+if not "%WSO2_INTEGRATOR_JRE_DIR%"=="" (
+    for /d %%D in ("%WSO2_INTEGRATOR_JRE_DIR%\jdk-*") do (
+        if exist "%%D\bin\java.exe" (
+            set "JAVA_HOME=%%D"
+            goto :jdkFound
+        )
+    )
 )
 :jdkFound
 

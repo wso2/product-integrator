@@ -1,18 +1,24 @@
 Prevent builtin extensions from being updated
 
 Updating builtin extensions from the marketplace prevents us from patching them
-(for example out GitHub authentication patches).
+(for example our GitHub authentication patches).
 
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/extensions/browser/extensionsWorkbenchService.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/extensions/browser/extensionsWorkbenchService.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/extensions/browser/extensionsWorkbenchService.ts
-@@ -343,6 +343,10 @@ export class Extension implements IExten
+@@ -343,6 +343,16 @@ export class Extension implements IExten
  			if (this.type === ExtensionType.System && this.productService.quality === 'stable' && !this.productService.builtInExtensionsEnabledWithAutoUpdates?.some(id => id.toLowerCase() === this.identifier.id.toLowerCase())) {
  				return false;
  			}
 +			// Do not update builtin extensions.
 +			if (this.type !== ExtensionType.User) {
++				return false;
++			}
++			// Do not update user-installed builtin shadow copies. These are placed by the
++			// WSO2 component updater to override a bundled builtin; letting the gallery
++			// update them would clobber the server-managed version.
++			if (this.local.isBuiltin) {
 +				return false;
 +			}
  			if (!this.local.preRelease && this.gallery.properties.isPreReleaseVersion) {

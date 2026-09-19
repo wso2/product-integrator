@@ -32,14 +32,19 @@
 
 # Set JAVA_HOME for installers
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-# Find JDK folder dynamically in the shared dependencies directory
-for jdk in "$SCRIPT_DIR"/../../dependencies/jdk-*; do
-    if [ -d "$jdk" ]; then
+# Find a usable JRE: prefer the shared JRE next to Ballerina (../../dependencies); when Ballerina
+# has been relocated out of the app (component update / editor-only build, see design doc D8) that
+# relative path is gone, so fall back to the JRE dir advertised by the product runtime environment
+# (WSO2_INTEGRATOR_JRE_DIR). A candidate is accepted only if it actually contains an executable
+# bin/java, so an empty or broken jdk-* directory is skipped.
+JAVA_PATH=""
+for jdk in "$SCRIPT_DIR"/../../dependencies/jdk-* "$WSO2_INTEGRATOR_JRE_DIR"/jdk-*; do
+    if [ -x "$jdk/bin/java" ]; then
         JAVA_PATH="$jdk"
         break
     fi
 done
-if test -d "$JAVA_PATH"; then
+if [ -n "$JAVA_PATH" ]; then
   JAVA_HOME=$JAVA_PATH
 fi
 

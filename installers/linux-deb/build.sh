@@ -149,12 +149,33 @@ mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
 rm -rf "$ICP_UNZIPPED_PATH"
 chmod +x "$ICP_TARGET/bin"/*
 
-# Modify icp.sh to use the JRE from shared dependencies directory
+# Make icp.sh resolve the JVM env-aware (§D8): prefer the resolved JDK home in WSO2_INTEGRATOR_JRE_HOME
+# (set once ICP/JRE are seeded to the data folder), else the JRE bundled next to ICP. Backward-compatible: with the
+# env var unset it resolves to the previous relative path. The resolver is prepended AFTER the
+# replace so its own `bin/java` is not itself rewritten.
 ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
 if [ -f "$ICP_SCRIPT" ]; then
-    print_info "Modifying icp.sh to use JRE from dependencies ($JRE_FOLDER)"
-    # Replace standalone 'java' invocations with the full path to the JRE java (word-boundary match)
-    sed -i "s|\bjava\b|\"\$SCRIPT_DIR\"/../../dependencies/$JRE_FOLDER/bin/java|g" "$ICP_SCRIPT"
+    print_info "Modifying icp.sh to use JRE (env-aware, fallback $JRE_FOLDER)"
+    sed -i "s|\bjava\b|\"\$WSO2_ICP_JAVA\"|g" "$ICP_SCRIPT"
+    ICP_TMP="$(mktemp)"
+    {
+        head -n 1 "$ICP_SCRIPT"
+        cat <<EOF
+WSO2_ICP_JAVA=""
+_wso2_icp_sd="\$(cd "\$(dirname "\$0")" && pwd)"
+if [ -n "\$WSO2_INTEGRATOR_JRE_HOME" ] && [ -x "\$WSO2_INTEGRATOR_JRE_HOME/bin/java" ]; then
+  WSO2_ICP_JAVA="\$WSO2_INTEGRATOR_JRE_HOME/bin/java"
+else
+  WSO2_ICP_JAVA="\$_wso2_icp_sd/../../dependencies/$JRE_FOLDER/bin/java"
+fi
+EOF
+        tail -n +2 "$ICP_SCRIPT"
+    } > "$ICP_TMP"
+    mv "$ICP_TMP" "$ICP_SCRIPT"
+    # 755 explicitly, not +x: the temp file was created 0600, and an icp.sh that group/other cannot
+    # READ cannot be executed by them either (the interpreter has to read it). Root-owned installs
+    # (deb/rpm) would otherwise ship an ICP that only root can launch.
+    chmod 755 "$ICP_SCRIPT"
 fi
 
 # # Update dashboard.sh to set JAVA_HOME to point to shared JDK
@@ -195,6 +216,20 @@ chmod 755 "$WORK_DIR/package/DEBIAN/prerm"
 print_info "Updating version in control file to $VERSION..."
 sed -i "s/@VERSION@/$VERSION/" "$WORK_DIR/package/DEBIAN/control"
 
+# INSTALLER_PROFILE=editor-update (§D8): drop the bundled Ballerina to produce the small
+# editor-only update package. The client seeds/resolves Ballerina from the per-user data
+# folder; on upgrade dpkg removes the old package's ballerina dir, but the seeded copy survives.
+# Stripped BEFORE Installed-Size is computed, so apt's free-space check sees the real size
+# rather than the full package's.
+DEB_SUFFIX=""
+if [ "${INSTALLER_PROFILE:-full}" = "editor-update" ]; then
+    # W-B: truly editor-only — drop Ballerina, ICP and the JRE. All are seeded to the data folder;
+    # ICP requires the MI extension to read WSO2_INTEGRATOR_ICP_HOME before this build is published.
+    rm -rf "$BALLERINA_TARGET" "$ICP_TARGET" "$DEPENDENCIES_DIR"
+    DEB_SUFFIX="-update"
+    print_info "editor-update profile: removed bundled Ballerina/ICP/JRE from package"
+fi
+
 # Get the installed size
 INSTALLED_SIZE=$(du -sk "$WORK_DIR/package" | cut -f1)
 
@@ -206,7 +241,7 @@ else
 fi
 
 # Build DEB package
-OUTPUT_DEB="$WORK_DIR/wso2-integrator_${VERSION}_amd64.deb"
+OUTPUT_DEB="$WORK_DIR/wso2-integrator_${VERSION}_amd64${DEB_SUFFIX}.deb"
 print_info "Building DEB package..."
 dpkg-deb -b "$WORK_DIR/package" "$OUTPUT_DEB"
 
