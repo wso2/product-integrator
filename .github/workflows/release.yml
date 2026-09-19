@@ -128,7 +128,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ inputs.version }}
+  group: release-${{ inputs.product_flavor || 'integrator' }}-${{ inputs.version }}
   cancel-in-progress: false
 
 jobs:
@@ -137,6 +137,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Agent Builder releases live in a separate public repo with their own independent
+      # version line; the source (and its release branch) stays in this repo. The release
+      # branch carries an agent-builder/ prefix so the two products' lines never collide.
+      RELEASE_REPO: ${{ inputs.product_flavor == 'agent-builder' && 'wso2/product-agent-builder' || github.repository }}
+      RELEASE_BRANCH: ${{ inputs.product_flavor == 'agent-builder' && format('agent-builder/{0}', inputs.version) || inputs.version }}
     outputs:
       wi_extension_version: ${{ steps.stamp.outputs.wi_extension_version }}
       sha: ${{ steps.commit.outputs.sha }}
@@ -166,26 +171,50 @@ jobs:
           ref: ${{ github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # An agent-builder release publishes into wso2/product-agent-builder, which
+      # GITHUB_TOKEN cannot write to — fail here, before an hour of building, not in the
+      # publish job.
+      - name: Check cross-repo release token
+        if: ${{ inputs.product_flavor == 'agent-builder' }}
+        env:
+          AGENT_BUILDER_RELEASE_TOKEN: ${{ secrets.AGENT_BUILDER_RELEASE_TOKEN }}
+        run: |
+          if [ -z "${AGENT_BUILDER_RELEASE_TOKEN}" ]; then
+            echo "::error::secrets.AGENT_BUILDER_RELEASE_TOKEN is not set. Agent Builder releases are created in ${RELEASE_REPO}, which needs a token with contents:write there." >&2
+            exit 1
+          fi
+          GH_TOKEN="${AGENT_BUILDER_RELEASE_TOKEN}" gh api "repos/${RELEASE_REPO}" --jq .full_name >/dev/null || {
+            echo "::error::AGENT_BUILDER_RELEASE_TOKEN cannot read ${RELEASE_REPO}." >&2
+            exit 1
+          }
+
       # A release version is published exactly once. The branch check alone is not enough: deleting
       # the branch (or the release) and re-running would republish under a tag that already shipped,
-      # so the tag and the release are checked too.
+      # so the tag and the release are checked too. The release BRANCH lives in this repo; the tag
+      # and the release live in RELEASE_REPO (this repo for integrator, product-agent-builder for
+      # agent builder).
       - name: Create the release branch
         env:
           VERSION: ${{ inputs.version }}
+          AGENT_BUILDER_RELEASE_TOKEN: ${{ secrets.AGENT_BUILDER_RELEASE_TOKEN }}
         run: |
-          if git ls-remote --exit-code --heads origin "${VERSION}" >/dev/null 2>&1; then
-            echo "Error: branch '${VERSION}' already exists. Pick a new version." >&2
+          if git ls-remote --exit-code --heads origin "${RELEASE_BRANCH}" >/dev/null 2>&1; then
+            echo "Error: branch '${RELEASE_BRANCH}' already exists. Pick a new version." >&2
             exit 1
           fi
-          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null 2>&1; then
-            echo "Error: tag 'v${VERSION}' already exists. Pick a new version." >&2
+          RELEASE_GH_TOKEN="${GH_TOKEN}"
+          if [ "${RELEASE_REPO}" != "${{ github.repository }}" ]; then
+            RELEASE_GH_TOKEN="${AGENT_BUILDER_RELEASE_TOKEN}"
+          fi
+          if GH_TOKEN="${RELEASE_GH_TOKEN}" gh api "repos/${RELEASE_REPO}/git/ref/tags/v${VERSION}" >/dev/null 2>&1; then
+            echo "Error: tag 'v${VERSION}' already exists in ${RELEASE_REPO}. Pick a new version." >&2
             exit 1
           fi
-          if gh release view "v${VERSION}" >/dev/null 2>&1; then
-            echo "Error: release 'v${VERSION}' already exists. Pick a new version." >&2
+          if GH_TOKEN="${RELEASE_GH_TOKEN}" gh release view "v${VERSION}" --repo "${RELEASE_REPO}" >/dev/null 2>&1; then
+            echo "Error: release 'v${VERSION}' already exists in ${RELEASE_REPO}. Pick a new version." >&2
             exit 1
           fi
-          git checkout -b "${VERSION}"
+          git checkout -b "${RELEASE_BRANCH}"
 
       # Pre-release: --force-extension guarantees a fresh 1.<odd>.<yymmddHH> even when the branch was
       # cut from something already concrete, so every alpha/beta/rc ships its own vsix version.
@@ -222,7 +251,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add ci/build/component-versions.properties wi/wi-extension/package.json
           git commit -m "Set versions for ${VERSION}"
-          git push origin "${VERSION}"
+          git push origin "${RELEASE_BRANCH}"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build:
@@ -253,6 +282,8 @@ jobs:
       ballerina_extension_source: ${{ inputs.ballerina_extension_source }}
       mi_extension_source: ${{ inputs.mi_extension_source }}
       product_flavor: ${{ inputs.product_flavor }}
+      # Only this workflow ever sets it, so dev/nightly flavor runs can never publish cross-repo.
+      release_repository: ${{ inputs.product_flavor == 'agent-builder' && 'wso2/product-agent-builder' || '' }}
 
   publish-marketplace:
     name: Publish WI extension to marketplaces
@@ -260,7 +291,10 @@ jobs:
     # The vsix only lands as a release asset when build_packed_installers produced the
     # publish-github-release job's release (build.yml:1095); with it off, there is nothing for
     # reusable-publish-vsix.yml to download.
-    if: ${{ inputs.publish_to_marketplace && inputs.build_packed_installers }}
+    # The WI extension is one shared VSIX serving both flavors; it publishes to the
+    # marketplaces from INTEGRATOR releases only, so an agent-builder release can never
+    # re-publish (or race) the same extension version.
+    if: ${{ inputs.publish_to_marketplace && inputs.build_packed_installers && inputs.product_flavor != 'agent-builder' }}
     uses: ./.github/workflows/reusable-publish-vsix.yml
     secrets:
       VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
