@@ -139,9 +139,13 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Agent Builder releases live in a separate public repo with their own independent
       # version line; the source (and its release branch) stays in this repo. The release
-      # branch carries an agent-builder/ prefix so the two products' lines never collide.
+      # branch carries an agent-builder- prefix so the two products' lines never collide.
+      # Hyphenated, NOT agent-builder/<version>: a slash would nest the ref under the existing
+      # `agent-builder` branch, and git cannot hold refs/heads/agent-builder and
+      # refs/heads/agent-builder/<version> at the same time (a D/F ref conflict) — the push of
+      # the first agent-builder release branch would fail outright.
       RELEASE_REPO: ${{ inputs.product_flavor == 'agent-builder' && 'wso2/product-agent-builder' || github.repository }}
-      RELEASE_BRANCH: ${{ inputs.product_flavor == 'agent-builder' && format('agent-builder/{0}', inputs.version) || inputs.version }}
+      RELEASE_BRANCH: ${{ inputs.product_flavor == 'agent-builder' && format('agent-builder-{0}', inputs.version) || inputs.version }}
     outputs:
       wi_extension_version: ${{ steps.stamp.outputs.wi_extension_version }}
       sha: ${{ steps.commit.outputs.sha }}
