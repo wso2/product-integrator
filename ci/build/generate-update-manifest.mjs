@@ -53,7 +53,9 @@
 //     --app-version 5.0.1.0 [--app-commit SHA] [--app-release-base URL] \
 //     [--artifact-slug wso2-agent-builder] \
 //     [--app-applies-to '>=5.0.0'] [--app-rollout 25] [--out source.json] \
-//     [--artifacts-base https://cdn/artifacts --mirror-dir artifacts-mirror] [--no-download]
+//     [--artifacts-base https://cdn/artifacts --mirror-dir artifacts-mirror] [--no-download] \
+//     [--app-installer-dir win-installers]   installers taken from local files instead of the release
+//                                            (the editor-only -update.msi is not a public release asset)
 //
 //   Components-only (ship a component fix without re-releasing the app):
 //     ... --components-only --carry-apps-from previous-source.json [--requires-app-version 5.1.5]
@@ -62,7 +64,7 @@
 // --no-download emits placeholder hashes (structure-only; for local validation, not for release).
 
 import { createHash } from 'node:crypto';
-import { copyFileSync, createReadStream, createWriteStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -275,6 +277,9 @@ async function main() {
 	const appVersion = args['app-version'] || versions['integrator.version'];
 	// Flavors share every name template; only the {slug} differs (wso2-integrator vs wso2-agent-builder).
 	const artifactSlug = safeSegment(args['artifact-slug'] || 'wso2-integrator', 'artifact slug');
+	// Update-only installers (the editor-only -update.msi) are NOT public release assets; when this
+	// directory holds the file, its bytes are hashed and mirrored from disk instead of the release.
+	const appInstallerDir = typeof args['app-installer-dir'] === 'string' ? args['app-installer-dir'] : undefined;
 
 	// A components-only publish ships component updates without a new app.
 	const componentsOnly = !!args['components-only'];
@@ -546,19 +551,36 @@ async function main() {
 			}
 			const fileName = safeSegment(substitute(installerName, { version: appVersion, appVersion, slug: artifactSlug }), 'installer file name');
 			const relPath = `app/${safeSegment(appVersion, 'app version')}/${fileName}`;
+			const localInstaller = appInstallerDir ? path.join(appInstallerDir, fileName) : undefined;
+			const useLocalInstaller = Boolean(localInstaller && existsSync(localInstaller));
+			if (useLocalInstaller && !artifactsBase && !noDownload) {
+				// A local-only installer has no public source URL; without the CDN the document
+				// would point clients at a release asset that is deliberately not published.
+				throw new Error(`${fileName} is a local file with no public source; --artifacts-base is required to mirror it`);
+			}
 			const entry = {
 				installer: await resolveArtifact({
 					relPath,
-					sourceUrl: releaseBase ? `${releaseBase}/${fileName}` : undefined,
+					sourceUrl: releaseBase && !useLocalInstaller ? `${releaseBase}/${fileName}` : undefined,
+					sourceFile: useLocalInstaller ? localInstaller : undefined,
 					statement: { id: 'app', version: appVersion }
 				})
 			};
 			// Squirrel.Mac payload: the editor-only .app zip. Its provenance is macOS code signing,
-			// which Squirrel enforces itself, so it carries a URL only.
+			// which Squirrel enforces itself, so it carries a URL only. It is served ONLY from the
+			// update CDN (the mac job uploads it there); it is not attached to the GitHub release,
+			// so a release-URL fallback would 404 on every mac update check.
 			const squirrelName = squirrelNames[target];
 			if (squirrelName) {
 				const zip = safeSegment(substitute(squirrelName, { version: appVersion, appVersion, slug: artifactSlug }), 'squirrel file name');
-				entry.squirrel = { url: `${artifactsBase || releaseBase}/${artifactsBase ? `app/${appVersion}/${zip}` : zip}` };
+				if (artifactsBase) {
+					entry.squirrel = { url: `${artifactsBase}/app/${appVersion}/${zip}` };
+				} else if (noDownload) {
+					// Structure-only validation may run without a CDN; never publish this document.
+					entry.squirrel = { url: `${releaseBase}/${zip}` };
+				} else {
+					throw new Error('Squirrel.Mac payloads are served only from the update CDN; set --artifacts-base (WSO2_UPDATE_ARTIFACTS_URL)');
+				}
 			}
 			perTarget[target] = entry;
 		}

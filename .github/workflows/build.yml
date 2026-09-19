@@ -870,7 +870,8 @@ jobs:
           fi
           # Same artifacts layout as everything else; the darwin manifest's app.squirrel.url
           # (embedded by generate-update-manifest.mjs) points at this exact versioned CDN URL.
-          DEST="s3://${AWS_UPDATE_S3_BUCKET}/artifacts/app/${V}/"
+          # Flavor-scoped prefix: agent-builder payloads live under artifacts/agent-builder/.
+          DEST="s3://${AWS_UPDATE_S3_BUCKET}/artifacts/${{ inputs.product_flavor == 'agent-builder' && 'agent-builder/' || '' }}app/${V}/"
           aws s3 cp "$ZIP" "${DEST}${ARTIFACT_SLUG}-${V}-${{ matrix.arch }}-mac.zip" --content-type application/zip --cache-control no-cache
           echo "Published Squirrel.Mac payload for darwin/${{ matrix.arch }} (v${V})"
 
@@ -1541,6 +1542,23 @@ jobs:
           path: release-files/
         continue-on-error: true
 
+      # Update-only artifacts must not ship as public release assets: the editor-only
+      # -update.msi and the Squirrel .app zips are delivery payloads of the in-app update
+      # mechanism, served from the update CDN (publish-update-source mirrors the MSI from the
+      # workflow artifact; the mac job uploads the zips to S3 directly). The workflow
+      # artifacts keep carrying the bytes between jobs — only the public release is pruned.
+      - name: Remove update-only artifacts from release files
+        shell: bash
+        run: |
+          shopt -s nullglob
+          removed=(release-files/*-update.msi* release-files/*-mac.zip)
+          if [ ${#removed[@]} -gt 0 ]; then
+            printf 'pruning update-only asset: %s\n' "${removed[@]}"
+            rm -f -- "${removed[@]}"
+          else
+            echo "no update-only artifacts to prune"
+          fi
+
       # The caller chose the tag; all that is derived here is the display name.
       - name: Resolve release name
         id: release-tag
@@ -1593,6 +1611,14 @@ jobs:
           fi
           if [ "${BUILD_WINDOWS}" = "true" ]; then
             require "Windows .msi"      release-files/"${ARTIFACT_SLUG}"-*.msi
+          fi
+
+          # Belt to the prune step: update-only payloads must never ship as release assets.
+          leaked=(release-files/*-update.msi* release-files/*-mac.zip)
+          if [ ${#leaked[@]} -gt 0 ]; then
+            echo "Error: update-only artifacts must not be published as release assets:" >&2
+            printf '  - %s\n' "${leaked[@]}" >&2
+            exit 1
           fi
 
           if [ ${#missing[@]} -gt 0 ]; then
@@ -1683,7 +1709,7 @@ jobs:
     # Shared with the Publish Component Updates workflow: both read-modify-write the same
     # index.json, and two at once would drop one of the two lines they repointed.
     concurrency:
-      group: update-index-${{ inputs.channel || 'insider' }}
+      group: update-index-${{ inputs.product_flavor || 'integrator' }}-${{ inputs.channel || 'insider' }}
       cancel-in-progress: false
     needs: [resolve-versions, publish-github-release]
     if: |
@@ -1699,6 +1725,9 @@ jobs:
       # New builds publish to the channel chosen at dispatch (default insider); the
       # promote-channel workflow later copies a source document down the ladder.
       CHANNEL: ${{ inputs.channel || 'insider' }}
+      # Flavor-scoped S3/CDN prefix ('' for integrator, 'agent-builder/' for agent builder):
+      # keeps the two products' manifests, indexes and mirrored artifacts fully disjoint.
+      PRODUCT_PREFIX: ${{ inputs.product_flavor == 'agent-builder' && 'agent-builder/' || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -1750,6 +1779,15 @@ jobs:
           echo "targets=${JOINED%,}" >> "$GITHUB_OUTPUT"
           echo "publishing targets: ${JOINED%,}"
 
+      # The editor-only -update.msi is not a public release asset (pruned before publish), so
+      # the generator takes its bytes from the workflow artifact instead of the release URL.
+      - name: Download Windows installers
+        if: ${{ steps.targets.outputs.targets != '' && inputs.build_windows == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: Product-Integrator-Windows
+          path: win-installers/
+
       # WSO2_UPDATE_ARTIFACTS_URL = the CDN base fronting s3://$AWS_UPDATE_S3_BUCKET/artifacts.
       # When set, every artifact is mirrored into artifacts-mirror/ and the document points clients
       # at the CDN only — no open-vsx/github in client URLs.
@@ -1768,7 +1806,15 @@ jobs:
 
           MIRROR_ARGS=()
           if [ -n "${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}" ]; then
-            MIRROR_ARGS=(--artifacts-base "${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}" --mirror-dir artifacts-mirror)
+            ARTIFACTS_BASE="${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}"
+            if [ -n "${PRODUCT_PREFIX}" ]; then
+              ARTIFACTS_BASE="${ARTIFACTS_BASE%/}/${PRODUCT_PREFIX%/}"
+            fi
+            MIRROR_ARGS=(--artifacts-base "${ARTIFACTS_BASE}" --mirror-dir artifacts-mirror)
+          fi
+          INSTALLER_DIR_ARGS=()
+          if [ -d win-installers ]; then
+            INSTALLER_DIR_ARGS=(--app-installer-dir win-installers)
           fi
           node ci/build/generate-update-manifest.mjs \
             --targets "${{ steps.targets.outputs.targets }}" \
@@ -1779,6 +1825,7 @@ jobs:
             --artifact-slug "${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}" \
             --source-flavors "wso2.ballerina=${{ inputs.ballerina_extension_source || 'marketplace' }},wso2.micro-integrator=${{ inputs.mi_extension_source || 'marketplace' }}" \
             "${MIRROR_ARGS[@]}" \
+            "${INSTALLER_DIR_ARGS[@]}" \
             --out source.json
           echo "----- source.json -----"
           cat source.json
@@ -1870,7 +1917,7 @@ jobs:
         if: ${{ steps.targets.outputs.targets != '' }}
         run: |
           if [ -d artifacts-mirror ]; then
-            aws s3 cp artifacts-mirror/ "s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/artifacts/" --recursive
+            aws s3 cp artifacts-mirror/ "s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/artifacts/${PRODUCT_PREFIX}" --recursive
           else
             echo "WSO2_UPDATE_ARTIFACTS_URL unset — no mirrored artifacts; the document points at source URLs."
           fi
@@ -1885,7 +1932,7 @@ jobs:
           # The server reads these; clients never do. Keep the manifests/ prefix PRIVATE — a publicly
           # readable source document would let a client bypass the server and with it the
           # kill-switch, rollout and entitlement decisions.
-          DEST="s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/manifests/${CHANNEL}/"
+          DEST="s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/manifests/${PRODUCT_PREFIX}${CHANNEL}/"
 
           # Published under this release's own name, so a newer release never overwrites the document an
           # older line is still served from.
