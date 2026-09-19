@@ -279,7 +279,7 @@ jobs:
         run: |
           $version = "${{ inputs.integrator_version }}"
           $release = Invoke-RestMethod "https://api.github.com/repos/wso2/product-integrator/releases/tags/v$version"
-          $asset = $release.assets | Where-Object { $_.name -match '^wso2-integrator-.*\.msi$' } | Select-Object -First 1
+          $asset = $release.assets | Where-Object { $_.name -match '^wso2-integrator-.*\.msi$' -and $_.name -notmatch '-update\.msi$' } | Select-Object -First 1
           if (-not $asset) { throw 'MSI asset not found' }
           New-Item -ItemType Directory -Path artifact -Force
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "artifact/$($asset.name)"
@@ -288,7 +288,10 @@ jobs:
         shell: pwsh
         run: |
           reg add 'HKLM\SYSTEM\CurrentControlSet\Control\FileSystem' /v LongPathsEnabled /t REG_DWORD /d 1 /f
-          $msi = Get-ChildItem artifact -Filter '*.msi' | Select-Object -First 1
+          # Exclude the editor-only -update MSI: it sorts FIRST ('-' < '.'), ships no bundled
+          # runtimes, and is an update payload — the smoke test must install the full MSI.
+          $msi = Get-ChildItem artifact -Filter '*.msi' | Where-Object { $_.Name -notmatch '-update\.msi$' } | Select-Object -First 1
+          if (-not $msi) { throw 'full MSI not found in artifact/' }
           $installDir = 'C:\w\'
           $proc = Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /norestart INTEGRATORFOLDER=`"$installDir`"" -Wait -PassThru
           Write-Host "msiexec exit code: $($proc.ExitCode)"

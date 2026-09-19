@@ -35,11 +35,19 @@ on:
           - insider
           - beta
           - stable
+      product:
+        description: "Product whose channels to promote. Each product has its own manifests prefix (integrator at manifests/<channel>/, agent-builder at manifests/agent-builder/<channel>/)."
+        required: false
+        default: 'integrator'
+        type: choice
+        options:
+          - integrator
+          - agent-builder
 
 # Same group as the two publishers: promotion read-modify-writes the TARGET channel's index.json,
 # and racing a publish to that channel would drop whichever line the loser had repointed.
 concurrency:
-  group: update-index-${{ github.event.inputs.to_channel }}
+  group: update-index-${{ github.event.inputs.product || 'integrator' }}-${{ github.event.inputs.to_channel }}
   cancel-in-progress: false
 
 permissions:
@@ -76,8 +84,13 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
 
       - name: Promote documents and index entries
+        env:
+          # The promote script composes manifests/<arg>/... from its channel arguments, so the
+          # product prefix rides inside them: agent-builder channels live at
+          # manifests/agent-builder/<channel>/ and promote as "agent-builder/<channel>".
+          PRODUCT_PREFIX: ${{ github.event.inputs.product == 'agent-builder' && 'agent-builder/' || '' }}
         run: |
           python3 ci/build/promote-update-channel.py \
             "${{ secrets.AWS_UPDATE_S3_BUCKET }}" \
-            "${{ github.event.inputs.from_channel }}" \
-            "${{ github.event.inputs.to_channel }}"
+            "${PRODUCT_PREFIX}${{ github.event.inputs.from_channel }}" \
+            "${PRODUCT_PREFIX}${{ github.event.inputs.to_channel }}"

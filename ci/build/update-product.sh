@@ -105,6 +105,22 @@ esac
 STOCK_UPDATE_URL=${STOCK_UPDATE_URL:-""}
 DARWIN_UNIVERSAL_ASSET_ID=${DARWIN_UNIVERSAL_ASSET_ID:-""}
 
+# Update-feed isolation: each flavor gets its own feed under the SAME base URL, keyed by a
+# path segment ("" for integrator, "/agent-builder" for agent builder). The client appends
+# /api/v1/updates and /api/update/... verbatim and its host allowlist ignores paths, so one
+# WSO2_UPDATE_URL secret serves both flavors with no client-side change — an Agent Builder
+# build must never poll (or be offered) the Integrator feed.
+case "${PRODUCT_FLAVOR}" in
+  agent-builder) UPDATE_PATH_SUFFIX="/agent-builder" ;;
+  *)             UPDATE_PATH_SUFFIX="" ;;
+esac
+if [ -n "${WSO2_UPDATE_URL}" ] && [ -n "${UPDATE_PATH_SUFFIX}" ]; then
+  WSO2_UPDATE_URL="${WSO2_UPDATE_URL%/}${UPDATE_PATH_SUFFIX}"
+fi
+if [ -n "${STOCK_UPDATE_URL}" ] && [ -n "${UPDATE_PATH_SUFFIX}" ]; then
+  STOCK_UPDATE_URL="${STOCK_UPDATE_URL%/}${UPDATE_PATH_SUFFIX}"
+fi
+
 require_non_empty() {
   local value="$1"
   local key="$2"

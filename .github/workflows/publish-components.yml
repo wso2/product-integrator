@@ -57,7 +57,7 @@ on:
 concurrency:
   # Shared with the Release workflow's publish job: both do a read-modify-write of the same
   # index.json, and two at once would drop one of the two lines they repointed.
-  group: update-index-${{ inputs.channel }}
+  group: update-index-integrator-${{ inputs.channel }}
   cancel-in-progress: false
 
 jobs:
