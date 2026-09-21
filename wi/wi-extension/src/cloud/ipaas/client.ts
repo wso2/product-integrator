@@ -27,6 +27,7 @@
  */
 
 import type {
+	ComponentKindSource,
 	ComponentEP,
 	ComponentKind,
 	ConnectionDetailed,
@@ -449,6 +450,22 @@ export class IpaasRpcClient extends ChoreoRPCClient {
 	}
 
 	/** A component's bound repository, or null when it has none or cannot be read. */
+	/**
+	 * The repository bound to a component, shaped as a ComponentKind source.
+	 *
+	 * The component list carries no repository fields at all, so the source on a
+	 * listed component is always empty and anything reading it there concludes
+	 * the integration has no repository. This is the only way to learn otherwise.
+	 */
+	async getComponentSource(
+		componentName: string,
+		projectName: string,
+	): Promise<ComponentKindSource> {
+		return toComponentSource(
+			await this.componentRepository(componentName, projectName),
+		);
+	}
+
 	private async componentRepository(
 		componentName: string,
 		projectName: string,

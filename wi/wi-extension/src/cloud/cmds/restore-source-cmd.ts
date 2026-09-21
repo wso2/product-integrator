@@ -103,13 +103,24 @@ export async function restoreIntegrationSource(): Promise<void> {
 			return;
 		}
 
-		const repoSource = getComponentKindRepoSource(component.spec.source);
+		// The component list carries no repository fields, so a listed component's
+		// source is always empty. Ask for the binding directly; fall back to the
+		// listed source for a backend that does carry one.
+		const client = ext.clients.rpcClient as {
+			getComponentSource?: (componentName: string, projectName: string) => Promise<typeof component.spec.source>;
+		};
+		const source =
+			(await client.getComponentSource?.(
+				component.metadata?.name ?? "",
+				projectHandle,
+			)) ?? component.spec.source;
+		const repoSource = getComponentKindRepoSource(source);
 		const location = toSourceLocation({
 			repo: repoSource.repo,
 			branch:
-				component.spec.source?.github?.branch ||
-				component.spec.source?.gitlab?.branch ||
-				component.spec.source?.bitbucket?.branch ||
+				source?.github?.branch ||
+				source?.gitlab?.branch ||
+				source?.bitbucket?.branch ||
 				"",
 			path: repoSource.path,
 		});
