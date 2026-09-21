@@ -59,6 +59,9 @@ async function isGitRepository(directoryPath: string): Promise<boolean> {
 export async function restoreIntegrationSource(): Promise<void> {
 	const sourceComponentId = process.env.SOURCE_COMPONENT_ID;
 	const workspacePath = workspace.workspaceFolders?.[0]?.uri?.fsPath;
+	// Entry is logged so that "the restore decided against it" can be told from
+	// "the restore never ran", which read the same from outside the editor.
+	ext.log(`Restoring integration source: integration=${sourceComponentId || "<unset>"}, workspace=${workspacePath || "<none>"}.`);
 	if (!workspacePath) {
 		return;
 	}
@@ -112,6 +115,9 @@ export async function restoreIntegrationSource(): Promise<void> {
 		});
 		if (!location) {
 			// An integration with no repository recorded has no source to fetch.
+			ext.log(
+				`Integration ${sourceComponentId} records no repository, so there is no source to fetch.`,
+			);
 			return;
 		}
 
