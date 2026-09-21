@@ -39,6 +39,23 @@ import {
  * same credential that answers the push. Once the platform can issue a read
  * token, only the URL handed to clone changes.
  */
+/**
+ * Whether the workspace already holds a clone.
+ *
+ * getGitRoot rejects rather than returning undefined when the directory is not
+ * a repository, and that is precisely the state this restore exists to handle:
+ * a scaffolded workspace with nothing cloned into it yet. Unhandled, the
+ * rejection leaves the whole restore to fail before it has logged anything --
+ * no source, and no sign that anything was attempted.
+ */
+async function isGitRepository(directoryPath: string): Promise<boolean> {
+	try {
+		return !!(await getGitRoot(ext.context, directoryPath));
+	} catch {
+		return false;
+	}
+}
+
 export async function restoreIntegrationSource(): Promise<void> {
 	const sourceComponentId = process.env.SOURCE_COMPONENT_ID;
 	const workspacePath = workspace.workspaceFolders?.[0]?.uri?.fsPath;
@@ -46,7 +63,7 @@ export async function restoreIntegrationSource(): Promise<void> {
 		return;
 	}
 
-	const workspaceIsRepository = !!(await getGitRoot(ext.context, workspacePath));
+	const workspaceIsRepository = await isGitRepository(workspacePath);
 	if (
 		!shouldRestoreSource({
 			backend: ext.cloudBackend,
@@ -54,6 +71,11 @@ export async function restoreIntegrationSource(): Promise<void> {
 			workspaceIsRepository,
 		})
 	) {
+		// Silence here is indistinguishable from the restore never having run,
+		// and the conditions are invisible from outside the editor.
+		ext.log(
+			`Not restoring integration source (backend=${ext.cloudBackend}, integration=${sourceComponentId || "<unset>"}, workspaceIsRepository=${workspaceIsRepository}).`,
+		);
 		return;
 	}
 
