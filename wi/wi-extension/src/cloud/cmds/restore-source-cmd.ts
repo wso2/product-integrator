@@ -56,14 +56,52 @@ async function isGitRepository(directoryPath: string): Promise<boolean> {
 	}
 }
 
+/**
+ * Whether a source restore may run in this session.
+ *
+ * Cheap and synchronous: the editor was opened for an integration. Callers use
+ * it to decide whether waiting on sourceRestoreSettled is worth doing at all,
+ * so a session that will never restore does not wait for a promise nothing
+ * resolves.
+ */
+export function sourceRestorePending(): boolean {
+	return ext.cloudBackend === "ipaas" && !!process.env.SOURCE_COMPONENT_ID;
+}
+
+let settleSourceRestore: (reopening: boolean) => void = () => undefined;
+
+/**
+ * Resolves once the restore has decided, to whether the window is about to
+ * reopen on the cloned source.
+ *
+ * Activating the editor's UI against the scaffold and then reopening the folder
+ * shows the user a burst of screens they cannot act on -- and on a private
+ * repository it happens while git is asking them for credentials. Anything that
+ * would draw UI can wait on this and stand down when it resolves true.
+ */
+export const sourceRestoreSettled = new Promise<boolean>((resolve) => {
+	settleSourceRestore = resolve;
+});
+
 export async function restoreIntegrationSource(): Promise<void> {
+	// Whatever happens below, anything waiting on the decision is released.
+	let reopening = false;
+	try {
+		reopening = await restoreIntegrationSourceInner();
+	} finally {
+		settleSourceRestore(reopening);
+	}
+}
+
+async function restoreIntegrationSourceInner(): Promise<boolean> {
+	let reopening = false;
 	const sourceComponentId = process.env.SOURCE_COMPONENT_ID;
 	const workspacePath = workspace.workspaceFolders?.[0]?.uri?.fsPath;
 	// Entry is logged so that "the restore decided against it" can be told from
 	// "the restore never ran", which read the same from outside the editor.
 	ext.log(`Restoring integration source: integration=${sourceComponentId || "<unset>"}, workspace=${workspacePath || "<none>"}.`);
 	if (!workspacePath) {
-		return;
+		return false;
 	}
 
 	const workspaceIsRepository = await isGitRepository(workspacePath);
@@ -79,13 +117,13 @@ export async function restoreIntegrationSource(): Promise<void> {
 		ext.log(
 			`Not restoring integration source (backend=${ext.cloudBackend}, integration=${sourceComponentId || "<unset>"}, workspaceIsRepository=${workspaceIsRepository}).`,
 		);
-		return;
+		return false;
 	}
 
 	const projectHandle = process.env.CLOUD_INITIAL_PROJECT_ID;
 	if (!projectHandle) {
 		ext.log("No project is known, so the integration's source cannot be located.");
-		return;
+		return false;
 	}
 
 	try {
@@ -100,7 +138,7 @@ export async function restoreIntegrationSource(): Promise<void> {
 		);
 		if (!component) {
 			ext.log(`Integration ${sourceComponentId} was not found in ${projectHandle}.`);
-			return;
+			return false;
 		}
 
 		const repoSource = getComponentKindRepoSource(component.spec.source);
@@ -118,7 +156,7 @@ export async function restoreIntegrationSource(): Promise<void> {
 			ext.log(
 				`Integration ${sourceComponentId} records no repository, so there is no source to fetch.`,
 			);
-			return;
+			return false;
 		}
 
 		const repoName = location.repoUrl.replace(/\/+$/, "").split("/").pop() ?? "source";
@@ -126,7 +164,7 @@ export async function restoreIntegrationSource(): Promise<void> {
 		const cloneRoot = join(parentPath, repoName);
 		if (existsSync(cloneRoot)) {
 			ext.log(`${cloneRoot} already exists; leaving it as it is.`);
-			return;
+			return false;
 		}
 
 		const git = await initGit(ext.context);
@@ -162,15 +200,18 @@ export async function restoreIntegrationSource(): Promise<void> {
 			window.showWarningMessage(
 				`The integration's source was fetched, but "${location.subPath}" is not in ${location.branch || "the default branch"}.`,
 			);
-			return;
+			return false;
 		}
+		reopening = true;
 		await commands.executeCommand("vscode.openFolder", Uri.file(openAt), {
 			forceNewWindow: false,
 		});
+		return reopening;
 	} catch (err) {
 		ext.logError("Could not fetch the integration's source", err as Error);
 		window.showErrorMessage(
 			`Could not fetch this integration's source: ${(err as Error).message}`,
 		);
+		return false;
 	}
 }

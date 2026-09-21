@@ -29,6 +29,7 @@ import {
     ViewType
 } from '@wso2/wi-core';
 import { ext } from './extensionVariables';
+import { sourceRestorePending, sourceRestoreSettled } from "./cloud/cmds/restore-source-cmd";
 import { fetchProjectInfo, fetchExtendedProjectInfo } from './bi/utils';
 import { activateProjectExplorer } from './bi/project-explorer/activate';
 import { ProjectExplorerEntryProvider } from './bi/project-explorer/project-explorer-provider';
@@ -304,7 +305,34 @@ const stateMachine = createMachine<MachineContext>({
     }
 });
 
+/**
+ * How long to wait for a pending source restore before activating anyway.
+ *
+ * Generous, because the wait spans the clone. Exceeding it is not a failure:
+ * activation simply proceeds as it did before, and the reopen -- if it still
+ * comes -- costs the flicker this avoids rather than anything worse.
+ */
+const SOURCE_RESTORE_WAIT_MS = 90_000;
+
 async function activateExtensionsBasedOnProjectType(context: MachineContext): Promise<void> {
+    // An editor opened for an integration starts on the scaffold and reopens on
+    // the clone. Activating now draws the whole project UI against the scaffold
+    // and again after the reopen -- screens the user cannot act on, arriving
+    // while git is asking them for credentials on a private repository. Wait for
+    // the restore to decide, and leave activation to the reopened window.
+    if (sourceRestorePending()) {
+        ext.log('Waiting for the integration source before activating the project UI.');
+        const reopening = await Promise.race([
+            sourceRestoreSettled,
+            // Fail open: a restore that never settles must not leave a blank editor.
+            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SOURCE_RESTORE_WAIT_MS)),
+        ]);
+        if (reopening) {
+            ext.log('The workspace is reopening on the fetched source; this window activates nothing.');
+            return;
+        }
+    }
+
     ext.log(`Activating extensions for project type: ${context.projectType}`);
     const selectedProfile = vscode.workspace.getConfiguration('integrator').get<string>('selectedProfile');
 
