@@ -19,6 +19,7 @@
 import * as vscode from "vscode";
 import path from "path";
 import { activateCloudFunctionality } from "./cloud/activate";
+import { abandonSourceRestore } from "./cloud/cmds/restore-source-cmd";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
 import { WICloudExtensionAPI } from "./cloud/cloud-ext-api";
@@ -84,6 +85,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 		const cloudAPIs = new WICloudExtensionAPI();
 		void activateCloudFunctionality(context, cloudAPIs).catch((error) => {
 			ext.logError("Cloud functionality failed to activate", error as Error);
+			// The source restore lives inside that call and will not run now, so
+			// release anything holding off on its decision rather than leaving it
+			// to time out.
+			abandonSourceRestore();
 		});
 
 		const exports: ExtensionExports = { cloudAPIs };

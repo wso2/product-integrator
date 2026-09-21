@@ -71,6 +71,17 @@ export function sourceRestorePending(): boolean {
 let settleSourceRestore: (reopening: boolean) => void = () => undefined;
 
 /**
+ * Release anything waiting on the restore when it will not run.
+ *
+ * Cloud activation starts the restore only after several awaits, any of which
+ * can fail. Without this the waiters would sit out the full timeout on an
+ * editor that was never going to reopen.
+ */
+export function abandonSourceRestore(): void {
+	settleSourceRestore(false);
+}
+
+/**
  * Resolves once the restore has decided, to whether the window is about to
  * reopen on the cloned source.
  *
