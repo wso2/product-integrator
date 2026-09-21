@@ -68,6 +68,7 @@ on:
         options:
           - codebuild
           - ubuntu-latest
+          - k8s-default-runners
       build_linux:
         description: 'Build for Linux'
         required: false
