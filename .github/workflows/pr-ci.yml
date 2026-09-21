@@ -24,7 +24,7 @@ jobs:
     name: Compile Integrator (No Installers)
     uses: ./.github/workflows/compile.yml
     with:
-      runOnAWS: false
+      runner: ubuntu-latest
       build_packed_installers: false
       ballerina_extension_source: github
       mi_extension_source: github
