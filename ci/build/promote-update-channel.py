@@ -10,8 +10,13 @@ Documents and their detached signatures are copied verbatim, so the CI signature
 nothing is re-signed. The client resolves by channel path and never reads the document's own
 `channel` field, so a copied document is correct where it lands.
 
-Usage: promote-update-channel.py <bucket> <from-channel> <to-channel>
+Promotes every line the source channel serves by default. `--version` narrows that to the single
+release named by a document, which is what a channel used for testing needs: several candidates can
+sit in insider while only the chosen one moves down.
+
+Usage: promote-update-channel.py <bucket> <from-channel> <to-channel> [--version <app-version>]
 """
+import argparse
 import json
 import os
 import re
@@ -48,23 +53,50 @@ def read_json_key(bucket: str, key: str):
 
 
 def main() -> int:
-    if len(sys.argv) != 4:
-        print(__doc__, file=sys.stderr)
-        return 2
-    bucket, source, target = sys.argv[1], sys.argv[2], sys.argv[3]
+    ap = argparse.ArgumentParser(
+        description="Promote source documents down the channel ladder.",
+        formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
+    ap.add_argument("bucket")
+    ap.add_argument("from_channel")
+    ap.add_argument("to_channel")
+    ap.add_argument("--version", help=(
+        "promote ONLY the line served by source-<version>.json; default promotes every line the "
+        "source channel serves"))
+    args = ap.parse_args()
+    bucket, source, target = args.bucket, args.from_channel, args.to_channel
 
     src_index = read_json_key(bucket, f"manifests/{source}/index.json")
     if not src_index or not src_index.get("entries"):
         print(f"error: {source} has no index.json with entries; nothing to promote", file=sys.stderr)
         return 1
+
+    promoting = src_index["entries"]
+    if args.version:
+        # Matched against the document each entry NAMES, not built into a key: every S3 path below
+        # still comes from the index, so a bogus --version selects nothing rather than reaching for
+        # an arbitrary object.
+        wanted = f"source-{args.version}.json"
+        promoting = [e for e in src_index["entries"] if e.get("manifest") == wanted]
+        if not promoting:
+            available = ", ".join(
+                sorted({e.get("manifest", "?") for e in src_index["entries"]})) or "(none)"
+            print(f"error: {source} serves no line from {wanted}. Documents it currently serves: "
+                  f"{available}", file=sys.stderr)
+            print("note: a document can exist in the bucket without being served — only lines named "
+                  "in index.json can be promoted.", file=sys.stderr)
+            return 1
+        if len(promoting) > 1:
+            lines = ", ".join(e.get("match", "?") for e in promoting)
+            print(f"promoting {wanted}, which serves more than one line: {lines}")
     dst_index = read_json_key(bucket, f"manifests/{target}/index.json")
     if dst_index is None:
         print(f"{target} has no index yet; creating one.")
         dst_index = {"schemaVersion": 1, "entries": []}
 
-    print(f"promoting {source} -> {target}")
+    scope = f"version {args.version}" if args.version else "all lines"
+    print(f"promoting {source} -> {target} ({scope})")
     manifest_shape = re.compile(r"^(source|source-[A-Za-z0-9][A-Za-z0-9._+-]{0,63})\.json$")
-    for entry in src_index["entries"]:
+    for entry in promoting:
         match, manifest = entry["match"], entry["manifest"]
         if not manifest_shape.match(manifest):
             print(f"error: index names manifest '{manifest}', which the update server would refuse "
