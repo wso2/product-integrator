@@ -505,8 +505,10 @@ jobs:
           BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.ballerina_extension_tag }}")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
+      # Agent Builder is Ballerina-only: update-product.sh leaves MI (and SI) out of
+      # builtInExtensions for that flavor, so downloading the VSIX would be dead weight.
       - name: Download archived MI VSIX
-        if: ${{ inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
+        if: ${{ inputs.product_flavor != 'agent-builder' && inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |
@@ -1063,8 +1065,10 @@ jobs:
           BALLERINA_VSIX_PATH=$(./ci/download-vsix.sh "wso2/ballerina-vscode" "${{ needs.resolve-versions.outputs.ballerina_extension_version }}" "ballerina-${{ needs.resolve-versions.outputs.ballerina_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.ballerina_extension_tag }}")
           echo "BALLERINA_VSIX_PATH=${BALLERINA_VSIX_PATH}" >> "$GITHUB_ENV"
 
+      # Agent Builder is Ballerina-only: update-product.sh leaves MI (and SI) out of
+      # builtInExtensions for that flavor, so downloading the VSIX would be dead weight.
       - name: Download archived MI VSIX
-        if: ${{ inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
+        if: ${{ inputs.product_flavor != 'agent-builder' && inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '' }}
         shell: bash
         working-directory: .
         run: |

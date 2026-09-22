@@ -28,6 +28,11 @@ VERSION=${1:-"$(read_version "integrator.version")"}
 #    extension builds callbacks from vscode.env.uriScheme, so this is safe)
 # applicationName and the extension/command ids stay wso2-integrator: one VSIX
 # serves both flavors.
+#
+# PACK_INTEGRATION_EXTENSIONS decides whether the two integration-runtime extensions
+# (wso2.micro-integrator and wso2.streaming-integrator) are bundled. Agent Builder is a
+# Ballerina-only product: MI and SI add nothing it can use, so they are left out of
+# builtInExtensions entirely rather than shipped and hidden.
 PRODUCT_FLAVOR=${PRODUCT_FLAVOR:-integrator}
 case "${PRODUCT_FLAVOR}" in
   integrator)
@@ -35,12 +40,14 @@ case "${PRODUCT_FLAVOR}" in
     DATA_FOLDER=".wso2-integrator"
     APP_SLUG="wso2-integrator"
     BUNDLE_ID="com.wso2.integrator"
+    PACK_INTEGRATION_EXTENSIONS="true"
     ;;
   agent-builder)
     PRODUCT_NAME="WSO2 Agent Builder"
     DATA_FOLDER=".wso2-agent-builder"
     APP_SLUG="wso2-agent-builder"
     BUNDLE_ID="com.wso2.agentbuilder"
+    PACK_INTEGRATION_EXTENSIONS="false"
     ;;
   *) echo "Error: unknown PRODUCT_FLAVOR '${PRODUCT_FLAVOR}' (expected 'integrator' or 'agent-builder')" >&2; exit 1 ;;
 esac
@@ -137,8 +144,11 @@ fi
 
 require_non_empty "${WSO2_HURL_CLIENT_EXTENSION_VERSION}" "wso2.hurl-client.extension.version"
 require_non_empty "${WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION}" "wso2.mcp-server-inspector.extension.version"
-require_non_empty "${MI_EXTENSION_VERSION}" "wso2.micro-integrator.extension.version"
-require_non_empty "${WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION}" "wso2.streaming-integrator.extension.version"
+# Only required by the flavors that bundle them; an Agent Builder build never reads these.
+if [ "${PACK_INTEGRATION_EXTENSIONS}" = "true" ]; then
+  require_non_empty "${MI_EXTENSION_VERSION}" "wso2.micro-integrator.extension.version"
+  require_non_empty "${WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION}" "wso2.streaming-integrator.extension.version"
+fi
 
 if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
   echo "Error: BALLERINA_EXTENSION_VERSION must be provided without a leading v. Example: 4.5.0" >&2
@@ -255,7 +265,9 @@ cat <<BALLERINA_MARKETPLACE_ENTRY
       },
 BALLERINA_MARKETPLACE_ENTRY
 fi)
-$(if [ -n "${MI_VSIX_PATH}" ]; then
+$(if [ "${PACK_INTEGRATION_EXTENSIONS}" != "true" ]; then
+  :
+elif [ -n "${MI_VSIX_PATH}" ]; then
 cat <<MI_VSIX_ENTRY
       {
         "name": "wso2.micro-integrator",
@@ -271,10 +283,14 @@ cat <<MI_MARKETPLACE_ENTRY
       },
 MI_MARKETPLACE_ENTRY
 fi)
+$(if [ "${PACK_INTEGRATION_EXTENSIONS}" = "true" ]; then
+cat <<SI_ENTRY
       {
         "name": "wso2.streaming-integrator",
         "version": "${WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION}"
       },
+SI_ENTRY
+fi)
       {
         "name": "wso2.wso2-integrator",
         "vsix": "../../wi/wi-extension/wso2-integrator-${WI_EXTENSION_VERSION}.vsix",
