@@ -43,6 +43,32 @@
       <util:RemoveFolderEx Id="RemoveIntegratorFolder" Property="INTEGRATORFOLDER" On="uninstall" />
     </Component>
 
+    <!-- Uninstall cleanup of the per-user data folder (%USERPROFILE%\.wso2-integrator): seeded
+         runtime components, staged updates and installed extensions. Otherwise a broken seed (or
+         hundreds of MB of runtimes) outlives every reinstall and the user has to find and delete
+         the hidden folder by hand. RemoveFolderEx only acts when its property has a value, so the
+         property is set ONLY on a real uninstall:
+         - during a major upgrade the old product is removed with UPGRADINGPRODUCTCODE set, and the
+           blank property makes the removal a no-op — user data survives app updates;
+         - `msiexec /x <msi> WSO2_KEEP_USERDATA=1` opts out of the cleanup (the ARP uninstall runs
+           without UI, so a checkbox cannot be offered there). -->
+    <!-- Before=AppSearch, not After: WiX schedules its own WixRemoveFoldersEx (which reads this
+         property and builds the RemoveFile rows) after AppSearch too, and with both actions on
+         the same anchor the relative order would come from linker-assigned sequence numbers. Both
+         gating properties arrive on the command line (UPGRADINGPRODUCTCODE from the upgrade's
+         RemoveExistingProducts, WSO2_KEEP_USERDATA from the user), so they are set this early. -->
+    <Property Id="WSO2_KEEP_USERDATA" Secure="yes" />
+    <SetProperty Id="WSO2USERDATAFOLDER" Action="SetWso2UserDataFolder"
+      Value="[%USERPROFILE]\.wso2-integrator"
+      Before="AppSearch"
+      Condition="(NOT UPGRADINGPRODUCTCODE) AND (NOT WSO2_KEEP_USERDATA)" />
+    <Component Id="CleanupUserDataComponent" Directory="INTEGRATORFOLDER"
+      Guid="{ac721b5d-a559-43a0-a89a-c355d0c18409}">
+      <RegistryValue Root="HKCU" Key="Software\WSO2\Integrator" Name="CleanupUserData"
+        Type="integer" Value="1" KeyPath="yes" />
+      <util:RemoveFolderEx Id="RemoveWso2UserDataFolder" Property="WSO2USERDATAFOLDER" On="uninstall" />
+    </Component>
+
     <Icon Id="Integrator.exe" SourceFile=".\resources\wso2.ico" />
     <Property Id="ARPPRODUCTICON" Value="Integrator.exe" />
   </Fragment>

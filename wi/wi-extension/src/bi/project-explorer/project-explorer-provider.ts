@@ -49,7 +49,10 @@ export class ProjectExplorerEntry extends vscode.TreeItem {
         icon: string = 'folder',
         isCodicon: boolean = false,
         position: NodePosition | undefined = undefined,
-        iconColor: vscode.ThemeColor | undefined = undefined
+        iconColor: vscode.ThemeColor | undefined = undefined,
+        iconLight?: string,
+        iconDark?: string,
+        iconSvgColor?: string
     ) {
         super(label, collapsibleState);
         this.tooltip = `${this.label}`;
@@ -57,6 +60,15 @@ export class ProjectExplorerEntry extends vscode.TreeItem {
         this.position = position;
         if (icon && isCodicon) {
             this.iconPath = new vscode.ThemeIcon(icon, iconColor);
+        } else if (iconLight && iconDark) {
+            const tint = (svg: string) => iconSvgColor
+                ? svg.replace(/((?:fill|stroke)\s*=\s*["'])(currentColor|black|white|#000(?:000)?|#fff(?:fff)?)(["'])/gi,
+                    `$1${iconSvgColor}$3`)
+                : svg;
+            this.iconPath = {
+                light: vscode.Uri.parse(`data:image/svg+xml;base64,${Buffer.from(tint(iconLight)).toString('base64')}`),
+                dark: vscode.Uri.parse(`data:image/svg+xml;base64,${Buffer.from(tint(iconDark)).toString('base64')}`)
+            };
         } else if (icon) {
             // Load icon from WI extension's assets folder
             const extensionPath = ext.context.extensionPath;
@@ -551,7 +563,10 @@ function getComponents(
             itemType === DIRECTORY_MAP.AGENT_DEFINITION ? 'symbol-class' : comp.icon,
             itemType === DIRECTORY_MAP.AGENT_DEFINITION,
             comp.position,
-            itemType === DIRECTORY_MAP.AGENT_DEFINITION ? new vscode.ThemeColor('icon.foreground') : undefined
+            itemType === DIRECTORY_MAP.AGENT_DEFINITION ? new vscode.ThemeColor('icon.foreground') : undefined,
+            comp.iconLight,
+            comp.iconDark,
+            comp.iconColor
         );
         fileEntry.resourceUri = Uri.parse(`bi-category:${projectPath}`);
         fileEntry.command = {
