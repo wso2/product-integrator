@@ -130,7 +130,12 @@ if exist "%BAL_SRC%" (
 REM Compute WiX ProductVersion. Windows Installer only compares the first THREE fields, so the
 REM 4-part integrator.version (a.b.c.d, e.g. 5.0.0.1) would not upgrade on a 4th-field bump.
 REM Fold the revision into the build field: a.b.(c*1000+d)  ->  5.0.0.1 becomes 5.0.1 (§D8).
-REM Constraint: c<=64 and d<=999 (build field max 65535). Pre-release suffixes (-m1) are stripped.
+REM Constraint: c<=64 and d<=999 (build field max 65535). Pre-release suffixes (-m1, -09181) are
+REM STRIPPED, so every pre-release of one core carries the SAME ProductVersion — that is only
+REM sound because Package.wxs sets MajorUpgrade AllowSameVersionUpgrades="yes" (same-version
+REM installs replace the registered product instead of stacking a second one). Keep the two in
+REM sync; do not fold the suffix in here instead (it would outrank the GA's a.b.c and block the
+REM final-release upgrade).
 REM Clear first so a failed computation can't inherit a stale value from the environment.
 set "WIX_VERSION="
 for /f "delims=" %%v in ('powershell -nologo -noprofile -command "$p=(('%~6' -split '-')[0] -split '\.'); while($p.Count -lt 4){$p+='0'}; $a=[int]$p[0]; $b=[int]$p[1]; $c=[int]$p[2]; $d=[int]$p[3]; if($c -gt 64 -or $d -gt 999){[Console]::Error.WriteLine('ProductVersion fold out of range (need c<=64,d<=999): %~6'); exit 1}; '{0}.{1}.{2}' -f $a,$b,($c*1000+$d)"') do set "WIX_VERSION=%%v"
