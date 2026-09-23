@@ -796,11 +796,29 @@ jobs:
             exit 1
           fi
           echo "Notarizing $DMG"
-          xcrun notarytool submit "$DMG" \
+          # `notarytool submit --wait` exits 0 even when Apple returns Invalid, so without this
+          # check the run failed one line later at `stapler` with "Could not find base64 encoded
+          # ticket ... Error 65" and no hint of the cause. Read the verdict, and on anything but
+          # Accepted print Apple's per-file findings, which is the only thing that says WHY.
+          SUBMIT_JSON=$(xcrun notarytool submit "$DMG" \
             --apple-id "$NOTARY_APPLE_ID" \
             --password "$NOTARY_APP_PASSWORD" \
             --team-id "$NOTARY_TEAM_ID" \
-            --wait
+            --wait --output-format json)
+          echo "$SUBMIT_JSON"
+          NOTARY_STATUS=$(printf '%s' "$SUBMIT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')
+          NOTARY_ID=$(printf '%s' "$SUBMIT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))')
+          if [ "$NOTARY_STATUS" != "Accepted" ]; then
+            echo "::error::notarization returned ${NOTARY_STATUS:-no status} for $DMG" >&2
+            if [ -n "$NOTARY_ID" ]; then
+              echo "----- Apple's notarization log -----"
+              xcrun notarytool log "$NOTARY_ID" \
+                --apple-id "$NOTARY_APPLE_ID" \
+                --password "$NOTARY_APP_PASSWORD" \
+                --team-id "$NOTARY_TEAM_ID" || true
+            fi
+            exit 1
+          fi
           xcrun stapler staple "$DMG"
 
       # This is the only AWS consumer in the job, so the credentials go in its own `env:` rather

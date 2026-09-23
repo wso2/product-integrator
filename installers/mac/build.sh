@@ -185,8 +185,8 @@ find "$WSO2_TARGET/WSO2 Integrator.app" -exec touch {} +
 
 # -------------------------------------------------------------------
 # Code-sign a fully-assembled app bundle (Developer ID + hardened runtime), inside-out:
-# loose Mach-O + component executables, then nested bundles deepest-first, then the top
-# app. Falls back to ad-hoc signing when no identity is configured (local/dev builds) so
+# natives inside jars, then every loose Mach-O, then nested bundles deepest-first, then
+# the top app. Falls back to ad-hoc signing when no identity is configured (local/dev builds) so
 # the app still launches. Reused for the full app and the stripped editor-only update
 # bundle (§D8) — stripping files breaks the seal, so the editor-only copy is re-signed.
 # -------------------------------------------------------------------
@@ -202,31 +202,61 @@ sign_app_bundle() {
         local SIGN_OPTS=(--force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$MAC_SIGNING_IDENTITY")
         local LIB_OPTS=(--force --timestamp --options runtime --sign "$MAC_SIGNING_IDENTITY")
 
-        # 1) Loose Mach-O content: libraries and native node addons first (no entitlements), then
-        #    executables inside the bundled components (Ballerina/JVM/ICP), then the repackaged CLI
-        #    under Resources/app/bin -- a bare Mach-O there is covered by no other pass, and one
-        #    unsigned executable fails notarization for the whole app.
-        find "$app" -type f \( -name "*.dylib" -o -name "*.so" -o -name "*.node" -o -name "*.jnilib" \) -print0 \
-            | while IFS= read -r -d '' f; do codesign "${LIB_OPTS[@]}" "$f"; done
-        if [ -d "$app/Contents/components" ]; then
-            find "$app/Contents/components" -type f -perm +111 ! -name "*.jar" -print0 \
-                | while IFS= read -r -d '' f; do codesign "${SIGN_OPTS[@]}" "$f"; done
-        fi
-        if [ -d "$app/Contents/Resources/app/bin" ]; then
-            find "$app/Contents/Resources/app/bin" -type f -perm +111 -print0 \
-                | while IFS= read -r -d '' f; do
-                    if file "$f" | grep -q "Mach-O"; then codesign "${SIGN_OPTS[@]}" "$f"; fi
-                  done
-        fi
+        # 1) Native libraries INSIDE .jar archives. The notary service unpacks jars, so a JNI
+        #    library shipped in a dependency jar is rejected exactly like a loose one -- that was
+        #    the bulk of the first rejection (sqlite-jdbc, netty-tcnative, lz4-java, jansi, jffi).
+        #    Extract, sign, write back into the same entry. Runs before anything is sealed.
+        find "$app" -type f -name "*.jar" -print0 \
+            | while IFS= read -r -d '' jar; do
+                listing=$(unzip -Z1 "$jar" 2>/dev/null || true)
+                natives=$(printf '%s\n' "$listing" | grep -E '\.(dylib|jnilib|so)$' || true)
+                [ -n "$natives" ] || continue
+                # Rewriting an entry invalidates a jarsigner signature. Say so rather than ship a
+                # jar whose seal we broke -- and rather than fail a build over a jar we cannot fix.
+                if printf '%s\n' "$listing" | grep -qE '^META-INF/.*\.(SF|DSA|RSA|EC)$'; then
+                    print_warning "jarsigner-signed, leaving its natives unsigned: $jar"
+                    continue
+                fi
+                jar_abs="$(cd "$(dirname "$jar")" && pwd)/$(basename "$jar")"
+                jar_tmp=$(mktemp -d)
+                (
+                    cd "$jar_tmp"
+                    printf '%s\n' "$natives" | while IFS= read -r entry; do
+                        unzip -qo "$jar_abs" "$entry" || continue
+                        [ -f "$entry" ] || continue
+                        file -b "$entry" | grep -q "Mach-O" || continue
+                        codesign "${LIB_OPTS[@]}" "$entry"
+                        zip -q "$jar_abs" "$entry"
+                    done
+                )
+                rm -rf "$jar_tmp"
+              done
 
-        # 2) Nested bundles (Electron frameworks + helper .apps), deepest path first.
+        # 2) Every Mach-O in the bundle, wherever it lives and whatever it is called. Matching by
+        #    extension and location missed six binaries that notarization rejected:
+        #    chrome_crashpad_handler and ShipIt nested in frameworks, and choreo/tgrep/rg/
+        #    spawn-helper under Resources -- none of which carry an extension. `file` is the only
+        #    reliable test, and it is architecture-agnostic: an arm64 build ships x86_64 slices
+        #    and an x64 build ships arm64 ones. Executables take the entitlements (the union
+        #    covers Electron + the bundled JVM, which needs jit/unsigned-exec-memory/dyld-env/
+        #    library-validation exceptions); libraries take none, since entitlements on a dylib
+        #    grant nothing and only widen what an auditor has to reason about.
+        find "$app" -type f \( -perm +111 -o -name "*.dylib" -o -name "*.so" -o -name "*.node" -o -name "*.jnilib" \) -print0 \
+            | while IFS= read -r -d '' f; do
+                case "$(file -b "$f" | tr '\n' ' ')" in
+                    *Mach-O*executable*) codesign "${SIGN_OPTS[@]}" "$f" ;;
+                    *Mach-O*)            codesign "${LIB_OPTS[@]}" "$f" ;;
+                esac
+              done
+
+        # 3) Nested bundles (Electron frameworks + helper .apps), deepest path first.
         find "$app" -type d \( -name "*.framework" -o -name "*.app" \) | awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2- \
             | while IFS= read -r bundle; do
                 [ "$bundle" = "$app" ] && continue
                 codesign "${SIGN_OPTS[@]}" "$bundle"
               done
 
-        # 3) The top-level app last, then verify the seal.
+        # 4) The top-level app last, then verify the seal.
         codesign "${SIGN_OPTS[@]}" "$app"
         codesign --verify --deep --strict --verbose=2 "$app"
         print_info "App signed and verified: $app"
