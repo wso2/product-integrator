@@ -336,7 +336,7 @@ sync
 sleep 3
 # Something transiently holds a freshly-written volume — Spotlight indexing, fsevents, or the
 # Finder used for the window layout above. Three attempts two seconds apart was not enough on a
-# real arm64 runner: the build failed here after the app had been signed and the pkg written.
+# real arm64 runner: the build failed here after the app had already been signed.
 #
 # So: escalate the backoff to ~30s total, name the holder when it fails (otherwise the next
 # occurrence is just as mysterious as this one was), and fall back to diskutil, which can evict a
@@ -397,7 +397,7 @@ MAC_ZIP="wso2-integrator-$VERSION-$ARCH-mac.zip"
 print_info "Creating Squirrel.Mac update payload: $MAC_ZIP"
 rm -f "$WORK_DIR/$MAC_ZIP"
 # INSTALLER_PROFILE=editor-update (§D8): the Squirrel update payload is EDITOR-ONLY — strip the
-# bundled Ballerina from a copy and re-sign it (the DMG/PKG first-install artifacts stay full).
+# bundled Ballerina from a copy and re-sign it (the DMG, the first-install artifact, stays full).
 # After Squirrel swaps the app, the seeded Ballerina in ~/.wso2-integrator survives the swap.
 # Default (full) keeps the current behaviour for local/dev builds.
 ZIP_SRC="$SIGN_APP"
