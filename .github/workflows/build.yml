@@ -8,7 +8,7 @@ on:
   workflow_call:
     inputs:
       runner:
-        description: 'Select runner type'
+        description: 'Runner for the Linux compile job: ubuntu-latest, codebuild, or k8s-default-runners. macOS and Windows are always GitHub-hosted.'
         required: false
         default: 'ubuntu-latest'
         type: string
@@ -324,7 +324,7 @@ jobs:
     uses: ./.github/workflows/compile.yml
     secrets: inherit
     with:
-      runOnAWS: ${{ inputs.runner == 'codebuild' }}
+      runner: ${{ inputs.runner }}
       ballerina_extension_source: ${{ inputs.ballerina_extension_source }}
       mi_extension_source: ${{ inputs.mi_extension_source }}
       build_packed_installers: ${{ inputs.build_packed_installers == true }}
