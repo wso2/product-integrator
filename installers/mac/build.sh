@@ -316,10 +316,18 @@ sign_app_bundle() {
                 # exactly what it did. C locale stops the error at its source so the file is
                 # classified rather than skipped; the guard keeps an unreadable one from being
                 # fatal, and says so instead of passing over it in silence.
-                if ! desc=$(LC_ALL=C file -b "$f" 2>/dev/null | LC_ALL=C tr '\n' ' '); then
+                # No pipeline here on purpose. Piping into `tr` meant the exit status came from
+                # `tr`, which succeeds on the empty input a failed `file` leaves behind -- so a
+                # `file` failure slipped past the guard and skipped the binary in silence, the
+                # very thing this check exists to prevent. `set -o pipefail` would fix that and
+                # break far more: this script is full of `... | grep | head`, and a grep with no
+                # match would become fatal. Checking `file` directly sidesteps both, and drops a
+                # subprocess from a loop that runs once per file in the bundle.
+                if ! desc=$(LC_ALL=C file -b "$f" 2>/dev/null); then
                     print_warning "could not classify, leaving unsigned: $f"
                     continue
                 fi
+                desc=${desc//$'\n'/ }
                 case "$desc" in
                     *dSYM*|*kext*|*Mach-O*object*) continue ;;
                     *Mach-O*executable*|*Mach-O*shared\ library*|*Mach-O*bundle*|*Mach-O*dynamically\ linked*) ;;
