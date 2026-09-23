@@ -806,7 +806,10 @@ jobs:
             --team-id "$NOTARY_TEAM_ID" \
             --wait --output-format json)
           echo "$SUBMIT_JSON"
-          read -r NOTARY_STATUS NOTARY_ID <<<"$(printf '%s' "$SUBMIT_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("status",""), d.get("id",""))')"
+          # Tab-separated, because a status can contain a space: `--wait` reports "In Progress"
+          # on timeout, and splitting on spaces would leave "Progress <uuid>" in the id, sending
+          # `notarytool log` an id it cannot use -- which `|| true` would then hide.
+          IFS=$'\t' read -r NOTARY_STATUS NOTARY_ID <<<"$(printf '%s' "$SUBMIT_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("status",""), d.get("id",""), sep="\t")')"
           if [ "$NOTARY_STATUS" != "Accepted" ]; then
             echo "::error::notarization returned ${NOTARY_STATUS:-no status} for $DMG" >&2
             if [ -n "$NOTARY_ID" ]; then

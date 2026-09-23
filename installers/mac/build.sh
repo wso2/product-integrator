@@ -255,9 +255,28 @@ sign_app_bundle() {
         #    grant nothing and only widen what an auditor has to reason about.
         find "$app" -type f \( -perm +111 -o -name "*.dylib" -o -name "*.so" -o -name "*.node" -o -name "*.jnilib" \) -print0 \
             | while IFS= read -r -d '' f; do
+                # Match the Mach-O KIND, not just the string: `file` also says Mach-O for object
+                # files, dSYM companions and kext bundles, none of which codesign will accept --
+                # and under `set -e` one of those would stop the build.
                 case "$(file -b "$f" | tr '\n' ' ')" in
-                    *Mach-O*executable*) codesign "${SIGN_OPTS[@]}" "$f" ;;
-                    *Mach-O*)            codesign "${LIB_OPTS[@]}" "$f" ;;
+                    *dSYM*|*kext*|*Mach-O*object*)
+                        : ;;
+                    *Mach-O*executable*)
+                        # Entitlements stay where they were before this sweep existed: the bundled
+                        # JVM and Ballerina launchers under components, and the repackaged CLI. The
+                        # executables this sweep newly reaches -- rg, tgrep, choreo, spawn-helper,
+                        # ShipIt, chrome_crashpad_handler -- get the hardened runtime and nothing
+                        # else. Handing them disable-library-validation and
+                        # allow-dyld-environment-variables would let DYLD_INSERT_LIBRARIES load
+                        # arbitrary code into a Developer-ID-signed binary; spawn-helper starts
+                        # user shells, so that is not theoretical.
+                        case "$f" in
+                            "$app"/Contents/components/*|"$app"/Contents/Resources/app/bin/*)
+                                codesign "${SIGN_OPTS[@]}" "$f" ;;
+                            *)  codesign "${LIB_OPTS[@]}" "$f" ;;
+                        esac ;;
+                    *Mach-O*shared\ library*|*Mach-O*bundle*|*Mach-O*dynamically\ linked*)
+                        codesign "${LIB_OPTS[@]}" "$f" ;;
                 esac
               done
 
