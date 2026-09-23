@@ -191,6 +191,48 @@ find "$WSO2_TARGET/WSO2 Integrator.app" -exec touch {} +
 # bundle (§D8) — stripping files breaks the seal, so the editor-only copy is re-signed.
 # -------------------------------------------------------------------
 ENTITLEMENTS="$WORK_DIR/entitlements.plist"
+
+# Apple refuses to notarize a Mach-O whose macOS deployment target predates 10.9, however
+# well it is signed. libjffi-1.2.jnilib -- vendored inside the streaming integrator's
+# language-server jar -- declares 10.6, and it failed the first release build that got far
+# enough for Apple to look past the missing signature. jnr's current release still ships an
+# x86_64 slice declaring 10.6, so upgrading the dependency does not settle it either.
+#
+# Bump only the slices that are actually too old. A blanket `vtool` rewrites an arm64
+# slice's LC_BUILD_VERSION into a meaningless 10.9 LC_VERSION_MIN_MACOSX -- arm64 macOS
+# starts at 11.0 -- so this walks architectures and leaves the rest alone. Must run before
+# codesign: vtool invalidates any existing signature.
+raise_old_deployment_target() {
+    local f="$1" arch min sdk bumped=0
+    for arch in $(lipo -archs "$f" 2>/dev/null); do
+        min=$(otool -l -arch "$arch" "$f" 2>/dev/null | grep -A4 -E 'LC_VERSION_MIN_MACOSX|LC_BUILD_VERSION' | grep -E '^ +(version|minos) ' | head -1 | awk '{print $2}')
+        sdk=$(otool -l -arch "$arch" "$f" 2>/dev/null | grep -A4 -E 'LC_VERSION_MIN_MACOSX|LC_BUILD_VERSION' | grep -E '^ +sdk ' | head -1 | awk '{print $2}')
+        # Either field below 10.9 is enough for Apple to reject the whole archive.
+        if awk -v a="$min" -v b="$sdk" 'BEGIN{
+                old=0
+                for (i=1; i<=2; i++) {
+                    v = (i==1 ? a : b)
+                    if (v == "" || v == "n/a") continue
+                    split(v, p, ".")
+                    if (p[1] < 10 || (p[1] == 10 && p[2] < 9)) old=1
+                }
+                exit old ? 0 : 1}'; then
+            # Keep the recorded SDK when it already clears the floor: only the offending
+            # field should change, and rewriting a 15.5 SDK down to 10.13 would misstate
+            # how the binary was actually built.
+            local keep_sdk
+            keep_sdk=$(awk -v v="$sdk" 'BEGIN{
+                    if (v == "" || v == "n/a") { print "10.13"; exit }
+                    split(v, p, ".")
+                    print (p[1] < 10 || (p[1] == 10 && p[2] < 9)) ? "10.13" : v }')
+            vtool -arch "$arch" -set-version-min macos 10.9 "$keep_sdk" -replace -output "$f" "$f"
+            bumped=1
+        fi
+    done
+    [ "$bumped" = 1 ] && print_info "raised deployment target to 10.9 (${f##*/}) so it can be notarized"
+    return 0
+}
+
 sign_app_bundle() {
     local app="$1"
     if [ -n "${MAC_SIGNING_IDENTITY:-}" ]; then
@@ -230,6 +272,7 @@ sign_app_bundle() {
                         unzip -qo "$jar_abs" "$entry" || continue
                         [ -f "$entry" ] || continue
                         file -b "$entry" | grep -q "Mach-O" || continue
+                        raise_old_deployment_target "$entry"
                         codesign "${LIB_OPTS[@]}" "$entry"
                         zip -q "$jar_abs" "$entry"
                         # Read the entry back OUT of the archive and verify it. Nothing else
@@ -258,9 +301,14 @@ sign_app_bundle() {
                 # Match the Mach-O KIND, not just the string: `file` also says Mach-O for object
                 # files, dSYM companions and kext bundles, none of which codesign will accept --
                 # and under `set -e` one of those would stop the build.
-                case "$(file -b "$f" | tr '\n' ' ')" in
-                    *dSYM*|*kext*|*Mach-O*object*)
-                        : ;;
+                desc=$(file -b "$f" | tr '\n' ' ')
+                case "$desc" in
+                    *dSYM*|*kext*|*Mach-O*object*) continue ;;
+                    *Mach-O*executable*|*Mach-O*shared\ library*|*Mach-O*bundle*|*Mach-O*dynamically\ linked*) ;;
+                    *) continue ;;
+                esac
+                raise_old_deployment_target "$f"
+                case "$desc" in
                     *Mach-O*executable*)
                         # Entitlements stay where they were before this sweep existed: the bundled
                         # JVM and Ballerina launchers under components, and the repackaged CLI. The
@@ -275,8 +323,7 @@ sign_app_bundle() {
                                 codesign "${SIGN_OPTS[@]}" "$f" ;;
                             *)  codesign "${LIB_OPTS[@]}" "$f" ;;
                         esac ;;
-                    *Mach-O*shared\ library*|*Mach-O*bundle*|*Mach-O*dynamically\ linked*)
-                        codesign "${LIB_OPTS[@]}" "$f" ;;
+                    *)  codesign "${LIB_OPTS[@]}" "$f" ;;
                 esac
               done
 
