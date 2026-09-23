@@ -217,7 +217,11 @@ raise_old_deployment_target() {
     for arch in $(lipo -archs "$f" 2>/dev/null); do
         # One otool per architecture. This runs for every Mach-O in the bundle and every
         # native inside every jar, so reading it twice doubles the cost for nothing.
-        load=$(otool -l -arch "$arch" "$f" 2>/dev/null | grep -A4 -E 'LC_VERSION_MIN_MACOSX|LC_BUILD_VERSION')
+        # `|| load=""` is load-bearing under `set -e`: a slice carrying neither load command
+        # makes grep exit 1, and a bare assignment would take the whole signing step down
+        # rather than skip one binary. The sibling assignments below are safe because their
+        # pipelines end in awk, which exits 0 on no input.
+        load=$(otool -l -arch "$arch" "$f" 2>/dev/null | grep -A4 -E 'LC_VERSION_MIN_MACOSX|LC_BUILD_VERSION') || load=""
         min=$(printf '%s\n' "$load" | grep -E '^ +(version|minos) ' | head -1 | awk '{print $2}')
         sdk=$(printf '%s\n' "$load" | grep -E '^ +sdk ' | head -1 | awk '{print $2}')
         # Either field below the floor is enough for Apple to reject the whole archive.
