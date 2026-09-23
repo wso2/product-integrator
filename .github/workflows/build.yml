@@ -806,8 +806,7 @@ jobs:
             --team-id "$NOTARY_TEAM_ID" \
             --wait --output-format json)
           echo "$SUBMIT_JSON"
-          NOTARY_STATUS=$(printf '%s' "$SUBMIT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')
-          NOTARY_ID=$(printf '%s' "$SUBMIT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))')
+          read -r NOTARY_STATUS NOTARY_ID <<<"$(printf '%s' "$SUBMIT_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("status",""), d.get("id",""))')"
           if [ "$NOTARY_STATUS" != "Accepted" ]; then
             echo "::error::notarization returned ${NOTARY_STATUS:-no status} for $DMG" >&2
             if [ -n "$NOTARY_ID" ]; then

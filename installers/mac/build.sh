@@ -214,7 +214,12 @@ sign_app_bundle() {
                 # Rewriting an entry invalidates a jarsigner signature. Say so rather than ship a
                 # jar whose seal we broke -- and rather than fail a build over a jar we cannot fix.
                 if printf '%s\n' "$listing" | grep -qE '^META-INF/.*\.(SF|DSA|RSA|EC)$'; then
+                    # Not fatal: a jar we cannot fix should not block a release, and it cannot
+                    # slip through either -- the notary step fails the build and prints Apple's
+                    # log, which names the file. Annotated so it is visible without reading the
+                    # build output line by line.
                     print_warning "jarsigner-signed, leaving its natives unsigned: $jar"
+                    [ -n "${GITHUB_ACTIONS:-}" ] && echo "::warning::jarsigner-signed jar left unsigned, notarization may reject it: $jar"
                     continue
                 fi
                 jar_abs="$(cd "$(dirname "$jar")" && pwd)/$(basename "$jar")"
@@ -227,6 +232,13 @@ sign_app_bundle() {
                         file -b "$entry" | grep -q "Mach-O" || continue
                         codesign "${LIB_OPTS[@]}" "$entry"
                         zip -q "$jar_abs" "$entry"
+                        # Read the entry back OUT of the archive and verify it. Nothing else
+                        # covers the write-back: `codesign --verify` on the app never looks
+                        # inside a jar, so a botched rewrite would pass CI clean and surface
+                        # as a native-load failure on a user's machine.
+                        rm -rf .verify && mkdir .verify
+                        ( cd .verify && unzip -qo "$jar_abs" "$entry" && codesign --verify "$entry" )
+                        rm -rf .verify
                     done
                 )
                 rm -rf "$jar_tmp"
