@@ -308,7 +308,26 @@ sign_app_bundle() {
                 # Match the Mach-O KIND, not just the string: `file` also says Mach-O for object
                 # files, dSYM companions and kext bundles, none of which codesign will accept --
                 # and under `set -e` one of those would stop the build.
-                desc=$(file -b "$f" | tr '\n' ' ')
+                # LC_ALL=C, and not a bare assignment. `file` echoes bytes out of the file it
+                # inspects, so its output is not always valid UTF-8, and in a UTF-8 locale `tr`
+                # rejects that with "Illegal byte sequence". Under the old inline
+                # `case "$(...)"` that merely matched no arm and skipped the file silently; as
+                # an assignment it takes the whole signing step down under `set -e`, which is
+                # exactly what it did. C locale stops the error at its source so the file is
+                # classified rather than skipped; the guard keeps an unreadable one from being
+                # fatal, and says so instead of passing over it in silence.
+                # No pipeline here on purpose. Piping into `tr` meant the exit status came from
+                # `tr`, which succeeds on the empty input a failed `file` leaves behind -- so a
+                # `file` failure slipped past the guard and skipped the binary in silence, the
+                # very thing this check exists to prevent. `set -o pipefail` would fix that and
+                # break far more: this script is full of `... | grep | head`, and a grep with no
+                # match would become fatal. Checking `file` directly sidesteps both, and drops a
+                # subprocess from a loop that runs once per file in the bundle.
+                if ! desc=$(LC_ALL=C file -b "$f" 2>/dev/null); then
+                    print_warning "could not classify, leaving unsigned: $f"
+                    continue
+                fi
+                desc=${desc//$'\n'/ }
                 case "$desc" in
                     *dSYM*|*kext*|*Mach-O*object*) continue ;;
                     *Mach-O*executable*|*Mach-O*shared\ library*|*Mach-O*bundle*|*Mach-O*dynamically\ linked*) ;;
