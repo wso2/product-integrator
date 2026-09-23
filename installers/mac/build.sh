@@ -37,8 +37,6 @@ JRE_ZIP="$5"
 VERSION="$6"
 ARCH="$7"
 
-OUTPUT_PKG="WSO2_Integrator.pkg"
-BUNDLE_IDENTIFIER="com.wso2.integrator"
 EXTRACTION_TARGET="$WORK_DIR/payload"
 
 # Extract wso2 zip
@@ -241,49 +239,6 @@ sign_app_bundle() {
 SIGN_APP="$WSO2_TARGET/WSO2 Integrator.app"
 sign_app_bundle "$SIGN_APP"
 
-# Build the component package
-pkgbuild --root "$EXTRACTION_TARGET" \
-         --identifier "$BUNDLE_IDENTIFIER" \
-         --version "$VERSION" \
-         --install-location "/" \
-         --ownership preserve \
-         --component-plist "$WORK_DIR/component.plist" \
-         "$WORK_DIR/WSO2 Integrator.pkg"
-
-sed -i '' "s/version=\"__VERSION__\"/version=\"$VERSION\"/g" "$WORK_DIR/Distribution.xml"
-
-
-# Build the final product archive. Signed with the Developer ID Installer identity
-# when available — an unsigned .pkg cannot be notarized. (App bundles inside are
-# already codesigned with the Application identity; the pkg wrapper needs its own.)
-if [ -n "${MAC_INSTALLER_SIGNING_IDENTITY:-}" ]; then
-    print_info "Signing installer package with: $MAC_INSTALLER_SIGNING_IDENTITY"
-    productbuild --distribution "$WORK_DIR/Distribution.xml" \
-                 --resources "$WORK_DIR" \
-                 --package-path "$WORK_DIR" \
-                 --sign "$MAC_INSTALLER_SIGNING_IDENTITY" \
-                 --timestamp \
-                 "wso2-integrator-$VERSION-$ARCH.pkg"
-else
-    print_warning "MAC_INSTALLER_SIGNING_IDENTITY not set — .pkg will be unsigned (not notarizable)"
-    productbuild --distribution "$WORK_DIR/Distribution.xml" \
-                 --resources "$WORK_DIR" \
-                 --package-path "$WORK_DIR" \
-                 "wso2-integrator-$VERSION-$ARCH.pkg"
-fi
-
-sed -i '' "s/version=\"$VERSION\"/version=\"__VERSION__\"/g" "$WORK_DIR/Distribution.xml"
-
-
-# Check if the build was successful
-if [ -f "wso2-integrator-$VERSION-$ARCH.pkg" ]; then
-    print_info "Successfully created: wso2-integrator-$VERSION-$ARCH.pkg"
-    print_info "Package size: $(du -h "wso2-integrator-$VERSION-$ARCH.pkg" | cut -f1)"
-else
-    print_error "Failed to create pkg package"
-    exit 1
-fi
-
 # -------------------------------------------------------------------
 # Build the DMG
 # -------------------------------------------------------------------
@@ -381,7 +336,7 @@ sync
 sleep 3
 # Something transiently holds a freshly-written volume — Spotlight indexing, fsevents, or the
 # Finder used for the window layout above. Three attempts two seconds apart was not enough on a
-# real arm64 runner: the build failed here after the app had been signed and the pkg written.
+# real arm64 runner: the build failed here after the app had already been signed.
 #
 # So: escalate the backoff to ~30s total, name the holder when it fails (otherwise the next
 # occurrence is just as mysterious as this one was), and fall back to diskutil, which can evict a
@@ -442,7 +397,7 @@ MAC_ZIP="wso2-integrator-$VERSION-$ARCH-mac.zip"
 print_info "Creating Squirrel.Mac update payload: $MAC_ZIP"
 rm -f "$WORK_DIR/$MAC_ZIP"
 # INSTALLER_PROFILE=editor-update (§D8): the Squirrel update payload is EDITOR-ONLY — strip the
-# bundled Ballerina from a copy and re-sign it (the DMG/PKG first-install artifacts stay full).
+# bundled Ballerina from a copy and re-sign it (the DMG, the first-install artifact, stays full).
 # After Squirrel swaps the app, the seeded Ballerina in ~/.wso2-integrator survives the swap.
 # Default (full) keeps the current behaviour for local/dev builds.
 ZIP_SRC="$SIGN_APP"
@@ -477,6 +432,5 @@ rm -rf "${ICP_TARGET:?}"/*
 rm -rf "${BALLERINA_TARGET:?}"/*
 rm -rf "$EXTRACTION_TARGET/Library"
 rm -rf "$EXTRACTION_TARGET/Applications"
-rm -rf "$WORK_DIR/WSO2 Integrator.pkg"
 
 print_info "Done!"
