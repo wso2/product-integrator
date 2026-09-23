@@ -202,34 +202,37 @@ ENTITLEMENTS="$WORK_DIR/entitlements.plist"
 # slice's LC_BUILD_VERSION into a meaningless 10.9 LC_VERSION_MIN_MACOSX -- arm64 macOS
 # starts at 11.0 -- so this walks architectures and leaves the rest alone. Must run before
 # codesign: vtool invalidates any existing signature.
+# True when a macOS version field is below the 10.9 floor the notary service enforces.
+# An absent field ("n/a", or a load command that carries neither) counts as not-old: it is
+# the caller's job to substitute a default, not this predicate's to invent one.
+_below_notary_floor() {
+    awk -v v="$1" 'BEGIN{
+        if (v == "" || v == "n/a") exit 1
+        split(v, p, ".")
+        exit (p[1] < 10 || (p[1] == 10 && p[2] < 9)) ? 0 : 1 }'
+}
+
 raise_old_deployment_target() {
-    local f="$1" arch min sdk bumped=0
+    local f="$1" arch load min sdk use_min use_sdk bumped=0
     for arch in $(lipo -archs "$f" 2>/dev/null); do
-        min=$(otool -l -arch "$arch" "$f" 2>/dev/null | grep -A4 -E 'LC_VERSION_MIN_MACOSX|LC_BUILD_VERSION' | grep -E '^ +(version|minos) ' | head -1 | awk '{print $2}')
-        sdk=$(otool -l -arch "$arch" "$f" 2>/dev/null | grep -A4 -E 'LC_VERSION_MIN_MACOSX|LC_BUILD_VERSION' | grep -E '^ +sdk ' | head -1 | awk '{print $2}')
-        # Either field below 10.9 is enough for Apple to reject the whole archive.
-        if awk -v a="$min" -v b="$sdk" 'BEGIN{
-                old=0
-                for (i=1; i<=2; i++) {
-                    v = (i==1 ? a : b)
-                    if (v == "" || v == "n/a") continue
-                    split(v, p, ".")
-                    if (p[1] < 10 || (p[1] == 10 && p[2] < 9)) old=1
-                }
-                exit old ? 0 : 1}'; then
-            # Keep the recorded SDK when it already clears the floor: only the offending
-            # field should change, and rewriting a 15.5 SDK down to 10.13 would misstate
-            # how the binary was actually built.
-            local keep_sdk
-            keep_sdk=$(awk -v v="$sdk" 'BEGIN{
-                    if (v == "" || v == "n/a") { print "10.13"; exit }
-                    split(v, p, ".")
-                    print (p[1] < 10 || (p[1] == 10 && p[2] < 9)) ? "10.13" : v }')
-            vtool -arch "$arch" -set-version-min macos 10.9 "$keep_sdk" -replace -output "$f" "$f"
-            bumped=1
-        fi
+        # One otool per architecture. This runs for every Mach-O in the bundle and every
+        # native inside every jar, so reading it twice doubles the cost for nothing.
+        load=$(otool -l -arch "$arch" "$f" 2>/dev/null | grep -A4 -E 'LC_VERSION_MIN_MACOSX|LC_BUILD_VERSION')
+        min=$(printf '%s\n' "$load" | grep -E '^ +(version|minos) ' | head -1 | awk '{print $2}')
+        sdk=$(printf '%s\n' "$load" | grep -E '^ +sdk ' | head -1 | awk '{print $2}')
+        # Either field below the floor is enough for Apple to reject the whole archive.
+        _below_notary_floor "$min" || _below_notary_floor "$sdk" || continue
+        # Carry through whichever field was already fine. vtool sets both at once, so
+        # hardcoding either one downgrades a binary that only had the other problem --
+        # a compliant 10.13 deployment target must survive an old SDK being raised.
+        if _below_notary_floor "$min" || [ -z "$min" ] || [ "$min" = "n/a" ]; then use_min=10.9; else use_min="$min"; fi
+        if _below_notary_floor "$sdk" || [ -z "$sdk" ] || [ "$sdk" = "n/a" ]; then use_sdk=10.13; else use_sdk="$sdk"; fi
+        vtool -arch "$arch" -set-version-min macos "$use_min" "$use_sdk" -replace -output "$f" "$f"
+        bumped=1
     done
-    [ "$bumped" = 1 ] && print_info "raised deployment target to 10.9 (${f##*/}) so it can be notarized"
+    # Not "raised to 10.9": when only the SDK was old the deployment target keeps its own,
+    # higher value, and the message should not claim otherwise.
+    [ "$bumped" = 1 ] && print_info "raised version fields below the 10.9 notarization floor: ${f##*/}"
     return 0
 }
 
