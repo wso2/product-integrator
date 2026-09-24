@@ -26,6 +26,7 @@ import {
 	normalizeSubPath,
 	isMissingRemoteBranch,
 	isEditorLocalEntry,
+	isEditorLocalPath,
 } from "./repo";
 import { parseGitHubOwnerRepo } from "./repo-url";
 
@@ -191,6 +192,20 @@ describe("isEditorLocalEntry", () => {
 	it("keeps everything belonging to the integration", () => {
 		for (const name of ["Ballerina.toml", "main.bal", "src", ".gitignore", "Config.toml", "mcp.json", ".vscoderc"]) {
 			assert.strictEqual(isEditorLocalEntry(name), false, `should keep: ${name}`);
+		}
+	});
+});
+
+describe("isEditorLocalPath", () => {
+	it("excludes what the editor writes inside its own directory", () => {
+		assert.strictEqual(isEditorLocalPath(".vscode/settings.json"), true);
+		assert.strictEqual(isEditorLocalPath(".vscode"), true);
+		assert.strictEqual(isEditorLocalPath(".mcp.json"), true);
+	});
+
+	it("keeps the integration's own files, wherever they sit", () => {
+		for (const path of ["main.bal", "src/orders/main.bal", "Ballerina.toml", "docs/.vscode-notes.md", "src/.vscode.bal"]) {
+			assert.strictEqual(isEditorLocalPath(path), false, `should keep: ${path}`);
 		}
 	});
 });

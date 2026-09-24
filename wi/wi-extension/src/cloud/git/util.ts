@@ -596,7 +596,12 @@ export const getGitRoot = async (context: ExtensionContext, directoryPath: strin
 	}
 };
 
-export const hasDirtyRepo = async (directoryPath: string, context: ExtensionContext, ignoredFileNames: string[] = []): Promise<boolean> => {
+export const hasDirtyRepo = async (
+	directoryPath: string,
+	context: ExtensionContext,
+	ignoredFileNames: string[] = [],
+	isIgnoredPath: (repoRelativePath: string) => boolean = () => false,
+): Promise<boolean> => {
 	try {
 		const git = await initGit(context);
 		const repoRoot = await git?.getRepositoryRoot(directoryPath)
@@ -605,7 +610,10 @@ export const hasDirtyRepo = async (directoryPath: string, context: ExtensionCont
 			if (git) {
 				const gitRepo = git.open(repoRoot, { path: repoRoot });
 				const status = await gitRepo.getStatus({ untrackedChanges: 'separate', subDirectory: subPath });
-				const hasLocalChanges = status.status.filter(item => !ignoredFileNames.some(fileName => item.path.endsWith(fileName))).length > 0;
+				const hasLocalChanges =
+					status.status.filter(
+						(item) => !ignoredFileNames.some((fileName) => item.path.endsWith(fileName)) && !isIgnoredPath(item.path),
+					).length > 0;
 				if (hasLocalChanges) {
 					return hasLocalChanges
 				}

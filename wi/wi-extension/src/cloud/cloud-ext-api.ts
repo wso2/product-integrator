@@ -25,6 +25,7 @@ import type {
 } from "@wso2/wso2-platform-core";
 import { ext } from "../extensionVariables";
 import { hasDirtyRepo } from "./git/util";
+import { isEditorLocalPath } from "./ipaas/repo";
 import { openClonedDir } from "./cloud-uri-handlers";
 import { contextStore } from "./stores/context-store";
 import { webviewStateStore } from "./stores/webview-state-store";
@@ -75,8 +76,13 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public getWebviewStateStore = () => webviewStateStore.getState().state;
 
 	// Git
+	// In the cloud editor the workspace is also the editor's own home: it writes
+	// settings into it that were never part of the integration and are excluded
+	// from what is pushed. Counting them here is what leaves "Push Changes to
+	// WSO2 Cloud" offering to push an integration that has nothing to push.
+	// Outside the cloud editor these files are the user's own, so they count.
 	public localRepoHasChanges = (fsPath: string): Promise<boolean> =>
-		hasDirtyRepo(fsPath, ext.context);
+		hasDirtyRepo(fsPath, ext.context, [], ext.isDevantCloudEditor ? isEditorLocalPath : undefined);
 
 	// Navigation
 	public openClonedDir = (params: Parameters<IWso2PlatformExtensionAPI["openClonedDir"]>[0]): Promise<void> =>

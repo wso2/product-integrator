@@ -119,3 +119,17 @@ const EDITOR_LOCAL_ENTRIES = new Set([".mcp.json", ".vscode"]);
 export function isEditorLocalEntry(name: string): boolean {
 	return EDITOR_LOCAL_ENTRIES.has(name);
 }
+
+/**
+ * Whether a path inside the repository belongs to the editor rather than to the
+ * integration.
+ *
+ * The cloud editor writes its own settings into the workspace after the clone,
+ * so git reports them as changes the user never made. Counting them makes an
+ * integration that was just deployed look like it has work waiting to be
+ * pushed, which is the opposite of what the state means.
+ */
+export function isEditorLocalPath(repoRelativePath: string): boolean {
+	const [first] = repoRelativePath.replace(/^[.][/]/, "").split("/");
+	return isEditorLocalEntry(first);
+}
