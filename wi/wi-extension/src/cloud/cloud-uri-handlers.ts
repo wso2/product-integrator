@@ -137,10 +137,15 @@ export function activateURIHandlers() {
 					// view of which repositories are reachable is now stale.
 					const installationId = urlParams.get("installation_id");
 
+					// Nothing to exchange is an outcome too: the install callback
+					// carries no code, and the views below still have to refresh.
+					let bound: Promise<void> = Promise.resolve();
 					if (authCode && (orgId || ext.cloudBackend === "ipaas")) {
-						ext.clients.rpcClient
+						bound = ext.clients.rpcClient
 							.obtainGithubToken({ code: authCode, orgId: orgId ?? "" })
-							.then(() => window.showInformationMessage("GitHub connected."))
+							.then(() => {
+								window.showInformationMessage("GitHub connected.");
+							})
 							.catch((err: Error) => {
 								ext.logError("Failed to connect GitHub", err);
 								window.showErrorMessage(err.message);
@@ -151,8 +156,17 @@ export function activateURIHandlers() {
 							ext.log(`GitHub App installation ${installationId} updated`);
 							window.showInformationMessage("GitHub repository access updated.");
 						}
-						ext.clients.rpcClient.resetGitHubInstallations();
-						contextStore.getState().refreshState();
+						const client = ext.clients.rpcClient;
+						// After the exchange, never alongside it. The platform answers
+						// the installation listing from the authorization it holds at
+						// the time of the call, so refreshing while the code is still
+						// being exchanged re-reads the old grant and caches it — which
+						// is why an organization authorized a moment ago stays missing
+						// until the user goes through the whole flow a second time.
+						bound.then(() => {
+							client.resetGitHubInstallations();
+							contextStore.getState().refreshState();
+						});
 					}
 				} catch (err: any) {
 					console.error("Failed to handle /ghapp uri handler", err);
