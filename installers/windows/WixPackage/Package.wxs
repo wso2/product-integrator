@@ -10,7 +10,20 @@
     Scope="perUser"
   >
 
-    <MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" />
+    <!-- AllowSameVersionUpgrades: the ProductVersion fold in build.bat STRIPS pre-release
+         suffixes, so every 5.1.0-* daily/alpha MSI carries ProductVersion 5.1.0. Without
+         same-version upgrades, MajorUpgrade only removes LOWER versions, so installing one
+         5.1.0-* build over another registered a SECOND product into the same folder — the
+         in-app editor-update then stacked a third — leaving a mixed Electron tree that died
+         at launch with a sandbox fatal (exit 0xFFFF7003) and no window, and interleaved
+         RemoveFolderEx runs on uninstall corrupted the shared-component refcounts (seen in
+         the field on 5.1.0-09172 + 09181-update, 2026-09-18). With this flag, any build of
+         the same release core replaces the installed one (order between two dailies is not
+         enforced — MSI ignores the suffix — which is acceptable within a pre-release train),
+         and the eventual GA 5.1.0 still replaces every daily. Do NOT "fix" this by folding
+         the daily suffix into the version instead: 5.1.<daily> would compare HIGHER than the
+         GA's 5.1.0 and block the final-release upgrade. -->
+    <MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" AllowSameVersionUpgrades="yes" />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" MaximumUncompressedMediaSize="400" />
 
     <ui:WixUI Id="WixUI_InstallDir_Custom" InstallDirectory="INSTALLFOLDER" />
@@ -23,6 +36,7 @@
       <ComponentGroupRef Id="IntegratorComponents" />
       <ComponentRef Id="IntegratorShortcutComponent" />
       <ComponentRef Id="CleanupFoldersComponent" />
+      <ComponentRef Id="CleanupUserDataComponent" />
     </Feature>
 
   </Package>
