@@ -46,7 +46,7 @@ import {
 import { buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ext } from "../../extensionVariables";
 import { buildAuthorizeUrl, buildInstallUrl } from "../../cloud/ipaas/github";
-import { isEditorLocalEntry, isMissingRemoteBranch } from "../../cloud/ipaas/repo";
+import { isEditorLocalEntry, isEditorLocalPath, isMissingRemoteBranch } from "../../cloud/ipaas/repo";
 import { IpaasRpcClient } from "../../cloud/ipaas/client";
 import { StateMachine } from "../../stateMachine";
 import { contextStore } from "../../cloud/stores/context-store";
@@ -161,7 +161,9 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async hasDirtyRepo(dirPath: string): Promise<boolean> {
-		return checkDirtyRepo(dirPath, ext.context);
+		// The editor's own files in the workspace are not the integration's, and
+		// are not pushed with it — see localRepoHasChanges.
+		return checkDirtyRepo(dirPath, ext.context, [], ext.isDevantCloudEditor ? isEditorLocalPath : undefined);
 	}
 
 	async getConfigFileDrifts(params: GetConfigFileDriftsReq): Promise<string[]> {
@@ -353,7 +355,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 		const repoUrl = urlObj.href;
 
-		const cloneInto = async (ref?: string) =>
+		const cloneInto = async (ref?: string, quietFailure = false) =>
 			window.withProgress(
 				{
 					title: `Cloning repository ${params.repo.orgHandler}/${params.repo.repo}`,
@@ -366,6 +368,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 							recursive: true,
 							...(ref ? { ref } : {}),
 							parentPath: join(params.cwd, ".."),
+							quietFailure,
 							progress: {
 								report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }),
 							},
@@ -377,7 +380,12 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		let clonedPath: string;
 		let branchMissing = false;
 		try {
-			clonedPath = await cloneInto(params.repo.branch);
+			// Quiet, because the branch is expected to be missing on a repository
+			// created for this integration: the attempt below recovers, and an
+			// error notification for it reads as a failed deployment to a user
+			// whose deployment is on its way. A failure this cannot recover from
+			// is rethrown, and surfaces where the caller reports it.
+			clonedPath = await cloneInto(params.repo.branch, true);
 		} catch (err) {
 			// The branch does not exist yet — either the repository holds no
 			// commits at all, which is the ordinary state of one created for
@@ -385,6 +393,12 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			// name. Neither is a failure: take the repository as it is and
 			// create the branch on the way out.
 			if (!isMissingRemoteBranch(err)) {
+				// The notification git would have raised was suppressed for the
+				// attempt above, so raise it here: the caller only logs.
+				const reason = (err as { stderr?: string })?.stderr || (err as Error)?.message;
+				if (reason) {
+					window.showErrorMessage(reason);
+				}
 				throw err;
 			}
 			branchMissing = true;

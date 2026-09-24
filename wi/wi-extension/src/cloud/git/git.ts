@@ -431,6 +431,15 @@ export interface ICloneOptions {
 	readonly progress: Progress<{ increment: number }>;
 	readonly recursive?: boolean;
 	readonly ref?: string;
+	/**
+	 * Keep git's own `fatal:` lines out of the notifications.
+	 *
+	 * A clone that the caller is prepared to recover from still writes its
+	 * failure to stderr, and reporting it here shows the user an error for
+	 * something that is about to succeed. The rejection is unaffected: a caller
+	 * that sets this takes on saying what went wrong when it cannot recover.
+	 */
+	readonly quietFailure?: boolean;
 }
 
 export class Git {
@@ -525,7 +534,9 @@ export class Git {
 				}
 
 				if (line.startsWith("fatal:")) {
-					window.showErrorMessage(line);
+					if (!options.quietFailure) {
+						window.showErrorMessage(line);
+					}
 					ext.logError(line);
 				}
 			});
