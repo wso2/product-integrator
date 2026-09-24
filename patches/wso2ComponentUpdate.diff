@@ -6,7 +6,7 @@ Index: product-integrator/lib/vscode/src/main.ts
  import { resolveNLSConfiguration } from './vs/base/node/nls.js';
  import { getUNCHost, addUNCHostToAllowlist } from './vs/base/node/unc.js';
  import { applyProductRuntimeEnvironment, resolveProductRuntimeEnvironment, storeProductRuntimeEnvironment } from './vs/platform/product/common/runtimeEnvironment.js';
-+import { activatePendingRuntimeComponents, enforceRuntimeHealthFallback, seedBundledComponents } from './vs/platform/wso2Update/node/wso2ComponentsManifest.js';
++import { activatePendingRuntimeComponents, enforceRuntimeHealthFallback, ILocalComponentEntry, ineligibleBaselineVersions, installedComponentVersion, seedBundledComponents } from './vs/platform/wso2Update/node/wso2ComponentsManifest.js';
  import { INLSConfiguration } from './vs/nls.js';
  import { NativeParsedArgs } from './vs/platform/environment/common/argv.js';
  
@@ -18,7 +18,7 @@ Index: product-integrator/lib/vscode/src/main.ts
  		}
  
  		const productMeta = product as unknown as IProductMeta;
-@@ -292,25 +294,56 @@ async function startup(codeCachePath: st
+@@ -292,25 +294,71 @@ async function startup(codeCachePath: st
  		// installed under the user's data folder so `${COMPONENT:<id>}` tokens in
  		// `runtimeEnv` point at the updated copy instead of the bundled one. Failures
  		// here are non-fatal: we fall back to the bundled paths.
@@ -41,10 +41,14 @@ Index: product-integrator/lib/vscode/src/main.ts
  				const manifestPath = path.join(dataFolderHome, 'components', 'manifest.json');
 -				if (!fs.existsSync(manifestPath)) {
 -					return overrides;
++				// Hoisted: the seeded-baseline pass below needs each entry's `failed`/`pending` to
++				// know which on-disk versions it must not adopt.
++				let manifestEntries: { [id: string]: ILocalComponentEntry } = {};
 +				if (fs.existsSync(manifestPath)) {
 +					const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 +					const components = manifest?.components;
 +					if (components && typeof components === 'object') {
++						manifestEntries = components as { [id: string]: ILocalComponentEntry };
 +						for (const [id, entry] of Object.entries(components as { [id: string]: { active?: { path?: string } } })) {
 +							const activePath = entry.active?.path;
 +							if (typeof activePath === 'string' && activePath.length > 0) {
@@ -75,17 +79,28 @@ Index: product-integrator/lib/vscode/src/main.ts
 +				// runs even when no manifest exists yet (first launch, right after seeding).
 +				const bundled = productMeta.bundledComponents;
 +				if (bundled) {
++					const componentsDir = path.join(dataFolderHome, 'components');
 +					for (const [id, version] of Object.entries(bundled)) {
 +						if (overrides[id] || !version) {
 +							continue;
 +						}
-+						const seeded = path.join(dataFolderHome, 'components', id, version);
-+						if (fs.existsSync(seeded)) {
-+							overrides[id] = seeded;
++						// An editor-only update advances bundledComponents without carrying the
++						// components, so the declared version may not be on disk while `$APP_ROOT/...`
++						// — the literal fallback — was just deleted by that same update. Resolving by
++						// declared name alone then finds neither and the extension dies on ENOENT. An
++						// older runtime that works beats that.
++						// Excludes versions auto-reverted for failing to boot, and one staged but not
++						// yet activated: adopting either would run a build nothing health-tracks.
++						const installed = installedComponentVersion(componentsDir, id, version, ineligibleBaselineVersions(manifestEntries[id]));
++						if (installed) {
++							overrides[id] = path.join(componentsDir, id, installed);
++							if (installed !== version) {
++								console.warn(`[wso2Update] ${id}@${version} is not installed; falling back to ${installed}`);
++							}
  						}
  					}
  				}
-@@ -320,10 +353,127 @@ async function startup(codeCachePath: st
+@@ -320,10 +368,127 @@ async function startup(codeCachePath: st
  			return overrides;
  		};
  
@@ -530,7 +545,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
-@@ -0,0 +1,1449 @@
+@@ -0,0 +1,1476 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -590,6 +605,8 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	ILocalComponentsManifest,
 +	isActiveSeedingDir,
 +	LOCAL_MANIFEST_SCHEMA_VERSION,
++	ineligibleBaselineVersions,
++	installedComponentVersion,
 +	readLocalManifest,
 +	reconcileBundledVersions,
 +	writeLocalManifest
@@ -1051,7 +1068,10 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		for (const [depId, range] of Object.entries(component.requires)) {
 +			const depVersion = depId === 'app'
 +				? this.appVersion()
-+				: (projected.get(depId) ?? this.activeVersion(depId, local) ?? this.bundledVersion(depId));
++				// No `?? this.bundledVersion(depId)`: with nothing on disk, activeVersion() returns
++				// undefined on purpose, and substituting the declared version here would satisfy a
++				// `requires` against a runtime this machine does not have.
++				: (projected.get(depId) ?? this.activeVersion(depId, local));
 +			if (!depVersion) {
 +				return false;
 +			}
@@ -1516,7 +1536,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +
 +		// Runtime components known from the bundled set.
 +		for (const [id, version] of Object.entries(bundled)) {
-+			statuses.set(id, { id, kind: 'runtime', bundledVersion: version, activeVersion: this.activeVersion(id, local) ?? version, pendingVersion: local?.components[id]?.pending?.version, overridden: !!local?.components[id]?.active });
++			statuses.set(id, { id, kind: 'runtime', bundledVersion: version, activeVersion: this.activeVersion(id, local), pendingVersion: local?.components[id]?.pending?.version, overridden: !!local?.components[id]?.active });
 +		}
 +		// Anything recorded locally that isn't in the bundled set (e.g. extensions).
 +		if (local) {
@@ -1653,7 +1673,13 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		// version too (not just the recorded entry, which may be unset).
 +		// `pending` too: in the narrow window where activation's manifest write failed, the staged
 +		// directory is still the next boot's input and must not be collected under it.
-+		const keep = new Set([entry.active?.version, entry.previous?.version, entry.pending?.version, entry.bundledVersion, this.bundledVersion(id)].filter((v): v is string => !!v));
++		// Both bundled keys name the DECLARED version. After an editor-only update that directory
++		// does not exist, so neither key protects the seeded tree the runtime actually resolves to
++		// -- and collecting it puts the app straight back to ENOENT on the next boot. Keep whatever
++		// installedComponentVersion() reports whenever the declared version is absent.
++		const declared = this.bundledVersion(id);
++		const seededFallback = installedComponentVersion(this.componentsHome, id, declared, ineligibleBaselineVersions(entry));
++		const keep = new Set([entry.active?.version, entry.previous?.version, entry.pending?.version, entry.bundledVersion, declared, seededFallback].filter((v): v is string => !!v));
 +		for (const version of versions) {
 +			if (keep.has(version)) {
 +				continue;
@@ -1904,7 +1930,23 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	//#region helpers
 +
 +	private activeVersion(id: string, local: ILocalComponentsManifest | undefined): string | undefined {
-+		return local?.components[id]?.active?.version ?? this.bundledVersion(id);
++		const active = local?.components[id]?.active?.version;
++		if (active) {
++			return active;
++		}
++		// Report what is on disk, not what product.json claims to bundle. Those agree for an app
++		// installed from the full installer, and diverge after an editor-only update: the new
++		// product.json names runtimes the payload never carried, so falling back to the declared
++		// version makes the client tell the server it already HAS the version it is missing. The
++		// server then correctly offers nothing and the state can never heal itself -- which is
++		// exactly how a stranded ballerina-runtime stayed stranded across every hourly check.
++		// Returns undefined when nothing is on disk, so callers must not paper over that with the
++		// declared version: an honest gap is what lets the server offer the component.
++		const bundled = this.bundledVersion(id);
++		if (bundled && this.productService.bundledComponents?.[id]) {
++			return installedComponentVersion(this.componentsHome, id, bundled, ineligibleBaselineVersions(local?.components[id]));
++		}
++		return bundled;
 +	}
 +
 +	private bundledVersion(id: string): string | undefined {
@@ -1984,7 +2026,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,711 @@
+@@ -0,0 +1,811 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2287,7 +2329,12 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		}
 +		entry.bundledVersion = bundledVersion;
 +		const active = entry.active;
-+		if (active && active.via !== 'user-extension' && active.version && compareVersions(bundledVersion, active.version) >= 0) {
++		// The bundled version supersedes an override only if it is really there. An editor-only
++		// update advances product.json without carrying the components, so taking the declared
++		// version at its word here retires a working override in favour of a version that was
++		// never installed -- the same mistake the inventory used to make.
++		const bundledPresent = fs.existsSync(path.toNamespacedPath(path.join(componentsHome, id, bundledVersion)));
++		if (bundledPresent && active && active.via !== 'user-extension' && active.version && compareVersions(bundledVersion, active.version) >= 0) {
 +			entry.previous = active;
 +			entry.active = null;
 +			changed = true;
@@ -2609,6 +2656,101 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +			}
 +		}
 +	}
++}
++
++/** A directory name that looks like a version, so `backup` or `old` never ranks as one. */
++const VERSION_DIR_RE = /^\d+(\.\d+)*(-[0-9A-Za-z.]+)?$/;
++
++/**
++ * Newest version directory actually present for a component, or undefined when none is.
++ *
++ * Every other reader looks the seeded baseline up by name — the version the running app
++ * DECLARES it bundles. That holds for an app installed from the full installer, and breaks the
++ * moment an editor-only update ships a product.json naming runtimes it does not carry: the
++ * declared version is not on disk, an older one is, and a lookup by name finds neither. Asking
++ * what is actually there is the only question with a reliable answer.
++ *
++ * Newest wins outright; the seed-completion marker is NOT preferred. Directories installed by
++ * the updater never carry one, so preferring marked would hand back an older seeded runtime in
++ * favour of a newer working one — and on a real machine none of the three components carried a
++ * marker at all. Staging directories and empty remnants are skipped, so a copy still in flight
++ * can never be mistaken for a usable tree.
++ */
++export function newestSeededVersion(componentsHome: string, id: string, exclude?: Iterable<string>): string | undefined {
++	const excluded = exclude ? new Set(exclude) : undefined;
++	const dir = path.join(componentsHome, id);
++	let entries: fs.Dirent[];
++	try {
++		entries = fs.readdirSync(path.toNamespacedPath(dir), { withFileTypes: true });
++	} catch {
++		return undefined; // no directory for this component at all
++	}
++	let newest: string | undefined;
++	for (const entry of entries) {
++		if (!entry.isDirectory() || !VERSION_DIR_RE.test(entry.name) || SEEDING_DIR_RE.test(entry.name)) {
++			continue;
++		}
++		if (excluded?.has(entry.name)) {
++			continue; // auto-reverted, or staged but not yet activated -- see ineligibleBaselineVersions
++		}
++		try {
++			if (fs.readdirSync(path.toNamespacedPath(path.join(dir, entry.name))).length === 0) {
++				continue; // an empty directory is a remnant, never a runtime
++			}
++		} catch {
++			continue;
++		}
++		if (!newest || compareVersions(entry.name, newest) > 0) {
++			newest = entry.name;
++		}
++	}
++	return newest;
++}
++
++/**
++ * The version of a component that is actually installed: the declared bundled version when its
++ * directory is present, otherwise the newest one that is, and undefined when none is.
++ *
++ * Deliberately never falls back to the declared version. Resolution, the inventory sent to the
++ * server, dependency checks and the GC keep-set all used to assume "declared" meant "installed",
++ * which is how an editor-only update left the app resolving a deleted path while telling the
++ * server it already had the runtime it was missing. One answer, in one place, so those four
++ * cannot drift apart again.
++ */
++export function installedComponentVersion(componentsHome: string, id: string, declaredVersion: string | undefined, exclude?: Iterable<string>): string | undefined {
++	const excluded = exclude ? new Set(exclude) : undefined;
++	if (declaredVersion && !excluded?.has(declaredVersion)
++		&& fs.existsSync(path.toNamespacedPath(path.join(componentsHome, id, declaredVersion)))) {
++		return declaredVersion;
++	}
++	return newestSeededVersion(componentsHome, id, excluded);
++}
++
++/**
++ * Versions present on disk that must never be adopted as a baseline.
++ *
++ * `failed` holds versions auto-reverted after they kept the app from booting. Before the on-disk
++ * fallback existed they were simply garbage-collected, so the question never arose; now that the
++ * newest directory wins, a reverted version is the newest one there and would be picked straight
++ * back up -- and because the revert leaves `active` null, nothing health-tracks it or reverts it a
++ * second time. That turns a visible ENOENT into a silently broken runtime with no recovery, which
++ * is worse than the bug this fallback was written for.
++ *
++ * `pending` is staged into its versioned directory before the restart that activates it. Adopting
++ * it early would run a version that has not been through activation, so it gets no health tracking
++ * or rollback either.
++ */
++export function ineligibleBaselineVersions(entry: ILocalComponentEntry | undefined): string[] {
++	const out: string[] = [];
++	for (const failed of entry?.failed ?? []) {
++		if (failed?.version) {
++			out.push(failed.version);
++		}
++	}
++	if (entry?.pending?.version) {
++		out.push(entry.pending.version);
++	}
++	return out;
 +}
 +
 +/**
@@ -3730,7 +3872,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,225 @@
+@@ -0,0 +1,389 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3749,12 +3891,12 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 + * under the License.
 + */
 +
-+import { strictEqual } from 'assert';
++import { deepStrictEqual, strictEqual } from 'assert';
 +import * as fs from 'fs';
 +import * as os from 'os';
 +import { join } from '../../../../base/common/path.js';
 +import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-+import { compareVersions, isActiveSeedingDir, SEED_COMPLETE_MARKER, seedBundledComponents } from '../../node/wso2ComponentsManifest.js';
++import { compareVersions, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, newestSeededVersion, SEED_COMPLETE_MARKER, seedBundledComponents } from '../../node/wso2ComponentsManifest.js';
 +
 +suite('wso2ComponentsManifest - compareVersions', () => {
 +	ensureNoDisposablesAreLeakedInTestSuite();
@@ -3954,6 +4096,170 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		const now = new Date();
 +		fs.utimesSync(join(componentDir, claimName), now, now);
 +		strictEqual(isActiveSeedingDir(componentDir, claimName), true); // the required refresh
++	});
++});
++
++suite('wso2ComponentsManifest - newestSeededVersion', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	let root: string;
++
++	setup(() => { root = fs.mkdtempSync(join(os.tmpdir(), 'wso2seeded-')); });
++	teardown(() => { fs.rmSync(root, { recursive: true, force: true }); });
++
++	const seed = (id: string, version: string, opts: { marker?: boolean; empty?: boolean } = {}) => {
++		const dir = join(root, id, version);
++		fs.mkdirSync(dir, { recursive: true });
++		if (!opts.empty) {
++			fs.writeFileSync(join(dir, 'payload'), 'x');
++		}
++		if (opts.marker) {
++			fs.writeFileSync(join(dir, SEED_COMPLETE_MARKER), version);
++		}
++	};
++
++	test('returns undefined when the component has no directory at all', () => {
++		strictEqual(newestSeededVersion(root, 'ballerina-runtime'), undefined);
++	});
++
++	test('finds a version directory that carries no completion marker', () => {
++		// The case that matters in the field: on a real affected machine none of the three
++		// components carried a marker — builds predating it, and updater-installed directories,
++		// write none. Requiring it would return undefined on exactly the installs this rescues.
++		seed('ballerina-runtime', '2201.13.6');
++		strictEqual(newestSeededVersion(root, 'ballerina-runtime'), '2201.13.6');
++	});
++
++	test('takes the newest even when an older one is marked and it is not', () => {
++		// Deliberate: the marker means "seeding finished", not "better". An updater-installed
++		// runtime never carries one, so preferring marked would hand back an older seeded tree in
++		// place of a newer working one.
++		seed('ballerina-runtime', '2201.12.5', { marker: true });
++		seed('ballerina-runtime', '2201.13.6');
++		strictEqual(newestSeededVersion(root, 'ballerina-runtime'), '2201.13.6');
++	});
++
++	test('picks the newest among several versions', () => {
++		seed('jre', '3.0.2', { marker: true });
++		seed('jre', '4.0.0', { marker: true });
++		strictEqual(newestSeededVersion(root, 'jre'), '4.0.0');
++	});
++
++	test('ranks a pre-release below the release it precedes', () => {
++		seed('icp', '2.1.0-alpha4');
++		seed('icp', '2.1.0');
++		strictEqual(newestSeededVersion(root, 'icp'), '2.1.0');
++	});
++
++	test('ignores in-flight staging directories', () => {
++		seed('icp', '2.1.0-alpha3');
++		fs.mkdirSync(join(root, 'icp', `2.1.0-alpha4.seeding-${process.pid}`), { recursive: true });
++		strictEqual(newestSeededVersion(root, 'icp'), '2.1.0-alpha3');
++	});
++
++	test('ignores an empty version directory', () => {
++		seed('icp', '2.1.0-alpha4', { empty: true });
++		seed('icp', '2.1.0-alpha3');
++		strictEqual(newestSeededVersion(root, 'icp'), '2.1.0-alpha3');
++	});
++
++	test('ignores directories that are not version-shaped', () => {
++		seed('jre', 'backup');
++		seed('jre', 'old');
++		strictEqual(newestSeededVersion(root, 'jre'), undefined);
++		seed('jre', '4.0.0');
++		strictEqual(newestSeededVersion(root, 'jre'), '4.0.0');
++	});
++});
++
++suite('wso2ComponentsManifest - installedComponentVersion', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	let root: string;
++
++	setup(() => { root = fs.mkdtempSync(join(os.tmpdir(), 'wso2installed-')); });
++	teardown(() => { fs.rmSync(root, { recursive: true, force: true }); });
++
++	const seed = (id: string, version: string) => {
++		const dir = join(root, id, version);
++		fs.mkdirSync(dir, { recursive: true });
++		fs.writeFileSync(join(dir, 'payload'), 'x');
++	};
++
++	test('returns the declared version when it is on disk', () => {
++		seed('jre', '4.0.0');
++		strictEqual(installedComponentVersion(root, 'jre', '4.0.0'), '4.0.0');
++	});
++
++	test('returns the older installed version when the declared one is not on disk', () => {
++		// The alpha6 case: product.json declares a runtime the editor-only payload never carried.
++		seed('ballerina-runtime', '2201.13.6');
++		strictEqual(installedComponentVersion(root, 'ballerina-runtime', '2201.14.0-alpha'), '2201.13.6');
++	});
++
++	test('returns undefined when nothing is installed', () => {
++		// Must NOT report the declared version: that is what told the server the client already
++		// had the runtime it was missing, so no update was ever offered.
++		strictEqual(installedComponentVersion(root, 'ballerina-runtime', '2201.14.0-alpha'), undefined);
++	});
++
++	test('returns undefined when no version is declared and none is installed', () => {
++		strictEqual(installedComponentVersion(root, 'icp', undefined), undefined);
++	});
++
++	test('falls back to what is installed when no version is declared', () => {
++		seed('icp', '2.1.0-alpha3');
++		strictEqual(installedComponentVersion(root, 'icp', undefined), '2.1.0-alpha3');
++	});
++});
++
++suite('wso2ComponentsManifest - baseline eligibility', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	let root: string;
++
++	setup(() => { root = fs.mkdtempSync(join(os.tmpdir(), 'wso2eligible-')); });
++	teardown(() => { fs.rmSync(root, { recursive: true, force: true }); });
++
++	const seed = (id: string, version: string) => {
++		const dir = join(root, id, version);
++		fs.mkdirSync(dir, { recursive: true });
++		fs.writeFileSync(join(dir, 'payload'), 'x');
++	};
++
++	test('collects auto-reverted and staged-but-unactivated versions', () => {
++		strictEqual(ineligibleBaselineVersions(undefined).length, 0);
++		const entry = {
++			failed: [{ version: '2201.14.0-alpha', at: '2026-09-25T00:00:00.000Z' }],
++			pending: { version: '2201.15.0', path: 'components/ballerina-runtime/2201.15.0' }
++		};
++		deepStrictEqual(ineligibleBaselineVersions(entry as never).sort(), ['2201.14.0-alpha', '2201.15.0']);
++	});
++
++	test('does not adopt a version that was auto-reverted for failing to boot', () => {
++		// The sequence that matters: the fallback runs, the updater installs a newer runtime, it
++		// fails two boots and is reverted with `active: null` (so no `previous` was ever set). The
++		// failed directory is still the newest on disk. Adopting it would run a known-bad build
++		// that nothing health-tracks, so it can never be reverted a second time.
++		seed('ballerina-runtime', '2201.13.6');
++		seed('ballerina-runtime', '2201.14.0-alpha');
++		const failed = ['2201.14.0-alpha'];
++		strictEqual(newestSeededVersion(root, 'ballerina-runtime'), '2201.14.0-alpha');
++		strictEqual(newestSeededVersion(root, 'ballerina-runtime', failed), '2201.13.6');
++		strictEqual(installedComponentVersion(root, 'ballerina-runtime', '2201.14.0-alpha', failed), '2201.13.6');
++	});
++
++	test('does not adopt a version staged but not yet activated', () => {
++		seed('icp', '2.1.0-alpha3');
++		seed('icp', '2.1.0-alpha4');
++		strictEqual(installedComponentVersion(root, 'icp', '9.9.9', ['2.1.0-alpha4']), '2.1.0-alpha3');
++	});
++
++	test('reports nothing when every version on disk is ineligible', () => {
++		// Correct outcome, not a regression: resolving to the $APP_ROOT fallback fails visibly,
++		// which is better than silently running a runtime known to break the app.
++		seed('ballerina-runtime', '2201.14.0-alpha');
++		strictEqual(installedComponentVersion(root, 'ballerina-runtime', '2201.14.0-alpha', ['2201.14.0-alpha']), undefined);
 +	});
 +});
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/update/browser/postUpdateWidget.ts
