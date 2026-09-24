@@ -380,14 +380,27 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
                             <div style={{ position: "relative" }}>
                                 {matchingOrgItem && (
                                     <div>
+                                        {/* The placeholder is not decoration. Nothing preselects a
+                                            repository — deploying into the wrong one is not an
+                                            accident worth risking — so the value starts empty, and a
+                                            dropdown whose value matches none of its options displays
+                                            the first one instead. The form then shows a repository it
+                                            does not hold, Deploy stays disabled with no visible
+                                            reason, and choosing that same repository fires no change
+                                            event: the user has to pick another and come back. An
+                                            option for the empty value keeps what is shown and what is
+                                            held the same thing. */}
                                         <Dropdown
                                             label="Repository"
                                             id="repo-init-repo"
                                             required
-                                            items={matchingOrgItem?.repositories?.map((r: { name: string }) => ({
-                                                value: r.name,
-                                                content: r.name,
-                                            })) ?? []}
+                                            items={[
+                                                ...(repo ? [] : [{ value: "", content: "Select a repository" }]),
+                                                ...(matchingOrgItem?.repositories?.map((r: { name: string }) => ({
+                                                    value: r.name,
+                                                    content: r.name,
+                                                })) ?? []),
+                                            ]}
                                             value={repo ?? ""}
                                             onChange={(e) => setRepo(e.target.value)}
                                         />
