@@ -574,7 +574,7 @@ jobs:
 
       # Pre-bundle the Ballerina Central packages this flavor ships (ci/build/ballerina-packages.properties)
       # into an overlay that every installer merges into the bundled distribution's package repository.
-      # Resolved once, here: a bala is platform-neutral, so the macOS and Windows jobs consume this same
+      # Resolved once, here: a bala is OS-independent, so the macOS and Windows jobs consume this same
       # artifact instead of each re-resolving the closure against Ballerina Central.
       - name: Stage pre-bundled Ballerina packages
         if: ${{ inputs.build_packed_installers == true}}

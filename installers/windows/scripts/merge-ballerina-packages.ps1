@@ -93,7 +93,7 @@ function Copy-Tree {
 # payload copy below is exactly what that profile relies on.
 if (Test-Path -LiteralPath $BallerinaHome) {
 	Copy-Tree -Source $overlayBala -Destination (Join-Path $BallerinaHome 'repo\bala')
-	Write-Host "Bundled $packageCount pre-pulled Ballerina package(s) into the distribution repository"
+	Write-Host "Merged $packageCount pre-bundled Ballerina package(s) into the distribution repository"
 } else {
 	Write-Host 'No bundled Ballerina in this payload; staging for startup repair only'
 }
@@ -102,4 +102,4 @@ $editorOverlay = Join-Path $EditorAppDir 'ballerina-packages'
 Remove-Item -LiteralPath $editorOverlay -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Tree -Source $overlayBala -Destination (Join-Path $editorOverlay 'bala')
 Copy-Item -LiteralPath $manifest -Destination $editorOverlay -Force
-Write-Host "Staged $packageCount pre-pulled Ballerina package(s) in the editor payload for startup repair"
+Write-Host "Staged $packageCount pre-bundled Ballerina package(s) in the editor payload for startup repair"

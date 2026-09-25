@@ -752,7 +752,7 @@ jobs:
       # imported certificate).
 
       # The overlay of pre-bundled Ballerina Central packages resolved once in `compile` (a bala is
-      # platform-neutral). installers/mac/build.sh merges it into the distribution's package repository.
+      # OS-independent). installers/mac/build.sh merges it into the distribution's package repository.
       - name: Download pre-bundled Ballerina packages
         if: ${{ inputs.build_packed_installers == true }}
         uses: actions/download-artifact@v4

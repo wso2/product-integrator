@@ -73,7 +73,7 @@ fi
 # Absent for the editor-only profiles, which ship no runtime at all. Not an error: the editor-payload
 # copy below is exactly what those profiles rely on.
 if [ -n "${BALLERINA_HOME}" ] && [ -d "${BALLERINA_HOME}" ]; then
-  log "bundling ${PACKAGE_COUNT} pre-pulled Ballerina package(s) into the distribution repository"
+  log "merging ${PACKAGE_COUNT} pre-bundled Ballerina package(s) into the distribution repository"
   mkdir -p "${BALLERINA_HOME}/repo/bala"
   cp -R "${OVERLAY_BALA}"/. "${BALLERINA_HOME}/repo/bala/"
 else

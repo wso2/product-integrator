@@ -90,7 +90,7 @@ powershell -nologo -noprofile -ExecutionPolicy Bypass -File "%~dp0scripts\merge-
     -BallerinaHome ".\WixPackage\payload\Integrator\components\ballerina" ^
     -EditorAppDir ".\WixPackage\payload\Integrator\resources\app"
 if errorlevel 1 (
-    echo Bundling pre-pulled Ballerina packages failed
+    echo Merging pre-bundled Ballerina packages failed
     exit /b 1
 )
 :after_ballerina_packages

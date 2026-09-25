@@ -2,10 +2,11 @@
 # Resolve the Ballerina Central packages a product flavor pre-bundles (ci/build/ballerina-packages.properties)
 # and stage them as an overlay for the bundled distribution's package repository.
 #
-# The installer scripts copy the staged tree into <ballerina>/components/.../repo/bala, which the
-# Ballerina compiler resolves before it reaches Ballerina Central. That is what makes a freshly
-# installed product able to build the projects its own templates generate without a network round
-# trip — see ci/build/ballerina-packages.properties for why that matters.
+# ci/build/merge-ballerina-packages.sh copies the staged tree into <ballerina-home>/repo/bala, the
+# distribution's own package repository, which the Ballerina compiler resolves before it reaches
+# Ballerina Central. That is what makes a freshly installed product able to build the projects its
+# own templates generate without a network round trip — see ci/build/ballerina-packages.properties
+# for why that matters.
 #
 # Resolution runs against the *same* distribution the installer bundles, so the closure staged here
 # is only the delta: anything the distribution already ships at a compatible version is resolved
@@ -266,7 +267,7 @@ mkdir -p "${VERIFY_HOME}"
 # keeping it would let a recorded version stand in for resolution that has to happen for real.
 rm -rf "${PROBE_DIR}/target" "${PROBE_DIR}/Dependencies.toml"
 if ! run_bal "${VERIFY_HOME}" build --offline > "${WORK_DIR}/verify-offline.log" 2>&1; then
-  echo "Error: the staged closure does not resolve from <distribution>/repo/bala — the overlay is incomplete." >&2
+  echo "Error: the staged closure does not resolve from <ballerina-home>/repo/bala — the overlay is incomplete." >&2
   cat "${WORK_DIR}/verify-offline.log" >&2
   exit 1
 fi
