@@ -6,7 +6,7 @@ Index: product-integrator/lib/vscode/src/main.ts
  import { resolveNLSConfiguration } from './vs/base/node/nls.js';
  import { getUNCHost, addUNCHostToAllowlist } from './vs/base/node/unc.js';
  import { applyProductRuntimeEnvironment, resolveProductRuntimeEnvironment, storeProductRuntimeEnvironment } from './vs/platform/product/common/runtimeEnvironment.js';
-+import { activatePendingRuntimeComponents, enforceRuntimeHealthFallback, seedBundledComponents } from './vs/platform/wso2Update/node/wso2ComponentsManifest.js';
++import { activatePendingRuntimeComponents, applyBundledBallerinaPackages, enforceRuntimeHealthFallback, seedBundledComponents } from './vs/platform/wso2Update/node/wso2ComponentsManifest.js';
  import { INLSConfiguration } from './vs/nls.js';
  import { NativeParsedArgs } from './vs/platform/environment/common/argv.js';
  
@@ -85,7 +85,7 @@ Index: product-integrator/lib/vscode/src/main.ts
  						}
  					}
  				}
-@@ -320,10 +353,127 @@ async function startup(codeCachePath: st
+@@ -320,10 +353,139 @@ async function startup(codeCachePath: st
  			return overrides;
  		};
  
@@ -167,6 +167,18 @@ Index: product-integrator/lib/vscode/src/main.ts
 +			}
 +
  			storeProductRuntimeEnvironment(process.env, resolvedRuntimeEnv);
++
++			// Top up the active Ballerina distribution with the packages this product pre-bundles.
++			// Here, not in an extension: the Ballerina language server resolves a project as soon as
++			// its extension activates and nothing orders one extension before another, so this is the
++			// only point that is guaranteed to be before any of them. BALLERINA_HOME is whatever
++			// runtimeEnv just resolved to — bundled, seeded, or component-updated — which is exactly
++			// the copy that needs the packages.
++			try {
++				applyBundledBallerinaPackages(appRoot, process.env['BALLERINA_HOME'] ?? '', msg => console.log('[wso2Packages]', msg));
++			} catch (err) {
++				console.warn('Failed to apply pre-bundled Ballerina packages:', err);
++			}
 +
 +			// Bridge the Ballerina extension's language-server JDK lookup (§D8). The extension
 +			// resolves its JDK from `<ballerinaHome>/dependencies/<jdk-*>` and THROWS if that
@@ -1984,7 +1996,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,711 @@
+@@ -0,0 +1,849 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2695,6 +2707,144 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		}
 +	}
 +	return 0;
++}
++
++/**
++ * Staging lives beside `bala`, not inside it. Same filesystem either way — which is what makes the
++ * rename atomic — but `<bala>/<org>/<name>/` is exactly where Ballerina enumerates version
++ * directories, and a half-written entry named like a version has no business being visible there.
++ * `repo/` itself holds only `bala` and `cache`, so an extra dot-directory is inert.
++ */
++const BALA_STAGING_DIR = '.wso2-staging';
++
++/**
++ * A bala carries its metadata at `<version>/<platform>/bala.json`. Testing for that rather than for
++ * the directory alone is what makes the repair self-healing: a tree left behind by an interrupted
++ * copy fails the test and is rebuilt, where a bare existence check would skip it on every later
++ * launch and leave the package permanently broken.
++ */
++function isCompleteBala(packageDir: string): boolean {
++	try {
++		return fs.readdirSync(packageDir, { withFileTypes: true })
++			.some(entry => entry.isDirectory() && fs.existsSync(path.join(packageDir, entry.name, 'bala.json')));
++	} catch {
++		return false;
++	}
++}
++
++/**
++ * Copies the Ballerina packages this product pre-bundles into whichever Ballerina distribution is
++ * active, skipping any the distribution already carries.
++ *
++ * The build stages these packages (ci/build/ballerina-packages.properties) so a fresh install can
++ * compile the projects the product's own templates generate without reaching Ballerina Central. The
++ * installers put them in the bundled distribution AND under `<editor payload>/ballerina-packages`,
++ * because the bundled distribution is frequently not the one in use: a `ballerina-runtime` component
++ * update installs the stock upstream distribution and it takes precedence, a runtime already seeded
++ * at the same version is never re-seeded, and the editor-only update payload carries no runtime at
++ * all. This reads the editor-payload copy and tops up the active distribution.
++ *
++ * It runs here, in the app shell, rather than from an extension: the Ballerina language server can
++ * resolve a project as soon as its extension activates, and nothing orders one extension before
++ * another. Running before any extension host starts is the only way to guarantee the packages are
++ * in place first — the same reason component seeding happens here.
++ *
++ * Best-effort: a failure leaves the product working, with the first build of an affected project
++ * falling back to pulling from Ballerina Central.
++ */
++export function applyBundledBallerinaPackages(
++	appRoot: string,
++	ballerinaHome: string,
++	log?: (message: string) => void
++): string[] {
++	const added: string[] = [];
++	if (!ballerinaHome || !fs.existsSync(ballerinaHome)) {
++		return added;
++	}
++
++	// macOS nests the editor payload under Contents/; Linux and Windows place it directly under the
++	// install dir. Same split as the bundled-component seeding above.
++	const editorApp = process.platform === 'darwin'
++		? path.join(appRoot, 'Contents', 'Resources', 'app')
++		: path.join(appRoot, 'resources', 'app');
++	const overlayBala = path.join(editorApp, 'ballerina-packages', 'bala');
++	if (!fs.existsSync(overlayBala)) {
++		// The Integrator flavor bundles no packages, so this is its normal path.
++		return added;
++	}
++
++	const targetBala = path.join(ballerinaHome, 'repo', 'bala');
++	const stagingRoot = path.join(ballerinaHome, 'repo', BALA_STAGING_DIR);
++	sweepStaleBalaStaging(stagingRoot);
++
++	for (const org of readDirNames(overlayBala)) {
++		for (const name of readDirNames(path.join(overlayBala, org))) {
++			for (const version of readDirNames(path.join(overlayBala, org, name))) {
++				const source = path.join(overlayBala, org, name, version);
++				const target = path.join(targetBala, org, name, version);
++				if (isCompleteBala(target)) {
++					continue;
++				}
++				try {
++					// Present but incomplete: a tree an interrupted copy left behind. Clearing it is
++					// what lets this retry rather than skip the package forever.
++					fs.rmSync(path.toNamespacedPath(target), { recursive: true, force: true });
++
++					// Built aside and moved in one step, so `bala` never contains a partly written
++					// package — not while this runs, and not if the app is killed midway.
++					// toNamespacedPath throughout: bala trees nest deeply enough to pass Windows'
++					// 260-character MAX_PATH, exactly as the component seeding above does.
++					const staging = path.join(stagingRoot, `${org}-${name}-${version}.${process.pid}`);
++					fs.rmSync(path.toNamespacedPath(staging), { recursive: true, force: true });
++					fs.mkdirSync(path.toNamespacedPath(stagingRoot), { recursive: true });
++					fs.cpSync(path.toNamespacedPath(source), path.toNamespacedPath(staging), { recursive: true });
++					fs.mkdirSync(path.toNamespacedPath(path.dirname(target)), { recursive: true });
++					try {
++						fs.renameSync(path.toNamespacedPath(staging), path.toNamespacedPath(target));
++						added.push(`${org}/${name}:${version}`);
++					} catch (err) {
++						// A concurrent instance put the same package in place first; its tree is as
++						// good as ours. Anything else is a real failure.
++						if (!isCompleteBala(target)) {
++							throw err;
++						}
++						fs.rmSync(path.toNamespacedPath(staging), { recursive: true, force: true });
++					}
++				} catch (err) {
++					log?.(`Failed to add pre-bundled Ballerina package ${org}/${name}:${version}: ${err}`);
++				}
++			}
++		}
++	}
++
++	fs.rmSync(path.toNamespacedPath(stagingRoot), { recursive: true, force: true });
++	if (added.length > 0) {
++		log?.(`Added ${added.length} pre-bundled Ballerina package(s) to ${ballerinaHome}: ${added.join(', ')}`);
++	}
++	return added;
++}
++
++function readDirNames(dir: string): string[] {
++	try {
++		return fs.readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
++	} catch {
++		return [];
++	}
++}
++
++/**
++ * Drops staging trees left by a run that died mid-copy. One owned by a live process is left alone:
++ * a second instance starting concurrently is doing legitimate work, and deleting its tree would make
++ * its rename fail.
++ */
++function sweepStaleBalaStaging(stagingRoot: string): void {
++	for (const name of readDirNames(stagingRoot)) {
++		const owner = Number(name.slice(name.lastIndexOf('.') + 1));
++		if (Number.isInteger(owner) && owner !== process.pid && isPidAlive(owner)) {
++			continue;
++		}
++		fs.rmSync(path.toNamespacedPath(path.join(stagingRoot, name)), { recursive: true, force: true });
++	}
 +}
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
 ===================================================================
