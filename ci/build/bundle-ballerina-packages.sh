@@ -23,10 +23,6 @@
 #                           <output-dir>/bundled-packages.txt records what was staged
 #          [flavor]         product flavor (default: $PRODUCT_FLAVOR, else 'integrator')
 #
-#        ci/build/bundle-ballerina-packages.sh --packages-for <flavor>
-#          Print the configured package list and exit. Lets a caller skip the (large) distribution
-#          download for a flavor that bundles nothing, without restating the config in YAML.
-#
 # Env:
 #   BALLERINA_BUNDLE_JDK   JDK home to run `bal` with. Defaults to the JDK inside the Ballerina zip,
 #                          then JAVA_HOME_21_X64, then JAVA_HOME.
@@ -40,15 +36,25 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PACKAGES_FILE="${SCRIPT_DIR}/ballerina-packages.properties"
 
-if [ "${1:-}" = "--packages-for" ]; then
-  if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 --packages-for <flavor>" >&2
+if [ ! -f "${PACKAGES_FILE}" ]; then
+  echo "Error: ${PACKAGES_FILE} not found" >&2
+  exit 1
+fi
+
+read_property() {
+  awk -F= -v k="$1" '$1 == k { print substr($0, index($0, "=") + 1); exit }' "${PACKAGES_FILE}" | tr -d '\r'
+}
+
+# Flavors are whatever the properties file declares, so adding one is a config change rather than a
+# code change here. This matches the KEY rather than reading its value, because read_property cannot
+# tell an undeclared flavor from one that deliberately bundles nothing -- and quietly treating a
+# typo'd flavor as "bundles nothing" would ship an installer missing every package it should carry.
+require_flavor() {
+  if ! awk -F= -v k="$1.packages" '$1 == k { found = 1 } END { exit !found }' "${PACKAGES_FILE}"; then
+    echo "Error: no '$1.packages' entry in ${PACKAGES_FILE}. Declare the flavor there first." >&2
     exit 1
   fi
-  awk -F= -v k="$2.packages" '$1 == k { print substr($0, index($0, "=") + 1); exit }' \
-    "${PACKAGES_FILE}" | tr -d '\r'
-  exit 0
-fi
+}
 
 if [ "$#" -lt 2 ]; then
   echo "Usage: $0 <ballerina-zip> <output-dir> [flavor]" >&2
@@ -58,20 +64,7 @@ fi
 BALLERINA_ZIP="$1"
 OUTPUT_DIR="$2"
 FLAVOR="${3:-${PRODUCT_FLAVOR:-integrator}}"
-
-case "${FLAVOR}" in
-  integrator|agent-builder) ;;
-  *) echo "Error: unknown flavor '${FLAVOR}' (expected 'integrator' or 'agent-builder')" >&2; exit 1 ;;
-esac
-
-if [ ! -f "${PACKAGES_FILE}" ]; then
-  echo "Error: ${PACKAGES_FILE} not found" >&2
-  exit 1
-fi
-
-read_property() {
-  awk -F= -v k="$1" '$1 == k { print substr($0, index($0, "=") + 1); exit }' "${PACKAGES_FILE}" | tr -d '\r'
-}
+require_flavor "${FLAVOR}"
 
 PACKAGE_LIST=$(read_property "${FLAVOR}.packages")
 
@@ -152,8 +145,9 @@ trap 'rm -rf "${WORK_DIR}"' EXIT
 echo "[bundle-ballerina-packages] flavor=${FLAVOR} packages=${PACKAGES[*]}"
 
 # --- the distribution the installer will ship -------------------------------------------------
-# Resolving against this exact release is the whole point: a newer `ballerina/ai` than the one the
-# release bundles has to be staged, an equal-or-newer one must not be.
+# Resolving against this exact release is the whole point: a `ballerina/ai` newer than the one the
+# release bundles has to be staged, whereas if the release already ships an equal or newer one,
+# nothing should be staged for it at all.
 echo "[bundle-ballerina-packages] extracting ${BALLERINA_ZIP##*/}"
 unzip -q -o "${BALLERINA_ZIP}" -d "${WORK_DIR}/zip"
 DIST_DIR=$(find "${WORK_DIR}/zip" -maxdepth 3 -type d -path '*/distributions/ballerina-*' | head -1)

@@ -77,23 +77,18 @@ if errorlevel 1 (
 :after_ballerina_extract
 
 REM Pre-bundled Ballerina Central packages, staged by ci/build/bundle-ballerina-packages.sh and
-REM handed over in BALLERINA_PACKAGES_DIR. The variable names the overlay ROOT, which always
-REM carries bundled-packages.txt; bala/ is absent whenever the flavor stages nothing. The manifest
-REM is therefore the only thing separating "this flavor bundles nothing" from "the overlay never
-REM arrived", so a missing manifest FAILS the build rather than skipping quietly -- otherwise a
-REM renamed artifact ships an MSI that cannot build offline and leaves CI green.
-REM
-REM Two destinations: the bundled distribution's repo\bala (so a fresh install resolves them at
-REM once), and the editor payload (where the WI extension finds them via vscode.env.appRoot and
-REM repairs whichever Ballerina home is actually active). The second matters because a
-REM ballerina-runtime component update installs the STOCK upstream distribution over the bundled
-REM one, and a runtime already seeded at the same version is never re-seeded.
+REM handed over in BALLERINA_PACKAGES_DIR (the overlay ROOT, holding bundled-packages.txt). The
+REM merge itself lives in scripts\merge-ballerina-packages.ps1, the Windows counterpart of
+REM ci/build/merge-ballerina-packages.sh that the other four installers call.
 REM
 REM Placed AFTER :after_ballerina_extract on purpose: the editor-update MSI ships no bundled
-REM Ballerina but DOES ship the editor payload, so it must still carry the packages. The
-REM distribution copy is skipped when that payload is absent.
+REM Ballerina but DOES ship the editor payload, which must still carry the packages. The script
+REM skips the distribution copy when that payload is absent.
 if not defined BALLERINA_PACKAGES_DIR goto :after_ballerina_packages
-powershell -nologo -noprofile -command "& { $src = $env:BALLERINA_PACKAGES_DIR; $manifest = Join-Path $src 'bundled-packages.txt'; if (-not (Test-Path -LiteralPath $manifest)) { Write-Host ('ERROR: BALLERINA_PACKAGES_DIR is set to ' + $src + ' but its manifest (' + $manifest + ') is missing.'); Write-Host 'The pre-bundled Ballerina package overlay did not arrive. Refusing to ship a distribution that may not build offline.'; exit 1 }; $listed = @(Get-Content -LiteralPath $manifest | Where-Object { $_ -and $_ -notmatch '^#' }).Count; if ($listed -eq 0) { Write-Host 'No pre-bundled Ballerina packages for this flavor (manifest lists none)'; exit 0 }; $bala = Join-Path $src 'bala'; $staged = @(Get-ChildItem -LiteralPath $bala -Directory -ErrorAction SilentlyContinue | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Directory } | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Directory }).Count; if ($staged -ne $listed) { Write-Host ('ERROR: overlay is incomplete: manifest lists ' + $listed + ' package(s), but ' + $bala + ' holds ' + $staged + '.'); exit 1 }; $dist = '.\WixPackage\payload\Integrator\components\ballerina'; if (Test-Path -LiteralPath $dist) { $distBala = Join-Path $dist 'repo\bala'; New-Item -ItemType Directory -Force -Path $distBala | Out-Null; Copy-Item -Path (Join-Path $bala '*') -Destination $distBala -Recurse -Force; Write-Host ('Bundled ' + $listed + ' pre-pulled Ballerina package(s) into the distribution repository') } else { Write-Host 'No bundled Ballerina in this payload (editor-update); staging for startup repair only' }; $editor = '.\WixPackage\payload\Integrator\resources\app\ballerina-packages'; Remove-Item -LiteralPath $editor -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path $editor | Out-Null; Copy-Item -LiteralPath $bala -Destination $editor -Recurse -Force; Copy-Item -LiteralPath $manifest -Destination $editor -Force; Write-Host ('Staged ' + $listed + ' pre-pulled Ballerina package(s) in the editor payload for startup repair') }"
+powershell -nologo -noprofile -ExecutionPolicy Bypass -File "%~dp0scripts\merge-ballerina-packages.ps1" ^
+    -OverlayDir "%BALLERINA_PACKAGES_DIR%" ^
+    -BallerinaHome ".\WixPackage\payload\Integrator\components\ballerina" ^
+    -EditorAppDir ".\WixPackage\payload\Integrator\resources\app"
 if errorlevel 1 (
     echo Bundling pre-pulled Ballerina packages failed
     exit /b 1
