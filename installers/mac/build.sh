@@ -143,6 +143,13 @@ mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
 rm -rf "$BALLERINA_TARGET/docs"
 rm -rf "$BALLERINA_TARGET/examples"
 
+# Pre-bundled Ballerina Central packages. ci/build/merge-ballerina-packages.sh owns the merge; see
+# ci/build/ballerina-packages.properties for what is bundled and why.
+if [ -n "${BALLERINA_PACKAGES_DIR:-}" ]; then
+    "$(cd "$(dirname "$0")/../.." && pwd)/ci/build/merge-ballerina-packages.sh" \
+        "$BALLERINA_PACKAGES_DIR" "$BALLERINA_TARGET" "$WSO2_TARGET/$APP_BUNDLE/Contents/Resources/app"
+fi
+
 # Extract JRE zip into shared dependencies directory
 print_info "Extracting JRE to shared dependencies directory"
 DEPENDENCIES_DIR="$COMPONENTS_DIR/dependencies"
