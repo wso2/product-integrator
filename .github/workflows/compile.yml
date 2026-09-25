@@ -582,12 +582,19 @@ jobs:
           fi
           ./ci/build/bundle-ballerina-packages.sh "$ZIP" "$OUT" "$PRODUCT_FLAVOR"
           rm -f "$RUNNER_TEMP/ballerina.zip"
-          # Picked up by installers/*/build.sh for every Linux package built below.
-          echo "BALLERINA_PACKAGES_DIR=$OUT/bala" >> "$GITHUB_ENV"
+          # Picked up by installers/*/build.sh for every Linux package built below. Points at the
+          # overlay ROOT, not bala/: the root always holds bundled-packages.txt, which is how those
+          # scripts tell "nothing to bundle" from "the overlay never arrived" instead of skipping.
+          echo "BALLERINA_PACKAGES_DIR=$OUT" >> "$GITHUB_ENV"
 
       # Consumed by build-macos and build-windows, which merge the same overlay into their own copy
       # of the distribution. bundled-packages.txt is always present, so the artifact exists even for
       # a flavor that bundles nothing and the downloads over there never have to be conditional.
+      #
+      # Default retention on purpose. A short window would expire the artifact out from under a
+      # re-run of just build-macos/build-windows days later (those jobs download it rather than
+      # rebuild it), and bundled-packages.txt plus resolved-dependencies.toml are the only record of
+      # which package versions a given build shipped -- worth keeping as long as the run itself.
       - name: Upload pre-bundled Ballerina packages
         if: ${{ inputs.build_packed_installers == true}}
         uses: actions/upload-artifact@v4
@@ -595,7 +602,6 @@ jobs:
           name: ballerina-packages
           path: ballerina-packages
           if-no-files-found: error
-          retention-days: 1
 
       - name: Build Linux packages - deb
         if: ${{ inputs.build_packed_installers == true}}

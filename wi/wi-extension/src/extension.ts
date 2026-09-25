@@ -27,6 +27,7 @@ import { BridgeLayer } from "./BridgeLayer";
 import { ViewType } from "@wso2/wi-core";
 import { getPlatform } from "./ws-managers/main/utils";
 import { getProductMode, getProductName, isAgentBuilderMode } from "./productMode";
+import { applyBundledBallerinaPackages } from "./utils/ballerinaPackages";
 
 interface ExtensionExports {
 	cloudAPIs: IWso2PlatformExtensionAPI;
@@ -75,6 +76,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 		await vscode.commands.executeCommand('setContext', 'WI.isWiRuntime', process.env.WSO2_INTEGRATOR_RUNTIME === 'true');
 		await vscode.commands.executeCommand('setContext', 'WI.productMode', getProductMode());
 		ext.log(`Product mode: ${getProductMode()} (display name: ${getProductName()})`);
+
+		// Top up the active Ballerina distribution with the packages this product pre-bundles, before
+		// anything can trigger a build. The bundled distribution is not always the one in use — a
+		// component update or an already-seeded copy can leave the active one without them — so the
+		// overlay ships in the editor payload and is applied here. No-op once present, and for the
+		// Integrator flavor, which bundles none.
+		applyBundledBallerinaPackages(
+			process.env.WSO2_INTEGRATOR_BALLERINA_HOME,
+			(message) => ext.log(message),
+			(message, error) => ext.logError(message, error),
+		);
 
 		registerEmbeddedWelcomeBootstrapCommand(context);
 

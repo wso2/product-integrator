@@ -763,7 +763,7 @@ jobs:
       - name: Build macOS installer packages
         if: ${{ inputs.build_packed_installers == true }}
         env:
-          BALLERINA_PACKAGES_DIR: ${{ github.workspace }}/ballerina-packages/bala
+          BALLERINA_PACKAGES_DIR: ${{ github.workspace }}/ballerina-packages
         run: |
           cd ../..
           ROOT_DIR=$(pwd)
@@ -1328,7 +1328,7 @@ jobs:
         if: ${{ inputs.build_packed_installers == true }}
         shell: pwsh
         env:
-          BALLERINA_PACKAGES_DIR: ${{ github.workspace }}\ballerina-packages\bala
+          BALLERINA_PACKAGES_DIR: ${{ github.workspace }}\ballerina-packages
         run: |
           cd ..\..
           $ROOT_DIR = Get-Location

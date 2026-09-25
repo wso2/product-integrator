@@ -83,13 +83,37 @@ OUTPUT_DIR=$(cd "${OUTPUT_DIR}" && pwd)
 # Written on every path -- including the ones that stage nothing -- so that a consumer can always
 # tell "this flavor bundles nothing" from "the staging step never ran", and so the overlay is never
 # a zero-file directory (an empty directory does not survive a CI artifact round trip).
+staged_packages() {
+  find "${OUTPUT_DIR}/bala" -mindepth 3 -maxdepth 3 -type d \
+    | sed "s|^${OUTPUT_DIR}/bala/||" \
+    | awk -F/ '{ print $1 "/" $2 ":" $3 }' \
+    | sort
+}
+
+# Classification lines for the manifest header and the build log: "new" for a package the
+# distribution does not carry at all, "upgrade" for a newer version of one it does -- naming the
+# version being superseded, since that is the one other offline projects resolve today.
+classify_staged() {
+  local entry pkg dist_versions
+  while IFS= read -r entry; do
+    [ -n "${entry}" ] || continue
+    pkg="${entry%:*}"
+    dist_versions=$(awk -F: -v p="${pkg}" '$1 == p { printf "%s%s", sep, $2; sep = ", " }' "${DIST_INVENTORY:-/dev/null}")
+    if [ -n "${dist_versions}" ]; then
+      echo "upgrade: ${entry} (distribution ships ${dist_versions})"
+    else
+      echo "new:     ${entry}"
+    fi
+  done < <(staged_packages)
+}
+
 write_manifest() {
   {
     echo "# flavor=${FLAVOR} distribution=${DIST_VERSION:-n/a}"
-    find "${OUTPUT_DIR}/bala" -mindepth 3 -maxdepth 3 -type d \
-      | sed "s|^${OUTPUT_DIR}/bala/||" \
-      | awk -F/ '{ print $1 "/" $2 ":" $3 }' \
-      | sort
+    if [ -n "${DIST_INVENTORY:-}" ] && [ -f "${DIST_INVENTORY}" ]; then
+      classify_staged | sed 's/^/# /'
+    fi
+    staged_packages
   } > "${OUTPUT_DIR}/bundled-packages.txt"
 }
 
@@ -140,6 +164,16 @@ fi
 DIST_VERSION=$(basename "${DIST_DIR}" | sed 's/^ballerina-//')
 echo "[bundle-ballerina-packages] resolving against distribution ${DIST_VERSION}"
 
+# What the distribution ships on its own, captured now because the verification step below copies
+# the overlay into this same repository. Used to tell a genuinely absent package from an UPGRADE of
+# one the distribution already carries -- the latter changes which version other offline projects in
+# this product resolve to, so it is reported rather than left for someone to notice.
+DIST_INVENTORY="${WORK_DIR}/distribution-packages.txt"
+find "${DIST_DIR}/repo/bala" -mindepth 3 -maxdepth 3 -type d \
+  | sed "s|^${DIST_DIR}/repo/bala/||" \
+  | awk -F/ '{ print $1 "/" $2 ":" $3 }' \
+  | sort > "${DIST_INVENTORY}"
+
 # --- a JDK to run it with ----------------------------------------------------------------------
 # The zip ships one under dependencies/; prefer it, because it is by definition the JDK this
 # Ballerina release was built against. JAVA_HOME on a runner can be an older major the compiler
@@ -162,11 +196,13 @@ echo "[bundle-ballerina-packages] JDK: ${BALLERINA_BUNDLE_JDK}"
 BAL_USER_HOME="${WORK_DIR}/ballerina-user-home"
 mkdir -p "${BAL_USER_HOME}"
 
+# $1 is the user-level Ballerina directory to run against; the rest are `bal` arguments.
 run_bal() {
+  local home_dir="$1"; shift
   ( cd "${PROBE_DIR}" && \
     JAVA_HOME="${BALLERINA_BUNDLE_JDK}" \
     BALLERINA_HOME="${DIST_DIR}" \
-    BALLERINA_HOME_DIR="${BAL_USER_HOME}" \
+    BALLERINA_HOME_DIR="${home_dir}" \
     "${DIST_DIR}/bin/bal" "$@" )
 }
 
@@ -198,7 +234,7 @@ EOF
 } > "${PROBE_DIR}/main.bal"
 
 echo "[bundle-ballerina-packages] resolving closure from Ballerina Central"
-if ! run_bal build > "${WORK_DIR}/resolve.log" 2>&1; then
+if ! run_bal "${BAL_USER_HOME}" build > "${WORK_DIR}/resolve.log" 2>&1; then
   echo "Error: could not resolve ${PACKAGES[*]} against distribution ${DIST_VERSION}." >&2
   cat "${WORK_DIR}/resolve.log" >&2
   exit 1
@@ -214,24 +250,73 @@ if [ ! -d "${CENTRAL_BALA}" ]; then
   exit 0
 fi
 
-# --- prove the overlay is self-sufficient ------------------------------------------------------
-# An offline rebuild against (distribution + this exact closure) is the same resolution the user's
-# first build performs once the overlay is merged into the distribution repo. If anything is
-# missing it fails here, in CI, instead of on a disconnected machine after install.
-echo "[bundle-ballerina-packages] verifying the closure resolves offline"
-# The compiled-module cache the first build left behind is derived state; dropping it forces this
-# pass to resolve from the balas alone -- which is all the overlay actually carries.
-rm -rf "${PROBE_DIR}/target" "${BAL_USER_HOME}/repositories/central.ballerina.io"/cache-*
-if ! run_bal build --offline > "${WORK_DIR}/verify.log" 2>&1; then
-  echo "Error: the staged closure does not resolve offline — the overlay is incomplete." >&2
-  cat "${WORK_DIR}/verify.log" >&2
+# The resolved graph, kept alongside the overlay: it names the exact version of every package the
+# staged closure was resolved against, which is the record of what a given build actually shipped.
+if [ -f "${PROBE_DIR}/Dependencies.toml" ]; then
+  cp "${PROBE_DIR}/Dependencies.toml" "${OUTPUT_DIR}/resolved-dependencies.toml"
+fi
+
+# --- prove the overlay is self-sufficient, in the layout it actually ships in -------------------
+# Verifying against BAL_USER_HOME would only prove the dependency SET is complete: `bal` would still
+# be finding those packages in the central cache, which is not where the product puts them. So put
+# the closure where the installers put it -- the distribution's own repo/bala -- and resolve with a
+# pristine user home. That is exactly what a user's first build does after install.
+#
+# DIST_DIR is this script's own throwaway extraction (WORK_DIR), so mutating it affects nothing the
+# installers later read.
+echo "[bundle-ballerina-packages] verifying the closure resolves from the distribution repository"
+cp -R "${CENTRAL_BALA}/." "${DIST_DIR}/repo/bala/"
+VERIFY_HOME="${WORK_DIR}/verify-user-home"
+mkdir -p "${VERIFY_HOME}"
+# The generated Dependencies.toml is dropped too: a user's first build starts without one, and
+# keeping it would let a recorded version stand in for resolution that has to happen for real.
+rm -rf "${PROBE_DIR}/target" "${PROBE_DIR}/Dependencies.toml"
+if ! run_bal "${VERIFY_HOME}" build --offline > "${WORK_DIR}/verify-offline.log" 2>&1; then
+  echo "Error: the staged closure does not resolve from <distribution>/repo/bala — the overlay is incomplete." >&2
+  cat "${WORK_DIR}/verify-offline.log" >&2
+  exit 1
+fi
+
+# Offline success alone does not prove the product never reaches out: with the network up, `bal` is
+# free to prefer a newer version from Central. Resolve once more WITH network against another
+# pristine home and assert nothing was downloaded -- the actual claim being made, which is that a
+# connected first build does not have to pull either.
+ONLINE_HOME="${WORK_DIR}/online-user-home"
+mkdir -p "${ONLINE_HOME}"
+rm -rf "${PROBE_DIR}/target" "${PROBE_DIR}/Dependencies.toml"
+if ! run_bal "${ONLINE_HOME}" build > "${WORK_DIR}/verify-online.log" 2>&1; then
+  echo "Error: the probe package does not build against the staged distribution with network access." >&2
+  cat "${WORK_DIR}/verify-online.log" >&2
+  exit 1
+fi
+# Guarded rather than piped straight from `find`: the success case is that this directory does not
+# exist at all, and under `set -o pipefail` a failing `find` in a command substitution would abort
+# the script -- silently, on the one path that means everything worked.
+ONLINE_BALA="${ONLINE_HOME}/repositories/central.ballerina.io/bala"
+PULLED=0
+if [ -d "${ONLINE_BALA}" ]; then
+  PULLED=$(find "${ONLINE_BALA}" -mindepth 3 -maxdepth 3 -type d | wc -l | tr -d ' ')
+fi
+if [ "${PULLED}" -ne 0 ]; then
+  echo "Error: a connected build still pulled ${PULLED} package(s) from Ballerina Central, so the overlay does not cover what the product needs:" >&2
+  find "${ONLINE_BALA}" -mindepth 3 -maxdepth 3 -type d | sed "s|.*/bala/||;s|^|    |" >&2
   exit 1
 fi
 
 cp -R "${CENTRAL_BALA}/." "${OUTPUT_DIR}/bala/"
 write_manifest
 
-STAGED_COUNT=$(find "${OUTPUT_DIR}/bala" -mindepth 3 -maxdepth 3 -type d | wc -l | tr -d ' ')
+STAGED_COUNT=$(staged_packages | wc -l | tr -d ' ')
 OVERLAY_SIZE=$(du -sh "${OUTPUT_DIR}/bala" | cut -f1 | tr -d ' ')
 echo "[bundle-ballerina-packages] staged ${STAGED_COUNT} package(s), ${OVERLAY_SIZE}, into ${OUTPUT_DIR}/bala"
-sed 's/^/    /' "${OUTPUT_DIR}/bundled-packages.txt"
+classify_staged | sed 's/^/    /'
+
+# Called out separately because it is the one consequence that reaches beyond the packages asked
+# for: a superseded module stays in the repository, but the newer one wins, so EVERY offline project
+# in this product resolves the staged version. Reviewing this line each time the pinned distribution
+# moves is cheaper than discovering the change from a bug report.
+UPGRADE_COUNT=$(classify_staged | grep -c '^upgrade:' || true)
+if [ "${UPGRADE_COUNT:-0}" -gt 0 ]; then
+  echo "[bundle-ballerina-packages] note: ${UPGRADE_COUNT} of these supersede a module distribution ${DIST_VERSION} already ships."
+  echo "[bundle-ballerina-packages] Offline projects in this product will resolve the staged version instead of the bundled one."
+fi

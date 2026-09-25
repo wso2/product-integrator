@@ -166,13 +166,51 @@ rm -rf "$BALLERINA_TARGET/examples"
 # Pre-bundled Ballerina Central packages, staged by ci/build/bundle-ballerina-packages.sh. They go
 # into the distribution's own package repository, which the compiler resolves before it reaches
 # Ballerina Central -- that is what lets a fresh install build the projects the product's templates
-# generate without a network round trip. Unset, or an empty overlay, for a flavor that bundles none.
-if [ -n "${BALLERINA_PACKAGES_DIR:-}" ] && [ -d "$BALLERINA_PACKAGES_DIR" ]; then
-    BUNDLED_PACKAGE_COUNT=$(find "$BALLERINA_PACKAGES_DIR" -mindepth 3 -maxdepth 3 -type d | wc -l | tr -d ' ')
+# generate without a network round trip.
+#
+# BALLERINA_PACKAGES_DIR names the overlay ROOT, not its bala/ subdirectory, because the root always
+# carries bundled-packages.txt while bala/ is absent whenever the flavor stages nothing (an empty
+# directory does not survive a CI artifact round trip). The manifest is therefore the only thing that
+# separates "this flavor bundles nothing" from "the overlay never arrived" -- and without that
+# distinction a renamed artifact or a changed download path would ship an installer that cannot build
+# offline, silently, with CI green. So: missing manifest is a build failure, never a skip.
+#
+# The packages land in TWO places, deliberately:
+#   1. the bundled distribution's own repo/bala, so a fresh install resolves them immediately;
+#   2. the editor payload, where the WI extension finds them (vscode.env.appRoot) and repairs
+#      whichever Ballerina home is actually active on startup.
+# (2) exists because the bundled runtime is frequently not the one in use: a ballerina-runtime
+# component update installs the STOCK upstream distribution over it, and a copy already seeded to
+# the user's data folder at the same version is never re-seeded. Without (2) only brand-new
+# installs would ever receive these packages. The editor payload is also the part that an
+# editor-only update replaces, so that path carries them too.
+if [ -n "${BALLERINA_PACKAGES_DIR:-}" ]; then
+    EDITOR_APP_DIR="$INTEGRATOR_TARGET/resources/app"
+    BUNDLED_MANIFEST="$BALLERINA_PACKAGES_DIR/bundled-packages.txt"
+    if [ ! -f "$BUNDLED_MANIFEST" ]; then
+        print_error "BALLERINA_PACKAGES_DIR is set to '$BALLERINA_PACKAGES_DIR' but its manifest ($BUNDLED_MANIFEST) is missing."
+        print_error "The pre-bundled Ballerina package overlay did not arrive. Refusing to ship a distribution that may not build offline."
+        exit 1
+    fi
+    # Manifest lines are "<org>/<name>:<version>"; the only other line is a leading '# flavor=...' header.
+    BUNDLED_PACKAGE_COUNT=$(grep -c '^[^#]' "$BUNDLED_MANIFEST" || true)
+    BUNDLED_PACKAGE_COUNT=${BUNDLED_PACKAGE_COUNT:-0}
     if [ "$BUNDLED_PACKAGE_COUNT" -gt 0 ]; then
+        STAGED_PACKAGE_COUNT=$(find "$BALLERINA_PACKAGES_DIR/bala" -mindepth 3 -maxdepth 3 -type d 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$STAGED_PACKAGE_COUNT" -ne "$BUNDLED_PACKAGE_COUNT" ]; then
+            print_error "Overlay is incomplete: $BUNDLED_MANIFEST lists $BUNDLED_PACKAGE_COUNT package(s), but $BALLERINA_PACKAGES_DIR/bala holds $STAGED_PACKAGE_COUNT."
+            exit 1
+        fi
         print_info "Bundling $BUNDLED_PACKAGE_COUNT pre-pulled Ballerina package(s) into the distribution repository"
         mkdir -p "$BALLERINA_TARGET/repo/bala"
-        cp -R "$BALLERINA_PACKAGES_DIR"/. "$BALLERINA_TARGET/repo/bala/"
+        cp -R "$BALLERINA_PACKAGES_DIR/bala"/. "$BALLERINA_TARGET/repo/bala/"
+        print_info "Staging the same packages in the editor payload for startup repair"
+        rm -rf "$EDITOR_APP_DIR/ballerina-packages"
+        mkdir -p "$EDITOR_APP_DIR/ballerina-packages"
+        cp -R "$BALLERINA_PACKAGES_DIR/bala" "$EDITOR_APP_DIR/ballerina-packages/"
+        cp "$BUNDLED_MANIFEST" "$EDITOR_APP_DIR/ballerina-packages/"
+    else
+        print_info "No pre-bundled Ballerina packages for this flavor (manifest lists none)"
     fi
 fi
 
