@@ -393,6 +393,16 @@ for e in pl.get('system-entities', []):
         print(mp)
         break
 ")
+# The device node backs the whole attached image; detaching IT is the one operation that works
+# even when the volume itself is held (see the detach fallbacks below).
+DMG_DEVICE=$(echo "$ATTACH_PLIST" | python3 -c "
+import sys, plistlib
+pl = plistlib.loads(sys.stdin.buffer.read())
+for e in pl.get('system-entities', []):
+    if e.get('mount-point', '').startswith('/Volumes/'):
+        print(e.get('dev-entry', ''))
+        break
+")
 
 if [ -z "$DMG_MOUNT_DIR" ]; then
     print_error "Failed to determine DMG mount point"
@@ -429,6 +439,14 @@ end tell
 APPLESCRIPT
 
 print_info "Finalising DMG"
+# The layout script above deliberately ends on `open`, so when it actually runs (it is
+# best-effort and silently skipped on restricted runners) Finder is left holding the volume
+# through an open window — a hold lsof cannot see (no file descriptors under the mount), which
+# is why run 35460059131 failed every detach with an EMPTY "who is holding it". Undo that hold
+# the same way it was created: close the window, then ask Finder itself to eject. Both are
+# best-effort; the hdiutil loop below remains the mechanism of record.
+osascript -e "tell application \"Finder\" to close (every window whose name is \"$(basename "$DMG_MOUNT_DIR")\")" 2>/dev/null || true
+osascript -e "tell application \"Finder\" to eject disk \"$(basename "$DMG_MOUNT_DIR")\"" 2>/dev/null || true
 sync
 sleep 3
 # Something transiently holds a freshly-written volume — Spotlight indexing, fsevents, or the
@@ -440,6 +458,11 @@ sleep 3
 # volume hdiutil will not.
 _detach_ok=0
 for _retry in 1 2 3 4 5 6; do
+    # The Finder eject above may already have detached it; hdiutil on a gone mount would "fail"
+    # six times and abort a build whose volume is in exactly the state we want.
+    if [ ! -d "$DMG_MOUNT_DIR" ]; then
+        _detach_ok=1; break
+    fi
     if hdiutil detach "$DMG_MOUNT_DIR" -force -quiet; then
         _detach_ok=1; break
     fi
@@ -457,9 +480,19 @@ if [ "$_detach_ok" -eq 0 ]; then
         _detach_ok=1
     fi
 fi
+if [ "$_detach_ok" -eq 0 ] && [ -n "$DMG_DEVICE" ]; then
+    # Last resort: detach the DEVICE backing the image rather than the volume. This severs the
+    # attachment even when a process holds the volume, which neither hdiutil-by-mountpoint nor
+    # diskutil unmount can do.
+    print_info "Trying device-level detach of $DMG_DEVICE"
+    if hdiutil detach "$DMG_DEVICE" -force -quiet; then
+        _detach_ok=1
+    fi
+fi
 if [ "$_detach_ok" -eq 0 ]; then
     print_error "Could not unmount $DMG_MOUNT_DIR; aborting before DMG conversion"
     lsof +D "$DMG_MOUNT_DIR" 2>/dev/null | head -20 || true
+    hdiutil info || true
     exit 1
 fi
 DMG_MOUNT_DIR=""  # Clear only after successful detach so the trap can still retry on failure
