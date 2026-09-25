@@ -133,6 +133,19 @@ mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
 rm -rf "$BALLERINA_TARGET/docs"
 rm -rf "$BALLERINA_TARGET/examples"
 
+# Pre-bundled Ballerina Central packages, staged by ci/build/bundle-ballerina-packages.sh. They go
+# into the distribution's own package repository, which the compiler resolves before it reaches
+# Ballerina Central -- that is what lets a fresh install build the projects the product's templates
+# generate without a network round trip. Unset, or an empty overlay, for a flavor that bundles none.
+if [ -n "${BALLERINA_PACKAGES_DIR:-}" ] && [ -d "$BALLERINA_PACKAGES_DIR" ]; then
+    BUNDLED_PACKAGE_COUNT=$(find "$BALLERINA_PACKAGES_DIR" -mindepth 3 -maxdepth 3 -type d | wc -l | tr -d ' ')
+    if [ "$BUNDLED_PACKAGE_COUNT" -gt 0 ]; then
+        print_info "Bundling $BUNDLED_PACKAGE_COUNT pre-pulled Ballerina package(s) into the distribution repository"
+        mkdir -p "$BALLERINA_TARGET/repo/bala"
+        cp -R "$BALLERINA_PACKAGES_DIR"/. "$BALLERINA_TARGET/repo/bala/"
+    fi
+fi
+
 # Extract JRE zip into shared dependencies directory
 print_info "Extracting JRE to shared dependencies directory..."
 rm -rf "$DEPENDENCIES_DIR"

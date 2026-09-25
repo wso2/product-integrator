@@ -74,6 +74,20 @@ if errorlevel 1 (
     echo Ballerina extraction failed
     exit /b 1
 )
+
+REM Pre-bundled Ballerina Central packages, staged by ci/build/bundle-ballerina-packages.sh and
+REM handed over in BALLERINA_PACKAGES_DIR. They go into the distribution's own package repository,
+REM which the compiler resolves before it reaches Ballerina Central -- that is what lets a fresh
+REM install build the projects the product's templates generate without a network round trip.
+REM Skipped with the rest of Ballerina for the editor-update profile (the goto above jumps past it).
+if not defined BALLERINA_PACKAGES_DIR goto :after_ballerina_packages
+if not exist "%BALLERINA_PACKAGES_DIR%" goto :after_ballerina_packages
+powershell -nologo -noprofile -command "& { $src = $env:BALLERINA_PACKAGES_DIR; $staged = @(Get-ChildItem -LiteralPath $src -Directory | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Directory } | ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Directory }); if ($staged.Count -eq 0) { Write-Host 'No pre-bundled Ballerina packages staged; skipping'; exit 0 }; $target = '.\WixPackage\payload\Integrator\components\ballerina\repo\bala'; New-Item -ItemType Directory -Force -Path $target | Out-Null; Copy-Item -Path (Join-Path $src '*') -Destination $target -Recurse -Force; Write-Host ('Bundled ' + $staged.Count + ' pre-pulled Ballerina package(s) into the distribution repository') }"
+if errorlevel 1 (
+    echo Bundling pre-pulled Ballerina packages failed
+    exit /b 1
+)
+:after_ballerina_packages
 :after_ballerina_extract
 
 REM Prune choreo-cli to win32/amd64 and linux/amd64 (WSL) only
