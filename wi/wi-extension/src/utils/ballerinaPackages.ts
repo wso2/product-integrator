@@ -23,21 +23,15 @@ import { env } from "vscode";
 /**
  * Repairs the active Ballerina distribution with the packages this product pre-bundles.
  *
- * The build stages a set of Ballerina Central packages (ci/build/ballerina-packages.properties,
- * resolved by ci/build/bundle-ballerina-packages.sh) so that a fresh install can compile the
+ * The build stages a set of Ballerina Central packages so that a fresh install can compile the
  * projects the product's own templates generate without reaching Ballerina Central. The installers
- * copy them into the bundled distribution's package repository — but the bundled distribution is
- * frequently NOT the one in use:
+ * put them in the bundled distribution AND in the editor payload (`<appRoot>/ballerina-packages`),
+ * because the bundled distribution is frequently not the one actually in use — a component update
+ * or an already-seeded copy can leave the active one without the packages. This reads the editor
+ * payload and tops up whichever distribution ended up active.
  *
- *   - a `ballerina-runtime` component update installs the STOCK upstream distribution into the
- *     user's data folder, and that copy takes precedence over the bundled one;
- *   - a runtime already seeded to the data folder at the same version is never re-seeded, so an
- *     existing install does not pick the packages up from a newer bundle;
- *   - the editor-only update payload carries no Ballerina runtime at all.
- *
- * Any of those leaves the active distribution without the packages. So the installers also drop the
- * overlay into the editor payload (`<appRoot>/ballerina-packages`), and this runs on every startup
- * to top up whichever distribution actually ended up active.
+ * What is bundled, and the full argument for the second copy:
+ * ci/build/ballerina-packages.properties, "How they reach a user".
  *
  * Cheap and idempotent: an existence check per package, and a copy only for what is missing. It
  * never overwrites a package the distribution already has — a version present upstream is left

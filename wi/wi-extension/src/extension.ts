@@ -78,10 +78,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 		ext.log(`Product mode: ${getProductMode()} (display name: ${getProductName()})`);
 
 		// Top up the active Ballerina distribution with the packages this product pre-bundles, before
-		// anything can trigger a build. The bundled distribution is not always the one in use — a
-		// component update or an already-seeded copy can leave the active one without them — so the
-		// overlay ships in the editor payload and is applied here. No-op once present, and for the
-		// Integrator flavor, which bundles none.
+		// anything can trigger a build. No-op once present, and for the Integrator flavor, which
+		// bundles none.
 		applyBundledBallerinaPackages(
 			process.env.WSO2_INTEGRATOR_BALLERINA_HOME,
 			(message) => ext.log(message),

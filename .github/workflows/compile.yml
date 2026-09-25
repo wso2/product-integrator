@@ -572,10 +572,9 @@ jobs:
             "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
           echo "BALLERINA_ZIP=$RUNNER_TEMP/ballerina.zip" >> "$GITHUB_ENV"
 
-      # Pre-bundle the Ballerina Central packages this flavor ships (ci/build/ballerina-packages.properties)
-      # into an overlay that every installer merges into the bundled distribution's package repository.
-      # Resolved once, here: a bala is OS-independent, so the macOS and Windows jobs consume this same
-      # artifact instead of each re-resolving the closure against Ballerina Central.
+      # Resolve this flavor's pre-bundled packages into an overlay the installers merge (see
+      # ci/build/ballerina-packages.properties). Done once here because a bala is OS-independent, so
+      # the macOS and Windows jobs consume this artifact rather than re-resolving it themselves.
       - name: Stage pre-bundled Ballerina packages
         if: ${{ inputs.build_packed_installers == true}}
         env:
@@ -590,14 +589,13 @@ jobs:
           # scripts tell "nothing to bundle" from "the overlay never arrived" instead of skipping.
           echo "BALLERINA_PACKAGES_DIR=$OUT" >> "$GITHUB_ENV"
 
-      # Consumed by build-macos and build-windows, which merge the same overlay into their own copy
-      # of the distribution. bundled-packages.txt is always present, so the artifact exists even for
-      # a flavor that bundles nothing and the downloads over there never have to be conditional.
+      # Consumed by build-macos and build-windows. bundled-packages.txt is always present, so the
+      # artifact exists even for a flavor that bundles nothing and those downloads never have to be
+      # conditional.
       #
-      # Default retention on purpose. A short window would expire the artifact out from under a
-      # re-run of just build-macos/build-windows days later (those jobs download it rather than
-      # rebuild it), and bundled-packages.txt plus resolved-dependencies.toml are the only record of
-      # which package versions a given build shipped -- worth keeping as long as the run itself.
+      # Default retention on purpose: a short window would expire the artifact out from under a
+      # re-run of just build-macos/build-windows days later (they download it rather than rebuild
+      # it), and it is the only record of which package versions a given build shipped.
       - name: Upload pre-bundled Ballerina packages
         if: ${{ inputs.build_packed_installers == true}}
         uses: actions/upload-artifact@v4

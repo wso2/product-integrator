@@ -751,8 +751,7 @@ jobs:
       # MAC_SIGNING_IDENTITY comes from the import step via GITHUB_ENV (derived from the
       # imported certificate).
 
-      # The overlay of pre-bundled Ballerina Central packages resolved once in `compile` (a bala is
-      # OS-independent). installers/mac/build.sh merges it into the distribution's package repository.
+      # The pre-bundled package overlay resolved once in `compile`; installers/mac/build.sh merges it.
       - name: Download pre-bundled Ballerina packages
         if: ${{ inputs.build_packed_installers == true }}
         uses: actions/download-artifact@v4
@@ -1315,8 +1314,7 @@ jobs:
         shell: pwsh
         run: |
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
-      # Same overlay the macOS and Linux installers merge; installers/windows/build.bat copies it into
-      # the distribution's package repository (and skips it with Ballerina for the editor-update MSI).
+      # The same overlay the macOS and Linux installers merge; installers/windows/build.bat copies it.
       - name: Download pre-bundled Ballerina packages
         if: ${{ inputs.build_packed_installers == true }}
         uses: actions/download-artifact@v4

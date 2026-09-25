@@ -15,12 +15,9 @@
 #
 # The overlay lands in two places:
 #   1. <ballerina-home>/repo/bala, so a fresh install resolves the packages immediately;
-#   2. <editor-app-dir>/ballerina-packages, where the WI extension finds them and repairs whichever
-#      Ballerina home is actually active at startup.
-# (2) is not redundant: a ballerina-runtime component update installs the STOCK upstream
-# distribution over the bundled one, and a runtime already seeded to the user's data folder at the
-# same version is never re-seeded, so without it only brand-new installs would ever get these
-# packages. It is also the part an editor-only update replaces, so that path carries them too.
+#   2. <editor-app-dir>/ballerina-packages, which the WI extension applies at startup to whichever
+#      Ballerina home is actually active.
+# Why (2) is not redundant: ci/build/ballerina-packages.properties, "How they reach a user".
 set -euo pipefail
 
 if [ "$#" -ne 3 ]; then
@@ -38,7 +35,7 @@ fail()    { echo "[merge-ballerina-packages] ERROR: $1" >&2; exit 1; }
 # The manifest, not the presence of bala/, is what says whether an overlay arrived. bala/ is absent
 # whenever the flavor stages nothing (an empty directory does not survive a CI artifact round trip),
 # so treating a missing directory as "nothing to do" would make a renamed artifact or a changed
-# download path indistinguishable from an empty flavor -- and ship an installer that cannot build
+# download path indistinguishable from an empty flavor — and ship an installer that cannot build
 # offline, silently, with CI green.
 MANIFEST="${OVERLAY_DIR}/bundled-packages.txt"
 if [ ! -f "${MANIFEST}" ]; then
@@ -59,7 +56,7 @@ if [ "${PACKAGE_COUNT}" -eq 0 ]; then
 fi
 
 # Guarded rather than piped straight from `find`: under `set -o pipefail` a `find` on a missing
-# directory fails the whole substitution and would abort this script before it could say why -- and
+# directory fails the whole substitution and would abort this script before it could say why — and
 # a missing bala/ is exactly the case this check exists to report.
 OVERLAY_BALA="${OVERLAY_DIR}/bala"
 STAGED_COUNT=0

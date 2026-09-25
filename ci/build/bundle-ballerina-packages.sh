@@ -13,7 +13,7 @@
 # from the distribution and never lands in the overlay.
 #
 # Versions are whatever Ballerina Central resolves as newest-compatible at build time; there is no
-# pinning, because Ballerina honours a pin only through a *complete* Dependencies.toml and quietly
+# pinning, because Ballerina honors a pin only through a *complete* Dependencies.toml and quietly
 # discards a partial one as corrupted. <output-dir>/bundled-packages.txt is the record of what a
 # given build actually staged.
 #
@@ -48,7 +48,7 @@ read_property() {
 
 # Flavors are whatever the properties file declares, so adding one is a config change rather than a
 # code change here. This matches the KEY rather than reading its value, because read_property cannot
-# tell an undeclared flavor from one that deliberately bundles nothing -- and quietly treating a
+# tell an undeclared flavor from one that deliberately bundles nothing — and quietly treating a
 # typo'd flavor as "bundles nothing" would ship an installer missing every package it should carry.
 require_flavor() {
   if ! awk -F= -v k="$1.packages" '$1 == k { found = 1 } END { exit !found }' "${PACKAGES_FILE}"; then
@@ -74,7 +74,7 @@ mkdir -p "${OUTPUT_DIR}/bala"
 OUTPUT_DIR=$(cd "${OUTPUT_DIR}" && pwd)
 
 # One line per staged package, for the build log and for anyone auditing what an installer carries.
-# Written on every path -- including the ones that stage nothing -- so that a consumer can always
+# Written on every path — including the ones that stage nothing — so that a consumer can always
 # tell "this flavor bundles nothing" from "the staging step never ran", and so the overlay is never
 # a zero-file directory (an empty directory does not survive a CI artifact round trip).
 staged_packages() {
@@ -85,7 +85,7 @@ staged_packages() {
 }
 
 # Classification lines for the manifest header and the build log: "new" for a package the
-# distribution does not carry at all, "upgrade" for a newer version of one it does -- naming the
+# distribution does not carry at all, "upgrade" for a newer version of one it does — naming the
 # version being superseded, since that is the one other offline projects resolve today.
 classify_staged() {
   local entry pkg dist_versions
@@ -161,7 +161,7 @@ echo "[bundle-ballerina-packages] resolving against distribution ${DIST_VERSION}
 
 # What the distribution ships on its own, captured now because the verification step below copies
 # the overlay into this same repository. Used to tell a genuinely absent package from an UPGRADE of
-# one the distribution already carries -- the latter changes which version other offline projects in
+# one the distribution already carries — the latter changes which version other offline projects in
 # this product resolve to, so it is reported rather than left for someone to notice.
 DIST_INVENTORY="${WORK_DIR}/distribution-packages.txt"
 find "${DIST_DIR}/repo/bala" -mindepth 3 -maxdepth 3 -type d \
@@ -254,7 +254,7 @@ fi
 # --- prove the overlay is self-sufficient, in the layout it actually ships in -------------------
 # Verifying against BAL_USER_HOME would only prove the dependency SET is complete: `bal` would still
 # be finding those packages in the central cache, which is not where the product puts them. So put
-# the closure where the installers put it -- the distribution's own repo/bala -- and resolve with a
+# the closure where the installers put it — the distribution's own repo/bala — and resolve with a
 # pristine user home. That is exactly what a user's first build does after install.
 #
 # DIST_DIR is this script's own throwaway extraction (WORK_DIR), so mutating it affects nothing the
@@ -274,7 +274,7 @@ fi
 
 # Offline success alone does not prove the product never reaches out: with the network up, `bal` is
 # free to prefer a newer version from Central. Resolve once more WITH network against another
-# pristine home and assert nothing was downloaded -- the actual claim being made, which is that a
+# pristine home and assert nothing was downloaded — the actual claim being made, which is that a
 # connected first build does not have to pull either.
 ONLINE_HOME="${WORK_DIR}/online-user-home"
 mkdir -p "${ONLINE_HOME}"
@@ -286,7 +286,7 @@ if ! run_bal "${ONLINE_HOME}" build > "${WORK_DIR}/verify-online.log" 2>&1; then
 fi
 # Guarded rather than piped straight from `find`: the success case is that this directory does not
 # exist at all, and under `set -o pipefail` a failing `find` in a command substitution would abort
-# the script -- silently, on the one path that means everything worked.
+# the script — silently, on the one path that means everything worked.
 ONLINE_BALA="${ONLINE_HOME}/repositories/central.ballerina.io/bala"
 PULLED=0
 if [ -d "${ONLINE_BALA}" ]; then

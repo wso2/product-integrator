@@ -76,10 +76,9 @@ if errorlevel 1 (
 )
 :after_ballerina_extract
 
-REM Pre-bundled Ballerina Central packages, staged by ci/build/bundle-ballerina-packages.sh and
-REM handed over in BALLERINA_PACKAGES_DIR (the overlay ROOT, holding bundled-packages.txt). The
-REM merge itself lives in scripts\merge-ballerina-packages.ps1, the Windows counterpart of
-REM ci/build/merge-ballerina-packages.sh that the other four installers call.
+REM Pre-bundled Ballerina Central packages. The merge lives in scripts\merge-ballerina-packages.ps1,
+REM the Windows counterpart of ci/build/merge-ballerina-packages.sh; see
+REM ci/build/ballerina-packages.properties for what is bundled and why.
 REM
 REM Placed AFTER :after_ballerina_extract on purpose: the editor-update MSI ships no bundled
 REM Ballerina but DOES ship the editor payload, which must still carry the packages. The script

@@ -17,14 +17,9 @@
 # Merge a staged Ballerina package overlay into the MSI payload. The Windows counterpart of
 # ci/build/merge-ballerina-packages.sh, which the other four installers call; keep the two in step.
 #
-# The overlay lands in two places:
-#   1. the bundled distribution's repo\bala, so a fresh install resolves the packages immediately;
-#   2. the editor payload, where the WI extension finds them (vscode.env.appRoot) and repairs
-#      whichever Ballerina home is actually active at startup.
-# (2) is not redundant: a ballerina-runtime component update installs the STOCK upstream
-# distribution over the bundled one, and a runtime already seeded to the user's data folder at the
-# same version is never re-seeded. It is also the part an editor-only update replaces, so the
-# editor-update MSI -- which ships no bundled Ballerina at all -- still carries the packages.
+# The overlay lands in two places: the bundled distribution's repo\bala, and the editor payload
+# (which the editor-update MSI still ships even though it carries no Ballerina). Why both:
+# ci/build/ballerina-packages.properties, "How they reach a user".
 #
 # Standalone rather than an inline `powershell -command` in build.bat for the same reason as
 # patch-icp-jre.ps1: the logic needs quotes, parentheses and branching that cmd.exe mangles, and a
@@ -45,7 +40,7 @@ $ErrorActionPreference = 'Stop'
 
 # The manifest, not the presence of bala\, is what says whether an overlay arrived: bala\ is absent
 # whenever the flavor stages nothing, so treating a missing directory as "nothing to do" would make
-# a renamed artifact indistinguishable from an empty flavor -- and ship an MSI that cannot build
+# a renamed artifact indistinguishable from an empty flavor — and ship an MSI that cannot build
 # offline, silently, with CI green.
 $manifest = Join-Path $OverlayDir 'bundled-packages.txt'
 if (-not (Test-Path -LiteralPath $manifest)) {
@@ -77,7 +72,7 @@ function Copy-Tree {
 	param([string] $Source, [string] $Destination)
 
 	$null = New-Item -ItemType Directory -Force -Path $Destination
-	# /NFL /NDL /NJH /NJS /NP: no per-file, per-directory, header, summary or progress output -- the
+	# /NFL /NDL /NJH /NJS /NP: no per-file, per-directory, header, summary or progress output — the
 	# build log wants the outcome, not thousands of copied-file lines.
 	& robocopy $Source $Destination /E /NFL /NDL /NJH /NJS /NP | Out-Null
 	if ($LASTEXITCODE -ge 8) {

@@ -133,10 +133,8 @@ mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
 rm -rf "$BALLERINA_TARGET/docs"
 rm -rf "$BALLERINA_TARGET/examples"
 
-# Pre-bundled Ballerina Central packages, staged by ci/build/bundle-ballerina-packages.sh and handed
-# over as a build artifact. ci/build/merge-ballerina-packages.sh owns the merge -- the same two
-# copies and the same sanity checks are needed by every installer, so they live in one place rather
-# than in five.
+# Pre-bundled Ballerina Central packages. ci/build/merge-ballerina-packages.sh owns the merge; see
+# ci/build/ballerina-packages.properties for what is bundled and why.
 if [ -n "${BALLERINA_PACKAGES_DIR:-}" ]; then
     "$(cd "$(dirname "$0")/../.." && pwd)/ci/build/merge-ballerina-packages.sh" \
         "$BALLERINA_PACKAGES_DIR" "$BALLERINA_TARGET" "$INTEGRATOR_TARGET/resources/app"
