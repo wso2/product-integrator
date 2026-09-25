@@ -8,7 +8,7 @@ on:
   workflow_call:
     inputs:
       runner:
-        description: 'Select runner type'
+        description: 'Runner for the Linux compile job: ubuntu-latest, codebuild, or k8s-default-runners. macOS and Windows are always GitHub-hosted.'
         required: false
         default: 'ubuntu-latest'
         type: string
@@ -338,7 +338,7 @@ jobs:
     uses: ./.github/workflows/compile.yml
     secrets: inherit
     with:
-      runOnAWS: ${{ inputs.runner == 'codebuild' }}
+      runner: ${{ inputs.runner }}
       ballerina_extension_source: ${{ inputs.ballerina_extension_source }}
       mi_extension_source: ${{ inputs.mi_extension_source }}
       build_packed_installers: ${{ inputs.build_packed_installers == true }}
@@ -695,17 +695,15 @@ jobs:
           mkdir -p ../artifacts
           (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
           cp ../artifacts/VSCode-darwin-${{ matrix.arch }}.zip ../../installers/mac/
-      # Imports the Developer ID Application cert (codesign: app bundles + DMG) and the
-      # Developer ID Installer cert (productbuild: the .pkg — an unsigned pkg cannot be
-      # notarized) into a temp keychain, then derives the identity names from the imported
-      # certs so no separate identity secret is needed.
+      # Imports the Developer ID Application cert (codesign: app bundles + DMG) into a temp
+      # keychain, then derives the identity name from the imported cert so no separate identity
+      # secret is needed. No Developer ID Installer cert: the DMG carries the app directly, and
+      # nothing here builds a .pkg for productbuild to sign.
       - name: Import signing certificates (macOS)
         if: ${{ inputs.build_packed_installers == true }}
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          MACOS_INSTALLER_CERTIFICATE: ${{ secrets.MACOS_INSTALLER_CERTIFICATE }}
-          MACOS_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           if [ -z "$MACOS_CERTIFICATE" ]; then
@@ -739,31 +737,19 @@ jobs:
             echo "::error::Importing MACOS_CERTIFICATE failed. The file decoded correctly, so MACOS_CERTIFICATE_PASSWORD does not match this .p12."
             exit 1
           fi
-          if [ -n "$MACOS_INSTALLER_CERTIFICATE" ]; then
-            echo "$MACOS_INSTALLER_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/installer_cert.p12"
-            check_p12 "$RUNNER_TEMP/installer_cert.p12" "MACOS_INSTALLER_CERTIFICATE"
-            if ! security import "$RUNNER_TEMP/installer_cert.p12" -k "$KEYCHAIN" -P "$MACOS_INSTALLER_CERTIFICATE_PASSWORD" -T /usr/bin/productbuild -T /usr/bin/productsign; then
-              echo "::error::Importing MACOS_INSTALLER_CERTIFICATE failed. The file decoded correctly, so MACOS_INSTALLER_CERTIFICATE_PASSWORD does not match this .p12."
-              exit 1
-            fi
-          fi
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PASS" "$KEYCHAIN" >/dev/null
-          rm -f "$RUNNER_TEMP/app_cert.p12" "$RUNNER_TEMP/installer_cert.p12"
+          rm -f "$RUNNER_TEMP/app_cert.p12"
           APP_ID=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"')
-          INST_ID=$(security find-identity -v "$KEYCHAIN" | grep -o '"Developer ID Installer: [^"]*"' | head -1 | tr -d '"')
           if [ -z "$APP_ID" ]; then
             echo "No Developer ID Application identity found after import" >&2
             exit 1
           fi
           echo "MAC_SIGNING_IDENTITY=$APP_ID" >> "$GITHUB_ENV"
-          if [ -n "$INST_ID" ]; then
-            echo "MAC_INSTALLER_SIGNING_IDENTITY=$INST_ID" >> "$GITHUB_ENV"
-          fi
-          echo "Imported certificates. App identity: $APP_ID | Installer identity: ${INST_ID:-none}"
+          echo "Imported certificate. App identity: $APP_ID"
 
-      # MAC_SIGNING_IDENTITY / MAC_INSTALLER_SIGNING_IDENTITY come from the import step
-      # via GITHUB_ENV (derived from the imported certificates).
+      # MAC_SIGNING_IDENTITY comes from the import step via GITHUB_ENV (derived from the
+      # imported certificate).
 
       - name: Build macOS installer packages
         if: ${{ inputs.build_packed_installers == true }}
@@ -794,7 +780,7 @@ jobs:
           wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
           wget -O jre.zip "$JRE_URL"
-          # editor-update profile: full DMG/PKG (first install) + EDITOR-ONLY Squirrel zip (§D8).
+          # editor-update profile: full DMG (first install) + EDITOR-ONLY Squirrel zip (§D8).
           INSTALLER_PROFILE=editor-update ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
 
@@ -818,34 +804,47 @@ jobs:
           set -euo pipefail
           V="$INTEGRATOR_VERSION"
           DMG="installers/mac/${ARTIFACT_SLUG}-${V}-${{ matrix.arch }}.dmg"
-          PKG="installers/mac/${ARTIFACT_SLUG}-${V}-${{ matrix.arch }}.pkg"
           if [ -z "$NOTARY_APPLE_ID" ] || [ -z "$NOTARY_APP_PASSWORD" ] || [ -z "$NOTARY_TEAM_ID" ]; then
             echo "Notarization credentials not set — skipping notarization (build is signed but not notarized)."
             exit 0
           fi
-          # Submitting ad-hoc or unsigned artifacts can only fail at Apple's end, so without both
-          # signing identities this build is the documented unsigned fallback — skip, don't submit.
-          if [ -z "${MAC_SIGNING_IDENTITY:-}" ] || [ -z "${MAC_INSTALLER_SIGNING_IDENTITY:-}" ]; then
-            echo "Signing identities not available — skipping notarization (unsigned fallback build)."
+          # Submitting an ad-hoc signed artifact can only fail at Apple's end, so without the
+          # signing identity this build is the documented unsigned fallback — skip, don't submit.
+          if [ -z "${MAC_SIGNING_IDENTITY:-}" ]; then
+            echo "Signing identity not available — skipping notarization (unsigned fallback build)."
             exit 0
           fi
-          # A signed release ships BOTH artifacts; notarizing a partial set would look green while
-          # publishing an un-notarized installer.
-          for ARTIFACT in "$DMG" "$PKG"; do
-            if [ ! -f "$ARTIFACT" ]; then
-              echo "::error::expected artifact missing before notarization: $ARTIFACT" >&2
-              exit 1
+          if [ ! -f "$DMG" ]; then
+            echo "::error::expected artifact missing before notarization: $DMG" >&2
+            exit 1
+          fi
+          echo "Notarizing $DMG"
+          # `notarytool submit --wait` exits 0 even when Apple returns Invalid, so without this
+          # check the run failed one line later at `stapler` with "Could not find base64 encoded
+          # ticket ... Error 65" and no hint of the cause. Read the verdict, and on anything but
+          # Accepted print Apple's per-file findings, which is the only thing that says WHY.
+          SUBMIT_JSON=$(xcrun notarytool submit "$DMG" \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_APP_PASSWORD" \
+            --team-id "$NOTARY_TEAM_ID" \
+            --wait --output-format json)
+          echo "$SUBMIT_JSON"
+          # Tab-separated, because a status can contain a space: `--wait` reports "In Progress"
+          # on timeout, and splitting on spaces would leave "Progress <uuid>" in the id, sending
+          # `notarytool log` an id it cannot use -- which `|| true` would then hide.
+          IFS=$'\t' read -r NOTARY_STATUS NOTARY_ID <<<"$(printf '%s' "$SUBMIT_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("status",""), d.get("id",""), sep="\t")')"
+          if [ "$NOTARY_STATUS" != "Accepted" ]; then
+            echo "::error::notarization returned ${NOTARY_STATUS:-no status} for $DMG" >&2
+            if [ -n "$NOTARY_ID" ]; then
+              echo "----- Apple's notarization log -----"
+              xcrun notarytool log "$NOTARY_ID" \
+                --apple-id "$NOTARY_APPLE_ID" \
+                --password "$NOTARY_APP_PASSWORD" \
+                --team-id "$NOTARY_TEAM_ID" || true
             fi
-          done
-          for ARTIFACT in "$DMG" "$PKG"; do
-            echo "Notarizing $ARTIFACT"
-            xcrun notarytool submit "$ARTIFACT" \
-              --apple-id "$NOTARY_APPLE_ID" \
-              --password "$NOTARY_APP_PASSWORD" \
-              --team-id "$NOTARY_TEAM_ID" \
-              --wait
-            xcrun stapler staple "$ARTIFACT"
-          done
+            exit 1
+          fi
+          xcrun stapler staple "$DMG"
 
       # This is the only AWS consumer in the job, so the credentials go in its own `env:` rather
       # than through configure-aws-credentials, which writes them to $GITHUB_ENV and would leave

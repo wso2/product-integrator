@@ -84,6 +84,9 @@ export interface ProjectStructureArtifactResponse {
     path: string;
     icon: string;
     moduleName?: string;
+    iconColor?: string;
+    iconLight?: string;
+    iconDark?: string;
     position?: NodePosition;
     context?: string;
     resources?: ProjectStructureArtifactResponse[];
