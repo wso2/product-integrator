@@ -2026,7 +2026,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,811 @@
+@@ -0,0 +1,933 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2392,6 +2392,96 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +}
 +
 +/**
++ * Where a replaced tree is parked while its contents are moved back over the fresh copy. It sits
++ * at the components-home ROOT on purpose: the stale sweep only walks `components/<id>` for
++ * `*.seeding*`/`*.repair-*` names, and the garbage collector only enumerates `components/<id>`
++ * for known component ids, so neither can reach it. On the success path nothing is left here.
++ */
++const SALVAGE_DIR = '.salvaged';
++
++/**
++ * Restores a replaced component tree over the freshly seeded one.
++ *
++ * A component writes into its own directory, and at BUNDLED paths: ICP ships
++ * `bin/database/icp_db.mv.db`, `credentials_db.mv.db` and `www/config.json`, then writes to those
++ * very files (the deb/rpm postinst chmods them for exactly that reason). So "keep what the bundle
++ * does not ship" would discard the database it is meant to protect.
++ *
++ * What the replace path actually repairs is ABSENCE: `seedContainsSource` rejects a tree only for
++ * a missing entry, or a zero-length file where the bundle's is not empty. Every other path present
++ * in the old tree was intact, and may hold the user's data. So the fresh copy supplies what was
++ * missing and the old tree is moved back over everything else.
++ *
++ * Moves, never copies: same filesystem, so each entry is a rename. Nothing is read or rewritten,
++ * which matters because this runs synchronously before any window opens and ICP's `logs/` has no
++ * size limit.
++ */
++function overlayPreservedTree(srcDir: string, salvage: string, target: string, log?: (message: string) => void): { restored: number; failed: number } {
++	let restored = 0;
++	let failed = 0;
++	const walk = (rel: string): void => {
++		const here = rel ? path.join(salvage, rel) : salvage;
++		let entries: fs.Dirent[];
++		try {
++			entries = fs.readdirSync(path.toNamespacedPath(here), { withFileTypes: true });
++		} catch (err) {
++			failed++;
++			log?.(`WARN: cannot read ${rel || '.'} in the replaced tree: ${err}`);
++			return;
++		}
++		for (const entry of entries) {
++			const childRel = rel ? path.join(rel, entry.name) : entry.name;
++			const from = path.join(salvage, childRel);
++			const to = path.join(target, childRel);
++			const bundled = path.join(srcDir, childRel);
++			// The stale marker from the replaced tree must never overwrite the one just stamped.
++			if (!rel && entry.name === SEED_COMPLETE_MARKER) {
++				continue;
++			}
++			let bundledStat: fs.Stats | undefined;
++			try {
++				bundledStat = fs.statSync(path.toNamespacedPath(bundled));
++			} catch { /* not shipped by the bundle: purely the component's own */ }
++			if (entry.isDirectory()) {
++				if (bundledStat && !bundledStat.isDirectory()) {
++					continue; // bundle turned this path into a file; keep the fresh copy
++				}
++				try {
++					fs.mkdirSync(path.toNamespacedPath(to), { recursive: true });
++				} catch (err) {
++					failed++;
++					log?.(`WARN: cannot create ${childRel} in the new tree: ${err}`);
++					continue;
++				}
++				walk(childRel);
++				continue;
++			}
++			if (bundledStat?.isFile()) {
++				// The damage this path repairs: an entry the old tree has but empty, where the
++				// bundle's is not. Keep the fresh copy rather than restoring the truncated one.
++				let oldSize = -1;
++				try {
++					oldSize = fs.statSync(path.toNamespacedPath(from)).size;
++				} catch { /* unreadable; fall through and let the move report it */ }
++				if (oldSize === 0 && bundledStat.size > 0) {
++					continue;
++				}
++			}
++			try {
++				fs.rmSync(path.toNamespacedPath(to), { recursive: true, force: true }); // rename onto an existing path fails on Windows
++				fs.renameSync(path.toNamespacedPath(from), path.toNamespacedPath(to));
++				restored++;
++			} catch (err) {
++				failed++;
++				log?.(`WARN: could not restore ${childRel}: ${err}`);
++			}
++		}
++	};
++	walk('');
++	return { restored, failed };
++}
++
++/**
 + * Marker file written (fsync'd) into a seeded version directory as the last step before it
 + * is promoted. Its presence is what distinguishes a COMPLETE seed from a partial tree
 + * committed by a racing second instance or a hard power-off, so the idempotence check must
@@ -2638,9 +2728,41 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +				throw err;
 +			}
 +			if (claimed) {
++				// Move the replaced tree out of the way FIRST: a rename is atomic and costs no
++				// disk, so the old tree cannot be lost by anything that follows. Copying it
++				// instead — right after writing hundreds of MB of bundle — could fail on a full
++				// disk and then fall through to the delete, which is the bug this guards.
++				let salvage: string | undefined = path.join(componentsHome, SALVAGE_DIR, id, `${version}-${Date.now()}`);
 +				try {
-+					fs.rmSync(path.toNamespacedPath(claimed), { recursive: true, force: true });
-+				} catch { /* leftover .repair dir is swept as stale on the next run */ }
++					fs.mkdirSync(path.dirname(path.toNamespacedPath(salvage)), { recursive: true });
++					fs.renameSync(path.toNamespacedPath(claimed), path.toNamespacedPath(salvage));
++				} catch (err) {
++					// Could not park it: leave the claim where it is rather than delete it. A
++					// `.repair-<pid>` directory is swept once its owner is gone, so this trades a
++					// later automatic cleanup for not destroying data now.
++					salvage = undefined;
++					log?.(`WARN: could not set aside the replaced ${id}@${version} tree; leaving ${claimed} in place: ${err}`);
++				}
++				if (salvage) {
++					const { restored, failed } = overlayPreservedTree(srcDir, salvage, target, log);
++					if (failed === 0) {
++						// Everything worth keeping is now in the live tree; the remainder is the
++						// damage the fresh copy replaced. Nothing is retained, so nothing accumulates.
++						try {
++							fs.rmSync(path.toNamespacedPath(salvage), { recursive: true, force: true });
++							// And the now-empty parents, so a repaired install leaves no trace at
++							// all. rmdir throws ENOTEMPTY when another component still has a
++							// salvage of its own, which is exactly the right stopping condition.
++							fs.rmdirSync(path.toNamespacedPath(path.dirname(salvage)));
++							fs.rmdirSync(path.toNamespacedPath(path.join(componentsHome, SALVAGE_DIR)));
++						} catch { /* an empty leftover under .salvaged is inert */ }
++						if (restored > 0) {
++							log?.(`Restored ${restored} item(s) from the replaced ${id}@${version} tree over the fresh copy`);
++						}
++					} else {
++						log?.(`ERROR: ${failed} item(s) from the replaced ${id}@${version} tree could not be restored; they are kept at ${salvage}`);
++					}
++				}
 +			}
 +			log?.(`Seeded ${id}@${version} from ${srcDir}`);
 +		} catch (err) {
@@ -3872,7 +3994,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,389 @@
+@@ -0,0 +1,454 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -4014,8 +4136,73 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		strictEqual(fs.existsSync(join(target(), SEED_COMPLETE_MARKER)), true);
 +	});
 +
++	test('re-seeding a damaged tree keeps data the component wrote at BUNDLED paths', () => {
++		// ICP ships bin/database/icp_db.mv.db and www/config.json and then writes to those very
++		// files, so "keep what the bundle does not ship" would discard the database. The bundle
++		// fixture therefore ships the same paths the runtime later modifies.
++		fs.mkdirSync(join(srcDir, 'database'), { recursive: true });
++		fs.writeFileSync(join(srcDir, 'database', 'icp_db.mv.db'), 'pristine db');
++		fs.writeFileSync(join(srcDir, 'config.json'), 'pristine config');
++
++		fs.mkdirSync(join(target(), 'database'), { recursive: true });
++		fs.writeFileSync(join(target(), 'database', 'icp_db.mv.db'), 'USER DATA');
++		fs.writeFileSync(join(target(), 'config.json'), 'USER CONFIG');
++		fs.mkdirSync(join(target(), 'logs'), { recursive: true });
++		fs.writeFileSync(join(target(), 'logs', 'icp.log'), 'log line');
++		// bin/bal is absent: that is the damage seedContainsSource rejects the tree for.
++		seedBundledComponents(componentsHome, seeds());
++
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'bal'), 'utf8'), 'launcher');       // repaired
++		strictEqual(fs.readFileSync(join(target(), 'database', 'icp_db.mv.db'), 'utf8'), 'USER DATA');
++		strictEqual(fs.readFileSync(join(target(), 'config.json'), 'utf8'), 'USER CONFIG');
++		strictEqual(fs.readFileSync(join(target(), 'logs', 'icp.log'), 'utf8'), 'log line');
++		strictEqual(fs.existsSync(join(componentsHome, '.salvaged')), false);                 // nothing retained
++	});
++
++	test('a truncated bundled file is replaced, not restored', () => {
++		// Zero-length where the bundle is not empty is the other thing seedContainsSource
++		// rejects a tree for, so the fresh copy has to win for that path specifically.
++		fs.mkdirSync(join(target(), 'bin'), { recursive: true });
++		fs.writeFileSync(join(target(), 'bin', 'bal'), '');
++		fs.writeFileSync(join(target(), 'keepme.txt'), 'user data');
++		seedBundledComponents(componentsHome, seeds());
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'bal'), 'utf8'), 'launcher');
++		strictEqual(fs.readFileSync(join(target(), 'keepme.txt'), 'utf8'), 'user data');
++	});
++
++	test('runtime data nested under a bundled directory survives', () => {
++		fs.mkdirSync(join(srcDir, 'bin', 'database'), { recursive: true });
++		fs.writeFileSync(join(srcDir, 'bin', 'database', 'icp.mv.db'), 'pristine');
++		fs.mkdirSync(join(target(), 'bin', 'database'), { recursive: true });
++		fs.writeFileSync(join(target(), 'bin', 'database', 'icp.mv.db'), 'USER DATA');
++		fs.writeFileSync(join(target(), 'bin', 'database', 'extra.trace'), 'trace');
++		seedBundledComponents(componentsHome, seeds());
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'bal'), 'utf8'), 'launcher');
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'database', 'icp.mv.db'), 'utf8'), 'USER DATA');
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'database', 'extra.trace'), 'utf8'), 'trace');
++	});
++
++	test('the replaced tree never overwrites the freshly stamped marker', () => {
++		fs.mkdirSync(target(), { recursive: true });
++		fs.writeFileSync(join(target(), 'data.txt'), 'user data');
++		seedBundledComponents(componentsHome, seeds());
++		strictEqual(fs.readFileSync(join(target(), SEED_COMPLETE_MARKER), 'utf8'), '1.0.0');
++		strictEqual(fs.readFileSync(join(target(), 'data.txt'), 'utf8'), 'user data');
++	});
++
++	test('a healthy seed is adopted without touching anything', () => {
++		seedBundledComponents(componentsHome, seeds());
++		fs.writeFileSync(join(target(), 'runtime.log'), 'data');
++		seedBundledComponents(componentsHome, seeds());
++		strictEqual(fs.readFileSync(join(target(), 'runtime.log'), 'utf8'), 'data');
++		strictEqual(fs.existsSync(join(componentsHome, '.salvaged')), false);
++	});
++
 +	test('a failed re-seed keeps the existing tree instead of leaving no runtime', function () {
-+		if (process.platform === 'win32') {
++		// Root ignores directory permission bits, so the chmod below cannot force the staging copy
++		// to fail and the assertion would see a successfully re-seeded tree. The code under test is
++		// fine; only this test's precondition does not hold as root (CI containers run as root).
++		if (process.platform === 'win32' || process.getuid?.() === 0) {
 +			this.skip(); // read-only dir semantics differ; the protocol is copy-first on all platforms
 +		}
 +		// Copy-first, swap-after: when staging cannot even be created, the incomplete-but-present
