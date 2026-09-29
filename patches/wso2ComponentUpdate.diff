@@ -2842,7 +2842,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
-@@ -0,0 +1,488 @@
+@@ -0,0 +1,608 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2863,7 +2863,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +
 +import { raceTimeout } from '../../../../base/common/async.js';
 +import { Codicon } from '../../../../base/common/codicons.js';
-+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
++import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 +import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 +import { URI } from '../../../../base/common/uri.js';
 +import { localize, localize2 } from '../../../../nls.js';
@@ -2900,6 +2900,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 + * Mirrors the same gate in menubar.ts and wso2ComponentUpdateService.resolveAppUpdate().
 + */
 +const stockUpdateServiceOwnsChecks = isMacintosh && !!product.updateUrl;
++
++/** How long to wait for a core-app update to become Ready before prompting for components alone. */
++const RESTART_PROMPT_WAIT_MS = 60_000;
 +
 +//#region configuration
 +
@@ -3146,6 +3149,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +
 +	private readonly availableContext: IContextKey<boolean>;
 +	private lastNotifiedKey: string | undefined;
++	/** The single in-flight wait for the app update to become Ready; see promptRestartForComponents. */
++	private restartPromptWait: DisposableStore | undefined;
 +	private explicitCheckInFlight = false;
 +
 +	constructor(
@@ -3157,7 +3162,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		@IWorkbenchExtensionManagementService private readonly extensionManagementService: IWorkbenchExtensionManagementService,
 +		@IDialogService private readonly dialogService: IDialogService,
 +		@ILogService private readonly logService: ILogService,
-+		@IUpdateService stockUpdateService: IUpdateService
++		@IUpdateService private readonly stockUpdateService: IUpdateService
 +	) {
 +		super();
 +
@@ -3170,12 +3175,129 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		// components too. Both the Command Palette entry and the application-menu item route
 +		// through the stock service, so hooking its explicit check covers both surfaces.
 +		if (stockUpdateServiceOwnsChecks) {
-+			this._register(stockUpdateService.onStateChange(state => {
++			this._register(this.stockUpdateService.onStateChange(state => {
 +				if (state.type === StateType.CheckingForUpdates && state.explicit) {
-+					this.runCombinedExplicitCheck(stockUpdateService);
++					this.runCombinedExplicitCheck();
 +				}
 +			}));
 +		}
++	}
++
++	/**
++	 * One restart prompt, not two competing ones.
++	 *
++	 * A component update finishing while the core app is mid-download used to prompt immediately,
++	 * and its "Restart" runs `hostService.restart()` — a plain restart, not the Squirrel apply path
++	 * (`quitAndInstall`). Taking it restarts without applying the app update, and at worst abandons
++	 * a download still in flight. So while the stock updater is working, say nothing and let a
++	 * single prompt cover both once it is ready, with the action that actually applies the update.
++	 *
++	 * Components activate on the next launch either way, so whichever restart happens carries them.
++	 */
++	private promptRestartForComponents(): void {
++		// A deny-list, not an allow-list. Listing the in-flight states means a state upstream adds
++		// later falls through and prompts early, reintroducing this bug for it; listing the settled
++		// ones means an unrecognised state simply waits, which is the safe way to be wrong.
++		const appUpdateSettled = (type: StateType) =>
++			type === StateType.Idle
++			|| type === StateType.Disabled
++			|| type === StateType.Uninitialized;
++		const appUpdateInFlight = (type: StateType) => type !== StateType.Ready && !appUpdateSettled(type);
++		// Still moving: these end in Ready or Idle on their own, so a wait here is slow, not stuck.
++		const appUpdateProgressing = (type: StateType) =>
++			type === StateType.Downloading
++			|| type === StateType.Updating
++			|| type === StateType.Overwriting
++			|| type === StateType.Restarting;
++
++		const promptComponentsOnly = () => this.notificationService.prompt(
++			Severity.Info,
++			localize('wso2.updates.restart', "Restart WSO2 Integrator to finish updating components."),
++			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => this.hostService.restart() }]
++		);
++		// `quitAndInstall()` returns without doing anything unless the state is still Ready, and on
++		// darwin its first call runs an overwrite check that postpones the restart when a newer
++		// build turns up. Either way the notification is already dismissed, so a bare call can
++		// leave the user with staged components, no restart and no prompt.
++		//
++		// Two paths, and neither can end in silence. When the apply path will not run, a plain
++		// restart still applies the staged components and cannot decline the way quitAndInstall
++		// can, so there is nothing to re-ask about. When it does run but declines -- or when
++		// anything throws -- the prompt goes back up.
++		const restartForBoth = async () => {
++			try {
++				if (this.stockUpdateService.state.type !== StateType.Ready) {
++					await this.hostService.restart();
++					return;
++				}
++				await this.stockUpdateService.quitAndInstall();
++				if (!appUpdateProgressing(this.stockUpdateService.state.type)) {
++					this.promptRestartForComponents();
++				}
++			} catch (err) {
++				// IPromptChoice.run is `() => void`, so a rejection escaping here would surface as
++				// an unhandled rejection and the user would be left with no way to retry.
++				this.logService.error('[wso2Update] restart after update failed', err);
++				this.promptRestartForComponents();
++			}
++		};
++		const promptAppAndComponents = () => this.notificationService.prompt(
++			Severity.Info,
++			localize('wso2.updates.restartCombined', "Restart WSO2 Integrator to finish updating the app and its components."),
++			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => restartForBoth() }]
++		);
++
++		const current = this.stockUpdateService.state.type;
++		if (current === StateType.Ready) {
++			promptAppAndComponents();
++			return;
++		}
++		if (!appUpdateInFlight(current)) {
++			promptComponentsOnly();
++			return;
++		}
++
++		// One wait at a time. A second component batch finishing while the first is still waiting
++		// would otherwise arm a second listener, and both would fire on Ready -- two prompts, which
++		// is the bug this method exists to prevent. The store is deliberately NOT registered on the
++		// contribution: this method runs repeatedly, and CLAUDE.md forbids accumulating per-call
++		// disposables there. It disposes itself on every exit, including the timeout.
++		if (this.restartPromptWait) {
++			return;
++		}
++		const store = new DisposableStore();
++		this.restartPromptWait = store;
++		const done = (prompt: () => void) => {
++			if (this.restartPromptWait !== store) {
++				return;
++			}
++			this.restartPromptWait = undefined;
++			store.dispose();
++			prompt();
++		};
++		store.add(this.stockUpdateService.onStateChange(next => {
++			if (next.type === StateType.Ready) {
++				done(promptAppAndComponents);
++			} else if (!appUpdateInFlight(next.type)) {
++				done(promptComponentsOnly);
++			}
++		}));
++		// Bounded, but slow is not stalled. The Squirrel payload is hundreds of megabytes and
++		// darwin reports `Downloading` with no progress events, so a deadline counted from the
++		// start of the wait fires mid-download on any ordinary connection -- showing the
++		// components-only prompt, whose Restart abandons the download, which is precisely the
++		// behaviour this method removes. So only give up in a state that is not still moving; a
++		// download that genuinely fails reports Idle and the listener above handles it.
++		let timer: ReturnType<typeof setTimeout>;
++		const giveUpIfStuck = () => {
++			if (appUpdateProgressing(this.stockUpdateService.state.type)) {
++				timer = setTimeout(giveUpIfStuck, RESTART_PROMPT_WAIT_MS);
++				return;
++			}
++			done(promptComponentsOnly);
++		};
++		timer = setTimeout(giveUpIfStuck, RESTART_PROMPT_WAIT_MS);
++		store.add(toDisposable(() => clearTimeout(timer)));
 +	}
 +
 +	/**
@@ -3186,7 +3308,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	 * later. Anything actually found announces itself — Squirrel prompts to restart once its download
 +	 * is ready, components go through notifyAvailable() — so this reports only the all-clear.
 +	 */
-+	private async runCombinedExplicitCheck(stockUpdateService: IUpdateService): Promise<void> {
++	private async runCombinedExplicitCheck(): Promise<void> {
 +		if (this.explicitCheckInFlight) {
 +			return;
 +		}
@@ -3196,7 +3318,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		this.lastNotifiedKey = undefined;
 +		try {
 +			const [stockState] = await Promise.all([
-+				raceTimeout(this.waitForStockSettle(stockUpdateService), 60_000),
++				raceTimeout(this.waitForStockSettle(), 60_000),
 +				this.updateService.checkForUpdates(true).catch(err => {
 +					this.logService.error('[wso2Update] component check alongside the stock check failed', err);
 +				})
@@ -3212,15 +3334,15 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		}
 +	}
 +
-+	private waitForStockSettle(stockUpdateService: IUpdateService): Promise<UpdateState> {
-+		if (stockUpdateService.state.type !== StateType.CheckingForUpdates) {
-+			return Promise.resolve(stockUpdateService.state);
++	private waitForStockSettle(): Promise<UpdateState> {
++		if (this.stockUpdateService.state.type !== StateType.CheckingForUpdates) {
++			return Promise.resolve(this.stockUpdateService.state);
 +		}
 +		return new Promise<UpdateState>(resolve => {
 +			// Scoped to this call, not the contribution: registering per check would accumulate
 +			// listeners for the lifetime of the window.
 +			const store = new DisposableStore();
-+			store.add(stockUpdateService.onStateChange(state => {
++			store.add(this.stockUpdateService.onStateChange(state => {
 +				if (state.type !== StateType.CheckingForUpdates) {
 +					store.dispose();
 +					resolve(state);
@@ -3317,9 +3439,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		}
 +
 +		if (state.restartRequired) {
-+			this.notificationService.prompt(Severity.Info, localize('wso2.updates.restart', "Restart WSO2 Integrator to finish updating components."), [
-+				{ label: localize('wso2.updates.restartNow', "Restart"), run: () => this.hostService.restart() }
-+			]);
++			this.promptRestartForComponents();
 +		} else if (installed > 0) {
 +			this.notificationService.prompt(Severity.Info, localize('wso2.updates.reload', "Reload the window to finish updating components."), [
 +				{ label: localize('wso2.updates.reloadNow', "Reload Window"), run: () => this.hostService.reload() }
