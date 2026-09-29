@@ -2842,7 +2842,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
-@@ -0,0 +1,566 @@
+@@ -0,0 +1,597 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3195,13 +3195,18 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	 * Components activate on the next launch either way, so whichever restart happens carries them.
 +	 */
 +	private promptRestartForComponents(): void {
-+		const appUpdateInFlight = (type: StateType) =>
-+			type === StateType.CheckingForUpdates
-+			|| type === StateType.AvailableForDownload
-+			|| type === StateType.Downloading
-+			|| type === StateType.Downloaded
++		// A deny-list, not an allow-list. Listing the in-flight states means a state upstream adds
++		// later falls through and prompts early, reintroducing this bug for it; listing the settled
++		// ones means an unrecognised state simply waits, which is the safe way to be wrong.
++		const appUpdateSettled = (type: StateType) =>
++			type === StateType.Idle
++			|| type === StateType.Disabled
++			|| type === StateType.Uninitialized;
++		const appUpdateInFlight = (type: StateType) => type !== StateType.Ready && !appUpdateSettled(type);
++		// Still moving: these end in Ready or Idle on their own, so a wait here is slow, not stuck.
++		const appUpdateProgressing = (type: StateType) =>
++			type === StateType.Downloading
 +			|| type === StateType.Updating
-+			// Already installing: the app is on its way down, so a prompt is pure noise.
 +			|| type === StateType.Overwriting
 +			|| type === StateType.Restarting;
 +
@@ -3210,10 +3215,25 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +			localize('wso2.updates.restart', "Restart WSO2 Integrator to finish updating components."),
 +			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => this.hostService.restart() }]
 +		);
++		// `quitAndInstall()` returns without doing anything unless the state is still Ready, and on
++		// darwin its first call runs an overwrite check that postpones the restart when a newer
++		// build turns up. Either way the notification is already dismissed, so a bare call can
++		// leave the user with staged components, no restart and no prompt. Fall back to a plain
++		// restart when the apply path will not run, and ask again if it declined to.
++		const restartForBoth = async () => {
++			if (this.stockUpdateService.state.type !== StateType.Ready) {
++				return this.hostService.restart();
++			}
++			await this.stockUpdateService.quitAndInstall();
++			const after = this.stockUpdateService.state.type;
++			if (!appUpdateProgressing(after)) {
++				this.promptRestartForComponents();
++			}
++		};
 +		const promptAppAndComponents = () => this.notificationService.prompt(
 +			Severity.Info,
 +			localize('wso2.updates.restartCombined', "Restart WSO2 Integrator to finish updating the app and its components."),
-+			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => this.stockUpdateService.quitAndInstall() }]
++			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => restartForBoth() }]
 +		);
 +
 +		const current = this.stockUpdateService.state.type;
@@ -3251,10 +3271,21 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +				done(promptComponentsOnly);
 +			}
 +		}));
-+		// Bounded, like waitForStockSettle. A download that stalls without erroring emits no
-+		// further state change, and waiting forever would mean never telling the user their
-+		// components need a restart at all.
-+		const timer = setTimeout(() => done(promptComponentsOnly), RESTART_PROMPT_WAIT_MS);
++		// Bounded, but slow is not stalled. The Squirrel payload is hundreds of megabytes and
++		// darwin reports `Downloading` with no progress events, so a deadline counted from the
++		// start of the wait fires mid-download on any ordinary connection -- showing the
++		// components-only prompt, whose Restart abandons the download, which is precisely the
++		// behaviour this method removes. So only give up in a state that is not still moving; a
++		// download that genuinely fails reports Idle and the listener above handles it.
++		let timer: ReturnType<typeof setTimeout>;
++		const giveUpIfStuck = () => {
++			if (appUpdateProgressing(this.stockUpdateService.state.type)) {
++				timer = setTimeout(giveUpIfStuck, RESTART_PROMPT_WAIT_MS);
++				return;
++			}
++			done(promptComponentsOnly);
++		};
++		timer = setTimeout(giveUpIfStuck, RESTART_PROMPT_WAIT_MS);
 +		store.add(toDisposable(() => clearTimeout(timer)));
 +	}
 +
