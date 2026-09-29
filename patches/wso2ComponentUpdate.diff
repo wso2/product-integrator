@@ -10,15 +10,17 @@ Index: product-integrator/lib/vscode/src/main.ts
  import { INLSConfiguration } from './vs/nls.js';
  import { NativeParsedArgs } from './vs/platform/environment/common/argv.js';
  
-@@ -220,6 +221,7 @@ async function startup(codeCachePath: st
+@@ -220,6 +221,9 @@ async function startup(codeCachePath: st
  			nameShort?: string;
  			nameLong?: string;
  			dataFolderName?: string;
 +			bundledComponents?: { readonly [id: string]: string };
++			wiversion?: string;
++			version?: string;
  		}
  
  		const productMeta = product as unknown as IProductMeta;
-@@ -292,25 +294,71 @@ async function startup(codeCachePath: st
+@@ -292,25 +296,71 @@ async function startup(codeCachePath: st
  		// installed under the user's data folder so `${COMPONENT:<id>}` tokens in
  		// `runtimeEnv` point at the updated copy instead of the bundled one. Failures
  		// here are non-fatal: we fall back to the bundled paths.
@@ -100,7 +102,7 @@ Index: product-integrator/lib/vscode/src/main.ts
  						}
  					}
  				}
-@@ -320,10 +368,127 @@ async function startup(codeCachePath: st
+@@ -320,10 +370,129 @@ async function startup(codeCachePath: st
  			return overrides;
  		};
  
@@ -111,7 +113,9 @@ Index: product-integrator/lib/vscode/src/main.ts
 +		try {
 +			if (effectiveDataFolderName) {
 +				const dataFolderHome = path.join(os.homedir(), effectiveDataFolderName);
-+				activatePendingRuntimeComponents(dataFolderHome, msg => console.log('[wso2Update]', msg));
++				// The same version the update service reports as this app's (wiversion, else version):
++				// a staged component whose `app` requirement this build does not meet stays pending.
++				activatePendingRuntimeComponents(dataFolderHome, productMeta.wiversion ?? productMeta.version, msg => console.log('[wso2Update]', msg));
 +				// Auto-fallback: if an activated runtime keeps the app from booting, roll it back
 +				// after a couple of unhealthy boots so the app can start again (§D5).
 +				enforceRuntimeHealthFallback(dataFolderHome, 2, msg => console.log('[wso2Update]', msg));
@@ -545,7 +549,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
-@@ -0,0 +1,1476 @@
+@@ -0,0 +1,1464 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -601,6 +605,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	getComponentsManifestPath,
 +	getDownloadsHome,
 +	getStagingHome,
++	heldBackPendingComponents,
 +	ILocalComponentEntry,
 +	ILocalComponentsManifest,
 +	isActiveSeedingDir,
@@ -609,6 +614,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	installedComponentVersion,
 +	readLocalManifest,
 +	reconcileBundledVersions,
++	satisfiesRange,
 +	writeLocalManifest
 +} from '../node/wso2ComponentsManifest.js';
 +
@@ -913,7 +919,14 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	/** Whether any runtime component is staged and waiting for a restart to activate. */
 +	private hasPendingComponents(): boolean {
 +		const local = readLocalManifest(this.componentsHome);
-+		return !!local && Object.values(local.components).some(entry => !!entry.pending);
++		if (!local) {
++			return false;
++		}
++		// A component held for an app that is not running is not waiting on a restart: restarting
++		// this app would leave it exactly where it is. Counting it would put "Restart to finish
++		// updating" up on every launch of the old app, and every restart would change nothing.
++		const held = heldBackPendingComponents(local, this.appVersion());
++		return Object.entries(local.components).some(([id, entry]) => !!entry.pending && !held.has(id));
 +	}
 +
 +	/**
@@ -1075,7 +1088,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			if (!depVersion) {
 +				return false;
 +			}
-+			if (!this.satisfiesRange(depVersion, range)) {
++			if (!satisfiesRange(depVersion, range, c => this.logService.trace(`[wso2Update] unrecognized version comparator '${c}'; accepting`))) {
 +				this.logService.info(`[wso2Update] ${component.id}: ${depId} ${depVersion} does not satisfy '${range}'`);
 +				return false;
 +			}
@@ -1083,35 +1096,6 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		return true;
 +	}
 +
-+	/**
-+	 * Whitespace-separated comparators, all of which must hold: ">=5.1.0 <5.2.0". Mirrors the
-+	 * server's satisfiesRange so both sides agree; an unrecognised comparator is accepted rather
-+	 * than failing an update closed on a range this client is simply too old to understand.
-+	 */
-+	private satisfiesRange(version: string, range: string): boolean {
-+		for (const comparator of range.trim().split(/\s+/).filter(Boolean)) {
-+			// The version part must actually look like a version: without this the regex matches any
-+			// token, so a range written for a richer grammar (`^5.1.0`, `~5.1`) would compare garbage
-+			// and fail CLOSED -- withholding the component -- instead of taking the documented
-+			// accept-what-we-don't-understand path.
-+			const match = /^(>=|<=|>|<|==|=)?\s*([0-9][0-9A-Za-z.+_-]*)$/.exec(comparator);
-+			if (!match) {
-+				this.logService.trace(`[wso2Update] unrecognized version comparator '${comparator}'; accepting`);
-+				continue;
-+			}
-+			const op = match[1] ?? '=';
-+			const cmp = compareVersions(version, match[2]);
-+			const satisfied = op === '>=' ? cmp >= 0
-+				: op === '>' ? cmp > 0
-+					: op === '<=' ? cmp <= 0
-+						: op === '<' ? cmp < 0
-+							: cmp === 0;
-+			if (!satisfied) {
-+				return false;
-+			}
-+		}
-+		return true;
-+	}
 +
 +	/** The versions this client would be on after taking everything in this answer. */
 +	private projectedVersions(response: IWso2UpdateCheckResponse): Map<string, string> {
@@ -1289,7 +1273,15 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		this.updateLocalManifest(manifest => {
 +			const entry = manifest.components[component.id] ?? (manifest.components[component.id] = {});
 +			entry.bundledVersion = entry.bundledVersion ?? this.bundledVersion(component.id);
-+			entry.pending = { version: component.version, path: relPath, installedAt: new Date().toISOString(), healthy: false };
++			// Requirements go with it, so activation can re-check them against whichever app
++			// actually boots next -- not necessarily this one.
++			entry.pending = {
++				version: component.version,
++				path: relPath,
++				installedAt: new Date().toISOString(),
++				healthy: false,
++				...(component.requires ? { requires: component.requires } : {})
++			};
 +		});
 +
 +		// Verify the pending state actually persisted; a silent write failure here would
@@ -2026,7 +2018,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,811 @@
+@@ -0,0 +1,907 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2065,6 +2057,14 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +	readonly healthy?: boolean;
 +	/** Consecutive boots this override has been active without being confirmed healthy (auto-fallback). */
 +	readonly bootCount?: number;
++	/**
++	 * The requirements the server attached to this version when it was offered, recorded at staging
++	 * so activation can re-check them at boot. They were satisfied when the component was staged,
++	 * but the app that boots next is not necessarily the app that staged it: an app update may have
++	 * landed in between, or failed to. Absent on versions staged before requirements were recorded,
++	 * which activate unconditionally exactly as they always did.
++	 */
++	readonly requires?: { readonly [id: string]: string };
 +}
 +
 +export interface ILocalComponentEntry {
@@ -2173,7 +2173,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 + *
 + * Returns the resolved active overrides after activation.
 + */
-+export function activatePendingRuntimeComponents(dataFolderHome: string, log?: (message: string) => void): Record<string, string> {
++export function activatePendingRuntimeComponents(dataFolderHome: string, runningAppVersion: string | undefined, log?: (message: string) => void): Record<string, string> {
 +	// `dataFolderHome` is `<home>/<dataFolderName>`; components live under it.
 +	const componentsHome = path.join(dataFolderHome, 'components');
 +	const manifest = readLocalManifest(componentsHome);
@@ -2181,6 +2181,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		return {};
 +	}
 +
++	const held = heldBackPendingComponents(manifest, runningAppVersion);
 +	let changed = false;
 +	for (const [id, entry] of Object.entries(manifest.components)) {
 +		const pending = entry?.pending;
@@ -2190,6 +2191,12 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		const targetPath = typeof pending.path === 'string' && pending.path.length > 0
 +			? (path.isAbsolute(pending.path) ? pending.path : path.join(dataFolderHome, pending.path))
 +			: undefined;
++		const reason = held.get(id);
++		if (reason && targetPath && fs.existsSync(targetPath)) {
++			// Left exactly as staged: it activates on the first boot of an app that satisfies it.
++			log?.(`Holding component ${id}@${pending.version} until a compatible app is running (${reason})`);
++			continue;
++		}
 +		if (targetPath && fs.existsSync(targetPath)) {
 +			if (entry.active && entry.active.version !== pending.version) {
 +				entry.previous = entry.active;
@@ -2793,6 +2800,87 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		return -1;
 +	}
 +	return comparePreRelease(preA, preB);
++}
++
++/**
++ * Whitespace-separated comparators, all of which must hold: ">=5.1.0 <5.2.0". Mirrors the server's
++ * satisfiesRange so both sides agree. An unrecognised comparator is accepted rather than failing
++ * closed on a range this client is simply too old to understand; `onUnrecognized` lets a caller
++ * log it.
++ *
++ * Lives here rather than in the update service because activation runs in the bootstrap, before
++ * any service exists, and must apply exactly the rules that decided what to stage.
++ */
++export function satisfiesRange(version: string, range: string, onUnrecognized?: (comparator: string) => void): boolean {
++	for (const comparator of range.trim().split(/\s+/).filter(Boolean)) {
++		// The version part must actually look like a version: without this the regex matches any
++		// token, so a range written for a richer grammar (`^5.1.0`, `~5.1`) would compare garbage
++		// and fail CLOSED -- withholding the component -- instead of taking the documented
++		// accept-what-we-don't-understand path.
++		const match = /^(>=|<=|>|<|==|=)?\s*([0-9][0-9A-Za-z.+_-]*)$/.exec(comparator);
++		if (!match) {
++			onUnrecognized?.(comparator);
++			continue;
++		}
++		const op = match[1] ?? '=';
++		const cmp = compareVersions(version, match[2]);
++		const satisfied = op === '>=' ? cmp >= 0
++			: op === '>' ? cmp > 0
++				: op === '<=' ? cmp <= 0
++					: op === '<' ? cmp < 0
++						: cmp === 0;
++		if (!satisfied) {
++			return false;
++		}
++	}
++	return true;
++}
++
++/**
++ * Staged components that must NOT activate on the app that is running, keyed by id, with the reason.
++ *
++ * A component is staged against one app and activated by whichever app boots next. Normally those
++ * are the same, but not always: an app update can land between staging and the restart (possibly
++ * onto a different release line), or a component staged for an incoming app can meet a restart in
++ * which that app update did not apply. Activating it anyway puts a component on an app it was not
++ * built for -- exactly what the server refuses to do when it offers ("a component that needs the
++ * newer app must not land on the older one"). So its `app` requirement is checked against the app
++ * actually running, and a component that fails is held: left pending, not discarded, so it
++ * activates once the right app is up.
++ *
++ * A component that depends on a held one is held too, to a fixpoint, so a dependency is never
++ * activated out from under its dependent. Other requirements were checked against the same staged
++ * set when it was offered and cannot have changed since.
++ *
++ * With no running version to compare against, `app` requirements are not evaluated: nothing could
++ * ever satisfy them, and holding forever is worse than the unguarded behaviour this replaces.
++ */
++export function heldBackPendingComponents(manifest: ILocalComponentsManifest, runningAppVersion: string | undefined): Map<string, string> {
++	const held = new Map<string, string>();
++	let grew = true;
++	while (grew) {
++		grew = false;
++		for (const [id, entry] of Object.entries(manifest.components)) {
++			const requires = entry?.pending?.requires;
++			if (!requires || held.has(id)) {
++				continue;
++			}
++			for (const [dep, range] of Object.entries(requires)) {
++				if (dep === 'app') {
++					if (runningAppVersion && !satisfiesRange(runningAppVersion, range)) {
++						held.set(id, `needs app ${range}, running ${runningAppVersion}`);
++						grew = true;
++						break;
++					}
++				} else if (held.has(dep)) {
++					held.set(id, `needs ${dep}, which is held`);
++					grew = true;
++					break;
++				}
++			}
++		}
++	}
++	return held;
 +}
 +
 +/** Splits `5.1.3-alpha.2+build` into its release core and pre-release; build metadata is dropped. */
@@ -3992,7 +4080,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,389 @@
+@@ -0,0 +1,516 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -4016,7 +4104,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +import * as os from 'os';
 +import { join } from '../../../../base/common/path.js';
 +import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-+import { compareVersions, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, newestSeededVersion, SEED_COMPLETE_MARKER, seedBundledComponents } from '../../node/wso2ComponentsManifest.js';
++import { activatePendingRuntimeComponents, compareVersions, heldBackPendingComponents, ILocalComponentsManifest, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
 +
 +suite('wso2ComponentsManifest - compareVersions', () => {
 +	ensureNoDisposablesAreLeakedInTestSuite();
@@ -4380,6 +4468,133 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		// which is better than silently running a runtime known to break the app.
 +		seed('ballerina-runtime', '2201.14.0-alpha');
 +		strictEqual(installedComponentVersion(root, 'ballerina-runtime', '2201.14.0-alpha', ['2201.14.0-alpha']), undefined);
++	});
++});
++
++suite('wso2ComponentsManifest - satisfiesRange', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('applies every comparator in the range', () => {
++		strictEqual(satisfiesRange('5.1.0', '>=5.1.0'), true);
++		strictEqual(satisfiesRange('5.0.9', '>=5.1.0'), false);
++		strictEqual(satisfiesRange('5.1.4', '>=5.1.0 <5.2.0'), true);
++		strictEqual(satisfiesRange('5.2.0', '>=5.1.0 <5.2.0'), false);
++	});
++
++	test('ranks a pre-release below the release it precedes', () => {
++		strictEqual(satisfiesRange('5.1.0-alpha5', '>=5.1.0-alpha6'), false);
++		strictEqual(satisfiesRange('5.1.0-alpha6', '>=5.1.0-alpha6'), true);
++		strictEqual(satisfiesRange('5.1.0', '>=5.1.0-alpha6'), true);
++	});
++
++	test('accepts a comparator it does not understand, and reports it', () => {
++		const seen: string[] = [];
++		strictEqual(satisfiesRange('5.1.0', '^5.1.0', c => seen.push(c)), true);
++		deepStrictEqual(seen, ['^5.1.0']);
++	});
++});
++
++suite('wso2ComponentsManifest - activation guard', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	let home: string;
++	let componentsHome: string;
++
++	setup(() => {
++		home = fs.mkdtempSync(join(os.tmpdir(), 'wso2guard-'));
++		componentsHome = join(home, 'components');
++		fs.mkdirSync(componentsHome, { recursive: true });
++	});
++	teardown(() => { fs.rmSync(home, { recursive: true, force: true }); });
++
++	const stage = (id: string, version: string) => {
++		const dir = join(componentsHome, id, version);
++		fs.mkdirSync(dir, { recursive: true });
++		fs.writeFileSync(join(dir, 'payload'), 'x');
++		return join('components', id, version);
++	};
++
++	const manifestWith = (components: ILocalComponentsManifest['components']): ILocalComponentsManifest =>
++		({ schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION, components });
++
++	test('holds a component whose app requirement the running app does not meet', () => {
++		const held = heldBackPendingComponents(manifestWith({
++			'ballerina-runtime': { pending: { version: '2201.14.0-alpha', requires: { app: '>=5.1.0-alpha6' } } }
++		}), '5.1.0-alpha5');
++		strictEqual(held.has('ballerina-runtime'), true);
++		strictEqual(held.get('ballerina-runtime'), 'needs app >=5.1.0-alpha6, running 5.1.0-alpha5');
++	});
++
++	test('does not hold a component the running app satisfies', () => {
++		const held = heldBackPendingComponents(manifestWith({
++			'ballerina-runtime': { pending: { version: '2201.14.0-alpha', requires: { app: '>=5.1.0-alpha6' } } }
++		}), '5.1.0-alpha6');
++		strictEqual(held.size, 0);
++	});
++
++	test('does not hold a component staged before requirements were recorded', () => {
++		const held = heldBackPendingComponents(manifestWith({
++			'jre': { pending: { version: '4.0.0' } }
++		}), '5.1.0-alpha5');
++		strictEqual(held.size, 0);
++	});
++
++	test('holds a component whose dependency is held, to a fixpoint', () => {
++		// icp is held on the app; mi depends on icp; a later entry depends on mi. None of the
++		// dependents has an app requirement of its own, so only propagation can hold them.
++		const held = heldBackPendingComponents(manifestWith({
++			'wso2.later': { pending: { version: '1.0.0', requires: { 'wso2.micro-integrator': '>=4.1.4' } } },
++			'wso2.micro-integrator': { pending: { version: '4.1.4', requires: { icp: '>=2.1.0-alpha4' } } },
++			'icp': { pending: { version: '2.1.0-alpha4', requires: { app: '>=5.1.0-alpha6' } } }
++		}), '5.1.0-alpha5');
++		deepStrictEqual([...held.keys()].sort(), ['icp', 'wso2.later', 'wso2.micro-integrator']);
++	});
++
++	test('does not evaluate the app requirement when the running version is unknown', () => {
++		const held = heldBackPendingComponents(manifestWith({
++			'icp': { pending: { version: '2.1.0-alpha4', requires: { app: '>=5.1.0-alpha6' } } }
++		}), undefined);
++		strictEqual(held.size, 0);
++	});
++
++	test('leaves a held component pending and untouched, then activates it once the app matches', () => {
++		const path = stage('ballerina-runtime', '2201.14.0-alpha');
++		const current = stage('ballerina-runtime', '2201.13.6');
++		writeLocalManifest(componentsHome, manifestWith({
++			'ballerina-runtime': {
++				active: { version: '2201.13.6', path: current, healthy: true },
++				pending: { version: '2201.14.0-alpha', path, requires: { app: '>=5.1.0-alpha6' } }
++			}
++		}));
++
++		// The old app boots: the app update it was staged for did not apply.
++		activatePendingRuntimeComponents(home, '5.1.0-alpha5');
++		let entry = readLocalManifest(componentsHome)!.components['ballerina-runtime'];
++		strictEqual(entry.active?.version, '2201.13.6', 'the working runtime stays active');
++		strictEqual(entry.pending?.version, '2201.14.0-alpha', 'held, not discarded');
++		strictEqual(fs.existsSync(join(home, path)), true, 'the staged tree is kept');
++
++		// The app it was staged for boots.
++		activatePendingRuntimeComponents(home, '5.1.0-alpha6');
++		entry = readLocalManifest(componentsHome)!.components['ballerina-runtime'];
++		strictEqual(entry.active?.version, '2201.14.0-alpha');
++		strictEqual(entry.previous?.version, '2201.13.6');
++		strictEqual(entry.pending, null);
++	});
++
++	test('still activates a component staged before requirements were recorded', () => {
++		const path = stage('jre', '4.0.0');
++		writeLocalManifest(componentsHome, manifestWith({ 'jre': { pending: { version: '4.0.0', path } } }));
++		activatePendingRuntimeComponents(home, '5.1.0-alpha5');
++		strictEqual(readLocalManifest(componentsHome)!.components['jre'].active?.version, '4.0.0');
++	});
++
++	test('still discards a held component whose staged directory is missing', () => {
++		writeLocalManifest(componentsHome, manifestWith({
++			'icp': { pending: { version: '2.1.0-alpha4', path: join('components', 'icp', '2.1.0-alpha4'), requires: { app: '>=5.1.0-alpha6' } } }
++		}));
++		activatePendingRuntimeComponents(home, '5.1.0-alpha5');
++		strictEqual(readLocalManifest(componentsHome)!.components['icp'].pending, null);
 +	});
 +});
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/update/browser/postUpdateWidget.ts
