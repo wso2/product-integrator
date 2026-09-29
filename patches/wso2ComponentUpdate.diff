@@ -2842,7 +2842,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
-@@ -0,0 +1,597 @@
+@@ -0,0 +1,608 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3218,15 +3218,26 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		// `quitAndInstall()` returns without doing anything unless the state is still Ready, and on
 +		// darwin its first call runs an overwrite check that postpones the restart when a newer
 +		// build turns up. Either way the notification is already dismissed, so a bare call can
-+		// leave the user with staged components, no restart and no prompt. Fall back to a plain
-+		// restart when the apply path will not run, and ask again if it declined to.
++		// leave the user with staged components, no restart and no prompt.
++		//
++		// Two paths, and neither can end in silence. When the apply path will not run, a plain
++		// restart still applies the staged components and cannot decline the way quitAndInstall
++		// can, so there is nothing to re-ask about. When it does run but declines -- or when
++		// anything throws -- the prompt goes back up.
 +		const restartForBoth = async () => {
-+			if (this.stockUpdateService.state.type !== StateType.Ready) {
-+				return this.hostService.restart();
-+			}
-+			await this.stockUpdateService.quitAndInstall();
-+			const after = this.stockUpdateService.state.type;
-+			if (!appUpdateProgressing(after)) {
++			try {
++				if (this.stockUpdateService.state.type !== StateType.Ready) {
++					await this.hostService.restart();
++					return;
++				}
++				await this.stockUpdateService.quitAndInstall();
++				if (!appUpdateProgressing(this.stockUpdateService.state.type)) {
++					this.promptRestartForComponents();
++				}
++			} catch (err) {
++				// IPromptChoice.run is `() => void`, so a rejection escaping here would surface as
++				// an unhandled rejection and the user would be left with no way to retry.
++				this.logService.error('[wso2Update] restart after update failed', err);
 +				this.promptRestartForComponents();
 +			}
 +		};
