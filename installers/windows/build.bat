@@ -76,6 +76,24 @@ if errorlevel 1 (
 )
 :after_ballerina_extract
 
+REM Pre-bundled Ballerina Central packages. The merge lives in scripts\merge-ballerina-packages.ps1,
+REM the Windows counterpart of ci/build/merge-ballerina-packages.sh; see
+REM ci/build/ballerina-packages.properties for what is bundled and why.
+REM
+REM Placed AFTER :after_ballerina_extract on purpose: the editor-update MSI ships no bundled
+REM Ballerina but DOES ship the editor payload, which must still carry the packages. The script
+REM skips the distribution copy when that payload is absent.
+if not defined BALLERINA_PACKAGES_DIR goto :after_ballerina_packages
+powershell -nologo -noprofile -ExecutionPolicy Bypass -File "%~dp0scripts\merge-ballerina-packages.ps1" ^
+    -OverlayDir "%BALLERINA_PACKAGES_DIR%" ^
+    -BallerinaHome ".\WixPackage\payload\Integrator\components\ballerina" ^
+    -EditorAppDir ".\WixPackage\payload\Integrator\resources\app"
+if errorlevel 1 (
+    echo Merging pre-bundled Ballerina packages failed
+    exit /b 1
+)
+:after_ballerina_packages
+
 REM Prune choreo-cli to win32/amd64 and linux/amd64 (WSL) only
 powershell -nologo -noprofile -command "& { $choreoCliDir = '.\WixPackage\payload\Integrator\resources\app\extensions\wso2.wso2-integrator\resources\choreo-cli'; if (Test-Path $choreoCliDir) { Get-ChildItem $choreoCliDir -Directory | ForEach-Object { $vDir = $_.FullName; foreach ($target in @((Join-Path $vDir 'darwin'), (Join-Path $vDir 'linux\arm64'))) { if (Test-Path $target) { try { Remove-Item $target -Recurse -Force -ErrorAction Stop } catch [System.Management.Automation.ItemNotFoundException] { } catch { Write-Warning ('choreo-cli prune warning: ' + $_.Exception.Message) } } }; Write-Host ('Pruned choreo-cli in ' + $_.Name) } } else { Write-Host 'choreo-cli directory not found, skipping prune' } }"
 

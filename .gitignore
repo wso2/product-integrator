@@ -41,6 +41,10 @@ installers/windows/WixPackage/payload/ICP/
 installers/linux-deb/package/usr/lib/
 installers/linux-deb/package/usr/share/wso2-integrator
 
+# Overlay of pre-bundled Ballerina Central packages, staged by ci/build/bundle-ballerina-packages.sh
+# into the workspace root during a packed-installer build.
+/ballerina-packages/
+
 # VScode build output
 lib/
 build/
