@@ -16,11 +16,12 @@
  * under the License.
  */
 
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, realpathSync } from "fs";
 import * as os from "os";
 import * as path from "path";
 import { Uri, commands, window, workspace } from "vscode";
 import { relativePath } from "../cloud/git/util";
+import { isAgentBuilderMode } from "../productMode";
 
 
 export const getNormalizedPath = (filePath: string): string => {
@@ -89,11 +90,12 @@ export const createDirectory = (basePath: string, dirName: string): { dirName: s
 };
 
 export const getDefaultCreationPath = (): string => {
-    const defaultPath = path.join(os.homedir(), "WSO2Integrator");
+    const defaultPath = path.join(os.homedir(), isAgentBuilderMode() ? "WSO2AgentBuilder" : "WSO2Integrator");
     if (!existsSync(defaultPath)) {
         mkdirSync(defaultPath, { recursive: true });
     }
-    return defaultPath;
+    // Case-insensitive filesystems can match a differently-cased existing folder; return its real casing.
+    return realpathSync.native(defaultPath);
 };
 
 export async function openDirectory(openingPath: string, message: string, onSelect?: () => void): Promise<void> {
