@@ -2,7 +2,15 @@ Index: product-integrator/lib/vscode/src/main.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/main.ts
 +++ product-integrator/lib/vscode/src/main.ts
-@@ -18,6 +18,7 @@ import * as perf from './vs/base/common/
+@@ -11,13 +11,14 @@ import { configurePortable } from './boo
+ import { bootstrapESM } from './bootstrap-esm.js';
+ import { app, protocol, crashReporter, Menu, contentTracing } from 'electron';
+ import minimist from 'minimist';
+-import { product } from './bootstrap-meta.js';
++import { pkg, product } from './bootstrap-meta.js';
+ import { parse } from './vs/base/common/jsonc.js';
+ import { getUserDataPath } from './vs/platform/environment/node/userDataPath.js';
+ import * as perf from './vs/base/common/performance.js';
  import { resolveNLSConfiguration } from './vs/base/node/nls.js';
  import { getUNCHost, addUNCHostToAllowlist } from './vs/base/node/unc.js';
  import { applyProductRuntimeEnvironment, resolveProductRuntimeEnvironment, storeProductRuntimeEnvironment } from './vs/platform/product/common/runtimeEnvironment.js';
@@ -102,7 +110,7 @@ Index: product-integrator/lib/vscode/src/main.ts
  						}
  					}
  				}
-@@ -320,10 +370,129 @@ async function startup(codeCachePath: st
+@@ -320,10 +370,133 @@ async function startup(codeCachePath: st
  			return overrides;
  		};
  
@@ -115,7 +123,11 @@ Index: product-integrator/lib/vscode/src/main.ts
 +				const dataFolderHome = path.join(os.homedir(), effectiveDataFolderName);
 +				// The same version the update service reports as this app's (wiversion, else version):
 +				// a staged component whose `app` requirement this build does not meet stays pending.
-+				activatePendingRuntimeComponents(dataFolderHome, productMeta.wiversion ?? productMeta.version, msg => console.log('[wso2Update]', msg));
++				// Same fallback chain as the service's appVersion(): a source run's product.json has no
++				// `version` (product.ts fills it from package.json the same way), and the two sides must
++				// judge a component against the same app.
++				const packageVersion = (pkg as { readonly version?: string }).version;
++				activatePendingRuntimeComponents(dataFolderHome, productMeta.wiversion ?? productMeta.version ?? packageVersion, msg => console.log('[wso2Update]', msg));
 +				// Auto-fallback: if an activated runtime keeps the app from booting, roll it back
 +				// after a couple of unhealthy boots so the app can start again (§D5).
 +				enforceRuntimeHealthFallback(dataFolderHome, 2, msg => console.log('[wso2Update]', msg));
@@ -295,7 +307,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Updat
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Update.ts
-@@ -0,0 +1,249 @@
+@@ -0,0 +1,251 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -415,6 +427,8 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Updat
 +	readonly availableVersion?: string;
 +	/** Version staged and awaiting a restart, if any. */
 +	readonly pendingVersion?: string;
++	/** True when the staged version needs a newer app, so it activates with the app update rather than on restart. */
++	readonly pendingAwaitsAppUpdate?: boolean;
 +	/** True when an installed override is active (i.e. not just the bundled version) and can be reverted. */
 +	readonly overridden?: boolean;
 +}
@@ -549,7 +563,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
-@@ -0,0 +1,1464 @@
+@@ -0,0 +1,1472 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -1021,6 +1035,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	private resolveOfferedUpdates(response: IWso2UpdateCheckResponse): IWso2AvailableUpdate[] {
 +		const local = readLocalManifest(this.componentsHome);
 +		const projected = this.projectedVersions(response);
++		const held = local ? heldBackPendingComponents(local, this.appVersion()) : new Map<string, string>();
 +		const offered: IWso2AvailableUpdate[] = [];
 +		for (const component of response.components) {
 +			// Trust boundary: these two values become path segments (stage, rm, rename). Refuse a
@@ -1037,9 +1052,11 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +				this.logService.info(`[wso2Update] ignoring ${component.id}@${component.version}: not newer than ${activeVersion}`);
 +				continue;
 +			}
-+			// Already downloaded and staged for the next restart — don't re-offer/re-download.
++			// Already downloaded and staged for the next restart — don't re-offer/re-download. Not
++			// when it is held for an app that is not running: a restart of this app never activates
++			// it, so it must not stand in the way of a compatible update this app can take.
 +			const pendingVersion = local?.components[component.id]?.pending?.version;
-+			if (pendingVersion && compareVersions(pendingVersion, component.version) >= 0) {
++			if (pendingVersion && !held.has(component.id) && compareVersions(pendingVersion, component.version) >= 0) {
 +				continue;
 +			}
 +			// This exact version already stopped the app from booting and was auto-reverted. The
@@ -1164,6 +1181,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +
 +		try {
 +			const localBefore = readLocalManifest(this.componentsHome);
++			const heldBefore = localBefore ? heldBackPendingComponents(localBefore, this.appVersion()) : new Map<string, string>();
 +			for (const [position, component] of targetComponents.entries()) {
 +				// Attribute the bytes about to move to this component. `sizeBytes` is what the offer
 +				// claimed; when it is absent the UI shows an indeterminate download rather than
@@ -1184,7 +1202,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +					// Already staged at (or above) this version — don't re-download; it just
 +					// needs a restart to activate.
 +					const pending = localBefore?.components[component.id]?.pending?.version;
-+					if (pending && compareVersions(pending, component.version) >= 0) {
++					if (pending && !heldBefore.has(component.id) && compareVersions(pending, component.version) >= 0) {
 +						this.logService.info(`[wso2Update] ${component.id}@${component.version} already staged; skipping re-download`);
 +						restartRequired = true;
 +						continue;
@@ -1525,16 +1543,19 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		const local = readLocalManifest(this.componentsHome);
 +		const bundled = this.productService.bundledComponents ?? {};
 +		const statuses = new Map<string, IWso2ComponentStatus>();
++		// A restart of this app leaves these where they are, so "pending restart" would be untrue.
++		const held = local ? heldBackPendingComponents(local, this.appVersion()) : new Map<string, string>();
++		const awaitsApp = (id: string) => held.has(id) ? { pendingAwaitsAppUpdate: true } : {};
 +
 +		// Runtime components known from the bundled set.
 +		for (const [id, version] of Object.entries(bundled)) {
-+			statuses.set(id, { id, kind: 'runtime', bundledVersion: version, activeVersion: this.activeVersion(id, local), pendingVersion: local?.components[id]?.pending?.version, overridden: !!local?.components[id]?.active });
++			statuses.set(id, { id, kind: 'runtime', bundledVersion: version, activeVersion: this.activeVersion(id, local), pendingVersion: local?.components[id]?.pending?.version, ...awaitsApp(id), overridden: !!local?.components[id]?.active });
 +		}
 +		// Anything recorded locally that isn't in the bundled set (e.g. extensions).
 +		if (local) {
 +			for (const [id, entry] of Object.entries(local.components)) {
 +				if (!statuses.has(id)) {
-+					statuses.set(id, { id, kind: entry.active?.via === 'user-extension' ? 'extension' : 'runtime', bundledVersion: entry.bundledVersion, activeVersion: entry.active?.version ?? entry.bundledVersion, pendingVersion: entry.pending?.version, overridden: !!entry.active });
++					statuses.set(id, { id, kind: entry.active?.via === 'user-extension' ? 'extension' : 'runtime', bundledVersion: entry.bundledVersion, activeVersion: entry.active?.version ?? entry.bundledVersion, pendingVersion: entry.pending?.version, ...awaitsApp(id), overridden: !!entry.active });
 +				}
 +			}
 +		}
@@ -1549,7 +1570,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +				// auto-reverted after a crash loop, or its `requires` are unmet — mirrors
 +				// resolveOfferedUpdates so Show Components and the check command agree.
 +				const availableVersion = ((!activeVersion || compareVersions(component.version, activeVersion) > 0)
-+					&& !(pendingVersion && compareVersions(pendingVersion, component.version) >= 0)
++					&& !(pendingVersion && !held.has(component.id) && compareVersions(pendingVersion, component.version) >= 0)
 +					&& !local?.components[component.id]?.failed?.some(f => f.version === component.version)
 +					&& this.requiresSatisfied(component, local, projected))
 +					? component.version : undefined;
@@ -1560,6 +1581,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +					activeVersion: existing?.activeVersion ?? activeVersion,
 +					availableVersion,
 +					pendingVersion: existing?.pendingVersion ?? local?.components[component.id]?.pending?.version,
++					...awaitsApp(component.id),
 +					overridden: existing?.overridden ?? !!local?.components[component.id]?.active
 +				});
 +			}
@@ -2018,7 +2040,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,907 @@
+@@ -0,0 +1,935 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2181,16 +2203,21 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		return {};
 +	}
 +
-+	const held = heldBackPendingComponents(manifest, runningAppVersion);
++	const stagedPath = (pending: ILocalComponentVersion) => typeof pending.path === 'string' && pending.path.length > 0
++		? (path.isAbsolute(pending.path) ? pending.path : path.join(dataFolderHome, pending.path))
++		: undefined;
++	// The same existence test that discards below, so a dependent is judged against what will run.
++	const held = heldBackPendingComponents(manifest, runningAppVersion, pending => {
++		const target = stagedPath(pending);
++		return !!target && fs.existsSync(target);
++	});
 +	let changed = false;
 +	for (const [id, entry] of Object.entries(manifest.components)) {
 +		const pending = entry?.pending;
 +		if (!pending) {
 +			continue;
 +		}
-+		const targetPath = typeof pending.path === 'string' && pending.path.length > 0
-+			? (path.isAbsolute(pending.path) ? pending.path : path.join(dataFolderHome, pending.path))
-+			: undefined;
++		const targetPath = stagedPath(pending);
 +		const reason = held.get(id);
 +		if (reason && targetPath && fs.existsSync(targetPath)) {
 +			// Left exactly as staged: it activates on the first boot of an app that satisfies it.
@@ -2848,32 +2875,55 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 + * actually running, and a component that fails is held: left pending, not discarded, so it
 + * activates once the right app is up.
 + *
-+ * A component that depends on a held one is held too, to a fixpoint, so a dependency is never
-+ * activated out from under its dependent. Other requirements were checked against the same staged
-+ * set when it was offered and cannot have changed since.
++ * A requirement on another component is checked against the version that component will RUN after
++ * this pass -- its pending version if that activates, otherwise its active one -- and a dependent
++ * that would not be satisfied is held too, to a fixpoint. That is what stops a dependent activating
++ * against an older dependency, whether the newer one is held, discarded for a missing directory
++ * (`isStaged`), or was already dropped on an earlier boot. A held or discarded dependency with no
++ * version to fall back on counts as unmet. A dependency this manifest does not track at all was
++ * checked when the dependent was offered, and is not re-checked here.
 + *
 + * With no running version to compare against, `app` requirements are not evaluated: nothing could
 + * ever satisfy them, and holding forever is worse than the unguarded behaviour this replaces.
 + */
-+export function heldBackPendingComponents(manifest: ILocalComponentsManifest, runningAppVersion: string | undefined): Map<string, string> {
++export function heldBackPendingComponents(
++	manifest: ILocalComponentsManifest,
++	runningAppVersion: string | undefined,
++	isStaged: (pending: ILocalComponentVersion) => boolean = () => true
++): Map<string, string> {
 +	const held = new Map<string, string>();
++	const discarded = new Set(Object.entries(manifest.components)
++		.filter(([, entry]) => entry?.pending && !isStaged(entry.pending))
++		.map(([id]) => id));
++	const activates = (id: string) => !!manifest.components[id]?.pending && !held.has(id) && !discarded.has(id);
 +	let grew = true;
 +	while (grew) {
 +		grew = false;
 +		for (const [id, entry] of Object.entries(manifest.components)) {
 +			const requires = entry?.pending?.requires;
-+			if (!requires || held.has(id)) {
++			if (!requires || !activates(id)) {
 +				continue;
 +			}
 +			for (const [dep, range] of Object.entries(requires)) {
++				let unmet: string | undefined;
 +				if (dep === 'app') {
 +					if (runningAppVersion && !satisfiesRange(runningAppVersion, range)) {
-+						held.set(id, `needs app ${range}, running ${runningAppVersion}`);
-+						grew = true;
-+						break;
++						unmet = `needs app ${range}, running ${runningAppVersion}`;
 +					}
-+				} else if (held.has(dep)) {
-+					held.set(id, `needs ${dep}, which is held`);
++				} else {
++					const depEntry = manifest.components[dep];
++					if (!depEntry) {
++						continue;
++					}
++					const depPending = depEntry.pending;
++					const depVersion = depPending && activates(dep) ? depPending.version : (depEntry.active?.version ?? depEntry.bundledVersion);
++					const replaced = !!depPending && !activates(dep);
++					if (depVersion ? !satisfiesRange(depVersion, range) : replaced) {
++						unmet = `needs ${dep} ${range}, which would run ${depVersion ?? 'no version'}`;
++					}
++				}
++				if (unmet) {
++					held.set(id, unmet);
 +					grew = true;
 +					break;
 +				}
@@ -2930,7 +2980,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
-@@ -0,0 +1,608 @@
+@@ -0,0 +1,617 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3139,6 +3189,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	readonly kind: string;
 +	readonly updatable: boolean;
 +	readonly pending: boolean;
++	readonly awaitsAppUpdate: boolean;
 +}
 +
 +class ShowComponentsAction extends Action2 {
@@ -3169,7 +3220,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +					? localize('wso2.updates.currentUpdated', "current {0} (updated)", currentVersion)
 +					: localize('wso2.updates.current', "current {0}", currentVersion),
 +				s.availableVersion ? localize('wso2.updates.availableItem', "available {0}", s.availableVersion) : undefined,
-+				s.pendingVersion ? localize('wso2.updates.pending', "pending restart {0}", s.pendingVersion) : undefined
++				s.pendingVersion
++					? s.pendingAwaitsAppUpdate
++						? localize('wso2.updates.pendingWithApp', "{0} installs with the app update", s.pendingVersion)
++						: localize('wso2.updates.pending', "pending restart {0}", s.pendingVersion)
++					: undefined
 +			].filter(Boolean);
 +			const icon = updatable ? '$(cloud-download) ' : (pending ? '$(sync) ' : '');
 +			return {
@@ -3179,7 +3234,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +				componentId: s.id,
 +				kind: s.kind,
 +				updatable,
-+				pending
++				pending,
++				awaitsAppUpdate: !!s.pendingAwaitsAppUpdate
 +			};
 +		});
 +		const anyActionable = items.some(i => i.updatable || i.pending);
@@ -3193,6 +3249,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		}
 +		if (picked.updatable) {
 +			await updateService.downloadUpdates([picked.componentId]);
++		} else if (picked.awaitsAppUpdate) {
++			// No Restart button: a plain restart keeps this app, and this component waits for the next one.
++			notificationService.info(localize('wso2.updates.componentAwaitsApp', "{0} is downloaded and will be installed with the WSO2 Integrator update.", picked.componentId));
 +		} else if (picked.pending) {
 +			notificationService.prompt(Severity.Info, localize('wso2.updates.componentPending', "{0} is downloaded. Restart WSO2 Integrator to finish updating.", picked.componentId), [
 +				{ label: localize('wso2.updates.restartNow', "Restart"), run: () => hostService.restart() }
@@ -4080,7 +4139,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,516 @@
+@@ -0,0 +1,550 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -4548,6 +4607,40 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +			'icp': { pending: { version: '2.1.0-alpha4', requires: { app: '>=5.1.0-alpha6' } } }
 +		}), '5.1.0-alpha5');
 +		deepStrictEqual([...held.keys()].sort(), ['icp', 'wso2.later', 'wso2.micro-integrator']);
++	});
++
++	test('judges a dependency by the version it will run, not by whether it is held', () => {
++		// icp's newer version is held on the app, but the icp it keeps running already satisfies mi.
++		const held = heldBackPendingComponents(manifestWith({
++			'icp': { active: { version: '2.1.0-alpha4' }, pending: { version: '2.1.0-alpha5', requires: { app: '>=5.1.0-alpha7' } } },
++			'wso2.micro-integrator': { pending: { version: '4.1.4', requires: { icp: '>=2.1.0-alpha4' } } }
++		}), '5.1.0-alpha6');
++		deepStrictEqual([...held.keys()], ['icp']);
++	});
++
++	test('holds a dependent once the dependency it needs is no longer coming', () => {
++		// A later boot: the newer icp was dropped earlier, so only the old one is left to run.
++		const held = heldBackPendingComponents(manifestWith({
++			'icp': { active: { version: '2.1.0-alpha3' } },
++			'wso2.micro-integrator': { pending: { version: '4.1.4', requires: { icp: '>=2.1.0-alpha4' } } }
++		}), '5.1.0-alpha6');
++		deepStrictEqual([...held.entries()], [['wso2.micro-integrator', 'needs icp >=2.1.0-alpha4, which would run 2.1.0-alpha3']]);
++	});
++
++	test('holds a dependent whose newer dependency is discarded for a missing directory', () => {
++		const runtime = stage('ballerina-runtime', '2201.14.0-alpha');
++		const jre = stage('jre', '4.0.0');
++		writeLocalManifest(componentsHome, manifestWith({
++			'jre': { active: { version: '4.0.0', path: jre, healthy: true }, pending: { version: '5.0.0', path: join('components', 'jre', '5.0.0') } },
++			'ballerina-runtime': { pending: { version: '2201.14.0-alpha', path: runtime, requires: { jre: '>=5.0.0' } } }
++		}));
++
++		activatePendingRuntimeComponents(home, '5.1.0-alpha6');
++		const components = readLocalManifest(componentsHome)!.components;
++		deepStrictEqual(
++			[components['jre'].active?.version, components['jre'].pending, components['ballerina-runtime'].active, components['ballerina-runtime'].pending?.version],
++			['4.0.0', null, undefined, '2201.14.0-alpha']
++		);
 +	});
 +
 +	test('does not evaluate the app requirement when the running version is unknown', () => {
