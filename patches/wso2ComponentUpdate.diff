@@ -489,9 +489,9 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Updat
 +	| { readonly type: Wso2UpdateStateType.CheckingForUpdates; readonly explicit: boolean }
 +	| { readonly type: Wso2UpdateStateType.UpdatesAvailable; readonly updates: readonly IWso2AvailableUpdate[]; readonly appUpdate?: IWso2AvailableAppUpdate }
 +	| { readonly type: Wso2UpdateStateType.Downloading; readonly progress?: IWso2DownloadProgress }
-+	/** `replayed`: the same Downloaded state put back after other work. Already announced, so only the indicator re-syncs. */
++	/** `replayed` (here and on Error): the same state put back after other work. Already announced, so only the indicator re-syncs. */
 +	| { readonly type: Wso2UpdateStateType.Downloaded; readonly stagedExtensions: readonly IWso2StagedExtension[]; readonly restartRequired: boolean; readonly replayed?: boolean }
-+	| { readonly type: Wso2UpdateStateType.Error; readonly message: string };
++	| { readonly type: Wso2UpdateStateType.Error; readonly message: string; readonly replayed?: boolean };
 +
 +/**
 + * Main-process service that discovers, verifies and stages component updates for
@@ -571,7 +571,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
-@@ -0,0 +1,1600 @@
+@@ -0,0 +1,1615 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -632,6 +632,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	ILocalComponentsManifest,
 +	isActiveSeedingDir,
 +	LOCAL_MANIFEST_SCHEMA_VERSION,
++	pinPendingToApp,
 +	ineligibleBaselineVersions,
 +	incomingAppVersionToPrepare,
 +	installedComponentVersion,
@@ -704,6 +705,14 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +/** Key-sorted entries, so two equal `requires` maps compare equal regardless of key order. */
 +function sortedEntries(map: { readonly [id: string]: string }): [string, string][] {
 +	return Object.entries(map).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
++}
++
++/**
++ * `state` put back after other work, marked so the workbench does not announce it again: a
++ * Downloaded state would raise its restart prompt a second time, an Error its failure toast.
++ */
++function replayedState(state: Wso2UpdateState): Wso2UpdateState {
++	return state.type === Wso2UpdateStateType.Downloaded || state.type === Wso2UpdateStateType.Error ? { ...state, replayed: true } : state;
 +}
 +
 +/** Carries whether a failed download attempt is worth repeating. */
@@ -1337,9 +1346,9 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		try {
 +			await this.fetchComponents(targets, incomingVersion);
 +		} finally {
-+			// Put back for the indicator, not as news: a Downloaded state was already announced, and
-+			// announcing it again would raise its restart prompt a second time.
-+			this.setState(before.type === Wso2UpdateStateType.Downloaded ? { ...before, replayed: true } : before);
++			// Whatever staged, even before a failure, is for the incoming app only.
++			this.updateLocalManifest(manifest => pinPendingToApp(manifest, targets, incomingVersion));
++			this.setState(replayedState(before));
 +		}
 +	}
 +
@@ -1717,24 +1726,30 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	}
 +
 +	async stagedExtensionsApplied(): Promise<void> {
-+		if (this._state.type !== Wso2UpdateStateType.Downloaded) {
-+			return;
-+		}
-+		// A staged runtime only becomes active at the next startup, so the restart affordance has to
-+		// survive until then. Extensions are live as soon as the renderer installs them.
-+		if (this._state.restartRequired) {
-+			return;
-+		}
-+		// Re-derive rather than assuming Idle: the user may have updated a single component from the
-+		// Components picker while others were still on offer.
-+		const response = this.lastResponse;
-+		const updates = response ? this.resolveOfferedUpdates(response) : [];
-+		const appUpdate = response ? this.resolveAppUpdate(response) : undefined;
-+		if (updates.length === 0 && !appUpdate) {
-+			this.setState({ type: Wso2UpdateStateType.Idle });
-+		} else {
-+			this.setState({ type: Wso2UpdateStateType.UpdatesAvailable, updates, appUpdate });
-+		}
++		// Under the same lock as the work that can swap the state out from under it: preparing for an
++		// app update puts its earlier state back when it finishes, and a call that ran in between
++		// would find no Downloaded to clear -- leaving a stale one restored for extensions that are
++		// already installed.
++		return this.runExclusive(async () => {
++			if (this._state.type !== Wso2UpdateStateType.Downloaded) {
++				return;
++			}
++			// A staged runtime only becomes active at the next startup, so the restart affordance has to
++			// survive until then. Extensions are live as soon as the renderer installs them.
++			if (this._state.restartRequired) {
++				return;
++			}
++			// Re-derive rather than assuming Idle: the user may have updated a single component from the
++			// Components picker while others were still on offer.
++			const response = this.lastResponse;
++			const updates = response ? this.resolveOfferedUpdates(response) : [];
++			const appUpdate = response ? this.resolveAppUpdate(response) : undefined;
++			if (updates.length === 0 && !appUpdate) {
++				this.setState({ type: Wso2UpdateStateType.Idle });
++			} else {
++				this.setState({ type: Wso2UpdateStateType.UpdatesAvailable, updates, appUpdate });
++			}
++		});
 +	}
 +
 +	private readonly claimedExtensionInstalls = new Set<string>();
@@ -2176,7 +2191,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,994 @@
+@@ -0,0 +1,1014 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3109,6 +3124,26 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +}
 +
 +/**
++ * Pins components just staged for an app update to that app: any of `staged` still pending at that
++ * version without an `app` requirement gets `>=appVersion`. They came from the incoming release's
++ * document, and without the pin activation would run one on whichever app boots next -- including
++ * the old app, if the update does not install. Done on the recorded entry, never on the offer, whose
++ * `requires` must keep matching its signed statement. Returns whether anything changed.
++ */
++export function pinPendingToApp(manifest: ILocalComponentsManifest, staged: readonly { readonly id: string; readonly version: string }[], appVersion: string): boolean {
++	let changed = false;
++	for (const { id, version } of staged) {
++		const entry = manifest.components[id];
++		const pending = entry?.pending;
++		if (pending && pending.version === version && !pending.requires?.app) {
++			entry.pending = { ...pending, requires: { ...pending.requires, app: `>=${appVersion}` } };
++			changed = true;
++		}
++	}
++	return changed;
++}
++
++/**
 + * Pending components that count as already staged when deciding what to offer for `appVersion`:
 + * those that app would activate, plus, once an app update has been prepared for, those staged for
 + * it. The second kind are held on the running app on purpose -- they wait for the restart into the
@@ -3757,9 +3792,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +
 +		// The main process persists its state across a window reload. On the initial
 +		// replay only sync the title-bar indicator — do NOT re-notify or re-install,
-+		// otherwise a `Downloaded` state would re-prompt on every reload. The same goes for a
-+		// Downloaded state the main process puts back after other work: it was announced already.
-+		if (isInitial || (state.type === Wso2UpdateStateType.Downloaded && state.replayed)) {
++		// otherwise a `Downloaded` state would re-prompt on every reload. The same goes for a state
++		// the main process puts back after other work: it was announced already.
++		if (isInitial || ((state.type === Wso2UpdateStateType.Downloaded || state.type === Wso2UpdateStateType.Error) && state.replayed)) {
 +			return;
 +		}
 +
@@ -4435,7 +4470,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,631 @@
+@@ -0,0 +1,663 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -4459,7 +4494,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +import * as os from 'os';
 +import { join } from '../../../../base/common/path.js';
 +import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-+import { activatePendingRuntimeComponents, compareVersions, heldBackPendingComponents, ILocalComponentsManifest, incomingAppVersionToPrepare, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, stagedPendingComponents, untilSettledOrStalled, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
++import { activatePendingRuntimeComponents, compareVersions, heldBackPendingComponents, ILocalComponentsManifest, incomingAppVersionToPrepare, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, pinPendingToApp, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, stagedPendingComponents, untilSettledOrStalled, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
 +
 +suite('wso2ComponentsManifest - compareVersions', () => {
 +	ensureNoDisposablesAreLeakedInTestSuite();
@@ -4897,6 +4932,38 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		} finally {
 +			clearInterval(ticker);
 +		}
++	});
++});
++
++suite('wso2ComponentsManifest - pinPendingToApp', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('pins what this pass staged to the incoming app, and nothing else', () => {
++		const manifest: ILocalComponentsManifest = {
++			schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION,
++			components: {
++				'jre': { pending: { version: '5.0.0' } },
++				'ballerina-runtime': { pending: { version: '2201.14.0', requires: { jre: '>=5.0.0' } } },
++				'icp': { pending: { version: '2.1.0-beta', requires: { app: '>=5.1.0-alpha7' } } },
++				'wso2.micro-integrator': { pending: { version: '4.5.0' } }
++			}
++		};
++		const changed = pinPendingToApp(manifest, [
++			{ id: 'jre', version: '5.0.0' },
++			{ id: 'ballerina-runtime', version: '2201.14.0' },
++			{ id: 'icp', version: '2.1.0-beta' },
++			{ id: 'wso2.micro-integrator', version: '4.4.0' } // not what is pending
++		], '5.1.0-alpha7');
++		deepStrictEqual({ changed, requires: Object.fromEntries(Object.entries(manifest.components).map(([id, e]) => [id, e.pending?.requires])) }, {
++			changed: true,
++			requires: {
++				'jre': { app: '>=5.1.0-alpha7' },
++				'ballerina-runtime': { jre: '>=5.0.0', app: '>=5.1.0-alpha7' },
++				'icp': { app: '>=5.1.0-alpha7' },
++				'wso2.micro-integrator': undefined
++			}
++		});
 +	});
 +});
 +
