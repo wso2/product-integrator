@@ -3431,7 +3431,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
-@@ -0,0 +1,667 @@
+@@ -0,0 +1,669 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -4079,7 +4079,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		// The staged work is applied, so leave the Downloaded state behind — otherwise the menu keeps
 +		// offering "Restart to Finish Updating Components" for extensions that are already installed.
 +		// A pending runtime keeps that state (restartRequired), since it really does need the restart.
-+		await this.updateService.stagedExtensionsApplied()
++		// Not awaited: it waits for the update lock, which preparing for an app update can hold for as
++		// long as its download keeps moving, and nothing below depends on it.
++		void this.updateService.stagedExtensionsApplied()
 +			.catch(err => this.logService.error('[wso2Update] failed to clear the downloaded state', err));
 +
 +		if (failed > 0) {
