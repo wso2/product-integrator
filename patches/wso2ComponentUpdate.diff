@@ -592,7 +592,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
-@@ -0,0 +1,1761 @@
+@@ -0,0 +1,1763 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -1409,7 +1409,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		this.setState({ type: Wso2UpdateStateType.Downloading });
 +		try {
 +			const { stagedExtensions } = await this.fetchComponents(targets, incomingVersion);
-+			this.recordDeferredExtensions(stagedExtensions, targets);
++			this.recordDeferredExtensions(stagedExtensions, targets, incomingVersion);
 +		} finally {
 +			// Whatever staged, even before a failure, is for the incoming app only.
 +			this.updateLocalManifest(manifest => pinPendingToApp(manifest, targets, incomingVersion));
@@ -1419,9 +1419,11 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +
 +	/**
 +	 * Records extensions downloaded for an app update, to be installed when it boots. Nothing tells
-+	 * the renderer about them: the renderer that would install them now is the old app's.
++	 * the renderer about them: the renderer that would install them now is the old app's. Pinned to
++	 * `incomingVersion` like the runtimes staged with them (pinPendingToApp), so one deferred only for
++	 * a runtime it needs does not install on the old app should that runtime reach it another way.
 +	 */
-+	private recordDeferredExtensions(staged: readonly IWso2StagedExtension[], offers: readonly IWso2ComponentOffer[]): void {
++	private recordDeferredExtensions(staged: readonly IWso2StagedExtension[], offers: readonly IWso2ComponentOffer[], incomingVersion: string): void {
 +		if (!staged.length) {
 +			return;
 +		}
@@ -1440,7 +1442,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +					version: extension.version,
 +					path: path.relative(this.dataFolderHome, extension.vsixPath),
 +					installedAt: new Date().toISOString(),
-+					...(extensionRequires ? { requires: extensionRequires } : {})
++					requires: { ...extensionRequires, app: extensionRequires?.app ?? `>=${incomingVersion}` }
 +				};
 +			}
 +		});
