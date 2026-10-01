@@ -307,7 +307,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Updat
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Update.ts
-@@ -0,0 +1,252 @@
+@@ -0,0 +1,259 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -559,12 +559,19 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Updat
 +	 * download or verification fails (so the caller can surface an error without quitting).
 +	 */
 +	applyAppUpdate(): Promise<void>;
++
++	/**
++	 * Stages the runtimes a downloaded app update needs, resolving once that is done, has failed or
++	 * has stopped making progress. Never rejects. The macOS updater awaits it before reporting the
++	 * update Ready, so no restart can install the app without them.
++	 */
++	prepareForAppUpdate(incomingVersion: string | undefined): Promise<void>;
 +}
 Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
-@@ -0,0 +1,1603 @@
+@@ -0,0 +1,1600 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -599,7 +606,6 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +import { ILogService } from '../../log/common/log.js';
 +import { IProductService } from '../../product/common/productService.js';
 +import { asText, IRequestService } from '../../request/common/request.js';
-+import { IUpdateService, StateType } from '../../update/common/update.js';
 +import { decodePublicKey, verifyDetachedSignature } from '../node/wso2UpdateVerification.js';
 +import {
 +	IWso2Artifact,
@@ -633,6 +639,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	reconcileBundledVersions,
 +	satisfiesRange,
 +	stagedPendingComponents,
++	untilSettledOrStalled,
 +	writeLocalManifest
 +} from '../node/wso2ComponentsManifest.js';
 +
@@ -664,6 +671,13 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 + * pressure, which an instant retry only adds to.
 + */
 +const DOWNLOAD_ATTEMPTS = 3;
++
++/**
++ * How long preparing for an app update may go without progress before the app update stops waiting
++ * for it. Not a deadline: a slow link keeps moving bytes and is waited for however long it takes.
++ * This only releases a restart held behind a download that has stopped moving.
++ */
++const PREPARE_STALL_MS = 3 * 60 * 1000;
 +const DOWNLOAD_RETRY_DELAYS_MS = [3000, 10000];
 +
 +/**
@@ -761,6 +775,9 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	/** Last progress emission, to rate-limit state events crossing the IPC boundary. */
 +	private lastProgressEmit = 0;
 +
++	/** When download work last moved (a chunk arrived, or a phase finished); see prepareForAppUpdate. */
++	private lastDownloadActivity = 0;
++
 +	/** The server's last answer, retained so downloadUpdates() can act on the offered set. */
 +	private lastResponse: IWso2UpdateCheckResponse | undefined;
 +
@@ -809,8 +826,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		@IConfigurationService private readonly configurationService: IConfigurationService,
 +		@IRequestService private readonly requestService: IRequestService,
 +		@ILogService private readonly logService: ILogService,
-+		@IProductService private readonly productService: IProductService,
-+		@IUpdateService private readonly stockUpdateService: IUpdateService
++		@IProductService private readonly productService: IProductService
 +	) {
 +		super();
 +
@@ -837,17 +853,6 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		}
 +
 +		this.lifecycleMainService.when(LifecycleMainPhase.AfterWindowOpen).then(() => this.scheduleChecks());
-+
-+		// On macOS the core app arrives through Squirrel, which knows nothing of components. Once its
-+		// download is Ready, fetch the runtimes THAT version needs, so the restart that installs it
-+		// boots with them rather than without. Windows does the same inside doApplyAppUpdate().
-+		if (process.platform === 'darwin' && this.productService.updateUrl) {
-+			this._register(this.stockUpdateService.onStateChange(state => {
-+				if (state.type === StateType.Ready) {
-+					this.prepareComponentsForAppUpdate(state.update.productVersion);
-+				}
-+			}));
-+		}
 +	}
 +
 +	//#region paths & config
@@ -976,7 +981,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	 * because the offers below are re-checked against local state rather than taken on trust.
 +	 *
 +	 * `asAppVersion` asks on behalf of an app update that is downloaded but not yet running (see
-+	 * prepareComponentsForAppUpdate). The server keeps no client state, so asking as that version is
++	 * prepareForAppUpdate). The server keeps no client state, so asking as that version is
 +	 * all it takes to be answered from its release's document. The running build's commit is left
 +	 * out then: paired with another version it would describe a build that does not exist.
 +	 */
@@ -1266,7 +1271,8 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	}
 +
 +	/**
-+	 * Stages the runtime components `incomingVersion` needs, once that app update is downloaded.
++	 * Stages the runtime components `incomingVersion` needs, once that app update is downloaded, and
++	 * resolves when that is done. The macOS updater awaits this before announcing the update Ready.
 +	 *
 +	 * The regular check asks as the RUNNING app, and a release's components require that release's
 +	 * app, so an app update used to arrive with none of its runtimes: the editor-only payload carries
@@ -1276,10 +1282,14 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	 *
 +	 * Extensions are left to the new app's own startup check. A staged VSIX is installed by whichever
 +	 * renderer sees it, which here would be the old app's.
++	 *
++	 * Never rejects, and never holds the app update hostage: a failure resolves (the new app fetches
++	 * what is missing on its own first check), and so does work that stops making progress for
++	 * PREPARE_STALL_MS -- it carries on in the background, but the restart no longer waits for it.
 +	 */
-+	private prepareComponentsForAppUpdate(incomingVersion: string | undefined): void {
-+		// Same gate as the scheduled checks: this moves hundreds of megabytes unasked.
-+		if (this.mode === 'none' || this.mode === 'manual') {
++	async prepareForAppUpdate(incomingVersion: string | undefined): Promise<void> {
++		// Same gates as the scheduled checks: this moves hundreds of megabytes unasked.
++		if (!this.updateBaseUrl || this.mode === 'none' || this.mode === 'manual') {
 +			return;
 +		}
 +		const version = incomingAppVersionToPrepare(incomingVersion, this.appVersion());
@@ -1288,22 +1298,27 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			// else means the feed did not report the WSO2 version it is expected to put in the release
 +			// name, and this update will arrive without its runtimes -- worth saying out loud.
 +			if (incomingVersion === this.appVersion()) {
-+				this.logService.trace(`[wso2Update] app update ready (${incomingVersion}); same version, nothing to prepare for`);
++				this.logService.trace(`[wso2Update] app update downloaded (${incomingVersion}); same version, nothing to prepare for`);
 +			} else {
-+				this.logService.warn(`[wso2Update] app update ready, but its version '${incomingVersion ?? ''}' is not a newer WSO2 Integrator version than ${this.appVersion()}; not preparing components for it`);
++				this.logService.warn(`[wso2Update] app update downloaded, but its version '${incomingVersion ?? ''}' is not a newer WSO2 Integrator version than ${this.appVersion()}; not preparing components for it`);
 +			}
 +			return;
 +		}
-+		this.runExclusive(() => this.stageComponentsForAppUpdate(version, true))
-+			.catch(err => this.logService.warn(`[wso2Update] could not prepare components for app update ${version}`, err));
++		const work = this.runExclusive(() => this.stageComponentsForAppUpdate(version))
++			.catch(err => this.logService.warn(`[wso2Update] could not prepare components for app update ${version}; the new app will fetch them`, err));
++
++		this.lastDownloadActivity = Date.now();
++		if (!await untilSettledOrStalled(work, () => this.lastDownloadActivity, PREPARE_STALL_MS)) {
++			this.logService.warn(`[wso2Update] preparing for app update ${version} made no progress for ${PREPARE_STALL_MS / 1000}s; no longer holding the update for it`);
++		}
 +	}
 +
 +	/**
-+	 * The work behind prepareComponentsForAppUpdate(); callers hold runExclusive(). `announce` ends in
-+	 * Downloaded, which the workbench turns into the single restart prompt for app and components;
-+	 * Windows passes false, since it is about to quit to install the update anyway.
++	 * The work behind prepareForAppUpdate(); callers hold runExclusive(). The state is put back
++	 * afterwards rather than left at Downloaded: Downloaded offers a plain restart, which would not
++	 * install the app update these components wait for. The app update's own Ready is the prompt.
 +	 */
-+	private async stageComponentsForAppUpdate(incomingVersion: string, announce: boolean): Promise<void> {
++	private async stageComponentsForAppUpdate(incomingVersion: string): Promise<void> {
 +		this.preparedAppVersion = incomingVersion;
 +		const response = await this.fetchUpdates(incomingVersion);
 +		// Not lastResponse: that describes the running app, and Show Components and downloadUpdates()
@@ -1313,32 +1328,18 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			: []);
 +		const targets = response?.components.filter(c => wanted.has(c.id)) ?? [];
 +
-+		const before = this._state;
-+		let failure: unknown;
-+		if (targets.length) {
-+			this.logService.info(`[wso2Update] staging ${targets.map(c => `${c.id}@${c.version}`).join(', ')} for app update ${incomingVersion}`);
-+			this.setState({ type: Wso2UpdateStateType.Downloading });
-+			try {
-+				await this.fetchComponents(targets, incomingVersion);
-+			} catch (err) {
-+				failure = err;
-+			}
++		if (!targets.length) {
++			return;
 +		}
-+
-+		// Announce whatever the incoming app will activate, not just what staged in this pass: a
-+		// repeated Ready (Squirrel found a newer build) finds its runtimes already staged by the first.
-+		const local = readLocalManifest(this.componentsHome);
-+		const held = local ? heldBackPendingComponents(local, incomingVersion) : new Map<string, string>();
-+		const activatesOnUpdate = !!local && Object.entries(local.components).some(([id, entry]) => !!entry.pending && !held.has(id));
-+		if (announce && activatesOnUpdate) {
-+			this.setState({ type: Wso2UpdateStateType.Downloaded, stagedExtensions: [], restartRequired: true });
-+		} else if (targets.length) {
++		this.logService.info(`[wso2Update] staging ${targets.map(c => `${c.id}@${c.version}`).join(', ')} for app update ${incomingVersion}`);
++		const before = this._state;
++		this.setState({ type: Wso2UpdateStateType.Downloading });
++		try {
++			await this.fetchComponents(targets, incomingVersion);
++		} finally {
 +			// Put back for the indicator, not as news: a Downloaded state was already announced, and
 +			// announcing it again would raise its restart prompt a second time.
 +			this.setState(before.type === Wso2UpdateStateType.Downloaded ? { ...before, replayed: true } : before);
-+		}
-+		if (failure) {
-+			throw failure;
 +		}
 +	}
 +
@@ -1383,12 +1384,14 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			signature: component.artifact.signature
 +		});
 +		this.logService.info(`[wso2Update] verified ${component.id}@${component.version}; extracting`);
++		this.lastDownloadActivity = Date.now();
 +
 +		// A crashed earlier attempt may have left a partial tree here; extracting over it would
 +		// merge stale files into the new version. The archive above is the only thing worth reusing.
 +		const extractDir = path.join(stagingDir, 'extracted');
 +		await fs.promises.rm(extractDir, { recursive: true, force: true });
 +		await extract(archivePath, extractDir, {}, CancellationToken.None);
++		this.lastDownloadActivity = Date.now();
 +		await fs.promises.rm(archivePath, { force: true });
 +
 +		// The JRE component is a WRAPPER directory containing a single `jdk-*` home (that is how
@@ -1620,6 +1623,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +					hash.update(chunk.buffer);
 +					if (this.activeDownload) {
 +						this.activeDownload.receivedBytes += chunk.buffer.byteLength;
++						this.lastDownloadActivity = Date.now();
 +						this.reportProgress();
 +					}
 +					if (!out.write(chunk.buffer)) {
@@ -1891,7 +1895,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		// new app is offered on its own first check.
 +		const incoming = incomingAppVersionToPrepare(app.version, this.appVersion());
 +		if (incoming) {
-+			await this.stageComponentsForAppUpdate(incoming, false)
++			await this.stageComponentsForAppUpdate(incoming)
 +				.catch(err => this.logService.warn(`[wso2Update] could not prepare components for app update ${incoming}; the new app will fetch them`, err));
 +		}
 +
@@ -2172,7 +2176,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,968 @@
+@@ -0,0 +1,994 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3009,6 +3013,32 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +}
 +
 +/**
++ * Waits for `work`, but stops waiting once it has gone `stallMs` without progress, as reported by
++ * `lastActivity()` (a `Date.now()` timestamp). Resolves true when `work` settled, either way, and
++ * false on a stall; the work itself carries on regardless. Not a deadline: work that keeps moving is
++ * waited for however long it takes.
++ */
++export async function untilSettledOrStalled(work: Promise<unknown>, lastActivity: () => number, stallMs: number): Promise<boolean> {
++	let timer: ReturnType<typeof setTimeout> | undefined;
++	const stalled = new Promise<boolean>(resolve => {
++		const check = () => {
++			const idle = Date.now() - lastActivity();
++			if (idle >= stallMs) {
++				resolve(false);
++				return;
++			}
++			timer = setTimeout(check, stallMs - idle);
++		};
++		timer = setTimeout(check, stallMs);
++	});
++	try {
++		return await Promise.race([work.then(() => true, () => true), stalled]);
++	} finally {
++		clearTimeout(timer);
++	}
++}
++
++/**
 + * Staged components that must NOT activate on the app that is running, keyed by id, with the reason.
 + *
 + * A component is staged against one app and activated by whichever app boots next. Normally those
@@ -3145,7 +3175,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
-@@ -0,0 +1,618 @@
+@@ -0,0 +1,667 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3455,6 +3485,17 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +
 +//#region contribution
 +
++/**
++ * Whether the app update is still moving. These states end in Ready or Idle on their own, so a wait
++ * on one is slow, not stuck. Updating includes staging the runtimes the update needs.
++ */
++function isAppUpdateProgressing(type: StateType): boolean {
++	return type === StateType.Downloading
++		|| type === StateType.Updating
++		|| type === StateType.Overwriting
++		|| type === StateType.Restarting;
++}
++
 +class Wso2UpdateContribution extends Disposable implements IWorkbenchContribution {
 +
 +	static readonly ID = 'workbench.contrib.wso2Update';
@@ -3463,6 +3504,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	private lastNotifiedKey: string | undefined;
 +	/** The single in-flight wait for the app update to become Ready; see promptRestartForComponents. */
 +	private restartPromptWait: DisposableStore | undefined;
++	/** Whether this window has prompted for the app update that is Ready now; cleared when it leaves Ready. */
++	private appUpdatePrompted = false;
 +	private explicitCheckInFlight = false;
 +
 +	constructor(
@@ -3482,6 +3525,17 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +
 +		this._register(this.updateService.onStateChange(state => this.onStateChange(state)));
 +		this.updateService.getState().then(state => this.onStateChange(state, true), err => this.logService.error('[wso2Update] getState failed', err));
++
++		// The app update's own prompt. The main process reports Ready only once the runtimes that
++		// version needs are staged too (see prepareForAppUpdate), so this is the moment everything is
++		// in place, and the single prompt that covers app and components alike.
++		this._register(this.stockUpdateService.onStateChange(state => {
++			if (state.type === StateType.Ready) {
++				void this.promptRestartForAppUpdate();
++			} else {
++				this.appUpdatePrompted = false;
++			}
++		}));
 +
 +		// Where the stock command is the only "Check for Updates" users see, it has to check
 +		// components too. Both the Command Palette entry and the application-menu item route
@@ -3515,53 +3569,15 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +			|| type === StateType.Disabled
 +			|| type === StateType.Uninitialized;
 +		const appUpdateInFlight = (type: StateType) => type !== StateType.Ready && !appUpdateSettled(type);
-+		// Still moving: these end in Ready or Idle on their own, so a wait here is slow, not stuck.
-+		const appUpdateProgressing = (type: StateType) =>
-+			type === StateType.Downloading
-+			|| type === StateType.Updating
-+			|| type === StateType.Overwriting
-+			|| type === StateType.Restarting;
 +
 +		const promptComponentsOnly = () => this.notificationService.prompt(
 +			Severity.Info,
 +			localize('wso2.updates.restart', "Restart WSO2 Integrator to finish updating components."),
 +			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => this.hostService.restart() }]
 +		);
-+		// `quitAndInstall()` returns without doing anything unless the state is still Ready, and on
-+		// darwin its first call runs an overwrite check that postpones the restart when a newer
-+		// build turns up. Either way the notification is already dismissed, so a bare call can
-+		// leave the user with staged components, no restart and no prompt.
-+		//
-+		// Two paths, and neither can end in silence. When the apply path will not run, a plain
-+		// restart still applies the staged components and cannot decline the way quitAndInstall
-+		// can, so there is nothing to re-ask about. When it does run but declines -- or when
-+		// anything throws -- the prompt goes back up.
-+		const restartForBoth = async () => {
-+			try {
-+				if (this.stockUpdateService.state.type !== StateType.Ready) {
-+					await this.hostService.restart();
-+					return;
-+				}
-+				await this.stockUpdateService.quitAndInstall();
-+				if (!appUpdateProgressing(this.stockUpdateService.state.type)) {
-+					this.promptRestartForComponents();
-+				}
-+			} catch (err) {
-+				// IPromptChoice.run is `() => void`, so a rejection escaping here would surface as
-+				// an unhandled rejection and the user would be left with no way to retry.
-+				this.logService.error('[wso2Update] restart after update failed', err);
-+				this.promptRestartForComponents();
-+			}
-+		};
-+		const promptAppAndComponents = () => this.notificationService.prompt(
-+			Severity.Info,
-+			localize('wso2.updates.restartCombined', "Restart WSO2 Integrator to finish updating the app and its components."),
-+			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => restartForBoth() }]
-+		);
-+
 +		const current = this.stockUpdateService.state.type;
 +		if (current === StateType.Ready) {
-+			promptAppAndComponents();
++			void this.promptRestartForAppUpdate();
 +			return;
 +		}
 +		if (!appUpdateInFlight(current)) {
@@ -3589,7 +3605,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		};
 +		store.add(this.stockUpdateService.onStateChange(next => {
 +			if (next.type === StateType.Ready) {
-+				done(promptAppAndComponents);
++				done(() => void this.promptRestartForAppUpdate());
 +			} else if (!appUpdateInFlight(next.type)) {
 +				done(promptComponentsOnly);
 +			}
@@ -3602,7 +3618,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		// download that genuinely fails reports Idle and the listener above handles it.
 +		let timer: ReturnType<typeof setTimeout>;
 +		const giveUpIfStuck = () => {
-+			if (appUpdateProgressing(this.stockUpdateService.state.type)) {
++			if (isAppUpdateProgressing(this.stockUpdateService.state.type)) {
 +				timer = setTimeout(giveUpIfStuck, RESTART_PROMPT_WAIT_MS);
 +				return;
 +			}
@@ -3610,6 +3626,69 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		};
 +		timer = setTimeout(giveUpIfStuck, RESTART_PROMPT_WAIT_MS);
 +		store.add(toDisposable(() => clearTimeout(timer)));
++	}
++
++	/**
++	 * The restart prompt for an app update that is Ready, covering any staged components with it.
++	 * Once per Ready, whichever of the stock state or a finished component download asks first, and
++	 * only in the window the user was last in -- every window sees the same events.
++	 */
++	private async promptRestartForAppUpdate(): Promise<void> {
++		const state = this.stockUpdateService.state;
++		if (this.appUpdatePrompted || state.type !== StateType.Ready) {
++			return;
++		}
++		this.appUpdatePrompted = true;
++		// Called from event listeners without an await, so nothing may escape as a rejection.
++		let lastFocused: boolean;
++		try {
++			lastFocused = await this.hostService.hadLastFocus();
++		} catch (err) {
++			this.logService.error('[wso2Update] could not tell which window to prompt in', err);
++			lastFocused = true; // two prompts beat none
++		}
++		if (!lastFocused) {
++			return;
++		}
++		const version = state.update.productVersion;
++		this.notificationService.prompt(
++			Severity.Info,
++			version
++				? localize('wso2.updates.appReadyVersion', "WSO2 Integrator {0} is ready. Restart to finish updating.", version)
++				: localize('wso2.updates.appReady', "A WSO2 Integrator update is ready. Restart to finish updating."),
++			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => this.restartIntoAppUpdate() }]
++		);
++	}
++
++	/**
++	 * `quitAndInstall()` returns without doing anything unless the state is still Ready, and on
++	 * darwin its first call runs an overwrite check that postpones the restart when a newer build
++	 * turns up. Either way the notification is already dismissed, so a bare call can leave the user
++	 * with staged components, no restart and no prompt.
++	 *
++	 * Two paths, and neither can end in silence. When the apply path will not run, a plain restart
++	 * still applies the staged components and cannot decline the way quitAndInstall can, so there is
++	 * nothing to re-ask about. When it does run but declines -- or when anything throws -- the prompt
++	 * goes back up.
++	 */
++	private async restartIntoAppUpdate(): Promise<void> {
++		try {
++			if (this.stockUpdateService.state.type !== StateType.Ready) {
++				await this.hostService.restart();
++				return;
++			}
++			await this.stockUpdateService.quitAndInstall();
++			if (!isAppUpdateProgressing(this.stockUpdateService.state.type)) {
++				this.appUpdatePrompted = false;
++				this.promptRestartForComponents();
++			}
++		} catch (err) {
++			// IPromptChoice.run is `() => void`, so a rejection escaping here would surface as an
++			// unhandled rejection and the user would be left with no way to retry.
++			this.logService.error('[wso2Update] restart after update failed', err);
++			this.appUpdatePrompted = false;
++			this.promptRestartForComponents();
++		}
 +	}
 +
 +	/**
@@ -4253,7 +4332,23 @@ Index: product-integrator/lib/vscode/src/vs/platform/update/electron-main/update
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/platform/update/electron-main/updateService.darwin.ts
 +++ product-integrator/lib/vscode/src/vs/platform/update/electron-main/updateService.darwin.ts
-@@ -91,9 +91,46 @@ export class DarwinUpdateService extends
+@@ -19,6 +19,7 @@ import { IApplicationStorageMainService
+ import { ITelemetryService } from '../../telemetry/common/telemetry.js';
+ import { AvailableForDownload, IUpdate, State, StateType, UpdateType } from '../common/update.js';
+ import { IMeteredConnectionService } from '../../meteredConnection/common/meteredConnection.js';
++import { IWso2ComponentUpdateService } from '../../wso2Update/common/wso2Update.js';
+ import { AbstractUpdateService, createUpdateURL, getUpdateRequestHeaders, IUpdateURLOptions, UpdateErrorClassification } from './abstractUpdateService.js';
+ 
+ export class DarwinUpdateService extends AbstractUpdateService implements IRelaunchHandler {
+@@ -47,6 +48,7 @@ export class DarwinUpdateService extends
+ 		@IProductService productService: IProductService,
+ 		@IApplicationStorageMainService applicationStorageMainService: IApplicationStorageMainService,
+ 		@IMeteredConnectionService meteredConnectionService: IMeteredConnectionService,
++		@IWso2ComponentUpdateService private readonly wso2ComponentUpdateService: IWso2ComponentUpdateService,
+ 	) {
+ 		super(lifecycleMainService, configurationService, environmentMainService, requestService, logService, productService, telemetryService, applicationStorageMainService, meteredConnectionService, true);
+ 
+@@ -91,9 +93,46 @@ export class DarwinUpdateService extends
  		this.setState(State.Idle(UpdateType.Archive, message));
  	}
  
@@ -4301,11 +4396,46 @@ Index: product-integrator/lib/vscode/src/vs/platform/update/electron-main/update
  		const headers = getUpdateRequestHeaders(this.productService.version);
  		try {
  			this.logService.trace('update#buildUpdateFeedUrl - setting feed URL for Electron autoUpdater', { url, assetID, quality, commit, headers });
+@@ -172,15 +211,30 @@ export class DarwinUpdateService extends
+ 		this.setState(State.Downloading(this.state.type === StateType.Overwriting ? this.state.update : undefined, this.state.explicit, this._overwrite));
+ 	}
+ 
+-	private onUpdateDownloaded(update: IUpdate): void {
+-		if (this.state.type !== StateType.Downloading) {
++	private async onUpdateDownloaded(update: IUpdate): Promise<void> {
++		// Checked on a local, not on `this.state`: the state can move during the await below, and
++		// narrowing `this.state` here would hide that from the check after it.
++		const downloading = this.state;
++		if (downloading.type !== StateType.Downloading) {
+ 			return;
+ 		}
+ 
+-		this.setState(State.Downloaded(update, this.state.explicit, this._overwrite));
++		const explicit = downloading.explicit;
++		this.setState(State.Downloaded(update, explicit, this._overwrite));
+ 		this.logService.info(`Update downloaded: ${JSON.stringify(update)}`);
+ 
+-		this.setState(State.Ready(update, this.state.explicit, this._overwrite));
++		// WSO2: the Squirrel payload is editor-only, so fetch the runtimes this version needs before
++		// calling it Ready. Every restart path keys on Ready (the prompt, the title bar, the menu,
++		// handleRelaunch), so holding it here is what stops any of them from booting the new app
++		// without its runtimes. Updating, not Downloaded: Downloaded offers "Install Update", which
++		// does nothing on this platform. The wait never rejects and gives up on a stalled download.
++		this.setState(State.Updating(update, explicit));
++		await this.wso2ComponentUpdateService.prepareForAppUpdate(update.productVersion);
++		if (this.state.type !== StateType.Updating) {
++			return; // superseded while waiting
++		}
++
++		this.setState(State.Ready(update, explicit, this._overwrite));
+ 	}
+ 
+ 	private onUpdateNotAvailable(): void {
 Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,593 @@
+@@ -0,0 +1,631 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -4329,7 +4459,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +import * as os from 'os';
 +import { join } from '../../../../base/common/path.js';
 +import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-+import { activatePendingRuntimeComponents, compareVersions, heldBackPendingComponents, ILocalComponentsManifest, incomingAppVersionToPrepare, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, stagedPendingComponents, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
++import { activatePendingRuntimeComponents, compareVersions, heldBackPendingComponents, ILocalComponentsManifest, incomingAppVersionToPrepare, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, stagedPendingComponents, untilSettledOrStalled, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
 +
 +suite('wso2ComponentsManifest - compareVersions', () => {
 +	ensureNoDisposablesAreLeakedInTestSuite();
@@ -4729,6 +4859,44 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +			['5.1.0-alpha7', '5.1.0', '5.2.0', '5.1.0-alpha6', '5.1.0-alpha5', undefined, '', 'latest', '5.1.0; rm -rf ~'].map(v => incomingAppVersionToPrepare(v, running)),
 +			['5.1.0-alpha7', '5.1.0', '5.2.0', undefined, undefined, undefined, undefined, undefined, undefined]
 +		);
++	});
++});
++
++suite('wso2ComponentsManifest - untilSettledOrStalled', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	const STALL_MS = 60;
++	const after = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
++
++	test('resolves true as soon as the work settles, rejected or not', async () => {
++		const now = () => Date.now();
++		deepStrictEqual(
++			[await untilSettledOrStalled(after(10), now, STALL_MS), await untilSettledOrStalled(after(10).then(() => { throw new Error('boom'); }), now, STALL_MS)],
++			[true, true]
++		);
++	});
++
++	test('gives up on work that stops moving, without waiting for it', async () => {
++		const started = Date.now();
++		const result = await untilSettledOrStalled(new Promise<void>(() => { }), () => started, STALL_MS);
++		// The work never settles, so resolving at all shows it was not waited for; the bound shows
++		// the wait did not give up early.
++		strictEqual(result, false);
++		strictEqual(Date.now() - started >= STALL_MS, true);
++	});
++
++	test('keeps waiting, past the stall window, for work that keeps moving', async () => {
++		let activity = Date.now();
++		const ticker = setInterval(() => activity = Date.now(), STALL_MS / 4);
++		try {
++			const started = Date.now();
++			const result = await untilSettledOrStalled(after(STALL_MS * 3), () => activity, STALL_MS);
++			strictEqual(result, true);
++			strictEqual(Date.now() - started >= STALL_MS * 3 - 5, true);
++		} finally {
++			clearInterval(ticker);
++		}
 +	});
 +});
 +
