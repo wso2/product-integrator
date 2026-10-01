@@ -283,6 +283,19 @@ Index: product-integrator/lib/vscode/src/vs/code/electron-main/app.ts
  import { IOpenURLOptions, IURLService } from '../../platform/url/common/url.js';
  import { URLHandlerChannelClient, URLHandlerRouter } from '../../platform/url/common/urlIpc.js';
  import { NativeURLService } from '../../platform/url/common/urlService.js';
+@@ -654,10 +656,10 @@ export class CodeApplication extends Dis
+ 		]);
+ 
+ 		// Shared process
+-		const { sharedProcessReady, sharedProcessClient } = this.setupSharedProcess(machineId, sqmId, devDeviceId);
++		const { sharedProcessReady, sharedProcessClient, startSharedProcess } = this.setupSharedProcess(machineId, sqmId, devDeviceId);
+ 
+ 		// Services
+-		const appInstantiationService = await this.initServices(machineId, sqmId, devDeviceId, sharedProcessReady);
++		const appInstantiationService = await this.initServices(machineId, sqmId, devDeviceId, sharedProcessReady, startSharedProcess);
+ 
+ 		// Error telemetry
+ 		appInstantiationService.invokeFunction(accessor => this._register(new ErrorTelemetry(accessor.get(ILogService), accessor.get(ITelemetryService))));
 @@ -685,6 +687,11 @@ export class CodeApplication extends Dis
  		// Signal phase: ready - before opening first window
  		this.lifecycleMainService.phase = LifecycleMainPhase.Ready;
@@ -295,12 +308,34 @@ Index: product-integrator/lib/vscode/src/vs/code/electron-main/app.ts
  		// Open Windows
  		await appInstantiationService.invokeFunction(accessor => this.openFirstWindow(accessor, initialProtocolUrls));
  
+@@ -1056,7 +1063,7 @@ export class CodeApplication extends Dis
+ 		return false;
+ 	}
+ 
+-	private setupSharedProcess(machineId: string, sqmId: string, devDeviceId: string): { sharedProcessReady: Promise<MessagePortClient>; sharedProcessClient: Promise<MessagePortClient> } {
++	private setupSharedProcess(machineId: string, sqmId: string, devDeviceId: string): { sharedProcessReady: Promise<MessagePortClient>; sharedProcessClient: Promise<MessagePortClient>; startSharedProcess: () => void } {
+ 		const sharedProcess = this._register(this.mainInstantiationService.createInstance(SharedProcess, machineId, sqmId, devDeviceId));
+ 
+ 		this._register(sharedProcess.onDidCrash(() => this.windowsMainService?.sendToFocused('vscode:reportSharedProcessCrash')));
+@@ -1077,10 +1084,10 @@ export class CodeApplication extends Dis
+ 			return sharedProcessClient;
+ 		})();
+ 
+-		return { sharedProcessReady, sharedProcessClient };
++		return { sharedProcessReady, sharedProcessClient, startSharedProcess: () => sharedProcess.startWithoutWindow() };
+ 	}
+ 
+-	private async initServices(machineId: string, sqmId: string, devDeviceId: string, sharedProcessReady: Promise<MessagePortClient>): Promise<IInstantiationService> {
++	private async initServices(machineId: string, sqmId: string, devDeviceId: string, sharedProcessReady: Promise<MessagePortClient>, startSharedProcess: () => void): Promise<IInstantiationService> {
+ 		const services = new ServiceCollection();
+ 
+ 		// Update
 @@ -1102,6 +1109,9 @@ export class CodeApplication extends Dis
  				break;
  		}
  
 +		// WSO2 component updates
-+		services.set(IWso2ComponentUpdateService, new SyncDescriptor(Wso2ComponentUpdateService, [getDelayedChannel(sharedProcessReady.then(client => client.getChannel('extensions')))]));
++		services.set(IWso2ComponentUpdateService, new SyncDescriptor(Wso2ComponentUpdateService, [getDelayedChannel(sharedProcessReady.then(client => client.getChannel('extensions'))), startSharedProcess]));
 +
  		// Windows
  		services.set(IWindowsMainService, new SyncDescriptor(WindowsMainService, [machineId, sqmId, devDeviceId, this.userEnv], false));
@@ -592,7 +627,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
-@@ -0,0 +1,1763 @@
+@@ -0,0 +1,1797 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -645,6 +680,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	Wso2UpdateStateType
 +} from '../common/wso2Update.js';
 +import {
++	awaitingDeferredExtensions,
 +	compareVersions,
 +	decideDeferredExtensions,
 +	ensureExecutablePermissions,
@@ -665,6 +701,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	reconcileBundledVersions,
 +	satisfiesRange,
 +	stagedPendingComponents,
++	sweepStagedExtensionDownloads,
 +	untilSettledOrStalled,
 +	writeLocalManifest
 +} from '../node/wso2ComponentsManifest.js';
@@ -868,6 +905,11 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	constructor(
 +		/** The shared process's extension-management channel; calls wait until that process is ready. */
 +		private readonly sharedProcessExtensions: IChannel,
++		/**
++		 * Starts the shared process before any window asks for it. Without it, a call on the channel
++		 * above made before the first window opens waits for a window that is waiting for this.
++		 */
++		private readonly startSharedProcess: () => void,
 +		@ILifecycleMainService private readonly lifecycleMainService: ILifecycleMainService,
 +		@IConfigurationService private readonly configurationService: IConfigurationService,
 +		@IRequestService private readonly requestService: IRequestService,
@@ -1125,6 +1167,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		const local = readLocalManifest(this.componentsHome);
 +		const projected = this.projectedVersions(response);
 +		const staged = local ? stagedPendingComponents(local, appVersion, this.preparedAppVersion) : new Set<string>();
++		const deferred = local ? awaitingDeferredExtensions(local, appVersion, this.preparedAppVersion) : new Set<string>();
 +		const offered: IWso2AvailableUpdate[] = [];
 +		for (const component of response.components) {
 +			// Trust boundary: these two values become path segments (stage, rm, rename). Refuse a
@@ -1149,9 +1192,10 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +				continue;
 +			}
 +			// Downloaded for an app update and installed when that app boots. Offering it as well
-+			// would download it a second time and install it from the renderer in parallel.
++			// would download it a second time and install it from the renderer in parallel. Not when
++			// the app it waits for is not coming: it must not keep this app from a compatible fix.
 +			const deferredVersion = local?.components[component.id]?.deferredExtension?.version;
-+			if (deferredVersion && compareVersions(deferredVersion, component.version) >= 0) {
++			if (deferredVersion && deferred.has(component.id) && compareVersions(deferredVersion, component.version) >= 0) {
 +				continue;
 +			}
 +			// This exact version already stopped the app from booting and was auto-reverted. The
@@ -1413,6 +1457,14 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		} finally {
 +			// Whatever staged, even before a failure, is for the incoming app only.
 +			this.updateLocalManifest(manifest => pinPendingToApp(manifest, targets, incomingVersion));
++			// An extension is recorded only once every target is in. After a failure, one that did
++			// download has no record, and nothing else would ever remove it.
++			const recorded = readLocalManifest(this.componentsHome);
++			for (const c of targets) {
++				if (c.kind === 'extension' && recorded?.components[c.id]?.deferredExtension?.version !== c.version) {
++					this.removeStagedExtension(c.id, c.version);
++				}
++			}
 +			this.setState(replayedState(before));
 +		}
 +	}
@@ -1475,6 +1527,17 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			this.logService.info(`[wso2Update] dropping deferred ${id}@${version}: already installed at that version or newer`);
 +			this.clearDeferredExtension(id, version);
 +		}
++		// No window yet, so no renderer install in flight: any VSIX not deferred is a leftover.
++		const swept = sweepStagedExtensionDownloads(this.stagingHome, readLocalManifest(this.componentsHome));
++		if (swept.length) {
++			this.logService.info(`[wso2Update] removed unreferenced extension downloads: ${swept.join(', ')}`);
++		}
++		if (!install.length) {
++			return;
++		}
++		// The shared process normally waits for the first window, and the first window is waiting for
++		// this. Only a launch that has something to install starts it early.
++		this.startSharedProcess();
 +		for (const { id, version } of install) {
 +			try {
 +				// Rebuilt from the id and version, not read back from the manifest: a recorded path is
@@ -1844,6 +1907,10 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		const held = local ? heldBackPendingComponents(local, this.appVersion()) : new Map<string, string>();
 +		const awaitsApp = (id: string) => held.has(id) || local?.components[id]?.deferredExtension ? { pendingAwaitsAppUpdate: true } : {};
 +		const staged = local ? stagedPendingComponents(local, this.appVersion(), this.preparedAppVersion) : new Set<string>();
++		const deferred = local ? awaitingDeferredExtensions(local, this.appVersion(), this.preparedAppVersion) : new Set<string>();
++		const isExtension = (id: string, entry: ILocalComponentEntry) => entry.active?.via === 'user-extension'
++			|| !!entry.deferredExtension
++			|| !!this.productService.builtInExtensions?.some(e => e.name === id);
 +
 +		// Runtime components known from the bundled set.
 +		for (const [id, version] of Object.entries(bundled)) {
@@ -1853,7 +1920,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		if (local) {
 +			for (const [id, entry] of Object.entries(local.components)) {
 +				if (!statuses.has(id)) {
-+					statuses.set(id, { id, kind: entry.active?.via === 'user-extension' ? 'extension' : 'runtime', bundledVersion: entry.bundledVersion, activeVersion: entry.active?.version ?? entry.bundledVersion, pendingVersion: entry.pending?.version ?? entry.deferredExtension?.version, ...awaitsApp(id), overridden: !!entry.active });
++					statuses.set(id, { id, kind: isExtension(id, entry) ? 'extension' : 'runtime', bundledVersion: entry.bundledVersion, activeVersion: entry.active?.version ?? entry.bundledVersion, pendingVersion: entry.pending?.version ?? entry.deferredExtension?.version, ...awaitsApp(id), overridden: !!entry.active });
 +				}
 +			}
 +		}
@@ -1864,11 +1931,13 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +				const existing = statuses.get(component.id);
 +				const activeVersion = this.activeVersion(component.id, local);
 +				const pendingVersion = local?.components[component.id]?.pending?.version;
++				const deferredVersion = local?.components[component.id]?.deferredExtension?.version;
 +				// Not "available" if already current, already staged (pending) at that version,
 +				// auto-reverted after a crash loop, or its `requires` are unmet — mirrors
 +				// resolveOfferedUpdates so Show Components and the check command agree.
 +				const availableVersion = ((!activeVersion || compareVersions(component.version, activeVersion) > 0)
 +					&& !(pendingVersion && staged.has(component.id) && compareVersions(pendingVersion, component.version) >= 0)
++					&& !(deferredVersion && deferred.has(component.id) && compareVersions(deferredVersion, component.version) >= 0)
 +					&& !local?.components[component.id]?.failed?.some(f => f.version === component.version)
 +					&& this.requiresSatisfied(component, local, projected))
 +					? component.version : undefined;
@@ -2360,7 +2429,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,1066 @@
+@@ -0,0 +1,1136 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3226,6 +3295,76 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +	} finally {
 +		clearTimeout(timer);
 +	}
++}
++
++/**
++ * Extensions whose deferred copy is still on its way in, as far as offers for `appVersion` go: the
++ * copy's `app` requirement is met by `appVersion` or by the app update this run prepared for. Those
++ * stand in for an offer at or below their version. A copy waiting for an app that is not coming does
++ * not: it must not keep the running app from a compatible fix, the same rule stagedPendingComponents
++ * applies to runtimes. A copy with no `app` requirement (recorded before they were pinned) counts.
++ */
++export function awaitingDeferredExtensions(manifest: ILocalComponentsManifest, appVersion: string | undefined, preparedAppVersion?: string): Set<string> {
++	const awaiting = new Set<string>();
++	for (const [id, entry] of Object.entries(manifest.components)) {
++		const deferred = entry?.deferredExtension;
++		if (!deferred) {
++			continue;
++		}
++		const range = deferred.requires?.app;
++		const meets = (version: string | undefined) => !!version && !!range && satisfiesRange(version, range);
++		if (!range || meets(appVersion) || meets(preparedAppVersion)) {
++			awaiting.add(id);
++		}
++	}
++	return awaiting;
++}
++
++/**
++ * Deletes downloaded extensions under `stagingHome` that no deferred entry refers to, returning what
++ * it removed as `id@version`. Only directories holding exactly `<id>-<version>.vsix` are touched, so
++ * runtime archives kept there for a retry are left alone. Meant for startup, before any window: a
++ * VSIX staged in an earlier run is never installed by this one unless it is deferred, so anything
++ * else there is a leftover -- a download that did not finish being recorded, or a renderer install
++ * the app quit before.
++ */
++export function sweepStagedExtensionDownloads(stagingHome: string, manifest: ILocalComponentsManifest | undefined): string[] {
++	const removed: string[] = [];
++	let ids: string[];
++	try {
++		ids = fs.readdirSync(stagingHome, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
++	} catch {
++		return removed;
++	}
++	for (const id of ids) {
++		let versions: string[];
++		try {
++			versions = fs.readdirSync(path.join(stagingHome, id), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
++		} catch {
++			continue;
++		}
++		for (const version of versions) {
++			const dir = path.join(stagingHome, id, version);
++			if (manifest?.components[id]?.deferredExtension?.version === version) {
++				continue;
++			}
++			let entries: string[];
++			try {
++				entries = fs.readdirSync(dir);
++			} catch {
++				continue;
++			}
++			if (entries.length === 1 && entries[0] === `${id}-${version}.vsix`) {
++				try {
++					fs.rmSync(dir, { recursive: true, force: true });
++					removed.push(`${id}@${version}`);
++				} catch {
++					// Left for the next startup.
++				}
++			}
++		}
++	}
++	return removed;
 +}
 +
 +/** A deferred extension to install now, with its VSIX path as recorded (see ILocalComponentEntry). */
@@ -4696,7 +4835,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,709 @@
+@@ -0,0 +1,771 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -4720,7 +4859,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +import * as os from 'os';
 +import { join } from '../../../../base/common/path.js';
 +import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-+import { activatePendingRuntimeComponents, compareVersions, decideDeferredExtensions, heldBackPendingComponents, ILocalComponentsManifest, incomingAppVersionToPrepare, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, pinPendingToApp, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, stagedPendingComponents, untilSettledOrStalled, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
++import { activatePendingRuntimeComponents, awaitingDeferredExtensions, compareVersions, decideDeferredExtensions, heldBackPendingComponents, ILocalComponentsManifest, incomingAppVersionToPrepare, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, pinPendingToApp, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, stagedPendingComponents, sweepStagedExtensionDownloads, untilSettledOrStalled, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
 +
 +suite('wso2ComponentsManifest - compareVersions', () => {
 +	ensureNoDisposablesAreLeakedInTestSuite();
@@ -5158,6 +5297,68 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		} finally {
 +			clearInterval(ticker);
 +		}
++	});
++});
++
++suite('wso2ComponentsManifest - awaitingDeferredExtensions', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('counts a deferred copy only for this app or the app update being prepared', () => {
++		const manifest: ILocalComponentsManifest = {
++			schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION,
++			components: {
++				'ballerina': { deferredExtension: { version: '5.4.0', requires: { app: '>=5.1.0-alpha7' } } },
++				'legacy': { deferredExtension: { version: '1.0.0' } }, // recorded before copies were pinned
++				'mi': { active: { version: '3.0.0' } }
++			}
++		};
++		const sorted = (set: Set<string>) => [...set].sort();
++		deepStrictEqual({
++			oldAppAfterFailedUpdate: sorted(awaitingDeferredExtensions(manifest, '5.1.0-alpha6')),
++			oldAppWhileUpdatePrepared: sorted(awaitingDeferredExtensions(manifest, '5.1.0-alpha6', '5.1.0-alpha7')),
++			incomingApp: sorted(awaitingDeferredExtensions(manifest, '5.1.0-alpha7'))
++		}, {
++			oldAppAfterFailedUpdate: ['legacy'],
++			oldAppWhileUpdatePrepared: ['ballerina', 'legacy'],
++			incomingApp: ['ballerina', 'legacy']
++		});
++	});
++});
++
++suite('wso2ComponentsManifest - sweepStagedExtensionDownloads', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	let staging: string;
++	setup(() => { staging = fs.mkdtempSync(join(os.tmpdir(), 'wso2sweep-')); });
++	teardown(() => { fs.rmSync(staging, { recursive: true, force: true }); });
++
++	const put = (id: string, version: string, file: string) => {
++		fs.mkdirSync(join(staging, id, version), { recursive: true });
++		fs.writeFileSync(join(staging, id, version, file), 'x');
++	};
++
++	test('removes unreferenced VSIX downloads and nothing else', () => {
++		put('wso2.ballerina', '5.4.0', 'wso2.ballerina-5.4.0.vsix'); // deferred: kept
++		put('wso2.ballerina', '5.3.0', 'wso2.ballerina-5.3.0.vsix'); // leftover
++		put('wso2.hurl-client', '1.1.0', 'wso2.hurl-client-1.1.0.vsix'); // leftover
++		put('ballerina-runtime', '2201.14.0', 'ballerina-runtime-2201.14.0.zip'); // runtime archive: kept
++		const removed = sweepStagedExtensionDownloads(staging, {
++			schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION,
++			components: { 'wso2.ballerina': { deferredExtension: { version: '5.4.0' } } }
++		});
++		deepStrictEqual({
++			removed: removed.sort(),
++			left: ['wso2.ballerina/5.4.0', 'wso2.ballerina/5.3.0', 'wso2.hurl-client/1.1.0', 'ballerina-runtime/2201.14.0'].filter(d => fs.existsSync(join(staging, d)))
++		}, {
++			removed: ['wso2.ballerina@5.3.0', 'wso2.hurl-client@1.1.0'],
++			left: ['wso2.ballerina/5.4.0', 'ballerina-runtime/2201.14.0']
++		});
++	});
++
++	test('does nothing when there is no staging directory', () => {
++		deepStrictEqual(sweepStagedExtensionDownloads(join(staging, 'missing'), undefined), []);
 +	});
 +});
 +
@@ -5723,3 +5924,26 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/update/browser/upd
  		dom.clearNode(this.content);
  		this.content.classList.remove('prominent', 'progress-indefinite', 'progress-percent', 'update-disabled');
  		this.content.style.removeProperty('--update-progress');
+Index: product-integrator/lib/vscode/src/vs/platform/sharedProcess/electron-main/sharedProcess.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/platform/sharedProcess/electron-main/sharedProcess.ts
++++ product-integrator/lib/vscode/src/vs/platform/sharedProcess/electron-main/sharedProcess.ts
+@@ -98,6 +98,18 @@ export class SharedProcess extends Dispo
+ 		this.utilityProcess = undefined;
+ 	}
+ 
++	/**
++	 * WSO2: spawns the shared process without waiting for a window to ask for it. Startup normally
++	 * holds it until the first window connects, so the two do not compete; a caller that must use it
++	 * before any window opens (installing extensions downloaded with an app update) opts in here.
++	 */
++	startWithoutWindow(): void {
++		if (!this.firstWindowConnectionBarrier.isOpen()) {
++			this.logService.trace('[SharedProcess] starting before the first window');
++			this.firstWindowConnectionBarrier.open();
++		}
++	}
++
+ 	private _whenReady: Promise<void> | undefined = undefined;
+ 	whenReady(): Promise<void> {
+ 		if (!this._whenReady) {
