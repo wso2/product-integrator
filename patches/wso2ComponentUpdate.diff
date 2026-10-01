@@ -283,17 +283,64 @@ Index: product-integrator/lib/vscode/src/vs/code/electron-main/app.ts
  import { IOpenURLOptions, IURLService } from '../../platform/url/common/url.js';
  import { URLHandlerChannelClient, URLHandlerRouter } from '../../platform/url/common/urlIpc.js';
  import { NativeURLService } from '../../platform/url/common/urlService.js';
-@@ -1102,6 +1104,9 @@ export class CodeApplication extends Dis
+@@ -654,10 +656,10 @@ export class CodeApplication extends Dis
+ 		]);
+ 
+ 		// Shared process
+-		const { sharedProcessReady, sharedProcessClient } = this.setupSharedProcess(machineId, sqmId, devDeviceId);
++		const { sharedProcessReady, sharedProcessClient, startSharedProcess } = this.setupSharedProcess(machineId, sqmId, devDeviceId);
+ 
+ 		// Services
+-		const appInstantiationService = await this.initServices(machineId, sqmId, devDeviceId, sharedProcessReady);
++		const appInstantiationService = await this.initServices(machineId, sqmId, devDeviceId, sharedProcessReady, startSharedProcess);
+ 
+ 		// Error telemetry
+ 		appInstantiationService.invokeFunction(accessor => this._register(new ErrorTelemetry(accessor.get(ILogService), accessor.get(ITelemetryService))));
+@@ -685,6 +687,11 @@ export class CodeApplication extends Dis
+ 		// Signal phase: ready - before opening first window
+ 		this.lifecycleMainService.phase = LifecycleMainPhase.Ready;
+ 
++		// WSO2: extensions downloaded with an app update install before the first window opens, so
++		// its extension host starts on them rather than on the versions they replace. Bounded, and
++		// a no-op on every launch that does not follow an app update.
++		await appInstantiationService.invokeFunction(accessor => accessor.get(IWso2ComponentUpdateService).whenDeferredExtensionsInstalled());
++
+ 		// Open Windows
+ 		await appInstantiationService.invokeFunction(accessor => this.openFirstWindow(accessor, initialProtocolUrls));
+ 
+@@ -1056,7 +1063,7 @@ export class CodeApplication extends Dis
+ 		return false;
+ 	}
+ 
+-	private setupSharedProcess(machineId: string, sqmId: string, devDeviceId: string): { sharedProcessReady: Promise<MessagePortClient>; sharedProcessClient: Promise<MessagePortClient> } {
++	private setupSharedProcess(machineId: string, sqmId: string, devDeviceId: string): { sharedProcessReady: Promise<MessagePortClient>; sharedProcessClient: Promise<MessagePortClient>; startSharedProcess: () => void } {
+ 		const sharedProcess = this._register(this.mainInstantiationService.createInstance(SharedProcess, machineId, sqmId, devDeviceId));
+ 
+ 		this._register(sharedProcess.onDidCrash(() => this.windowsMainService?.sendToFocused('vscode:reportSharedProcessCrash')));
+@@ -1077,10 +1084,10 @@ export class CodeApplication extends Dis
+ 			return sharedProcessClient;
+ 		})();
+ 
+-		return { sharedProcessReady, sharedProcessClient };
++		return { sharedProcessReady, sharedProcessClient, startSharedProcess: () => sharedProcess.startWithoutWindow() };
+ 	}
+ 
+-	private async initServices(machineId: string, sqmId: string, devDeviceId: string, sharedProcessReady: Promise<MessagePortClient>): Promise<IInstantiationService> {
++	private async initServices(machineId: string, sqmId: string, devDeviceId: string, sharedProcessReady: Promise<MessagePortClient>, startSharedProcess: () => void): Promise<IInstantiationService> {
+ 		const services = new ServiceCollection();
+ 
+ 		// Update
+@@ -1102,6 +1109,9 @@ export class CodeApplication extends Dis
  				break;
  		}
  
 +		// WSO2 component updates
-+		services.set(IWso2ComponentUpdateService, new SyncDescriptor(Wso2ComponentUpdateService));
++		services.set(IWso2ComponentUpdateService, new SyncDescriptor(Wso2ComponentUpdateService, [getDelayedChannel(sharedProcessReady.then(client => client.getChannel('extensions'))), startSharedProcess]));
 +
  		// Windows
  		services.set(IWindowsMainService, new SyncDescriptor(WindowsMainService, [machineId, sqmId, devDeviceId, this.userEnv], false));
  		services.set(IAuxiliaryWindowsMainService, new SyncDescriptor(AuxiliaryWindowsMainService, undefined, false));
-@@ -1283,6 +1288,9 @@ export class CodeApplication extends Dis
+@@ -1283,6 +1293,9 @@ export class CodeApplication extends Dis
  		const updateChannel = new UpdateChannel(updateService);
  		mainProcessElectronServer.registerChannel('update', updateChannel);
  
@@ -307,7 +354,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Updat
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Update.ts
-@@ -0,0 +1,261 @@
+@@ -0,0 +1,268 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -568,12 +615,19 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Updat
 +	 * which case the new app's first check fetches what is missing.
 +	 */
 +	prepareForAppUpdate(incomingVersion: string | undefined): Promise<void>;
++
++	/**
++	 * Resolves once extensions downloaded with an app update have been installed on this one, or
++	 * after a bounded wait. Never rejects. Startup awaits it before opening the first window, so the
++	 * extension host starts on the new versions.
++	 */
++	whenDeferredExtensionsInstalled(): Promise<void>;
 +}
 Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
-@@ -0,0 +1,1622 @@
+@@ -0,0 +1,1797 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -598,8 +652,11 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +import * as os from 'os';
 +import * as path from '../../../base/common/path.js';
 +import { shell } from 'electron';
++import { raceTimeout } from '../../../base/common/async.js';
 +import { Emitter } from '../../../base/common/event.js';
 +import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
++import { URI } from '../../../base/common/uri.js';
++import { IChannel } from '../../../base/parts/ipc/common/ipc.js';
 +import { CancellationToken } from '../../../base/common/cancellation.js';
 +import { listenStream } from '../../../base/common/stream.js';
 +import { extract } from '../../../base/node/zip.js';
@@ -623,7 +680,9 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	Wso2UpdateStateType
 +} from '../common/wso2Update.js';
 +import {
++	awaitingDeferredExtensions,
 +	compareVersions,
++	decideDeferredExtensions,
 +	ensureExecutablePermissions,
 +	getComponentsHome,
 +	getComponentsManifestPath,
@@ -642,6 +701,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	reconcileBundledVersions,
 +	satisfiesRange,
 +	stagedPendingComponents,
++	sweepStagedExtensionDownloads,
 +	untilSettledOrStalled,
 +	writeLocalManifest
 +} from '../node/wso2ComponentsManifest.js';
@@ -681,6 +741,13 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 + * This only releases a restart held behind a download that has stopped moving.
 + */
 +const PREPARE_STALL_MS = 3 * 60 * 1000;
++
++/**
++ * How long the first window waits for extensions downloaded with an app update to install. Past it
++ * the window opens anyway and the install finishes behind it; the extension host then starts on the
++ * old version and picks the new one up on its next restart.
++ */
++const DEFERRED_INSTALL_WAIT_MS = 60 * 1000;
 +const DOWNLOAD_RETRY_DELAYS_MS = [3000, 10000];
 +
 +/**
@@ -832,7 +899,17 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		return { Authorization: `Bearer ${this.entitlementToken}` };
 +	}
 +
++	/** Installing extensions deferred from an app update; see whenDeferredExtensionsInstalled(). */
++	private readonly deferredExtensionsInstall: Promise<void>;
++
 +	constructor(
++		/** The shared process's extension-management channel; calls wait until that process is ready. */
++		private readonly sharedProcessExtensions: IChannel,
++		/**
++		 * Starts the shared process before any window asks for it. Without it, a call on the channel
++		 * above made before the first window opens waits for a window that is waiting for this.
++		 */
++		private readonly startSharedProcess: () => void,
 +		@ILifecycleMainService private readonly lifecycleMainService: ILifecycleMainService,
 +		@IConfigurationService private readonly configurationService: IConfigurationService,
 +		@IRequestService private readonly requestService: IRequestService,
@@ -858,6 +935,11 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			this.logService.warn('[wso2Update] health/GC pass failed', err);
 +		}
 +
++		// Extensions downloaded for this app while the previous one was running. Started here, not
++		// on first use, because the first window waits on it (whenDeferredExtensionsInstalled).
++		this.deferredExtensionsInstall = this.installDeferredExtensions()
++			.catch(err => this.logService.warn('[wso2Update] installing deferred extensions failed', err));
++
 +		if (!this.updateBaseUrl) {
 +			this.logService.info('[wso2Update] disabled (no wso2UpdateUrl configured)');
 +			return;
@@ -870,6 +952,10 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +
 +	private get dataFolderName(): string {
 +		return this.productService.dataFolderName;
++	}
++
++	private get dataFolderHome(): string {
++		return path.join(os.homedir(), this.dataFolderName);
 +	}
 +
 +	private get componentsHome(): string {
@@ -1081,6 +1167,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		const local = readLocalManifest(this.componentsHome);
 +		const projected = this.projectedVersions(response);
 +		const staged = local ? stagedPendingComponents(local, appVersion, this.preparedAppVersion) : new Set<string>();
++		const deferred = local ? awaitingDeferredExtensions(local, appVersion, this.preparedAppVersion) : new Set<string>();
 +		const offered: IWso2AvailableUpdate[] = [];
 +		for (const component of response.components) {
 +			// Trust boundary: these two values become path segments (stage, rm, rename). Refuse a
@@ -1102,6 +1189,13 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			// coming: it must not stand in the way of a compatible update this app can take.
 +			const pendingVersion = local?.components[component.id]?.pending?.version;
 +			if (pendingVersion && staged.has(component.id) && compareVersions(pendingVersion, component.version) >= 0) {
++				continue;
++			}
++			// Downloaded for an app update and installed when that app boots. Offering it as well
++			// would download it a second time and install it from the renderer in parallel. Not when
++			// the app it waits for is not coming: it must not keep this app from a compatible fix.
++			const deferredVersion = local?.components[component.id]?.deferredExtension?.version;
++			if (deferredVersion && deferred.has(component.id) && compareVersions(deferredVersion, component.version) >= 0) {
 +				continue;
 +			}
 +			// This exact version already stopped the app from booting and was auto-reverted. The
@@ -1341,10 +1435,15 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		const response = await this.fetchUpdates(incomingVersion);
 +		// Not lastResponse: that describes the running app, and Show Components and downloadUpdates()
 +		// act on it. These offers are for an app that is not running yet.
-+		const wanted = new Set(response
-+			? this.resolveOfferedUpdates(response, incomingVersion).filter(u => u.kind !== 'extension').map(u => u.id)
-+			: []);
-+		const targets = response?.components.filter(c => wanted.has(c.id)) ?? [];
++		const wanted = new Set(response ? this.resolveOfferedUpdates(response, incomingVersion).map(u => u.id) : []);
++		// An extension the running app can already take goes through the regular check and installs
++		// now. Only one it cannot is downloaded here, to install when the incoming app boots. "Can"
++		// means against what is active on this machine NOW (no projection): an extension that needs a
++		// runtime staged in this very pass cannot run until the restart either.
++		const local = readLocalManifest(this.componentsHome);
++		const nothingProjected = new Map<string, string>();
++		const targets = response?.components.filter(c => wanted.has(c.id)
++			&& (c.kind !== 'extension' || !this.requiresSatisfied(c, local, nothingProjected))) ?? [];
 +
 +		if (!targets.length) {
 +			return;
@@ -1353,22 +1452,139 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		const before = this._state;
 +		this.setState({ type: Wso2UpdateStateType.Downloading });
 +		try {
-+			await this.fetchComponents(targets, incomingVersion);
++			const { stagedExtensions } = await this.fetchComponents(targets, incomingVersion);
++			this.recordDeferredExtensions(stagedExtensions, targets, incomingVersion);
 +		} finally {
 +			// Whatever staged, even before a failure, is for the incoming app only.
 +			this.updateLocalManifest(manifest => pinPendingToApp(manifest, targets, incomingVersion));
++			// An extension is recorded only once every target is in. After a failure, one that did
++			// download has no record, and nothing else would ever remove it.
++			const recorded = readLocalManifest(this.componentsHome);
++			for (const c of targets) {
++				if (c.kind === 'extension' && recorded?.components[c.id]?.deferredExtension?.version !== c.version) {
++					this.removeStagedExtension(c.id, c.version);
++				}
++			}
 +			this.setState(replayedState(before));
 +		}
 +	}
 +
-+	private async downloadExtension(component: IWso2ComponentOffer): Promise<string> {
-+		// Same trust boundary as stageRuntime: id and version become path segments.
-+		if (!isSafePathSegment(component.id) || !isSafePathSegment(component.version)) {
-+			throw new Error(`Unsafe component id/version: '${component.id}' '${component.version}'`);
++	/**
++	 * Records extensions downloaded for an app update, to be installed when it boots. Nothing tells
++	 * the renderer about them: the renderer that would install them now is the old app's. Pinned to
++	 * `incomingVersion` like the runtimes staged with them (pinPendingToApp), so one deferred only for
++	 * a runtime it needs does not install on the old app should that runtime reach it another way.
++	 */
++	private recordDeferredExtensions(staged: readonly IWso2StagedExtension[], offers: readonly IWso2ComponentOffer[], incomingVersion: string): void {
++		if (!staged.length) {
++			return;
 +		}
-+		const dir = path.join(this.stagingHome, component.id, component.version);
-+		await fs.promises.mkdir(dir, { recursive: true });
-+		const vsixPath = path.join(dir, `${component.id}-${component.version}.vsix`);
++		const requires = new Map(offers.map(c => [c.id, c.requires]));
++		const superseded: { id: string; version: string }[] = [];
++		this.updateLocalManifest(manifest => {
++			for (const extension of staged) {
++				const entry = manifest.components[extension.id] ?? (manifest.components[extension.id] = {});
++				entry.bundledVersion = entry.bundledVersion ?? this.bundledVersion(extension.id);
++				const previous = entry.deferredExtension?.version;
++				if (previous && previous !== extension.version) {
++					superseded.push({ id: extension.id, version: previous });
++				}
++				const extensionRequires = requires.get(extension.id);
++				entry.deferredExtension = {
++					version: extension.version,
++					path: path.relative(this.dataFolderHome, extension.vsixPath),
++					installedAt: new Date().toISOString(),
++					requires: { ...extensionRequires, app: extensionRequires?.app ?? `>=${incomingVersion}` }
++				};
++			}
++		});
++		for (const { id, version } of superseded) {
++			this.removeStagedExtension(id, version);
++		}
++		this.logService.info(`[wso2Update] deferred ${staged.map(e => `${e.id}@${e.version}`).join(', ')} to the app update`);
++	}
++
++	async whenDeferredExtensionsInstalled(): Promise<void> {
++		await raceTimeout(this.deferredExtensionsInstall, DEFERRED_INSTALL_WAIT_MS, () =>
++			this.logService.warn(`[wso2Update] deferred extensions still installing after ${DEFERRED_INSTALL_WAIT_MS / 1000}s; opening the window without waiting`));
++	}
++
++	/**
++	 * Installs, through the shared process, the extensions that were downloaded for this app while
++	 * the previous one was running. Runs at startup, before any window, so the extension host starts
++	 * on the new versions instead of activating the old ones against the new runtimes.
++	 *
++	 * An install that fails is dropped rather than retried: the next check offers the extension the
++	 * ordinary way. One that this app does not meet the requirements of stays for the app it waits for.
++	 */
++	private async installDeferredExtensions(): Promise<void> {
++		const local = readLocalManifest(this.componentsHome);
++		if (!local) {
++			return;
++		}
++		const { install, discard } = decideDeferredExtensions(local, this.appVersion(), id => this.activeVersion(id, local));
++		for (const { id, version } of discard) {
++			this.logService.info(`[wso2Update] dropping deferred ${id}@${version}: already installed at that version or newer`);
++			this.clearDeferredExtension(id, version);
++		}
++		// No window yet, so no renderer install in flight: any VSIX not deferred is a leftover.
++		const swept = sweepStagedExtensionDownloads(this.stagingHome, readLocalManifest(this.componentsHome));
++		if (swept.length) {
++			this.logService.info(`[wso2Update] removed unreferenced extension downloads: ${swept.join(', ')}`);
++		}
++		if (!install.length) {
++			return;
++		}
++		// The shared process normally waits for the first window, and the first window is waiting for
++		// this. Only a launch that has something to install starts it early.
++		this.startSharedProcess();
++		for (const { id, version } of install) {
++			try {
++				// Rebuilt from the id and version, not read back from the manifest: a recorded path is
++				// just a string in a JSON file, while these are held to the same shape as at download.
++				const vsix = this.stagedExtensionPath(id, version);
++				this.logService.info(`[wso2Update] installing deferred ${id}@${version} from ${vsix}`);
++				// The options the renderer install uses (see the workbench contribution): a shadow of
++				// the built-in copy, pinned so marketplace auto-update leaves it alone.
++				await this.sharedProcessExtensions.call('install', [URI.file(vsix), { isBuiltin: true, pinned: true }]);
++				await this.recordExtensionInstalled(id, version);
++			} catch (err) {
++				this.logService.warn(`[wso2Update] could not install deferred ${id}@${version}; it will be offered again`, err);
++				this.clearDeferredExtension(id, version);
++			}
++		}
++	}
++
++	/** Forgets a deferred extension and deletes its download. */
++	private clearDeferredExtension(id: string, version: string): void {
++		this.updateLocalManifest(manifest => {
++			const entry = manifest.components[id];
++			if (entry?.deferredExtension?.version === version) {
++				entry.deferredExtension = null;
++			}
++		});
++		this.removeStagedExtension(id, version);
++	}
++
++	private removeStagedExtension(id: string, version: string): void {
++		if (isSafePathSegment(id) && isSafePathSegment(version)) {
++			fs.promises.rm(path.join(this.stagingHome, id, version), { recursive: true, force: true })
++				.catch(err => this.logService.warn(`[wso2Update] could not clean staged ${id}@${version}`, err));
++		}
++	}
++
++	/** Where an extension's VSIX is staged. Throws for an id or version that could leave the staging tree. */
++	private stagedExtensionPath(id: string, version: string): string {
++		// Same trust boundary as stageRuntime: id and version become path segments.
++		if (!isSafePathSegment(id) || !isSafePathSegment(version)) {
++			throw new Error(`Unsafe component id/version: '${id}' '${version}'`);
++		}
++		return path.join(this.stagingHome, id, version, `${id}-${version}.vsix`);
++	}
++
++	private async downloadExtension(component: IWso2ComponentOffer): Promise<string> {
++		const vsixPath = this.stagedExtensionPath(component.id, component.version);
++		await fs.promises.mkdir(path.dirname(vsixPath), { recursive: true });
 +		await this.downloadAndVerify(component.artifact.url, vsixPath, {
 +			id: component.id,
 +			version: component.version,
@@ -1689,8 +1905,12 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		const statuses = new Map<string, IWso2ComponentStatus>();
 +		// A restart of this app leaves these where they are, so "pending restart" would be untrue.
 +		const held = local ? heldBackPendingComponents(local, this.appVersion()) : new Map<string, string>();
-+		const awaitsApp = (id: string) => held.has(id) ? { pendingAwaitsAppUpdate: true } : {};
++		const awaitsApp = (id: string) => held.has(id) || local?.components[id]?.deferredExtension ? { pendingAwaitsAppUpdate: true } : {};
 +		const staged = local ? stagedPendingComponents(local, this.appVersion(), this.preparedAppVersion) : new Set<string>();
++		const deferred = local ? awaitingDeferredExtensions(local, this.appVersion(), this.preparedAppVersion) : new Set<string>();
++		const isExtension = (id: string, entry: ILocalComponentEntry) => entry.active?.via === 'user-extension'
++			|| !!entry.deferredExtension
++			|| !!this.productService.builtInExtensions?.some(e => e.name === id);
 +
 +		// Runtime components known from the bundled set.
 +		for (const [id, version] of Object.entries(bundled)) {
@@ -1700,7 +1920,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		if (local) {
 +			for (const [id, entry] of Object.entries(local.components)) {
 +				if (!statuses.has(id)) {
-+					statuses.set(id, { id, kind: entry.active?.via === 'user-extension' ? 'extension' : 'runtime', bundledVersion: entry.bundledVersion, activeVersion: entry.active?.version ?? entry.bundledVersion, pendingVersion: entry.pending?.version, ...awaitsApp(id), overridden: !!entry.active });
++					statuses.set(id, { id, kind: isExtension(id, entry) ? 'extension' : 'runtime', bundledVersion: entry.bundledVersion, activeVersion: entry.active?.version ?? entry.bundledVersion, pendingVersion: entry.pending?.version ?? entry.deferredExtension?.version, ...awaitsApp(id), overridden: !!entry.active });
 +				}
 +			}
 +		}
@@ -1711,11 +1931,13 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +				const existing = statuses.get(component.id);
 +				const activeVersion = this.activeVersion(component.id, local);
 +				const pendingVersion = local?.components[component.id]?.pending?.version;
++				const deferredVersion = local?.components[component.id]?.deferredExtension?.version;
 +				// Not "available" if already current, already staged (pending) at that version,
 +				// auto-reverted after a crash loop, or its `requires` are unmet — mirrors
 +				// resolveOfferedUpdates so Show Components and the check command agree.
 +				const availableVersion = ((!activeVersion || compareVersions(component.version, activeVersion) > 0)
 +					&& !(pendingVersion && staged.has(component.id) && compareVersions(pendingVersion, component.version) >= 0)
++					&& !(deferredVersion && deferred.has(component.id) && compareVersions(deferredVersion, component.version) >= 0)
 +					&& !local?.components[component.id]?.failed?.some(f => f.version === component.version)
 +					&& this.requiresSatisfied(component, local, projected))
 +					? component.version : undefined;
@@ -1725,7 +1947,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +					bundledVersion: existing?.bundledVersion ?? this.bundledVersion(component.id),
 +					activeVersion: existing?.activeVersion ?? activeVersion,
 +					availableVersion,
-+					pendingVersion: existing?.pendingVersion ?? local?.components[component.id]?.pending?.version,
++					pendingVersion: existing?.pendingVersion ?? local?.components[component.id]?.pending?.version ?? local?.components[component.id]?.deferredExtension?.version,
 +					...awaitsApp(component.id),
 +					overridden: existing?.overridden ?? !!local?.components[component.id]?.active
 +				});
@@ -1776,16 +1998,23 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	}
 +
 +	async recordExtensionInstalled(id: string, version: string): Promise<void> {
++		let supersededDeferred: string | undefined;
 +		this.updateLocalManifest(manifest => {
 +			const entry = manifest.components[id] ?? (manifest.components[id] = {});
 +			entry.bundledVersion = entry.bundledVersion ?? this.bundledVersion(id);
 +			entry.active = { version, via: 'user-extension', installedAt: new Date().toISOString(), healthy: true };
++			// Installed at or past a copy deferred to an app update: that copy has nothing left to do.
++			const deferred = entry.deferredExtension;
++			if (deferred && compareVersions(deferred.version, version) <= 0) {
++				entry.deferredExtension = null;
++				supersededDeferred = deferred.version !== version ? deferred.version : undefined;
++			}
 +		});
 +		// The staged VSIX has served its purpose; nothing re-reads it, so every kept copy is pure
 +		// disk growth (extensions are tens of MB and update often).
-+		if (isSafePathSegment(id) && isSafePathSegment(version)) {
-+			await fs.promises.rm(path.join(this.stagingHome, id, version), { recursive: true, force: true })
-+				.catch(err => this.logService.warn(`[wso2Update] could not clean staged ${id}@${version}`, err));
++		this.removeStagedExtension(id, version);
++		if (supersededDeferred) {
++			this.removeStagedExtension(id, supersededDeferred);
 +		}
 +	}
 +
@@ -2200,7 +2429,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,1014 @@
+@@ -0,0 +1,1136 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2254,6 +2483,12 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +	active?: ILocalComponentVersion | null;
 +	previous?: ILocalComponentVersion | null;
 +	pending?: ILocalComponentVersion | null;
++	/**
++	 * An extension downloaded for an app update that is not running yet, installed by the main
++	 * process when that app boots and before any window opens, so the extension host starts on it.
++	 * Kept apart from `pending`, which is runtime activation's: `path` is a VSIX, not a runtime root.
++	 */
++	deferredExtension?: ILocalComponentVersion | null;
 +	/**
 +	 * Versions auto-reverted after they kept the app from booting. Recorded so the same version is
 +	 * not offered, downloaded and activated again on the very next check — which, since the revert
@@ -3060,6 +3295,122 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +	} finally {
 +		clearTimeout(timer);
 +	}
++}
++
++/**
++ * Extensions whose deferred copy is still on its way in, as far as offers for `appVersion` go: the
++ * copy's `app` requirement is met by `appVersion` or by the app update this run prepared for. Those
++ * stand in for an offer at or below their version. A copy waiting for an app that is not coming does
++ * not: it must not keep the running app from a compatible fix, the same rule stagedPendingComponents
++ * applies to runtimes. A copy with no `app` requirement (recorded before they were pinned) counts.
++ */
++export function awaitingDeferredExtensions(manifest: ILocalComponentsManifest, appVersion: string | undefined, preparedAppVersion?: string): Set<string> {
++	const awaiting = new Set<string>();
++	for (const [id, entry] of Object.entries(manifest.components)) {
++		const deferred = entry?.deferredExtension;
++		if (!deferred) {
++			continue;
++		}
++		const range = deferred.requires?.app;
++		const meets = (version: string | undefined) => !!version && !!range && satisfiesRange(version, range);
++		if (!range || meets(appVersion) || meets(preparedAppVersion)) {
++			awaiting.add(id);
++		}
++	}
++	return awaiting;
++}
++
++/**
++ * Deletes downloaded extensions under `stagingHome` that no deferred entry refers to, returning what
++ * it removed as `id@version`. Only directories holding exactly `<id>-<version>.vsix` are touched, so
++ * runtime archives kept there for a retry are left alone. Meant for startup, before any window: a
++ * VSIX staged in an earlier run is never installed by this one unless it is deferred, so anything
++ * else there is a leftover -- a download that did not finish being recorded, or a renderer install
++ * the app quit before.
++ */
++export function sweepStagedExtensionDownloads(stagingHome: string, manifest: ILocalComponentsManifest | undefined): string[] {
++	const removed: string[] = [];
++	let ids: string[];
++	try {
++		ids = fs.readdirSync(stagingHome, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
++	} catch {
++		return removed;
++	}
++	for (const id of ids) {
++		let versions: string[];
++		try {
++			versions = fs.readdirSync(path.join(stagingHome, id), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
++		} catch {
++			continue;
++		}
++		for (const version of versions) {
++			const dir = path.join(stagingHome, id, version);
++			if (manifest?.components[id]?.deferredExtension?.version === version) {
++				continue;
++			}
++			let entries: string[];
++			try {
++				entries = fs.readdirSync(dir);
++			} catch {
++				continue;
++			}
++			if (entries.length === 1 && entries[0] === `${id}-${version}.vsix`) {
++				try {
++					fs.rmSync(dir, { recursive: true, force: true });
++					removed.push(`${id}@${version}`);
++				} catch {
++					// Left for the next startup.
++				}
++			}
++		}
++	}
++	return removed;
++}
++
++/** A deferred extension to install now, with its VSIX path as recorded (see ILocalComponentEntry). */
++export interface IDeferredExtensionInstall {
++	readonly id: string;
++	readonly version: string;
++	readonly path: string;
++}
++
++/**
++ * What to do, at boot, with each extension downloaded for an app update. `install` what this app
++ * meets the requirements of; `discard` what it already has at that version or newer (the new app
++ * may bundle it); anything else stays deferred, since the app it waits for may still come.
++ *
++ * `installedVersion` answers for extensions and runtimes alike, after runtime activation has run.
++ * As in heldBackPendingComponents, `app` requirements are not evaluated without a running version.
++ */
++export function decideDeferredExtensions(
++	manifest: ILocalComponentsManifest,
++	runningAppVersion: string | undefined,
++	installedVersion: (id: string) => string | undefined
++): { readonly install: IDeferredExtensionInstall[]; readonly discard: { readonly id: string; readonly version: string }[] } {
++	const install: IDeferredExtensionInstall[] = [];
++	const discard: { id: string; version: string }[] = [];
++	for (const [id, entry] of Object.entries(manifest.components)) {
++		const deferred = entry.deferredExtension;
++		if (!deferred) {
++			continue;
++		}
++		const installed = installedVersion(id);
++		if (!deferred.path || (installed && compareVersions(deferred.version, installed) <= 0)) {
++			discard.push({ id, version: deferred.version });
++			continue;
++		}
++		const met = Object.entries(deferred.requires ?? {}).every(([depId, range]) => {
++			if (depId === 'app' && !runningAppVersion) {
++				return true;
++			}
++			const depVersion = depId === 'app' ? runningAppVersion : installedVersion(depId);
++			return !!depVersion && satisfiesRange(depVersion, range);
++		});
++		if (met) {
++			install.push({ id, version: deferred.version, path: deferred.path });
++		}
++	}
++	return { install, discard };
 +}
 +
 +/**
@@ -4484,7 +4835,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,663 @@
+@@ -0,0 +1,771 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -4508,7 +4859,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +import * as os from 'os';
 +import { join } from '../../../../base/common/path.js';
 +import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-+import { activatePendingRuntimeComponents, compareVersions, heldBackPendingComponents, ILocalComponentsManifest, incomingAppVersionToPrepare, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, pinPendingToApp, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, stagedPendingComponents, untilSettledOrStalled, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
++import { activatePendingRuntimeComponents, awaitingDeferredExtensions, compareVersions, decideDeferredExtensions, heldBackPendingComponents, ILocalComponentsManifest, incomingAppVersionToPrepare, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, pinPendingToApp, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, stagedPendingComponents, sweepStagedExtensionDownloads, untilSettledOrStalled, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
 +
 +suite('wso2ComponentsManifest - compareVersions', () => {
 +	ensureNoDisposablesAreLeakedInTestSuite();
@@ -4946,6 +5297,114 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		} finally {
 +			clearInterval(ticker);
 +		}
++	});
++});
++
++suite('wso2ComponentsManifest - awaitingDeferredExtensions', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('counts a deferred copy only for this app or the app update being prepared', () => {
++		const manifest: ILocalComponentsManifest = {
++			schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION,
++			components: {
++				'ballerina': { deferredExtension: { version: '5.4.0', requires: { app: '>=5.1.0-alpha7' } } },
++				'legacy': { deferredExtension: { version: '1.0.0' } }, // recorded before copies were pinned
++				'mi': { active: { version: '3.0.0' } }
++			}
++		};
++		const sorted = (set: Set<string>) => [...set].sort();
++		deepStrictEqual({
++			oldAppAfterFailedUpdate: sorted(awaitingDeferredExtensions(manifest, '5.1.0-alpha6')),
++			oldAppWhileUpdatePrepared: sorted(awaitingDeferredExtensions(manifest, '5.1.0-alpha6', '5.1.0-alpha7')),
++			incomingApp: sorted(awaitingDeferredExtensions(manifest, '5.1.0-alpha7'))
++		}, {
++			oldAppAfterFailedUpdate: ['legacy'],
++			oldAppWhileUpdatePrepared: ['ballerina', 'legacy'],
++			incomingApp: ['ballerina', 'legacy']
++		});
++	});
++});
++
++suite('wso2ComponentsManifest - sweepStagedExtensionDownloads', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	let staging: string;
++	setup(() => { staging = fs.mkdtempSync(join(os.tmpdir(), 'wso2sweep-')); });
++	teardown(() => { fs.rmSync(staging, { recursive: true, force: true }); });
++
++	const put = (id: string, version: string, file: string) => {
++		fs.mkdirSync(join(staging, id, version), { recursive: true });
++		fs.writeFileSync(join(staging, id, version, file), 'x');
++	};
++
++	test('removes unreferenced VSIX downloads and nothing else', () => {
++		put('wso2.ballerina', '5.4.0', 'wso2.ballerina-5.4.0.vsix'); // deferred: kept
++		put('wso2.ballerina', '5.3.0', 'wso2.ballerina-5.3.0.vsix'); // leftover
++		put('wso2.hurl-client', '1.1.0', 'wso2.hurl-client-1.1.0.vsix'); // leftover
++		put('ballerina-runtime', '2201.14.0', 'ballerina-runtime-2201.14.0.zip'); // runtime archive: kept
++		const removed = sweepStagedExtensionDownloads(staging, {
++			schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION,
++			components: { 'wso2.ballerina': { deferredExtension: { version: '5.4.0' } } }
++		});
++		deepStrictEqual({
++			removed: removed.sort(),
++			left: ['wso2.ballerina/5.4.0', 'wso2.ballerina/5.3.0', 'wso2.hurl-client/1.1.0', 'ballerina-runtime/2201.14.0'].filter(d => fs.existsSync(join(staging, d)))
++		}, {
++			removed: ['wso2.ballerina@5.3.0', 'wso2.hurl-client@1.1.0'],
++			left: ['wso2.ballerina/5.4.0', 'ballerina-runtime/2201.14.0']
++		});
++	});
++
++	test('does nothing when there is no staging directory', () => {
++		deepStrictEqual(sweepStagedExtensionDownloads(join(staging, 'missing'), undefined), []);
++	});
++});
++
++suite('wso2ComponentsManifest - decideDeferredExtensions', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	const vsix = (id: string, version: string) => join('staging', id, version, `${id}-${version}.vsix`);
++	const manifest: ILocalComponentsManifest = {
++		schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION,
++		components: {
++			'ballerina': { deferredExtension: { version: '5.4.0', path: vsix('ballerina', '5.4.0'), requires: { app: '>=5.1.0-alpha7' } } },
++			'wso2-integrator': { deferredExtension: { version: '1.2.0', path: vsix('wso2-integrator', '1.2.0'), requires: { app: '>=5.1.0-alpha7' } } },
++			'bi': { deferredExtension: { version: '2.0.0', path: vsix('bi', '2.0.0'), requires: { 'ballerina-runtime': '>=2201.14.0-alpha' } } },
++			'mi': { deferredExtension: { version: '3.0.0', path: vsix('mi', '3.0.0'), requires: { 'micro-integrator': '>=4.5.0' } } },
++			'no-path': { deferredExtension: { version: '1.0.0' } },
++			'plain-runtime': { pending: { version: '1.0.0', path: join('components', 'plain-runtime', '1.0.0') } }
++		}
++	};
++	const installed: { [id: string]: string } = {
++		'ballerina': '5.3.0',
++		'wso2-integrator': '1.2.0', // the new app bundles the version that was deferred
++		'bi': '1.9.0',
++		'ballerina-runtime': '2201.14.0-alpha'
++		// 'micro-integrator' is not installed at all
++	};
++
++	test('installs what the running app meets, drops what it already has, and holds the rest', () => {
++		deepStrictEqual(decideDeferredExtensions(manifest, '5.1.0-alpha7', id => installed[id]), {
++			install: [
++				{ id: 'ballerina', version: '5.4.0', path: vsix('ballerina', '5.4.0') },
++				{ id: 'bi', version: '2.0.0', path: vsix('bi', '2.0.0') }
++			],
++			discard: [
++				{ id: 'wso2-integrator', version: '1.2.0' },
++				{ id: 'no-path', version: '1.0.0' }
++			]
++		});
++	});
++
++	test('holds extensions for the app update when the old app boots instead', () => {
++		deepStrictEqual(decideDeferredExtensions(manifest, '5.1.0-alpha6', id => installed[id]).install.map(e => e.id), ['bi']);
++	});
++
++	test('does not evaluate app requirements without a running version', () => {
++		deepStrictEqual(decideDeferredExtensions(manifest, undefined, id => installed[id]).install.map(e => e.id), ['ballerina', 'bi']);
 +	});
 +});
 +
@@ -5465,3 +5924,26 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/update/browser/upd
  		dom.clearNode(this.content);
  		this.content.classList.remove('prominent', 'progress-indefinite', 'progress-percent', 'update-disabled');
  		this.content.style.removeProperty('--update-progress');
+Index: product-integrator/lib/vscode/src/vs/platform/sharedProcess/electron-main/sharedProcess.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/platform/sharedProcess/electron-main/sharedProcess.ts
++++ product-integrator/lib/vscode/src/vs/platform/sharedProcess/electron-main/sharedProcess.ts
+@@ -98,6 +98,18 @@ export class SharedProcess extends Dispo
+ 		this.utilityProcess = undefined;
+ 	}
+ 
++	/**
++	 * WSO2: spawns the shared process without waiting for a window to ask for it. Startup normally
++	 * holds it until the first window connects, so the two do not compete; a caller that must use it
++	 * before any window opens (installing extensions downloaded with an app update) opts in here.
++	 */
++	startWithoutWindow(): void {
++		if (!this.firstWindowConnectionBarrier.isOpen()) {
++			this.logService.trace('[SharedProcess] starting before the first window');
++			this.firstWindowConnectionBarrier.open();
++		}
++	}
++
+ 	private _whenReady: Promise<void> | undefined = undefined;
+ 	whenReady(): Promise<void> {
+ 		if (!this._whenReady) {
