@@ -10,8 +10,14 @@ Documents and their detached signatures are copied verbatim, so the CI signature
 nothing is re-signed. The client resolves by channel path and never reads the document's own
 `channel` field, so a copied document is correct where it lands.
 
-Usage: promote-update-channel.py <bucket> <from-channel> <to-channel>
+`--version` is REQUIRED and names the release to promote, or the literal `all` for every line the
+source channel serves. There is no default on purpose: a channel used to qualify releases holds
+several candidates at once, and "promote everything" is the destructive reading of an operator
+forgetting to fill the field in.
+
+Usage: promote-update-channel.py <bucket> <from-channel> <to-channel> --version <app-version>|all
 """
+import argparse
 import json
 import os
 import re
@@ -48,23 +54,61 @@ def read_json_key(bucket: str, key: str):
 
 
 def main() -> int:
-    if len(sys.argv) != 4:
-        print(__doc__, file=sys.stderr)
+    ap = argparse.ArgumentParser(
+        description="Promote source documents down the channel ladder.",
+        formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
+    ap.add_argument("bucket")
+    ap.add_argument("from_channel")
+    ap.add_argument("to_channel")
+    ap.add_argument("--version", required=True, metavar="VERSION|all", help=(
+        "the release to promote: the line served by source-<version>.json, or the literal 'all' "
+        "to promote every line the source channel serves"))
+    args = ap.parse_args()
+    bucket, source, target = args.bucket, args.from_channel, args.to_channel
+    # An empty string reaches here when a caller passes the flag with an unset variable, which is
+    # precisely the "forgot to fill it in" case the required flag exists to catch.
+    wanted_version = args.version.strip()
+    if not wanted_version:
+        print("error: --version is empty. Name a release (e.g. 5.1.0-alpha5), or pass 'all' to "
+              "promote every line the source channel serves.", file=sys.stderr)
         return 2
-    bucket, source, target = sys.argv[1], sys.argv[2], sys.argv[3]
+    promote_all = wanted_version.lower() == "all"
 
     src_index = read_json_key(bucket, f"manifests/{source}/index.json")
     if not src_index or not src_index.get("entries"):
         print(f"error: {source} has no index.json with entries; nothing to promote", file=sys.stderr)
         return 1
+
+    promoting = src_index["entries"]
+    # 'all' is reserved: a document literally named source-all.json cannot be singled out. Nothing
+    # names releases that way, and the alternative — a separate --all flag — reintroduces the
+    # "neither given" case this is meant to remove.
+    if not promote_all:
+        # Matched against the document each entry NAMES, not built into a key: every S3 path below
+        # still comes from the index, so a bogus --version selects nothing rather than reaching for
+        # an arbitrary object.
+        wanted = f"source-{wanted_version}.json"
+        promoting = [e for e in src_index["entries"] if e.get("manifest") == wanted]
+        if not promoting:
+            available = ", ".join(
+                sorted({e.get("manifest", "?") for e in src_index["entries"]})) or "(none)"
+            print(f"error: {source} serves no line from {wanted}. Documents it currently serves: "
+                  f"{available}", file=sys.stderr)
+            print("note: a document can exist in the bucket without being served — only lines named "
+                  "in index.json can be promoted.", file=sys.stderr)
+            return 1
+        if len(promoting) > 1:
+            lines = ", ".join(e.get("match", "?") for e in promoting)
+            print(f"promoting {wanted}, which serves more than one line: {lines}")
     dst_index = read_json_key(bucket, f"manifests/{target}/index.json")
     if dst_index is None:
         print(f"{target} has no index yet; creating one.")
         dst_index = {"schemaVersion": 1, "entries": []}
 
-    print(f"promoting {source} -> {target}")
+    scope = "all lines" if promote_all else f"version {wanted_version}"
+    print(f"promoting {source} -> {target} ({scope})")
     manifest_shape = re.compile(r"^(source|source-[A-Za-z0-9][A-Za-z0-9._+-]{0,63})\.json$")
-    for entry in src_index["entries"]:
+    for entry in promoting:
         match, manifest = entry["match"], entry["manifest"]
         if not manifest_shape.match(manifest):
             print(f"error: index names manifest '{manifest}', which the update server would refuse "
