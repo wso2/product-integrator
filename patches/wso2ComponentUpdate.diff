@@ -4713,54 +4713,88 @@ Index: product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/dia
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/electron-browser/parts/dialogs/dialog.contribution.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/dialogs/dialog.contribution.ts
-@@ -19,6 +19,7 @@ import { IInstantiationService } from '.
+@@ -19,6 +19,10 @@ import { IInstantiationService } from '.
  import { Lazy } from '../../../../base/common/lazy.js';
  import { createNativeAboutDialogDetails } from '../../../../platform/dialogs/electron-browser/dialog.js';
  import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
 +import { IWso2ComponentUpdateService } from '../../../../platform/wso2Update/common/wso2Update.js';
++import { IExtensionService } from '../../../services/extensions/common/extensions.js';
++import { ExtensionIdentifier } from '../../../../platform/extensions/common/extensions.js';
++import { localize } from '../../../../nls.js';
  
  export class DialogHandlerContribution extends Disposable implements IWorkbenchContribution {
  
-@@ -39,6 +40,7 @@ export class DialogHandlerContribution e
+@@ -39,6 +43,8 @@ export class DialogHandlerContribution e
  		@IClipboardService clipboardService: IClipboardService,
  		@INativeHostService private nativeHostService: INativeHostService,
  		@IWorkbenchEnvironmentService private environmentService: IWorkbenchEnvironmentService,
 +		@IWso2ComponentUpdateService private componentUpdateService: IWso2ComponentUpdateService,
++		@IExtensionService private extensionService: IExtensionService,
  	) {
  		super();
  
-@@ -87,7 +89,7 @@ export class DialogHandlerContribution e
+@@ -87,7 +93,7 @@ export class DialogHandlerContribution e
  
  				// About
  				else {
 -					const aboutDialogDetails = createNativeAboutDialogDetails(this.productService, await this.nativeHostService.getOSProperties());
-+					const aboutDialogDetails = createNativeAboutDialogDetails(this.productService, await this.nativeHostService.getOSProperties(), await this.getRuntimeComponentDetails());
++					const aboutDialogDetails = createNativeAboutDialogDetails(this.productService, await this.nativeHostService.getOSProperties(), await this.getComponentDetails());
  
  					if (this.useCustomDialog) {
  						await this.browserImpl.value.about(aboutDialogDetails.title, aboutDialogDetails.details, aboutDialogDetails.detailsToCopy);
-@@ -109,6 +111,26 @@ export class DialogHandlerContribution e
+@@ -109,6 +115,56 @@ export class DialogHandlerContribution e
  			// Use the custom dialog while driven so that the driver can interact with it
  			!!this.environmentService.enableSmokeTestDriver;
  	}
 +
-+	// Builds the runtime component version lines (Ballerina/JRE/ICP) shown in the About dialog,
-+	// using the active (post-update) version and flagging components running an updated override.
-+	// Non-fatal: if the component service is unavailable the About dialog shows without them.
-+	private async getRuntimeComponentDetails(): Promise<string | undefined> {
++	// Builds the component version sections shown in the About dialog: every runtime component
++	// (Ballerina/JRE/ICP, ...) and every built-in WSO2 extension, at the version actually in use
++	// after any component update. Each section is non-fatal: if its source is unavailable the
++	// About dialog shows without it.
++	private async getComponentDetails(): Promise<string | undefined> {
++		const sections = [
++			await this.getSection(localize('aboutRuntimes', "Runtimes:"), () => this.getRuntimeLines()),
++			await this.getSection(localize('aboutExtensions', "Extensions:"), () => this.getExtensionLines())
++		].filter(section => !!section);
++		return sections.length ? `\n${sections.join('\n\n')}` : undefined;
++	}
++
++	private async getSection(title: string, getLines: () => Promise<string[]>): Promise<string | undefined> {
 +		try {
-+			const labels: { [id: string]: string } = {
-+				'ballerina-runtime': 'Ballerina',
-+				'jre': 'JRE',
-+				'icp': 'ICP'
-+			};
-+			const statuses = await this.componentUpdateService.getComponentStatuses();
-+			const lines = statuses
-+				.filter(status => status.kind === 'runtime' && labels[status.id])
-+				.map(status => `${labels[status.id]}: ${status.activeVersion ?? status.bundledVersion ?? 'Unknown'}${status.overridden ? ' (updated)' : ''}`);
-+			return lines.length ? lines.join('\n') : undefined;
++			const lines = await getLines();
++			return lines.length ? `${title}\n${lines.join('\n')}` : undefined;
 +		} catch {
 +			return undefined;
 +		}
++	}
++
++	private async getRuntimeLines(): Promise<string[]> {
++		const labels: { [id: string]: string } = {
++			'ballerina-runtime': 'Ballerina',
++			'jre': 'JRE',
++			'icp': 'ICP'
++		};
++		const statuses = await this.componentUpdateService.getComponentStatuses();
++		return statuses
++			.filter(status => status.kind === 'runtime')
++			.map(status => `${labels[status.id] ?? status.id}: ${status.activeVersion ?? status.bundledVersion ?? 'Unknown'}${status.overridden ? ' (updated)' : ''}`);
++	}
++
++	// The running extension is the truth: a component update installs a newer copy of a built-in
++	// extension as a user extension, which then shadows the version recorded in product.json.
++	private async getExtensionLines(): Promise<string[]> {
++		const builtIns = (this.productService.builtInExtensions ?? []).filter(ext => ext.name.toLowerCase().startsWith('wso2.'));
++		if (!builtIns.length) {
++			return [];
++		}
++		await this.extensionService.whenInstalledExtensionsRegistered();
++		return builtIns.map(builtIn => {
++			const running = this.extensionService.extensions.find(ext => ExtensionIdentifier.equals(ext.identifier, builtIn.name));
++			const label = running?.displayName ?? builtIn.name.split('.')[1];
++			const version = running?.version ?? (builtIn.version && builtIn.version !== 'latest' ? builtIn.version : 'Unknown');
++			const updated = !!running && !running.isBuiltin;
++			return `${label}: ${version}${updated ? ' (updated)' : ''}`;
++		});
 +	}
  }
  
