@@ -673,12 +673,12 @@ jobs:
           (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
           cp ../artifacts/VSCode-darwin-${{ matrix.arch }}.zip ../../installers/mac/
 
-      # The exact editor the DMG below is built from; published as a release asset.
-      - name: Upload macOS editor
+      # The exact editor ("core") the DMG below is built from; published as a release asset.
+      - name: Upload macOS core
         if: ${{ inputs.build_packed_installers == true }}
         uses: actions/upload-artifact@v4
         with:
-          name: editor-darwin-${{ matrix.arch }}
+          name: core-darwin-${{ matrix.arch }}
           path: lib/artifacts/VSCode-darwin-${{ matrix.arch }}.zip
           if-no-files-found: error
       # Imports the Developer ID Application cert (codesign: app bundles + DMG) into a temp
@@ -1273,12 +1273,12 @@ jobs:
         run: |
           cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
 
-      # The exact editor the MSIs below are built from; published as a release asset.
-      - name: Upload Windows editor
+      # The exact editor ("core") the MSIs below are built from; published as a release asset.
+      - name: Upload Windows core
         if: ${{ inputs.build_packed_installers == true }}
         uses: actions/upload-artifact@v4
         with:
-          name: editor-win32-x64
+          name: core-win32-x64
           path: lib/artifacts/VSCode-win32-x64.zip
           if-no-files-found: error
       - name: Exclude build workspace from Windows Defender
@@ -1543,43 +1543,43 @@ jobs:
           path: release-files/
         continue-on-error: true
 
-      # The per-OS editors the installers above were built from (VSCode + patches + bundled
+      # The per-OS "core" editors the installers above were built from (VSCode + patches + bundled
       # extensions + CLI, no Ballerina/ICP/JRE), and the versions they were built with, so
       # downstream builds wrap these exact binaries instead of rebuilding them.
-      - name: Download Linux editor
+      - name: Download Linux core
         uses: actions/download-artifact@v4
         with:
-          name: editor-linux-x64
-          path: editors/
+          name: core-linux-x64
+          path: core/
 
-      - name: Download macOS editor (arm64)
+      - name: Download macOS core (arm64)
         if: ${{ inputs.build_macos == true }}
         uses: actions/download-artifact@v4
         with:
-          name: editor-darwin-arm64
-          path: editors/
+          name: core-darwin-arm64
+          path: core/
 
-      - name: Download macOS editor (x64)
+      - name: Download macOS core (x64)
         if: ${{ inputs.build_macos == true }}
         uses: actions/download-artifact@v4
         with:
-          name: editor-darwin-x64
-          path: editors/
+          name: core-darwin-x64
+          path: core/
 
-      - name: Download Windows editor
+      - name: Download Windows core
         if: ${{ inputs.build_windows == true }}
         uses: actions/download-artifact@v4
         with:
-          name: editor-win32-x64
-          path: editors/
+          name: core-win32-x64
+          path: core/
 
       - name: Download stamped versions
         uses: actions/download-artifact@v4
         with:
           name: build-versions
-          path: editors/versions/
+          path: core/versions/
 
-      - name: Stage editors
+      - name: Stage core files
         shell: bash
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
@@ -1593,12 +1593,12 @@ jobs:
             (cd release-files && openssl dgst -sha256 -out "${name}.sha256" "${name}")
             ls -lh "release-files/${name}"
           }
-          P="wso2-integrator-${INTEGRATOR_VERSION}-editor"
-          stage editors/vscode-linux-x64.tar.gz    "${P}-linux-x64.tar.gz"
-          stage editors/VSCode-darwin-arm64.zip    "${P}-darwin-arm64.zip"
-          stage editors/VSCode-darwin-x64.zip      "${P}-darwin-x64.zip"
-          stage editors/VSCode-win32-x64.zip       "${P}-win32-x64.zip"
-          cp editors/versions/ci/build/component-versions.properties \
+          P="wso2-integrator-${INTEGRATOR_VERSION}-core"
+          stage core/vscode-linux-x64.tar.gz    "${P}-linux-x64.tar.gz"
+          stage core/VSCode-darwin-arm64.zip    "${P}-darwin-arm64.zip"
+          stage core/VSCode-darwin-x64.zip      "${P}-darwin-x64.zip"
+          stage core/VSCode-win32-x64.zip       "${P}-win32-x64.zip"
+          cp core/versions/ci/build/component-versions.properties \
             "release-files/wso2-integrator-${INTEGRATOR_VERSION}-component-versions.properties"
 
       # Signed because they are build inputs for downstream builds; a .sha256 in the same release
@@ -1606,14 +1606,14 @@ jobs:
       - name: cosign-installer
         uses: sigstore/cosign-installer@v3.5.0
 
-      - name: Sign the editors
+      - name: Sign the core files
         shell: bash
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-editor-*.{tar.gz,zip}; do
+          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-core-*.{tar.gz,zip}; do
             cosign sign-blob "${F}" --output-certificate "${F}.pem" --output-signature "${F}.sig" --yes
             cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity=https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           done
@@ -1658,19 +1658,19 @@ jobs:
 
           require "Linux .deb"          release-files/*.deb
           require "Linux .rpm"          release-files/*.rpm
-          require "Linux .tar.gz"       release-files/!(*-editor-*)linux-x64.tar.gz
+          require "Linux .tar.gz"       release-files/!(*-core-*)linux-x64.tar.gz
           require "WI extension .vsix"  release-files/*.vsix
-          require "Linux editor"        release-files/*-editor-linux-x64.tar.gz
+          require "Linux core"          release-files/*-core-linux-x64.tar.gz
           require "Component versions"  release-files/*-component-versions.properties
           if [ "${BUILD_MACOS}" = "true" ]; then
             require "macOS arm64 .dmg"  release-files/*arm64.dmg
             require "macOS x64 .dmg"    release-files/*x64.dmg
-            require "macOS arm64 editor" release-files/*-editor-darwin-arm64.zip
-            require "macOS x64 editor"  release-files/*-editor-darwin-x64.zip
+            require "macOS arm64 core"   release-files/*-core-darwin-arm64.zip
+            require "macOS x64 core"    release-files/*-core-darwin-x64.zip
           fi
           if [ "${BUILD_WINDOWS}" = "true" ]; then
             require "Windows .msi"      release-files/*.msi
-            require "Windows editor"    release-files/*-editor-win32-x64.zip
+            require "Windows core"      release-files/*-core-win32-x64.zip
           fi
 
           if [ ${#missing[@]} -gt 0 ]; then
