@@ -3692,7 +3692,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
-@@ -0,0 +1,669 @@
+@@ -0,0 +1,763 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3718,7 +3718,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +import { URI } from '../../../../base/common/uri.js';
 +import { localize, localize2 } from '../../../../nls.js';
 +import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
++import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
 +import './media/wso2Update.css';
++import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 +import { ICommandService } from '../../../../platform/commands/common/commands.js';
 +import { ConfigurationScope, Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 +import { ContextKeyExpr, IContextKey, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
@@ -3734,6 +3736,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +import { IWso2ComponentUpdateService, Wso2UpdateState, Wso2UpdateStateType } from '../../../../platform/wso2Update/common/wso2Update.js';
 +import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 +import { IWorkbenchExtensionManagementService } from '../../../services/extensionManagement/common/extensionManagement.js';
++import { IExtensionService } from '../../../services/extensions/common/extensions.js';
++import { ExtensionIdentifier } from '../../../../platform/extensions/common/extensions.js';
 +import { IHostService } from '../../../services/host/browser/host.js';
 +import { setComponentUpdateSummary } from '../../update/browser/updateTitleBarEntry.js';
 +
@@ -3992,10 +3996,100 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	}
 +}
 +
++/**
++ * Help > Version Information: the version of every runtime component and built-in WSO2 extension,
++ * as actually in use after any component update. Kept out of the About dialog, which shows only the
++ * app version and OS.
++ */
++class ShowVersionInformationAction extends Action2 {
++	constructor() {
++		super({
++			id: 'wso2.showVersionInformation',
++			title: {
++				...localize2('wso2.versionInformation', "Version Information"),
++				mnemonicTitle: localize({ key: 'wso2.miVersionInformation', comment: ['&& denotes a mnemonic'] }, "&&Version Information"),
++			},
++			category: Categories.Help,
++			f1: true,
++			menu: {
++				id: MenuId.MenubarHelpMenu,
++				group: 'z_about',
++				order: 2
++			}
++		});
++	}
++	async run(accessor: ServicesAccessor): Promise<void> {
++		const dialogService = accessor.get(IDialogService);
++		const clipboardService = accessor.get(IClipboardService);
++		const updateService = accessor.get(IWso2ComponentUpdateService);
++		const extensionService = accessor.get(IExtensionService);
++
++		// Each section is non-fatal: if its source is unavailable the dialog shows without it.
++		const sections = [
++			localize('wso2.versionInformation.version', "Version: {0}", product.wiversion ?? product.version ?? 'Unknown'),
++			await versionSection(localize('wso2.versionInformation.runtimes', "Runtimes:"), () => runtimeVersionLines(updateService)),
++			await versionSection(localize('wso2.versionInformation.extensions', "Extensions:"), () => extensionVersionLines(extensionService))
++		].filter(section => !!section);
++		const details = sections.join('\n\n');
++
++		await dialogService.prompt({
++			type: Severity.Info,
++			message: product.nameLong,
++			detail: details,
++			buttons: [{
++				label: localize({ key: 'wso2.versionInformation.copy', comment: ['&& denotes a mnemonic'] }, "&&Copy"),
++				run: () => clipboardService.writeText(details)
++			}],
++			cancelButton: localize('wso2.versionInformation.ok', "OK")
++		});
++	}
++}
++
++async function versionSection(title: string, getLines: () => Promise<string[]>): Promise<string | undefined> {
++	try {
++		const lines = await getLines();
++		return lines.length ? `${title}\n${lines.join('\n')}` : undefined;
++	} catch {
++		return undefined;
++	}
++}
++
++async function runtimeVersionLines(updateService: IWso2ComponentUpdateService): Promise<string[]> {
++	const labels: { [id: string]: string } = {
++		'ballerina-runtime': 'Ballerina',
++		'jre': 'JRE',
++		'icp': 'ICP'
++	};
++	const statuses = await updateService.getComponentStatuses();
++	return statuses
++		.filter(status => status.kind === 'runtime')
++		.map(status => `${labels[status.id] ?? status.id}: ${status.activeVersion ?? status.bundledVersion ?? 'Unknown'}${status.overridden ? ' (updated)' : ''}`);
++}
++
++/**
++ * The running extension is the truth: a component update installs a newer copy of a built-in
++ * extension as a user extension, which then shadows the version recorded in product.json.
++ */
++async function extensionVersionLines(extensionService: IExtensionService): Promise<string[]> {
++	const builtIns = (product.builtInExtensions ?? []).filter(ext => ext.name.toLowerCase().startsWith('wso2.'));
++	if (!builtIns.length) {
++		return [];
++	}
++	await extensionService.whenInstalledExtensionsRegistered();
++	return builtIns.map(builtIn => {
++		const running = extensionService.extensions.find(ext => ExtensionIdentifier.equals(ext.identifier, builtIn.name));
++		const label = running?.displayName ?? builtIn.name.split('.')[1];
++		const version = running?.version ?? (builtIn.version && builtIn.version !== 'latest' ? builtIn.version : 'Unknown');
++		const updated = !!running && !running.isBuiltin;
++		return `${label}: ${version}${updated ? ' (updated)' : ''}`;
++	});
++}
++
 +registerAction2(CheckForUpdatesAction);
 +registerAction2(UpdateAllAction);
 +registerAction2(ShowComponentsAction);
 +registerAction2(UpdateIndicatorAction);
++registerAction2(ShowVersionInformationAction);
 +
 +
 +//#endregion
@@ -4684,121 +4778,6 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2UpdateV
 +		return undefined;
 +	}
 +}
-Index: product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
-===================================================================
---- product-integrator.orig/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
-+++ product-integrator/lib/vscode/src/vs/platform/dialogs/electron-browser/dialog.ts
-@@ -12,15 +12,18 @@ interface IWIProductService extends IPro
- 	readonly wiversion?: string;
- }
- 
--export function createNativeAboutDialogDetails(productService: IProductService, osProps: IOSProperties): { title: string; details: string; detailsToCopy: string } {
-+export function createNativeAboutDialogDetails(productService: IProductService, osProps: IOSProperties, extraDetails?: string): { title: string; details: string; detailsToCopy: string } {
- 	const version = (productService as IWIProductService).wiversion ?? productService.version ?? 'Unknown';
- 
- 	const getDetails = (): string => {
--		return localize({ key: 'aboutDetail', comment: ['Electron, Chromium, Node.js and V8 are product names that need no translation'] },
-+		const base = localize({ key: 'aboutDetail', comment: ['Electron, Chromium, Node.js and V8 are product names that need no translation'] },
- 			"Version: {0}\nOS: {1}",
- 			version,
- 			`${osProps.type} ${osProps.arch} ${osProps.release}${isLinuxSnap ? ' snap' : ''}`
- 		);
-+		// Bundled/updated runtime component versions (Ballerina, JRE, ICP) — otherwise not
-+		// visible anywhere in the UI, and useful for support/diagnostics.
-+		return extraDetails ? `${base}\n${extraDetails}` : base;
- 	};
- 
- 	const details = getDetails();
-Index: product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/dialogs/dialog.contribution.ts
-===================================================================
---- product-integrator.orig/lib/vscode/src/vs/workbench/electron-browser/parts/dialogs/dialog.contribution.ts
-+++ product-integrator/lib/vscode/src/vs/workbench/electron-browser/parts/dialogs/dialog.contribution.ts
-@@ -19,6 +19,10 @@ import { IInstantiationService } from '.
- import { Lazy } from '../../../../base/common/lazy.js';
- import { createNativeAboutDialogDetails } from '../../../../platform/dialogs/electron-browser/dialog.js';
- import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
-+import { IWso2ComponentUpdateService } from '../../../../platform/wso2Update/common/wso2Update.js';
-+import { IExtensionService } from '../../../services/extensions/common/extensions.js';
-+import { ExtensionIdentifier } from '../../../../platform/extensions/common/extensions.js';
-+import { localize } from '../../../../nls.js';
- 
- export class DialogHandlerContribution extends Disposable implements IWorkbenchContribution {
- 
-@@ -39,6 +43,8 @@ export class DialogHandlerContribution e
- 		@IClipboardService clipboardService: IClipboardService,
- 		@INativeHostService private nativeHostService: INativeHostService,
- 		@IWorkbenchEnvironmentService private environmentService: IWorkbenchEnvironmentService,
-+		@IWso2ComponentUpdateService private componentUpdateService: IWso2ComponentUpdateService,
-+		@IExtensionService private extensionService: IExtensionService,
- 	) {
- 		super();
- 
-@@ -87,7 +93,7 @@ export class DialogHandlerContribution e
- 
- 				// About
- 				else {
--					const aboutDialogDetails = createNativeAboutDialogDetails(this.productService, await this.nativeHostService.getOSProperties());
-+					const aboutDialogDetails = createNativeAboutDialogDetails(this.productService, await this.nativeHostService.getOSProperties(), await this.getComponentDetails());
- 
- 					if (this.useCustomDialog) {
- 						await this.browserImpl.value.about(aboutDialogDetails.title, aboutDialogDetails.details, aboutDialogDetails.detailsToCopy);
-@@ -109,6 +115,56 @@ export class DialogHandlerContribution e
- 			// Use the custom dialog while driven so that the driver can interact with it
- 			!!this.environmentService.enableSmokeTestDriver;
- 	}
-+
-+	// Builds the component version sections shown in the About dialog: every runtime component
-+	// (Ballerina/JRE/ICP, ...) and every built-in WSO2 extension, at the version actually in use
-+	// after any component update. Each section is non-fatal: if its source is unavailable the
-+	// About dialog shows without it.
-+	private async getComponentDetails(): Promise<string | undefined> {
-+		const sections = [
-+			await this.getSection(localize('aboutRuntimes', "Runtimes:"), () => this.getRuntimeLines()),
-+			await this.getSection(localize('aboutExtensions', "Extensions:"), () => this.getExtensionLines())
-+		].filter(section => !!section);
-+		return sections.length ? `\n${sections.join('\n\n')}` : undefined;
-+	}
-+
-+	private async getSection(title: string, getLines: () => Promise<string[]>): Promise<string | undefined> {
-+		try {
-+			const lines = await getLines();
-+			return lines.length ? `${title}\n${lines.join('\n')}` : undefined;
-+		} catch {
-+			return undefined;
-+		}
-+	}
-+
-+	private async getRuntimeLines(): Promise<string[]> {
-+		const labels: { [id: string]: string } = {
-+			'ballerina-runtime': 'Ballerina',
-+			'jre': 'JRE',
-+			'icp': 'ICP'
-+		};
-+		const statuses = await this.componentUpdateService.getComponentStatuses();
-+		return statuses
-+			.filter(status => status.kind === 'runtime')
-+			.map(status => `${labels[status.id] ?? status.id}: ${status.activeVersion ?? status.bundledVersion ?? 'Unknown'}${status.overridden ? ' (updated)' : ''}`);
-+	}
-+
-+	// The running extension is the truth: a component update installs a newer copy of a built-in
-+	// extension as a user extension, which then shadows the version recorded in product.json.
-+	private async getExtensionLines(): Promise<string[]> {
-+		const builtIns = (this.productService.builtInExtensions ?? []).filter(ext => ext.name.toLowerCase().startsWith('wso2.'));
-+		if (!builtIns.length) {
-+			return [];
-+		}
-+		await this.extensionService.whenInstalledExtensionsRegistered();
-+		return builtIns.map(builtIn => {
-+			const running = this.extensionService.extensions.find(ext => ExtensionIdentifier.equals(ext.identifier, builtIn.name));
-+			const label = running?.displayName ?? builtIn.name.split('.')[1];
-+			const version = running?.version ?? (builtIn.version && builtIn.version !== 'latest' ? builtIn.version : 'Unknown');
-+			const updated = !!running && !running.isBuiltin;
-+			return `${label}: ${version}${updated ? ' (updated)' : ''}`;
-+		});
-+	}
- }
- 
- registerWorkbenchContribution2(
 Index: product-integrator/lib/vscode/build/lib/i18n.resources.json
 ===================================================================
 --- product-integrator.orig/lib/vscode/build/lib/i18n.resources.json
