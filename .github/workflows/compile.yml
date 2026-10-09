@@ -534,7 +534,17 @@ jobs:
           ARCHIVE_PATH=../artifacts/vscode-linux-x64.tar.gz
           mkdir -p ../artifacts
           tar -czf "$ARCHIVE_PATH" -C .. VSCode-linux-x64
-      
+
+      # The exact editor the Linux installers below are built from; published as a release asset
+      # (build.yml, publish-github-release) so downstream builds reuse these binaries.
+      - name: Upload Linux editor
+        if: ${{ inputs.build_packed_installers == true && github.event_name != 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-linux-x64
+          path: lib/artifacts/vscode-linux-x64.tar.gz
+          if-no-files-found: error
+
       - name: Copy Integrator artifact to build directories
         if: ${{ inputs.build_packed_installers == true}}
         run: |

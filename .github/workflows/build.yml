@@ -672,6 +672,15 @@ jobs:
           mkdir -p ../artifacts
           (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
           cp ../artifacts/VSCode-darwin-${{ matrix.arch }}.zip ../../installers/mac/
+
+      # The exact editor the DMG below is built from; published as a release asset.
+      - name: Upload macOS editor
+        if: ${{ inputs.build_packed_installers == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-darwin-${{ matrix.arch }}
+          path: lib/artifacts/VSCode-darwin-${{ matrix.arch }}.zip
+          if-no-files-found: error
       # Imports the Developer ID Application cert (codesign: app bundles + DMG) into a temp
       # keychain, then derives the identity name from the imported cert so no separate identity
       # secret is needed. No Developer ID Installer cert: the DMG carries the app directly, and
@@ -1263,6 +1272,15 @@ jobs:
         if: ${{ inputs.build_packed_installers == true }}
         run: |
           cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
+
+      # The exact editor the MSIs below are built from; published as a release asset.
+      - name: Upload Windows editor
+        if: ${{ inputs.build_packed_installers == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-win32-x64
+          path: lib/artifacts/VSCode-win32-x64.zip
+          if-no-files-found: error
       - name: Exclude build workspace from Windows Defender
         if: ${{ inputs.build_packed_installers == true }}
         continue-on-error: true
@@ -1525,56 +1543,80 @@ jobs:
           path: release-files/
         continue-on-error: true
 
-      # The OS-agnostic compiled VSCode and the versions it was built with, so downstream builds can
-      # run `gulp vscode-<os>-<arch>-min-ci` from this release instead of recompiling. That task reads
-      # only out-vscode-min and .build/extensions (which already holds the bundled extensions), so
-      # the rest of the compilation artifact is left out. No Ballerina/ICP/JRE.
-      - name: Download compilation artifact
+      # The per-OS editors the installers above were built from (VSCode + patches + bundled
+      # extensions + CLI, no Ballerina/ICP/JRE), and the versions they were built with, so
+      # downstream builds wrap these exact binaries instead of rebuilding them.
+      - name: Download Linux editor
         uses: actions/download-artifact@v4
         with:
-          name: compilation
-          path: compiled/
+          name: editor-linux-x64
+          path: editors/
+
+      - name: Download macOS editor (arm64)
+        if: ${{ inputs.build_macos == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: editor-darwin-arm64
+          path: editors/
+
+      - name: Download macOS editor (x64)
+        if: ${{ inputs.build_macos == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: editor-darwin-x64
+          path: editors/
+
+      - name: Download Windows editor
+        if: ${{ inputs.build_windows == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: editor-win32-x64
+          path: editors/
 
       - name: Download stamped versions
         uses: actions/download-artifact@v4
         with:
           name: build-versions
-          path: compiled/versions/
+          path: editors/versions/
 
-      - name: Stage compiled VSCode
+      - name: Stage editors
         shell: bash
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
         run: |
           set -euo pipefail
-          NAME="wso2-integrator-${INTEGRATOR_VERSION}-compiled.tar.gz"
-          mkdir compiled/src
-          tar -xzf compiled/compilation.tar.gz -C compiled/src out-vscode-min .build/extensions
-          rm compiled/compilation.tar.gz
-          # Packaging reads the build date from here; out-build, its fallback, is not shipped.
-          test -f compiled/src/out-vscode-min/date
-          du -sh compiled/src/out-vscode-min compiled/src/.build/extensions
-          tar -czf "release-files/${NAME}" -C compiled/src out-vscode-min .build/extensions
-          rm -rf compiled/src
-          ls -lh "release-files/${NAME}"
-          (cd release-files && openssl dgst -sha256 -out "${NAME}.sha256" "${NAME}")
-          cp compiled/versions/ci/build/component-versions.properties \
+          shopt -s nullglob
+          stage() {
+            local src="$1" name="$2"
+            [ -f "${src}" ] || return 0
+            mv "${src}" "release-files/${name}"
+            (cd release-files && openssl dgst -sha256 -out "${name}.sha256" "${name}")
+            ls -lh "release-files/${name}"
+          }
+          P="wso2-integrator-${INTEGRATOR_VERSION}-editor"
+          stage editors/vscode-linux-x64.tar.gz    "${P}-linux-x64.tar.gz"
+          stage editors/VSCode-darwin-arm64.zip    "${P}-darwin-arm64.zip"
+          stage editors/VSCode-darwin-x64.zip      "${P}-darwin-x64.zip"
+          stage editors/VSCode-win32-x64.zip       "${P}-win32-x64.zip"
+          cp editors/versions/ci/build/component-versions.properties \
             "release-files/wso2-integrator-${INTEGRATOR_VERSION}-component-versions.properties"
 
-      # Signed because it is a build input for downstream builds; a .sha256 in the same release
+      # Signed because they are build inputs for downstream builds; a .sha256 in the same release
       # cannot detect a replaced asset.
       - name: cosign-installer
         uses: sigstore/cosign-installer@v3.5.0
 
-      - name: Sign the compiled VSCode
+      - name: Sign the editors
         shell: bash
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
         run: |
           set -euo pipefail
-          F="release-files/wso2-integrator-${INTEGRATOR_VERSION}-compiled.tar.gz"
-          cosign sign-blob "${F}" --output-certificate "${F}.pem" --output-signature "${F}.sig" --yes
-          cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity=https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          shopt -s nullglob
+          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-editor-*.{tar.gz,zip}; do
+            cosign sign-blob "${F}" --output-certificate "${F}.pem" --output-signature "${F}.sig" --yes
+            cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity=https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          done
 
       # The caller chose the tag; all that is derived here is the display name.
       - name: Resolve release name
@@ -1606,7 +1648,7 @@ jobs:
           BUILD_MACOS: ${{ inputs.build_macos }}
           BUILD_WINDOWS: ${{ inputs.build_windows }}
         run: |
-          shopt -s nullglob
+          shopt -s nullglob extglob
           missing=()
           require() {
             local label="$1"; shift
@@ -1616,16 +1658,19 @@ jobs:
 
           require "Linux .deb"          release-files/*.deb
           require "Linux .rpm"          release-files/*.rpm
-          require "Linux .tar.gz"       release-files/*linux-x64.tar.gz
+          require "Linux .tar.gz"       release-files/!(*-editor-*)linux-x64.tar.gz
           require "WI extension .vsix"  release-files/*.vsix
-          require "Compiled VSCode"     release-files/*-compiled.tar.gz
+          require "Linux editor"        release-files/*-editor-linux-x64.tar.gz
           require "Component versions"  release-files/*-component-versions.properties
           if [ "${BUILD_MACOS}" = "true" ]; then
             require "macOS arm64 .dmg"  release-files/*arm64.dmg
             require "macOS x64 .dmg"    release-files/*x64.dmg
+            require "macOS arm64 editor" release-files/*-editor-darwin-arm64.zip
+            require "macOS x64 editor"  release-files/*-editor-darwin-x64.zip
           fi
           if [ "${BUILD_WINDOWS}" = "true" ]; then
             require "Windows .msi"      release-files/*.msi
+            require "Windows editor"    release-files/*-editor-win32-x64.zip
           fi
 
           if [ ${#missing[@]} -gt 0 ]; then
