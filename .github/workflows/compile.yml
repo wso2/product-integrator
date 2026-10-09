@@ -42,6 +42,11 @@ on:
         default: false
         required: false
         type: boolean
+      publish_core:
+        description: 'Upload the Linux core (the editor the Linux installers are built from) for the release. build.yml sets it when a release will be published.'
+        default: false
+        required: false
+        type: boolean
 
 permissions:
   id-token: write
@@ -538,7 +543,7 @@ jobs:
       # The exact editor ("core") the Linux installers below are built from; published as a release asset
       # (build.yml, publish-github-release) so downstream builds reuse these binaries.
       - name: Upload Linux core
-        if: ${{ inputs.build_packed_installers == true && github.event_name != 'pull_request' }}
+        if: ${{ inputs.build_packed_installers == true && inputs.publish_core == true }}
         uses: actions/upload-artifact@v4
         with:
           name: core-linux-x64

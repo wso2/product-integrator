@@ -331,6 +331,7 @@ jobs:
       versions_artifact: build-versions
       ref: ${{ inputs.ref }}
       is_prerelease: ${{ inputs.is_prerelease }}
+      publish_core: ${{ inputs.publish_tag != '' }}
 
   smoke-test:
     if: ${{ inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
@@ -675,7 +676,7 @@ jobs:
 
       # The exact editor ("core") the DMG below is built from; published as a release asset.
       - name: Upload macOS core
-        if: ${{ inputs.build_packed_installers == true }}
+        if: ${{ inputs.build_packed_installers == true && inputs.publish_tag != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: core-darwin-${{ matrix.arch }}
@@ -1275,7 +1276,7 @@ jobs:
 
       # The exact editor ("core") the MSIs below are built from; published as a release asset.
       - name: Upload Windows core
-        if: ${{ inputs.build_packed_installers == true }}
+        if: ${{ inputs.build_packed_installers == true && inputs.publish_tag != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: core-win32-x64
@@ -1615,7 +1616,7 @@ jobs:
           shopt -s nullglob
           for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-core-*.{tar.gz,zip}; do
             cosign sign-blob "${F}" --output-certificate "${F}.pem" --output-signature "${F}.sig" --yes
-            cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity=https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+            cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build.yml@${GITHUB_REF}" --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           done
 
       # The caller chose the tag; all that is derived here is the display name.
