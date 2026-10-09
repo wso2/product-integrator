@@ -1525,9 +1525,10 @@ jobs:
           path: release-files/
         continue-on-error: true
 
-      # The OS-agnostic compiled VSCode (out-* plus the bundled extensions, no Ballerina/ICP/JRE) and
-      # the versions it was built with, so downstream builds can package from this release instead of
-      # recompiling.
+      # The OS-agnostic compiled VSCode and the versions it was built with, so downstream builds can
+      # run `gulp vscode-<os>-<arch>-min-ci` from this release instead of recompiling. That task reads
+      # only out-vscode-min and .build/extensions (which already holds the bundled extensions), so
+      # the rest of the compilation artifact is left out. No Ballerina/ICP/JRE.
       - name: Download compilation artifact
         uses: actions/download-artifact@v4
         with:
@@ -1547,7 +1548,15 @@ jobs:
         run: |
           set -euo pipefail
           NAME="wso2-integrator-${INTEGRATOR_VERSION}-compiled.tar.gz"
-          mv compiled/compilation.tar.gz "release-files/${NAME}"
+          mkdir compiled/src
+          tar -xzf compiled/compilation.tar.gz -C compiled/src out-vscode-min .build/extensions
+          rm compiled/compilation.tar.gz
+          # Packaging reads the build date from here; out-build, its fallback, is not shipped.
+          test -f compiled/src/out-vscode-min/date
+          du -sh compiled/src/out-vscode-min compiled/src/.build/extensions
+          tar -czf "release-files/${NAME}" -C compiled/src out-vscode-min .build/extensions
+          rm -rf compiled/src
+          ls -lh "release-files/${NAME}"
           (cd release-files && openssl dgst -sha256 -out "${NAME}.sha256" "${NAME}")
           cp compiled/versions/ci/build/component-versions.properties \
             "release-files/wso2-integrator-${INTEGRATOR_VERSION}-component-versions.properties"
