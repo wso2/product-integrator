@@ -2,23 +2,33 @@ Index: product-integrator/lib/vscode/src/main.ts
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/main.ts
 +++ product-integrator/lib/vscode/src/main.ts
-@@ -18,6 +18,7 @@ import * as perf from './vs/base/common/
+@@ -11,13 +11,14 @@ import { configurePortable } from './boo
+ import { bootstrapESM } from './bootstrap-esm.js';
+ import { app, protocol, crashReporter, Menu, contentTracing } from 'electron';
+ import minimist from 'minimist';
+-import { product } from './bootstrap-meta.js';
++import { pkg, product } from './bootstrap-meta.js';
+ import { parse } from './vs/base/common/jsonc.js';
+ import { getUserDataPath } from './vs/platform/environment/node/userDataPath.js';
+ import * as perf from './vs/base/common/performance.js';
  import { resolveNLSConfiguration } from './vs/base/node/nls.js';
  import { getUNCHost, addUNCHostToAllowlist } from './vs/base/node/unc.js';
  import { applyProductRuntimeEnvironment, resolveProductRuntimeEnvironment, storeProductRuntimeEnvironment } from './vs/platform/product/common/runtimeEnvironment.js';
-+import { activatePendingRuntimeComponents, enforceRuntimeHealthFallback, seedBundledComponents } from './vs/platform/wso2Update/node/wso2ComponentsManifest.js';
++import { activatePendingRuntimeComponents, enforceRuntimeHealthFallback, ILocalComponentEntry, ineligibleBaselineVersions, installedComponentVersion, seedBundledComponents } from './vs/platform/wso2Update/node/wso2ComponentsManifest.js';
  import { INLSConfiguration } from './vs/nls.js';
  import { NativeParsedArgs } from './vs/platform/environment/common/argv.js';
  
-@@ -220,6 +221,7 @@ async function startup(codeCachePath: st
+@@ -220,6 +221,9 @@ async function startup(codeCachePath: st
  			nameShort?: string;
  			nameLong?: string;
  			dataFolderName?: string;
 +			bundledComponents?: { readonly [id: string]: string };
++			wiversion?: string;
++			version?: string;
  		}
  
  		const productMeta = product as unknown as IProductMeta;
-@@ -292,25 +294,56 @@ async function startup(codeCachePath: st
+@@ -292,25 +296,71 @@ async function startup(codeCachePath: st
  		// installed under the user's data folder so `${COMPONENT:<id>}` tokens in
  		// `runtimeEnv` point at the updated copy instead of the bundled one. Failures
  		// here are non-fatal: we fall back to the bundled paths.
@@ -41,10 +51,14 @@ Index: product-integrator/lib/vscode/src/main.ts
  				const manifestPath = path.join(dataFolderHome, 'components', 'manifest.json');
 -				if (!fs.existsSync(manifestPath)) {
 -					return overrides;
++				// Hoisted: the seeded-baseline pass below needs each entry's `failed`/`pending` to
++				// know which on-disk versions it must not adopt.
++				let manifestEntries: { [id: string]: ILocalComponentEntry } = {};
 +				if (fs.existsSync(manifestPath)) {
 +					const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 +					const components = manifest?.components;
 +					if (components && typeof components === 'object') {
++						manifestEntries = components as { [id: string]: ILocalComponentEntry };
 +						for (const [id, entry] of Object.entries(components as { [id: string]: { active?: { path?: string } } })) {
 +							const activePath = entry.active?.path;
 +							if (typeof activePath === 'string' && activePath.length > 0) {
@@ -75,17 +89,28 @@ Index: product-integrator/lib/vscode/src/main.ts
 +				// runs even when no manifest exists yet (first launch, right after seeding).
 +				const bundled = productMeta.bundledComponents;
 +				if (bundled) {
++					const componentsDir = path.join(dataFolderHome, 'components');
 +					for (const [id, version] of Object.entries(bundled)) {
 +						if (overrides[id] || !version) {
 +							continue;
 +						}
-+						const seeded = path.join(dataFolderHome, 'components', id, version);
-+						if (fs.existsSync(seeded)) {
-+							overrides[id] = seeded;
++						// An editor-only update advances bundledComponents without carrying the
++						// components, so the declared version may not be on disk while `$APP_ROOT/...`
++						// — the literal fallback — was just deleted by that same update. Resolving by
++						// declared name alone then finds neither and the extension dies on ENOENT. An
++						// older runtime that works beats that.
++						// Excludes versions auto-reverted for failing to boot, and one staged but not
++						// yet activated: adopting either would run a build nothing health-tracks.
++						const installed = installedComponentVersion(componentsDir, id, version, ineligibleBaselineVersions(manifestEntries[id]));
++						if (installed) {
++							overrides[id] = path.join(componentsDir, id, installed);
++							if (installed !== version) {
++								console.warn(`[wso2Update] ${id}@${version} is not installed; falling back to ${installed}`);
++							}
  						}
  					}
  				}
-@@ -320,10 +353,127 @@ async function startup(codeCachePath: st
+@@ -320,10 +370,133 @@ async function startup(codeCachePath: st
  			return overrides;
  		};
  
@@ -96,7 +121,13 @@ Index: product-integrator/lib/vscode/src/main.ts
 +		try {
 +			if (effectiveDataFolderName) {
 +				const dataFolderHome = path.join(os.homedir(), effectiveDataFolderName);
-+				activatePendingRuntimeComponents(dataFolderHome, msg => console.log('[wso2Update]', msg));
++				// The same version the update service reports as this app's (wiversion, else version):
++				// a staged component whose `app` requirement this build does not meet stays pending.
++				// Same fallback chain as the service's appVersion(): a source run's product.json has no
++				// `version` (product.ts fills it from package.json the same way), and the two sides must
++				// judge a component against the same app.
++				const packageVersion = (pkg as { readonly version?: string }).version;
++				activatePendingRuntimeComponents(dataFolderHome, productMeta.wiversion ?? productMeta.version ?? packageVersion, msg => console.log('[wso2Update]', msg));
 +				// Auto-fallback: if an activated runtime keeps the app from booting, roll it back
 +				// after a couple of unhealthy boots so the app can start again (§D5).
 +				enforceRuntimeHealthFallback(dataFolderHome, 2, msg => console.log('[wso2Update]', msg));
@@ -252,17 +283,64 @@ Index: product-integrator/lib/vscode/src/vs/code/electron-main/app.ts
  import { IOpenURLOptions, IURLService } from '../../platform/url/common/url.js';
  import { URLHandlerChannelClient, URLHandlerRouter } from '../../platform/url/common/urlIpc.js';
  import { NativeURLService } from '../../platform/url/common/urlService.js';
-@@ -1102,6 +1104,9 @@ export class CodeApplication extends Dis
+@@ -654,10 +656,10 @@ export class CodeApplication extends Dis
+ 		]);
+ 
+ 		// Shared process
+-		const { sharedProcessReady, sharedProcessClient } = this.setupSharedProcess(machineId, sqmId, devDeviceId);
++		const { sharedProcessReady, sharedProcessClient, startSharedProcess } = this.setupSharedProcess(machineId, sqmId, devDeviceId);
+ 
+ 		// Services
+-		const appInstantiationService = await this.initServices(machineId, sqmId, devDeviceId, sharedProcessReady);
++		const appInstantiationService = await this.initServices(machineId, sqmId, devDeviceId, sharedProcessReady, startSharedProcess);
+ 
+ 		// Error telemetry
+ 		appInstantiationService.invokeFunction(accessor => this._register(new ErrorTelemetry(accessor.get(ILogService), accessor.get(ITelemetryService))));
+@@ -685,6 +687,11 @@ export class CodeApplication extends Dis
+ 		// Signal phase: ready - before opening first window
+ 		this.lifecycleMainService.phase = LifecycleMainPhase.Ready;
+ 
++		// WSO2: extensions downloaded with an app update install before the first window opens, so
++		// its extension host starts on them rather than on the versions they replace. Bounded, and
++		// a no-op on every launch that does not follow an app update.
++		await appInstantiationService.invokeFunction(accessor => accessor.get(IWso2ComponentUpdateService).whenDeferredExtensionsInstalled());
++
+ 		// Open Windows
+ 		await appInstantiationService.invokeFunction(accessor => this.openFirstWindow(accessor, initialProtocolUrls));
+ 
+@@ -1056,7 +1063,7 @@ export class CodeApplication extends Dis
+ 		return false;
+ 	}
+ 
+-	private setupSharedProcess(machineId: string, sqmId: string, devDeviceId: string): { sharedProcessReady: Promise<MessagePortClient>; sharedProcessClient: Promise<MessagePortClient> } {
++	private setupSharedProcess(machineId: string, sqmId: string, devDeviceId: string): { sharedProcessReady: Promise<MessagePortClient>; sharedProcessClient: Promise<MessagePortClient>; startSharedProcess: () => void } {
+ 		const sharedProcess = this._register(this.mainInstantiationService.createInstance(SharedProcess, machineId, sqmId, devDeviceId));
+ 
+ 		this._register(sharedProcess.onDidCrash(() => this.windowsMainService?.sendToFocused('vscode:reportSharedProcessCrash')));
+@@ -1077,10 +1084,10 @@ export class CodeApplication extends Dis
+ 			return sharedProcessClient;
+ 		})();
+ 
+-		return { sharedProcessReady, sharedProcessClient };
++		return { sharedProcessReady, sharedProcessClient, startSharedProcess: () => sharedProcess.startWithoutWindow() };
+ 	}
+ 
+-	private async initServices(machineId: string, sqmId: string, devDeviceId: string, sharedProcessReady: Promise<MessagePortClient>): Promise<IInstantiationService> {
++	private async initServices(machineId: string, sqmId: string, devDeviceId: string, sharedProcessReady: Promise<MessagePortClient>, startSharedProcess: () => void): Promise<IInstantiationService> {
+ 		const services = new ServiceCollection();
+ 
+ 		// Update
+@@ -1102,6 +1109,9 @@ export class CodeApplication extends Dis
  				break;
  		}
  
 +		// WSO2 component updates
-+		services.set(IWso2ComponentUpdateService, new SyncDescriptor(Wso2ComponentUpdateService));
++		services.set(IWso2ComponentUpdateService, new SyncDescriptor(Wso2ComponentUpdateService, [getDelayedChannel(sharedProcessReady.then(client => client.getChannel('extensions'))), startSharedProcess]));
 +
  		// Windows
  		services.set(IWindowsMainService, new SyncDescriptor(WindowsMainService, [machineId, sqmId, devDeviceId, this.userEnv], false));
  		services.set(IAuxiliaryWindowsMainService, new SyncDescriptor(AuxiliaryWindowsMainService, undefined, false));
-@@ -1283,6 +1288,9 @@ export class CodeApplication extends Dis
+@@ -1283,6 +1293,9 @@ export class CodeApplication extends Dis
  		const updateChannel = new UpdateChannel(updateService);
  		mainProcessElectronServer.registerChannel('update', updateChannel);
  
@@ -276,7 +354,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Updat
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Update.ts
-@@ -0,0 +1,249 @@
+@@ -0,0 +1,268 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -396,6 +474,8 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Updat
 +	readonly availableVersion?: string;
 +	/** Version staged and awaiting a restart, if any. */
 +	readonly pendingVersion?: string;
++	/** True when the staged version needs a newer app, so it activates with the app update rather than on restart. */
++	readonly pendingAwaitsAppUpdate?: boolean;
 +	/** True when an installed override is active (i.e. not just the bundled version) and can be reverted. */
 +	readonly overridden?: boolean;
 +}
@@ -456,8 +536,9 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Updat
 +	| { readonly type: Wso2UpdateStateType.CheckingForUpdates; readonly explicit: boolean }
 +	| { readonly type: Wso2UpdateStateType.UpdatesAvailable; readonly updates: readonly IWso2AvailableUpdate[]; readonly appUpdate?: IWso2AvailableAppUpdate }
 +	| { readonly type: Wso2UpdateStateType.Downloading; readonly progress?: IWso2DownloadProgress }
-+	| { readonly type: Wso2UpdateStateType.Downloaded; readonly stagedExtensions: readonly IWso2StagedExtension[]; readonly restartRequired: boolean }
-+	| { readonly type: Wso2UpdateStateType.Error; readonly message: string };
++	/** `replayed` (here and on Error): the same state put back after other work. Already announced, so only the indicator re-syncs. */
++	| { readonly type: Wso2UpdateStateType.Downloaded; readonly stagedExtensions: readonly IWso2StagedExtension[]; readonly restartRequired: boolean; readonly replayed?: boolean }
++	| { readonly type: Wso2UpdateStateType.Error; readonly message: string; readonly replayed?: boolean };
 +
 +/**
 + * Main-process service that discovers, verifies and stages component updates for
@@ -525,12 +606,28 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/common/wso2Updat
 +	 * download or verification fails (so the caller can surface an error without quitting).
 +	 */
 +	applyAppUpdate(): Promise<void>;
++
++	/**
++	 * Stages the runtimes a downloaded app update needs, resolving once that is done, has failed or
++	 * has stopped making progress. Never rejects. The macOS updater awaits it before reporting the
++	 * update Ready, so none of the app's own restart paths installs the update without them. Quitting
++	 * outright still can (Squirrel installs a downloaded update on the next launch regardless), in
++	 * which case the new app's first check fetches what is missing.
++	 */
++	prepareForAppUpdate(incomingVersion: string | undefined): Promise<void>;
++
++	/**
++	 * Resolves once extensions downloaded with an app update have been installed on this one, or
++	 * after a bounded wait. Never rejects. Startup awaits it before opening the first window, so the
++	 * extension host starts on the new versions.
++	 */
++	whenDeferredExtensionsInstalled(): Promise<void>;
 +}
 Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
-@@ -0,0 +1,1449 @@
+@@ -0,0 +1,1797 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -555,8 +652,11 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +import * as os from 'os';
 +import * as path from '../../../base/common/path.js';
 +import { shell } from 'electron';
++import { raceTimeout } from '../../../base/common/async.js';
 +import { Emitter } from '../../../base/common/event.js';
 +import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
++import { URI } from '../../../base/common/uri.js';
++import { IChannel } from '../../../base/parts/ipc/common/ipc.js';
 +import { CancellationToken } from '../../../base/common/cancellation.js';
 +import { listenStream } from '../../../base/common/stream.js';
 +import { extract } from '../../../base/node/zip.js';
@@ -580,18 +680,29 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	Wso2UpdateStateType
 +} from '../common/wso2Update.js';
 +import {
++	awaitingDeferredExtensions,
 +	compareVersions,
++	decideDeferredExtensions,
 +	ensureExecutablePermissions,
 +	getComponentsHome,
 +	getComponentsManifestPath,
 +	getDownloadsHome,
 +	getStagingHome,
++	heldBackPendingComponents,
 +	ILocalComponentEntry,
 +	ILocalComponentsManifest,
 +	isActiveSeedingDir,
 +	LOCAL_MANIFEST_SCHEMA_VERSION,
++	pinPendingToApp,
++	ineligibleBaselineVersions,
++	incomingAppVersionToPrepare,
++	installedComponentVersion,
 +	readLocalManifest,
 +	reconcileBundledVersions,
++	satisfiesRange,
++	stagedPendingComponents,
++	sweepStagedExtensionDownloads,
++	untilSettledOrStalled,
 +	writeLocalManifest
 +} from '../node/wso2ComponentsManifest.js';
 +
@@ -623,6 +734,20 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 + * pressure, which an instant retry only adds to.
 + */
 +const DOWNLOAD_ATTEMPTS = 3;
++
++/**
++ * How long preparing for an app update may go without progress before the app update stops waiting
++ * for it. Not a deadline: a slow link keeps moving bytes and is waited for however long it takes.
++ * This only releases a restart held behind a download that has stopped moving.
++ */
++const PREPARE_STALL_MS = 3 * 60 * 1000;
++
++/**
++ * How long the first window waits for extensions downloaded with an app update to install. Past it
++ * the window opens anyway and the install finishes behind it; the extension host then starts on the
++ * old version and picks the new one up on its next restart.
++ */
++const DEFERRED_INSTALL_WAIT_MS = 60 * 1000;
 +const DOWNLOAD_RETRY_DELAYS_MS = [3000, 10000];
 +
 +/**
@@ -649,6 +774,14 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +/** Key-sorted entries, so two equal `requires` maps compare equal regardless of key order. */
 +function sortedEntries(map: { readonly [id: string]: string }): [string, string][] {
 +	return Object.entries(map).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
++}
++
++/**
++ * `state` put back after other work, marked so the workbench does not announce it again: a
++ * Downloaded state would raise its restart prompt a second time, an Error its failure toast.
++ */
++function replayedState(state: Wso2UpdateState): Wso2UpdateState {
++	return state.type === Wso2UpdateStateType.Downloaded || state.type === Wso2UpdateStateType.Error ? { ...state, replayed: true } : state;
 +}
 +
 +/** Carries whether a failed download attempt is worth repeating. */
@@ -720,8 +853,18 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	/** Last progress emission, to rate-limit state events crossing the IPC boundary. */
 +	private lastProgressEmit = 0;
 +
++	/** When download work last moved (a chunk arrived, or a phase finished); see prepareForAppUpdate. */
++	private lastDownloadActivity = 0;
++
 +	/** The server's last answer, retained so downloadUpdates() can act on the offered set. */
 +	private lastResponse: IWso2UpdateCheckResponse | undefined;
++
++	/**
++	 * The app update this run staged components for, so the regular checks leave what was staged for
++	 * it alone (see stagedPendingComponents). In memory only: after a restart that did not install
++	 * the update, those components are just held, and must not block what the old app can take.
++	 */
++	private preparedAppVersion: string | undefined;
 +
 +	/**
 +	 * Bearer token for update-server requests, supplied by the workbench (see
@@ -756,7 +899,17 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		return { Authorization: `Bearer ${this.entitlementToken}` };
 +	}
 +
++	/** Installing extensions deferred from an app update; see whenDeferredExtensionsInstalled(). */
++	private readonly deferredExtensionsInstall: Promise<void>;
++
 +	constructor(
++		/** The shared process's extension-management channel; calls wait until that process is ready. */
++		private readonly sharedProcessExtensions: IChannel,
++		/**
++		 * Starts the shared process before any window asks for it. Without it, a call on the channel
++		 * above made before the first window opens waits for a window that is waiting for this.
++		 */
++		private readonly startSharedProcess: () => void,
 +		@ILifecycleMainService private readonly lifecycleMainService: ILifecycleMainService,
 +		@IConfigurationService private readonly configurationService: IConfigurationService,
 +		@IRequestService private readonly requestService: IRequestService,
@@ -782,6 +935,11 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			this.logService.warn('[wso2Update] health/GC pass failed', err);
 +		}
 +
++		// Extensions downloaded for this app while the previous one was running. Started here, not
++		// on first use, because the first window waits on it (whenDeferredExtensionsInstalled).
++		this.deferredExtensionsInstall = this.installDeferredExtensions()
++			.catch(err => this.logService.warn('[wso2Update] installing deferred extensions failed', err));
++
 +		if (!this.updateBaseUrl) {
 +			this.logService.info('[wso2Update] disabled (no wso2UpdateUrl configured)');
 +			return;
@@ -794,6 +952,10 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +
 +	private get dataFolderName(): string {
 +		return this.productService.dataFolderName;
++	}
++
++	private get dataFolderHome(): string {
++		return path.join(os.homedir(), this.dataFolderName);
 +	}
 +
 +	private get componentsHome(): string {
@@ -896,7 +1058,14 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	/** Whether any runtime component is staged and waiting for a restart to activate. */
 +	private hasPendingComponents(): boolean {
 +		const local = readLocalManifest(this.componentsHome);
-+		return !!local && Object.values(local.components).some(entry => !!entry.pending);
++		if (!local) {
++			return false;
++		}
++		// A component held for an app that is not running is not waiting on a restart: restarting
++		// this app would leave it exactly where it is. Counting it would put "Restart to finish
++		// updating" up on every launch of the old app, and every restart would change nothing.
++		const held = heldBackPendingComponents(local, this.appVersion());
++		return Object.entries(local.components).some(([id, entry]) => !!entry.pending && !held.has(id));
 +	}
 +
 +	/**
@@ -907,8 +1076,13 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	 * The response is composed per client and therefore unsigned. That is safe only because every
 +	 * artifact it names is verified against its own signed statement before installation, and
 +	 * because the offers below are re-checked against local state rather than taken on trust.
++	 *
++	 * `asAppVersion` asks on behalf of an app update that is downloaded but not yet running (see
++	 * prepareForAppUpdate). The server keeps no client state, so asking as that version is
++	 * all it takes to be answered from its release's document. The running build's commit is left
++	 * out then: paired with another version it would describe a build that does not exist.
 +	 */
-+	private async fetchUpdates(): Promise<IWso2UpdateCheckResponse | undefined> {
++	private async fetchUpdates(asAppVersion?: string): Promise<IWso2UpdateCheckResponse | undefined> {
 +		const url = `${this.updateBaseUrl}/api/v1/updates`;
 +		if (!this.isAllowedUrl(url)) {
 +			throw new Error(`Update server host not allowed: ${url}`);
@@ -917,8 +1091,8 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			channel: this.channel,
 +			platform: this.platformKey(),
 +			arch: this.archKey(),
-+			appVersion: this.appVersion(),
-+			...(this.productService.commit ? { appCommit: this.productService.commit } : {}),
++			appVersion: asAppVersion ?? this.appVersion(),
++			...(this.productService.commit && !asAppVersion ? { appCommit: this.productService.commit } : {}),
 +			components: this.componentInventory(),
 +			bucket: this.rolloutBucket()
 +		};
@@ -988,9 +1162,12 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		return parseInt(createHash('sha1').update(this.deviceId()).digest('hex').slice(0, 8), 16) % 100;
 +	}
 +
-+	private resolveOfferedUpdates(response: IWso2UpdateCheckResponse): IWso2AvailableUpdate[] {
++	/** `appVersion` is the app the offers must suit: the running one unless preparing for an update. */
++	private resolveOfferedUpdates(response: IWso2UpdateCheckResponse, appVersion = this.appVersion()): IWso2AvailableUpdate[] {
 +		const local = readLocalManifest(this.componentsHome);
 +		const projected = this.projectedVersions(response);
++		const staged = local ? stagedPendingComponents(local, appVersion, this.preparedAppVersion) : new Set<string>();
++		const deferred = local ? awaitingDeferredExtensions(local, appVersion, this.preparedAppVersion) : new Set<string>();
 +		const offered: IWso2AvailableUpdate[] = [];
 +		for (const component of response.components) {
 +			// Trust boundary: these two values become path segments (stage, rm, rename). Refuse a
@@ -1007,9 +1184,18 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +				this.logService.info(`[wso2Update] ignoring ${component.id}@${component.version}: not newer than ${activeVersion}`);
 +				continue;
 +			}
-+			// Already downloaded and staged for the next restart — don't re-offer/re-download.
++			// Already downloaded and staged — for the next restart, or for the app update being
++			// prepared — so don't re-offer/re-download. Not when it is held for an app that is not
++			// coming: it must not stand in the way of a compatible update this app can take.
 +			const pendingVersion = local?.components[component.id]?.pending?.version;
-+			if (pendingVersion && compareVersions(pendingVersion, component.version) >= 0) {
++			if (pendingVersion && staged.has(component.id) && compareVersions(pendingVersion, component.version) >= 0) {
++				continue;
++			}
++			// Downloaded for an app update and installed when that app boots. Offering it as well
++			// would download it a second time and install it from the renderer in parallel. Not when
++			// the app it waits for is not coming: it must not keep this app from a compatible fix.
++			const deferredVersion = local?.components[component.id]?.deferredExtension?.version;
++			if (deferredVersion && deferred.has(component.id) && compareVersions(deferredVersion, component.version) >= 0) {
 +				continue;
 +			}
 +			// This exact version already stopped the app from booting and was auto-reverted. The
@@ -1020,7 +1206,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +				this.logService.info(`[wso2Update] ignoring ${component.id}@${component.version}: previously auto-reverted after failing to boot`);
 +				continue;
 +			}
-+			if (!this.requiresSatisfied(component, local, projected)) {
++			if (!this.requiresSatisfied(component, local, projected, appVersion)) {
 +				this.logService.info(`[wso2Update] ignoring ${component.id}@${component.version}: unmet requirements`);
 +				continue;
 +			}
@@ -1039,23 +1225,31 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	 * Whether a component's `requires` hold for this machine. `app` is compared against the version
 +	 * running RIGHT NOW — never one a queued update would reach — because the user may never
 +	 * restart, and a component needing the newer app must not land on the older one meanwhile.
++	 *
++	 * The one exception is `appVersion`, passed only when staging for an app update that is already
++	 * downloaded. That is still safe: what it stages is recorded with its `requires`, and activation
++	 * holds it back on any app that does not meet them (heldBackPendingComponents).
 +	 */
 +	private requiresSatisfied(
 +		component: IWso2ComponentOffer,
 +		local: ILocalComponentsManifest | undefined,
-+		projected: Map<string, string>
++		projected: Map<string, string>,
++		appVersion = this.appVersion()
 +	): boolean {
 +		if (!component.requires) {
 +			return true;
 +		}
 +		for (const [depId, range] of Object.entries(component.requires)) {
 +			const depVersion = depId === 'app'
-+				? this.appVersion()
-+				: (projected.get(depId) ?? this.activeVersion(depId, local) ?? this.bundledVersion(depId));
++				? appVersion
++				// No `?? this.bundledVersion(depId)`: with nothing on disk, activeVersion() returns
++				// undefined on purpose, and substituting the declared version here would satisfy a
++				// `requires` against a runtime this machine does not have.
++				: (projected.get(depId) ?? this.activeVersion(depId, local));
 +			if (!depVersion) {
 +				return false;
 +			}
-+			if (!this.satisfiesRange(depVersion, range)) {
++			if (!satisfiesRange(depVersion, range, c => this.logService.trace(`[wso2Update] unrecognized version comparator '${c}'; accepting`))) {
 +				this.logService.info(`[wso2Update] ${component.id}: ${depId} ${depVersion} does not satisfy '${range}'`);
 +				return false;
 +			}
@@ -1063,35 +1257,6 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		return true;
 +	}
 +
-+	/**
-+	 * Whitespace-separated comparators, all of which must hold: ">=5.1.0 <5.2.0". Mirrors the
-+	 * server's satisfiesRange so both sides agree; an unrecognised comparator is accepted rather
-+	 * than failing an update closed on a range this client is simply too old to understand.
-+	 */
-+	private satisfiesRange(version: string, range: string): boolean {
-+		for (const comparator of range.trim().split(/\s+/).filter(Boolean)) {
-+			// The version part must actually look like a version: without this the regex matches any
-+			// token, so a range written for a richer grammar (`^5.1.0`, `~5.1`) would compare garbage
-+			// and fail CLOSED -- withholding the component -- instead of taking the documented
-+			// accept-what-we-don't-understand path.
-+			const match = /^(>=|<=|>|<|==|=)?\s*([0-9][0-9A-Za-z.+_-]*)$/.exec(comparator);
-+			if (!match) {
-+				this.logService.trace(`[wso2Update] unrecognized version comparator '${comparator}'; accepting`);
-+				continue;
-+			}
-+			const op = match[1] ?? '=';
-+			const cmp = compareVersions(version, match[2]);
-+			const satisfied = op === '>=' ? cmp >= 0
-+				: op === '>' ? cmp > 0
-+					: op === '<=' ? cmp <= 0
-+						: op === '<' ? cmp < 0
-+							: cmp === 0;
-+			if (!satisfied) {
-+				return false;
-+			}
-+		}
-+		return true;
-+	}
 +
 +	/** The versions this client would be on after taking everything in this answer. */
 +	private projectedVersions(response: IWso2UpdateCheckResponse): Map<string, string> {
@@ -1155,12 +1320,27 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		}
 +
 +		this.setState({ type: Wso2UpdateStateType.Downloading });
++		try {
++			const { stagedExtensions, restartRequired } = await this.fetchComponents(targetComponents);
++			this.setState({ type: Wso2UpdateStateType.Downloaded, stagedExtensions, restartRequired });
++		} catch (err) {
++			this.logService.error('[wso2Update] download/apply failed', err);
++			this.setState({ type: Wso2UpdateStateType.Error, message: String(err) });
++		}
++	}
++
++	/**
++	 * Downloads and stages `targets` in order, publishing per-component progress. Stops at the first
++	 * failure and throws it; whatever staged before that stays staged. `appVersion` is the app they
++	 * are for, as in resolveOfferedUpdates().
++	 */
++	private async fetchComponents(targets: readonly IWso2ComponentOffer[], appVersion = this.appVersion()): Promise<{ stagedExtensions: IWso2StagedExtension[]; restartRequired: boolean }> {
 +		const stagedExtensions: IWso2StagedExtension[] = [];
 +		let restartRequired = false;
-+
 +		try {
 +			const localBefore = readLocalManifest(this.componentsHome);
-+			for (const [position, component] of targetComponents.entries()) {
++			const stagedBefore = localBefore ? stagedPendingComponents(localBefore, appVersion, this.preparedAppVersion) : new Set<string>();
++			for (const [position, component] of targets.entries()) {
 +				// Attribute the bytes about to move to this component. `sizeBytes` is what the offer
 +				// claimed; when it is absent the UI shows an indeterminate download rather than
 +				// inventing a denominator.
@@ -1168,7 +1348,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +					id: component.id,
 +					version: component.version,
 +					index: position + 1,
-+					total: targetComponents.length,
++					total: targets.length,
 +					...(component.artifact.sizeBytes !== undefined ? { totalBytes: component.artifact.sizeBytes } : {}),
 +					receivedBytes: 0
 +				};
@@ -1180,7 +1360,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +					// Already staged at (or above) this version — don't re-download; it just
 +					// needs a restart to activate.
 +					const pending = localBefore?.components[component.id]?.pending?.version;
-+					if (pending && compareVersions(pending, component.version) >= 0) {
++					if (pending && stagedBefore.has(component.id) && compareVersions(pending, component.version) >= 0) {
 +						this.logService.info(`[wso2Update] ${component.id}@${component.version} already staged; skipping re-download`);
 +						restartRequired = true;
 +						continue;
@@ -1189,23 +1369,222 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +					restartRequired = true;
 +				}
 +			}
++		} finally {
 +			this.activeDownload = undefined;
-+			this.setState({ type: Wso2UpdateStateType.Downloaded, stagedExtensions, restartRequired });
-+		} catch (err) {
-+			this.activeDownload = undefined;
-+			this.logService.error('[wso2Update] download/apply failed', err);
-+			this.setState({ type: Wso2UpdateStateType.Error, message: String(err) });
++		}
++		return { stagedExtensions, restartRequired };
++	}
++
++	/**
++	 * Stages the runtime components `incomingVersion` needs, once that app update is downloaded, and
++	 * resolves when that is done. The macOS updater awaits this before announcing the update Ready.
++	 *
++	 * The regular check asks as the RUNNING app, and a release's components require that release's
++	 * app, so an app update used to arrive with none of its runtimes: the editor-only payload carries
++	 * none, and the old app was never offered them. Asking as the incoming version closes the gap.
++	 * Everything staged here is recorded with its `requires`, so if the restart does not install the
++	 * update after all, activation leaves it pending rather than running it on the old app.
++	 *
++	 * Extensions are left to the new app's own startup check. A staged VSIX is installed by whichever
++	 * renderer sees it, which here would be the old app's.
++	 *
++	 * Never rejects, and never holds the app update hostage: a failure resolves (the new app fetches
++	 * what is missing on its own first check), and so does work that stops making progress for
++	 * PREPARE_STALL_MS -- it carries on in the background, but the restart no longer waits for it.
++	 */
++	async prepareForAppUpdate(incomingVersion: string | undefined): Promise<void> {
++		// Same gates as the scheduled checks: this moves hundreds of megabytes unasked.
++		if (!this.updateBaseUrl || this.mode === 'none' || this.mode === 'manual') {
++			return;
++		}
++		const version = incomingAppVersionToPrepare(incomingVersion, this.appVersion());
++		if (!version) {
++			// The same version (a rebuild) needs nothing the regular check would not bring. Anything
++			// else means the feed did not report the WSO2 version it is expected to put in the release
++			// name, and this update will arrive without its runtimes -- worth saying out loud.
++			if (incomingVersion === this.appVersion()) {
++				this.logService.trace(`[wso2Update] app update downloaded (${incomingVersion}); same version, nothing to prepare for`);
++			} else {
++				this.logService.warn(`[wso2Update] app update downloaded, but its version '${incomingVersion ?? ''}' is not a newer WSO2 Integrator version than ${this.appVersion()}; not preparing components for it`);
++			}
++			return;
++		}
++		await this.untilPreparedOrStalled(this.runExclusive(() => this.stageComponentsForAppUpdate(version)), version);
++	}
++
++	/**
++	 * Waits for staging for an app update, but never longer than it keeps making progress, and never
++	 * rejects: the app update must not wait on a component. Work that stalls carries on in the
++	 * background; the new app fetches whatever it did not finish.
++	 */
++	private async untilPreparedOrStalled(work: Promise<void>, version: string): Promise<void> {
++		const settled = work.catch(err => this.logService.warn(`[wso2Update] could not prepare components for app update ${version}; the new app will fetch them`, err));
++		this.lastDownloadActivity = Date.now();
++		if (!await untilSettledOrStalled(settled, () => this.lastDownloadActivity, PREPARE_STALL_MS)) {
++			this.logService.warn(`[wso2Update] preparing for app update ${version} made no progress for ${PREPARE_STALL_MS / 1000}s; no longer holding the update for it`);
 +		}
 +	}
 +
-+	private async downloadExtension(component: IWso2ComponentOffer): Promise<string> {
-+		// Same trust boundary as stageRuntime: id and version become path segments.
-+		if (!isSafePathSegment(component.id) || !isSafePathSegment(component.version)) {
-+			throw new Error(`Unsafe component id/version: '${component.id}' '${component.version}'`);
++	/**
++	 * The work behind prepareForAppUpdate(); callers hold runExclusive(). The state is put back
++	 * afterwards rather than left at Downloaded: Downloaded offers a plain restart, which would not
++	 * install the app update these components wait for. The app update's own Ready is the prompt.
++	 */
++	private async stageComponentsForAppUpdate(incomingVersion: string): Promise<void> {
++		this.preparedAppVersion = incomingVersion;
++		const response = await this.fetchUpdates(incomingVersion);
++		// Not lastResponse: that describes the running app, and Show Components and downloadUpdates()
++		// act on it. These offers are for an app that is not running yet.
++		const wanted = new Set(response ? this.resolveOfferedUpdates(response, incomingVersion).map(u => u.id) : []);
++		// An extension the running app can already take goes through the regular check and installs
++		// now. Only one it cannot is downloaded here, to install when the incoming app boots. "Can"
++		// means against what is active on this machine NOW (no projection): an extension that needs a
++		// runtime staged in this very pass cannot run until the restart either.
++		const local = readLocalManifest(this.componentsHome);
++		const nothingProjected = new Map<string, string>();
++		const targets = response?.components.filter(c => wanted.has(c.id)
++			&& (c.kind !== 'extension' || !this.requiresSatisfied(c, local, nothingProjected))) ?? [];
++
++		if (!targets.length) {
++			return;
 +		}
-+		const dir = path.join(this.stagingHome, component.id, component.version);
-+		await fs.promises.mkdir(dir, { recursive: true });
-+		const vsixPath = path.join(dir, `${component.id}-${component.version}.vsix`);
++		this.logService.info(`[wso2Update] staging ${targets.map(c => `${c.id}@${c.version}`).join(', ')} for app update ${incomingVersion}`);
++		const before = this._state;
++		this.setState({ type: Wso2UpdateStateType.Downloading });
++		try {
++			const { stagedExtensions } = await this.fetchComponents(targets, incomingVersion);
++			this.recordDeferredExtensions(stagedExtensions, targets, incomingVersion);
++		} finally {
++			// Whatever staged, even before a failure, is for the incoming app only.
++			this.updateLocalManifest(manifest => pinPendingToApp(manifest, targets, incomingVersion));
++			// An extension is recorded only once every target is in. After a failure, one that did
++			// download has no record, and nothing else would ever remove it.
++			const recorded = readLocalManifest(this.componentsHome);
++			for (const c of targets) {
++				if (c.kind === 'extension' && recorded?.components[c.id]?.deferredExtension?.version !== c.version) {
++					this.removeStagedExtension(c.id, c.version);
++				}
++			}
++			this.setState(replayedState(before));
++		}
++	}
++
++	/**
++	 * Records extensions downloaded for an app update, to be installed when it boots. Nothing tells
++	 * the renderer about them: the renderer that would install them now is the old app's. Pinned to
++	 * `incomingVersion` like the runtimes staged with them (pinPendingToApp), so one deferred only for
++	 * a runtime it needs does not install on the old app should that runtime reach it another way.
++	 */
++	private recordDeferredExtensions(staged: readonly IWso2StagedExtension[], offers: readonly IWso2ComponentOffer[], incomingVersion: string): void {
++		if (!staged.length) {
++			return;
++		}
++		const requires = new Map(offers.map(c => [c.id, c.requires]));
++		const superseded: { id: string; version: string }[] = [];
++		this.updateLocalManifest(manifest => {
++			for (const extension of staged) {
++				const entry = manifest.components[extension.id] ?? (manifest.components[extension.id] = {});
++				entry.bundledVersion = entry.bundledVersion ?? this.bundledVersion(extension.id);
++				const previous = entry.deferredExtension?.version;
++				if (previous && previous !== extension.version) {
++					superseded.push({ id: extension.id, version: previous });
++				}
++				const extensionRequires = requires.get(extension.id);
++				entry.deferredExtension = {
++					version: extension.version,
++					path: path.relative(this.dataFolderHome, extension.vsixPath),
++					installedAt: new Date().toISOString(),
++					requires: { ...extensionRequires, app: extensionRequires?.app ?? `>=${incomingVersion}` }
++				};
++			}
++		});
++		for (const { id, version } of superseded) {
++			this.removeStagedExtension(id, version);
++		}
++		this.logService.info(`[wso2Update] deferred ${staged.map(e => `${e.id}@${e.version}`).join(', ')} to the app update`);
++	}
++
++	async whenDeferredExtensionsInstalled(): Promise<void> {
++		await raceTimeout(this.deferredExtensionsInstall, DEFERRED_INSTALL_WAIT_MS, () =>
++			this.logService.warn(`[wso2Update] deferred extensions still installing after ${DEFERRED_INSTALL_WAIT_MS / 1000}s; opening the window without waiting`));
++	}
++
++	/**
++	 * Installs, through the shared process, the extensions that were downloaded for this app while
++	 * the previous one was running. Runs at startup, before any window, so the extension host starts
++	 * on the new versions instead of activating the old ones against the new runtimes.
++	 *
++	 * An install that fails is dropped rather than retried: the next check offers the extension the
++	 * ordinary way. One that this app does not meet the requirements of stays for the app it waits for.
++	 */
++	private async installDeferredExtensions(): Promise<void> {
++		const local = readLocalManifest(this.componentsHome);
++		if (!local) {
++			return;
++		}
++		const { install, discard } = decideDeferredExtensions(local, this.appVersion(), id => this.activeVersion(id, local));
++		for (const { id, version } of discard) {
++			this.logService.info(`[wso2Update] dropping deferred ${id}@${version}: already installed at that version or newer`);
++			this.clearDeferredExtension(id, version);
++		}
++		// No window yet, so no renderer install in flight: any VSIX not deferred is a leftover.
++		const swept = sweepStagedExtensionDownloads(this.stagingHome, readLocalManifest(this.componentsHome));
++		if (swept.length) {
++			this.logService.info(`[wso2Update] removed unreferenced extension downloads: ${swept.join(', ')}`);
++		}
++		if (!install.length) {
++			return;
++		}
++		// The shared process normally waits for the first window, and the first window is waiting for
++		// this. Only a launch that has something to install starts it early.
++		this.startSharedProcess();
++		for (const { id, version } of install) {
++			try {
++				// Rebuilt from the id and version, not read back from the manifest: a recorded path is
++				// just a string in a JSON file, while these are held to the same shape as at download.
++				const vsix = this.stagedExtensionPath(id, version);
++				this.logService.info(`[wso2Update] installing deferred ${id}@${version} from ${vsix}`);
++				// The options the renderer install uses (see the workbench contribution): a shadow of
++				// the built-in copy, pinned so marketplace auto-update leaves it alone.
++				await this.sharedProcessExtensions.call('install', [URI.file(vsix), { isBuiltin: true, pinned: true }]);
++				await this.recordExtensionInstalled(id, version);
++			} catch (err) {
++				this.logService.warn(`[wso2Update] could not install deferred ${id}@${version}; it will be offered again`, err);
++				this.clearDeferredExtension(id, version);
++			}
++		}
++	}
++
++	/** Forgets a deferred extension and deletes its download. */
++	private clearDeferredExtension(id: string, version: string): void {
++		this.updateLocalManifest(manifest => {
++			const entry = manifest.components[id];
++			if (entry?.deferredExtension?.version === version) {
++				entry.deferredExtension = null;
++			}
++		});
++		this.removeStagedExtension(id, version);
++	}
++
++	private removeStagedExtension(id: string, version: string): void {
++		if (isSafePathSegment(id) && isSafePathSegment(version)) {
++			fs.promises.rm(path.join(this.stagingHome, id, version), { recursive: true, force: true })
++				.catch(err => this.logService.warn(`[wso2Update] could not clean staged ${id}@${version}`, err));
++		}
++	}
++
++	/** Where an extension's VSIX is staged. Throws for an id or version that could leave the staging tree. */
++	private stagedExtensionPath(id: string, version: string): string {
++		// Same trust boundary as stageRuntime: id and version become path segments.
++		if (!isSafePathSegment(id) || !isSafePathSegment(version)) {
++			throw new Error(`Unsafe component id/version: '${id}' '${version}'`);
++		}
++		return path.join(this.stagingHome, id, version, `${id}-${version}.vsix`);
++	}
++
++	private async downloadExtension(component: IWso2ComponentOffer): Promise<string> {
++		const vsixPath = this.stagedExtensionPath(component.id, component.version);
++		await fs.promises.mkdir(path.dirname(vsixPath), { recursive: true });
 +		await this.downloadAndVerify(component.artifact.url, vsixPath, {
 +			id: component.id,
 +			version: component.version,
@@ -1239,12 +1618,14 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			signature: component.artifact.signature
 +		});
 +		this.logService.info(`[wso2Update] verified ${component.id}@${component.version}; extracting`);
++		this.lastDownloadActivity = Date.now();
 +
 +		// A crashed earlier attempt may have left a partial tree here; extracting over it would
 +		// merge stale files into the new version. The archive above is the only thing worth reusing.
 +		const extractDir = path.join(stagingDir, 'extracted');
 +		await fs.promises.rm(extractDir, { recursive: true, force: true });
 +		await extract(archivePath, extractDir, {}, CancellationToken.None);
++		this.lastDownloadActivity = Date.now();
 +		await fs.promises.rm(archivePath, { force: true });
 +
 +		// The JRE component is a WRAPPER directory containing a single `jdk-*` home (that is how
@@ -1269,7 +1650,15 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		this.updateLocalManifest(manifest => {
 +			const entry = manifest.components[component.id] ?? (manifest.components[component.id] = {});
 +			entry.bundledVersion = entry.bundledVersion ?? this.bundledVersion(component.id);
-+			entry.pending = { version: component.version, path: relPath, installedAt: new Date().toISOString(), healthy: false };
++			// Requirements go with it, so activation can re-check them against whichever app
++			// actually boots next -- not necessarily this one.
++			entry.pending = {
++				version: component.version,
++				path: relPath,
++				installedAt: new Date().toISOString(),
++				healthy: false,
++				...(component.requires ? { requires: component.requires } : {})
++			};
 +		});
 +
 +		// Verify the pending state actually persisted; a silent write failure here would
@@ -1468,6 +1857,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +					hash.update(chunk.buffer);
 +					if (this.activeDownload) {
 +						this.activeDownload.receivedBytes += chunk.buffer.byteLength;
++						this.lastDownloadActivity = Date.now();
 +						this.reportProgress();
 +					}
 +					if (!out.write(chunk.buffer)) {
@@ -1513,16 +1903,24 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		const local = readLocalManifest(this.componentsHome);
 +		const bundled = this.productService.bundledComponents ?? {};
 +		const statuses = new Map<string, IWso2ComponentStatus>();
++		// A restart of this app leaves these where they are, so "pending restart" would be untrue.
++		const held = local ? heldBackPendingComponents(local, this.appVersion()) : new Map<string, string>();
++		const awaitsApp = (id: string) => held.has(id) || local?.components[id]?.deferredExtension ? { pendingAwaitsAppUpdate: true } : {};
++		const staged = local ? stagedPendingComponents(local, this.appVersion(), this.preparedAppVersion) : new Set<string>();
++		const deferred = local ? awaitingDeferredExtensions(local, this.appVersion(), this.preparedAppVersion) : new Set<string>();
++		const isExtension = (id: string, entry: ILocalComponentEntry) => entry.active?.via === 'user-extension'
++			|| !!entry.deferredExtension
++			|| !!this.productService.builtInExtensions?.some(e => e.name === id);
 +
 +		// Runtime components known from the bundled set.
 +		for (const [id, version] of Object.entries(bundled)) {
-+			statuses.set(id, { id, kind: 'runtime', bundledVersion: version, activeVersion: this.activeVersion(id, local) ?? version, pendingVersion: local?.components[id]?.pending?.version, overridden: !!local?.components[id]?.active });
++			statuses.set(id, { id, kind: 'runtime', bundledVersion: version, activeVersion: this.activeVersion(id, local), pendingVersion: local?.components[id]?.pending?.version, ...awaitsApp(id), overridden: !!local?.components[id]?.active });
 +		}
 +		// Anything recorded locally that isn't in the bundled set (e.g. extensions).
 +		if (local) {
 +			for (const [id, entry] of Object.entries(local.components)) {
 +				if (!statuses.has(id)) {
-+					statuses.set(id, { id, kind: entry.active?.via === 'user-extension' ? 'extension' : 'runtime', bundledVersion: entry.bundledVersion, activeVersion: entry.active?.version ?? entry.bundledVersion, pendingVersion: entry.pending?.version, overridden: !!entry.active });
++					statuses.set(id, { id, kind: isExtension(id, entry) ? 'extension' : 'runtime', bundledVersion: entry.bundledVersion, activeVersion: entry.active?.version ?? entry.bundledVersion, pendingVersion: entry.pending?.version ?? entry.deferredExtension?.version, ...awaitsApp(id), overridden: !!entry.active });
 +				}
 +			}
 +		}
@@ -1533,11 +1931,13 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +				const existing = statuses.get(component.id);
 +				const activeVersion = this.activeVersion(component.id, local);
 +				const pendingVersion = local?.components[component.id]?.pending?.version;
++				const deferredVersion = local?.components[component.id]?.deferredExtension?.version;
 +				// Not "available" if already current, already staged (pending) at that version,
 +				// auto-reverted after a crash loop, or its `requires` are unmet — mirrors
 +				// resolveOfferedUpdates so Show Components and the check command agree.
 +				const availableVersion = ((!activeVersion || compareVersions(component.version, activeVersion) > 0)
-+					&& !(pendingVersion && compareVersions(pendingVersion, component.version) >= 0)
++					&& !(pendingVersion && staged.has(component.id) && compareVersions(pendingVersion, component.version) >= 0)
++					&& !(deferredVersion && deferred.has(component.id) && compareVersions(deferredVersion, component.version) >= 0)
 +					&& !local?.components[component.id]?.failed?.some(f => f.version === component.version)
 +					&& this.requiresSatisfied(component, local, projected))
 +					? component.version : undefined;
@@ -1547,7 +1947,8 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +					bundledVersion: existing?.bundledVersion ?? this.bundledVersion(component.id),
 +					activeVersion: existing?.activeVersion ?? activeVersion,
 +					availableVersion,
-+					pendingVersion: existing?.pendingVersion ?? local?.components[component.id]?.pending?.version,
++					pendingVersion: existing?.pendingVersion ?? local?.components[component.id]?.pending?.version ?? local?.components[component.id]?.deferredExtension?.version,
++					...awaitsApp(component.id),
 +					overridden: existing?.overridden ?? !!local?.components[component.id]?.active
 +				});
 +			}
@@ -1556,24 +1957,30 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	}
 +
 +	async stagedExtensionsApplied(): Promise<void> {
-+		if (this._state.type !== Wso2UpdateStateType.Downloaded) {
-+			return;
-+		}
-+		// A staged runtime only becomes active at the next startup, so the restart affordance has to
-+		// survive until then. Extensions are live as soon as the renderer installs them.
-+		if (this._state.restartRequired) {
-+			return;
-+		}
-+		// Re-derive rather than assuming Idle: the user may have updated a single component from the
-+		// Components picker while others were still on offer.
-+		const response = this.lastResponse;
-+		const updates = response ? this.resolveOfferedUpdates(response) : [];
-+		const appUpdate = response ? this.resolveAppUpdate(response) : undefined;
-+		if (updates.length === 0 && !appUpdate) {
-+			this.setState({ type: Wso2UpdateStateType.Idle });
-+		} else {
-+			this.setState({ type: Wso2UpdateStateType.UpdatesAvailable, updates, appUpdate });
-+		}
++		// Under the same lock as the work that can swap the state out from under it: preparing for an
++		// app update puts its earlier state back when it finishes, and a call that ran in between
++		// would find no Downloaded to clear -- leaving a stale one restored for extensions that are
++		// already installed.
++		return this.runExclusive(async () => {
++			if (this._state.type !== Wso2UpdateStateType.Downloaded) {
++				return;
++			}
++			// A staged runtime only becomes active at the next startup, so the restart affordance has to
++			// survive until then. Extensions are live as soon as the renderer installs them.
++			if (this._state.restartRequired) {
++				return;
++			}
++			// Re-derive rather than assuming Idle: the user may have updated a single component from the
++			// Components picker while others were still on offer.
++			const response = this.lastResponse;
++			const updates = response ? this.resolveOfferedUpdates(response) : [];
++			const appUpdate = response ? this.resolveAppUpdate(response) : undefined;
++			if (updates.length === 0 && !appUpdate) {
++				this.setState({ type: Wso2UpdateStateType.Idle });
++			} else {
++				this.setState({ type: Wso2UpdateStateType.UpdatesAvailable, updates, appUpdate });
++			}
++		});
 +	}
 +
 +	private readonly claimedExtensionInstalls = new Set<string>();
@@ -1591,16 +1998,23 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	}
 +
 +	async recordExtensionInstalled(id: string, version: string): Promise<void> {
++		let supersededDeferred: string | undefined;
 +		this.updateLocalManifest(manifest => {
 +			const entry = manifest.components[id] ?? (manifest.components[id] = {});
 +			entry.bundledVersion = entry.bundledVersion ?? this.bundledVersion(id);
 +			entry.active = { version, via: 'user-extension', installedAt: new Date().toISOString(), healthy: true };
++			// Installed at or past a copy deferred to an app update: that copy has nothing left to do.
++			const deferred = entry.deferredExtension;
++			if (deferred && compareVersions(deferred.version, version) <= 0) {
++				entry.deferredExtension = null;
++				supersededDeferred = deferred.version !== version ? deferred.version : undefined;
++			}
 +		});
 +		// The staged VSIX has served its purpose; nothing re-reads it, so every kept copy is pure
 +		// disk growth (extensions are tens of MB and update often).
-+		if (isSafePathSegment(id) && isSafePathSegment(version)) {
-+			await fs.promises.rm(path.join(this.stagingHome, id, version), { recursive: true, force: true })
-+				.catch(err => this.logService.warn(`[wso2Update] could not clean staged ${id}@${version}`, err));
++		this.removeStagedExtension(id, version);
++		if (supersededDeferred) {
++			this.removeStagedExtension(id, supersededDeferred);
 +		}
 +	}
 +
@@ -1653,7 +2067,13 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		// version too (not just the recorded entry, which may be unset).
 +		// `pending` too: in the narrow window where activation's manifest write failed, the staged
 +		// directory is still the next boot's input and must not be collected under it.
-+		const keep = new Set([entry.active?.version, entry.previous?.version, entry.pending?.version, entry.bundledVersion, this.bundledVersion(id)].filter((v): v is string => !!v));
++		// Both bundled keys name the DECLARED version. After an editor-only update that directory
++		// does not exist, so neither key protects the seeded tree the runtime actually resolves to
++		// -- and collecting it puts the app straight back to ENOENT on the next boot. Keep whatever
++		// installedComponentVersion() reports whenever the declared version is absent.
++		const declared = this.bundledVersion(id);
++		const seededFallback = installedComponentVersion(this.componentsHome, id, declared, ineligibleBaselineVersions(entry));
++		const keep = new Set([entry.active?.version, entry.previous?.version, entry.pending?.version, entry.bundledVersion, declared, seededFallback].filter((v): v is string => !!v));
 +		for (const version of versions) {
 +			if (keep.has(version)) {
 +				continue;
@@ -1722,6 +2142,15 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		// `app` is the reserved statement id for the core-app installer.
 +		await this.downloadAndVerify(url, msiPath, { id: 'app', version: app.version, sha256, signature });
 +		this.logService.info(`[wso2Update] verified app update MSI at ${msiPath}; scheduling silent install on quit`);
++
++		// The MSI is editor-only, so fetch the runtimes this version needs before quitting to install
++		// it. Best effort, with the same stall guard as macOS: a download that stops moving must not
++		// keep "Update and Restart" from ever installing. Whatever is missing, the new app is offered
++		// on its own first check.
++		const incoming = incomingAppVersionToPrepare(app.version, this.appVersion());
++		if (incoming) {
++			await this.untilPreparedOrStalled(this.stageComponentsForAppUpdate(incoming), incoming);
++		}
 +
 +		// Apply the editor-only MSI on quit, then relaunch — deterministically. The earlier approach
 +		// (a detached cmd.exe with fixed `ping` delays) was racy: msiexec could fire while the app
@@ -1904,7 +2333,23 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	//#region helpers
 +
 +	private activeVersion(id: string, local: ILocalComponentsManifest | undefined): string | undefined {
-+		return local?.components[id]?.active?.version ?? this.bundledVersion(id);
++		const active = local?.components[id]?.active?.version;
++		if (active) {
++			return active;
++		}
++		// Report what is on disk, not what product.json claims to bundle. Those agree for an app
++		// installed from the full installer, and diverge after an editor-only update: the new
++		// product.json names runtimes the payload never carried, so falling back to the declared
++		// version makes the client tell the server it already HAS the version it is missing. The
++		// server then correctly offers nothing and the state can never heal itself -- which is
++		// exactly how a stranded ballerina-runtime stayed stranded across every hourly check.
++		// Returns undefined when nothing is on disk, so callers must not paper over that with the
++		// declared version: an honest gap is what lets the server offer the component.
++		const bundled = this.bundledVersion(id);
++		if (bundled && this.productService.bundledComponents?.[id]) {
++			return installedComponentVersion(this.componentsHome, id, bundled, ineligibleBaselineVersions(local?.components[id]));
++		}
++		return bundled;
 +	}
 +
 +	private bundledVersion(id: string): string | undefined {
@@ -1984,7 +2429,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,711 @@
+@@ -0,0 +1,1258 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2023,6 +2468,14 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +	readonly healthy?: boolean;
 +	/** Consecutive boots this override has been active without being confirmed healthy (auto-fallback). */
 +	readonly bootCount?: number;
++	/**
++	 * The requirements the server attached to this version when it was offered, recorded at staging
++	 * so activation can re-check them at boot. They were satisfied when the component was staged,
++	 * but the app that boots next is not necessarily the app that staged it: an app update may have
++	 * landed in between, or failed to. Absent on versions staged before requirements were recorded,
++	 * which activate unconditionally exactly as they always did.
++	 */
++	readonly requires?: { readonly [id: string]: string };
 +}
 +
 +export interface ILocalComponentEntry {
@@ -2030,6 +2483,12 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +	active?: ILocalComponentVersion | null;
 +	previous?: ILocalComponentVersion | null;
 +	pending?: ILocalComponentVersion | null;
++	/**
++	 * An extension downloaded for an app update that is not running yet, installed by the main
++	 * process when that app boots and before any window opens, so the extension host starts on it.
++	 * Kept apart from `pending`, which is runtime activation's: `path` is a VSIX, not a runtime root.
++	 */
++	deferredExtension?: ILocalComponentVersion | null;
 +	/**
 +	 * Versions auto-reverted after they kept the app from booting. Recorded so the same version is
 +	 * not offered, downloaded and activated again on the very next check — which, since the revert
@@ -2131,7 +2590,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 + *
 + * Returns the resolved active overrides after activation.
 + */
-+export function activatePendingRuntimeComponents(dataFolderHome: string, log?: (message: string) => void): Record<string, string> {
++export function activatePendingRuntimeComponents(dataFolderHome: string, runningAppVersion: string | undefined, log?: (message: string) => void): Record<string, string> {
 +	// `dataFolderHome` is `<home>/<dataFolderName>`; components live under it.
 +	const componentsHome = path.join(dataFolderHome, 'components');
 +	const manifest = readLocalManifest(componentsHome);
@@ -2139,15 +2598,27 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		return {};
 +	}
 +
++	const stagedPath = (pending: ILocalComponentVersion) => typeof pending.path === 'string' && pending.path.length > 0
++		? (path.isAbsolute(pending.path) ? pending.path : path.join(dataFolderHome, pending.path))
++		: undefined;
++	// The same existence test that discards below, so a dependent is judged against what will run.
++	const held = heldBackPendingComponents(manifest, runningAppVersion, pending => {
++		const target = stagedPath(pending);
++		return !!target && fs.existsSync(target);
++	});
 +	let changed = false;
 +	for (const [id, entry] of Object.entries(manifest.components)) {
 +		const pending = entry?.pending;
 +		if (!pending) {
 +			continue;
 +		}
-+		const targetPath = typeof pending.path === 'string' && pending.path.length > 0
-+			? (path.isAbsolute(pending.path) ? pending.path : path.join(dataFolderHome, pending.path))
-+			: undefined;
++		const targetPath = stagedPath(pending);
++		const reason = held.get(id);
++		if (reason && targetPath && fs.existsSync(targetPath)) {
++			// Left exactly as staged: it activates on the first boot of an app that satisfies it.
++			log?.(`Holding component ${id}@${pending.version} until a compatible app is running (${reason})`);
++			continue;
++		}
 +		if (targetPath && fs.existsSync(targetPath)) {
 +			if (entry.active && entry.active.version !== pending.version) {
 +				entry.previous = entry.active;
@@ -2287,7 +2758,12 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		}
 +		entry.bundledVersion = bundledVersion;
 +		const active = entry.active;
-+		if (active && active.via !== 'user-extension' && active.version && compareVersions(bundledVersion, active.version) >= 0) {
++		// The bundled version supersedes an override only if it is really there. An editor-only
++		// update advances product.json without carrying the components, so taking the declared
++		// version at its word here retires a working override in favour of a version that was
++		// never installed -- the same mistake the inventory used to make.
++		const bundledPresent = fs.existsSync(path.toNamespacedPath(path.join(componentsHome, id, bundledVersion)));
++		if (bundledPresent && active && active.via !== 'user-extension' && active.version && compareVersions(bundledVersion, active.version) >= 0) {
 +			entry.previous = active;
 +			entry.active = null;
 +			changed = true;
@@ -2342,6 +2818,96 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		}
 +	};
 +	walk(root);
++}
++
++/**
++ * Where a replaced tree is parked while its contents are moved back over the fresh copy. It sits
++ * at the components-home ROOT on purpose: the stale sweep only walks `components/<id>` for
++ * `*.seeding*`/`*.repair-*` names, and the garbage collector only enumerates `components/<id>`
++ * for known component ids, so neither can reach it. On the success path nothing is left here.
++ */
++const SALVAGE_DIR = '.salvaged';
++
++/**
++ * Restores a replaced component tree over the freshly seeded one.
++ *
++ * A component writes into its own directory, and at BUNDLED paths: ICP ships
++ * `bin/database/icp_db.mv.db`, `credentials_db.mv.db` and `www/config.json`, then writes to those
++ * very files (the deb/rpm postinst chmods them for exactly that reason). So "keep what the bundle
++ * does not ship" would discard the database it is meant to protect.
++ *
++ * What the replace path actually repairs is ABSENCE: `seedContainsSource` rejects a tree only for
++ * a missing entry, or a zero-length file where the bundle's is not empty. Every other path present
++ * in the old tree was intact, and may hold the user's data. So the fresh copy supplies what was
++ * missing and the old tree is moved back over everything else.
++ *
++ * Moves, never copies: same filesystem, so each entry is a rename. Nothing is read or rewritten,
++ * which matters because this runs synchronously before any window opens and ICP's `logs/` has no
++ * size limit.
++ */
++function overlayPreservedTree(srcDir: string, salvage: string, target: string, log?: (message: string) => void): { restored: number; failed: number } {
++	let restored = 0;
++	let failed = 0;
++	const walk = (rel: string): void => {
++		const here = rel ? path.join(salvage, rel) : salvage;
++		let entries: fs.Dirent[];
++		try {
++			entries = fs.readdirSync(path.toNamespacedPath(here), { withFileTypes: true });
++		} catch (err) {
++			failed++;
++			log?.(`WARN: cannot read ${rel || '.'} in the replaced tree: ${err}`);
++			return;
++		}
++		for (const entry of entries) {
++			const childRel = rel ? path.join(rel, entry.name) : entry.name;
++			const from = path.join(salvage, childRel);
++			const to = path.join(target, childRel);
++			const bundled = path.join(srcDir, childRel);
++			// The stale marker from the replaced tree must never overwrite the one just stamped.
++			if (!rel && entry.name === SEED_COMPLETE_MARKER) {
++				continue;
++			}
++			let bundledStat: fs.Stats | undefined;
++			try {
++				bundledStat = fs.statSync(path.toNamespacedPath(bundled));
++			} catch { /* not shipped by the bundle: purely the component's own */ }
++			if (entry.isDirectory()) {
++				if (bundledStat && !bundledStat.isDirectory()) {
++					continue; // bundle turned this path into a file; keep the fresh copy
++				}
++				try {
++					fs.mkdirSync(path.toNamespacedPath(to), { recursive: true });
++				} catch (err) {
++					failed++;
++					log?.(`WARN: cannot create ${childRel} in the new tree: ${err}`);
++					continue;
++				}
++				walk(childRel);
++				continue;
++			}
++			if (bundledStat?.isFile()) {
++				// The damage this path repairs: an entry the old tree has but empty, where the
++				// bundle's is not. Keep the fresh copy rather than restoring the truncated one.
++				let oldSize = -1;
++				try {
++					oldSize = fs.statSync(path.toNamespacedPath(from)).size;
++				} catch { /* unreadable; fall through and let the move report it */ }
++				if (oldSize === 0 && bundledStat.size > 0) {
++					continue;
++				}
++			}
++			try {
++				fs.rmSync(path.toNamespacedPath(to), { recursive: true, force: true }); // rename onto an existing path fails on Windows
++				fs.renameSync(path.toNamespacedPath(from), path.toNamespacedPath(to));
++				restored++;
++			} catch (err) {
++				failed++;
++				log?.(`WARN: could not restore ${childRel}: ${err}`);
++			}
++		}
++	};
++	walk('');
++	return { restored, failed };
 +}
 +
 +/**
@@ -2591,9 +3157,41 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +				throw err;
 +			}
 +			if (claimed) {
++				// Move the replaced tree out of the way FIRST: a rename is atomic and costs no
++				// disk, so the old tree cannot be lost by anything that follows. Copying it
++				// instead — right after writing hundreds of MB of bundle — could fail on a full
++				// disk and then fall through to the delete, which is the bug this guards.
++				let salvage: string | undefined = path.join(componentsHome, SALVAGE_DIR, id, `${version}-${Date.now()}`);
 +				try {
-+					fs.rmSync(path.toNamespacedPath(claimed), { recursive: true, force: true });
-+				} catch { /* leftover .repair dir is swept as stale on the next run */ }
++					fs.mkdirSync(path.dirname(path.toNamespacedPath(salvage)), { recursive: true });
++					fs.renameSync(path.toNamespacedPath(claimed), path.toNamespacedPath(salvage));
++				} catch (err) {
++					// Could not park it: leave the claim where it is rather than delete it. A
++					// `.repair-<pid>` directory is swept once its owner is gone, so this trades a
++					// later automatic cleanup for not destroying data now.
++					salvage = undefined;
++					log?.(`WARN: could not set aside the replaced ${id}@${version} tree; leaving ${claimed} in place: ${err}`);
++				}
++				if (salvage) {
++					const { restored, failed } = overlayPreservedTree(srcDir, salvage, target, log);
++					if (failed === 0) {
++						// Everything worth keeping is now in the live tree; the remainder is the
++						// damage the fresh copy replaced. Nothing is retained, so nothing accumulates.
++						try {
++							fs.rmSync(path.toNamespacedPath(salvage), { recursive: true, force: true });
++							// And the now-empty parents, so a repaired install leaves no trace at
++							// all. rmdir throws ENOTEMPTY when another component still has a
++							// salvage of its own, which is exactly the right stopping condition.
++							fs.rmdirSync(path.toNamespacedPath(path.dirname(salvage)));
++							fs.rmdirSync(path.toNamespacedPath(path.join(componentsHome, SALVAGE_DIR)));
++						} catch { /* an empty leftover under .salvaged is inert */ }
++						if (restored > 0) {
++							log?.(`Restored ${restored} item(s) from the replaced ${id}@${version} tree over the fresh copy`);
++						}
++					} else {
++						log?.(`ERROR: ${failed} item(s) from the replaced ${id}@${version} tree could not be restored; they are kept at ${salvage}`);
++					}
++				}
 +			}
 +			log?.(`Seeded ${id}@${version} from ${srcDir}`);
 +		} catch (err) {
@@ -2609,6 +3207,101 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +			}
 +		}
 +	}
++}
++
++/** A directory name that looks like a version, so `backup` or `old` never ranks as one. */
++const VERSION_DIR_RE = /^\d+(\.\d+)*(-[0-9A-Za-z.]+)?$/;
++
++/**
++ * Newest version directory actually present for a component, or undefined when none is.
++ *
++ * Every other reader looks the seeded baseline up by name — the version the running app
++ * DECLARES it bundles. That holds for an app installed from the full installer, and breaks the
++ * moment an editor-only update ships a product.json naming runtimes it does not carry: the
++ * declared version is not on disk, an older one is, and a lookup by name finds neither. Asking
++ * what is actually there is the only question with a reliable answer.
++ *
++ * Newest wins outright; the seed-completion marker is NOT preferred. Directories installed by
++ * the updater never carry one, so preferring marked would hand back an older seeded runtime in
++ * favour of a newer working one — and on a real machine none of the three components carried a
++ * marker at all. Staging directories and empty remnants are skipped, so a copy still in flight
++ * can never be mistaken for a usable tree.
++ */
++export function newestSeededVersion(componentsHome: string, id: string, exclude?: Iterable<string>): string | undefined {
++	const excluded = exclude ? new Set(exclude) : undefined;
++	const dir = path.join(componentsHome, id);
++	let entries: fs.Dirent[];
++	try {
++		entries = fs.readdirSync(path.toNamespacedPath(dir), { withFileTypes: true });
++	} catch {
++		return undefined; // no directory for this component at all
++	}
++	let newest: string | undefined;
++	for (const entry of entries) {
++		if (!entry.isDirectory() || !VERSION_DIR_RE.test(entry.name) || SEEDING_DIR_RE.test(entry.name)) {
++			continue;
++		}
++		if (excluded?.has(entry.name)) {
++			continue; // auto-reverted, or staged but not yet activated -- see ineligibleBaselineVersions
++		}
++		try {
++			if (fs.readdirSync(path.toNamespacedPath(path.join(dir, entry.name))).length === 0) {
++				continue; // an empty directory is a remnant, never a runtime
++			}
++		} catch {
++			continue;
++		}
++		if (!newest || compareVersions(entry.name, newest) > 0) {
++			newest = entry.name;
++		}
++	}
++	return newest;
++}
++
++/**
++ * The version of a component that is actually installed: the declared bundled version when its
++ * directory is present, otherwise the newest one that is, and undefined when none is.
++ *
++ * Deliberately never falls back to the declared version. Resolution, the inventory sent to the
++ * server, dependency checks and the GC keep-set all used to assume "declared" meant "installed",
++ * which is how an editor-only update left the app resolving a deleted path while telling the
++ * server it already had the runtime it was missing. One answer, in one place, so those four
++ * cannot drift apart again.
++ */
++export function installedComponentVersion(componentsHome: string, id: string, declaredVersion: string | undefined, exclude?: Iterable<string>): string | undefined {
++	const excluded = exclude ? new Set(exclude) : undefined;
++	if (declaredVersion && !excluded?.has(declaredVersion)
++		&& fs.existsSync(path.toNamespacedPath(path.join(componentsHome, id, declaredVersion)))) {
++		return declaredVersion;
++	}
++	return newestSeededVersion(componentsHome, id, excluded);
++}
++
++/**
++ * Versions present on disk that must never be adopted as a baseline.
++ *
++ * `failed` holds versions auto-reverted after they kept the app from booting. Before the on-disk
++ * fallback existed they were simply garbage-collected, so the question never arose; now that the
++ * newest directory wins, a reverted version is the newest one there and would be picked straight
++ * back up -- and because the revert leaves `active` null, nothing health-tracks it or reverts it a
++ * second time. That turns a visible ENOENT into a silently broken runtime with no recovery, which
++ * is worse than the bug this fallback was written for.
++ *
++ * `pending` is staged into its versioned directory before the restart that activates it. Adopting
++ * it early would run a version that has not been through activation, so it gets no health tracking
++ * or rollback either.
++ */
++export function ineligibleBaselineVersions(entry: ILocalComponentEntry | undefined): string[] {
++	const out: string[] = [];
++	for (const failed of entry?.failed ?? []) {
++		if (failed?.version) {
++			out.push(failed.version);
++		}
++	}
++	if (entry?.pending?.version) {
++		out.push(entry.pending.version);
++	}
++	return out;
 +}
 +
 +/**
@@ -2651,6 +3344,305 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		return -1;
 +	}
 +	return comparePreRelease(preA, preB);
++}
++
++/**
++ * Whitespace-separated comparators, all of which must hold: ">=5.1.0 <5.2.0". Mirrors the server's
++ * satisfiesRange so both sides agree. An unrecognised comparator is accepted rather than failing
++ * closed on a range this client is simply too old to understand; `onUnrecognized` lets a caller
++ * log it.
++ *
++ * Lives here rather than in the update service because activation runs in the bootstrap, before
++ * any service exists, and must apply exactly the rules that decided what to stage.
++ */
++export function satisfiesRange(version: string, range: string, onUnrecognized?: (comparator: string) => void): boolean {
++	for (const comparator of range.trim().split(/\s+/).filter(Boolean)) {
++		// The version part must actually look like a version: without this the regex matches any
++		// token, so a range written for a richer grammar (`^5.1.0`, `~5.1`) would compare garbage
++		// and fail CLOSED -- withholding the component -- instead of taking the documented
++		// accept-what-we-don't-understand path.
++		const match = /^(>=|<=|>|<|==|=)?\s*([0-9][0-9A-Za-z.+_-]*)$/.exec(comparator);
++		if (!match) {
++			onUnrecognized?.(comparator);
++			continue;
++		}
++		const op = match[1] ?? '=';
++		const cmp = compareVersions(version, match[2]);
++		const satisfied = op === '>=' ? cmp >= 0
++			: op === '>' ? cmp > 0
++				: op === '<=' ? cmp <= 0
++					: op === '<' ? cmp < 0
++						: cmp === 0;
++		if (!satisfied) {
++			return false;
++		}
++	}
++	return true;
++}
++
++/**
++ * The version to stage components for once an app update is downloaded, or undefined when there is
++ * nothing to do. Only a strictly newer, well-formed version qualifies: the same version is already
++ * what the regular check asks as, and anything older or unparseable would fetch components for an
++ * app that is not coming.
++ */
++export function incomingAppVersionToPrepare(incomingVersion: string | undefined, runningAppVersion: string): string | undefined {
++	if (!incomingVersion || !VERSION_DIR_RE.test(incomingVersion)) {
++		return undefined;
++	}
++	return compareVersions(incomingVersion, runningAppVersion) > 0 ? incomingVersion : undefined;
++}
++
++/**
++ * Waits for `work`, but stops waiting once it has gone `stallMs` without progress, as reported by
++ * `lastActivity()` (a `Date.now()` timestamp). Resolves true when `work` settled, either way, and
++ * false on a stall; the work itself carries on regardless. Not a deadline: work that keeps moving is
++ * waited for however long it takes.
++ */
++export async function untilSettledOrStalled(work: Promise<unknown>, lastActivity: () => number, stallMs: number): Promise<boolean> {
++	let timer: ReturnType<typeof setTimeout> | undefined;
++	const stalled = new Promise<boolean>(resolve => {
++		const check = () => {
++			const idle = Date.now() - lastActivity();
++			if (idle >= stallMs) {
++				resolve(false);
++				return;
++			}
++			timer = setTimeout(check, stallMs - idle);
++		};
++		timer = setTimeout(check, stallMs);
++	});
++	try {
++		return await Promise.race([work.then(() => true, () => true), stalled]);
++	} finally {
++		clearTimeout(timer);
++	}
++}
++
++/**
++ * Extensions whose deferred copy is still on its way in, as far as offers for `appVersion` go: the
++ * copy's `app` requirement is met by `appVersion` or by the app update this run prepared for. Those
++ * stand in for an offer at or below their version. A copy waiting for an app that is not coming does
++ * not: it must not keep the running app from a compatible fix, the same rule stagedPendingComponents
++ * applies to runtimes. A copy with no `app` requirement (recorded before they were pinned) counts.
++ */
++export function awaitingDeferredExtensions(manifest: ILocalComponentsManifest, appVersion: string | undefined, preparedAppVersion?: string): Set<string> {
++	const awaiting = new Set<string>();
++	for (const [id, entry] of Object.entries(manifest.components)) {
++		const deferred = entry?.deferredExtension;
++		if (!deferred) {
++			continue;
++		}
++		const range = deferred.requires?.app;
++		const meets = (version: string | undefined) => !!version && !!range && satisfiesRange(version, range);
++		if (!range || meets(appVersion) || meets(preparedAppVersion)) {
++			awaiting.add(id);
++		}
++	}
++	return awaiting;
++}
++
++/**
++ * Deletes downloaded extensions under `stagingHome` that no deferred entry refers to, returning what
++ * it removed as `id@version`. Only directories holding exactly `<id>-<version>.vsix` are touched, so
++ * runtime archives kept there for a retry are left alone. Meant for startup, before any window: a
++ * VSIX staged in an earlier run is never installed by this one unless it is deferred, so anything
++ * else there is a leftover -- a download that did not finish being recorded, or a renderer install
++ * the app quit before.
++ */
++export function sweepStagedExtensionDownloads(stagingHome: string, manifest: ILocalComponentsManifest | undefined): string[] {
++	const removed: string[] = [];
++	let ids: string[];
++	try {
++		ids = fs.readdirSync(stagingHome, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
++	} catch {
++		return removed;
++	}
++	for (const id of ids) {
++		let versions: string[];
++		try {
++			versions = fs.readdirSync(path.join(stagingHome, id), { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
++		} catch {
++			continue;
++		}
++		for (const version of versions) {
++			const dir = path.join(stagingHome, id, version);
++			if (manifest?.components[id]?.deferredExtension?.version === version) {
++				continue;
++			}
++			let entries: string[];
++			try {
++				entries = fs.readdirSync(dir);
++			} catch {
++				continue;
++			}
++			if (entries.length === 1 && entries[0] === `${id}-${version}.vsix`) {
++				try {
++					fs.rmSync(dir, { recursive: true, force: true });
++					removed.push(`${id}@${version}`);
++				} catch {
++					// Left for the next startup.
++				}
++			}
++		}
++	}
++	return removed;
++}
++
++/** A deferred extension to install now, with its VSIX path as recorded (see ILocalComponentEntry). */
++export interface IDeferredExtensionInstall {
++	readonly id: string;
++	readonly version: string;
++	readonly path: string;
++}
++
++/**
++ * What to do, at boot, with each extension downloaded for an app update. `install` what this app
++ * meets the requirements of; `discard` what it already has at that version or newer (the new app
++ * may bundle it); anything else stays deferred, since the app it waits for may still come.
++ *
++ * `installedVersion` answers for extensions and runtimes alike, after runtime activation has run.
++ * As in heldBackPendingComponents, `app` requirements are not evaluated without a running version.
++ */
++export function decideDeferredExtensions(
++	manifest: ILocalComponentsManifest,
++	runningAppVersion: string | undefined,
++	installedVersion: (id: string) => string | undefined
++): { readonly install: IDeferredExtensionInstall[]; readonly discard: { readonly id: string; readonly version: string }[] } {
++	const install: IDeferredExtensionInstall[] = [];
++	const discard: { id: string; version: string }[] = [];
++	for (const [id, entry] of Object.entries(manifest.components)) {
++		const deferred = entry.deferredExtension;
++		if (!deferred) {
++			continue;
++		}
++		const installed = installedVersion(id);
++		if (!deferred.path || (installed && compareVersions(deferred.version, installed) <= 0)) {
++			discard.push({ id, version: deferred.version });
++			continue;
++		}
++		const met = Object.entries(deferred.requires ?? {}).every(([depId, range]) => {
++			if (depId === 'app' && !runningAppVersion) {
++				return true;
++			}
++			const depVersion = depId === 'app' ? runningAppVersion : installedVersion(depId);
++			return !!depVersion && satisfiesRange(depVersion, range);
++		});
++		if (met) {
++			install.push({ id, version: deferred.version, path: deferred.path });
++		}
++	}
++	return { install, discard };
++}
++
++/**
++ * Staged components that must NOT activate on the app that is running, keyed by id, with the reason.
++ *
++ * A component is staged against one app and activated by whichever app boots next. Normally those
++ * are the same, but not always: an app update can land between staging and the restart (possibly
++ * onto a different release line), or a component staged for an incoming app can meet a restart in
++ * which that app update did not apply. Activating it anyway puts a component on an app it was not
++ * built for -- exactly what the server refuses to do when it offers ("a component that needs the
++ * newer app must not land on the older one"). So its `app` requirement is checked against the app
++ * actually running, and a component that fails is held: left pending, not discarded, so it
++ * activates once the right app is up.
++ *
++ * A requirement on another component is checked against the version that component will RUN after
++ * this pass -- its pending version if that activates, otherwise its active one -- and a dependent
++ * that would not be satisfied is held too, to a fixpoint. That is what stops a dependent activating
++ * against an older dependency, whether the newer one is held, discarded for a missing directory
++ * (`isStaged`), or was already dropped on an earlier boot. A held or discarded dependency with no
++ * version to fall back on counts as unmet. A dependency this manifest does not track at all was
++ * checked when the dependent was offered, and is not re-checked here.
++ *
++ * With no running version to compare against, `app` requirements are not evaluated: nothing could
++ * ever satisfy them, and holding forever is worse than the unguarded behaviour this replaces.
++ */
++export function heldBackPendingComponents(
++	manifest: ILocalComponentsManifest,
++	runningAppVersion: string | undefined,
++	isStaged: (pending: ILocalComponentVersion) => boolean = () => true
++): Map<string, string> {
++	const held = new Map<string, string>();
++	const discarded = new Set(Object.entries(manifest.components)
++		.filter(([, entry]) => entry?.pending && !isStaged(entry.pending))
++		.map(([id]) => id));
++	const activates = (id: string) => !!manifest.components[id]?.pending && !held.has(id) && !discarded.has(id);
++	let grew = true;
++	while (grew) {
++		grew = false;
++		for (const [id, entry] of Object.entries(manifest.components)) {
++			const requires = entry?.pending?.requires;
++			if (!requires || !activates(id)) {
++				continue;
++			}
++			for (const [dep, range] of Object.entries(requires)) {
++				let unmet: string | undefined;
++				if (dep === 'app') {
++					if (runningAppVersion && !satisfiesRange(runningAppVersion, range)) {
++						unmet = `needs app ${range}, running ${runningAppVersion}`;
++					}
++				} else {
++					const depEntry = manifest.components[dep];
++					if (!depEntry) {
++						continue;
++					}
++					const depPending = depEntry.pending;
++					const depVersion = depPending && activates(dep) ? depPending.version : (depEntry.active?.version ?? depEntry.bundledVersion);
++					const replaced = !!depPending && !activates(dep);
++					if (depVersion ? !satisfiesRange(depVersion, range) : replaced) {
++						unmet = `needs ${dep} ${range}, which would run ${depVersion ?? 'no version'}`;
++					}
++				}
++				if (unmet) {
++					held.set(id, unmet);
++					grew = true;
++					break;
++				}
++			}
++		}
++	}
++	return held;
++}
++
++/**
++ * Pins components just staged for an app update to that app: any of `staged` still pending at that
++ * version without an `app` requirement gets `>=appVersion`. They came from the incoming release's
++ * document, and without the pin activation would run one on whichever app boots next -- including
++ * the old app, if the update does not install. Done on the recorded entry, never on the offer, whose
++ * `requires` must keep matching its signed statement. Returns whether anything changed.
++ */
++export function pinPendingToApp(manifest: ILocalComponentsManifest, staged: readonly { readonly id: string; readonly version: string }[], appVersion: string): boolean {
++	let changed = false;
++	for (const { id, version } of staged) {
++		const entry = manifest.components[id];
++		const pending = entry?.pending;
++		if (pending && pending.version === version && !pending.requires?.app) {
++			entry.pending = { ...pending, requires: { ...pending.requires, app: `>=${appVersion}` } };
++			changed = true;
++		}
++	}
++	return changed;
++}
++
++/**
++ * Pending components that count as already staged when deciding what to offer for `appVersion`:
++ * those that app would activate, plus, once an app update has been prepared for, those staged for
++ * it. The second kind are held on the running app on purpose -- they wait for the restart into the
++ * update -- so an older version the running app could take must not replace one, or the restart
++ * arrives without it. A pending held for an app that is NOT coming does not count: it must not keep
++ * the running app from a compatible update.
++ */
++export function stagedPendingComponents(manifest: ILocalComponentsManifest, appVersion: string | undefined, preparedAppVersion?: string): Set<string> {
++	const heldNow = heldBackPendingComponents(manifest, appVersion);
++	const heldForUpdate = preparedAppVersion ? heldBackPendingComponents(manifest, preparedAppVersion) : undefined;
++	const staged = new Set<string>();
++	for (const [id, entry] of Object.entries(manifest.components)) {
++		if (entry?.pending && (!heldNow.has(id) || (heldForUpdate && !heldForUpdate.has(id)))) {
++			staged.add(id);
++		}
++	}
++	return staged;
 +}
 +
 +/** Splits `5.1.3-alpha.2+build` into its release core and pre-release; build metadata is dropped. */
@@ -2700,7 +3692,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
-@@ -0,0 +1,488 @@
+@@ -0,0 +1,669 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2721,7 +3713,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +
 +import { raceTimeout } from '../../../../base/common/async.js';
 +import { Codicon } from '../../../../base/common/codicons.js';
-+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
++import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 +import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 +import { URI } from '../../../../base/common/uri.js';
 +import { localize, localize2 } from '../../../../nls.js';
@@ -2758,6 +3750,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 + * Mirrors the same gate in menubar.ts and wso2ComponentUpdateService.resolveAppUpdate().
 + */
 +const stockUpdateServiceOwnsChecks = isMacintosh && !!product.updateUrl;
++
++/** How long to wait for a core-app update to become Ready before prompting for components alone. */
++const RESTART_PROMPT_WAIT_MS = 60_000;
 +
 +//#region configuration
 +
@@ -2906,6 +3901,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	readonly kind: string;
 +	readonly updatable: boolean;
 +	readonly pending: boolean;
++	readonly awaitsAppUpdate: boolean;
 +}
 +
 +class ShowComponentsAction extends Action2 {
@@ -2936,7 +3932,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +					? localize('wso2.updates.currentUpdated', "current {0} (updated)", currentVersion)
 +					: localize('wso2.updates.current', "current {0}", currentVersion),
 +				s.availableVersion ? localize('wso2.updates.availableItem', "available {0}", s.availableVersion) : undefined,
-+				s.pendingVersion ? localize('wso2.updates.pending', "pending restart {0}", s.pendingVersion) : undefined
++				s.pendingVersion
++					? s.pendingAwaitsAppUpdate
++						? localize('wso2.updates.pendingWithApp', "{0} installs with the app update", s.pendingVersion)
++						: localize('wso2.updates.pending', "pending restart {0}", s.pendingVersion)
++					: undefined
 +			].filter(Boolean);
 +			const icon = updatable ? '$(cloud-download) ' : (pending ? '$(sync) ' : '');
 +			return {
@@ -2946,7 +3946,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +				componentId: s.id,
 +				kind: s.kind,
 +				updatable,
-+				pending
++				pending,
++				awaitsAppUpdate: !!s.pendingAwaitsAppUpdate
 +			};
 +		});
 +		const anyActionable = items.some(i => i.updatable || i.pending);
@@ -2960,6 +3961,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		}
 +		if (picked.updatable) {
 +			await updateService.downloadUpdates([picked.componentId]);
++		} else if (picked.awaitsAppUpdate) {
++			// No Restart button: a plain restart keeps this app, and this component waits for the next one.
++			notificationService.info(localize('wso2.updates.componentAwaitsApp', "{0} is downloaded and will be installed with the WSO2 Integrator update.", picked.componentId));
 +		} else if (picked.pending) {
 +			notificationService.prompt(Severity.Info, localize('wso2.updates.componentPending', "{0} is downloaded. Restart WSO2 Integrator to finish updating.", picked.componentId), [
 +				{ label: localize('wso2.updates.restartNow', "Restart"), run: () => hostService.restart() }
@@ -2998,12 +4002,27 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +
 +//#region contribution
 +
++/**
++ * Whether the app update is still moving. These states end in Ready or Idle on their own, so a wait
++ * on one is slow, not stuck. Updating includes staging the runtimes the update needs.
++ */
++function isAppUpdateProgressing(type: StateType): boolean {
++	return type === StateType.Downloading
++		|| type === StateType.Updating
++		|| type === StateType.Overwriting
++		|| type === StateType.Restarting;
++}
++
 +class Wso2UpdateContribution extends Disposable implements IWorkbenchContribution {
 +
 +	static readonly ID = 'workbench.contrib.wso2Update';
 +
 +	private readonly availableContext: IContextKey<boolean>;
 +	private lastNotifiedKey: string | undefined;
++	/** The single in-flight wait for the app update to become Ready; see promptRestartForComponents. */
++	private restartPromptWait: DisposableStore | undefined;
++	/** Whether this window has prompted for the app update that is Ready now; cleared when it leaves Ready. */
++	private appUpdatePrompted = false;
 +	private explicitCheckInFlight = false;
 +
 +	constructor(
@@ -3015,7 +4034,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		@IWorkbenchExtensionManagementService private readonly extensionManagementService: IWorkbenchExtensionManagementService,
 +		@IDialogService private readonly dialogService: IDialogService,
 +		@ILogService private readonly logService: ILogService,
-+		@IUpdateService stockUpdateService: IUpdateService
++		@IUpdateService private readonly stockUpdateService: IUpdateService
 +	) {
 +		super();
 +
@@ -3024,15 +4043,168 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		this._register(this.updateService.onStateChange(state => this.onStateChange(state)));
 +		this.updateService.getState().then(state => this.onStateChange(state, true), err => this.logService.error('[wso2Update] getState failed', err));
 +
++		// The app update's own prompt. The main process reports Ready only once the runtimes that
++		// version needs are staged too (see prepareForAppUpdate), so this is the moment everything is
++		// in place, and the single prompt that covers app and components alike.
++		this._register(this.stockUpdateService.onStateChange(state => {
++			if (state.type === StateType.Ready) {
++				void this.promptRestartForAppUpdate();
++			} else {
++				this.appUpdatePrompted = false;
++			}
++		}));
++
 +		// Where the stock command is the only "Check for Updates" users see, it has to check
 +		// components too. Both the Command Palette entry and the application-menu item route
 +		// through the stock service, so hooking its explicit check covers both surfaces.
 +		if (stockUpdateServiceOwnsChecks) {
-+			this._register(stockUpdateService.onStateChange(state => {
++			this._register(this.stockUpdateService.onStateChange(state => {
 +				if (state.type === StateType.CheckingForUpdates && state.explicit) {
-+					this.runCombinedExplicitCheck(stockUpdateService);
++					this.runCombinedExplicitCheck();
 +				}
 +			}));
++		}
++	}
++
++	/**
++	 * One restart prompt, not two competing ones.
++	 *
++	 * A component update finishing while the core app is mid-download used to prompt immediately,
++	 * and its "Restart" runs `hostService.restart()` — a plain restart, not the Squirrel apply path
++	 * (`quitAndInstall`). Taking it restarts without applying the app update, and at worst abandons
++	 * a download still in flight. So while the stock updater is working, say nothing and let a
++	 * single prompt cover both once it is ready, with the action that actually applies the update.
++	 *
++	 * Components activate on the next launch either way, so whichever restart happens carries them.
++	 */
++	private promptRestartForComponents(): void {
++		// A deny-list, not an allow-list. Listing the in-flight states means a state upstream adds
++		// later falls through and prompts early, reintroducing this bug for it; listing the settled
++		// ones means an unrecognised state simply waits, which is the safe way to be wrong.
++		const appUpdateSettled = (type: StateType) =>
++			type === StateType.Idle
++			|| type === StateType.Disabled
++			|| type === StateType.Uninitialized;
++		const appUpdateInFlight = (type: StateType) => type !== StateType.Ready && !appUpdateSettled(type);
++
++		const promptComponentsOnly = () => this.notificationService.prompt(
++			Severity.Info,
++			localize('wso2.updates.restart', "Restart WSO2 Integrator to finish updating components."),
++			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => this.hostService.restart() }]
++		);
++		const current = this.stockUpdateService.state.type;
++		if (current === StateType.Ready) {
++			void this.promptRestartForAppUpdate();
++			return;
++		}
++		if (!appUpdateInFlight(current)) {
++			promptComponentsOnly();
++			return;
++		}
++
++		// One wait at a time. A second component batch finishing while the first is still waiting
++		// would otherwise arm a second listener, and both would fire on Ready -- two prompts, which
++		// is the bug this method exists to prevent. The store is deliberately NOT registered on the
++		// contribution: this method runs repeatedly, and CLAUDE.md forbids accumulating per-call
++		// disposables there. It disposes itself on every exit, including the timeout.
++		if (this.restartPromptWait) {
++			return;
++		}
++		const store = new DisposableStore();
++		this.restartPromptWait = store;
++		const done = (prompt: () => void) => {
++			if (this.restartPromptWait !== store) {
++				return;
++			}
++			this.restartPromptWait = undefined;
++			store.dispose();
++			prompt();
++		};
++		store.add(this.stockUpdateService.onStateChange(next => {
++			if (next.type === StateType.Ready) {
++				done(() => void this.promptRestartForAppUpdate());
++			} else if (!appUpdateInFlight(next.type)) {
++				done(promptComponentsOnly);
++			}
++		}));
++		// Bounded, but slow is not stalled. The Squirrel payload is hundreds of megabytes and
++		// darwin reports `Downloading` with no progress events, so a deadline counted from the
++		// start of the wait fires mid-download on any ordinary connection -- showing the
++		// components-only prompt, whose Restart abandons the download, which is precisely the
++		// behaviour this method removes. So only give up in a state that is not still moving; a
++		// download that genuinely fails reports Idle and the listener above handles it.
++		let timer: ReturnType<typeof setTimeout>;
++		const giveUpIfStuck = () => {
++			if (isAppUpdateProgressing(this.stockUpdateService.state.type)) {
++				timer = setTimeout(giveUpIfStuck, RESTART_PROMPT_WAIT_MS);
++				return;
++			}
++			done(promptComponentsOnly);
++		};
++		timer = setTimeout(giveUpIfStuck, RESTART_PROMPT_WAIT_MS);
++		store.add(toDisposable(() => clearTimeout(timer)));
++	}
++
++	/**
++	 * The restart prompt for an app update that is Ready, covering any staged components with it.
++	 * Once per Ready, whichever of the stock state or a finished component download asks first, and
++	 * only in the window the user was last in -- every window sees the same events.
++	 */
++	private async promptRestartForAppUpdate(): Promise<void> {
++		const state = this.stockUpdateService.state;
++		if (this.appUpdatePrompted || state.type !== StateType.Ready) {
++			return;
++		}
++		this.appUpdatePrompted = true;
++		// Called from event listeners without an await, so nothing may escape as a rejection.
++		let lastFocused: boolean;
++		try {
++			lastFocused = await this.hostService.hadLastFocus();
++		} catch (err) {
++			this.logService.error('[wso2Update] could not tell which window to prompt in', err);
++			lastFocused = true; // two prompts beat none
++		}
++		if (!lastFocused) {
++			return;
++		}
++		const version = state.update.productVersion;
++		this.notificationService.prompt(
++			Severity.Info,
++			version
++				? localize('wso2.updates.appReadyVersion', "WSO2 Integrator {0} is ready. Restart to finish updating.", version)
++				: localize('wso2.updates.appReady', "A WSO2 Integrator update is ready. Restart to finish updating."),
++			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => this.restartIntoAppUpdate() }]
++		);
++	}
++
++	/**
++	 * `quitAndInstall()` returns without doing anything unless the state is still Ready, and on
++	 * darwin its first call runs an overwrite check that postpones the restart when a newer build
++	 * turns up. Either way the notification is already dismissed, so a bare call can leave the user
++	 * with staged components, no restart and no prompt.
++	 *
++	 * Two paths, and neither can end in silence. When the apply path will not run, a plain restart
++	 * still applies the staged components and cannot decline the way quitAndInstall can, so there is
++	 * nothing to re-ask about. When it does run but declines -- or when anything throws -- the prompt
++	 * goes back up.
++	 */
++	private async restartIntoAppUpdate(): Promise<void> {
++		try {
++			if (this.stockUpdateService.state.type !== StateType.Ready) {
++				await this.hostService.restart();
++				return;
++			}
++			await this.stockUpdateService.quitAndInstall();
++			if (!isAppUpdateProgressing(this.stockUpdateService.state.type)) {
++				this.appUpdatePrompted = false;
++				this.promptRestartForComponents();
++			}
++		} catch (err) {
++			// IPromptChoice.run is `() => void`, so a rejection escaping here would surface as an
++			// unhandled rejection and the user would be left with no way to retry.
++			this.logService.error('[wso2Update] restart after update failed', err);
++			this.appUpdatePrompted = false;
++			this.promptRestartForComponents();
 +		}
 +	}
 +
@@ -3044,7 +4216,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	 * later. Anything actually found announces itself — Squirrel prompts to restart once its download
 +	 * is ready, components go through notifyAvailable() — so this reports only the all-clear.
 +	 */
-+	private async runCombinedExplicitCheck(stockUpdateService: IUpdateService): Promise<void> {
++	private async runCombinedExplicitCheck(): Promise<void> {
 +		if (this.explicitCheckInFlight) {
 +			return;
 +		}
@@ -3054,7 +4226,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		this.lastNotifiedKey = undefined;
 +		try {
 +			const [stockState] = await Promise.all([
-+				raceTimeout(this.waitForStockSettle(stockUpdateService), 60_000),
++				raceTimeout(this.waitForStockSettle(), 60_000),
 +				this.updateService.checkForUpdates(true).catch(err => {
 +					this.logService.error('[wso2Update] component check alongside the stock check failed', err);
 +				})
@@ -3070,15 +4242,15 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		}
 +	}
 +
-+	private waitForStockSettle(stockUpdateService: IUpdateService): Promise<UpdateState> {
-+		if (stockUpdateService.state.type !== StateType.CheckingForUpdates) {
-+			return Promise.resolve(stockUpdateService.state);
++	private waitForStockSettle(): Promise<UpdateState> {
++		if (this.stockUpdateService.state.type !== StateType.CheckingForUpdates) {
++			return Promise.resolve(this.stockUpdateService.state);
 +		}
 +		return new Promise<UpdateState>(resolve => {
 +			// Scoped to this call, not the contribution: registering per check would accumulate
 +			// listeners for the lifetime of the window.
 +			const store = new DisposableStore();
-+			store.add(stockUpdateService.onStateChange(state => {
++			store.add(this.stockUpdateService.onStateChange(state => {
 +				if (state.type !== StateType.CheckingForUpdates) {
 +					store.dispose();
 +					resolve(state);
@@ -3102,8 +4274,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +
 +		// The main process persists its state across a window reload. On the initial
 +		// replay only sync the title-bar indicator — do NOT re-notify or re-install,
-+		// otherwise a `Downloaded` state would re-prompt on every reload.
-+		if (isInitial) {
++		// otherwise a `Downloaded` state would re-prompt on every reload. The same goes for a state
++		// the main process puts back after other work: it was announced already.
++		if (isInitial || ((state.type === Wso2UpdateStateType.Downloaded || state.type === Wso2UpdateStateType.Error) && state.replayed)) {
 +			return;
 +		}
 +
@@ -3167,7 +4340,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		// The staged work is applied, so leave the Downloaded state behind — otherwise the menu keeps
 +		// offering "Restart to Finish Updating Components" for extensions that are already installed.
 +		// A pending runtime keeps that state (restartRequired), since it really does need the restart.
-+		await this.updateService.stagedExtensionsApplied()
++		// Not awaited: it waits for the update lock, which preparing for an app update can hold for as
++		// long as its download keeps moving, and nothing below depends on it.
++		void this.updateService.stagedExtensionsApplied()
 +			.catch(err => this.logService.error('[wso2Update] failed to clear the downloaded state', err));
 +
 +		if (failed > 0) {
@@ -3175,9 +4350,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		}
 +
 +		if (state.restartRequired) {
-+			this.notificationService.prompt(Severity.Info, localize('wso2.updates.restart', "Restart WSO2 Integrator to finish updating components."), [
-+				{ label: localize('wso2.updates.restartNow', "Restart"), run: () => this.hostService.restart() }
-+			]);
++			this.promptRestartForComponents();
 +		} else if (installed > 0) {
 +			this.notificationService.prompt(Severity.Info, localize('wso2.updates.reload', "Reload the window to finish updating components."), [
 +				{ label: localize('wso2.updates.reloadNow', "Reload Window"), run: () => this.hostService.reload() }
@@ -3678,7 +4851,23 @@ Index: product-integrator/lib/vscode/src/vs/platform/update/electron-main/update
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/platform/update/electron-main/updateService.darwin.ts
 +++ product-integrator/lib/vscode/src/vs/platform/update/electron-main/updateService.darwin.ts
-@@ -91,9 +91,46 @@ export class DarwinUpdateService extends
+@@ -19,6 +19,7 @@ import { IApplicationStorageMainService
+ import { ITelemetryService } from '../../telemetry/common/telemetry.js';
+ import { AvailableForDownload, IUpdate, State, StateType, UpdateType } from '../common/update.js';
+ import { IMeteredConnectionService } from '../../meteredConnection/common/meteredConnection.js';
++import { IWso2ComponentUpdateService } from '../../wso2Update/common/wso2Update.js';
+ import { AbstractUpdateService, createUpdateURL, getUpdateRequestHeaders, IUpdateURLOptions, UpdateErrorClassification } from './abstractUpdateService.js';
+ 
+ export class DarwinUpdateService extends AbstractUpdateService implements IRelaunchHandler {
+@@ -47,6 +48,7 @@ export class DarwinUpdateService extends
+ 		@IProductService productService: IProductService,
+ 		@IApplicationStorageMainService applicationStorageMainService: IApplicationStorageMainService,
+ 		@IMeteredConnectionService meteredConnectionService: IMeteredConnectionService,
++		@IWso2ComponentUpdateService private readonly wso2ComponentUpdateService: IWso2ComponentUpdateService,
+ 	) {
+ 		super(lifecycleMainService, configurationService, environmentMainService, requestService, logService, productService, telemetryService, applicationStorageMainService, meteredConnectionService, true);
+ 
+@@ -91,9 +93,46 @@ export class DarwinUpdateService extends
  		this.setState(State.Idle(UpdateType.Archive, message));
  	}
  
@@ -3726,11 +4915,49 @@ Index: product-integrator/lib/vscode/src/vs/platform/update/electron-main/update
  		const headers = getUpdateRequestHeaders(this.productService.version);
  		try {
  			this.logService.trace('update#buildUpdateFeedUrl - setting feed URL for Electron autoUpdater', { url, assetID, quality, commit, headers });
+@@ -172,15 +211,33 @@ export class DarwinUpdateService extends
+ 		this.setState(State.Downloading(this.state.type === StateType.Overwriting ? this.state.update : undefined, this.state.explicit, this._overwrite));
+ 	}
+ 
+-	private onUpdateDownloaded(update: IUpdate): void {
+-		if (this.state.type !== StateType.Downloading) {
++	private async onUpdateDownloaded(update: IUpdate): Promise<void> {
++		// Checked on a local, not on `this.state`: the state can move during the await below, and
++		// narrowing `this.state` here would hide that from the check after it.
++		const downloading = this.state;
++		if (downloading.type !== StateType.Downloading) {
+ 			return;
+ 		}
+ 
+-		this.setState(State.Downloaded(update, this.state.explicit, this._overwrite));
++		const explicit = downloading.explicit;
++		this.setState(State.Downloaded(update, explicit, this._overwrite));
+ 		this.logService.info(`Update downloaded: ${JSON.stringify(update)}`);
+ 
+-		this.setState(State.Ready(update, this.state.explicit, this._overwrite));
++		// WSO2: the Squirrel payload is editor-only, so fetch the runtimes this version needs before
++		// calling it Ready. Every restart path the app offers keys on Ready (the prompt, the title bar,
++		// the menu, handleRelaunch), so holding it here stops all of them from booting the new app
++		// without its runtimes. Quitting outright is not one of them: Squirrel installs a downloaded
++		// update on the next launch regardless, so a Cmd+Q mid-download boots the new app without them,
++		// and its first check fetches them. Updating, not Downloaded: Downloaded offers "Install
++		// Update", which does nothing on this platform. The wait never rejects and gives up on a
++		// stalled download.
++		this.setState(State.Updating(update, explicit));
++		await this.wso2ComponentUpdateService.prepareForAppUpdate(update.productVersion);
++		if (this.state.type !== StateType.Updating) {
++			return; // superseded while waiting
++		}
++
++		this.setState(State.Ready(update, explicit, this._overwrite));
+ 	}
+ 
+ 	private onUpdateNotAvailable(): void {
 Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,225 @@
+@@ -0,0 +1,836 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3749,12 +4976,12 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 + * under the License.
 + */
 +
-+import { strictEqual } from 'assert';
++import { deepStrictEqual, strictEqual } from 'assert';
 +import * as fs from 'fs';
 +import * as os from 'os';
 +import { join } from '../../../../base/common/path.js';
 +import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-+import { compareVersions, isActiveSeedingDir, SEED_COMPLETE_MARKER, seedBundledComponents } from '../../node/wso2ComponentsManifest.js';
++import { activatePendingRuntimeComponents, awaitingDeferredExtensions, compareVersions, decideDeferredExtensions, heldBackPendingComponents, ILocalComponentsManifest, incomingAppVersionToPrepare, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, pinPendingToApp, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, stagedPendingComponents, sweepStagedExtensionDownloads, untilSettledOrStalled, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
 +
 +suite('wso2ComponentsManifest - compareVersions', () => {
 +	ensureNoDisposablesAreLeakedInTestSuite();
@@ -3872,8 +5099,73 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		strictEqual(fs.existsSync(join(target(), SEED_COMPLETE_MARKER)), true);
 +	});
 +
++	test('re-seeding a damaged tree keeps data the component wrote at BUNDLED paths', () => {
++		// ICP ships bin/database/icp_db.mv.db and www/config.json and then writes to those very
++		// files, so "keep what the bundle does not ship" would discard the database. The bundle
++		// fixture therefore ships the same paths the runtime later modifies.
++		fs.mkdirSync(join(srcDir, 'database'), { recursive: true });
++		fs.writeFileSync(join(srcDir, 'database', 'icp_db.mv.db'), 'pristine db');
++		fs.writeFileSync(join(srcDir, 'config.json'), 'pristine config');
++
++		fs.mkdirSync(join(target(), 'database'), { recursive: true });
++		fs.writeFileSync(join(target(), 'database', 'icp_db.mv.db'), 'USER DATA');
++		fs.writeFileSync(join(target(), 'config.json'), 'USER CONFIG');
++		fs.mkdirSync(join(target(), 'logs'), { recursive: true });
++		fs.writeFileSync(join(target(), 'logs', 'icp.log'), 'log line');
++		// bin/bal is absent: that is the damage seedContainsSource rejects the tree for.
++		seedBundledComponents(componentsHome, seeds());
++
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'bal'), 'utf8'), 'launcher');
++		strictEqual(fs.readFileSync(join(target(), 'database', 'icp_db.mv.db'), 'utf8'), 'USER DATA');
++		strictEqual(fs.readFileSync(join(target(), 'config.json'), 'utf8'), 'USER CONFIG');
++		strictEqual(fs.readFileSync(join(target(), 'logs', 'icp.log'), 'utf8'), 'log line');
++		strictEqual(fs.existsSync(join(componentsHome, '.salvaged')), false);
++	});
++
++	test('a truncated bundled file is replaced, not restored', () => {
++		// Zero-length where the bundle is not empty is the other thing seedContainsSource
++		// rejects a tree for, so the fresh copy has to win for that path specifically.
++		fs.mkdirSync(join(target(), 'bin'), { recursive: true });
++		fs.writeFileSync(join(target(), 'bin', 'bal'), '');
++		fs.writeFileSync(join(target(), 'keepme.txt'), 'user data');
++		seedBundledComponents(componentsHome, seeds());
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'bal'), 'utf8'), 'launcher');
++		strictEqual(fs.readFileSync(join(target(), 'keepme.txt'), 'utf8'), 'user data');
++	});
++
++	test('runtime data nested under a bundled directory survives', () => {
++		fs.mkdirSync(join(srcDir, 'bin', 'database'), { recursive: true });
++		fs.writeFileSync(join(srcDir, 'bin', 'database', 'icp.mv.db'), 'pristine');
++		fs.mkdirSync(join(target(), 'bin', 'database'), { recursive: true });
++		fs.writeFileSync(join(target(), 'bin', 'database', 'icp.mv.db'), 'USER DATA');
++		fs.writeFileSync(join(target(), 'bin', 'database', 'extra.trace'), 'trace');
++		seedBundledComponents(componentsHome, seeds());
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'bal'), 'utf8'), 'launcher');
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'database', 'icp.mv.db'), 'utf8'), 'USER DATA');
++		strictEqual(fs.readFileSync(join(target(), 'bin', 'database', 'extra.trace'), 'utf8'), 'trace');
++	});
++
++	test('the replaced tree never overwrites the freshly stamped marker', () => {
++		fs.mkdirSync(target(), { recursive: true });
++		fs.writeFileSync(join(target(), 'data.txt'), 'user data');
++		seedBundledComponents(componentsHome, seeds());
++		strictEqual(fs.readFileSync(join(target(), SEED_COMPLETE_MARKER), 'utf8'), '1.0.0');
++		strictEqual(fs.readFileSync(join(target(), 'data.txt'), 'utf8'), 'user data');
++	});
++
++	test('a healthy seed is adopted without touching anything', () => {
++		seedBundledComponents(componentsHome, seeds());
++		fs.writeFileSync(join(target(), 'runtime.log'), 'data');
++		seedBundledComponents(componentsHome, seeds());
++		strictEqual(fs.readFileSync(join(target(), 'runtime.log'), 'utf8'), 'data');
++		strictEqual(fs.existsSync(join(componentsHome, '.salvaged')), false);
++	});
++
 +	test('a failed re-seed keeps the existing tree instead of leaving no runtime', function () {
-+		if (process.platform === 'win32') {
++		// Root ignores directory permission bits, so the chmod below cannot force the staging copy
++		// to fail and the assertion would see a successfully re-seeded tree. The code under test is
++		// fine; only this test's precondition does not hold as root (CI containers run as root).
++		if (process.platform === 'win32' || process.getuid?.() === 0) {
 +			this.skip(); // read-only dir semantics differ; the protocol is copy-first on all platforms
 +		}
 +		// Copy-first, swap-after: when staging cannot even be created, the incomplete-but-present
@@ -3954,6 +5246,552 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		const now = new Date();
 +		fs.utimesSync(join(componentDir, claimName), now, now);
 +		strictEqual(isActiveSeedingDir(componentDir, claimName), true); // the required refresh
++	});
++});
++
++suite('wso2ComponentsManifest - newestSeededVersion', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	let root: string;
++
++	setup(() => { root = fs.mkdtempSync(join(os.tmpdir(), 'wso2seeded-')); });
++	teardown(() => { fs.rmSync(root, { recursive: true, force: true }); });
++
++	const seed = (id: string, version: string, opts: { marker?: boolean; empty?: boolean } = {}) => {
++		const dir = join(root, id, version);
++		fs.mkdirSync(dir, { recursive: true });
++		if (!opts.empty) {
++			fs.writeFileSync(join(dir, 'payload'), 'x');
++		}
++		if (opts.marker) {
++			fs.writeFileSync(join(dir, SEED_COMPLETE_MARKER), version);
++		}
++	};
++
++	test('returns undefined when the component has no directory at all', () => {
++		strictEqual(newestSeededVersion(root, 'ballerina-runtime'), undefined);
++	});
++
++	test('finds a version directory that carries no completion marker', () => {
++		// The case that matters in the field: on a real affected machine none of the three
++		// components carried a marker — builds predating it, and updater-installed directories,
++		// write none. Requiring it would return undefined on exactly the installs this rescues.
++		seed('ballerina-runtime', '2201.13.6');
++		strictEqual(newestSeededVersion(root, 'ballerina-runtime'), '2201.13.6');
++	});
++
++	test('takes the newest even when an older one is marked and it is not', () => {
++		// Deliberate: the marker means "seeding finished", not "better". An updater-installed
++		// runtime never carries one, so preferring marked would hand back an older seeded tree in
++		// place of a newer working one.
++		seed('ballerina-runtime', '2201.12.5', { marker: true });
++		seed('ballerina-runtime', '2201.13.6');
++		strictEqual(newestSeededVersion(root, 'ballerina-runtime'), '2201.13.6');
++	});
++
++	test('picks the newest among several versions', () => {
++		seed('jre', '3.0.2', { marker: true });
++		seed('jre', '4.0.0', { marker: true });
++		strictEqual(newestSeededVersion(root, 'jre'), '4.0.0');
++	});
++
++	test('ranks a pre-release below the release it precedes', () => {
++		seed('icp', '2.1.0-alpha4');
++		seed('icp', '2.1.0');
++		strictEqual(newestSeededVersion(root, 'icp'), '2.1.0');
++	});
++
++	test('ignores in-flight staging directories', () => {
++		seed('icp', '2.1.0-alpha3');
++		fs.mkdirSync(join(root, 'icp', `2.1.0-alpha4.seeding-${process.pid}`), { recursive: true });
++		strictEqual(newestSeededVersion(root, 'icp'), '2.1.0-alpha3');
++	});
++
++	test('ignores an empty version directory', () => {
++		seed('icp', '2.1.0-alpha4', { empty: true });
++		seed('icp', '2.1.0-alpha3');
++		strictEqual(newestSeededVersion(root, 'icp'), '2.1.0-alpha3');
++	});
++
++	test('ignores directories that are not version-shaped', () => {
++		seed('jre', 'backup');
++		seed('jre', 'old');
++		strictEqual(newestSeededVersion(root, 'jre'), undefined);
++		seed('jre', '4.0.0');
++		strictEqual(newestSeededVersion(root, 'jre'), '4.0.0');
++	});
++});
++
++suite('wso2ComponentsManifest - installedComponentVersion', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	let root: string;
++
++	setup(() => { root = fs.mkdtempSync(join(os.tmpdir(), 'wso2installed-')); });
++	teardown(() => { fs.rmSync(root, { recursive: true, force: true }); });
++
++	const seed = (id: string, version: string) => {
++		const dir = join(root, id, version);
++		fs.mkdirSync(dir, { recursive: true });
++		fs.writeFileSync(join(dir, 'payload'), 'x');
++	};
++
++	test('returns the declared version when it is on disk', () => {
++		seed('jre', '4.0.0');
++		strictEqual(installedComponentVersion(root, 'jre', '4.0.0'), '4.0.0');
++	});
++
++	test('returns the older installed version when the declared one is not on disk', () => {
++		// The alpha6 case: product.json declares a runtime the editor-only payload never carried.
++		seed('ballerina-runtime', '2201.13.6');
++		strictEqual(installedComponentVersion(root, 'ballerina-runtime', '2201.14.0-alpha'), '2201.13.6');
++	});
++
++	test('returns undefined when nothing is installed', () => {
++		// Must NOT report the declared version: that is what told the server the client already
++		// had the runtime it was missing, so no update was ever offered.
++		strictEqual(installedComponentVersion(root, 'ballerina-runtime', '2201.14.0-alpha'), undefined);
++	});
++
++	test('returns undefined when no version is declared and none is installed', () => {
++		strictEqual(installedComponentVersion(root, 'icp', undefined), undefined);
++	});
++
++	test('falls back to what is installed when no version is declared', () => {
++		seed('icp', '2.1.0-alpha3');
++		strictEqual(installedComponentVersion(root, 'icp', undefined), '2.1.0-alpha3');
++	});
++});
++
++suite('wso2ComponentsManifest - baseline eligibility', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	let root: string;
++
++	setup(() => { root = fs.mkdtempSync(join(os.tmpdir(), 'wso2eligible-')); });
++	teardown(() => { fs.rmSync(root, { recursive: true, force: true }); });
++
++	const seed = (id: string, version: string) => {
++		const dir = join(root, id, version);
++		fs.mkdirSync(dir, { recursive: true });
++		fs.writeFileSync(join(dir, 'payload'), 'x');
++	};
++
++	test('collects auto-reverted and staged-but-unactivated versions', () => {
++		strictEqual(ineligibleBaselineVersions(undefined).length, 0);
++		const entry = {
++			failed: [{ version: '2201.14.0-alpha', at: '2026-09-25T00:00:00.000Z' }],
++			pending: { version: '2201.15.0', path: 'components/ballerina-runtime/2201.15.0' }
++		};
++		deepStrictEqual(ineligibleBaselineVersions(entry as never).sort(), ['2201.14.0-alpha', '2201.15.0']);
++	});
++
++	test('does not adopt a version that was auto-reverted for failing to boot', () => {
++		// The sequence that matters: the fallback runs, the updater installs a newer runtime, it
++		// fails two boots and is reverted with `active: null` (so no `previous` was ever set). The
++		// failed directory is still the newest on disk. Adopting it would run a known-bad build
++		// that nothing health-tracks, so it can never be reverted a second time.
++		seed('ballerina-runtime', '2201.13.6');
++		seed('ballerina-runtime', '2201.14.0-alpha');
++		const failed = ['2201.14.0-alpha'];
++		strictEqual(newestSeededVersion(root, 'ballerina-runtime'), '2201.14.0-alpha');
++		strictEqual(newestSeededVersion(root, 'ballerina-runtime', failed), '2201.13.6');
++		strictEqual(installedComponentVersion(root, 'ballerina-runtime', '2201.14.0-alpha', failed), '2201.13.6');
++	});
++
++	test('does not adopt a version staged but not yet activated', () => {
++		seed('icp', '2.1.0-alpha3');
++		seed('icp', '2.1.0-alpha4');
++		strictEqual(installedComponentVersion(root, 'icp', '9.9.9', ['2.1.0-alpha4']), '2.1.0-alpha3');
++	});
++
++	test('reports nothing when every version on disk is ineligible', () => {
++		// Correct outcome, not a regression: resolving to the $APP_ROOT fallback fails visibly,
++		// which is better than silently running a runtime known to break the app.
++		seed('ballerina-runtime', '2201.14.0-alpha');
++		strictEqual(installedComponentVersion(root, 'ballerina-runtime', '2201.14.0-alpha', ['2201.14.0-alpha']), undefined);
++	});
++});
++
++suite('wso2ComponentsManifest - satisfiesRange', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('applies every comparator in the range', () => {
++		strictEqual(satisfiesRange('5.1.0', '>=5.1.0'), true);
++		strictEqual(satisfiesRange('5.0.9', '>=5.1.0'), false);
++		strictEqual(satisfiesRange('5.1.4', '>=5.1.0 <5.2.0'), true);
++		strictEqual(satisfiesRange('5.2.0', '>=5.1.0 <5.2.0'), false);
++	});
++
++	test('ranks a pre-release below the release it precedes', () => {
++		strictEqual(satisfiesRange('5.1.0-alpha5', '>=5.1.0-alpha6'), false);
++		strictEqual(satisfiesRange('5.1.0-alpha6', '>=5.1.0-alpha6'), true);
++		strictEqual(satisfiesRange('5.1.0', '>=5.1.0-alpha6'), true);
++	});
++
++	test('accepts a comparator it does not understand, and reports it', () => {
++		const seen: string[] = [];
++		strictEqual(satisfiesRange('5.1.0', '^5.1.0', c => seen.push(c)), true);
++		deepStrictEqual(seen, ['^5.1.0']);
++	});
++});
++
++suite('wso2ComponentsManifest - incomingAppVersionToPrepare', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('prepares only for a well-formed, strictly newer app', () => {
++		const running = '5.1.0-alpha6';
++		deepStrictEqual(
++			['5.1.0-alpha7', '5.1.0', '5.2.0', '5.1.0-alpha6', '5.1.0-alpha5', undefined, '', 'latest', '5.1.0; rm -rf ~'].map(v => incomingAppVersionToPrepare(v, running)),
++			['5.1.0-alpha7', '5.1.0', '5.2.0', undefined, undefined, undefined, undefined, undefined, undefined]
++		);
++	});
++});
++
++suite('wso2ComponentsManifest - untilSettledOrStalled', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	const STALL_MS = 60;
++	const after = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
++
++	test('resolves true as soon as the work settles, rejected or not', async () => {
++		const now = () => Date.now();
++		deepStrictEqual(
++			[await untilSettledOrStalled(after(10), now, STALL_MS), await untilSettledOrStalled(after(10).then(() => { throw new Error('boom'); }), now, STALL_MS)],
++			[true, true]
++		);
++	});
++
++	test('gives up on work that stops moving, without waiting for it', async () => {
++		const started = Date.now();
++		const result = await untilSettledOrStalled(new Promise<void>(() => { }), () => started, STALL_MS);
++		// The work never settles, so resolving at all shows it was not waited for; the bound shows
++		// the wait did not give up early.
++		strictEqual(result, false);
++		strictEqual(Date.now() - started >= STALL_MS, true);
++	});
++
++	test('keeps waiting, past the stall window, for work that keeps moving', async () => {
++		let activity = Date.now();
++		const ticker = setInterval(() => activity = Date.now(), STALL_MS / 4);
++		try {
++			const started = Date.now();
++			const result = await untilSettledOrStalled(after(STALL_MS * 3), () => activity, STALL_MS);
++			strictEqual(result, true);
++			strictEqual(Date.now() - started >= STALL_MS * 3 - 5, true);
++		} finally {
++			clearInterval(ticker);
++		}
++	});
++});
++
++suite('wso2ComponentsManifest - awaitingDeferredExtensions', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('counts a deferred copy only for this app or the app update being prepared', () => {
++		const manifest: ILocalComponentsManifest = {
++			schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION,
++			components: {
++				'ballerina': { deferredExtension: { version: '5.4.0', requires: { app: '>=5.1.0-alpha7' } } },
++				'legacy': { deferredExtension: { version: '1.0.0' } }, // recorded before copies were pinned
++				'mi': { active: { version: '3.0.0' } }
++			}
++		};
++		const sorted = (set: Set<string>) => [...set].sort();
++		deepStrictEqual({
++			oldAppAfterFailedUpdate: sorted(awaitingDeferredExtensions(manifest, '5.1.0-alpha6')),
++			oldAppWhileUpdatePrepared: sorted(awaitingDeferredExtensions(manifest, '5.1.0-alpha6', '5.1.0-alpha7')),
++			incomingApp: sorted(awaitingDeferredExtensions(manifest, '5.1.0-alpha7'))
++		}, {
++			oldAppAfterFailedUpdate: ['legacy'],
++			oldAppWhileUpdatePrepared: ['ballerina', 'legacy'],
++			incomingApp: ['ballerina', 'legacy']
++		});
++	});
++});
++
++suite('wso2ComponentsManifest - sweepStagedExtensionDownloads', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	let staging: string;
++	setup(() => { staging = fs.mkdtempSync(join(os.tmpdir(), 'wso2sweep-')); });
++	teardown(() => { fs.rmSync(staging, { recursive: true, force: true }); });
++
++	const put = (id: string, version: string, file: string) => {
++		fs.mkdirSync(join(staging, id, version), { recursive: true });
++		fs.writeFileSync(join(staging, id, version, file), 'x');
++	};
++
++	test('removes unreferenced VSIX downloads and nothing else', () => {
++		put('wso2.ballerina', '5.4.0', 'wso2.ballerina-5.4.0.vsix'); // deferred: kept
++		put('wso2.ballerina', '5.3.0', 'wso2.ballerina-5.3.0.vsix'); // leftover
++		put('wso2.hurl-client', '1.1.0', 'wso2.hurl-client-1.1.0.vsix'); // leftover
++		put('ballerina-runtime', '2201.14.0', 'ballerina-runtime-2201.14.0.zip'); // runtime archive: kept
++		const removed = sweepStagedExtensionDownloads(staging, {
++			schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION,
++			components: { 'wso2.ballerina': { deferredExtension: { version: '5.4.0' } } }
++		});
++		deepStrictEqual({
++			removed: removed.sort(),
++			left: ['wso2.ballerina/5.4.0', 'wso2.ballerina/5.3.0', 'wso2.hurl-client/1.1.0', 'ballerina-runtime/2201.14.0'].filter(d => fs.existsSync(join(staging, d)))
++		}, {
++			removed: ['wso2.ballerina@5.3.0', 'wso2.hurl-client@1.1.0'],
++			left: ['wso2.ballerina/5.4.0', 'ballerina-runtime/2201.14.0']
++		});
++	});
++
++	test('does nothing when there is no staging directory', () => {
++		deepStrictEqual(sweepStagedExtensionDownloads(join(staging, 'missing'), undefined), []);
++	});
++});
++
++suite('wso2ComponentsManifest - decideDeferredExtensions', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	const vsix = (id: string, version: string) => join('staging', id, version, `${id}-${version}.vsix`);
++	const manifest: ILocalComponentsManifest = {
++		schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION,
++		components: {
++			'ballerina': { deferredExtension: { version: '5.4.0', path: vsix('ballerina', '5.4.0'), requires: { app: '>=5.1.0-alpha7' } } },
++			'wso2-integrator': { deferredExtension: { version: '1.2.0', path: vsix('wso2-integrator', '1.2.0'), requires: { app: '>=5.1.0-alpha7' } } },
++			'bi': { deferredExtension: { version: '2.0.0', path: vsix('bi', '2.0.0'), requires: { 'ballerina-runtime': '>=2201.14.0-alpha' } } },
++			'mi': { deferredExtension: { version: '3.0.0', path: vsix('mi', '3.0.0'), requires: { 'micro-integrator': '>=4.5.0' } } },
++			'no-path': { deferredExtension: { version: '1.0.0' } },
++			'plain-runtime': { pending: { version: '1.0.0', path: join('components', 'plain-runtime', '1.0.0') } }
++		}
++	};
++	const installed: { [id: string]: string } = {
++		'ballerina': '5.3.0',
++		'wso2-integrator': '1.2.0', // the new app bundles the version that was deferred
++		'bi': '1.9.0',
++		'ballerina-runtime': '2201.14.0-alpha'
++		// 'micro-integrator' is not installed at all
++	};
++
++	test('installs what the running app meets, drops what it already has, and holds the rest', () => {
++		deepStrictEqual(decideDeferredExtensions(manifest, '5.1.0-alpha7', id => installed[id]), {
++			install: [
++				{ id: 'ballerina', version: '5.4.0', path: vsix('ballerina', '5.4.0') },
++				{ id: 'bi', version: '2.0.0', path: vsix('bi', '2.0.0') }
++			],
++			discard: [
++				{ id: 'wso2-integrator', version: '1.2.0' },
++				{ id: 'no-path', version: '1.0.0' }
++			]
++		});
++	});
++
++	test('holds extensions for the app update when the old app boots instead', () => {
++		deepStrictEqual(decideDeferredExtensions(manifest, '5.1.0-alpha6', id => installed[id]).install.map(e => e.id), ['bi']);
++	});
++
++	test('does not evaluate app requirements without a running version', () => {
++		deepStrictEqual(decideDeferredExtensions(manifest, undefined, id => installed[id]).install.map(e => e.id), ['ballerina', 'bi']);
++	});
++});
++
++suite('wso2ComponentsManifest - pinPendingToApp', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('pins what this pass staged to the incoming app, and nothing else', () => {
++		const manifest: ILocalComponentsManifest = {
++			schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION,
++			components: {
++				'jre': { pending: { version: '5.0.0' } },
++				'ballerina-runtime': { pending: { version: '2201.14.0', requires: { jre: '>=5.0.0' } } },
++				'icp': { pending: { version: '2.1.0-beta', requires: { app: '>=5.1.0-alpha7' } } },
++				'wso2.micro-integrator': { pending: { version: '4.5.0' } }
++			}
++		};
++		const changed = pinPendingToApp(manifest, [
++			{ id: 'jre', version: '5.0.0' },
++			{ id: 'ballerina-runtime', version: '2201.14.0' },
++			{ id: 'icp', version: '2.1.0-beta' },
++			{ id: 'wso2.micro-integrator', version: '4.4.0' } // not what is pending
++		], '5.1.0-alpha7');
++		deepStrictEqual({ changed, requires: Object.fromEntries(Object.entries(manifest.components).map(([id, e]) => [id, e.pending?.requires])) }, {
++			changed: true,
++			requires: {
++				'jre': { app: '>=5.1.0-alpha7' },
++				'ballerina-runtime': { jre: '>=5.0.0', app: '>=5.1.0-alpha7' },
++				'icp': { app: '>=5.1.0-alpha7' },
++				'wso2.micro-integrator': undefined
++			}
++		});
++	});
++});
++
++suite('wso2ComponentsManifest - stagedPendingComponents', () => {
++
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('counts what the app will activate, and what was staged for the prepared app update', () => {
++		const manifest: ILocalComponentsManifest = {
++			schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION,
++			components: {
++				// Staged for the incoming alpha7, so held on the running alpha6.
++				'ballerina-runtime': { pending: { version: '2201.14.0', requires: { app: '>=5.1.0-alpha7' } } },
++				// Staged for the running app; the restart activates it.
++				'icp': { pending: { version: '2.1.0-alpha4', requires: { app: '>=5.1.0-alpha6' } } },
++				// Held for an app nobody is installing.
++				'wso2.micro-integrator': { pending: { version: '4.5.0', requires: { app: '>=5.2.0' } } },
++				'jre': { active: { version: '4.0.0' } }
++			}
++		};
++		const sorted = (set: Set<string>) => [...set].sort();
++		deepStrictEqual({
++			nothingPrepared: sorted(stagedPendingComponents(manifest, '5.1.0-alpha6')),
++			updatePrepared: sorted(stagedPendingComponents(manifest, '5.1.0-alpha6', '5.1.0-alpha7')),
++			asTheIncomingApp: sorted(stagedPendingComponents(manifest, '5.1.0-alpha7', '5.1.0-alpha7'))
++		}, {
++			nothingPrepared: ['icp'],
++			updatePrepared: ['ballerina-runtime', 'icp'],
++			asTheIncomingApp: ['ballerina-runtime', 'icp']
++		});
++	});
++});
++
++suite('wso2ComponentsManifest - activation guard', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	let home: string;
++	let componentsHome: string;
++
++	setup(() => {
++		home = fs.mkdtempSync(join(os.tmpdir(), 'wso2guard-'));
++		componentsHome = join(home, 'components');
++		fs.mkdirSync(componentsHome, { recursive: true });
++	});
++	teardown(() => { fs.rmSync(home, { recursive: true, force: true }); });
++
++	const stage = (id: string, version: string) => {
++		const dir = join(componentsHome, id, version);
++		fs.mkdirSync(dir, { recursive: true });
++		fs.writeFileSync(join(dir, 'payload'), 'x');
++		return join('components', id, version);
++	};
++
++	const manifestWith = (components: ILocalComponentsManifest['components']): ILocalComponentsManifest =>
++		({ schemaVersion: LOCAL_MANIFEST_SCHEMA_VERSION, components });
++
++	test('holds a component whose app requirement the running app does not meet', () => {
++		const held = heldBackPendingComponents(manifestWith({
++			'ballerina-runtime': { pending: { version: '2201.14.0-alpha', requires: { app: '>=5.1.0-alpha6' } } }
++		}), '5.1.0-alpha5');
++		strictEqual(held.has('ballerina-runtime'), true);
++		strictEqual(held.get('ballerina-runtime'), 'needs app >=5.1.0-alpha6, running 5.1.0-alpha5');
++	});
++
++	test('does not hold a component the running app satisfies', () => {
++		const held = heldBackPendingComponents(manifestWith({
++			'ballerina-runtime': { pending: { version: '2201.14.0-alpha', requires: { app: '>=5.1.0-alpha6' } } }
++		}), '5.1.0-alpha6');
++		strictEqual(held.size, 0);
++	});
++
++	test('does not hold a component staged before requirements were recorded', () => {
++		const held = heldBackPendingComponents(manifestWith({
++			'jre': { pending: { version: '4.0.0' } }
++		}), '5.1.0-alpha5');
++		strictEqual(held.size, 0);
++	});
++
++	test('holds a component whose dependency is held, to a fixpoint', () => {
++		// icp is held on the app; mi depends on icp; a later entry depends on mi. None of the
++		// dependents has an app requirement of its own, so only propagation can hold them.
++		const held = heldBackPendingComponents(manifestWith({
++			'wso2.later': { pending: { version: '1.0.0', requires: { 'wso2.micro-integrator': '>=4.1.4' } } },
++			'wso2.micro-integrator': { pending: { version: '4.1.4', requires: { icp: '>=2.1.0-alpha4' } } },
++			'icp': { pending: { version: '2.1.0-alpha4', requires: { app: '>=5.1.0-alpha6' } } }
++		}), '5.1.0-alpha5');
++		deepStrictEqual([...held.keys()].sort(), ['icp', 'wso2.later', 'wso2.micro-integrator']);
++	});
++
++	test('judges a dependency by the version it will run, not by whether it is held', () => {
++		// icp's newer version is held on the app, but the icp it keeps running already satisfies mi.
++		const held = heldBackPendingComponents(manifestWith({
++			'icp': { active: { version: '2.1.0-alpha4' }, pending: { version: '2.1.0-alpha5', requires: { app: '>=5.1.0-alpha7' } } },
++			'wso2.micro-integrator': { pending: { version: '4.1.4', requires: { icp: '>=2.1.0-alpha4' } } }
++		}), '5.1.0-alpha6');
++		deepStrictEqual([...held.keys()], ['icp']);
++	});
++
++	test('holds a dependent once the dependency it needs is no longer coming', () => {
++		// A later boot: the newer icp was dropped earlier, so only the old one is left to run.
++		const held = heldBackPendingComponents(manifestWith({
++			'icp': { active: { version: '2.1.0-alpha3' } },
++			'wso2.micro-integrator': { pending: { version: '4.1.4', requires: { icp: '>=2.1.0-alpha4' } } }
++		}), '5.1.0-alpha6');
++		deepStrictEqual([...held.entries()], [['wso2.micro-integrator', 'needs icp >=2.1.0-alpha4, which would run 2.1.0-alpha3']]);
++	});
++
++	test('holds a dependent whose newer dependency is discarded for a missing directory', () => {
++		const runtime = stage('ballerina-runtime', '2201.14.0-alpha');
++		const jre = stage('jre', '4.0.0');
++		writeLocalManifest(componentsHome, manifestWith({
++			'jre': { active: { version: '4.0.0', path: jre, healthy: true }, pending: { version: '5.0.0', path: join('components', 'jre', '5.0.0') } },
++			'ballerina-runtime': { pending: { version: '2201.14.0-alpha', path: runtime, requires: { jre: '>=5.0.0' } } }
++		}));
++
++		activatePendingRuntimeComponents(home, '5.1.0-alpha6');
++		const components = readLocalManifest(componentsHome)!.components;
++		deepStrictEqual(
++			[components['jre'].active?.version, components['jre'].pending, components['ballerina-runtime'].active, components['ballerina-runtime'].pending?.version],
++			['4.0.0', null, undefined, '2201.14.0-alpha']
++		);
++	});
++
++	test('does not evaluate the app requirement when the running version is unknown', () => {
++		const held = heldBackPendingComponents(manifestWith({
++			'icp': { pending: { version: '2.1.0-alpha4', requires: { app: '>=5.1.0-alpha6' } } }
++		}), undefined);
++		strictEqual(held.size, 0);
++	});
++
++	test('leaves a held component pending and untouched, then activates it once the app matches', () => {
++		const path = stage('ballerina-runtime', '2201.14.0-alpha');
++		const current = stage('ballerina-runtime', '2201.13.6');
++		writeLocalManifest(componentsHome, manifestWith({
++			'ballerina-runtime': {
++				active: { version: '2201.13.6', path: current, healthy: true },
++				pending: { version: '2201.14.0-alpha', path, requires: { app: '>=5.1.0-alpha6' } }
++			}
++		}));
++
++		// The old app boots: the app update it was staged for did not apply.
++		activatePendingRuntimeComponents(home, '5.1.0-alpha5');
++		let entry = readLocalManifest(componentsHome)!.components['ballerina-runtime'];
++		strictEqual(entry.active?.version, '2201.13.6', 'the working runtime stays active');
++		strictEqual(entry.pending?.version, '2201.14.0-alpha', 'held, not discarded');
++		strictEqual(fs.existsSync(join(home, path)), true, 'the staged tree is kept');
++
++		// The app it was staged for boots.
++		activatePendingRuntimeComponents(home, '5.1.0-alpha6');
++		entry = readLocalManifest(componentsHome)!.components['ballerina-runtime'];
++		strictEqual(entry.active?.version, '2201.14.0-alpha');
++		strictEqual(entry.previous?.version, '2201.13.6');
++		strictEqual(entry.pending, null);
++	});
++
++	test('still activates a component staged before requirements were recorded', () => {
++		const path = stage('jre', '4.0.0');
++		writeLocalManifest(componentsHome, manifestWith({ 'jre': { pending: { version: '4.0.0', path } } }));
++		activatePendingRuntimeComponents(home, '5.1.0-alpha5');
++		strictEqual(readLocalManifest(componentsHome)!.components['jre'].active?.version, '4.0.0');
++	});
++
++	test('still discards a held component whose staged directory is missing', () => {
++		writeLocalManifest(componentsHome, manifestWith({
++			'icp': { pending: { version: '2.1.0-alpha4', path: join('components', 'icp', '2.1.0-alpha4'), requires: { app: '>=5.1.0-alpha6' } } }
++		}));
++		activatePendingRuntimeComponents(home, '5.1.0-alpha5');
++		strictEqual(readLocalManifest(componentsHome)!.components['icp'].pending, null);
 +	});
 +});
 Index: product-integrator/lib/vscode/src/vs/workbench/contrib/update/browser/postUpdateWidget.ts
@@ -4273,3 +6111,26 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/update/browser/upd
  		dom.clearNode(this.content);
  		this.content.classList.remove('prominent', 'progress-indefinite', 'progress-percent', 'update-disabled');
  		this.content.style.removeProperty('--update-progress');
+Index: product-integrator/lib/vscode/src/vs/platform/sharedProcess/electron-main/sharedProcess.ts
+===================================================================
+--- product-integrator.orig/lib/vscode/src/vs/platform/sharedProcess/electron-main/sharedProcess.ts
++++ product-integrator/lib/vscode/src/vs/platform/sharedProcess/electron-main/sharedProcess.ts
+@@ -98,6 +98,18 @@ export class SharedProcess extends Dispo
+ 		this.utilityProcess = undefined;
+ 	}
+ 
++	/**
++	 * WSO2: spawns the shared process without waiting for a window to ask for it. Startup normally
++	 * holds it until the first window connects, so the two do not compete; a caller that must use it
++	 * before any window opens (installing extensions downloaded with an app update) opts in here.
++	 */
++	startWithoutWindow(): void {
++		if (!this.firstWindowConnectionBarrier.isOpen()) {
++			this.logService.trace('[SharedProcess] starting before the first window');
++			this.firstWindowConnectionBarrier.open();
++		}
++	}
++
+ 	private _whenReady: Promise<void> | undefined = undefined;
+ 	whenReady(): Promise<void> {
+ 		if (!this._whenReady) {

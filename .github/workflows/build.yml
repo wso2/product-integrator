@@ -331,6 +331,7 @@ jobs:
       versions_artifact: build-versions
       ref: ${{ inputs.ref }}
       is_prerelease: ${{ inputs.is_prerelease }}
+      publish_core: ${{ inputs.publish_tag != '' }}
 
   smoke-test:
     if: ${{ inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
@@ -672,6 +673,15 @@ jobs:
           mkdir -p ../artifacts
           (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
           cp ../artifacts/VSCode-darwin-${{ matrix.arch }}.zip ../../installers/mac/
+
+      # The exact editor ("core") the DMG below is built from; published as a release asset.
+      - name: Upload macOS core
+        if: ${{ inputs.build_packed_installers == true && inputs.publish_tag != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-darwin-${{ matrix.arch }}
+          path: lib/artifacts/VSCode-darwin-${{ matrix.arch }}.zip
+          if-no-files-found: error
       # Imports the Developer ID Application cert (codesign: app bundles + DMG) into a temp
       # keychain, then derives the identity name from the imported cert so no separate identity
       # secret is needed. No Developer ID Installer cert: the DMG carries the app directly, and
@@ -1263,6 +1273,15 @@ jobs:
         if: ${{ inputs.build_packed_installers == true }}
         run: |
           cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
+
+      # The exact editor ("core") the MSIs below are built from; published as a release asset.
+      - name: Upload Windows core
+        if: ${{ inputs.build_packed_installers == true && inputs.publish_tag != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-win32-x64
+          path: lib/artifacts/VSCode-win32-x64.zip
+          if-no-files-found: error
       - name: Exclude build workspace from Windows Defender
         if: ${{ inputs.build_packed_installers == true }}
         continue-on-error: true
@@ -1525,6 +1544,81 @@ jobs:
           path: release-files/
         continue-on-error: true
 
+      # The per-OS "core" editors the installers above were built from (VSCode + patches + bundled
+      # extensions + CLI, no Ballerina/ICP/JRE), and the versions they were built with, so
+      # downstream builds wrap these exact binaries instead of rebuilding them.
+      - name: Download Linux core
+        uses: actions/download-artifact@v4
+        with:
+          name: core-linux-x64
+          path: core/
+
+      - name: Download macOS core (arm64)
+        if: ${{ inputs.build_macos == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: core-darwin-arm64
+          path: core/
+
+      - name: Download macOS core (x64)
+        if: ${{ inputs.build_macos == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: core-darwin-x64
+          path: core/
+
+      - name: Download Windows core
+        if: ${{ inputs.build_windows == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: core-win32-x64
+          path: core/
+
+      - name: Download stamped versions
+        uses: actions/download-artifact@v4
+        with:
+          name: build-versions
+          path: core/versions/
+
+      - name: Stage core files
+        shell: bash
+        env:
+          INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          stage() {
+            local src="$1" name="$2"
+            [ -f "${src}" ] || return 0
+            mv "${src}" "release-files/${name}"
+            (cd release-files && openssl dgst -sha256 -out "${name}.sha256" "${name}")
+            ls -lh "release-files/${name}"
+          }
+          P="wso2-integrator-${INTEGRATOR_VERSION}-core"
+          stage core/vscode-linux-x64.tar.gz    "${P}-linux-x64.tar.gz"
+          stage core/VSCode-darwin-arm64.zip    "${P}-darwin-arm64.zip"
+          stage core/VSCode-darwin-x64.zip      "${P}-darwin-x64.zip"
+          stage core/VSCode-win32-x64.zip       "${P}-win32-x64.zip"
+          cp core/versions/ci/build/component-versions.properties \
+            "release-files/wso2-integrator-${INTEGRATOR_VERSION}-component-versions.properties"
+
+      # Signed because they are build inputs for downstream builds; a .sha256 in the same release
+      # cannot detect a replaced asset.
+      - name: cosign-installer
+        uses: sigstore/cosign-installer@v3.5.0
+
+      - name: Sign the core files
+        shell: bash
+        env:
+          INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-core-*.{tar.gz,zip}; do
+            cosign sign-blob "${F}" --output-certificate "${F}.pem" --output-signature "${F}.sig" --yes
+            cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build.yml@${GITHUB_REF}" --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          done
+
       # The caller chose the tag; all that is derived here is the display name.
       - name: Resolve release name
         id: release-tag
@@ -1555,7 +1649,7 @@ jobs:
           BUILD_MACOS: ${{ inputs.build_macos }}
           BUILD_WINDOWS: ${{ inputs.build_windows }}
         run: |
-          shopt -s nullglob
+          shopt -s nullglob extglob
           missing=()
           require() {
             local label="$1"; shift
@@ -1565,14 +1659,19 @@ jobs:
 
           require "Linux .deb"          release-files/*.deb
           require "Linux .rpm"          release-files/*.rpm
-          require "Linux .tar.gz"       release-files/*.tar.gz
+          require "Linux .tar.gz"       release-files/!(*-core-*)linux-x64.tar.gz
           require "WI extension .vsix"  release-files/*.vsix
+          require "Linux core"          release-files/*-core-linux-x64.tar.gz
+          require "Component versions"  release-files/*-component-versions.properties
           if [ "${BUILD_MACOS}" = "true" ]; then
             require "macOS arm64 .dmg"  release-files/*arm64.dmg
             require "macOS x64 .dmg"    release-files/*x64.dmg
+            require "macOS arm64 core"   release-files/*-core-darwin-arm64.zip
+            require "macOS x64 core"    release-files/*-core-darwin-x64.zip
           fi
           if [ "${BUILD_WINDOWS}" = "true" ]; then
             require "Windows .msi"      release-files/*.msi
+            require "Windows core"      release-files/*-core-win32-x64.zip
           fi
 
           if [ ${#missing[@]} -gt 0 ]; then

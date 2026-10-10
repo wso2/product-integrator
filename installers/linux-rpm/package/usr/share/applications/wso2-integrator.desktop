@@ -8,7 +8,7 @@ Type=Application
 StartupNotify=false
 StartupWMClass=WSO2 Integrator
 Categories=Development;IDE;Utility;
-MimeType=application/x-wso2-integrator-workspace;
+MimeType=application/x-wso2-integrator-workspace;text/x-ballerina;
 Actions=new-empty-window;
 
 [Desktop Action new-empty-window]
