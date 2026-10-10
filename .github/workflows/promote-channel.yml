@@ -6,7 +6,10 @@ name: Promote Update Channel
 # A channel is not one source.json: each release publishes source-<version>.json and claims a line
 # in index.json. So promotion copies the documents the source channel currently serves and upserts
 # the matching index entries in the target, per line — a line the target serves and the source does
-# not is left alone rather than dropped. See ci/build/promote-update-channel.py.
+# not is left alone rather than dropped. `version` names the release to move, or "all" for every
+# line the source channel serves — required, because a testing channel holds several candidates and
+# promoting all of them should never be what happens by default.
+# See ci/build/promote-update-channel.py.
 #
 # Documents and their detached signatures are copied verbatim, so the signature stays valid and
 # nothing is re-signed; the client resolves by channel PATH and never reads a document's own
@@ -35,6 +38,10 @@ on:
           - insider
           - beta
           - stable
+      version:
+        description: 'Release to promote, e.g. 5.1.0-alpha5 (the version in source-<version>.json), or "all" for every line the source channel serves. Required, with no default: a channel used to qualify releases holds several candidates at once, so promoting everything must be typed deliberately rather than be what happens when the field is left alone.'
+        required: true
+        type: string
 
 # Same group as the two publishers: promotion read-modify-writes the TARGET channel's index.json,
 # and racing a publish to that channel would drop whichever line the loser had repointed.
@@ -76,8 +83,14 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
 
       - name: Promote documents and index entries
+        env:
+          # Through the environment rather than interpolated into the command: a version is
+          # free-text input, and `${{ }}` inside a run block is substituted before bash sees it.
+          PROMOTE_VERSION: ${{ github.event.inputs.version }}
         run: |
+          set -euo pipefail
           python3 ci/build/promote-update-channel.py \
             "${{ secrets.AWS_UPDATE_S3_BUCKET }}" \
             "${{ github.event.inputs.from_channel }}" \
-            "${{ github.event.inputs.to_channel }}"
+            "${{ github.event.inputs.to_channel }}" \
+            --version "${PROMOTE_VERSION}"
