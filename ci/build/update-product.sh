@@ -24,6 +24,7 @@ MI_EXTENSION_VERSION=${MI_EXTENSION_VERSION:-"$(read_version "wso2.micro-integra
 WSO2_HURL_CLIENT_EXTENSION_VERSION=$(read_version "wso2.hurl-client.extension.version")
 WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION=$(read_version "wso2.mcp-server-inspector.extension.version")
 WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION=$(read_version "wso2.streaming-integrator.extension.version")
+EVEN_BETTER_TOML_EXTENSION_VERSION=$(read_version "tamasfe.even-better-toml.extension.version")
 
 # Bundled component versions (Ballerina runtime, custom JRE, ICP) — surfaced in
 # product.json so the in-app updater and Components UI can compare the bundled
@@ -96,6 +97,7 @@ require_non_empty "${WSO2_HURL_CLIENT_EXTENSION_VERSION}" "wso2.hurl-client.exte
 require_non_empty "${WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION}" "wso2.mcp-server-inspector.extension.version"
 require_non_empty "${MI_EXTENSION_VERSION}" "wso2.micro-integrator.extension.version"
 require_non_empty "${WSO2_STREAMING_INTEGRATOR_EXTENSION_VERSION}" "wso2.streaming-integrator.extension.version"
+require_non_empty "${EVEN_BETTER_TOML_EXTENSION_VERSION}" "tamasfe.even-better-toml.extension.version"
 
 if [[ -n "${BALLERINA_EXTENSION_VERSION}" && "${BALLERINA_EXTENSION_VERSION}" =~ ^[vV] ]]; then
   echo "Error: BALLERINA_EXTENSION_VERSION must be provided without a leading v. Example: 4.5.0" >&2
@@ -195,6 +197,10 @@ cat > lib/vscode/product.json <<EOF
       {
         "name": "wso2.mcp-server-inspector",
         "version": "${WSO2_MCP_SERVER_INSPECTOR_EXTENSION_VERSION}"
+      },
+      {
+        "name": "tamasfe.even-better-toml",
+        "version": "${EVEN_BETTER_TOML_EXTENSION_VERSION}"
       },
 $(if [ -n "${BALLERINA_VSIX_PATH}" ]; then
 cat <<BALLERINA_VSIX_ENTRY
