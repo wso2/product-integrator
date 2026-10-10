@@ -218,14 +218,6 @@ fi
 # Fix ZIP epoch timestamps — unzip preserves 1980-01-01 dates from ZIP archives
 find "$WSO2_TARGET/$APP_BUNDLE" -exec touch {} +
 
-# Resolve the product-name placeholder in packaging metadata (same in-place
-# substitute/restore pattern as __VERSION__ in Distribution.xml).
-sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/component.plist"
-sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/Distribution.xml"
-sed -i '' "s/__BUNDLE_ID__/$BUNDLE_IDENTIFIER/g" "$WORK_DIR/Distribution.xml"
-sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/welcome.html"
-sed -i '' "s/__PRODUCT_NAME__/$APP_NAME/g" "$WORK_DIR/conclusion.html"
-
 # -------------------------------------------------------------------
 # Code-sign a fully-assembled app bundle (Developer ID + hardened runtime), inside-out:
 # natives inside jars, then every loose Mach-O, then nested bundles deepest-first, then
