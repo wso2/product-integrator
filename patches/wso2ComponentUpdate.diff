@@ -3692,7 +3692,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
-@@ -0,0 +1,766 @@
+@@ -0,0 +1,745 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3714,7 +3714,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +import { raceTimeout } from '../../../../base/common/async.js';
 +import { Codicon } from '../../../../base/common/codicons.js';
 +import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-+import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
++import { isLinuxSnap, isMacintosh, isWindows } from '../../../../base/common/platform.js';
 +import { URI } from '../../../../base/common/uri.js';
 +import { localize, localize2 } from '../../../../nls.js';
 +import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -3727,6 +3727,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 +import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 +import { ILogService } from '../../../../platform/log/common/log.js';
++import { INativeHostService } from '../../../../platform/native/common/native.js';
 +import { INotificationService, IPromptChoice, Severity } from '../../../../platform/notification/common/notification.js';
 +import product from '../../../../platform/product/common/product.js';
 +import { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
@@ -3737,9 +3738,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 +import { IWorkbenchExtensionManagementService } from '../../../services/extensionManagement/common/extensionManagement.js';
 +import { IExtensionService } from '../../../services/extensions/common/extensions.js';
-+import { ExtensionIdentifier } from '../../../../platform/extensions/common/extensions.js';
 +import { IHostService } from '../../../services/host/browser/host.js';
 +import { setComponentUpdateSummary } from '../../update/browser/updateTitleBarEntry.js';
++import { extensionVersionLines, runtimeVersionLines } from '../common/versionInformation.js';
 +
 +const WSO2_UPDATES_AVAILABLE_KEY = 'wso2UpdatesAvailable';
 +const WSO2_UPDATES_AVAILABLE = new RawContextKey<boolean>(WSO2_UPDATES_AVAILABLE_KEY, false);
@@ -4021,16 +4022,37 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	async run(accessor: ServicesAccessor): Promise<void> {
 +		const dialogService = accessor.get(IDialogService);
 +		const clipboardService = accessor.get(IClipboardService);
++		const nativeHostService = accessor.get(INativeHostService);
 +		const updateService = accessor.get(IWso2ComponentUpdateService);
 +		const extensionService = accessor.get(IExtensionService);
++		const logService = accessor.get(ILogService);
 +
-+		// Each section is non-fatal: if its source is unavailable the dialog shows without it.
-+		const sections = [
-+			localize('wso2.versionInformation.version', "Version: {0}", product.wiversion ?? product.version ?? 'Unknown'),
-+			await versionSection(localize('wso2.versionInformation.runtimes', "Runtimes:"), () => runtimeVersionLines(updateService)),
-+			await versionSection(localize('wso2.versionInformation.extensions', "Extensions:"), () => extensionVersionLines(extensionService))
-+		].filter(section => !!section);
-+		const details = sections.join('\n\n');
++		// Each source is non-fatal: if one fails the dialog shows without it, and the failure is logged
++		// so a missing section can be told apart from an install that has nothing to list.
++		const read = async <T>(name: string, get: () => Promise<T>): Promise<T | undefined> => {
++			try {
++				return await get();
++			} catch (error) {
++				logService.error(`[wso2Update] Version Information: could not read ${name}`, error);
++				return undefined;
++			}
++		};
++		const [os, runtimes, extensions] = await Promise.all([
++			read('the OS', () => nativeHostService.getOSProperties()),
++			read('runtimes', async () => runtimeVersionLines(await updateService.getComponentStatuses())),
++			read('extensions', async () => {
++				await extensionService.whenInstalledExtensionsRegistered();
++				return extensionVersionLines(product.builtInExtensions ?? [], extensionService.extensions);
++			})
++		]);
++		const section = (title: string, lines: string[] | undefined) => lines?.length ? `${title}\n${lines.join('\n')}` : undefined;
++		// Version and OS, as in About, so the copied text is complete for a support request.
++		const version = localize('wso2.versionInformation.version', "Version: {0}", product.wiversion ?? product.version ?? 'Unknown');
++		const details = [
++			os ? `${version}\n${localize('wso2.versionInformation.os', "OS: {0}", `${os.type} ${os.arch} ${os.release}${isLinuxSnap ? ' snap' : ''}`)}` : version,
++			section(localize('wso2.versionInformation.runtimes', "Runtimes:"), runtimes),
++			section(localize('wso2.versionInformation.extensions', "Extensions:"), extensions)
++		].filter(part => !!part).join('\n\n');
 +
 +		await dialogService.prompt({
 +			type: Severity.Info,
@@ -4043,49 +4065,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +			cancelButton: localize('wso2.versionInformation.ok', "OK")
 +		});
 +	}
-+}
-+
-+async function versionSection(title: string, getLines: () => Promise<string[]>): Promise<string | undefined> {
-+	try {
-+		const lines = await getLines();
-+		return lines.length ? `${title}\n${lines.join('\n')}` : undefined;
-+	} catch {
-+		return undefined;
-+	}
-+}
-+
-+async function runtimeVersionLines(updateService: IWso2ComponentUpdateService): Promise<string[]> {
-+	const labels: { [id: string]: string } = {
-+		'ballerina-runtime': 'Ballerina',
-+		// Not a Java version: the custom runtime image Ballerina ships with, versioned on its own.
-+		'jre': 'Ballerina JRE',
-+		'icp': 'ICP'
-+	};
-+	const statuses = await updateService.getComponentStatuses();
-+	return statuses
-+		.filter(status => status.kind === 'runtime')
-+		.map(status => `${labels[status.id] ?? status.id}: ${status.activeVersion ?? status.bundledVersion ?? 'Unknown'}${status.overridden ? ' (updated)' : ''}`);
-+}
-+
-+/**
-+ * The running extension is the truth: a component update installs a newer copy of a built-in
-+ * extension as a user extension, which then shadows the version recorded in product.json. That copy
-+ * inherits `isBuiltin` (see dedupExtensions), so "updated" is judged against the bundled version.
-+ */
-+async function extensionVersionLines(extensionService: IExtensionService): Promise<string[]> {
-+	const builtIns = (product.builtInExtensions ?? []).filter(ext => ext.name.toLowerCase().startsWith('wso2.'));
-+	if (!builtIns.length) {
-+		return [];
-+	}
-+	await extensionService.whenInstalledExtensionsRegistered();
-+	return builtIns.map(builtIn => {
-+		const running = extensionService.extensions.find(ext => ExtensionIdentifier.equals(ext.identifier, builtIn.name));
-+		const label = running?.displayName ?? builtIn.name.split('.')[1];
-+		const bundledVersion = builtIn.version && builtIn.version !== 'latest' ? builtIn.version : undefined;
-+		const version = running?.version ?? bundledVersion ?? 'Unknown';
-+		const updated = !!running && !!bundledVersion && running.version !== bundledVersion;
-+		return `${label}: ${version}${updated ? ' (updated)' : ''}`;
-+	});
 +}
 +
 +registerAction2(CheckForUpdatesAction);
@@ -6150,3 +6129,173 @@ Index: product-integrator/lib/vscode/src/vs/platform/sharedProcess/electron-main
  	private _whenReady: Promise<void> | undefined = undefined;
  	whenReady(): Promise<void> {
  		if (!this._whenReady) {
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/common/versionInformation.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/common/versionInformation.ts
+@@ -0,0 +1,81 @@
++/**
++ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
++ *
++ * WSO2 LLC. licenses this file to you under the Apache License,
++ * Version 2.0 (the "License"); you may not use this file except
++ * in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied. See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++
++import { IBuiltInExtension } from '../../../../base/common/product.js';
++import { localize } from '../../../../nls.js';
++import { ExtensionIdentifier, IExtensionDescription } from '../../../../platform/extensions/common/extensions.js';
++import { IWso2ComponentStatus } from '../../../../platform/wso2Update/common/wso2Update.js';
++
++/** What Version Information needs to know about a running extension. */
++export type IRunningExtension = Pick<IExtensionDescription, 'identifier' | 'version' | 'displayName'>;
++
++const runtimeLabels: { [id: string]: string } = {
++	'ballerina-runtime': 'Ballerina',
++	// Not a Java version: the custom runtime image Ballerina ships with, versioned on its own.
++	'jre': 'Ballerina JRE',
++	'icp': 'ICP'
++};
++
++/**
++ * "Updated" means the version in use differs from the one the app shipped with -- the same rule
++ * Show Components uses. A component the app did not ship has nothing to differ from.
++ */
++function isUpdated(version: string | undefined, bundledVersion: string | undefined): boolean {
++	return !!version && !!bundledVersion && version !== bundledVersion;
++}
++
++function withUpdatedHint(version: string, updated: boolean): string {
++	return updated ? localize('wso2.versionInformation.updated', "{0} (updated)", version) : version;
++}
++
++/**
++ * One line per runtime component. `activeVersion` is what is on disk and is undefined when nothing
++ * is -- after an editor-only update, or for a runtime the server offers but this install lacks.
++ * That gap is reported as such rather than covered with the version product.json declares.
++ */
++export function runtimeVersionLines(statuses: readonly IWso2ComponentStatus[]): string[] {
++	return statuses
++		.filter(status => status.kind === 'runtime')
++		.map(status => {
++			const label = runtimeLabels[status.id] ?? status.id;
++			const version = status.activeVersion
++				? withUpdatedHint(status.activeVersion, isUpdated(status.activeVersion, status.bundledVersion))
++				: localize('wso2.versionInformation.notInstalled', "not installed");
++			return `${label}: ${version}`;
++		});
++}
++
++/**
++ * One line per built-in WSO2 extension. The running extension is the truth: a component update
++ * installs a newer copy as a user extension, which shadows the version recorded in product.json.
++ * That copy inherits `isBuiltin` (see dedupExtensions), so "updated" is judged by version. An
++ * extension that is disabled or failed to start is flagged rather than shown as if it were loaded.
++ */
++export function extensionVersionLines(builtIns: readonly IBuiltInExtension[], running: readonly IRunningExtension[]): string[] {
++	return builtIns
++		.filter(builtIn => builtIn.name.toLowerCase().startsWith('wso2.'))
++		.map(builtIn => {
++			const extension = running.find(ext => ExtensionIdentifier.equals(ext.identifier, builtIn.name));
++			const label = extension?.displayName ?? builtIn.name.split('.')[1];
++			const bundledVersion = builtIn.version && builtIn.version !== 'latest' ? builtIn.version : undefined;
++			const version = extension
++				? withUpdatedHint(extension.version, isUpdated(extension.version, bundledVersion))
++				: localize('wso2.versionInformation.notRunning', "{0} (not running)", bundledVersion ?? localize('wso2.versionInformation.unknown', "Unknown"));
++			return `${label}: ${version}`;
++		});
++}
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/test/common/versionInformation.test.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/test/common/versionInformation.test.ts
+@@ -0,0 +1,79 @@
++/**
++ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
++ *
++ * WSO2 LLC. licenses this file to you under the Apache License,
++ * Version 2.0 (the "License"); you may not use this file except
++ * in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied. See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++
++import { deepStrictEqual } from 'assert';
++import { IBuiltInExtension } from '../../../../../base/common/product.js';
++import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
++import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
++import { IWso2ComponentStatus } from '../../../../../platform/wso2Update/common/wso2Update.js';
++import { extensionVersionLines, IRunningExtension, runtimeVersionLines } from '../../common/versionInformation.js';
++
++suite('wso2Update - Version Information', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('runtime lines', () => {
++		const statuses: IWso2ComponentStatus[] = [
++			{ id: 'ballerina-runtime', kind: 'runtime', bundledVersion: '2201.14.0', activeVersion: '2201.14.0' },
++			// Updated in-app.
++			{ id: 'jre', kind: 'runtime', bundledVersion: '4.0.0', activeVersion: '4.0.1', overridden: true },
++			// An override at the bundled version (e.g. after an app update that ships it) is not "updated".
++			{ id: 'icp', kind: 'runtime', bundledVersion: '2.1.0', activeVersion: '2.1.0', overridden: true },
++			// Missing on disk after an editor-only update: not covered with the declared version.
++			{ id: 'stranded', kind: 'runtime', bundledVersion: '1.0.0' },
++			// Offered by the server but never installed.
++			{ id: 'offered', kind: 'runtime', availableVersion: '3.0.0' },
++			// Delivered by an update, not shipped with the app: nothing to be "updated" from.
++			{ id: 'delivered', kind: 'runtime', activeVersion: '0.5.0', overridden: true },
++			{ id: 'wso2.hurl-client', kind: 'extension', bundledVersion: '0.9.4', activeVersion: '0.9.5' }
++		];
++		deepStrictEqual(runtimeVersionLines(statuses), [
++			'Ballerina: 2201.14.0',
++			'Ballerina JRE: 4.0.1 (updated)',
++			'ICP: 2.1.0',
++			'stranded: not installed',
++			'offered: not installed',
++			'delivered: 0.5.0'
++		]);
++	});
++
++	test('extension lines', () => {
++		const builtIns: IBuiltInExtension[] = [
++			{ name: 'wso2.ballerina', version: '5.13.0', repo: '', metadata: undefined },
++			{ name: 'wso2.micro-integrator', version: '4.1.0', repo: '', metadata: undefined },
++			{ name: 'wso2.hurl-client', version: '0.9.4', repo: '', metadata: undefined },
++			{ name: 'wso2.mcp-server-inspector', version: 'latest', repo: '', metadata: undefined },
++			{ name: 'wso2.streaming-integrator', version: 'latest', repo: '', metadata: undefined },
++			{ name: 'redhat.vscode-yaml', version: '1.0.0', repo: '', metadata: undefined }
++		];
++		const running: IRunningExtension[] = [
++			{ identifier: new ExtensionIdentifier('wso2.ballerina'), version: '5.13.0', displayName: 'Ballerina' },
++			// Matched case-insensitively; updated in-app (the user copy still reports isBuiltin).
++			{ identifier: new ExtensionIdentifier('WSO2.Micro-Integrator'), version: '4.1.5', displayName: 'WSO2 Integrator: MI' },
++			// No display name: falls back to the short id. Bundled as `latest`: nothing to compare with.
++			{ identifier: new ExtensionIdentifier('wso2.mcp-server-inspector'), version: '0.7.4' },
++			{ identifier: new ExtensionIdentifier('redhat.vscode-yaml'), version: '1.0.0', displayName: 'YAML' }
++		];
++		deepStrictEqual(extensionVersionLines(builtIns, running), [
++			'Ballerina: 5.13.0',
++			'WSO2 Integrator: MI: 4.1.5 (updated)',
++			'hurl-client: 0.9.4 (not running)',
++			'mcp-server-inspector: 0.7.4',
++			'streaming-integrator: Unknown (not running)'
++		]);
++	});
++});
