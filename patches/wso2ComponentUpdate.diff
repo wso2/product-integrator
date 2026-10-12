@@ -3692,7 +3692,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
-@@ -0,0 +1,745 @@
+@@ -0,0 +1,669 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -3714,20 +3714,17 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +import { raceTimeout } from '../../../../base/common/async.js';
 +import { Codicon } from '../../../../base/common/codicons.js';
 +import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-+import { isLinuxSnap, isMacintosh, isWindows } from '../../../../base/common/platform.js';
++import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 +import { URI } from '../../../../base/common/uri.js';
 +import { localize, localize2 } from '../../../../nls.js';
 +import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
-+import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
 +import './media/wso2Update.css';
-+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 +import { ICommandService } from '../../../../platform/commands/common/commands.js';
 +import { ConfigurationScope, Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 +import { ContextKeyExpr, IContextKey, IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 +import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 +import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 +import { ILogService } from '../../../../platform/log/common/log.js';
-+import { INativeHostService } from '../../../../platform/native/common/native.js';
 +import { INotificationService, IPromptChoice, Severity } from '../../../../platform/notification/common/notification.js';
 +import product from '../../../../platform/product/common/product.js';
 +import { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
@@ -3737,10 +3734,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +import { IWso2ComponentUpdateService, Wso2UpdateState, Wso2UpdateStateType } from '../../../../platform/wso2Update/common/wso2Update.js';
 +import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 +import { IWorkbenchExtensionManagementService } from '../../../services/extensionManagement/common/extensionManagement.js';
-+import { IExtensionService } from '../../../services/extensions/common/extensions.js';
 +import { IHostService } from '../../../services/host/browser/host.js';
 +import { setComponentUpdateSummary } from '../../update/browser/updateTitleBarEntry.js';
-+import { extensionVersionLines, runtimeVersionLines } from '../common/versionInformation.js';
 +
 +const WSO2_UPDATES_AVAILABLE_KEY = 'wso2UpdatesAvailable';
 +const WSO2_UPDATES_AVAILABLE = new RawContextKey<boolean>(WSO2_UPDATES_AVAILABLE_KEY, false);
@@ -3997,81 +3992,10 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	}
 +}
 +
-+/**
-+ * Help > Version Information: the version of every runtime component and built-in WSO2 extension,
-+ * as actually in use after any component update. Kept out of the About dialog, which shows only the
-+ * app version and OS.
-+ */
-+class ShowVersionInformationAction extends Action2 {
-+	constructor() {
-+		super({
-+			id: 'wso2.showVersionInformation',
-+			title: {
-+				...localize2('wso2.versionInformation', "Version Information"),
-+				mnemonicTitle: localize({ key: 'wso2.miVersionInformation', comment: ['&& denotes a mnemonic'] }, "&&Version Information"),
-+			},
-+			category: Categories.Help,
-+			f1: true,
-+			menu: {
-+				id: MenuId.MenubarHelpMenu,
-+				group: 'z_about',
-+				order: 2
-+			}
-+		});
-+	}
-+	async run(accessor: ServicesAccessor): Promise<void> {
-+		const dialogService = accessor.get(IDialogService);
-+		const clipboardService = accessor.get(IClipboardService);
-+		const nativeHostService = accessor.get(INativeHostService);
-+		const updateService = accessor.get(IWso2ComponentUpdateService);
-+		const extensionService = accessor.get(IExtensionService);
-+		const logService = accessor.get(ILogService);
-+
-+		// Each source is non-fatal: if one fails the dialog shows without it, and the failure is logged
-+		// so a missing section can be told apart from an install that has nothing to list.
-+		const read = async <T>(name: string, get: () => Promise<T>): Promise<T | undefined> => {
-+			try {
-+				return await get();
-+			} catch (error) {
-+				logService.error(`[wso2Update] Version Information: could not read ${name}`, error);
-+				return undefined;
-+			}
-+		};
-+		const [os, runtimes, extensions] = await Promise.all([
-+			read('the OS', () => nativeHostService.getOSProperties()),
-+			read('runtimes', async () => runtimeVersionLines(await updateService.getComponentStatuses())),
-+			read('extensions', async () => {
-+				await extensionService.whenInstalledExtensionsRegistered();
-+				return extensionVersionLines(product.builtInExtensions ?? [], extensionService.extensions);
-+			})
-+		]);
-+		const section = (title: string, lines: string[] | undefined) => lines?.length ? `${title}\n${lines.join('\n')}` : undefined;
-+		// Version and OS, as in About, so the copied text is complete for a support request.
-+		const version = localize('wso2.versionInformation.version', "Version: {0}", product.wiversion ?? product.version ?? 'Unknown');
-+		const details = [
-+			os ? `${version}\n${localize('wso2.versionInformation.os', "OS: {0}", `${os.type} ${os.arch} ${os.release}${isLinuxSnap ? ' snap' : ''}`)}` : version,
-+			section(localize('wso2.versionInformation.runtimes', "Runtimes:"), runtimes),
-+			section(localize('wso2.versionInformation.extensions', "Extensions:"), extensions)
-+		].filter(part => !!part).join('\n\n');
-+
-+		await dialogService.prompt({
-+			type: Severity.Info,
-+			message: product.nameLong,
-+			detail: details,
-+			buttons: [{
-+				label: localize({ key: 'wso2.versionInformation.copy', comment: ['&& denotes a mnemonic'] }, "&&Copy"),
-+				run: () => clipboardService.writeText(details)
-+			}],
-+			cancelButton: localize('wso2.versionInformation.ok', "OK")
-+		});
-+	}
-+}
-+
 +registerAction2(CheckForUpdatesAction);
 +registerAction2(UpdateAllAction);
 +registerAction2(ShowComponentsAction);
 +registerAction2(UpdateIndicatorAction);
-+registerAction2(ShowVersionInformationAction);
 +
 +
 +//#endregion
@@ -4479,11 +4403,12 @@ Index: product-integrator/lib/vscode/src/vs/workbench/workbench.desktop.main.ts
  import './services/url/electron-browser/urlService.js';
  import './services/lifecycle/electron-browser/lifecycleService.js';
  import './services/title/electron-browser/titleService.js';
-@@ -206,6 +207,7 @@ import './contrib/keybindingsExport/elec
+@@ -206,6 +207,8 @@ import './contrib/keybindingsExport/elec
  
  // WSO2
  import './contrib/wso2/browser/wso2.contribution.js';
 +import './contrib/wso2Update/browser/wso2Update.contribution.js';
++import './contrib/wso2Update/electron-browser/versionInformation.contribution.js';
  
  //#endregion
  
@@ -6299,3 +6224,112 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/test/co
 +		]);
 +	});
 +});
+Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/electron-browser/versionInformation.contribution.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/electron-browser/versionInformation.contribution.ts
+@@ -0,0 +1,104 @@
++/**
++ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
++ *
++ * WSO2 LLC. licenses this file to you under the Apache License,
++ * Version 2.0 (the "License"); you may not use this file except
++ * in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied. See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++
++import { isLinuxSnap } from '../../../../base/common/platform.js';
++import { localize, localize2 } from '../../../../nls.js';
++import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
++import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
++import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
++import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
++import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
++import { ILogService } from '../../../../platform/log/common/log.js';
++import { INativeHostService } from '../../../../platform/native/common/native.js';
++import { Severity } from '../../../../platform/notification/common/notification.js';
++import product from '../../../../platform/product/common/product.js';
++import { IWso2ComponentUpdateService } from '../../../../platform/wso2Update/common/wso2Update.js';
++import { IExtensionService } from '../../../services/extensions/common/extensions.js';
++import { extensionVersionLines, runtimeVersionLines } from '../common/versionInformation.js';
++
++/**
++ * Help > Version Information: the version of every runtime component and built-in WSO2 extension,
++ * as actually in use after any component update. Kept out of the About dialog, which shows only the
++ * app version and OS.
++ */
++class ShowVersionInformationAction extends Action2 {
++	constructor() {
++		super({
++			id: 'wso2.showVersionInformation',
++			title: {
++				...localize2('wso2.versionInformation', "Version Information"),
++				mnemonicTitle: localize({ key: 'wso2.miVersionInformation', comment: ['&& denotes a mnemonic'] }, "&&Version Information"),
++			},
++			category: Categories.Help,
++			f1: true,
++			menu: {
++				id: MenuId.MenubarHelpMenu,
++				group: 'z_about',
++				order: 2
++			}
++		});
++	}
++	async run(accessor: ServicesAccessor): Promise<void> {
++		const dialogService = accessor.get(IDialogService);
++		const clipboardService = accessor.get(IClipboardService);
++		const nativeHostService = accessor.get(INativeHostService);
++		const updateService = accessor.get(IWso2ComponentUpdateService);
++		const extensionService = accessor.get(IExtensionService);
++		const logService = accessor.get(ILogService);
++
++		// Each source is non-fatal: if one fails the dialog shows without it, and the failure is logged
++		// so a missing section can be told apart from an install that has nothing to list.
++		const read = async <T>(name: string, get: () => Promise<T>): Promise<T | undefined> => {
++			try {
++				return await get();
++			} catch (error) {
++				logService.error(`[wso2Update] Version Information: could not read ${name}`, error);
++				return undefined;
++			}
++		};
++		const [os, runtimes, extensions] = await Promise.all([
++			read('the OS', () => nativeHostService.getOSProperties()),
++			read('runtimes', async () => runtimeVersionLines(await updateService.getComponentStatuses())),
++			read('extensions', async () => {
++				await extensionService.whenInstalledExtensionsRegistered();
++				return extensionVersionLines(product.builtInExtensions ?? [], extensionService.extensions);
++			})
++		]);
++		const section = (title: string, lines: string[] | undefined) => lines?.length ? `${title}\n${lines.join('\n')}` : undefined;
++		// Version and OS, as in About, so the copied text is complete for a support request.
++		const version = localize('wso2.versionInformation.version', "Version: {0}", product.wiversion ?? product.version ?? 'Unknown');
++		const details = [
++			os ? `${version}\n${localize('wso2.versionInformation.os', "OS: {0}", `${os.type} ${os.arch} ${os.release}${isLinuxSnap ? ' snap' : ''}`)}` : version,
++			section(localize('wso2.versionInformation.runtimes', "Runtimes:"), runtimes),
++			section(localize('wso2.versionInformation.extensions', "Extensions:"), extensions)
++		].filter(part => !!part).join('\n\n');
++
++		await dialogService.prompt({
++			type: Severity.Info,
++			message: product.nameLong,
++			detail: details,
++			buttons: [{
++				label: localize({ key: 'wso2.versionInformation.copy', comment: ['&& denotes a mnemonic'] }, "&&Copy"),
++				run: () => clipboardService.writeText(details)
++			}],
++			cancelButton: localize('wso2.versionInformation.ok', "OK")
++		});
++	}
++}
++
++registerAction2(ShowVersionInformationAction);
