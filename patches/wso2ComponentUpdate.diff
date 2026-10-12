@@ -3692,7 +3692,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser/wso2Update.contribution.ts
-@@ -0,0 +1,763 @@
+@@ -0,0 +1,766 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -4057,7 +4057,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +async function runtimeVersionLines(updateService: IWso2ComponentUpdateService): Promise<string[]> {
 +	const labels: { [id: string]: string } = {
 +		'ballerina-runtime': 'Ballerina',
-+		'jre': 'JRE',
++		// Not a Java version: the custom runtime image Ballerina ships with, versioned on its own.
++		'jre': 'Ballerina JRE',
 +		'icp': 'ICP'
 +	};
 +	const statuses = await updateService.getComponentStatuses();
@@ -4068,7 +4069,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +
 +/**
 + * The running extension is the truth: a component update installs a newer copy of a built-in
-+ * extension as a user extension, which then shadows the version recorded in product.json.
++ * extension as a user extension, which then shadows the version recorded in product.json. That copy
++ * inherits `isBuiltin` (see dedupExtensions), so "updated" is judged against the bundled version.
 + */
 +async function extensionVersionLines(extensionService: IExtensionService): Promise<string[]> {
 +	const builtIns = (product.builtInExtensions ?? []).filter(ext => ext.name.toLowerCase().startsWith('wso2.'));
@@ -4079,8 +4081,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	return builtIns.map(builtIn => {
 +		const running = extensionService.extensions.find(ext => ExtensionIdentifier.equals(ext.identifier, builtIn.name));
 +		const label = running?.displayName ?? builtIn.name.split('.')[1];
-+		const version = running?.version ?? (builtIn.version && builtIn.version !== 'latest' ? builtIn.version : 'Unknown');
-+		const updated = !!running && !running.isBuiltin;
++		const bundledVersion = builtIn.version && builtIn.version !== 'latest' ? builtIn.version : undefined;
++		const version = running?.version ?? bundledVersion ?? 'Unknown';
++		const updated = !!running && !!bundledVersion && running.version !== bundledVersion;
 +		return `${label}: ${version}${updated ? ' (updated)' : ''}`;
 +	});
 +}
