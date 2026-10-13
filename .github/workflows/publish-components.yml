@@ -167,8 +167,6 @@ jobs:
           # VSIX would otherwise surface later as a hashing error.
           ls -la wi/wi-extension/*.vsix
 
-      # No installer build here to take it from: package the runtime with the same script the release
-      # uses. Skipped when it is carried or for a dry run, which hashes nothing.
       # No installer build here to take them from: package the runtimes with the same scripts the
       # release uses. Carried ones are skipped (ids trimmed as the generator does); a dry run hashes nothing.
       - name: Package runtimes
