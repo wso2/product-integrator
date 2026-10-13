@@ -627,7 +627,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
-@@ -0,0 +1,1914 @@
+@@ -0,0 +1,1925 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -911,8 +911,9 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	/** When download work last moved (a chunk arrived, or a phase finished); see prepareForAppUpdate. */
 +	private lastDownloadActivity = 0;
 +
-+	/** DOWNLOAD_STALL_MS. An instance field only so a test can shorten it. */
++	/** DOWNLOAD_STALL_MS and PREPARE_STALL_MS. Instance fields only so a test can shorten them. */
 +	private readonly downloadStallMs: number = DOWNLOAD_STALL_MS;
++	private readonly prepareStallMs: number = PREPARE_STALL_MS;
 +
 +	/** The server's last answer, retained so downloadUpdates() can act on the offered set. */
 +	private lastResponse: IWso2UpdateCheckResponse | undefined;
@@ -1059,8 +1060,16 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	// in-flight download/apply, and two download requests can never race stageRuntime.
 +	private operationQueue: Promise<unknown> = Promise.resolve();
 +
++	/**
++	 * Staging the stall guard stopped waiting for, which carries on after its caller released the
++	 * queue (on Windows it runs inside the apply's own turn). The next operation waits for it too, so
++	 * two stagings never write the same archive or swap the same directories. Bounded: every download
++	 * attempt is cut off by the download watchdog. Never rejects.
++	 */
++	private abandonedWork: Promise<unknown> = Promise.resolve();
++
 +	private runExclusive<T>(task: () => Promise<T>): Promise<T> {
-+		const run = this.operationQueue.then(task, task);
++		const run = this.operationQueue.then(() => this.abandonedWork).then(task, task);
 +		this.operationQueue = run.then(() => undefined, () => undefined);
 +		return run;
 +	}
@@ -1473,13 +1482,15 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	/**
 +	 * Waits for staging for an app update, but never longer than it keeps making progress, and never
 +	 * rejects: the app update must not wait on a component. Work that stalls carries on in the
-+	 * background; the new app fetches whatever it did not finish.
++	 * background, and the next operation waits for it (abandonedWork); the new app fetches whatever
++	 * it did not finish.
 +	 */
 +	private async untilPreparedOrStalled(work: Promise<void>, version: string): Promise<void> {
 +		const settled = work.catch(err => this.logService.warn(`[wso2Update] could not prepare components for app update ${version}; the new app will fetch them`, err));
 +		this.lastDownloadActivity = Date.now();
-+		if (!await untilSettledOrStalled(settled, () => this.lastDownloadActivity, PREPARE_STALL_MS)) {
-+			this.logService.warn(`[wso2Update] preparing for app update ${version} made no progress for ${PREPARE_STALL_MS / 1000}s; no longer holding the update for it`);
++		if (!await untilSettledOrStalled(settled, () => this.lastDownloadActivity, this.prepareStallMs)) {
++			this.logService.warn(`[wso2Update] preparing for app update ${version} made no progress for ${this.prepareStallMs / 1000}s; no longer holding the update for it`);
++			this.abandonedWork = settled;
 +		}
 +	}
 +
@@ -6454,7 +6465,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/electron-ma
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/electron-main/wso2ComponentUpdateService.test.ts
-@@ -0,0 +1,392 @@
+@@ -0,0 +1,422 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -6511,6 +6522,8 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/electron-ma
 +	restoreState(before: Wso2UpdateState, epoch: number): void;
 +	reportProgress(force?: boolean, active?: IDownloadRecord): void;
 +	downloadAttempt(url: string, destPath: string, expectedSha256: string): Promise<void>;
++	runExclusive<T>(task: () => Promise<T>): Promise<T>;
++	untilPreparedOrStalled(work: Promise<void>, version: string): Promise<void>;
 +}
 +
 +/**
@@ -6521,7 +6534,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/electron-ma
 + * Keep the list below in step with those methods: a field one of them starts reading is otherwise
 + * silently `undefined` here, and a test can then pass for the wrong reason.
 + */
-+function createService(store: Pick<DisposableStore, 'add'>, request: (token: CancellationToken) => Promise<IRequestContext>, downloadStallMs = 2000): ITestableService {
++function createService(store: Pick<DisposableStore, 'add'>, request: (token: CancellationToken) => Promise<IRequestContext>, downloadStallMs = 2000, prepareStallMs = 2000): ITestableService {
 +	const service = Object.create(Wso2ComponentUpdateService.prototype);
 +	Object.assign(service, {
 +		_onStateChange: store.add(new Emitter<Wso2UpdateState>()),
@@ -6530,6 +6543,9 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/electron-ma
 +		lastProgressEmit: 0,
 +		lastDownloadActivity: 0,
 +		downloadStallMs,
++		prepareStallMs,
++		operationQueue: Promise.resolve(),
++		abandonedWork: Promise.resolve(),
 +		activeDownload: undefined,
 +		entitlementToken: undefined,
 +		logService: new NullLogService(),
@@ -6845,5 +6861,30 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/electron-ma
 +			}
 +			strictEqual(s._state.type, Wso2UpdateStateType.Idle, order);
 +		}
++	});
++});
++
++suite('Wso2ComponentUpdateService - operation queue', () => {
++	const store = ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('staging the stall guard gave up on holds back the next operation until it ends', async () => {
++		// On Windows the apply stages inside its own turn of the queue, so giving up on staging ends
++		// that turn while staging carries on. If the next operation started anyway, a second
++		// "Update and Restart" would stage the same component into the same files at the same time.
++		const s = createService(store, () => Promise.reject(new Error('no network in these tests')), 2000, 20);
++		let finishStaging!: () => void;
++		const staging = new Promise<void>(resolve => finishStaging = resolve);
++		const order: string[] = [];
++
++		await s.runExclusive(async () => {
++			await s.untilPreparedOrStalled(staging.then(() => { order.push('abandoned staging ends'); }), '2.0.0');
++			order.push('apply returns');
++		});
++		const next = s.runExclusive(async () => { order.push('next operation runs'); });
++		await timeout(20);
++		finishStaging();
++		await next;
++
++		deepStrictEqual(order, ['apply returns', 'abandoned staging ends', 'next operation runs']);
 +	});
 +});
