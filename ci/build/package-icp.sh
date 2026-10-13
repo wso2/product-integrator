@@ -40,6 +40,7 @@ mv "${TOP_DIRS[0]}" "${STAGE}"
 
 # Our launcher changes ride on upstream's scripts as patches. No fuzz: if upstream reworks the lines
 # they touch, fail here and refresh the patch (diff -u against the new upstream script).
+# Change a patch only together with a new upstream version: the CDN keeps one object per version.
 apply_patch() {
   patch -s -N -F0 -p1 -d "${STAGE}" < "${SCRIPT_DIR}/icp/$1"
 }
