@@ -104,7 +104,7 @@ jobs:
         run: |
           npm run test-node -- --runGlob "$NODE_TESTS" 2>&1 | tee "$RUNNER_TEMP/node-tests.log"
           # The runner exits 0 when the glob matches nothing, which would turn this check into a no-op.
-          grep -Eq '^ *[1-9][0-9]* passing' "$RUNNER_TEMP/node-tests.log" || { echo '::error::No wso2Update node tests ran'; exit 1; }
+          sed -E 's/\x1B\[[0-9;]*m//g' "$RUNNER_TEMP/node-tests.log" | grep -Eq '^ *[1-9][0-9]* passing' || { echo '::error::No wso2Update node tests ran'; exit 1; }
 
       - name: Electron tests
         env:
@@ -115,4 +115,5 @@ jobs:
             exit 0
           fi
           xvfb-run -a ./scripts/test.sh --runGlob "$ELECTRON_TESTS" 2>&1 | tee "$RUNNER_TEMP/electron-tests.log"
-          grep -Eq '^ *[1-9][0-9]* passing' "$RUNNER_TEMP/electron-tests.log" || { echo '::error::No wso2Update electron tests ran'; exit 1; }
+          # This runner colours its summary; strip the escapes before matching it.
+          sed -E 's/\x1B\[[0-9;]*m//g' "$RUNNER_TEMP/electron-tests.log" | grep -Eq '^ *[1-9][0-9]* passing' || { echo '::error::No wso2Update electron tests ran'; exit 1; }
