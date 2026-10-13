@@ -84,8 +84,8 @@ REM (in addition to Ballerina). The client seeds them to the data folder; ICP re
 REM extension to read WSO2_INTEGRATOR_ICP_HOME before this build is published (go-live gate).
 if /i "%INSTALLER_PROFILE%"=="editor-update" goto :after_runtimes
 
-@REM REM Extract ICP.zip
-powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~4', '.\temp_icp'); $icpDir = (Get-ChildItem '.\temp_icp' -Directory | Select-Object -First 1).FullName; $icpTarget = '.\WixPackage\payload\Integrator\components\icp'; New-Item -ItemType Directory -Force -Path $icpTarget | Out-Null; Copy-Item -Path \"$icpDir\*\" -Destination $icpTarget -Recurse -Force; Remove-Item -Recurse -Force '.\temp_icp' }"
+REM %~4 is the packaged icp (ci/build/package-icp.sh): launchers already patched for our JRE
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $icpTarget = '.\WixPackage\payload\Integrator\components\icp'; New-Item -ItemType Directory -Force -Path $icpTarget | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~4', $icpTarget); }"
 if errorlevel 1 (
     echo ICP extraction failed
     exit /b 1
@@ -96,17 +96,6 @@ echo Extracting JRE to shared dependencies directory
 powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $dependenciesTarget = '.\WixPackage\payload\Integrator\components\dependencies'; if (Test-Path $dependenciesTarget) { Remove-Item -Recurse -Force $dependenciesTarget }; New-Item -ItemType Directory -Force -Path $dependenciesTarget | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~5', $dependenciesTarget); }"
 if errorlevel 1 (
     echo JRE extraction failed
-    exit /b 1
-)
-
-REM Modify icp.bat to use the JRE from shared dependencies directory (§D8): prefer
-REM WSO2_INTEGRATOR_JRE_HOME (set by main.ts once ICP/JRE are seeded to the data
-REM folder), else the JRE bundled next to ICP. The rewrite lives in a standalone
-REM script because its embedded quotes/parens corrupt cmd.exe quote tracking inline.
-echo Modifying icp.bat to use JRE from dependencies
-powershell -nologo -noprofile -ExecutionPolicy Bypass -File "%~dp0scripts\patch-icp-jre.ps1"
-if errorlevel 1 (
-    echo ERROR: failed to patch icp.bat for env-aware JRE
     exit /b 1
 )
 :after_runtimes
