@@ -2429,7 +2429,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,1304 @@
+@@ -0,0 +1,1305 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2877,7 +2877,8 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +	const drop = (childRel: string, from: string, bundledStat: fs.Stats): void => {
 +		let differs = true;
 +		try {
-+			differs = bundledStat.isDirectory() || fs.statSync(path.toNamespacedPath(from)).size !== bundledStat.size;
++			const oldStat = fs.statSync(path.toNamespacedPath(from));
++			differs = oldStat.isDirectory() !== bundledStat.isDirectory() || oldStat.size !== bundledStat.size;
 +		} catch { /* unreadable: report it */ }
 +		if (differs) {
 +			dropped.push(childRel.replace(/\\/g, '/'));
@@ -4923,7 +4924,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,910 @@
+@@ -0,0 +1,921 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -5183,6 +5184,17 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		fs.writeFileSync(join(icpTarget, 'bin', 'database'), 'not a directory');
 +		seedBundledComponents(componentsHome, icpSeeds);
 +		strictEqual(fs.readFileSync(join(icpTarget, 'bin', 'database', 'icp_db.mv.db'), 'utf8'), 'pristine db');
++	});
++
++	test('a directory where the bundle now ships a file is reported, whatever its size', () => {
++		// A directory's own size (4096 on most Linux filesystems, 0 on Windows) can equal the file's,
++		// so only comparing kinds catches it. Sized to match here, so the kind is all that differs.
++		fs.mkdirSync(join(target(), 'bin', 'bal'), { recursive: true });
++		fs.writeFileSync(join(target(), 'bin', 'bal', 'stray'), 'x');
++		fs.writeFileSync(join(srcDir, 'bin', 'bal'), 'x'.repeat(fs.statSync(join(target(), 'bin', 'bal')).size));
++		const messages: string[] = [];
++		seedBundledComponents(componentsHome, seeds(), m => messages.push(m));
++		deepStrictEqual(messages.filter(m => m.startsWith('Replaced')), ['Replaced 1 file(s) of the old ballerina-runtime@1.0.0 tree that differed from the bundle: bin/bal']);
 +	});
 +
 +	test('the replaced tree never overwrites the freshly stamped marker', () => {
