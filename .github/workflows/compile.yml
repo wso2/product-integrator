@@ -197,10 +197,19 @@ jobs:
         run: |
           ./ci/build/package-ballerina-runtime.sh "${{ needs.resolve-versions.outputs.ballerina_version }}" out
 
+      # The CDN path has no build in it, so a re-publish of the same version must produce the same
+      # bytes; package a second time and compare.
+      - name: Check the package is reproducible
+        run: |
+          ./ci/build/package-ballerina-runtime.sh "${{ needs.resolve-versions.outputs.ballerina_version }}" out-check
+          cmp out/ballerina-runtime-*.zip out-check/ballerina-runtime-*.zip
+
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: ballerina-runtime
+          # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
+          retention-days: 7
           path: out/ballerina-runtime-*.zip
           compression-level: 0
           if-no-files-found: error
@@ -221,10 +230,19 @@ jobs:
       - name: Package
         run: ./ci/build/package-icp.sh "${{ needs.resolve-versions.outputs.icp_version }}" out
 
+      # The CDN path has no build in it, so a re-publish of the same version must produce the same
+      # bytes; package a second time and compare.
+      - name: Check the package is reproducible
+        run: |
+          ./ci/build/package-icp.sh "${{ needs.resolve-versions.outputs.icp_version }}" out-check
+          cmp out/icp-*.zip out-check/icp-*.zip
+
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: icp
+          # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
+          retention-days: 7
           path: out/icp-*.zip
           compression-level: 0
           if-no-files-found: error
