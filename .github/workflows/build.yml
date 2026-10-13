@@ -182,6 +182,7 @@ jobs:
       icp_version: ${{ steps.read-versions.outputs.icp_version }}
       integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
       ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
+      artifacts_path: ${{ steps.artifacts-dir.outputs.artifacts_path }}
     steps:
       # Checked here rather than in Publish Update Source, because build-macos and build-windows
       # bake WSO2_UPDATE_URL and WSO2_UPDATE_PUBLIC_KEY into product.json long before that job
@@ -318,6 +319,39 @@ jobs:
           echo "icp_version=${ICP_VERSION}" >> "$GITHUB_OUTPUT"
           echo "integrator_version=${INTEGRATOR_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_jre_version=${BALLERINA_JRE_VERSION}" >> "$GITHUB_OUTPUT"
+
+      # Every publish gets its own artifacts directory, so a later release can never overwrite what
+      # an earlier document points at. Sharing one key per component version broke clients: ICP
+      # 2.1.0's requires.app is rendered from the publishing app's version, so v5.1.0-beta2 and
+      # 5.1.0-RC1 wrote different signed statements to the same object, and a CloudFront edge kept
+      # serving beta2's to RC1 clients. With one directory per publish, a document and the bytes it
+      # names never change after it is written, so they can be cached as immutable.
+      #
+      # Minted here, before any build, because build-macos uploads the Squirrel.Mac payload itself,
+      # long before publish-update-source exists: both must land in the same directory.
+      - name: Name this build's artifacts directory
+        id: artifacts-dir
+        shell: bash
+        env:
+          INTEGRATOR_VERSION: ${{ steps.read-versions.outputs.integrator_version }}
+          PUBLISHING: ${{ inputs.publish_update_source == true }}
+        run: |
+          set -euo pipefail
+          # The product segment keeps this feed apart from integrator-support/ and agent-builder/.
+          PRODUCT=integrator
+          NAME="${INTEGRATOR_VERSION}-$(date -u +%Y%m%dT%H%M%SZ)"
+          # One path segment of a URL and an S3 key. `+` is legal in a version but is decoded to a
+          # space by some layers in front of the bucket, so refuse it rather than publish a URL that
+          # only works through some of them.
+          if [[ ! "${NAME}" =~ ^[0-9A-Za-z._-]+$ ]]; then
+            if [ "${PUBLISHING}" = "true" ]; then
+              echo "::error::cannot name an artifacts directory after '${NAME}': only [0-9A-Za-z._-] is allowed" >&2
+              exit 1
+            fi
+            NAME="unpublished"
+          fi
+          echo "artifacts_path=${PRODUCT}/releases/${NAME}" >> "$GITHUB_OUTPUT"
+          echo "artifacts directory: ${PRODUCT}/releases/${NAME}"
 
   compile:
     needs: [stamp-version, resolve-versions]
@@ -849,6 +883,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
           AWS_UPDATE_S3_BUCKET: ${{ secrets.AWS_UPDATE_S3_BUCKET }}
+          ARTIFACTS_PATH: ${{ needs.resolve-versions.outputs.artifacts_path }}
         run: |
           set -euo pipefail
           missing=()
@@ -865,11 +900,19 @@ jobs:
             echo "::error::Squirrel.Mac payload not found at $ZIP" >&2
             exit 1
           fi
-          # Same artifacts layout as everything else; the darwin manifest's app.squirrel.url
-          # (embedded by generate-update-manifest.mjs) points at this exact versioned CDN URL.
-          DEST="s3://${AWS_UPDATE_S3_BUCKET}/artifacts/app/${V}/"
-          aws s3 cp "$ZIP" "${DEST}wso2-integrator-${V}-${{ matrix.arch }}-mac.zip" --content-type application/zip --cache-control no-cache
-          echo "Published Squirrel.Mac payload for darwin/${{ matrix.arch }} (v${V})"
+          # This build's own artifacts directory (see resolve-versions); the darwin manifest's
+          # app.squirrel.url, embedded by generate-update-manifest.mjs, names this exact object.
+          KEY="artifacts/${ARTIFACTS_PATH}/app/${V}/wso2-integrator-${V}-${{ matrix.arch }}-mac.zip"
+          # First write wins. The directory is immutable once a document points at it, and a
+          # single-job re-run of this build would otherwise replace the payload under a URL that
+          # CloudFront serves as immutable for a year.
+          if aws s3api head-object --bucket "${AWS_UPDATE_S3_BUCKET}" --key "${KEY}" >/dev/null 2>&1; then
+            echo "s3://${AWS_UPDATE_S3_BUCKET}/${KEY} already published; leaving it as is"
+            exit 0
+          fi
+          aws s3 cp "$ZIP" "s3://${AWS_UPDATE_S3_BUCKET}/${KEY}" --content-type application/zip \
+            --cache-control "public, max-age=31536000, immutable"
+          echo "Published Squirrel.Mac payload for darwin/${{ matrix.arch }} (v${V}) to ${ARTIFACTS_PATH}"
 
       - name: Upload macOS DMG artifacts
         if: ${{ inputs.build_packed_installers == true }}
@@ -1831,10 +1874,14 @@ jobs:
 
       # WSO2_UPDATE_ARTIFACTS_URL = the CDN base fronting s3://$AWS_UPDATE_S3_BUCKET/artifacts.
       # When set, every artifact is mirrored into artifacts-mirror/ and the document points clients
-      # at the CDN only — no open-vsx/github in client URLs.
+      # at the CDN only — no open-vsx/github in client URLs. The base passed to the generator is this
+      # publish's own directory under it (see resolve-versions); the generator maps every URL to
+      # <base>/<path> and every mirrored file to artifacts-mirror/<path>, so uploading the mirror to
+      # the matching prefix is all that keeps the two in step.
       - name: Generate source document
         if: ${{ steps.targets.outputs.targets != '' }}
         env:
+          ARTIFACTS_PATH: ${{ needs.resolve-versions.outputs.artifacts_path }}
           # Lets the generator hash release assets on a private repo (the enterprise mirror);
           # public repos serve them unauthenticated and ignore this.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1846,8 +1893,9 @@ jobs:
           echo "document sequence ${SEQUENCE} (run ${{ github.run_number }})"
 
           MIRROR_ARGS=()
-          if [ -n "${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}" ]; then
-            MIRROR_ARGS=(--artifacts-base "${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}" --mirror-dir artifacts-mirror)
+          ARTIFACTS_URL="${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}"
+          if [ -n "${ARTIFACTS_URL}" ]; then
+            MIRROR_ARGS=(--artifacts-base "${ARTIFACTS_URL%/}/${ARTIFACTS_PATH}" --mirror-dir artifacts-mirror)
           fi
           node ci/build/generate-update-manifest.mjs \
             --targets "${{ steps.targets.outputs.targets }}" \
@@ -1946,9 +1994,15 @@ jobs:
 
       - name: Upload mirrored artifacts to update bucket
         if: ${{ steps.targets.outputs.targets != '' }}
+        env:
+          ARTIFACTS_PATH: ${{ needs.resolve-versions.outputs.artifacts_path }}
         run: |
           if [ -d artifacts-mirror ]; then
-            aws s3 cp artifacts-mirror/ "s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/artifacts/" --recursive
+            # Immutable: nothing ever writes this directory again once its document is published,
+            # so the CDN may keep every object for as long as it likes. A re-run of this job before
+            # the index step re-uploads the same bytes, and no client can see the directory until then.
+            aws s3 cp artifacts-mirror/ "s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/artifacts/${ARTIFACTS_PATH}/" --recursive \
+              --cache-control "public, max-age=31536000, immutable"
           else
             echo "WSO2_UPDATE_ARTIFACTS_URL unset — no mirrored artifacts; the document points at source URLs."
           fi

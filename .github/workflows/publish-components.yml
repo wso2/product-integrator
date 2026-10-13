@@ -197,6 +197,20 @@ jobs:
           python3 ci/build/plan-component-publish.py plan --index index.json --selector "${selector}" \
             --current current.json --stamp "$(date -u -d "@${SEQUENCE}" +%y%m%d%H%M)" > planned.env
           . ./planned.env
+
+          # This publish's own artifacts directory, as build.yml mints one per release: a later
+          # publish can then never overwrite bytes or statements an earlier document points at.
+          # Named after the line it serves, with `components` so it is told apart from a release.
+          # The product segment keeps this feed apart from integrator-support/ and agent-builder/.
+          PRODUCT=integrator
+          LABEL="${app_version:-${selector}}"
+          ARTIFACTS_NAME="${LABEL}-components-$(date -u -d "@${SEQUENCE}" +%Y%m%dT%H%M%SZ)"
+          # One segment of a URL and an S3 key; `+` is decoded to a space by some layers in front
+          # of the bucket, so it is refused here rather than published.
+          if [[ ! "${ARTIFACTS_NAME}" =~ ^[0-9A-Za-z._-]+$ ]]; then
+            echo "::error::cannot name an artifacts directory after '${ARTIFACTS_NAME}': only [0-9A-Za-z._-] is allowed" >&2
+            exit 1
+          fi
           {
             echo "selector=${selector}"
             echo "current_doc=${current_doc}"
@@ -204,7 +218,9 @@ jobs:
             echo "sequence=${SEQUENCE}"
             echo "doc=${doc}"
             echo "app_version=${app_version}"
+            echo "artifacts_path=${PRODUCT}/releases/${ARTIFACTS_NAME}"
           } >> "$GITHUB_OUTPUT"
+          echo "artifacts directory: ${PRODUCT}/releases/${ARTIFACTS_NAME}"
           echo "publishing ${doc} (sequence ${SEQUENCE}, up from ${current_sequence}) for line ${selector}"
 
       # Every target in the config: no installers are built here, so there is no per-run platform
@@ -212,6 +228,7 @@ jobs:
       - name: Generate source document
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACTS_PATH: ${{ steps.plan.outputs.artifacts_path }}
           REQUIRES_APP: ${{ inputs.requires_app_version }}
           # Free-form dispatch input: bound through env, never expanded into the script, so shell
           # syntax in the value stays data in a job that holds signing and cloud credentials.
@@ -242,7 +259,7 @@ jobs:
             --sequence "${{ steps.plan.outputs.sequence }}" \
             --components-only \
             --carry-apps-from current.json \
-            --artifacts-base "${ARTIFACTS_URL}" \
+            --artifacts-base "${ARTIFACTS_URL%/}/${ARTIFACTS_PATH}" \
             --mirror-dir artifacts-mirror \
             "${EXTRA[@]}" \
             --out source.json
@@ -393,13 +410,18 @@ jobs:
 
       - name: Upload mirrored artifacts to update bucket
         if: ${{ !inputs.dry_run }}
+        env:
+          ARTIFACTS_PATH: ${{ steps.plan.outputs.artifacts_path }}
         run: |
           set -euo pipefail
           if [ ! -d artifacts-mirror ]; then
             echo "Nothing to upload; every artifact this document names is already in the bucket."
             exit 0
           fi
-          aws s3 cp artifacts-mirror/ "s3://${BUCKET}/artifacts/" --recursive
+          # Immutable, as in build.yml: nothing writes this directory again once its document is
+          # published, so the CDN may keep every object indefinitely.
+          aws s3 cp artifacts-mirror/ "s3://${BUCKET}/artifacts/${ARTIFACTS_PATH}/" --recursive \
+            --cache-control "public, max-age=31536000, immutable"
 
       # Artifacts, then the document, then the index: nothing becomes reachable before what it
       # names is in place.
