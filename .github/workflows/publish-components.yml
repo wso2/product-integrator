@@ -168,19 +168,24 @@ jobs:
 
       # No installer build here to take it from: package the runtime with the same script the release
       # uses. Skipped when it is carried or for a dry run, which hashes nothing.
-      - name: Package Ballerina runtime
-        if: ${{ !inputs.dry_run && !contains(format(',{0},', inputs.carry_components), ',ballerina-runtime,') }}
+      # No installer build here to take them from: package the runtimes with the same scripts the
+      # release uses. Carried ones are skipped (ids trimmed as the generator does); a dry run hashes nothing.
+      - name: Package runtimes
+        if: ${{ !inputs.dry_run }}
+        env:
+          CARRY_INPUT: ${{ inputs.carry_components }}
         run: |
           set -euo pipefail
-          BALLERINA_VERSION=$(awk -F= '$1 == "ballerina.version" { print substr($0, index($0, "=") + 1); exit }' ci/build/component-versions.properties | tr -d '\r')
-          ./ci/build/package-ballerina-runtime.sh "${BALLERINA_VERSION}" out
-
-      - name: Package ICP
-        if: ${{ !inputs.dry_run && !contains(format(',{0},', inputs.carry_components), ',icp,') }}
-        run: |
-          set -euo pipefail
-          ICP_VERSION=$(awk -F= '$1 == "icp.version" { print substr($0, index($0, "=") + 1); exit }' ci/build/component-versions.properties | tr -d '\r')
-          ./ci/build/package-icp.sh "${ICP_VERSION}" out
+          CARRY=",$(printf '%s' "${CARRY_INPUT}" | tr -d '[:space:]'),"
+          read_version() {
+            awk -F= -v k="$1" '$1 == k { print substr($0, index($0, "=") + 1); exit }' ci/build/component-versions.properties | tr -d '\r'
+          }
+          if [[ "${CARRY}" != *,ballerina-runtime,* ]]; then
+            ./ci/build/package-ballerina-runtime.sh "$(read_version ballerina.version)" out
+          fi
+          if [[ "${CARRY}" != *,icp,* ]]; then
+            ./ci/build/package-icp.sh "$(read_version icp.version)" out
+          fi
 
       - name: Login to AWS
         uses: aws-actions/configure-aws-credentials@v4
