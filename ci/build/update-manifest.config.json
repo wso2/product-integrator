@@ -47,7 +47,7 @@
       "id": "icp",
       "kind": "runtime",
       "versionKey": "icp.version",
-      "url": "https://github.com/wso2/integration-control-plane/releases/download/v{version}/wso2-integration-control-plane-{version}.zip",
+      "sourceFile": "out/icp-{version}.zip",
       "requires": {
         "app": ">={appVersion}"
       },

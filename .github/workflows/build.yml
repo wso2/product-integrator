@@ -746,6 +746,13 @@ jobs:
           name: ballerina-runtime
           path: ballerina-runtime
 
+      - name: Download ICP
+        if: ${{ inputs.build_packed_installers == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: icp
+          path: icp-package
+
       - name: Build macOS installer packages
         if: ${{ inputs.build_packed_installers == true }}
         run: |
@@ -760,19 +767,14 @@ jobs:
           fi
           BALLERINA_ZIP="${ROOT_DIR}/ballerina-runtime/ballerina-runtime-${BALLERINA_VERSION}.zip"
           ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
-          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
-          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
-            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
-          fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          ICP_ZIP="${ROOT_DIR}/icp-package/icp-${ICP_VERSION}.zip"
           JRE_VERSION="${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
           JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-${JRE_PLATFORM}-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/mac
-          wget -O icp.zip "$ICP_URL"
           wget -O jre.zip "$JRE_URL"
           # editor-update profile: full DMG (first install) + EDITOR-ONLY Squirrel zip (§D8).
-          INSTALLER_PROFILE=editor-update ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
+          INSTALLER_PROFILE=editor-update ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip "$ICP_ZIP" jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
 
       # Apple-ID (app-specific password) notarytool auth. NOTARY_APP_PASSWORD is an
@@ -1306,6 +1308,13 @@ jobs:
           name: ballerina-runtime
           path: ballerina-runtime
 
+      - name: Download ICP
+        if: ${{ inputs.build_packed_installers == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: icp
+          path: icp-package
+
       - name: Build Windows installer packages
         if: ${{ inputs.build_packed_installers == true }}
         shell: pwsh
@@ -1316,25 +1325,20 @@ jobs:
           $BALLERINA_VERSION = "${{ needs.resolve-versions.outputs.ballerina_version }}"
           $BALLERINA_ZIP = Join-Path $ROOT_DIR "ballerina-runtime\ballerina-runtime-${BALLERINA_VERSION}.zip"
           $ICP_VERSION = "${{ needs.resolve-versions.outputs.icp_version }}"
-          $ICP_VERSION_FILENAME = $ICP_VERSION -replace '-.*$', ''
-          if ($ICP_VERSION -ne $ICP_VERSION_FILENAME) {
-            $ICP_VERSION_FILENAME = "${ICP_VERSION_FILENAME}-SNAPSHOT"
-          }
-          $ICP_URL = "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          $ICP_ZIP = Join-Path $ROOT_DIR "icp-package\icp-${ICP_VERSION}.zip"
           $JRE_VERSION = "${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
           $JRE_URL = "https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-win-64-${JRE_VERSION}.zip"
           $INTEGRATOR_VERSION = "${{ needs.resolve-versions.outputs.integrator_version }}"
           cd .\installers\windows
-          Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
           Invoke-WebRequest -Uri $JRE_URL -OutFile "jre.zip"
           # Full first-install MSI (editor + Ballerina + ICP + JRE) -> wso2-integrator-<v>.msi
           $env:INSTALLER_PROFILE = "full"
-          .\build.bat $BALLERINA_ZIP $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
+          .\build.bat $BALLERINA_ZIP $BALLERINA_VERSION .\VSCode-win32-x64.zip $ICP_ZIP .\jre.zip $INTEGRATOR_VERSION
           if ($LASTEXITCODE -ne 0) { throw "full MSI build failed" }
           # Editor-only update MSI (§D8) -> wso2-integrator-<v>-update.msi. Ballerina is dropped;
           # the client seeds/resolves it from the per-user data folder so the upgrade can't strand it.
           $env:INSTALLER_PROFILE = "editor-update"
-          .\build.bat $BALLERINA_ZIP $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
+          .\build.bat $BALLERINA_ZIP $BALLERINA_VERSION .\VSCode-win32-x64.zip $ICP_ZIP .\jre.zip $INTEGRATOR_VERSION
           if ($LASTEXITCODE -ne 0) { throw "editor-update MSI build failed" }
           Remove-Item Env:\INSTALLER_PROFILE
 
@@ -1814,11 +1818,17 @@ jobs:
           name: wi-extension-vsix
           path: wi/wi-extension
 
-      # The same ballerina-runtime zip the installers bundled (config `sourceFile`).
+      # The same ballerina-runtime and icp zips the installers bundled (config `sourceFile`).
       - name: Download Ballerina runtime
         uses: actions/download-artifact@v4
         with:
           name: ballerina-runtime
+          path: out
+
+      - name: Download ICP
+        uses: actions/download-artifact@v4
+        with:
+          name: icp
           path: out
 
       # ONE document describes every platform this run actually built. A target that was not built

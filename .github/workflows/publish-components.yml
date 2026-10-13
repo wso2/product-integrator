@@ -176,6 +176,13 @@ jobs:
           BALLERINA_VERSION=$(awk -F= '$1 == "ballerina.version" { print substr($0, index($0, "=") + 1); exit }' ci/build/component-versions.properties | tr -d '\r')
           ./ci/build/package-ballerina-runtime.sh "${BALLERINA_VERSION}" out
 
+      - name: Package ICP
+        if: ${{ !inputs.dry_run && !contains(format(',{0},', inputs.carry_components), ',icp,') }}
+        run: |
+          set -euo pipefail
+          ICP_VERSION=$(awk -F= '$1 == "icp.version" { print substr($0, index($0, "=") + 1); exit }' ci/build/component-versions.properties | tr -d '\r')
+          ./ci/build/package-icp.sh "${ICP_VERSION}" out
+
       - name: Login to AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
