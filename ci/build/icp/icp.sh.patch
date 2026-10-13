@@ -1,39 +1,26 @@
 --- a/bin/icp.sh
 +++ b/bin/icp.sh
-@@ -29,6 +29,20 @@
- LOG_DIR="$PARENT_DIR/logs"
- LOG_FILE="$LOG_DIR/icp.log"
- TMP_DIR="$PARENT_DIR/tmp"
-+
-+# WSO2 Integrator: run on our JRE, the active one (WSO2_INTEGRATOR_JRE_HOME) or the one shipped next
-+# to ICP (../../dependencies), falling back to java on PATH.
-+WSO2_ICP_JAVA=java
+@@ -1,2 +1,13 @@
+ #!/bin/bash
++WSO2_ICP_JAVA=""
++_wso2_icp_sd="$(cd "$(dirname "$0")" && pwd)"
 +if [ -n "$WSO2_INTEGRATOR_JRE_HOME" ] && [ -x "$WSO2_INTEGRATOR_JRE_HOME/bin/java" ]; then
-+    WSO2_ICP_JAVA="$WSO2_INTEGRATOR_JRE_HOME/bin/java"
++  WSO2_ICP_JAVA="$WSO2_INTEGRATOR_JRE_HOME/bin/java"
 +else
-+    for jdk in "$SCRIPT_DIR"/../../dependencies/jdk-*; do
-+        if [ -x "$jdk/bin/java" ]; then
-+            WSO2_ICP_JAVA="$jdk/bin/java"
-+            break
-+        fi
-+    done
++  WSO2_ICP_JAVA="$_wso2_icp_sd/../../dependencies/jdk-*/bin/java"
++  for _wso2_icp_jdk in "$_wso2_icp_sd"/../../dependencies/jdk-*; do
++    WSO2_ICP_JAVA="$_wso2_icp_jdk/bin/java"
++    break
++  done
 +fi
  
- resolve_version() {
-     if [ -f "$PARENT_DIR/version.txt" ]; then
-@@ -158,13 +172,13 @@
-     fi
- 
+@@ -160,3 +171,3 @@
      if [ "$mode" = "background" ]; then
 -        nohup java "${JAVA_OPTS[@]}" -cp "$icp_classpath" "$icp_main_class" "$@" >> "$LOG_FILE" 2>&1 &
 +        nohup "$WSO2_ICP_JAVA" "${JAVA_OPTS[@]}" -cp "$icp_classpath" "$icp_main_class" "$@" >> "$LOG_FILE" 2>&1 &
          server_pid=$!
-         echo "$server_pid" > "$PID_FILE"
-         echo "ICP Server started with PID $server_pid"
-         echo "Logs are available at $LOG_FILE"
+@@ -166,3 +177,3 @@
      else
 -        exec java "${JAVA_OPTS[@]}" -cp "$icp_classpath" "$icp_main_class" "$@"
 +        exec "$WSO2_ICP_JAVA" "${JAVA_OPTS[@]}" -cp "$icp_classpath" "$icp_main_class" "$@"
      fi
- }
- 

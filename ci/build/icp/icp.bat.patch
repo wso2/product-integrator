@@ -1,32 +1,17 @@
 --- a/bin/icp.bat
 +++ b/bin/icp.bat
-@@ -26,6 +26,11 @@
- set PID_FILE=!PARENT_DIR!\icp.pid
- set LOG_DIR=!PARENT_DIR!\logs
- set LOG_FILE=!LOG_DIR!\icp.log
-+rem WSO2 Integrator: run on our JRE, the active one (WSO2_INTEGRATOR_JRE_HOME) or the one shipped next
-+rem to ICP (..\..\dependencies), falling back to java on PATH.
-+set "WSO2_ICP_JAVA=java"
-+for /d %%D in ("!SCRIPT_DIR!..\..\dependencies\jdk-*") do if exist "%%D\bin\java.exe" set "WSO2_ICP_JAVA=%%D\bin\java"
-+if defined WSO2_INTEGRATOR_JRE_HOME if exist "!WSO2_INTEGRATOR_JRE_HOME!\bin\java.exe" set "WSO2_ICP_JAVA=!WSO2_INTEGRATOR_JRE_HOME!\bin\java"
- set COMMAND=run
- if /I "!PROCESSOR_ARCHITECTURE!"=="ARM64" (
-     echo ARM Windows detected - disabling native Netty tcnative libraries
-@@ -203,7 +208,7 @@
- set "ICP_JAVA_OPTS=!JAVA_OPTS!"
- set "ICP_CLASSPATH_PS=!ICP_CLASSPATH!"
+@@ -1 +1,4 @@
++@set "WSO2_ICP_JAVA="
++@for /d %%D in ("%~dp0..\..\dependencies\jdk-*") do @if not defined WSO2_ICP_JAVA set "WSO2_ICP_JAVA=%%D\bin\java"
++@if defined WSO2_INTEGRATOR_JRE_HOME if exist "%WSO2_INTEGRATOR_JRE_HOME%\bin\java.exe" set "WSO2_ICP_JAVA=%WSO2_INTEGRATOR_JRE_HOME%\bin\java"
+ @echo off
+@@ -205,3 +208,3 @@
  set "ICP_MAIN_CLASS_PS=!ICP_MAIN_CLASS!"
 -powershell -NoProfile -ExecutionPolicy Bypass -Command "$cp = $env:ICP_CLASSPATH_PS; $mc = $env:ICP_MAIN_CLASS_PS; $log = $env:ICP_LOG_FILE; $errLog = $env:ICP_ERR_LOG_FILE; $wd = $env:ICP_SCRIPT_DIR; $appArgs = @(); if ($env:ICP_APP_ARGS_JSON -and $env:ICP_APP_ARGS_JSON -ne '[]') { $appArgs = @(ConvertFrom-Json -InputObject $env:ICP_APP_ARGS_JSON) }; $javaOpts = @(); if ($env:ICP_JAVA_OPTS) { $javaOpts = $env:ICP_JAVA_OPTS -split '\s+' | Where-Object { $_ } }; $javaArgs = $javaOpts + @('-cp', $cp, $mc) + $appArgs; $p = Start-Process -FilePath 'java' -ArgumentList $javaArgs -WorkingDirectory $wd -RedirectStandardOutput $log -RedirectStandardError $errLog -PassThru -WindowStyle Hidden; $p.Id" > "!PID_FILE!"
-+powershell -NoProfile -ExecutionPolicy Bypass -Command "$cp = $env:ICP_CLASSPATH_PS; $mc = $env:ICP_MAIN_CLASS_PS; $log = $env:ICP_LOG_FILE; $errLog = $env:ICP_ERR_LOG_FILE; $wd = $env:ICP_SCRIPT_DIR; $appArgs = @(); if ($env:ICP_APP_ARGS_JSON -and $env:ICP_APP_ARGS_JSON -ne '[]') { $appArgs = @(ConvertFrom-Json -InputObject $env:ICP_APP_ARGS_JSON) }; $javaOpts = @(); if ($env:ICP_JAVA_OPTS) { $javaOpts = $env:ICP_JAVA_OPTS -split '\s+' | Where-Object { $_ } }; $javaArgs = $javaOpts + @('-cp', $cp, $mc) + $appArgs; $p = Start-Process -FilePath $env:WSO2_ICP_JAVA -ArgumentList $javaArgs -WorkingDirectory $wd -RedirectStandardOutput $log -RedirectStandardError $errLog -PassThru -WindowStyle Hidden; $p.Id" > "!PID_FILE!"
++powershell -NoProfile -ExecutionPolicy Bypass -Command "$cp = $env:ICP_CLASSPATH_PS; $mc = $env:ICP_MAIN_CLASS_PS; $log = $env:ICP_LOG_FILE; $errLog = $env:ICP_ERR_LOG_FILE; $wd = $env:ICP_SCRIPT_DIR; $appArgs = @(); if ($env:ICP_APP_ARGS_JSON -and $env:ICP_APP_ARGS_JSON -ne '[]') { $appArgs = @(ConvertFrom-Json -InputObject $env:ICP_APP_ARGS_JSON) }; $javaOpts = @(); if ($env:ICP_JAVA_OPTS) { $javaOpts = $env:ICP_JAVA_OPTS -split '\s+' | Where-Object { $_ } }; $javaArgs = $javaOpts + @('-cp', $cp, $mc) + $appArgs; $p = Start-Process -FilePath '"%WSO2_ICP_JAVA%"' -ArgumentList $javaArgs -WorkingDirectory $wd -RedirectStandardOutput $log -RedirectStandardError $errLog -PassThru -WindowStyle Hidden; $p.Id" > "!PID_FILE!"
  set /p SERVER_PID=<"!PID_FILE!"
- if not defined SERVER_PID (
-     echo Failed to start ICP Server
-@@ -296,7 +301,7 @@
- :runServer
- call :prepareRun
+@@ -298,3 +301,3 @@
  if errorlevel 1 goto end
 -java !JAVA_OPTS! -cp "!ICP_CLASSPATH!" !ICP_MAIN_CLASS! !FORWARD_ARGS!
-+"!WSO2_ICP_JAVA!" !JAVA_OPTS! -cp "!ICP_CLASSPATH!" !ICP_MAIN_CLASS! !FORWARD_ARGS!
++"%WSO2_ICP_JAVA%" !JAVA_OPTS! -cp "!ICP_CLASSPATH!" !ICP_MAIN_CLASS! !FORWARD_ARGS!
  if exist "!PID_FILE!" del /f /q "!PID_FILE!" >nul 2>&1
- 
- :end
