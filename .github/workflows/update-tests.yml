@@ -44,6 +44,9 @@ jobs:
     timeout-minutes: 60
     defaults:
       run:
+        # Named explicitly so the steps run with `-o pipefail`; the implicit default is plain
+        # `bash -e`, under which `... | tee` hides a failing test run.
+        shell: bash
         working-directory: lib/vscode
     env:
       # Globs are relative to out/, where transpile-client writes the compiled tests.
