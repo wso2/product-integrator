@@ -50,10 +50,13 @@ mv "${WORK}/icp.bat" "${STAGE}/bin/icp.bat"
 apply_patch icp.bat.patch
 awk '{ printf "%s\r\n", $0 }' "${STAGE}/bin/icp.bat" > "${WORK}/icp.bat"
 mv "${WORK}/icp.bat" "${STAGE}/bin/icp.bat"
-chmod 755 "${STAGE}"/bin/*.sh
+chmod +x "${STAGE}"/bin/*
 
 mkdir -p "${OUT_DIR}"
 OUT_ZIP="$(cd "${OUT_DIR}" && pwd)/icp-${ICP_VERSION}.zip"
 rm -f "${OUT_ZIP}"
-(cd "${STAGE}" && zip -qrX "${OUT_ZIP}" .)
+# Same inputs must give the same bytes: the CDN path has no build in it, so a re-publish of the same
+# version overwrites the object that earlier signed documents point at.
+(cd "${STAGE}" && find . -exec touch -h -d 2000-01-01T00:00:00Z {} + \
+  && find . -mindepth 1 | LC_ALL=C sort | TZ=UTC zip -qX -@ "${OUT_ZIP}")
 echo "Wrote ${OUT_ZIP}"
