@@ -639,15 +639,18 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
-@@ -9,6 +9,7 @@ import { isWindows, OperatingSystem } fr
+@@ -7,8 +7,9 @@ import { deepStrictEqual, strictEqual }
+ import { IStringDictionary } from '../../../../../base/common/collections.js';
+ import { isWindows, OperatingSystem } from '../../../../../base/common/platform.js';
  import { URI as Uri } from '../../../../../base/common/uri.js';
- import { addTerminalEnvironmentKeys, createTerminalEnvironment, getUriLabelForShell, getCwd, getLangEnvVariable, getWorkspaceForTerminal, mergeEnvironments, preparePathForShell, shouldSetLangEnvVariable } from '../../common/terminalEnvironment.js';
+-import { addTerminalEnvironmentKeys, createTerminalEnvironment, getUriLabelForShell, getCwd, getLangEnvVariable, getWorkspaceForTerminal, mergeEnvironments, preparePathForShell, shouldSetLangEnvVariable } from '../../common/terminalEnvironment.js';
++import { addTerminalEnvironmentKeys, createTerminalEnvironment, reapplyProductRuntimeEnvironment, getUriLabelForShell, getCwd, getLangEnvVariable, getWorkspaceForTerminal, mergeEnvironments, preparePathForShell, shouldSetLangEnvVariable } from '../../common/terminalEnvironment.js';
  import { GeneralShellType, PosixShellType, WindowsShellType } from '../../../../../platform/terminal/common/terminal.js';
 +import { storeProductRuntimeEnvironment } from '../../../../../platform/product/common/runtimeEnvironment.js';
  import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
  import { TestContextService, TestHistoryService } from '../../../../test/common/workbenchTestServices.js';
  import { testWorkspace } from '../../../../../platform/workspace/test/common/testWorkspace.js';
-@@ -315,12 +316,79 @@ suite('Workbench - TerminalEnvironment',
+@@ -315,12 +316,89 @@ suite('Workbench - TerminalEnvironment',
  			COLORTERM: 'truecolor',
  			TERM_PROGRAM: 'vscode'
  		};
@@ -689,6 +692,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 +				baseEnv
 +			);
 +
++			// What every caller does (terminalProcessManager, localTerminalBackend, remoteTerminalChannel):
++			// createTerminalEnvironment carries the stored runtime env into the env it returns, and the
++			// re-apply after it, past any extension contributions, is what puts that env on top.
++			reapplyProductRuntimeEnvironment(env);
++
 +			strictEqual(env.foo, 'runtime');
 +			strictEqual(env.BALLERINA_HOME, '/runtime/home');
 +			strictEqual(env.PATH, [`/runtime/bin`, `/launch/bin`].join(pathSeparator));
@@ -719,6 +727,11 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 +				'off',
 +				baseEnv
 +			);
++
++			// What every caller does (terminalProcessManager, localTerminalBackend, remoteTerminalChannel):
++			// createTerminalEnvironment carries the stored runtime env into the env it returns, and the
++			// re-apply after it, past any extension contributions, is what puts that env on top.
++			reapplyProductRuntimeEnvironment(env);
 +
 +			strictEqual(env.foo, 'runtime');
 +			strictEqual(env.PATH, [`/runtime/bin`, `/strict/bin`].join(pathSeparator));
