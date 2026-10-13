@@ -101,6 +101,7 @@ jobs:
         run: npm run typecheck-client
 
       - name: Compile
+        id: compile
         run: npm run transpile-client
 
       - name: Node tests
@@ -109,7 +110,9 @@ jobs:
           # The runner exits 0 when the glob matches nothing, which would turn this check into a no-op.
           sed -E 's/\x1B\[[0-9;]*m//g' "$RUNNER_TEMP/node-tests.log" | grep -Eq '^ *[1-9][0-9]* passing' || { echo '::error::No wso2Update node tests ran'; exit 1; }
 
+      # Runs even when the node tests failed, so one run reports breakage in both suites.
       - name: Electron tests
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
