@@ -4,14 +4,15 @@ name: Update Mechanism Tests
 # the patches) on the patched vscode tree. The full PR build (pr-ci.yml) never runs unit tests, so
 # without this a patch or vscode bump can break updates and still go green.
 #
-# Only the wso2Update suites run, not vscode's whole unit test set: those are what this repo owns,
-# and a failure here then always means the update mechanism, not upstream flakiness.
+# Only the update mechanism's suites run, not vscode's whole unit test set: those are what this repo
+# owns, so a failing test step means the update mechanism, not upstream flakiness. The steps before
+# them (patching, installing, the whole-tree type check) can still fail for unrelated reasons.
 
 on:
   pull_request:
     branches:
+      # Not 5.0.x: it has no update mechanism, so there would be nothing to run.
       - main
-      - 5.0.x
       - 'staging/**'
     paths:
       # Every lib/vscode change in this repo, the update mechanism and its tests included, is
@@ -22,7 +23,6 @@ on:
   push:
     branches:
       - main
-      - 5.0.x
       - 'staging/**'
     paths:
       - 'patches/**'
@@ -32,7 +32,8 @@ on:
 
 concurrency:
   group: update-tests-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Only a PR's newer push supersedes its older run; every pushed commit keeps its own result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -49,11 +50,25 @@ jobs:
         shell: bash
         working-directory: lib/vscode
     env:
-      # Globs are relative to out/, where transpile-client writes the compiled tests.
-      # runtimeEnvironment resolves ${COMPONENT:*} to an installed component update, so it is
-      # part of the update mechanism even though it lives outside wso2Update.
-      NODE_TESTS: '{vs/**/wso2Update/test/{common,node}/**/*.test.js,vs/platform/product/test/common/runtimeEnvironment.test.js}'
-      ELECTRON_TESTS: 'vs/**/wso2Update/test/{electron-main,electron-browser}/**/*.test.js'
+      # One glob per line, relative to out/, where transpile-client writes the compiled tests. Each
+      # must match at least one file, so a moved or renamed suite fails the job instead of quietly
+      # dropping out of it. Outside wso2Update: runtimeEnvironment resolves ${COMPONENT:*} to an
+      # installed component update, and terminalEnvironment re-applies that env to terminals.
+      NODE_TESTS: |
+        vs/**/wso2Update/test/{common,node}/**/*.test.js
+        vs/platform/product/test/common/runtimeEnvironment.test.js
+        vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.js
+      ELECTRON_TESTS: |
+        vs/**/wso2Update/test/{electron-main,electron-browser}/**/*.test.js
+      # Checks every glob in argv[1] against out/ with the glob module the test runners use, and
+      # prints them as the single --runGlob the runners take.
+      MATCH_GLOBS: |
+        const glob = require('glob');
+        const patterns = process.argv[1].split('\n').map(p => p.trim()).filter(Boolean);
+        const missing = patterns.filter(p => glob.sync(p, { cwd: 'out' }).length === 0);
+        for (const p of missing) { console.error(`::error::No compiled tests match ${p}`); }
+        if (missing.length) { process.exit(1); }
+        console.log(patterns.length === 1 ? patterns[0] : `{${patterns.join(',')}}`);
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,7 +90,7 @@ jobs:
 
       - name: Install system packages
         run: |
-          sudo apt-get update
+          ./build/azure-pipelines/linux/apt-retry.sh sudo apt-get update
           ./build/azure-pipelines/linux/apt-retry.sh sudo apt-get install -y \
             quilt xvfb libgtk-3-0 libxkbfile-dev libkrb5-dev libsecret-1-dev libgbm1 libnss3 libasound2t64
 
@@ -88,38 +103,71 @@ jobs:
         working-directory: .
         run: quilt push -a
 
+      # Retried like vscode's own workflow: postinstall downloads a lot from GitHub, and one
+      # transient failure should not read as a broken update mechanism.
       - name: Install dependencies
+        id: install
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm ci
+        run: |
+          for i in 1 2 3; do
+            npm ci && break
+            [ "$i" -eq 3 ] && { echo '::error::npm ci failed 3 times'; exit 1; }
+            echo "npm ci failed (attempt $i), retrying..."
+          done
 
       # Type errors would otherwise surface only as a confusing load failure, or not at all:
-      # transpile-client strips types without checking them.
+      # transpile-client strips types without checking them. It checks the whole patched tree,
+      # though, so the steps after it still run and report on the update mechanism either way.
       - name: Type check
         run: npm run typecheck-client
 
       - name: Compile
         id: compile
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run transpile-client
 
       - name: Node tests
-        run: |
-          npm run test-node -- --runGlob "$NODE_TESTS" 2>&1 | tee "$RUNNER_TEMP/node-tests.log"
-          # The runner exits 0 when the glob matches nothing, which would turn this check into a no-op.
-          sed -E 's/\x1B\[[0-9;]*m//g' "$RUNNER_TEMP/node-tests.log" | grep -Eq '^ *[1-9][0-9]* passing' || { echo '::error::No wso2Update node tests ran'; exit 1; }
-
-      # Runs even when the node tests failed, so one run reports breakage in both suites.
-      - name: Electron tests
         if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        run: |
+          glob=$(node -e "$MATCH_GLOBS" "$NODE_TESTS")
+          npm run test-node -- --runGlob "$glob" 2>&1 | tee "$RUNNER_TEMP/node-tests.log"
+          # The runner exits 0 when nothing ran, which would turn this check into a no-op.
+          sed -E 's/\x1B\[[0-9;]*m//g' "$RUNNER_TEMP/node-tests.log" | grep -Eq '^ *[1-9][0-9]* passing' || { echo '::error::No node tests ran'; exit 1; }
+
+      # The first electron-main suite arrives with the download watchdog change; until a tree has
+      # one, the Electron steps are skipped rather than failed.
+      - name: Find Electron tests
+        id: electron
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        run: |
+          if glob=$(node -e "$MATCH_GLOBS" "$ELECTRON_TESTS" 2>/dev/null); then
+            echo "glob=$glob" >> "$GITHUB_OUTPUT"
+          else
+            echo '::notice::No wso2Update Electron tests in this tree'
+          fi
+
+      # Fetched on its own, with retries, so a network hiccup cannot pass for a failing test.
+      - name: Download Electron
+        id: download-electron
+        if: ${{ !cancelled() && steps.electron.outputs.glob != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! find src/vs -path '*/wso2Update/test/electron-*' -name '*.test.ts' | grep -q .; then
-            echo '::notice::No wso2Update electron tests in this tree'
-            exit 0
-          fi
-          xvfb-run -a ./scripts/test.sh --runGlob "$ELECTRON_TESTS" 2>&1 | tee "$RUNNER_TEMP/electron-tests.log"
+          for i in 1 2 3; do
+            npm run electron && break
+            [ "$i" -eq 3 ] && { echo '::error::Electron download failed 3 times'; exit 1; }
+            echo "Electron download failed (attempt $i), retrying..."
+          done
+
+      - name: Electron tests
+        if: ${{ !cancelled() && steps.download-electron.outcome == 'success' }}
+        env:
+          VSCODE_SKIP_PRELAUNCH: '1'
+          GLOB: ${{ steps.electron.outputs.glob }}
+        run: |
+          xvfb-run -a ./scripts/test.sh --runGlob "$GLOB" 2>&1 | tee "$RUNNER_TEMP/electron-tests.log"
           # This runner colours its summary; strip the escapes before matching it.
-          sed -E 's/\x1B\[[0-9;]*m//g' "$RUNNER_TEMP/electron-tests.log" | grep -Eq '^ *[1-9][0-9]* passing' || { echo '::error::No wso2Update electron tests ran'; exit 1; }
+          sed -E 's/\x1B\[[0-9;]*m//g' "$RUNNER_TEMP/electron-tests.log" | grep -Eq '^ *[1-9][0-9]* passing' || { echo '::error::No Electron tests ran'; exit 1; }
