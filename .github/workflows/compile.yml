@@ -191,13 +191,13 @@ jobs:
 
       - name: Package
         run: |
-          ./ci/build/package-ballerina-runtime.sh "${{ needs.resolve-versions.outputs.ballerina_version }}" out
+          ./ci/build/package-ballerina-runtime.sh "${{ needs.resolve-versions.outputs.ballerina_version }}" out upstream.zip
 
       # The CDN path has no build in it, so a re-publish of the same version must produce the same
-      # bytes; package a second time and compare.
+      # bytes; package a second time from the same upstream zip and compare.
       - name: Check the package is reproducible
         run: |
-          ./ci/build/package-ballerina-runtime.sh "${{ needs.resolve-versions.outputs.ballerina_version }}" out-check
+          ./ci/build/package-ballerina-runtime.sh "${{ needs.resolve-versions.outputs.ballerina_version }}" out-check upstream.zip
           cmp out/ballerina-runtime-*.zip out-check/ballerina-runtime-*.zip
 
       - name: Upload
@@ -224,13 +224,13 @@ jobs:
           persist-credentials: false
 
       - name: Package
-        run: ./ci/build/package-icp.sh "${{ needs.resolve-versions.outputs.icp_version }}" out
+        run: ./ci/build/package-icp.sh "${{ needs.resolve-versions.outputs.icp_version }}" out upstream.zip
 
       # The CDN path has no build in it, so a re-publish of the same version must produce the same
-      # bytes; package a second time and compare.
+      # bytes; package a second time from the same upstream zip and compare.
       - name: Check the package is reproducible
         run: |
-          ./ci/build/package-icp.sh "${{ needs.resolve-versions.outputs.icp_version }}" out-check
+          ./ci/build/package-icp.sh "${{ needs.resolve-versions.outputs.icp_version }}" out-check upstream.zip
           cmp out/icp-*.zip out-check/icp-*.zip
 
       - name: Upload

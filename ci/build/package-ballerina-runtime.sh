@@ -5,7 +5,8 @@
 # updated one are identical.
 #
 # Usage: package-ballerina-runtime.sh <ballerina_version> <out_dir> [upstream_zip]
-#   upstream_zip: use this file instead of downloading from ballerina-distribution
+#   upstream_zip: use this file instead of a temporary download from ballerina-distribution; if it does not
+#     exist yet it is downloaded there, so a second run can reuse it
 # Output: <out_dir>/ballerina-runtime-<ballerina_version>.zip
 set -euo pipefail
 
@@ -22,12 +23,13 @@ UPSTREAM_ZIP="${3:-}"
 WORK=$(mktemp -d)
 trap 'rm -rf "${WORK}"' EXIT
 
-if [ -z "${UPSTREAM_ZIP}" ]; then
+UPSTREAM_ZIP="${UPSTREAM_ZIP:-${WORK}/upstream.zip}"
+if [ ! -f "${UPSTREAM_ZIP}" ]; then
   # Pre-release tags carry a suffix the asset names drop (v2201.13.6-alpha2 -> ballerina-2201.13.6.zip).
   URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION%%-*}.zip"
-  UPSTREAM_ZIP="${WORK}/upstream.zip"
   echo "Downloading ${URL}"
-  curl -fsSL --retry 3 -o "${UPSTREAM_ZIP}" "${URL}"
+  curl -fsSL --retry 3 -o "${UPSTREAM_ZIP}.part" "${URL}"
+  mv "${UPSTREAM_ZIP}.part" "${UPSTREAM_ZIP}"
 fi
 
 unzip -q "${UPSTREAM_ZIP}" -d "${WORK}/upstream"

@@ -1,16 +1,18 @@
 --- a/bin/icp.bat
 +++ b/bin/icp.bat
-@@ -1 +1,4 @@
-+@set "WSO2_ICP_JAVA="
-+@for /d %%D in ("%~dp0..\..\dependencies\jdk-*") do @if not defined WSO2_ICP_JAVA set "WSO2_ICP_JAVA=%%D\bin\java"
+@@ -1 +1,6 @@
++@set "WSO2_ICP_JAVA=%~dp0..\..\dependencies\jdk-*\bin\java"
++@set "_WSO2_ICP_JDK="
++@for /d %%D in ("%~dp0..\..\dependencies\jdk-*") do @if not defined _WSO2_ICP_JDK (set "_WSO2_ICP_JDK=%%D" & set "WSO2_ICP_JAVA=%%D\bin\java")
++@set "_WSO2_ICP_JDK="
 +@if defined WSO2_INTEGRATOR_JRE_HOME if exist "%WSO2_INTEGRATOR_JRE_HOME%\bin\java.exe" set "WSO2_ICP_JAVA=%WSO2_INTEGRATOR_JRE_HOME%\bin\java"
  @echo off
-@@ -205,3 +208,3 @@
+@@ -205,3 +210,3 @@
  set "ICP_MAIN_CLASS_PS=!ICP_MAIN_CLASS!"
 -powershell -NoProfile -ExecutionPolicy Bypass -Command "$cp = $env:ICP_CLASSPATH_PS; $mc = $env:ICP_MAIN_CLASS_PS; $log = $env:ICP_LOG_FILE; $errLog = $env:ICP_ERR_LOG_FILE; $wd = $env:ICP_SCRIPT_DIR; $appArgs = @(); if ($env:ICP_APP_ARGS_JSON -and $env:ICP_APP_ARGS_JSON -ne '[]') { $appArgs = @(ConvertFrom-Json -InputObject $env:ICP_APP_ARGS_JSON) }; $javaOpts = @(); if ($env:ICP_JAVA_OPTS) { $javaOpts = $env:ICP_JAVA_OPTS -split '\s+' | Where-Object { $_ } }; $javaArgs = $javaOpts + @('-cp', $cp, $mc) + $appArgs; $p = Start-Process -FilePath 'java' -ArgumentList $javaArgs -WorkingDirectory $wd -RedirectStandardOutput $log -RedirectStandardError $errLog -PassThru -WindowStyle Hidden; $p.Id" > "!PID_FILE!"
 +powershell -NoProfile -ExecutionPolicy Bypass -Command "$cp = $env:ICP_CLASSPATH_PS; $mc = $env:ICP_MAIN_CLASS_PS; $log = $env:ICP_LOG_FILE; $errLog = $env:ICP_ERR_LOG_FILE; $wd = $env:ICP_SCRIPT_DIR; $appArgs = @(); if ($env:ICP_APP_ARGS_JSON -and $env:ICP_APP_ARGS_JSON -ne '[]') { $appArgs = @(ConvertFrom-Json -InputObject $env:ICP_APP_ARGS_JSON) }; $javaOpts = @(); if ($env:ICP_JAVA_OPTS) { $javaOpts = $env:ICP_JAVA_OPTS -split '\s+' | Where-Object { $_ } }; $javaArgs = $javaOpts + @('-cp', $cp, $mc) + $appArgs; $p = Start-Process -FilePath '"%WSO2_ICP_JAVA%"' -ArgumentList $javaArgs -WorkingDirectory $wd -RedirectStandardOutput $log -RedirectStandardError $errLog -PassThru -WindowStyle Hidden; $p.Id" > "!PID_FILE!"
  set /p SERVER_PID=<"!PID_FILE!"
-@@ -298,3 +301,3 @@
+@@ -298,3 +303,3 @@
  if errorlevel 1 goto end
 -java !JAVA_OPTS! -cp "!ICP_CLASSPATH!" !ICP_MAIN_CLASS! !FORWARD_ARGS!
 +"%WSO2_ICP_JAVA%" !JAVA_OPTS! -cp "!ICP_CLASSPATH!" !ICP_MAIN_CLASS! !FORWARD_ARGS!

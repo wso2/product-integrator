@@ -4,7 +4,8 @@
 # the same one, so a seeded ICP and an updated one are identical.
 #
 # Usage: package-icp.sh <icp_version> <out_dir> [upstream_zip]
-#   upstream_zip: use this file instead of downloading from integration-control-plane
+#   upstream_zip: use this file instead of a temporary download from integration-control-plane; if it does not
+#     exist yet it is downloaded there, so a second run can reuse it
 # Output: <out_dir>/icp-<icp_version>.zip
 set -euo pipefail
 
@@ -21,11 +22,12 @@ UPSTREAM_ZIP="${3:-}"
 WORK=$(mktemp -d)
 trap 'rm -rf "${WORK}"' EXIT
 
-if [ -z "${UPSTREAM_ZIP}" ]; then
+UPSTREAM_ZIP="${UPSTREAM_ZIP:-${WORK}/upstream.zip}"
+if [ ! -f "${UPSTREAM_ZIP}" ]; then
   URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
-  UPSTREAM_ZIP="${WORK}/upstream.zip"
   echo "Downloading ${URL}"
-  curl -fsSL --retry 3 -o "${UPSTREAM_ZIP}" "${URL}"
+  curl -fsSL --retry 3 -o "${UPSTREAM_ZIP}.part" "${URL}"
+  mv "${UPSTREAM_ZIP}.part" "${UPSTREAM_ZIP}"
 fi
 
 unzip -q "${UPSTREAM_ZIP}" -d "${WORK}/upstream"
