@@ -31,8 +31,10 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: update-tests-${{ github.event.pull_request.number || github.ref }}
-  # Only a PR's newer push supersedes its older run; every pushed commit keeps its own result.
+  # A PR's newer push supersedes its older run. Anything else is keyed by commit: a shared group
+  # keeps only one pending run, so a third push would cancel the second's queued run even without
+  # cancel-in-progress, and every pushed commit should keep its own result.
+  group: update-tests-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
