@@ -57,10 +57,11 @@ jobs:
         with:
           persist-credentials: false
 
-      # Only lib/vscode is needed; external/wso2-vscode-extensions is large and unused here.
-      - name: Checkout lib/vscode
+      # Shallow, and no recursion: quilt only needs the files the patches touch, which are in
+      # lib/vscode and (for wso2-font-pkg-update) external/wso2-vscode-extensions.
+      - name: Checkout submodules
         working-directory: .
-        run: git submodule update --init --depth 1 lib/vscode
+        run: git submodule update --init --depth 1 lib/vscode external/wso2-vscode-extensions
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
