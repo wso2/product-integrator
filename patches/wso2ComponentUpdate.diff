@@ -2429,7 +2429,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts
-@@ -0,0 +1,1258 @@
+@@ -0,0 +1,1305 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -2829,25 +2829,61 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +const SALVAGE_DIR = '.salvaged';
 +
 +/**
-+ * Restores a replaced component tree over the freshly seeded one.
++ * Paths inside a component's tree that the component itself writes to at runtime, relative to the
++ * tree's root. Everything else the bundle ships is payload, which nothing writes.
 + *
-+ * A component writes into its own directory, and at BUNDLED paths: ICP ships
-+ * `bin/database/icp_db.mv.db`, `credentials_db.mv.db` and `www/config.json`, then writes to those
-+ * very files (the deb/rpm postinst chmods them for exactly that reason). So "keep what the bundle
-+ * does not ship" would discard the database it is meant to protect.
++ * The installers are the source of truth: installers/linux-deb/package/DEBIAN/postinst and
++ * installers/linux-rpm/wso2-integrator.spec grant write access to exactly these, because ICP keeps
++ * its H2 databases, its logs and its console config inside its own directory. Keep the three in
++ * step by hand. A component that starts writing into its tree belongs here too, or a repair will
++ * put the bundled copy back over its data.
++ */
++const RUNTIME_WRITABLE_PATHS: { readonly [componentId: string]: readonly string[] } = {
++	icp: ['bin/database', 'logs', 'www/config.json'],
++};
++
++/** Whether `relPath` (relative to the component's root, either separator) is, or is inside, a path the component writes to at runtime. */
++export function isRuntimeWritablePath(componentId: string, relPath: string): boolean {
++	const normalized = relPath.replace(/\\/g, '/');
++	return (Object.hasOwn(RUNTIME_WRITABLE_PATHS, componentId) ? RUNTIME_WRITABLE_PATHS[componentId] : []).some(writable => normalized === writable || normalized.startsWith(`${writable}/`));
++}
++
++/**
++ * Restores a replaced component tree's own data over the freshly seeded one.
 + *
-+ * What the replace path actually repairs is ABSENCE: `seedContainsSource` rejects a tree only for
-+ * a missing entry, or a zero-length file where the bundle's is not empty. Every other path present
-+ * in the old tree was intact, and may hold the user's data. So the fresh copy supplies what was
-+ * missing and the old tree is moved back over everything else.
++ * The replace path runs because the old tree is damaged, and the fresh copy is the repair -- so the
++ * bundle's own entries win. That is not only about what is missing: a copy cut off by the old
++ * shared-staging race leaves a file that exists, is not empty, and is wrong, and a check by
++ * existence and size cannot tell it from a good one. Restoring it would leave the runtime as broken
++ * after the repair as before it.
++ *
++ * What comes back from the old tree is what the component itself wrote: every path the bundle does
++ * not ship (logs, files it created), and the bundled paths it writes to at runtime
++ * (RUNTIME_WRITABLE_PATHS) -- ICP ships its H2 databases and console config and then writes to those
++ * very files, so they are the user's data, not payload. Even those give way to the fresh copy when
++ * the old one is empty where the bundle's is not, which is the damage itself.
 + *
 + * Moves, never copies: same filesystem, so each entry is a rename. Nothing is read or rewritten,
 + * which matters because this runs synchronously before any window opens and ICP's `logs/` has no
 + * size limit.
++ *
++ * `dropped` lists the old tree's files that lost to the fresh copy and differed from it in kind or
++ * size. The salvage is deleted once everything is restored, so this is the only trace of them.
 + */
-+function overlayPreservedTree(srcDir: string, salvage: string, target: string, log?: (message: string) => void): { restored: number; failed: number } {
++function overlayPreservedTree(componentId: string, srcDir: string, salvage: string, target: string, log?: (message: string) => void): { restored: number; failed: number; dropped: string[] } {
 +	let restored = 0;
 +	let failed = 0;
++	const dropped: string[] = [];
++	const drop = (childRel: string, from: string, bundledStat: fs.Stats): void => {
++		let differs = true;
++		try {
++			const oldStat = fs.statSync(path.toNamespacedPath(from));
++			differs = oldStat.isDirectory() !== bundledStat.isDirectory() || oldStat.size !== bundledStat.size;
++		} catch { /* unreadable: report it */ }
++		if (differs) {
++			dropped.push(childRel.replace(/\\/g, '/'));
++		}
++	};
 +	const walk = (rel: string): void => {
 +		const here = rel ? path.join(salvage, rel) : salvage;
 +		let entries: fs.Dirent[];
@@ -2873,6 +2909,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +			} catch { /* not shipped by the bundle: purely the component's own */ }
 +			if (entry.isDirectory()) {
 +				if (bundledStat && !bundledStat.isDirectory()) {
++					drop(childRel, from, bundledStat);
 +					continue; // bundle turned this path into a file; keep the fresh copy
 +				}
 +				try {
@@ -2885,14 +2922,20 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +				walk(childRel);
 +				continue;
 +			}
-+			if (bundledStat?.isFile()) {
-+				// The damage this path repairs: an entry the old tree has but empty, where the
-+				// bundle's is not. Keep the fresh copy rather than restoring the truncated one.
++			if (bundledStat) {
++				// Shipped by the bundle, so payload: the fresh copy wins, and a file never replaces
++				// a bundled directory. The exception is a path the component writes to.
++				if (bundledStat.isDirectory() || !isRuntimeWritablePath(componentId, childRel)) {
++					drop(childRel, from, bundledStat);
++					continue;
++				}
++				// Even then, empty where the bundle is not is the damage, not data.
 +				let oldSize = -1;
 +				try {
 +					oldSize = fs.statSync(path.toNamespacedPath(from)).size;
 +				} catch { /* unreadable; fall through and let the move report it */ }
 +				if (oldSize === 0 && bundledStat.size > 0) {
++					drop(childRel, from, bundledStat);
 +					continue;
 +				}
 +			}
@@ -2907,7 +2950,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +		}
 +	};
 +	walk('');
-+	return { restored, failed };
++	return { restored, failed, dropped };
 +}
 +
 +/**
@@ -3173,7 +3216,11 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 +					log?.(`WARN: could not set aside the replaced ${id}@${version} tree; leaving ${claimed} in place: ${err}`);
 +				}
 +				if (salvage) {
-+					const { restored, failed } = overlayPreservedTree(srcDir, salvage, target, log);
++					const { restored, failed, dropped } = overlayPreservedTree(id, srcDir, salvage, target, log);
++					if (dropped.length > 0) {
++						const shown = dropped.slice(0, 5).join(', ');
++						log?.(`Replaced ${dropped.length} file(s) of the old ${id}@${version} tree that differed from the bundle: ${shown}${dropped.length > 5 ? ', ...' : ''}`);
++					}
 +					if (failed === 0) {
 +						// Everything worth keeping is now in the live tree; the remainder is the
 +						// damage the fresh copy replaced. Nothing is retained, so nothing accumulates.
@@ -4877,7 +4924,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2ComponentsManifest.test.ts
-@@ -0,0 +1,836 @@
+@@ -0,0 +1,921 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -4901,7 +4948,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +import * as os from 'os';
 +import { join } from '../../../../base/common/path.js';
 +import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-+import { activatePendingRuntimeComponents, awaitingDeferredExtensions, compareVersions, decideDeferredExtensions, heldBackPendingComponents, ILocalComponentsManifest, incomingAppVersionToPrepare, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, pinPendingToApp, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, stagedPendingComponents, sweepStagedExtensionDownloads, untilSettledOrStalled, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
++import { activatePendingRuntimeComponents, awaitingDeferredExtensions, compareVersions, decideDeferredExtensions, heldBackPendingComponents, ILocalComponentsManifest, incomingAppVersionToPrepare, ineligibleBaselineVersions, installedComponentVersion, isActiveSeedingDir, isRuntimeWritablePath, LOCAL_MANIFEST_SCHEMA_VERSION, newestSeededVersion, pinPendingToApp, readLocalManifest, satisfiesRange, SEED_COMPLETE_MARKER, seedBundledComponents, stagedPendingComponents, sweepStagedExtensionDownloads, untilSettledOrStalled, writeLocalManifest } from '../../node/wso2ComponentsManifest.js';
 +
 +suite('wso2ComponentsManifest - compareVersions', () => {
 +	ensureNoDisposablesAreLeakedInTestSuite();
@@ -4949,6 +4996,37 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +	});
 +});
 +
++suite('wso2ComponentsManifest - isRuntimeWritablePath', () => {
++	ensureNoDisposablesAreLeakedInTestSuite();
++
++	test('matches the paths a component writes to, and only those', () => {
++		const cases: [string, string][] = [
++			['icp', 'bin/database'],
++			['icp', 'bin/database/icp_db.mv.db'],
++			['icp', 'bin\\database\\icp_db.mv.db'],
++			['icp', 'logs/2026/icp.log'],
++			['icp', 'www/config.json'],
++			['icp', 'bin/databases/other.db'],
++			['icp', 'www/config.json.example'],
++			['icp', 'bin/icp.sh'],
++			['ballerina-runtime', 'bin/bal'],
++			['unknown', 'bin/database']
++		];
++		deepStrictEqual(cases.map(([id, relPath]) => `${id} ${relPath} ${isRuntimeWritablePath(id, relPath)}`), [
++			'icp bin/database true',
++			'icp bin/database/icp_db.mv.db true',
++			'icp bin\\database\\icp_db.mv.db true',
++			'icp logs/2026/icp.log true',
++			'icp www/config.json true',
++			'icp bin/databases/other.db false',
++			'icp www/config.json.example false',
++			'icp bin/icp.sh false',
++			'ballerina-runtime bin/bal false',
++			'unknown bin/database false'
++		]);
++	});
++});
++
 +suite('wso2ComponentsManifest - seedBundledComponents', () => {
 +	ensureNoDisposablesAreLeakedInTestSuite();
 +
@@ -4971,6 +5049,16 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +
 +	const seeds = () => ({ 'ballerina-runtime': { srcDir, version: '1.0.0' } });
 +	const target = () => join(componentsHome, 'ballerina-runtime', '1.0.0');
++	/** Reads `paths` under `dir` into one object, so a test compares the whole outcome at once. */
++	const read = (dir: string, paths: string[]) => Object.fromEntries(paths.map(p => [p, fs.readFileSync(join(dir, ...p.split('/')), 'utf8')]));
++	/** A bundled ICP with its launcher and the H2 database it then writes to; each test adds the damage. */
++	const icp = () => {
++		const icpSrc = join(root, 'install', 'icp');
++		fs.mkdirSync(join(icpSrc, 'bin', 'database'), { recursive: true });
++		fs.writeFileSync(join(icpSrc, 'bin', 'icp.sh'), 'launcher');
++		fs.writeFileSync(join(icpSrc, 'bin', 'database', 'icp_db.mv.db'), 'pristine db');
++		return { icpSrc, icpTarget: join(componentsHome, 'icp', '2.1.0'), icpSeeds: { icp: { srcDir: icpSrc, version: '2.1.0' } } };
++	};
 +
 +	test('seeds a fresh component and stamps the completion marker', () => {
 +		seedBundledComponents(componentsHome, seeds());
@@ -5019,27 +5107,46 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		strictEqual(fs.existsSync(join(target(), SEED_COMPLETE_MARKER)), true);
 +	});
 +
-+	test('re-seeding a damaged tree keeps data the component wrote at BUNDLED paths', () => {
-+		// ICP ships bin/database/icp_db.mv.db and www/config.json and then writes to those very
-+		// files, so "keep what the bundle does not ship" would discard the database. The bundle
-+		// fixture therefore ships the same paths the runtime later modifies.
-+		fs.mkdirSync(join(srcDir, 'database'), { recursive: true });
-+		fs.writeFileSync(join(srcDir, 'database', 'icp_db.mv.db'), 'pristine db');
-+		fs.writeFileSync(join(srcDir, 'config.json'), 'pristine config');
++	test('re-seeding a damaged ICP tree keeps what ICP writes, and repairs its payload', () => {
++		// ICP ships its H2 databases and console config and then writes to those very files -- the
++		// installers grant it write access to exactly these -- so they are the user's data. Every
++		// other file it ships is payload, and a cut-off copy of one must not survive the repair.
++		const { icpSrc, icpTarget, icpSeeds } = icp();
++		fs.mkdirSync(join(icpSrc, 'www'), { recursive: true });
++		fs.writeFileSync(join(icpSrc, 'www', 'config.json'), 'pristine config');
++		fs.writeFileSync(join(icpSrc, 'www', 'config.json.example'), 'example');
 +
-+		fs.mkdirSync(join(target(), 'database'), { recursive: true });
-+		fs.writeFileSync(join(target(), 'database', 'icp_db.mv.db'), 'USER DATA');
-+		fs.writeFileSync(join(target(), 'config.json'), 'USER CONFIG');
-+		fs.mkdirSync(join(target(), 'logs'), { recursive: true });
-+		fs.writeFileSync(join(target(), 'logs', 'icp.log'), 'log line');
-+		// bin/bal is absent: that is the damage seedContainsSource rejects the tree for.
-+		seedBundledComponents(componentsHome, seeds());
++		fs.mkdirSync(join(icpTarget, 'bin', 'database'), { recursive: true });
++		fs.writeFileSync(join(icpTarget, 'bin', 'database', 'icp_db.mv.db'), 'USER DATA');
++		fs.mkdirSync(join(icpTarget, 'www'), { recursive: true });
++		fs.writeFileSync(join(icpTarget, 'www', 'config.json'), 'USER CONFIG');
++		fs.writeFileSync(join(icpTarget, 'www', 'config.json.example'), 'exam'); // payload, cut off
++		fs.mkdirSync(join(icpTarget, 'logs'), { recursive: true });
++		fs.writeFileSync(join(icpTarget, 'logs', 'icp.log'), 'log line');
++		// bin/icp.sh is absent: the damage that sends the tree down the repair path.
++		const messages: string[] = [];
++		seedBundledComponents(componentsHome, icpSeeds, m => messages.push(m));
 +
-+		strictEqual(fs.readFileSync(join(target(), 'bin', 'bal'), 'utf8'), 'launcher');
-+		strictEqual(fs.readFileSync(join(target(), 'database', 'icp_db.mv.db'), 'utf8'), 'USER DATA');
-+		strictEqual(fs.readFileSync(join(target(), 'config.json'), 'utf8'), 'USER CONFIG');
-+		strictEqual(fs.readFileSync(join(target(), 'logs', 'icp.log'), 'utf8'), 'log line');
++		deepStrictEqual(read(icpTarget, ['bin/icp.sh', 'bin/database/icp_db.mv.db', 'www/config.json', 'www/config.json.example', 'logs/icp.log']), {
++			'bin/icp.sh': 'launcher',
++			'bin/database/icp_db.mv.db': 'USER DATA',
++			'www/config.json': 'USER CONFIG',
++			'www/config.json.example': 'example',
++			'logs/icp.log': 'log line'
++		});
 +		strictEqual(fs.existsSync(join(componentsHome, '.salvaged')), false);
++		// The salvage is gone, so the log is the only record of the payload the repair replaced.
++		deepStrictEqual(messages.filter(m => m.startsWith('Replaced')), ['Replaced 1 file(s) of the old icp@2.1.0 tree that differed from the bundle: www/config.json.example']);
++	});
++
++	test('an empty copy of a file ICP writes is damage, not data', () => {
++		// An empty H2 database stops ICP from starting, so the fresh copy wins for it even though
++		// the path is one ICP writes to.
++		const { icpTarget, icpSeeds } = icp();
++		fs.mkdirSync(join(icpTarget, 'bin', 'database'), { recursive: true });
++		fs.writeFileSync(join(icpTarget, 'bin', 'database', 'icp_db.mv.db'), '');
++		seedBundledComponents(componentsHome, icpSeeds);
++		strictEqual(fs.readFileSync(join(icpTarget, 'bin', 'database', 'icp_db.mv.db'), 'utf8'), 'pristine db');
 +	});
 +
 +	test('a truncated bundled file is replaced, not restored', () => {
@@ -5053,16 +5160,41 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/node/wso2Co
 +		strictEqual(fs.readFileSync(join(target(), 'keepme.txt'), 'utf8'), 'user data');
 +	});
 +
-+	test('runtime data nested under a bundled directory survives', () => {
-+		fs.mkdirSync(join(srcDir, 'bin', 'database'), { recursive: true });
-+		fs.writeFileSync(join(srcDir, 'bin', 'database', 'icp.mv.db'), 'pristine');
-+		fs.mkdirSync(join(target(), 'bin', 'database'), { recursive: true });
-+		fs.writeFileSync(join(target(), 'bin', 'database', 'icp.mv.db'), 'USER DATA');
-+		fs.writeFileSync(join(target(), 'bin', 'database', 'extra.trace'), 'trace');
++	test('a file under a bundled directory is kept when the bundle does not ship it, refreshed when it does', () => {
++		// The Ballerina runtime writes nothing into its tree, so every file it ships is payload: the
++		// fresh copy wins even over an old one that is not empty. A file it does not ship is kept.
++		fs.mkdirSync(join(srcDir, 'bin', 'lib'), { recursive: true });
++		fs.writeFileSync(join(srcDir, 'bin', 'lib', 'runtime.jar'), 'pristine');
++		fs.mkdirSync(join(target(), 'bin', 'lib'), { recursive: true });
++		fs.writeFileSync(join(target(), 'bin', 'lib', 'runtime.jar'), 'cut off');
++		fs.writeFileSync(join(target(), 'bin', 'lib', 'extra.trace'), 'trace');
 +		seedBundledComponents(componentsHome, seeds());
-+		strictEqual(fs.readFileSync(join(target(), 'bin', 'bal'), 'utf8'), 'launcher');
-+		strictEqual(fs.readFileSync(join(target(), 'bin', 'database', 'icp.mv.db'), 'utf8'), 'USER DATA');
-+		strictEqual(fs.readFileSync(join(target(), 'bin', 'database', 'extra.trace'), 'utf8'), 'trace');
++		deepStrictEqual(read(target(), ['bin/bal', 'bin/lib/runtime.jar', 'bin/lib/extra.trace']), {
++			'bin/bal': 'launcher',
++			'bin/lib/runtime.jar': 'pristine',
++			'bin/lib/extra.trace': 'trace'
++		});
++	});
++
++	test('a file in the old tree never replaces a bundled directory, even one ICP writes into', () => {
++		// A path ICP writes to is otherwise restored from the old tree, so that is where a stray file
++		// standing in for a bundled directory would win and take the fresh directory with it.
++		const { icpTarget, icpSeeds } = icp();
++		fs.mkdirSync(join(icpTarget, 'bin'), { recursive: true });
++		fs.writeFileSync(join(icpTarget, 'bin', 'database'), 'not a directory');
++		seedBundledComponents(componentsHome, icpSeeds);
++		strictEqual(fs.readFileSync(join(icpTarget, 'bin', 'database', 'icp_db.mv.db'), 'utf8'), 'pristine db');
++	});
++
++	test('a directory where the bundle now ships a file is reported, whatever its size', () => {
++		// A directory's own size (4096 on most Linux filesystems, 0 on Windows) can equal the file's,
++		// so only comparing kinds catches it. Sized to match here, so the kind is all that differs.
++		fs.mkdirSync(join(target(), 'bin', 'bal'), { recursive: true });
++		fs.writeFileSync(join(target(), 'bin', 'bal', 'stray'), 'x');
++		fs.writeFileSync(join(srcDir, 'bin', 'bal'), 'x'.repeat(fs.statSync(join(target(), 'bin', 'bal')).size));
++		const messages: string[] = [];
++		seedBundledComponents(componentsHome, seeds(), m => messages.push(m));
++		deepStrictEqual(messages.filter(m => m.startsWith('Replaced')), ['Replaced 1 file(s) of the old ballerina-runtime@1.0.0 tree that differed from the bundle: bin/bal']);
 +	});
 +
 +	test('the replaced tree never overwrites the freshly stamped marker', () => {
