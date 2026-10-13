@@ -350,7 +350,6 @@ async function main() {
 	};
 	const varsFor = target => ({
 		...commonVars,
-		ballerinaPlatform: config.platformTokens?.ballerina?.[target],
 		jrePlatform: config.platformTokens?.jre?.[target]
 	});
 
