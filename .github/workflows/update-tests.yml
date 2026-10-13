@@ -1,0 +1,172 @@
+name: Update Mechanism Tests
+
+# Runs the unit tests of the component/app update mechanism (src/vs/platform/wso2Update, added by
+# the patches) on the patched vscode tree. The full PR build (pr-ci.yml) never runs unit tests, so
+# without this a patch or vscode bump can break updates and still go green.
+#
+# Only the update mechanism's suites run, not vscode's whole unit test set: those are what this repo
+# owns, so a failing test step means the update mechanism, not upstream flakiness. The steps before
+# them (patching, installing, the whole-tree type check) can still fail for unrelated reasons.
+
+on:
+  pull_request:
+    branches:
+      # Not 5.0.x: it has no update mechanism, so there would be nothing to run.
+      - main
+      - 'staging/**'
+    paths:
+      # Every lib/vscode change in this repo, the update mechanism and its tests included, is
+      # either a patch or a submodule bump.
+      - 'patches/**'
+      - 'lib/vscode'
+      - '.github/workflows/update-tests.yml'
+  push:
+    branches:
+      - main
+      - 'staging/**'
+    paths:
+      - 'patches/**'
+      - 'lib/vscode'
+      - '.github/workflows/update-tests.yml'
+  workflow_dispatch:
+
+concurrency:
+  # A PR's newer push supersedes its older run. Anything else is keyed by commit: a shared group
+  # keeps only one pending run, so a third push would cancel the second's queued run even without
+  # cancel-in-progress, and every pushed commit should keep its own result.
+  group: update-tests-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: wso2Update unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        # Named explicitly so the steps run with `-o pipefail`; the implicit default is plain
+        # `bash -e`, under which piping a test run (`... | tee`) once hid its failure.
+        shell: bash
+        working-directory: lib/vscode
+    env:
+      # One glob per line, relative to out/, where transpile-client writes the compiled tests. Each
+      # must match at least one file, so a moved or renamed suite fails the job instead of quietly
+      # dropping out of it. This is the only such guard: the runners' "N passing" cannot be, as each
+      # adds a test of its own (node: `Errors`; Electron: `assertCleanState`) that passes when none
+      # of ours ran. Outside wso2Update: runtimeEnvironment resolves ${COMPONENT:*} to an
+      # installed component update, and terminalEnvironment re-applies that env to terminals.
+      NODE_TESTS: |
+        vs/**/wso2Update/test/{common,node}/**/*.test.js
+        vs/platform/product/test/common/runtimeEnvironment.test.js
+        vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.js
+      ELECTRON_TESTS: |
+        vs/**/wso2Update/test/{electron-main,electron-browser}/**/*.test.js
+      # Checks every glob in argv[1] against out/ with the glob module the test runners use, and
+      # prints them as the single --runGlob the runners take.
+      MATCH_GLOBS: |
+        const glob = require('glob');
+        const patterns = process.argv[1].split('\n').map(p => p.trim()).filter(Boolean);
+        const missing = patterns.filter(p => glob.sync(p, { cwd: 'out' }).length === 0);
+        for (const p of missing) { console.error(`::error::No compiled tests match ${p}`); }
+        if (missing.length) { process.exit(1); }
+        console.log(patterns.length === 1 ? patterns[0] : `{${patterns.join(',')}}`);
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Shallow, and no recursion: quilt only needs the files the patches touch, which are in
+      # lib/vscode and (for wso2-font-pkg-update) external/wso2-vscode-extensions.
+      - name: Checkout submodules
+        working-directory: .
+        run: git submodule update --init --depth 1 lib/vscode external/wso2-vscode-extensions
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+          cache: npm
+          cache-dependency-path: lib/vscode/package-lock.json
+
+      - name: Install system packages
+        run: |
+          ./build/azure-pipelines/linux/apt-retry.sh sudo apt-get update
+          ./build/azure-pipelines/linux/apt-retry.sh sudo apt-get install -y \
+            quilt xvfb libgtk-3-0 libxkbfile-dev libkrb5-dev libsecret-1-dev libgbm1 libnss3 libasound2t64
+
+      # Ubuntu 24.04 blocks the unprivileged user namespaces Electron's sandbox needs; vscode's own
+      # Linux test workflow (lib/vscode/.github/workflows/pr-linux-test.yml) lifts it the same way.
+      - name: Allow Electron sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Apply patches
+        working-directory: .
+        run: quilt push -a
+
+      # Retried like vscode's own workflow: postinstall downloads a lot from GitHub, and one
+      # transient failure should not read as a broken update mechanism.
+      - name: Install dependencies
+        id: install
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in 1 2 3; do
+            npm ci && break
+            [ "$i" -eq 3 ] && { echo '::error::npm ci failed 3 times'; exit 1; }
+            echo "npm ci failed (attempt $i), retrying..."
+          done
+
+      # Type errors would otherwise surface only as a confusing load failure, or not at all:
+      # transpile-client strips types without checking them. It checks the whole patched tree,
+      # though, so the steps after it still run and report on the update mechanism either way.
+      - name: Type check
+        run: npm run typecheck-client
+
+      - name: Compile
+        id: compile
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run transpile-client
+
+      - name: Node tests
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        run: |
+          glob=$(node -e "$MATCH_GLOBS" "$NODE_TESTS")
+          npm run test-node -- --runGlob "$glob"
+
+      # The first electron-main suite arrives with the download watchdog change; until a tree has
+      # one, the Electron steps are skipped rather than failed.
+      - name: Find Electron tests
+        id: electron
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        run: |
+          if glob=$(node -e "$MATCH_GLOBS" "$ELECTRON_TESTS" 2>/dev/null); then
+            echo "glob=$glob" >> "$GITHUB_OUTPUT"
+          else
+            echo '::notice::No wso2Update Electron tests in this tree'
+          fi
+
+      # Fetched on its own, with retries, so a network hiccup cannot pass for a failing test.
+      - name: Download Electron
+        id: download-electron
+        if: ${{ !cancelled() && steps.electron.outputs.glob != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in 1 2 3; do
+            npm run electron && break
+            [ "$i" -eq 3 ] && { echo '::error::Electron download failed 3 times'; exit 1; }
+            echo "Electron download failed (attempt $i), retrying..."
+          done
+
+      - name: Electron tests
+        if: ${{ !cancelled() && steps.download-electron.outcome == 'success' }}
+        env:
+          VSCODE_SKIP_PRELAUNCH: '1'
+          GLOB: ${{ steps.electron.outputs.glob }}
+        run: xvfb-run -a ./scripts/test.sh --runGlob "$GLOB"
