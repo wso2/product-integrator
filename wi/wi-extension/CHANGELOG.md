@@ -5,6 +5,25 @@ All notable changes to the **WSO2 Integrator** extension will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.2.0](https://github.com/wso2/product-integrator/compare/v5.0.0...v5.1.0) - 2026-10-12
+
+### Added
+
+- **Workflow Deployment** — Added workflow as an integration type when deploying to WSO2 Cloud.
+- **MCP Proxy Components** — Added support for linking MCP proxy components to a repository, with a fallback that lists MCP proxy components when no match is found.
+- **Project Explorer Icons** — Project Explorer artifacts can now show custom light and dark theme icons, including new SMB and Voice Agent icons.
+
+### Changed
+
+- **Ballerina Extension 6.0.0** — Updated the bundled Ballerina extension to 6.0.0, which adds workflow integration, Copilot Skills and MCP support, new AI agent capabilities and new event and file triggers. See the [Ballerina extension changelog](https://github.com/wso2/ballerina-vscode/blob/main/packages/ballerina-extension/CHANGELOG.md) for details.
+- **Welcome View** — Updated the welcome view and the "Create Project" card text for clarity.
+- **Cloud Editor** — Deploying from the Cloud Editor now updates the draft status of the integration.
+
+### Fixed
+
+- **Cloud Deployment** — Fixed missing-value validation, organization ID handling and empty mutation results when deploying to WSO2 Cloud.
+- **Project Explorer Icons** — Fixed washed-out SMB and FTP icons and matched the SMB icon weight to the rest of the icon set.
+
 ## [1.0.0](https://github.com/wso2/product-integrator/compare/v5.0.0-alpha...v5.0.0-rc1) - 2026-05-18
 
 ### Added
