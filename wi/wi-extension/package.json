@@ -1,693 +1,698 @@
 {
-  "name": "wso2-integrator",
-  "displayName": "WSO2 Integrator",
-  "description": "Integration development environment for WSO2 Integrator",
-  "version": "1.1.26081017",
-  "cliVersion": "v1.2.212606121500",
-  "publisher": "wso2",
-  "icon": "resources/icons/wso2-integrator-logo.png",
-  "license": "Apache-2.0",
-  "repository": {
-    "url": "https://github.com/wso2/product-integrator"
-  },
-  "engines": {
-    "vscode": "^1.100.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [
-    "onStartupFinished",
-    "onCommand:wso2.integrator.getEmbeddedWelcomeBootstrap",
-    "workspaceContains:**/Ballerina.toml",
-    "onLanguage:SynapseXml",
-    "onLanguage:ballerina",
-    "workspaceContains:.project",
-    "workspaceContains:pom.xml",
-    "workspaceContains:**/*.siddhi"
-  ],
-  "main": "./dist/extension.js",
-  "contributes": {
-    "configuration": {
-      "type": "object",
-      "title": "WSO2 Integrator",
-      "properties": {
-        "integrator.selectedProfile": {
-          "type": "string",
-          "enum": [
-            "WSO2 Integrator: Default",
-            "WSO2 Integrator: MI",
-            "WSO2 Integrator: SI"
-          ],
-          "default": "WSO2 Integrator: Default",
-          "description": "Select the active WSO2 Integrator profile."
-        },
-        "integrator.advanced.cloudEnv": {
-          "type": "string",
-          "enum": [
-            "prod",
-            "stage",
-            "dev"
-          ],
-          "default": "prod",
-          "description": "The WSO2 Cloud Environment to use",
-          "scope": "machine"
-        },
-        "integrator.advanced.cloudRpcPath": {
-          "type": "string",
-          "default": "",
-          "description": "The path to Cloud RPC server",
-          "scope": "window"
-        },
-        "integrator.advanced.cloudRpcArchitecture": {
-          "type": "string",
-          "enum": [
-            "",
-            "amd64",
-            "arm64"
-          ],
-          "default": "",
-          "description": "The architecture of Cloud RPC server. Change only if you are running within a container with a different architecture than your host machine.",
-          "scope": "window"
-        },
-        "integrator.advanced.skipKeyring": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable only if your system does not support keyring.",
-          "scope": "window"
-        }
-      }
-    },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "wso2-integrator",
-          "title": "WSO2 Integrator",
-          "icon": "resources/icons/integrator-activity-icon.svg"
-        },
-        {
-          "id": "wso2-agent-builder",
-          "title": "WSO2 Agent Builder",
-          "icon": "resources/icons/integrator-activity-icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "wso2-integrator": [
-        {
-          "id": "wso2-integrator.explorer",
-          "name": "Integrations",
-          "contextualTitle": "WSO2 Integrator",
-          "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi'))"
-        }
-      ],
-      "wso2-agent-builder": [
-        {
-          "id": "wso2-agent-builder.explorer",
-          "name": "Agents",
-          "contextualTitle": "WSO2 Agent Builder",
-          "when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi'))"
-        }
-      ]
-    },
-    "viewsWelcome": [
-      {
-        "view": "wso2-integrator.explorer",
-        "contents": "$(loadingspin) Loading WSO2 Integrator...",
-        "when": "WI.productMode != 'agent-builder' && !WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
-      },
-      {
-        "view": "wso2-agent-builder.explorer",
-        "contents": "$(loadingspin) Loading WSO2 Agent Builder...",
-        "when": "WI.productMode == 'agent-builder' && !WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
-      },
-      {
-        "view": "wso2-integrator.explorer",
-        "contents": "$(rocket) Build integration solutions with WSO2 Integrator.\n\nUse the welcome page to create a new project, explore samples, import external integrations, and manage profile settings.\n\nOpen an integration project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
-        "when": "WI.productMode != 'agent-builder' && WI.projectType == 'none'"
-      },
-      {
-        "view": "wso2-agent-builder.explorer",
-        "contents": "$(rocket) Build AI agents with WSO2 Agent Builder.\n\nUse the welcome page to create a new agent project or explore samples.\n\nOpen an agent project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
-        "when": "WI.productMode == 'agent-builder' && WI.projectType == 'none'"
-      },
-      {
-        "view": "wso2-integrator.explorer",
-        "contents": "No integrations or libraries found in this project.\n\nGet started by adding your first integration or library.\n\n[$(add) Add Integration or Library](command:BI.project-explorer.add)",
-        "when": "BI.project.empty"
-      },
-      {
-        "view": "wso2-agent-builder.explorer",
-        "contents": "No integrations or libraries found in this project.\n\nGet started by adding your first integration or library.\n\n[$(add) Add Integration or Library](command:BI.project-explorer.add)",
-        "when": "BI.project.empty"
-      },
-      {
-        "view": "wso2-integrator.explorer",
-        "contents": "Welcome to WSO2 Integrator.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
-        "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
-      },
-      {
-        "view": "wso2-agent-builder.explorer",
-        "contents": "Welcome to WSO2 Agent Builder.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
-        "when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
-      },
-      {
-        "view": "wso2-integrator.explorer",
-        "contents": "Welcome to WSO2 Integrator.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
-        "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
-      },
-      {
-        "view": "wso2-agent-builder.explorer",
-        "contents": "Welcome to WSO2 Agent Builder.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
-        "when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
-      }
-    ],
-    "commands": [
-      {
-        "command": "wso2.integrator.openWelcome",
-        "title": "Open Welcome Page",
-        "category": "WSO2 Integrator",
-        "icon": "$(home)"
-      },
-      {
-        "command": "wso2-integrator.explorer.refresh",
-        "title": "Refresh",
-        "category": "WSO2 Integrator",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "wso2.integrator.openBIIntegration",
-        "title": "Open Default Integration",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "wso2.integrator.openMIIntegration",
-        "title": "Open MI Integration",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "wso2.integrator.cloud.auth.signIn",
-        "title": "Sign In",
-        "category": "WSO2 Integrator",
-        "icon": "$(sign-in)",
-        "enablement": "!isLoggedIn"
-      },
-      {
-        "command": "wso2.integrator.cloud.auth.signOut",
-        "title": "Sign Out",
-        "category": "WSO2 Integrator",
-        "icon": "$(sign-out)",
-        "enablement": "isLoggedIn"
-      },
-      {
-        "command": "wso2.integrator.cloud.auth.cancelSignIn",
-        "title": "Cancel Sign In",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "wso2.integrator.cloud.integration.create",
-        "title": "Deploy Integration to Cloud",
-        "category": "WSO2 Integrator",
-        "icon": "$(add)"
-      },
-      {
-        "command": "wso2.integrator.cloud.integration.delete",
-        "title": "Delete Integration from Cloud",
-        "category": "WSO2 Integrator",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "wso2.integrator.cloud.integration.openInConsole",
-        "title": "Open in Cloud Console",
-        "category": "WSO2 Integrator",
-        "icon": "$(link-external)"
-      },
-      {
-        "command": "wso2.integrator.cloud.project.clone",
-        "title": "Clone Cloud Project Repository",
-        "category": "WSO2 Integrator",
-        "icon": "$(repo-clone)"
-      },
-      {
-        "command": "wso2.integrator.cloud.project.createContext",
-        "title": "Associate Cloud Project",
-        "category": "WSO2 Integrator",
-        "icon": "$(link)"
-      },
-      {
-        "command": "wso2.integrator.cloud.project.manageContext",
-        "title": "Manage Cloud Project",
-        "category": "WSO2 Integrator",
-        "icon": "$(settings-gear)"
-      },
-      {
-        "command": "wso2.integrator.cloud.project.refresh",
-        "title": "Refresh Workspace",
-        "category": "WSO2 Integrator",
-        "icon": "$(refresh)",
-        "enablement": "!isLoadingContextDirs"
-      },
-      {
-        "command": "ballerina.showVisualizer",
-        "title": "Show Visualizer",
-        "icon": {
-          "light": "resources/icons/preview-command-icon.svg",
-          "dark": "resources/icons/preview-command-icon-dark.svg"
-        },
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "ballerina.force.update.artifacts",
-        "title": "Force Update Artifacts",
-        "icon": "$(refresh)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add",
-        "title": "Add Integration or Library",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.convert",
-        "title": "Convert to Project",
-        "icon": "$(package)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.open-project",
-        "title": "Open Project",
-        "icon": "$(folder-opened)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-to-project",
-        "title": "Add to Project",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.overview",
-        "title": "Open Overview",
-        "icon": {
-          "light": "resources/icons/preview-command-icon.svg",
-          "dark": "resources/icons/preview-command-icon-dark.svg"
-        },
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-connection",
-        "title": "Add Connection",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-agent",
-        "title": "Add Agent",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-agent-definition",
-        "title": "Add Agent Definition",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.delete",
-        "title": "Delete",
-        "icon": "$(trash)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-entry-point",
-        "title": "Add Entry Point",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-type",
-        "title": "Add Type",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.view-type-diagram",
-        "title": "View Type Diagram",
-        "icon": {
-          "light": "resources/icons/preview-command-icon.svg",
-          "dark": "resources/icons/preview-command-icon-dark.svg"
-        },
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-function",
-        "title": "Add Function",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-configuration",
-        "title": "Add Configuration",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.view-configuration",
-        "title": "View Configuration",
-        "icon": {
-          "light": "resources/icons/preview-command-icon.svg",
-          "dark": "resources/icons/preview-command-icon-dark.svg"
-        },
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-data-mapper",
-        "title": "Add Data Mapper",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-natural-function",
-        "title": "Add Natural Function",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-custom-connector",
-        "title": "Add Custom Connector",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "wso2.integrator.setupBallerinaVisually",
-        "title": "Setup Ballerina"
-      },
-      {
-        "command": "BI.project-explorer.add-workflow",
-        "title": "Add Workflow",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      },
-      {
-        "command": "BI.project-explorer.add-workflow-activity",
-        "title": "Add Workflow Activity",
-        "icon": "$(add)",
-        "category": "WSO2 Integrator"
-      }
-    ],
-    "menus": {
-      "commandPalette": [
-        {
-          "command": "ballerina.showVisualizer",
-          "when": "false"
-        },
-        {
-          "command": "ballerina.force.update.artifacts",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.convert",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.open-project",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-to-project",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.overview",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-connection",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-agent",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-agent-definition",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.delete",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-entry-point",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-type",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.view-type-diagram",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-function",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-configuration",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.view-configuration",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-data-mapper",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-natural-function",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-custom-connector",
-          "when": "false"
-        },
-        {
-          "command": "wso2.integrator.setupBallerinaVisually",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-workflow",
-          "when": "false"
-        },
-        {
-          "command": "BI.project-explorer.add-workflow-activity",
-          "when": "false"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "ballerina.showVisualizer",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project",
-          "group": "inline"
-        },
-        {
-          "command": "ballerina.force.update.artifacts",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.convert",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus != 'member' && BI.enclosingProjectStatus != 'orphaned'",
-          "group": "navigation"
-        },
-        {
-          "command": "BI.project-explorer.open-project",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'member'",
-          "group": "navigation"
-        },
-        {
-          "command": "BI.project-explorer.add-to-project",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'orphaned'",
-          "group": "navigation"
-        },
-        {
-          "command": "BI.project-explorer.add-connection",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == connections",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-agent",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == agents",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-agent-definition",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == agentDefinitions",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.delete",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && (viewItem == CONNECTION || viewItem == SERVICE || viewItem == FUNCTION || viewItem == AUTOMATION || viewItem == TYPE || viewItem == CONFIGURABLE || viewItem == DATA_MAPPER || viewItem == NP_FUNCTION || viewItem == localConnector || viewItem == WORKFLOW || viewItem == ACTIVITY || viewItem == AGENT || viewItem == AGENT_DEFINITION)",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-entry-point",
-          "when": "view == wso2-integrator.explorer && viewItem == entryPoint",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-type",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == types",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.view-type-diagram",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == types",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-function",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == functions",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-configuration",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == configurations",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.view-configuration",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == configurations",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-data-mapper",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == dataMappers",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-natural-function",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == naturalFunctions",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-custom-connector",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == localConnectors",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-workflow",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == workflows",
-          "group": "inline"
-        },
-        {
-          "command": "BI.project-explorer.add-workflow-activity",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == workflowActivities",
-          "group": "inline"
-        }
-      ],
-      "view/title": [
-        {
-          "command": "wso2-integrator.explorer.refresh",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer)",
-          "group": "navigation@2"
-        },
-        {
-          "command": "BI.project-explorer.convert",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus != 'member' && BI.enclosingProjectStatus != 'orphaned'",
-          "group": "navigation"
-        },
-        {
-          "command": "BI.project-explorer.open-project",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'member'",
-          "group": "navigation"
-        },
-        {
-          "command": "BI.project-explorer.add-to-project",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'orphaned'",
-          "group": "navigation"
-        },
-        {
-          "command": "BI.project-explorer.add",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.isBallerinaWorkspace == true",
-          "group": "navigation"
-        },
-        {
-          "command": "BI.project-explorer.overview",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true",
-          "group": "navigation"
-        }
-      ]
-    },
-    "icons": {}
-  },
-  "scripts": {
-    "lint": "biome check .",
-    "lint:fix": "biome check --write .",
-    "vscode:prepublish": "rm -rf resources/jslibs && npm run copyJSLibs",
-    "prebuild": "rm -rf dist",
-    "build": "webpack --mode production && npm run download-choreo-cli && npm run package",
-    "copyJSLibs": "copyfiles -E -f ../wi-webviews/build/main.js resources/jslibs",
-    "watch": "webpack --mode development --watch",
-    "compile": "webpack --mode development",
-    "compile-tests": "tsc -p . --outDir out",
-    "test": "node ./out/test/runTest.js",
-    "package": "node ../../external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js",
-    "download-choreo-cli": "node scripts/download-choreo-cli.js"
-  },
-  "devDependencies": {
-    "@types/byline": "4.2.33",
-    "@types/js-yaml": "4.0.9",
-    "@types/which": "3.0.4",
-    "@vscode/vsce": "3.4.0",
-    "@types/vscode": "1.100.0",
-    "@types/mocha": "10.0.3",
-    "@types/node": "22.15.21",
-    "@typescript-eslint/eslint-plugin": "8.32.1",
-    "@typescript-eslint/parser": "8.32.1",
-    "@vscode/test-electron": "2.5.2",
-    "eslint": "9.27.0",
-    "glob": "11.0.2",
-    "mocha": "11.2.2",
-    "typescript": "5.8.3",
-    "copyfiles": "2.4.1",
-    "copy-webpack-plugin": "13.0.0",
-    "source-map-support": "0.5.21",
-    "ts-loader": "9.5.2",
-    "webpack": "5.102.1",
-    "webpack-cli": "6.0.1",
-    "webpack-permissions-plugin": "1.0.9",
-    "@playwright/test": "1.55.1",
-    "@wso2/wi-webviews": "workspace:*"
-  },
-  "dependencies": {
-    "@wso2/wi-core": "workspace:*",
-    "@wso2/wso2-platform-core": "workspace:*",
-    "vscode-messenger-common": "^0.5.1",
-    "vscode-messenger": "~0.5.1",
-    "vscode-jsonrpc": "8.2.1",
-    "zustand": "5.0.5",
-    "byline": "5.0.0",
-    "which": "5.0.0",
-    "js-yaml": "4.1.1",
-    "yaml": "2.8.0",
-    "@vscode/iconv-lite-umd": "^0.7.0",
-    "file-type": "^18.2.1",
-    "jschardet": "^3.1.4",
-    "@wso2/webview-giga-bridge": "workspace:*",
-    "xstate": "4.38.3",
-    "@emotion/styled": "11.14.1",
-    "@wso2/ui-toolkit": "workspace:*",
-    "unzipper": "0.12.3",
-    "@types/unzipper": "0.10.11",
-    "axios": "1.13.2",
-    "dotenv": "17.2.3"
-  }
+	"name": "wso2-integrator",
+	"displayName": "WSO2 Integrator",
+	"description": "Integration development environment for WSO2 Integrator",
+	"version": "1.1.26081017",
+	"cliVersion": "v1.2.212606121500",
+	"publisher": "wso2",
+	"icon": "resources/icons/wso2-integrator-logo.png",
+	"license": "Apache-2.0",
+	"repository": {
+		"url": "https://github.com/wso2/product-integrator"
+	},
+	"engines": {
+		"vscode": "^1.100.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onStartupFinished",
+		"onCommand:wso2.integrator.getEmbeddedWelcomeBootstrap",
+		"workspaceContains:**/Ballerina.toml",
+		"onLanguage:SynapseXml",
+		"onLanguage:ballerina",
+		"workspaceContains:.project",
+		"workspaceContains:pom.xml",
+		"workspaceContains:**/*.siddhi"
+	],
+	"main": "./dist/extension.js",
+	"contributes": {
+		"configuration": {
+			"type": "object",
+			"title": "WSO2 Integrator",
+			"properties": {
+				"integrator.selectedProfile": {
+					"type": "string",
+					"enum": [
+						"WSO2 Integrator: Default",
+						"WSO2 Integrator: MI",
+						"WSO2 Integrator: SI"
+					],
+					"default": "WSO2 Integrator: Default",
+					"description": "Select the active WSO2 Integrator profile."
+				},
+				"integrator.advanced.cloudEnv": {
+					"type": "string",
+					"enum": [
+						"prod",
+						"stage",
+						"dev"
+					],
+					"default": "prod",
+					"description": "The WSO2 Cloud Environment to use",
+					"scope": "machine"
+				},
+				"integrator.advanced.cloudRpcPath": {
+					"type": "string",
+					"default": "",
+					"description": "The path to Cloud RPC server",
+					"scope": "window"
+				},
+				"integrator.advanced.cloudRpcArchitecture": {
+					"type": "string",
+					"enum": [
+						"",
+						"amd64",
+						"arm64"
+					],
+					"default": "",
+					"description": "The architecture of Cloud RPC server. Change only if you are running within a container with a different architecture than your host machine.",
+					"scope": "window"
+				},
+				"integrator.advanced.skipKeyring": {
+					"type": "boolean",
+					"default": false,
+					"description": "Enable only if your system does not support keyring.",
+					"scope": "window"
+				}
+			}
+		},
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "wso2-integrator",
+					"title": "WSO2 Integrator",
+					"icon": "resources/icons/integrator-activity-icon.svg"
+				},
+				{
+					"id": "wso2-agent-builder",
+					"title": "WSO2 Agent Builder",
+					"icon": "resources/icons/integrator-activity-icon.svg"
+				}
+			]
+		},
+		"views": {
+			"wso2-integrator": [
+				{
+					"id": "wso2-integrator.explorer",
+					"name": "Integrations",
+					"contextualTitle": "WSO2 Integrator",
+					"when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi'))"
+				}
+			],
+			"wso2-agent-builder": [
+				{
+					"id": "wso2-agent-builder.explorer",
+					"name": "Agents",
+					"contextualTitle": "WSO2 Agent Builder",
+					"when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi'))"
+				}
+			]
+		},
+		"viewsWelcome": [
+			{
+				"view": "wso2-integrator.explorer",
+				"contents": "$(loadingspin) Loading WSO2 Integrator...",
+				"when": "WI.productMode != 'agent-builder' && !WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
+			},
+			{
+				"view": "wso2-agent-builder.explorer",
+				"contents": "$(loadingspin) Loading WSO2 Agent Builder...",
+				"when": "WI.productMode == 'agent-builder' && !WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
+			},
+			{
+				"view": "wso2-integrator.explorer",
+				"contents": "$(rocket) Build integration solutions with WSO2 Integrator.\n\nUse the welcome page to create a new project, explore samples, import external integrations, and manage profile settings.\n\nOpen an integration project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
+				"when": "WI.productMode != 'agent-builder' && WI.projectType == 'none'"
+			},
+			{
+				"view": "wso2-agent-builder.explorer",
+				"contents": "$(rocket) Build AI agents with WSO2 Agent Builder.\n\nUse the welcome page to create a new agent project or explore samples.\n\nOpen an agent project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
+				"when": "WI.productMode == 'agent-builder' && WI.projectType == 'none'"
+			},
+			{
+				"view": "wso2-integrator.explorer",
+				"contents": "No integrations or libraries found in this project.\n\nGet started by adding your first integration or library.\n\n[$(add) Add Integration or Library](command:BI.project-explorer.add)",
+				"when": "BI.project.empty"
+			},
+			{
+				"view": "wso2-agent-builder.explorer",
+				"contents": "No integrations or libraries found in this project.\n\nGet started by adding your first integration or library.\n\n[$(add) Add Integration or Library](command:BI.project-explorer.add)",
+				"when": "BI.project.empty"
+			},
+			{
+				"view": "wso2-integrator.explorer",
+				"contents": "Welcome to WSO2 Integrator.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+				"when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
+			},
+			{
+				"view": "wso2-agent-builder.explorer",
+				"contents": "Welcome to WSO2 Agent Builder.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+				"when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
+			},
+			{
+				"view": "wso2-integrator.explorer",
+				"contents": "Welcome to WSO2 Integrator.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+				"when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
+			},
+			{
+				"view": "wso2-agent-builder.explorer",
+				"contents": "Welcome to WSO2 Agent Builder.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+				"when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
+			}
+		],
+		"commands": [
+			{
+				"command": "wso2.integrator.openWelcome",
+				"title": "Open Welcome Page",
+				"category": "WSO2 Integrator",
+				"icon": "$(home)"
+			},
+			{
+				"command": "wso2-integrator.explorer.refresh",
+				"title": "Refresh",
+				"category": "WSO2 Integrator",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "wso2.integrator.openBIIntegration",
+				"title": "Open Default Integration",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "wso2.integrator.openMIIntegration",
+				"title": "Open MI Integration",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "wso2.integrator.cloud.auth.signIn",
+				"title": "Sign In",
+				"category": "WSO2 Integrator",
+				"icon": "$(sign-in)",
+				"enablement": "!isLoggedIn"
+			},
+			{
+				"command": "wso2.integrator.cloud.auth.signOut",
+				"title": "Sign Out",
+				"category": "WSO2 Integrator",
+				"icon": "$(sign-out)",
+				"enablement": "isLoggedIn"
+			},
+			{
+				"command": "wso2.integrator.cloud.auth.cancelSignIn",
+				"title": "Cancel Sign In",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "wso2.integrator.cloud.integration.create",
+				"title": "Deploy Integration to Cloud",
+				"category": "WSO2 Integrator",
+				"icon": "$(add)"
+			},
+			{
+				"command": "wso2.integrator.cloud.integration.delete",
+				"title": "Delete Integration from Cloud",
+				"category": "WSO2 Integrator",
+				"icon": "$(trash)"
+			},
+			{
+				"command": "wso2.integrator.cloud.integration.openInConsole",
+				"title": "Open in Cloud Console",
+				"category": "WSO2 Integrator",
+				"icon": "$(link-external)"
+			},
+			{
+				"command": "wso2.integrator.cloud.project.clone",
+				"title": "Clone Cloud Project Repository",
+				"category": "WSO2 Integrator",
+				"icon": "$(repo-clone)"
+			},
+			{
+				"command": "wso2.integrator.cloud.project.createContext",
+				"title": "Associate Cloud Project",
+				"category": "WSO2 Integrator",
+				"icon": "$(link)"
+			},
+			{
+				"command": "wso2.integrator.cloud.project.manageContext",
+				"title": "Manage Cloud Project",
+				"category": "WSO2 Integrator",
+				"icon": "$(settings-gear)"
+			},
+			{
+				"command": "wso2.integrator.cloud.project.refresh",
+				"title": "Refresh Workspace",
+				"category": "WSO2 Integrator",
+				"icon": "$(refresh)",
+				"enablement": "!isLoadingContextDirs"
+			},
+			{
+				"command": "ballerina.showVisualizer",
+				"title": "Show Visualizer",
+				"icon": {
+					"light": "resources/icons/preview-command-icon.svg",
+					"dark": "resources/icons/preview-command-icon-dark.svg"
+				},
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "ballerina.force.update.artifacts",
+				"title": "Force Update Artifacts",
+				"icon": "$(refresh)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add",
+				"title": "Add Integration or Library",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.convert",
+				"title": "Convert to Project",
+				"icon": "$(package)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.open-project",
+				"title": "Open Project",
+				"icon": "$(folder-opened)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-to-project",
+				"title": "Add to Project",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.overview",
+				"title": "Open Overview",
+				"icon": {
+					"light": "resources/icons/preview-command-icon.svg",
+					"dark": "resources/icons/preview-command-icon-dark.svg"
+				},
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-connection",
+				"title": "Add Connection",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-agent",
+				"title": "Add Agent",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-agent-definition",
+				"title": "Add Agent Definition",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.delete",
+				"title": "Delete",
+				"icon": "$(trash)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-entry-point",
+				"title": "Add Entry Point",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-type",
+				"title": "Add Type",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.view-type-diagram",
+				"title": "View Type Diagram",
+				"icon": {
+					"light": "resources/icons/preview-command-icon.svg",
+					"dark": "resources/icons/preview-command-icon-dark.svg"
+				},
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-function",
+				"title": "Add Function",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-configuration",
+				"title": "Add Configuration",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.view-configuration",
+				"title": "View Configuration",
+				"icon": {
+					"light": "resources/icons/preview-command-icon.svg",
+					"dark": "resources/icons/preview-command-icon-dark.svg"
+				},
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-data-mapper",
+				"title": "Add Data Mapper",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-natural-function",
+				"title": "Add Natural Function",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-custom-connector",
+				"title": "Add Custom Connector",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "wso2.integrator.setupBallerinaVisually",
+				"title": "Setup Ballerina"
+			},
+			{
+				"command": "BI.project-explorer.add-workflow",
+				"title": "Add Workflow",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			},
+			{
+				"command": "BI.project-explorer.add-workflow-activity",
+				"title": "Add Workflow Activity",
+				"icon": "$(add)",
+				"category": "WSO2 Integrator"
+			}
+		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "ballerina.showVisualizer",
+					"when": "false"
+				},
+				{
+					"command": "ballerina.force.update.artifacts",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.convert",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.open-project",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-to-project",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.overview",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-connection",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-agent",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-agent-definition",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.delete",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-entry-point",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-type",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.view-type-diagram",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-function",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-configuration",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.view-configuration",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-data-mapper",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-natural-function",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-custom-connector",
+					"when": "false"
+				},
+				{
+					"command": "wso2.integrator.setupBallerinaVisually",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-workflow",
+					"when": "false"
+				},
+				{
+					"command": "BI.project-explorer.add-workflow-activity",
+					"when": "false"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "ballerina.showVisualizer",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project",
+					"group": "inline"
+				},
+				{
+					"command": "ballerina.force.update.artifacts",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.convert",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus != 'member' && BI.enclosingProjectStatus != 'orphaned'",
+					"group": "navigation"
+				},
+				{
+					"command": "BI.project-explorer.open-project",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'member'",
+					"group": "navigation"
+				},
+				{
+					"command": "BI.project-explorer.add-to-project",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == bi-project && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'orphaned'",
+					"group": "navigation"
+				},
+				{
+					"command": "BI.project-explorer.add-connection",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == connections",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.add-agent",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == agents",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.add-agent-definition",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == agentDefinitions",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.delete",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && (viewItem == CONNECTION || viewItem == SERVICE || viewItem == FUNCTION || viewItem == AUTOMATION || viewItem == TYPE || viewItem == CONFIGURABLE || viewItem == DATA_MAPPER || viewItem == NP_FUNCTION || viewItem == localConnector || viewItem == WORKFLOW || viewItem == ACTIVITY || viewItem == AGENT || viewItem == AGENT_DEFINITION)",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.add-entry-point",
+					"when": "view == wso2-integrator.explorer && viewItem == entryPoint",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.add-type",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == types",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.view-type-diagram",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == types",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.add-function",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == functions",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.add-configuration",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == configurations",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.view-configuration",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == configurations",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.add-data-mapper",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == dataMappers",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.add-natural-function",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == naturalFunctions",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.add-custom-connector",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == localConnectors",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.add-workflow",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == workflows",
+					"group": "inline"
+				},
+				{
+					"command": "BI.project-explorer.add-workflow-activity",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == workflowActivities",
+					"group": "inline"
+				}
+			],
+			"view/title": [
+				{
+					"command": "wso2-integrator.explorer.refresh",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer)",
+					"group": "navigation@2"
+				},
+				{
+					"command": "BI.project-explorer.convert",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus != 'member' && BI.enclosingProjectStatus != 'orphaned'",
+					"group": "navigation"
+				},
+				{
+					"command": "BI.project-explorer.open-project",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'member'",
+					"group": "navigation"
+				},
+				{
+					"command": "BI.project-explorer.add-to-project",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true && BI.isBallerinaWorkspace != true && BI.enclosingProjectStatus == 'orphaned'",
+					"group": "navigation"
+				},
+				{
+					"command": "BI.project-explorer.add",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.isBallerinaWorkspace == true",
+					"group": "navigation"
+				},
+				{
+					"command": "BI.project-explorer.overview",
+					"when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && BI.project == true",
+					"group": "navigation"
+				}
+			]
+		},
+		"icons": {}
+	},
+	"scripts": {
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"vscode:prepublish": "rm -rf resources/jslibs && npm run copyJSLibs",
+		"prebuild": "rm -rf dist",
+		"build": "webpack --mode production && npm run download-choreo-cli && npm run package",
+		"copyJSLibs": "copyfiles -E -f ../wi-webviews/build/main.js resources/jslibs",
+		"watch": "webpack --mode development --watch",
+		"compile": "webpack --mode development",
+		"compile-tests": "tsc -p . --outDir out",
+		"test": "node ./out/test/runTest.js",
+		"package": "node ../../external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js",
+		"download-choreo-cli": "node scripts/download-choreo-cli.js",
+		"test:unit": "jest --config jest.config.js",
+		"test:typecheck": "tsc --noEmit -p tsconfig.spec.json"
+	},
+	"devDependencies": {
+		"@playwright/test": "1.55.1",
+		"@types/byline": "4.2.33",
+		"@types/jest": "29.5.14",
+		"@types/js-yaml": "4.0.9",
+		"@types/mocha": "10.0.3",
+		"@types/node": "22.15.21",
+		"@types/vscode": "1.100.0",
+		"@types/which": "3.0.4",
+		"@typescript-eslint/eslint-plugin": "8.32.1",
+		"@typescript-eslint/parser": "8.32.1",
+		"@vscode/test-electron": "2.5.2",
+		"@vscode/vsce": "3.4.0",
+		"@wso2/wi-webviews": "workspace:*",
+		"copy-webpack-plugin": "13.0.0",
+		"copyfiles": "2.4.1",
+		"eslint": "9.27.0",
+		"glob": "11.0.2",
+		"jest": "29.7.0",
+		"mocha": "11.2.2",
+		"source-map-support": "0.5.21",
+		"ts-jest": "29.3.4",
+		"ts-loader": "9.5.2",
+		"typescript": "5.8.3",
+		"webpack": "5.102.1",
+		"webpack-cli": "6.0.1",
+		"webpack-permissions-plugin": "1.0.9"
+	},
+	"dependencies": {
+		"@wso2/wi-core": "workspace:*",
+		"@wso2/wso2-platform-core": "workspace:*",
+		"vscode-messenger-common": "^0.5.1",
+		"vscode-messenger": "~0.5.1",
+		"vscode-jsonrpc": "8.2.1",
+		"zustand": "5.0.5",
+		"byline": "5.0.0",
+		"which": "5.0.0",
+		"js-yaml": "4.1.1",
+		"yaml": "2.8.0",
+		"@vscode/iconv-lite-umd": "^0.7.0",
+		"file-type": "^18.2.1",
+		"jschardet": "^3.1.4",
+		"@wso2/webview-giga-bridge": "workspace:*",
+		"xstate": "4.38.3",
+		"@emotion/styled": "11.14.1",
+		"@wso2/ui-toolkit": "workspace:*",
+		"unzipper": "0.12.3",
+		"@types/unzipper": "0.10.11",
+		"axios": "1.13.2",
+		"dotenv": "17.2.3"
+	}
 }
