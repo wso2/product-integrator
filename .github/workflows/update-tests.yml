@@ -46,13 +46,15 @@ jobs:
     defaults:
       run:
         # Named explicitly so the steps run with `-o pipefail`; the implicit default is plain
-        # `bash -e`, under which `... | tee` hides a failing test run.
+        # `bash -e`, under which piping a test run (`... | tee`) once hid its failure.
         shell: bash
         working-directory: lib/vscode
     env:
       # One glob per line, relative to out/, where transpile-client writes the compiled tests. Each
       # must match at least one file, so a moved or renamed suite fails the job instead of quietly
-      # dropping out of it. Outside wso2Update: runtimeEnvironment resolves ${COMPONENT:*} to an
+      # dropping out of it. This is the only such guard: the runners' "N passing" cannot be, as each
+      # adds a test of its own (node: `Errors`; Electron: `assertCleanState`) that passes when none
+      # of ours ran. Outside wso2Update: runtimeEnvironment resolves ${COMPONENT:*} to an
       # installed component update, and terminalEnvironment re-applies that env to terminals.
       NODE_TESTS: |
         vs/**/wso2Update/test/{common,node}/**/*.test.js
@@ -133,9 +135,7 @@ jobs:
         if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
         run: |
           glob=$(node -e "$MATCH_GLOBS" "$NODE_TESTS")
-          npm run test-node -- --runGlob "$glob" 2>&1 | tee "$RUNNER_TEMP/node-tests.log"
-          # The runner exits 0 when nothing ran, which would turn this check into a no-op.
-          sed -E 's/\x1B\[[0-9;]*m//g' "$RUNNER_TEMP/node-tests.log" | grep -Eq '^ *[1-9][0-9]* passing' || { echo '::error::No node tests ran'; exit 1; }
+          npm run test-node -- --runGlob "$glob"
 
       # The first electron-main suite arrives with the download watchdog change; until a tree has
       # one, the Electron steps are skipped rather than failed.
@@ -167,7 +167,4 @@ jobs:
         env:
           VSCODE_SKIP_PRELAUNCH: '1'
           GLOB: ${{ steps.electron.outputs.glob }}
-        run: |
-          xvfb-run -a ./scripts/test.sh --runGlob "$GLOB" 2>&1 | tee "$RUNNER_TEMP/electron-tests.log"
-          # This runner colours its summary; strip the escapes before matching it.
-          sed -E 's/\x1B\[[0-9;]*m//g' "$RUNNER_TEMP/electron-tests.log" | grep -Eq '^ *[1-9][0-9]* passing' || { echo '::error::No Electron tests ran'; exit 1; }
+        run: xvfb-run -a ./scripts/test.sh --runGlob "$GLOB"
