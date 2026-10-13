@@ -67,9 +67,9 @@ echo Installer profile: %INSTALLER_PROFILE%
 REM Extract ballerina.zip (skipped for the editor-update profile)
 if /i "%INSTALLER_PROFILE%"=="editor-update" goto :after_ballerina_extract
 echo Extracting Ballerina to payload
-REM Extract distributions directory (actual Ballerina runtime) to components\ballerina
-REM and remove docs/examples to reduce installer size
-powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $extractDir = 'C:\tmp_bal'; Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path $extractDir | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', $extractDir); $unzippedFolder = (Get-ChildItem $extractDir -Directory | Select-Object -First 1).FullName; $ballerinaTarget = '.\WixPackage\payload\Integrator\components\ballerina'; New-Item -ItemType Directory -Force -Path $ballerinaTarget | Out-Null; $distDir = Join-Path $unzippedFolder 'distributions'; if (Test-Path $distDir) { $distFolder = (Get-ChildItem $distDir -Directory | Select-Object -First 1).FullName; if ($distFolder) { Copy-Item -Path \"$distFolder\*\" -Destination $ballerinaTarget -Recurse -Force } }; Remove-Item -Recurse -Force (Join-Path $ballerinaTarget 'docs') -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force (Join-Path $ballerinaTarget 'examples') -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force $extractDir }"
+REM %~1 is the packaged ballerina-runtime (ci/build/package-ballerina-runtime.sh), already flattened
+REM and carrying bal.bat
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $ballerinaTarget = '.\WixPackage\payload\Integrator\components\ballerina'; New-Item -ItemType Directory -Force -Path $ballerinaTarget | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', $ballerinaTarget); }"
 if errorlevel 1 (
     echo Ballerina extraction failed
     exit /b 1
@@ -84,8 +84,8 @@ REM (in addition to Ballerina). The client seeds them to the data folder; ICP re
 REM extension to read WSO2_INTEGRATOR_ICP_HOME before this build is published (go-live gate).
 if /i "%INSTALLER_PROFILE%"=="editor-update" goto :after_runtimes
 
-@REM REM Extract ICP.zip
-powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::ExtractToDirectory('%~4', '.\temp_icp'); $icpDir = (Get-ChildItem '.\temp_icp' -Directory | Select-Object -First 1).FullName; $icpTarget = '.\WixPackage\payload\Integrator\components\icp'; New-Item -ItemType Directory -Force -Path $icpTarget | Out-Null; Copy-Item -Path \"$icpDir\*\" -Destination $icpTarget -Recurse -Force; Remove-Item -Recurse -Force '.\temp_icp' }"
+REM %~4 is the packaged icp (ci/build/package-icp.sh): launchers already patched for our JRE
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $icpTarget = '.\WixPackage\payload\Integrator\components\icp'; New-Item -ItemType Directory -Force -Path $icpTarget | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~4', $icpTarget); }"
 if errorlevel 1 (
     echo ICP extraction failed
     exit /b 1
@@ -98,32 +98,7 @@ if errorlevel 1 (
     echo JRE extraction failed
     exit /b 1
 )
-
-REM Modify icp.bat to use the JRE from shared dependencies directory (§D8): prefer
-REM WSO2_INTEGRATOR_JRE_HOME (set by main.ts once ICP/JRE are seeded to the data
-REM folder), else the JRE bundled next to ICP. The rewrite lives in a standalone
-REM script because its embedded quotes/parens corrupt cmd.exe quote tracking inline.
-echo Modifying icp.bat to use JRE from dependencies
-powershell -nologo -noprofile -ExecutionPolicy Bypass -File "%~dp0scripts\patch-icp-jre.ps1"
-if errorlevel 1 (
-    echo ERROR: failed to patch icp.bat for env-aware JRE
-    exit /b 1
-)
 :after_runtimes
-
-REM Copy balscript/bal to ballerina bin directory and replace version placeholder
-REM (skipped for editor-update: there is no bundled Ballerina in that payload)
-if /i "%INSTALLER_PROFILE%"=="editor-update" goto :after_balbat
-set "BAL_SRC=%~dp0WixPackage\balscript\bal.bat"
-set "BAL_TARGET=.\WixPackage\payload\Integrator\components\ballerina\bin\bal.bat"
-if exist "%BAL_SRC%" (
-    if not exist ".\WixPackage\payload\Integrator\components\ballerina\bin" mkdir ".\WixPackage\payload\Integrator\components\ballerina\bin"
-    powershell -nologo -noprofile -command "& { (Get-Content '%BAL_SRC%') -replace '@BALLERINA_VERSION@', '%~2' | Set-Content '%BAL_TARGET%' }"
-    echo Copied bal.bat to ballerina bin directory with version %~2
-) else (
-    echo bal.bat not found at %BAL_SRC%
-)
-:after_balbat
 
 
 
