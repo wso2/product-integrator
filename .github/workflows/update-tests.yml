@@ -1,0 +1,117 @@
+name: Update Mechanism Tests
+
+# Runs the unit tests of the component/app update mechanism (src/vs/platform/wso2Update, added by
+# the patches) on the patched vscode tree. The full PR build (pr-ci.yml) never runs unit tests, so
+# without this a patch or vscode bump can break updates and still go green.
+#
+# Only the wso2Update suites run, not vscode's whole unit test set: those are what this repo owns,
+# and a failure here then always means the update mechanism, not upstream flakiness.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 5.0.x
+      - 'staging/**'
+    paths:
+      # Every lib/vscode change in this repo, the update mechanism and its tests included, is
+      # either a patch or a submodule bump.
+      - 'patches/**'
+      - 'lib/vscode'
+      - '.github/workflows/update-tests.yml'
+  push:
+    branches:
+      - main
+      - 5.0.x
+      - 'staging/**'
+    paths:
+      - 'patches/**'
+      - 'lib/vscode'
+      - '.github/workflows/update-tests.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: update-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: wso2Update unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: lib/vscode
+    env:
+      # Globs are relative to out/, where transpile-client writes the compiled tests.
+      # runtimeEnvironment resolves ${COMPONENT:*} to an installed component update, so it is
+      # part of the update mechanism even though it lives outside wso2Update.
+      NODE_TESTS: '{vs/**/wso2Update/test/{common,node}/**/*.test.js,vs/platform/product/test/common/runtimeEnvironment.test.js}'
+      ELECTRON_TESTS: 'vs/**/wso2Update/test/{electron-main,electron-browser}/**/*.test.js'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Only lib/vscode is needed; external/wso2-vscode-extensions is large and unused here.
+      - name: Checkout lib/vscode
+        working-directory: .
+        run: git submodule update --init --depth 1 lib/vscode
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: lib/vscode/.nvmrc
+          cache: npm
+          cache-dependency-path: lib/vscode/package-lock.json
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          ./build/azure-pipelines/linux/apt-retry.sh sudo apt-get install -y \
+            quilt xvfb libgtk-3-0 libxkbfile-dev libkrb5-dev libsecret-1-dev libgbm1 libnss3 libasound2t64
+
+      # Ubuntu 24.04 blocks the unprivileged user namespaces Electron's sandbox needs; vscode's own
+      # Linux test workflow (lib/vscode/.github/workflows/pr-linux-test.yml) lifts it the same way.
+      - name: Allow Electron sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Apply patches
+        working-directory: .
+        run: quilt push -a
+
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
+
+      # Type errors would otherwise surface only as a confusing load failure, or not at all:
+      # transpile-client strips types without checking them.
+      - name: Type check
+        run: npm run typecheck-client
+
+      - name: Compile
+        run: npm run transpile-client
+
+      - name: Node tests
+        run: |
+          npm run test-node -- --runGlob "$NODE_TESTS" 2>&1 | tee "$RUNNER_TEMP/node-tests.log"
+          # The runner exits 0 when the glob matches nothing, which would turn this check into a no-op.
+          grep -Eq '^ *[1-9][0-9]* passing' "$RUNNER_TEMP/node-tests.log" || { echo '::error::No wso2Update node tests ran'; exit 1; }
+
+      - name: Electron tests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! find src/vs -path '*/wso2Update/test/electron-*' -name '*.test.ts' | grep -q .; then
+            echo '::notice::No wso2Update electron tests in this tree'
+            exit 0
+          fi
+          xvfb-run -a ./scripts/test.sh --runGlob "$ELECTRON_TESTS" 2>&1 | tee "$RUNNER_TEMP/electron-tests.log"
+          grep -Eq '^ *[1-9][0-9]* passing' "$RUNNER_TEMP/electron-tests.log" || { echo '::error::No wso2Update electron tests ran'; exit 1; }
