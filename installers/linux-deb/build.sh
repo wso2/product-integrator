@@ -90,34 +90,10 @@ if [ -d "$CHOREO_CLI_DIR" ]; then
     done
 fi
 
-# Extract Ballerina zip
+# Extract the packaged ballerina-runtime (ci/build/package-ballerina-runtime.sh)
 print_info "Extracting Ballerina to components..."
-mkdir -p "$COMPONENTS_DIR"
-unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
-BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$BALLERINA_ZIP" | head -1 | cut -d/ -f1)
-BALLERINA_UNZIPPED_PATH="$EXTRACTION_TARGET/$BALLERINA_UNZIPPED_FOLDER"
-
-# Create a temp directory for consolidation
-BALLERINA_TEMP="$WORK_DIR/ballerina_temp"
-rm -rf "$BALLERINA_TEMP"
-mkdir -p "$BALLERINA_TEMP"
-
-# Move distributions contents to temp
-print_info "Consolidating Ballerina distributions"
-if [ -d "$BALLERINA_UNZIPPED_PATH/distributions" ]; then
-    DIST_FOLDER=$(ls "$BALLERINA_UNZIPPED_PATH/distributions" | head -1)
-    if [ -n "$DIST_FOLDER" ]; then
-        cp -r "$BALLERINA_UNZIPPED_PATH/distributions/$DIST_FOLDER"/* "$BALLERINA_TEMP/"
-    fi
-fi
-
-# Move distributions contents to target (without JDK)
 mkdir -p "$BALLERINA_TARGET"
-mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
-
-# Remove unwanted Ballerina folders
-rm -rf "$BALLERINA_TARGET/docs"
-rm -rf "$BALLERINA_TARGET/examples"
+unzip -q -o "$BALLERINA_ZIP" -d "$BALLERINA_TARGET"
 
 # Extract JRE zip into shared dependencies directory
 print_info "Extracting JRE to shared dependencies directory"
@@ -130,13 +106,6 @@ if [ -z "$JRE_FOLDER" ]; then
     exit 1
 fi
 
-rm -rf "$BALLERINA_UNZIPPED_PATH"
-rm -rf "$BALLERINA_TEMP"
-
-# Replace bal script with the one from balscript
-print_info "Replacing bal script with updated version from balscript"
-cp "$WORK_DIR/balscript/bal" "$BALLERINA_TARGET/bin/bal"
-sed -i "s/@BALLERINA_VERSION@/$BALLERINA_VERSION/g" "$BALLERINA_TARGET/bin/bal"
 chmod +x "$BALLERINA_TARGET/bin"/*
 
 # Extract ICP zip

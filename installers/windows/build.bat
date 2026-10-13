@@ -67,9 +67,9 @@ echo Installer profile: %INSTALLER_PROFILE%
 REM Extract ballerina.zip (skipped for the editor-update profile)
 if /i "%INSTALLER_PROFILE%"=="editor-update" goto :after_ballerina_extract
 echo Extracting Ballerina to payload
-REM Extract distributions directory (actual Ballerina runtime) to components\ballerina
-REM and remove docs/examples to reduce installer size
-powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $extractDir = 'C:\tmp_bal'; Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path $extractDir | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', $extractDir); $unzippedFolder = (Get-ChildItem $extractDir -Directory | Select-Object -First 1).FullName; $ballerinaTarget = '.\WixPackage\payload\Integrator\components\ballerina'; New-Item -ItemType Directory -Force -Path $ballerinaTarget | Out-Null; $distDir = Join-Path $unzippedFolder 'distributions'; if (Test-Path $distDir) { $distFolder = (Get-ChildItem $distDir -Directory | Select-Object -First 1).FullName; if ($distFolder) { Copy-Item -Path \"$distFolder\*\" -Destination $ballerinaTarget -Recurse -Force } }; Remove-Item -Recurse -Force (Join-Path $ballerinaTarget 'docs') -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force (Join-Path $ballerinaTarget 'examples') -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force $extractDir }"
+REM %~1 is the packaged ballerina-runtime (ci/build/package-ballerina-runtime.sh), already flattened
+REM and carrying bal.bat
+powershell -nologo -noprofile -command "& { Add-Type -A 'System.IO.Compression.FileSystem'; $ballerinaTarget = '.\WixPackage\payload\Integrator\components\ballerina'; New-Item -ItemType Directory -Force -Path $ballerinaTarget | Out-Null; [IO.Compression.ZipFile]::ExtractToDirectory('%~1', $ballerinaTarget); }"
 if errorlevel 1 (
     echo Ballerina extraction failed
     exit /b 1
@@ -110,20 +110,6 @@ if errorlevel 1 (
     exit /b 1
 )
 :after_runtimes
-
-REM Copy balscript/bal to ballerina bin directory and replace version placeholder
-REM (skipped for editor-update: there is no bundled Ballerina in that payload)
-if /i "%INSTALLER_PROFILE%"=="editor-update" goto :after_balbat
-set "BAL_SRC=%~dp0WixPackage\balscript\bal.bat"
-set "BAL_TARGET=.\WixPackage\payload\Integrator\components\ballerina\bin\bal.bat"
-if exist "%BAL_SRC%" (
-    if not exist ".\WixPackage\payload\Integrator\components\ballerina\bin" mkdir ".\WixPackage\payload\Integrator\components\ballerina\bin"
-    powershell -nologo -noprofile -command "& { (Get-Content '%BAL_SRC%') -replace '@BALLERINA_VERSION@', '%~2' | Set-Content '%BAL_TARGET%' }"
-    echo Copied bal.bat to ballerina bin directory with version %~2
-) else (
-    echo bal.bat not found at %BAL_SRC%
-)
-:after_balbat
 
 
 

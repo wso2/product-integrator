@@ -174,8 +174,37 @@ jobs:
           else
             echo "All required versions from component-versions.properties are available."
           fi
-  compile:
+
+  # The ballerina-runtime component, built once for every platform. Installers bundle this zip and
+  # publish-update-source mirrors the same file to the CDN, so seeded and updated runtimes match.
+  package-ballerina-runtime:
     needs: resolve-versions
+    if: ${{ inputs.build_packed_installers == true }}
+    name: Package Ballerina runtime
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Package
+        run: |
+          ./ci/build/package-ballerina-runtime.sh "${{ needs.resolve-versions.outputs.ballerina_version }}" out
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ballerina-runtime
+          path: out/ballerina-runtime-*.zip
+          compression-level: 0
+          if-no-files-found: error
+
+  compile:
+    needs: [resolve-versions, package-ballerina-runtime]
+    # package-ballerina-runtime is skipped when no installers are built; that must not skip this job.
+    if: ${{ !cancelled() && needs.resolve-versions.result == 'success' && needs.package-ballerina-runtime.result != 'failure' }}
     name: Build repo
     # A timeout here is self-perpetuating: the job is cancelled before the post-step that SAVES the
     # caches, so the next run starts cold and times out again. That mechanism is unchanged by the
@@ -557,6 +586,13 @@ jobs:
           cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-rpm/
           cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-tar/
 
+      - name: Download Ballerina runtime
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/download-artifact@v4
+        with:
+          name: ballerina-runtime
+          path: ballerina-runtime
+
       - name: Build Linux packages - deb
         if: ${{ inputs.build_packed_installers == true}}
         run: |
@@ -564,8 +600,7 @@ jobs:
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
-          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
-          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
+          BALLERINA_ZIP="${ROOT_DIR}/ballerina-runtime/ballerina-runtime-${BALLERINA_VERSION}.zip"
           ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
           ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
@@ -576,10 +611,9 @@ jobs:
           JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-deb
-          wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
           wget -O jre.zip "$JRE_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
+          ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
 
       - name: Upload Deb artifacts
@@ -599,8 +633,7 @@ jobs:
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
-          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
-          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
+          BALLERINA_ZIP="${ROOT_DIR}/ballerina-runtime/ballerina-runtime-${BALLERINA_VERSION}.zip"
           ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
           ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
@@ -611,10 +644,9 @@ jobs:
           JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-rpm
-          wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
           wget -O jre.zip "$JRE_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
+          ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       - name: Upload RPM artifacts
         if: ${{ inputs.build_packed_installers == true}}
@@ -632,8 +664,7 @@ jobs:
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
-          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
-          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
+          BALLERINA_ZIP="${ROOT_DIR}/ballerina-runtime/ballerina-runtime-${BALLERINA_VERSION}.zip"
           ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
           ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
           if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
@@ -644,10 +675,9 @@ jobs:
           JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-tar
-          wget -O ballerina.zip "$BALLERINA_URL"
           wget -O icp.zip "$ICP_URL"
           wget -O jre.zip "$JRE_URL"
-          ./build.sh ballerina.zip $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
+          ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       # Permanent diagnostic: the installer tail is the job's disk high-water mark, and headroom on
       # ubuntu-latest is thin. always() so the numbers are there on the run that runs out.
