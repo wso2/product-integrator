@@ -627,7 +627,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/wso2ComponentUpdateService.ts
-@@ -0,0 +1,1797 @@
+@@ -0,0 +1,1939 @@
 +/**
 + * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
 + *
@@ -652,12 +652,12 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +import * as os from 'os';
 +import * as path from '../../../base/common/path.js';
 +import { shell } from 'electron';
-+import { raceTimeout } from '../../../base/common/async.js';
++import { raceTimeout, RunOnceScheduler } from '../../../base/common/async.js';
 +import { Emitter } from '../../../base/common/event.js';
 +import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
 +import { URI } from '../../../base/common/uri.js';
 +import { IChannel } from '../../../base/parts/ipc/common/ipc.js';
-+import { CancellationToken } from '../../../base/common/cancellation.js';
++import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
 +import { listenStream } from '../../../base/common/stream.js';
 +import { extract } from '../../../base/node/zip.js';
 +import { IConfigurationService } from '../../configuration/common/configuration.js';
@@ -743,6 +743,18 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +const PREPARE_STALL_MS = 3 * 60 * 1000;
 +
 +/**
++ * How long one download attempt may go without receiving a byte before it is abandoned and retried.
++ * Deliberately generous: a slow link still delivers bytes far more often than this, and a proxy that
++ * holds the response to scan it gets that long before the attempt gives up -- after which the retry
++ * usually meets its cached copy. A shorter window would cut such a proxy off on every download.
++ *
++ * It equals PREPARE_STALL_MS, so while preparing for an app update the prepare guard wins the race:
++ * the restart stops waiting when this attempt is abandoned, and the retry carries on behind it
++ * rather than holding the restart for another window.
++ */
++const DOWNLOAD_STALL_MS = 3 * 60 * 1000;
++
++/**
 + * How long the first window waits for extensions downloaded with an app update to install. Past it
 + * the window opens anyway and the install finishes behind it; the extension host then starts on the
 + * old version and picks the new one up on its next restart.
@@ -779,9 +791,24 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +/**
 + * `state` put back after other work, marked so the workbench does not announce it again: a
 + * Downloaded state would raise its restart prompt a second time, an Error its failure toast.
++ *
++ * Only an outcome is worth putting back. CheckingForUpdates and Downloading are claims that work is
++ * in progress, and the work that made the claim is over by the time anything restores it -- so
++ * replaying one left the service reporting a download nothing was performing: the menu stuck on a
++ * disabled "Downloading Component Updates...", no progress to draw, and no way to start a check.
++ * Idle is what is true, and the next check re-derives whatever is on offer.
 + */
-+function replayedState(state: Wso2UpdateState): Wso2UpdateState {
-+	return state.type === Wso2UpdateStateType.Downloaded || state.type === Wso2UpdateStateType.Error ? { ...state, replayed: true } : state;
++export function replayedState(state: Wso2UpdateState): Wso2UpdateState {
++	switch (state.type) {
++		case Wso2UpdateStateType.Downloaded:
++		case Wso2UpdateStateType.Error:
++			return { ...state, replayed: true };
++		case Wso2UpdateStateType.CheckingForUpdates:
++		case Wso2UpdateStateType.Downloading:
++			return { type: Wso2UpdateStateType.Idle };
++		default:
++			return state;
++	}
 +}
 +
 +/** Carries whether a failed download attempt is worth repeating. */
@@ -800,9 +827,37 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +
 +	private _state: Wso2UpdateState = { type: Wso2UpdateStateType.Idle };
 +	async getState(): Promise<Wso2UpdateState> { return this._state; }
++
++	/**
++	 * Counts transitions, so work that puts the state back afterwards can tell whether anything else
++	 * has taken it over meanwhile (see restoreState). Progress is not a transition: it is the same
++	 * download reporting how far it has got, so it is published without counting.
++	 */
++	private stateEpoch = 0;
++
 +	private setState(state: Wso2UpdateState): void {
++		this.stateEpoch++;
++		this.publishState(state);
++	}
++
++	private publishState(state: Wso2UpdateState): void {
 +		this._state = state;
 +		this._onStateChange.fire(state);
++	}
++
++	/**
++	 * Puts back `before`, the state saved by work that took the state over at `epoch` -- unless
++	 * something else has taken it over since.
++	 *
++	 * Normally nothing can: that work runs under runExclusive(). But staging for an app update can be
++	 * abandoned by its stall guard while it carries on (untilPreparedOrStalled), and on Windows its
++	 * caller then returns and releases the lock. The abandoned work's restore, when it finally comes,
++	 * would overwrite whatever later operations had set since.
++	 */
++	private restoreState(before: Wso2UpdateState, epoch: number): void {
++		if (this.stateEpoch === epoch) {
++			this.setState(replayedState(before));
++		}
 +	}
 +
 +	/**
@@ -811,10 +866,10 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	 * Every emission crosses the IPC boundary and re-renders the title bar, and a fast link delivers
 +	 * chunks far more often than a user can perceive — so an unthrottled feed would spend more effort
 +	 * reporting the download than performing it. `force` is for the transitions that must not be
-+	 * dropped: the first byte of a component, and its completion.
++	 * dropped: the first byte of a component, and its completion. A download attempt passes the record
++	 * it counts on as `active`, so what is published always matches what is counted.
 +	 */
-+	private reportProgress(force = false): void {
-+		const active = this.activeDownload;
++	private reportProgress(force = false, active = this.activeDownload): void {
 +		if (!active || this._state.type !== Wso2UpdateStateType.Downloading) {
 +			return;
 +		}
@@ -823,7 +878,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			return;
 +		}
 +		this.lastProgressEmit = now;
-+		this.setState({
++		this.publishState({
 +			type: Wso2UpdateStateType.Downloading,
 +			progress: {
 +				id: active.id,
@@ -855,6 +910,10 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +
 +	/** When download work last moved (a chunk arrived, or a phase finished); see prepareForAppUpdate. */
 +	private lastDownloadActivity = 0;
++
++	/** DOWNLOAD_STALL_MS and PREPARE_STALL_MS. Instance fields only so a test can shorten them. */
++	private readonly downloadStallMs: number = DOWNLOAD_STALL_MS;
++	private readonly prepareStallMs: number = PREPARE_STALL_MS;
 +
 +	/** The server's last answer, retained so downloadUpdates() can act on the offered set. */
 +	private lastResponse: IWso2UpdateCheckResponse | undefined;
@@ -1001,8 +1060,16 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	// in-flight download/apply, and two download requests can never race stageRuntime.
 +	private operationQueue: Promise<unknown> = Promise.resolve();
 +
++	/**
++	 * Staging the stall guard stopped waiting for, which carries on after the queue turn it ran in
++	 * ended (see prepareWithinTurn). The next operation waits for it too, so two stagings never write
++	 * the same archive or swap the same directories. Bounded: every download attempt is cut off by the
++	 * download watchdog. Never rejects.
++	 */
++	private abandonedWork: Promise<unknown> = Promise.resolve();
++
 +	private runExclusive<T>(task: () => Promise<T>): Promise<T> {
-+		const run = this.operationQueue.then(task, task);
++		const run = this.operationQueue.then(() => this.abandonedWork).then(task, task);
 +		this.operationQueue = run.then(() => undefined, () => undefined);
 +		return run;
 +	}
@@ -1415,13 +1482,29 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	/**
 +	 * Waits for staging for an app update, but never longer than it keeps making progress, and never
 +	 * rejects: the app update must not wait on a component. Work that stalls carries on in the
-+	 * background; the new app fetches whatever it did not finish.
++	 * background; the new app fetches whatever it did not finish. Resolves false on a stall.
 +	 */
-+	private async untilPreparedOrStalled(work: Promise<void>, version: string): Promise<void> {
++	private async untilPreparedOrStalled(work: Promise<void>, version: string): Promise<boolean> {
 +		const settled = work.catch(err => this.logService.warn(`[wso2Update] could not prepare components for app update ${version}; the new app will fetch them`, err));
 +		this.lastDownloadActivity = Date.now();
-+		if (!await untilSettledOrStalled(settled, () => this.lastDownloadActivity, PREPARE_STALL_MS)) {
-+			this.logService.warn(`[wso2Update] preparing for app update ${version} made no progress for ${PREPARE_STALL_MS / 1000}s; no longer holding the update for it`);
++		if (!await untilSettledOrStalled(settled, () => this.lastDownloadActivity, this.prepareStallMs)) {
++			this.logService.warn(`[wso2Update] preparing for app update ${version} made no progress for ${this.prepareStallMs / 1000}s; no longer holding the update for it`);
++			return false;
++		}
++		return true;
++	}
++
++	/**
++	 * Stages for an app update from inside an operation that already holds the queue (Windows' apply),
++	 * under the same stall guard. Abandoned staging outlives that turn, so the queue is held for it
++	 * (abandonedWork). macOS does not need this: its staging is a queue operation of its own, and so
++	 * holds the queue for as long as it runs. Recording that queued operation here instead would make
++	 * it wait on itself if the guard gave up before its turn began.
++	 */
++	private async prepareWithinTurn(incomingVersion: string): Promise<void> {
++		const staging = this.stageComponentsForAppUpdate(incomingVersion);
++		if (!await this.untilPreparedOrStalled(staging, incomingVersion)) {
++			this.abandonedWork = staging.then(() => undefined, () => undefined);
 +		}
 +	}
 +
@@ -1451,6 +1534,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		this.logService.info(`[wso2Update] staging ${targets.map(c => `${c.id}@${c.version}`).join(', ')} for app update ${incomingVersion}`);
 +		const before = this._state;
 +		this.setState({ type: Wso2UpdateStateType.Downloading });
++		const epoch = this.stateEpoch;
 +		try {
 +			const { stagedExtensions } = await this.fetchComponents(targets, incomingVersion);
 +			this.recordDeferredExtensions(stagedExtensions, targets, incomingVersion);
@@ -1465,7 +1549,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +					this.removeStagedExtension(c.id, c.version);
 +				}
 +			}
-+			this.setState(replayedState(before));
++			this.restoreState(before, epoch);
 +		}
 +	}
 +
@@ -1833,54 +1917,112 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +	 */
 +	private async downloadAttempt(url: string, destPath: string, expectedSha256: string): Promise<void> {
 +		this.logService.info(`[wso2Update] downloading ${url}`);
-+		const context = await this.requestService
-+			.request({ url, headers: this.authHeaders(url), followRedirects: 0, callSite: 'wso2Update.download' }, CancellationToken.None)
-+			.catch(err => {
-+				// Never established, so nothing was written: always worth another attempt.
-+				throw new DownloadError(`Request failed for ${url}: ${err}`, true);
-+			});
-+		const status = context.res.statusCode ?? 0;
-+		if (status !== 200) {
-+			throw new DownloadError(
-+				`Unexpected status ${status} downloading ${url}`,
-+				status >= 500 || status === 429 || status === 408
-+			);
++		// Count this attempt's bytes from zero, against the component it began for. A retry fetches
++		// the artifact again from the start -- the file is truncated, not resumed -- so carrying the
++		// failed attempt's bytes over reported more than the artifact holds (392 MB of a 390 MB
++		// runtime after one dropped connection). Captured once rather than read through
++		// `this.activeDownload` per chunk, so bytes can never land on a different component.
++		const record = this.activeDownload;
++		if (record && record.receivedBytes > 0) {
++			record.receivedBytes = 0;
++			this.reportProgress(true, record);
 +		}
-+		const hash = createHash('sha256');
-+		const out = fs.createWriteStream(destPath);
-+		await new Promise<void>((resolve, reject) => {
-+			// A write can fail asynchronously (disk full, I/O error); surface it so the download
-+			// rejects instead of hanging or resolving with a truncated file.
-+			out.on('error', err => reject(new DownloadError(`Writing ${destPath} failed: ${err}`, false)));
-+			listenStream(context.stream, {
-+				onData: chunk => {
-+					hash.update(chunk.buffer);
-+					if (this.activeDownload) {
-+						this.activeDownload.receivedBytes += chunk.buffer.byteLength;
-+						this.lastDownloadActivity = Date.now();
-+						this.reportProgress();
-+					}
-+					if (!out.write(chunk.buffer)) {
-+						// Honor disk backpressure: pause the network stream until the file
-+						// drains, otherwise a slow disk lets a multi-hundred-MB download
-+						// queue up in memory.
-+						context.stream.pause();
-+						out.once('drain', () => context.stream.resume());
-+					}
-+				},
-+				onError: err => {
++
++		// Nothing else bounds an attempt. The request service stops listening for cancellation once
++		// response headers arrive, so a connection that goes half-open mid-body (sleep, a dropped VPN)
++		// delivers no data, no end and no error -- and this attempt, holding the update lock every
++		// later check queues behind, would never finish. Every sign of life re-arms the watchdog; a
++		// pause for disk backpressure suspends it, since a slow disk is not a dead link.
++		const cts = new CancellationTokenSource();
++		let onStall = (): void => { };
++		const watchdog = new RunOnceScheduler(() => {
++			cts.cancel(); // before the response: aborts the request
++			onStall();    // after it: settles the transfer below
++		}, this.downloadStallMs);
++		const stalled = () => new DownloadError(`No data from ${url} for ${this.downloadStallMs / 1000}s`, true);
++		try {
++			watchdog.schedule();
++			const context = await this.requestService
++				.request({ url, headers: this.authHeaders(url), followRedirects: 0, callSite: 'wso2Update.download' }, cts.token)
++				.catch(err => {
++					// Never established, so nothing was written: always worth another attempt.
++					throw cts.token.isCancellationRequested ? stalled() : new DownloadError(`Request failed for ${url}: ${err}`, true);
++				});
++			watchdog.schedule();
++			// Stops delivering to this attempt and frees the socket. The stream is a wrapper that does
++			// not pass destroy() through, so close the response too, best effort.
++			const closeResponse = (): void => {
++				context.stream.destroy();
++				try {
++					(context.res as { destroy?(): void }).destroy?.();
++				} catch { /* ignore */ }
++			};
++			const status = context.res.statusCode ?? 0;
++			if (status !== 200) {
++				closeResponse(); // the body is never read, so it would hold the connection open
++				throw new DownloadError(
++					`Unexpected status ${status} downloading ${url}`,
++					status >= 500 || status === 429 || status === 408
++				);
++			}
++			const hash = createHash('sha256');
++			const out = fs.createWriteStream(destPath);
++			await new Promise<void>((resolve, reject) => {
++				onStall = () => {
++					reject(stalled());
++					// Release the file for the retry. Destroying the stream also drops this attempt's
++					// listeners, so a chunk arriving late is never counted or written.
++					closeResponse();
 +					out.destroy();
-+					reject(new DownloadError(`Transfer of ${url} failed: ${err}`, true));
-+				},
-+				onEnd: () => {
-+					out.end(() => resolve());
-+				}
++				};
++				// A write can fail asynchronously (disk full, I/O error); surface it so the download
++				// rejects instead of hanging or resolving with a truncated file.
++				out.on('error', err => reject(new DownloadError(`Writing ${destPath} failed: ${err}`, false)));
++				// The end can arrive while the stream is paused for backpressure, so a later drain must
++				// not re-arm the watchdog: the transfer is over, only the disk is still catching up.
++				let ended = false;
++				listenStream(context.stream, {
++					onData: chunk => {
++						watchdog.schedule();
++						hash.update(chunk.buffer);
++						if (record) {
++							record.receivedBytes += chunk.buffer.byteLength;
++							this.lastDownloadActivity = Date.now();
++							this.reportProgress(false, record);
++						}
++						if (!out.write(chunk.buffer)) {
++							// Honor disk backpressure: pause the network stream until the file
++							// drains, otherwise a slow disk lets a multi-hundred-MB download
++							// queue up in memory.
++							watchdog.cancel();
++							context.stream.pause();
++							out.once('drain', () => {
++								if (!ended) {
++									watchdog.schedule();
++								}
++								context.stream.resume();
++							});
++						}
++					},
++					onError: err => {
++						out.destroy();
++						reject(new DownloadError(`Transfer of ${url} failed: ${err}`, true));
++					},
++					onEnd: () => {
++						ended = true;
++						watchdog.cancel();
++						out.end(() => resolve());
++					}
++				});
 +			});
-+		});
-+		const actual = hash.digest('hex').toLowerCase();
-+		if (actual !== expectedSha256.toLowerCase()) {
-+			await fs.promises.rm(destPath, { force: true });
-+			throw new DownloadError(`Checksum mismatch for ${url} (expected ${expectedSha256}, got ${actual})`, false);
++			const actual = hash.digest('hex').toLowerCase();
++			if (actual !== expectedSha256.toLowerCase()) {
++				await fs.promises.rm(destPath, { force: true });
++				throw new DownloadError(`Checksum mismatch for ${url} (expected ${expectedSha256}, got ${actual})`, false);
++			}
++		} finally {
++			watchdog.dispose();
++			cts.dispose();
 +		}
 +	}
 +
@@ -2149,7 +2291,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +		// on its own first check.
 +		const incoming = incomingAppVersionToPrepare(app.version, this.appVersion());
 +		if (incoming) {
-+			await this.untilPreparedOrStalled(this.stageComponentsForAppUpdate(incoming), incoming);
++			await this.prepareWithinTurn(incoming);
 +		}
 +
 +		// Apply the editor-only MSI on quit, then relaunch — deterministically. The earlier approach
@@ -6465,3 +6607,454 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/electro
 +}
 +
 +registerAction2(ShowVersionInformationAction);
+Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/electron-main/wso2ComponentUpdateService.test.ts
+===================================================================
+--- /dev/null
++++ product-integrator/lib/vscode/src/vs/platform/wso2Update/test/electron-main/wso2ComponentUpdateService.test.ts
+@@ -0,0 +1,446 @@
++/**
++ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
++ *
++ * WSO2 LLC. licenses this file to you under the Apache License,
++ * Version 2.0 (the "License"); you may not use this file except
++ * in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++ * KIND, either express or implied. See the License for the
++ * specific language governing permissions and limitations
++ * under the License.
++ */
++
++import { deepStrictEqual, ok, rejects, strictEqual } from 'assert';
++import { createHash } from 'crypto';
++import * as fs from 'fs';
++import * as os from 'os';
++import { timeout } from '../../../../base/common/async.js';
++import { newWriteableBufferStream, streamToBufferReadableStream, VSBuffer, VSBufferReadableStream } from '../../../../base/common/buffer.js';
++import { CancellationToken } from '../../../../base/common/cancellation.js';
++import { CancellationError } from '../../../../base/common/errors.js';
++import { Emitter } from '../../../../base/common/event.js';
++import { DisposableStore } from '../../../../base/common/lifecycle.js';
++import { join } from '../../../../base/common/path.js';
++import { newWriteableStream, WriteableStream } from '../../../../base/common/stream.js';
++import { IRequestContext } from '../../../../base/parts/request/common/request.js';
++import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
++import { NullLogService } from '../../../log/common/log.js';
++import { Wso2UpdateState, Wso2UpdateStateType } from '../../common/wso2Update.js';
++import { replayedState, Wso2ComponentUpdateService } from '../../electron-main/wso2ComponentUpdateService.js';
++
++interface IDownloadRecord {
++	readonly id: string;
++	readonly version: string;
++	readonly index: number;
++	readonly total: number;
++	readonly totalBytes?: number;
++	receivedBytes: number;
++}
++
++/** The private surface these tests drive. */
++interface ITestableService {
++	_onStateChange: Emitter<Wso2UpdateState>;
++	_state: Wso2UpdateState;
++	stateEpoch: number;
++	lastProgressEmit: number;
++	activeDownload: IDownloadRecord | undefined;
++	setState(state: Wso2UpdateState): void;
++	restoreState(before: Wso2UpdateState, epoch: number): void;
++	reportProgress(force?: boolean, active?: IDownloadRecord): void;
++	downloadAttempt(url: string, destPath: string, expectedSha256: string): Promise<void>;
++	runExclusive<T>(task: () => Promise<T>): Promise<T>;
++	untilPreparedOrStalled(work: Promise<void>, version: string): Promise<boolean>;
++	prepareWithinTurn(incomingVersion: string): Promise<void>;
++	stageComponentsForAppUpdate(incomingVersion: string): Promise<void>;
++}
++
++/**
++ * The constructor reconciles and garbage-collects the components home it resolves from
++ * os.homedir() -- the real ~/.wso2-integrator on a developer machine. So the methods under test run
++ * on an instance that skips it, seeded with exactly the fields they read.
++ *
++ * Keep the list below in step with those methods: a field one of them starts reading is otherwise
++ * silently `undefined` here, and a test can then pass for the wrong reason.
++ */
++function createService(store: Pick<DisposableStore, 'add'>, request: (token: CancellationToken) => Promise<IRequestContext>, downloadStallMs = 2000, prepareStallMs = 2000): ITestableService {
++	const service = Object.create(Wso2ComponentUpdateService.prototype);
++	Object.assign(service, {
++		_onStateChange: store.add(new Emitter<Wso2UpdateState>()),
++		_state: { type: Wso2UpdateStateType.Idle },
++		stateEpoch: 0,
++		lastProgressEmit: 0,
++		lastDownloadActivity: 0,
++		downloadStallMs,
++		prepareStallMs,
++		operationQueue: Promise.resolve(),
++		abandonedWork: Promise.resolve(),
++		activeDownload: undefined,
++		entitlementToken: undefined,
++		logService: new NullLogService(),
++		requestService: { request: (_options: unknown, token: CancellationToken) => request(token) },
++	});
++	return service;
++}
++
++function respond(stream: VSBufferReadableStream, closed?: { value: boolean }): IRequestContext {
++	const res = { statusCode: 200, headers: {}, destroy: () => { if (closed) { closed.value = true; } } };
++	return { res, stream };
++}
++
++/** Counts the stream's pause() calls, so a test can tell it went through disk backpressure. */
++function countPauses<T extends WriteableStream<VSBuffer>>(stream: T, pauses: { count: number }): T {
++	const pause = stream.pause.bind(stream);
++	stream.pause = () => {
++		pauses.count++;
++		pause();
++	};
++	return stream;
++}
++
++function bytes(count: number): VSBuffer {
++	const data = new Uint8Array(count);
++	for (let i = 0; i < count; i++) {
++		data[i] = i % 251;
++	}
++	return VSBuffer.wrap(data);
++}
++
++function sha256(buffer: VSBuffer): string {
++	return createHash('sha256').update(buffer.buffer).digest('hex');
++}
++
++function record(id: string, totalBytes?: number): IDownloadRecord {
++	return { id, version: '1.0.0', index: 1, total: 1, ...(totalBytes !== undefined ? { totalBytes } : {}), receivedBytes: 0 };
++}
++
++const ARTIFACT_URL = 'https://integrator-updates-cdn.wso2.com/artifacts/components/ballerina-runtime/1.0.0/ballerina.zip';
++
++function isRetryable(pattern?: RegExp): (err: { retryable?: boolean; message?: string }) => boolean {
++	return err => err.retryable === true && (!pattern || pattern.test(err.message ?? ''));
++}
++
++suite('Wso2ComponentUpdateService - download attempts', () => {
++	const store = ensureNoDisposablesAreLeakedInTestSuite();
++	let dir: string;
++	let dest: string;
++
++	setup(() => {
++		dir = fs.mkdtempSync(join(os.tmpdir(), 'wso2-download-'));
++		dest = join(dir, 'artifact.zip');
++	});
++
++	teardown(() => {
++		fs.rmSync(dir, { recursive: true, force: true });
++	});
++
++	test('a retried attempt counts from zero, not on top of the failed one', async () => {
++		// The reported "392 MB of 390 MB": a connection drops part-way, the retry fetches the whole
++		// artifact again from the start, and the failed attempt's bytes were still on the counter.
++		const full = bytes(300);
++		let attempt = 0;
++		const service = createService(store, async () => {
++			const stream = newWriteableBufferStream();
++			if (++attempt === 1) {
++				stream.write(full.slice(0, 100));
++				setTimeout(() => stream.error(new Error('ECONNRESET')));
++			} else {
++				stream.write(full);
++				setTimeout(() => stream.end());
++			}
++			return respond(stream);
++		});
++		const progress = record('ballerina-runtime', 300);
++		service.activeDownload = progress;
++
++		await rejects(() => service.downloadAttempt(ARTIFACT_URL, dest, sha256(full)), isRetryable());
++		strictEqual(progress.receivedBytes, 100);
++
++		await service.downloadAttempt(ARTIFACT_URL, dest, sha256(full));
++		strictEqual(progress.receivedBytes, 300);
++	});
++
++	test('bytes are counted on the component the attempt began for', async () => {
++		// If another download takes `activeDownload` over mid-transfer, this attempt's bytes must not
++		// follow it -- they belong to the component this attempt is fetching.
++		const full = bytes(200);
++		let stream!: WriteableStream<VSBuffer>;
++		const service = createService(store, async () => {
++			stream = newWriteableBufferStream();
++			return respond(stream);
++		});
++		const first = record('ballerina-runtime');
++		const second = record('icp');
++		service.activeDownload = first;
++		service.setState({ type: Wso2UpdateStateType.Downloading });
++		const published: string[] = [];
++		store.add(service._onStateChange.event(state => {
++			if (state.type === Wso2UpdateStateType.Downloading && state.progress) {
++				published.push(`${state.progress.id}: ${state.progress.receivedBytes}`);
++			}
++		}));
++
++		const done = service.downloadAttempt(ARTIFACT_URL, dest, sha256(full));
++		await timeout(0);
++		stream.write(full.slice(0, 50));
++		service.activeDownload = second;
++		service.lastProgressEmit = 0; // as if the throttle interval had passed, so this chunk publishes too
++		stream.write(full.slice(50));
++		stream.end();
++		await done;
++
++		// What is published follows the counter, not whichever component is active now.
++		deepStrictEqual({ first: first.receivedBytes, second: second.receivedBytes, published }, {
++			first: 200,
++			second: 0,
++			published: ['ballerina-runtime: 50', 'ballerina-runtime: 200']
++		});
++	});
++
++	test('a transfer that stops delivering is abandoned, retryably, and its response closed', async () => {
++		// A half-open connection after the headers: no data, no end, no error. The request service
++		// no longer listens for cancellation at that point, so only the watchdog can end it.
++		const closed = { value: false };
++		const service = createService(store, async () => {
++			const stream = newWriteableBufferStream();
++			stream.write(bytes(10));
++			return respond(stream, closed);
++		}, 50);
++
++		await rejects(() => service.downloadAttempt(ARTIFACT_URL, dest, sha256(bytes(100))), isRetryable(/No data/));
++		ok(closed.value, 'the stalled response should be closed, not left open');
++	});
++
++	test('a chunk that arrives after the attempt was abandoned is not counted', async () => {
++		// The request service hands back a wrapper over the socket's stream, and destroying the
++		// wrapper does not stop the socket. Destroying it does drop this attempt's listeners, so a
++		// late chunk cannot add to the counter the retry is about to start again from zero.
++		let source!: WriteableStream<Uint8Array>;
++		const service = createService(store, async () => {
++			source = newWriteableStream<Uint8Array>(chunks => chunks[chunks.length - 1]);
++			source.write(bytes(10).buffer);
++			return respond(streamToBufferReadableStream(source));
++		}, 50);
++		const progress = record('ballerina-runtime');
++		service.activeDownload = progress;
++
++		await rejects(() => service.downloadAttempt(ARTIFACT_URL, dest, sha256(bytes(100))), isRetryable(/No data/));
++		source.write(bytes(90).buffer);
++		await timeout(0);
++		strictEqual(progress.receivedBytes, 10);
++	});
++
++	test('a request that never answers is cancelled and abandoned, retryably', async () => {
++		let cancelled = false;
++		const service = createService(store, token => new Promise<IRequestContext>((_resolve, reject) => {
++			// What the request service does on cancellation before a response.
++			const listener = token.onCancellationRequested(() => {
++				listener.dispose();
++				cancelled = true;
++				reject(new CancellationError());
++			});
++		}), 50);
++
++		await rejects(() => service.downloadAttempt(ARTIFACT_URL, dest, '00'), isRetryable(/No data/));
++		ok(cancelled, 'the pending request should be cancelled');
++	});
++
++	test('a slow but steady transfer is not cut off', async () => {
++		// Ten chunks 25ms apart: longer in total than the 200ms stall window, but never that long silent.
++		const full = bytes(10 * 20);
++		let stream!: WriteableStream<VSBuffer>;
++		const service = createService(store, async () => {
++			stream = newWriteableBufferStream();
++			return respond(stream);
++		}, 200);
++
++		const done = service.downloadAttempt(ARTIFACT_URL, dest, sha256(full));
++		for (let i = 0; i < 10; i++) {
++			await timeout(25);
++			stream.write(full.slice(i * 20, (i + 1) * 20));
++		}
++		stream.end();
++		await done;
++		strictEqual(fs.readFileSync(dest).length, 200);
++	});
++
++	test('a transfer paused for disk backpressure completes intact', async () => {
++		// Far over the file stream's high-water mark, so the write reports backpressure and the
++		// transfer goes through pause and drain -- with the watchdog suspended, then re-armed.
++		const full = bytes(4 * 1024 * 1024);
++		const pauses = { count: 0 };
++		const service = createService(store, async () => {
++			const stream = countPauses(newWriteableBufferStream(), pauses);
++			stream.write(full);
++			setTimeout(() => stream.end());
++			return respond(stream);
++		}, 200);
++
++		await service.downloadAttempt(ARTIFACT_URL, dest, sha256(full));
++		deepStrictEqual({ intact: sha256(VSBuffer.wrap(fs.readFileSync(dest))) === sha256(full), paused: pauses.count > 0 }, { intact: true, paused: true });
++	});
++
++	test('a transfer that stalls after a backpressure pause is still abandoned', async () => {
++		// The watchdog is suspended while the disk catches up; the drain has to re-arm it, or a
++		// connection that dies during the pause would hang exactly as before.
++		const pauses = { count: 0 };
++		const service = createService(store, async () => {
++			const stream = countPauses(newWriteableBufferStream(), pauses);
++			stream.write(bytes(4 * 1024 * 1024));
++			return respond(stream);
++		}, 50);
++
++		await rejects(() => service.downloadAttempt(ARTIFACT_URL, dest, '00'), isRetryable(/No data/));
++		// Otherwise this could pass through the plain no-data-after-headers path instead.
++		ok(pauses.count > 0, 'the transfer should have paused for backpressure');
++	});
++});
++
++suite('Wso2ComponentUpdateService - state restore', () => {
++	const store = ensureNoDisposablesAreLeakedInTestSuite();
++
++	function service(): ITestableService {
++		return createService(store, () => Promise.reject(new Error('no network in these tests')));
++	}
++
++	test('only an outcome is replayed; an in-flight marker becomes Idle', () => {
++		deepStrictEqual(
++			replayedState({ type: Wso2UpdateStateType.Downloaded, stagedExtensions: [], restartRequired: true }),
++			{ type: Wso2UpdateStateType.Downloaded, stagedExtensions: [], restartRequired: true, replayed: true });
++		deepStrictEqual(
++			replayedState({ type: Wso2UpdateStateType.Error, message: 'failed' }),
++			{ type: Wso2UpdateStateType.Error, message: 'failed', replayed: true });
++
++		deepStrictEqual(replayedState({ type: Wso2UpdateStateType.Downloading }), { type: Wso2UpdateStateType.Idle });
++		deepStrictEqual(
++			replayedState({ type: Wso2UpdateStateType.Downloading, progress: { id: 'icp', version: '1.0.0', index: 1, total: 1, receivedBytes: 5 } }),
++			{ type: Wso2UpdateStateType.Idle });
++		deepStrictEqual(replayedState({ type: Wso2UpdateStateType.CheckingForUpdates, explicit: true }), { type: Wso2UpdateStateType.Idle });
++
++		const idle: Wso2UpdateState = { type: Wso2UpdateStateType.Idle };
++		strictEqual(replayedState(idle), idle);
++		const available: Wso2UpdateState = { type: Wso2UpdateStateType.UpdatesAvailable, updates: [] };
++		strictEqual(replayedState(available), available);
++	});
++
++	test('work that took the state over puts it back when nothing else has', () => {
++		const s = service();
++		const before: Wso2UpdateState = { type: Wso2UpdateStateType.UpdatesAvailable, updates: [] };
++		s.setState(before);
++		s.setState({ type: Wso2UpdateStateType.Downloading });
++		const epoch = s.stateEpoch;
++
++		s.restoreState(before, epoch);
++		strictEqual(s._state, before);
++	});
++
++	test('progress is not a takeover', () => {
++		// If reporting progress counted as a transition, every staging pass that moved a single byte
++		// would skip its own restore and leave the state at Downloading.
++		const s = service();
++		const before: Wso2UpdateState = { type: Wso2UpdateStateType.UpdatesAvailable, updates: [] };
++		s.setState(before);
++		s.setState({ type: Wso2UpdateStateType.Downloading });
++		const epoch = s.stateEpoch;
++
++		s.activeDownload = record('icp', 100);
++		s.reportProgress(true);
++		const reported = s._state;
++		ok(reported.type === Wso2UpdateStateType.Downloading && reported.progress, 'progress should be published');
++
++		s.restoreState(before, epoch);
++		strictEqual(s._state, before);
++	});
++
++	test('a restore does not overwrite a later transition', () => {
++		const s = service();
++		s.setState({ type: Wso2UpdateStateType.Downloading });
++		const epoch = s.stateEpoch;
++		const later: Wso2UpdateState = { type: Wso2UpdateStateType.UpdatesAvailable, updates: [] };
++		s.setState(later);
++
++		s.restoreState({ type: Wso2UpdateStateType.Idle }, epoch);
++		strictEqual(s._state, later);
++	});
++
++	test('abandoned staging can no longer leave the service stuck at Downloading', () => {
++		// The reported failure, at the level of the state machine. Staging for an app update (A) is
++		// abandoned by its stall guard and the lock released; a later operation (B) starts while A
++		// is still mid-flight, so B saves A's transient Downloading as the state to put back.
++		for (const order of ['A finishes first', 'B finishes first']) {
++			const s = service();
++			s.setState({ type: Wso2UpdateStateType.UpdatesAvailable, updates: [] });
++
++			const beforeA = s._state;
++			s.setState({ type: Wso2UpdateStateType.Downloading });
++			const epochA = s.stateEpoch;
++
++			const beforeB = s._state;
++			s.setState({ type: Wso2UpdateStateType.Downloading });
++			const epochB = s.stateEpoch;
++
++			if (order === 'A finishes first') {
++				// Before the fix: A put UpdatesAvailable back, then B put its captured Downloading
++				// back -- a download nothing was performing, with no way out short of a restart.
++				s.restoreState(beforeA, epochA);
++				s.restoreState(beforeB, epochB);
++			} else {
++				s.restoreState(beforeB, epochB);
++				s.restoreState(beforeA, epochA);
++			}
++			strictEqual(s._state.type, Wso2UpdateStateType.Idle, order);
++		}
++	});
++});
++
++suite('Wso2ComponentUpdateService - operation queue', () => {
++	const store = ensureNoDisposablesAreLeakedInTestSuite();
++
++	function service(): ITestableService {
++		return createService(store, () => Promise.reject(new Error('no network in these tests')), 2000, 20);
++	}
++
++	test('staging the stall guard gave up on holds back the next operation until it ends', async () => {
++		// On Windows the apply stages inside its own turn of the queue, so giving up on staging ends
++		// that turn while staging carries on. If the next operation started anyway, a second
++		// "Update and Restart" would stage the same component into the same files at the same time.
++		const s = service();
++		let finishStaging!: () => void;
++		const staging = new Promise<void>(resolve => finishStaging = resolve);
++		const order: string[] = [];
++		s.stageComponentsForAppUpdate = () => staging.then(() => { order.push('abandoned staging ends'); });
++
++		await s.runExclusive(async () => {
++			await s.prepareWithinTurn('2.0.0');
++			order.push('apply returns');
++		});
++		const next = s.runExclusive(async () => { order.push('next operation runs'); });
++		await timeout(20);
++		finishStaging();
++		await next;
++
++		deepStrictEqual(order, ['apply returns', 'abandoned staging ends', 'next operation runs']);
++	});
++
++	test('a queued operation the stall guard gave up on before its turn still runs', async () => {
++		// macOS stages as a queue operation of its own, guarded while it waits for its turn. Giving up
++		// on it there must not make it wait on itself once its turn comes.
++		const s = service();
++		let finishFirst!: () => void;
++		const first = s.runExclusive(() => new Promise<void>(resolve => finishFirst = resolve));
++		const order: string[] = [];
++		const queued = s.runExclusive(async () => { order.push('queued operation runs'); });
++
++		strictEqual(await s.untilPreparedOrStalled(queued, '2.0.0'), false);
++		finishFirst();
++		await first;
++		await queued;
++
++		deepStrictEqual(order, ['queued operation runs']);
++	});
++});
