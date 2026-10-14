@@ -1644,10 +1644,28 @@ jobs:
           name: build-versions
           path: core/versions/
 
+      # The packaged runtimes (ci/build/package-ballerina-runtime.sh, package-icp.sh) the installers
+      # above bundled and the update source serves. Published next to the cores for the same reason:
+      # a downstream build (the support distribution) must ship these exact bytes, not re-download
+      # or re-package the runtimes itself.
+      - name: Download Ballerina runtime package
+        uses: actions/download-artifact@v4
+        with:
+          name: ballerina-runtime
+          path: runtimes/
+
+      - name: Download ICP package
+        uses: actions/download-artifact@v4
+        with:
+          name: icp
+          path: runtimes/
+
       - name: Stage core files
         shell: bash
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
+          BALLERINA_VERSION: ${{ needs.resolve-versions.outputs.ballerina_version }}
+          ICP_VERSION: ${{ needs.resolve-versions.outputs.icp_version }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -1663,6 +1681,10 @@ jobs:
           stage core/VSCode-darwin-arm64.zip    "${P}-darwin-arm64.zip"
           stage core/VSCode-darwin-x64.zip      "${P}-darwin-x64.zip"
           stage core/VSCode-win32-x64.zip       "${P}-win32-x64.zip"
+          # Prefixed with the integrator version: on the rolling nightly two builds can share a
+          # runtime version, and the roll step below tells superseded assets apart by name.
+          stage "runtimes/ballerina-runtime-${BALLERINA_VERSION}.zip" "wso2-integrator-${INTEGRATOR_VERSION}-ballerina-runtime-${BALLERINA_VERSION}.zip"
+          stage "runtimes/icp-${ICP_VERSION}.zip"                     "wso2-integrator-${INTEGRATOR_VERSION}-icp-${ICP_VERSION}.zip"
           cp core/versions/ci/build/component-versions.properties \
             "release-files/wso2-integrator-${INTEGRATOR_VERSION}-component-versions.properties"
 
@@ -1671,14 +1693,14 @@ jobs:
       - name: cosign-installer
         uses: sigstore/cosign-installer@v3.5.0
 
-      - name: Sign the core files
+      - name: Sign the core and runtime files
         shell: bash
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-core-*.{tar.gz,zip}; do
+          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-{core-*,ballerina-runtime-*,icp-*}.{tar.gz,zip}; do
             cosign sign-blob "${F}" --output-certificate "${F}.pem" --output-signature "${F}.sig" --yes
             cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build.yml@${GITHUB_REF}" --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           done
@@ -1727,6 +1749,8 @@ jobs:
           require "WI extension .vsix"  release-files/*.vsix
           require "Linux core"          release-files/*-core-linux-x64.tar.gz
           require "Component versions"  release-files/*-component-versions.properties
+          require "Ballerina runtime"   release-files/*-ballerina-runtime-*.zip
+          require "ICP package"         release-files/*-icp-*.zip
           if [ "${BUILD_MACOS}" = "true" ]; then
             require "macOS arm64 .dmg"  release-files/*arm64.dmg
             require "macOS x64 .dmg"    release-files/*x64.dmg
