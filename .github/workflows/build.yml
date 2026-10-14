@@ -869,7 +869,20 @@ jobs:
             fi
             exit 1
           fi
-          xcrun stapler staple "$DMG"
+          # Accepted means the ticket exists; staple only downloads it, and that download drops
+          # often enough (CloudKit -1005, Error 68) to retry rather than redo the whole build.
+          for attempt in 1 2 3 4 5; do
+            if xcrun stapler staple "$DMG"; then
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::stapling $DMG failed after $attempt attempts" >&2
+              exit 1
+            fi
+            echo "::warning::stapler staple attempt $attempt failed; retrying in $((attempt * 30))s"
+            sleep $((attempt * 30))
+          done
+          xcrun stapler validate "$DMG"
 
       # This is the only AWS consumer in the job, so the credentials go in its own `env:` rather
       # than through configure-aws-credentials, which writes them to $GITHUB_ENV and would leave
