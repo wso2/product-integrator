@@ -358,15 +358,10 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
         entryPoints.resourceUri = Uri.parse(`bi-category:${projectPath}`);
         entryPoints.contextValue = 'entryPoint';
         entryPoints.children = [];
-        // Agent Builder exposes MCP services as its only entry point. Automations and
-        // every other service protocol (HTTP, GraphQL, ...) stay hidden so they cannot
-        // be opened from the tree.
-        if (!agentBuilder && project.directoryMap[DIRECTORY_MAP.AUTOMATION].length > 0) {
+        if (project.directoryMap[DIRECTORY_MAP.AUTOMATION].length > 0) {
             entryPoints.children.push(...getComponents(project.directoryMap[DIRECTORY_MAP.AUTOMATION], DIRECTORY_MAP.AUTOMATION, projectPath));
         }
-        const services = project.directoryMap[DIRECTORY_MAP.SERVICE] ?? [];
-        entryPoints.children.push(...getComponents(
-            agentBuilder ? services.filter(isMcpService) : services, DIRECTORY_MAP.SERVICE, projectPath));
+        entryPoints.children.push(...getComponents(project.directoryMap[DIRECTORY_MAP.SERVICE], DIRECTORY_MAP.SERVICE, projectPath));
         if (entryPoints.children.length > 0) {
             entryPoints.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
         }
@@ -493,33 +488,35 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     }
     entries.push(dataMappers);
 
-    // ---------- Workflows ----------
-    const workflowChildren = getComponents(project.directoryMap[DIRECTORY_MAP.WORKFLOW] ?? [], DIRECTORY_MAP.WORKFLOW, projectPath);
-    const workflows = new ProjectExplorerEntry(
-        'Workflows',
-        workflowChildren.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
-        null,
-        'workflow',
-        false
-    );
-    workflows.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-    workflows.contextValue = 'workflows';
-    workflows.children = workflowChildren;
-    entries.push(workflows);
+    if (!agentBuilder) {
+        // ---------- Workflows ----------
+        const workflowChildren = getComponents(project.directoryMap[DIRECTORY_MAP.WORKFLOW] ?? [], DIRECTORY_MAP.WORKFLOW, projectPath);
+        const workflows = new ProjectExplorerEntry(
+            'Workflows',
+            workflowChildren.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
+            null,
+            'workflow',
+            false
+        );
+        workflows.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+        workflows.contextValue = 'workflows';
+        workflows.children = workflowChildren;
+        entries.push(workflows);
 
-    // ---------- Workflow Activities ----------
-    const activityChildren = getComponents(project.directoryMap[DIRECTORY_MAP.ACTIVITY] ?? [], DIRECTORY_MAP.ACTIVITY, projectPath);
-    const workflowActivities = new ProjectExplorerEntry(
-        'Workflow Activities',
-        activityChildren.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
-        null,
-        'task',
-        false
-    );
-    workflowActivities.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-    workflowActivities.contextValue = 'workflowActivities';
-    workflowActivities.children = activityChildren;
-    entries.push(workflowActivities);
+        // ---------- Workflow Activities ----------
+        const activityChildren = getComponents(project.directoryMap[DIRECTORY_MAP.ACTIVITY] ?? [], DIRECTORY_MAP.ACTIVITY, projectPath);
+        const workflowActivities = new ProjectExplorerEntry(
+            'Workflow Activities',
+            activityChildren.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
+            null,
+            'task',
+            false
+        );
+        workflowActivities.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+        workflowActivities.contextValue = 'workflowActivities';
+        workflowActivities.children = activityChildren;
+        entries.push(workflowActivities);
+    }
 
     // ---------- Configurations ----------
     const configs = new ProjectExplorerEntry(
@@ -552,13 +549,6 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     }
 
     return entries;
-}
-
-/**
- * A service artifact is an MCP service when it is backed by the `mcp` module.
- */
-function isMcpService(service: ProjectStructureArtifactResponse): boolean {
-    return service.moduleName === 'mcp';
 }
 
 function getComponents(
