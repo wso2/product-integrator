@@ -1522,6 +1522,21 @@ jobs:
       (inputs.publish_tag != '') &&
       (inputs.build_packed_installers == true)
     steps:
+      # First, before any download: actions/checkout clears a workspace that holds no .git before it
+      # clones, so a checkout after the downloads below would silently delete every artifact they
+      # fetched. The job reads ci/build/update-manifest.config.json and runs the generator in fetch
+      # mode (see "Stage core, runtime and component files").
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Download Linux DEB artifacts
         uses: actions/download-artifact@v4
         with:
@@ -1644,10 +1659,30 @@ jobs:
           name: build-versions
           path: core/versions/
 
-      - name: Stage core files
+      # The packaged runtimes (ci/build/package-ballerina-runtime.sh, package-icp.sh) the installers
+      # above bundled and the update source serves, plus the JRE and the bundled extensions the feed
+      # serves. Published next to the cores for the same reason: a downstream build (the support
+      # distribution) must ship these exact bytes and fetch nothing from anywhere but this release.
+      - name: Download Ballerina runtime package
+        uses: actions/download-artifact@v4
+        with:
+          name: ballerina-runtime
+          path: runtimes/
+
+      - name: Download ICP package
+        uses: actions/download-artifact@v4
+        with:
+          name: icp
+          path: runtimes/
+
+      - name: Stage core, runtime and component files
         shell: bash
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
+          BALLERINA_VERSION: ${{ needs.resolve-versions.outputs.ballerina_version }}
+          ICP_VERSION: ${{ needs.resolve-versions.outputs.icp_version }}
+          BALLERINA_EXTENSION_SOURCE: ${{ inputs.ballerina_extension_source }}
+          MI_EXTENSION_SOURCE: ${{ inputs.mi_extension_source }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -1663,6 +1698,20 @@ jobs:
           stage core/VSCode-darwin-arm64.zip    "${P}-darwin-arm64.zip"
           stage core/VSCode-darwin-x64.zip      "${P}-darwin-x64.zip"
           stage core/VSCode-win32-x64.zip       "${P}-win32-x64.zip"
+          # Prefixed with the integrator version: on the rolling nightly two builds can share a
+          # runtime version, and the roll step below tells superseded assets apart by name.
+          stage "runtimes/ballerina-runtime-${BALLERINA_VERSION}.zip" "wso2-integrator-${INTEGRATOR_VERSION}-ballerina-runtime-${BALLERINA_VERSION}.zip"
+          stage "runtimes/icp-${ICP_VERSION}.zip"                     "wso2-integrator-${INTEGRATOR_VERSION}-icp-${ICP_VERSION}.zip"
+          # The JRE for every target and the bundled extensions, downloaded by the generator itself
+          # (fetch mode: the same resolution publish-update-source mirrors with, so the release and
+          # the feed cannot disagree), named <integrator>-<component id>-<file>.
+          node ci/build/generate-update-manifest.mjs --fetch-components feed-components \
+            --versions core/versions/ci/build/component-versions.properties \
+            --source-flavors "wso2.ballerina=${BALLERINA_EXTENSION_SOURCE:-marketplace},wso2.micro-integrator=${MI_EXTENSION_SOURCE:-marketplace}"
+          for f in feed-components/*/*; do
+            id=$(basename "$(dirname "${f}")")
+            stage "${f}" "wso2-integrator-${INTEGRATOR_VERSION}-${id}-$(basename "${f}")"
+          done
           cp core/versions/ci/build/component-versions.properties \
             "release-files/wso2-integrator-${INTEGRATOR_VERSION}-component-versions.properties"
 
@@ -1671,14 +1720,14 @@ jobs:
       - name: cosign-installer
         uses: sigstore/cosign-installer@v3.5.0
 
-      - name: Sign the core files
+      - name: Sign the core, runtime and component files
         shell: bash
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-core-*.{tar.gz,zip}; do
+          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-{core-*,ballerina-runtime-*,icp-*,jre-*}.{tar.gz,zip} release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-wso2.*.vsix; do
             cosign sign-blob "${F}" --output-certificate "${F}.pem" --output-signature "${F}.sig" --yes
             cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build.yml@${GITHUB_REF}" --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           done
@@ -1696,6 +1745,17 @@ jobs:
           else
             echo "name=WSO2 Integrator ${PUBLISH_TAG}" >> "$GITHUB_OUTPUT"
           fi
+
+      # Only what a user installs, and the build inputs downstream builds wrap, go on the release.
+      # The in-app update payloads are not release assets: the Squirrel.Mac zips are served from the
+      # update bucket alone (build-macos uploads them whenever a feed is published, and nothing names
+      # them otherwise), and the editor-only update MSI is read by publish-update-source from this
+      # run's Product-Integrator-Windows artifact (--app-installer-dir), never from the release.
+      - name: Keep the update payloads off the release
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f release-files/*-mac.zip release-files/*-update.msi release-files/*-update.msi.*
 
       - name: List release files
         env:
@@ -1724,9 +1784,21 @@ jobs:
           require "Linux .deb"          release-files/*.deb
           require "Linux .rpm"          release-files/*.rpm
           require "Linux .tar.gz"       release-files/!(*-core-*)linux-x64.tar.gz
-          require "WI extension .vsix"  release-files/*.vsix
+          # Not the bundled extensions' vsix (named -wso2.<id>-), only the WI extension's own.
+          require "WI extension .vsix"  release-files/!(*-wso2.*).vsix
           require "Linux core"          release-files/*-core-linux-x64.tar.gz
           require "Component versions"  release-files/*-component-versions.properties
+          require "Ballerina runtime"   release-files/*-ballerina-runtime-*.zip
+          require "ICP package"         release-files/*-icp-*.zip
+          # The fetched components, from the same config the generator read: every component with
+          # a URL, and for the JRE one file per platform token, so the list cannot drift from it.
+          CONFIG=ci/build/update-manifest.config.json
+          for t in $(jq -r '.platformTokens.jre | to_entries[] | .value' "${CONFIG}" | sort -u); do
+            require "JRE ${t}"          release-files/*-jre-*-${t}-*.zip
+          done
+          for e in $(jq -r '.components[] | select(.url != null and .id != "jre") | .id' "${CONFIG}"); do
+            require "Component ${e}"    release-files/*-${e}-*
+          done
           if [ "${BUILD_MACOS}" = "true" ]; then
             require "macOS arm64 .dmg"  release-files/*arm64.dmg
             require "macOS x64 .dmg"    release-files/*x64.dmg
@@ -1881,6 +1953,19 @@ jobs:
           name: icp
           path: out
 
+      # The app installers the document names (the DMGs and the editor-only update MSI, config
+      # `app.installers`) come from this run's own build artifacts: the update MSI is not a release
+      # asset, and the DMGs need not be fetched back from the release. continue-on-error because a
+      # platform that was not built has no artifact; the generator fails on a missing installer for
+      # a target that IS published (--app-installer-dir with no --app-release-base to fall back to).
+      - name: Download the app installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '{Product-Integrator-Windows,Product-Integrator-Darwin-DMG-*}'
+          path: app-installers/
+          merge-multiple: true
+        continue-on-error: true
+
       # ONE document describes every platform this run actually built. A target that was not built
       # is left out entirely rather than published with URLs to release assets that never existed.
       - name: Resolve published targets
@@ -1938,7 +2023,7 @@ jobs:
             --targets "${{ steps.targets.outputs.targets }}" \
             --sequence "${SEQUENCE}" \
             --app-version "${{ needs.resolve-versions.outputs.integrator_version }}" \
-            --app-release-base "https://github.com/${{ github.repository }}/releases/download/${{ inputs.publish_tag }}" \
+            --app-installer-dir app-installers \
             --app-commit "${{ github.sha }}" \
             --source-flavors "wso2.ballerina=${{ inputs.ballerina_extension_source || 'marketplace' }},wso2.micro-integrator=${{ inputs.mi_extension_source || 'marketplace' }}" \
             "${MIRROR_ARGS[@]}" \

@@ -52,16 +52,26 @@
 //     --sequence 42 [--targets darwin-arm64,win32-x64] \
 //     --app-version 5.0.1.0 [--app-commit SHA] [--app-release-base URL] \
 //     [--app-applies-to '>=5.0.0'] [--app-rollout 25] [--out source.json] \
-//     [--artifacts-base https://cdn/artifacts --mirror-dir artifacts-mirror] [--no-download]
+//     [--artifacts-base https://cdn/artifacts --mirror-dir artifacts-mirror] [--no-download] \
+//     [--app-installer-dir app-installers]   app installers read from local files (a build's own
+//                                            artifacts) instead of fetched from the release; with
+//                                            no --app-release-base a missing file is an error
 //
 //   Components-only (ship a component fix without re-releasing the app):
 //     ... --components-only --carry-apps-from previous-source.json [--requires-app-version 5.1.5]
 //     [--carry-components wso2.wso2-integrator]   components this publish is not changing
 //
-// --no-download emits placeholder hashes (structure-only; for local validation, not for release).
+//   Fetch only (no document): download every component the feed would serve from a URL, resolved
+//   exactly as above (variants, flavors, {jrePlatform}/{version}/{versionBase}), into DIR/<id>/<file>,
+//   so the release can publish them next to the cores:
+//     ... --fetch-components DIR [--source-flavors ...] [--targets ...]
+//   Components declared with `sourceFile` are built in this repo and are not fetched.
+//
+// --no-download emits placeholder hashes (structure-only; for local validation, not for release);
+// with --fetch-components it prints what would be fetched and where.
 
 import { createHash } from 'node:crypto';
-import { copyFileSync, createReadStream, createWriteStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -132,18 +142,26 @@ function safeSegment(value, what) {
 // GitHub returns 404 for it regardless — so resolve the asset through the API and fetch it by id
 // with an octet-stream Accept header. The API then redirects to object storage, which rejects a
 // request carrying a second auth mechanism, so authenticate the first hop only and follow bare.
+// One cap on every download, request and body alike: a stalled upstream (Open VSX, GitHub) would
+// otherwise hang the publish job until the runner's 6 hour limit. Generous for the largest artifact
+// (a ~350 MB runtime takes well under a minute on a hosted runner); `--retry`-style retries are
+// not attempted, since a publish that needed one is worth a look.
+const FETCH_TIMEOUT_MS = 20 * 60 * 1000;
+
 async function fetchArtifact(url) {
 	const token = process.env['GITHUB_TOKEN'];
 	const parsed = new URL(url);
+	const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
 	const release = token && parsed.hostname === 'github.com'
 		? /^\/([^/]+)\/([^/]+)\/releases\/download\/([^/]+)\/(.+)$/.exec(parsed.pathname)
 		: undefined;
 	if (!release) {
-		return fetch(url, { redirect: 'follow' });
+		return fetch(url, { redirect: 'follow', signal });
 	}
 	const [, owner, repo, tag, file] = release;
 	const meta = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`, {
-		headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
+		headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+		signal
 	});
 	if (!meta.ok) {
 		throw new Error(`Failed to look up release ${tag} in ${owner}/${repo}: HTTP ${meta.status}`);
@@ -155,10 +173,11 @@ async function fetchArtifact(url) {
 	}
 	const res = await fetch(asset.url, {
 		headers: { Authorization: `Bearer ${token}`, Accept: 'application/octet-stream' },
-		redirect: 'manual'
+		redirect: 'manual',
+		signal
 	});
 	const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : undefined;
-	return location ? fetch(location, { redirect: 'follow' }) : res;
+	return location ? fetch(location, { redirect: 'follow', signal }) : res;
 }
 
 async function hashAndSize(url, mirrorPath) {
@@ -179,15 +198,22 @@ async function hashAndSize(url, mirrorPath) {
 		// never come.
 		out.on('error', err => { outError = err; });
 	}
-	for await (const chunk of Readable.fromWeb(res.body)) {
-		if (outError) {
-			throw new Error(`Failed to mirror ${url} to ${mirrorPath}: ${outError.message}`);
+	try {
+		for await (const chunk of Readable.fromWeb(res.body)) {
+			if (outError) {
+				throw new Error(`Failed to mirror ${url} to ${mirrorPath}: ${outError.message}`);
+			}
+			hash.update(chunk);
+			size += chunk.length;
+			if (out && !out.write(chunk)) {
+				await new Promise(resolve => out.once('drain', () => resolve()).once('error', () => resolve()));
+			}
 		}
-		hash.update(chunk);
-		size += chunk.length;
-		if (out && !out.write(chunk)) {
-			await new Promise(resolve => out.once('drain', () => resolve()).once('error', () => resolve()));
+	} catch (err) {
+		if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+			throw new Error(`Timed out downloading ${url} after ${FETCH_TIMEOUT_MS / 60000} minutes`);
 		}
+		throw err;
 	}
 	if (out) {
 		await new Promise((resolve, reject) => out.end(() => outError ? reject(outError) : resolve()));
@@ -272,6 +298,14 @@ async function main() {
 	}
 
 	const appVersion = args['app-version'] || versions['integrator.version'];
+
+	// Fetch-only mode: download the URL-sourced components into <dir>/<id>/<file> and write no
+	// document. The release job uses it to publish the JRE and the bundled extensions next to the
+	// cores, from the SAME resolution the feed uses, so the two can never disagree.
+	const fetchComponentsDir = typeof args['fetch-components'] === 'string' ? args['fetch-components'] : '';
+	if (fetchComponentsDir && (artifactsBase || args['components-only'])) {
+		throw new Error('--fetch-components writes no document; it takes no --artifacts-base or --components-only');
+	}
 
 	// A components-only publish ships component updates without a new app.
 	const componentsOnly = !!args['components-only'];
@@ -422,6 +456,7 @@ async function main() {
 	}
 
 	const components = [];
+	const fetched = new Map();
 	if (carryComponentIds.size > 0) {
 		// Every entry for the id, so a component published as several variants keeps all of them.
 		for (const entry of carriedDocument.components ?? []) {
@@ -434,6 +469,11 @@ async function main() {
 	for (const component of declared) {
 		if (carryComponentIds.has(component.id)) {
 			continue; // carried above, not rebuilt or re-mirrored
+		}
+		// Built in this repo, so there is nothing to fetch (the release publishes those from the
+		// build's own artifacts).
+		if (fetchComponentsDir && component.sourceFile) {
+			continue;
 		}
 		// Components that only exist as a repo-local build artifact (no public source URL) can only
 		// be published when mirroring is on. Skip LOUDLY rather than failing the whole document.
@@ -489,6 +529,21 @@ async function main() {
 			const fileName = safeSegment(sourceFile
 				? path.basename(sourceFile)
 				: path.posix.basename(decodeURIComponent(new URL(sourceUrl).pathname)), 'file name');
+			if (fetchComponentsDir) {
+				// Each distinct URL once (a VSIX resolves to the same URL for every target).
+				if (!fetched.has(sourceUrl)) {
+					const dest = path.join(fetchComponentsDir, safeSegment(component.id, 'component id'), fileName);
+					fetched.set(sourceUrl, dest);
+					if (noDownload) {
+						console.log(`would fetch ${component.id} ${version}: ${sourceUrl} -> ${dest}`);
+					} else {
+						console.log(`fetching ${component.id} ${version}: ${sourceUrl}`);
+						const { sha256, sizeBytes } = await hashAndSize(sourceUrl, dest);
+						console.log(`  -> ${dest} (${sizeBytes} bytes, sha256 ${sha256})`);
+					}
+				}
+				continue;
+			}
 			const relPath = `components/${safeSegment(component.id, 'component id')}/${safeSegment(version, 'version')}/${fileName}`;
 			perTarget[target] = await resolveArtifact({
 				relPath,
@@ -498,6 +553,9 @@ async function main() {
 			});
 		}
 
+		if (fetchComponentsDir) {
+			continue;
+		}
 		components.push({
 			id: component.id,
 			kind: component.kind,
@@ -507,6 +565,11 @@ async function main() {
 			recommended: !!component.recommended,
 			targets: perTarget
 		});
+	}
+
+	if (fetchComponentsDir) {
+		process.stderr.write(`${noDownload ? 'Would fetch' : 'Fetched'} ${fetched.size} component file${fetched.size === 1 ? '' : 's'} into ${fetchComponentsDir}\n`);
+		return;
 	}
 
 	// Core-app entry. `appliesTo` is a range over the CLIENT's CURRENT version, which is how one
@@ -521,17 +584,22 @@ async function main() {
 
 	const apps = [...carriedApps];
 	const releaseBase = typeof args['app-release-base'] === 'string' ? args['app-release-base'].replace(/\/+$/, '') : '';
+	// App installers taken from a local directory (a build's own artifacts) instead of the release:
+	// the editor-only -update.msi need not be a release asset at all then. A file found there is
+	// hashed and mirrored from disk; one not found falls back to the release when --app-release-base
+	// is given and is an error otherwise.
+	const appInstallerDir = typeof args['app-installer-dir'] === 'string' ? args['app-installer-dir'] : undefined;
 	if (componentsOnly) {
 		console.log(`components-only publish: no app entry generated, ${apps.length} carried, `
 			+ `requires.app pinned to ${requiresAppVersion}`);
 	}
-	if (!componentsOnly && artifactsBase && !releaseBase) {
+	if (!componentsOnly && artifactsBase && !releaseBase && !appInstallerDir) {
 		// The CDN base satisfies the URL the document points clients at, but the installer BYTES
 		// still have to come from somewhere to be hashed and mirrored. Without this the failure is
 		// a bare "Invalid URL" from deep inside the fetch.
-		throw new Error('an app entry needs --app-release-base: the release URL the installers are fetched from for hashing and mirroring');
+		throw new Error('an app entry needs --app-release-base (the release URL the installers are fetched from) or --app-installer-dir (their local files) for hashing and mirroring');
 	}
-	if (!componentsOnly && (releaseBase || artifactsBase)) {
+	if (!componentsOnly && (releaseBase || artifactsBase || appInstallerDir)) {
 		const installerNames = config.app?.installers ?? {};
 		const squirrelNames = config.app?.squirrel ?? {};
 		const perTarget = {};
@@ -542,10 +610,24 @@ async function main() {
 			}
 			const fileName = safeSegment(substitute(installerName, { version: appVersion, appVersion }), 'installer file name');
 			const relPath = `app/${safeSegment(appVersion, 'app version')}/${fileName}`;
+			const localInstaller = appInstallerDir ? path.join(appInstallerDir, fileName) : undefined;
+			const useLocalInstaller = Boolean(localInstaller && existsSync(localInstaller));
+			if (localInstaller && !useLocalInstaller) {
+				if (!releaseBase) {
+					throw new Error(`${fileName} is not in --app-installer-dir ${appInstallerDir} and no --app-release-base was given to fall back to`);
+				}
+				console.log(`${fileName} is not in --app-installer-dir ${appInstallerDir}; fetching it from ${releaseBase}`);
+			}
+			if (useLocalInstaller && !artifactsBase) {
+				// A local-only installer has no public source URL; without the CDN the document
+				// would point clients at a release asset that may deliberately not be published.
+				throw new Error(`${fileName} is a local file with no public source; --artifacts-base is required to mirror it`);
+			}
 			const entry = {
 				installer: await resolveArtifact({
 					relPath,
-					sourceUrl: releaseBase ? `${releaseBase}/${fileName}` : undefined,
+					sourceUrl: releaseBase && !useLocalInstaller ? `${releaseBase}/${fileName}` : undefined,
+					sourceFile: useLocalInstaller ? localInstaller : undefined,
 					statement: { id: 'app', version: appVersion }
 				})
 			};
