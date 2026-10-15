@@ -340,6 +340,17 @@ function generateTreeData(project: ProjectStructure, isSingleProject: boolean): 
     return projectRootEntry;
 }
 
+// Agent Builder lists each kind of AI component in its own section after Agents, in this order.
+const AI_COMPONENT_SECTIONS: { kind: string; label: string; icon: string; alwaysShown?: boolean }[] = [
+    { kind: 'modelProvider', label: 'Model Providers', icon: 'bi-ai-model', alwaysShown: true },
+    { kind: 'memoryStore', label: 'Memory Stores', icon: 'bi-memory' },
+    { kind: 'knowledgeBase', label: 'Knowledge Bases', icon: 'bi-db-kb' },
+    { kind: 'vectorStore', label: 'Vector Stores', icon: 'bi-db' },
+    { kind: 'embeddingProvider', label: 'Embedding Providers', icon: 'bi-doc' },
+    { kind: 'chunker', label: 'Chunkers', icon: 'bi-cut' },
+    { kind: 'dataLoader', label: 'Data Loaders', icon: 'bi-data-table' },
+];
+
 function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     const entries: ProjectExplorerEntry[] = [];
     const projectPath = project.projectPath;
@@ -369,7 +380,8 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     }
 
     // ---------- Listeners ----------
-    if (!isLibrary) {
+    // Agent Builder manages listeners through their entry points.
+    if (!isLibrary && !agentBuilder) {
         const listeners = new ProjectExplorerEntry(
             'Listeners',
             vscode.TreeItemCollapsibleState.Expanded,
@@ -398,7 +410,7 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     connections.contextValue = 'connections';
     const allConnections = project.directoryMap[DIRECTORY_MAP.CONNECTION] ?? [];
     connections.children = getComponents(
-        agentBuilder ? allConnections.filter(c => !isModelProvider(c)) : allConnections, DIRECTORY_MAP.CONNECTION, projectPath);
+        agentBuilder ? allConnections.filter(c => !isAiComponent(c)) : allConnections, DIRECTORY_MAP.CONNECTION, projectPath);
     if (connections.children.length > 0) {
         connections.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
     }
@@ -424,21 +436,22 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
         entries.push(agents);
     }
 
-    // ---------- Model Providers ----------
+    // ---------- AI Components ----------
     if (agentBuilder) {
-        const modelProviders = new ProjectExplorerEntry(
-            'Model Providers',
-            vscode.TreeItemCollapsibleState.Expanded,
-            null,
-            'sparkle',
-            true,
-            undefined,
-            new vscode.ThemeColor('icon.foreground')
-        );
-        modelProviders.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-        modelProviders.contextValue = 'modelProviders';
-        modelProviders.children = getComponents(allConnections.filter(isModelProvider), DIRECTORY_MAP.CONNECTION, projectPath);
-        entries.splice(entries.indexOf(agents) + 1, 0, modelProviders);
+        const aiSections = AI_COMPONENT_SECTIONS.map(({ kind, label, icon }) => {
+            const section = new ProjectExplorerEntry(
+                label,
+                vscode.TreeItemCollapsibleState.Expanded,
+                null,
+                icon,
+                false
+            );
+            section.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+            section.contextValue = `${kind}s`;
+            section.children = getComponents(allConnections.filter(c => c.kind === kind), DIRECTORY_MAP.CONNECTION, projectPath);
+            return section;
+        }).filter((section, index) => AI_COMPONENT_SECTIONS[index].alwaysShown || section.children.length > 0);
+        entries.splice(entries.indexOf(agents) + 1, 0, ...aiSections);
     }
 
     // ---------- Agent Definitions ----------
@@ -470,9 +483,10 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     types.resourceUri = Uri.parse(`bi-category:${projectPath}`);
     types.contextValue = 'types';
     types.children = getComponents(project.directoryMap[DIRECTORY_MAP.TYPE], DIRECTORY_MAP.TYPE, projectPath);
-    if (types.children.length > 0) {
-        types.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-    }
+    // Agent Builder keeps the type list folded until the user opens it.
+    types.collapsibleState = agentBuilder
+        ? vscode.TreeItemCollapsibleState.Collapsed
+        : vscode.TreeItemCollapsibleState.Expanded;
     entries.push(types);
 
     // ---------- Functions ----------
@@ -491,23 +505,23 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     }
     entries.push(functions);
 
-    // ---------- Data Mappers ----------
-    const dataMappers = new ProjectExplorerEntry(
-        'Data Mappers',
-        vscode.TreeItemCollapsibleState.Expanded,
-        null,
-        'dataMapper',
-        false
-    );
-    dataMappers.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-    dataMappers.contextValue = 'dataMappers';
-    dataMappers.children = getComponents(project.directoryMap[DIRECTORY_MAP.DATA_MAPPER], DIRECTORY_MAP.DATA_MAPPER, projectPath);
-    if (dataMappers.children.length > 0) {
-        dataMappers.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-    }
-    entries.push(dataMappers);
-
     if (!agentBuilder) {
+        // ---------- Data Mappers ----------
+        const dataMappers = new ProjectExplorerEntry(
+            'Data Mappers',
+            vscode.TreeItemCollapsibleState.Expanded,
+            null,
+            'dataMapper',
+            false
+        );
+        dataMappers.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+        dataMappers.contextValue = 'dataMappers';
+        dataMappers.children = getComponents(project.directoryMap[DIRECTORY_MAP.DATA_MAPPER], DIRECTORY_MAP.DATA_MAPPER, projectPath);
+        if (dataMappers.children.length > 0) {
+            dataMappers.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+        }
+        entries.push(dataMappers);
+
         // ---------- Workflows ----------
         const workflowChildren = getComponents(project.directoryMap[DIRECTORY_MAP.WORKFLOW] ?? [], DIRECTORY_MAP.WORKFLOW, projectPath);
         const workflows = new ProjectExplorerEntry(
@@ -567,11 +581,25 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
         entries.push(naturalFunctions);
     }
 
-    return entries;
+    return agentBuilder ? orderForAgentBuilder(entries) : entries;
 }
 
-function isModelProvider(connection: ProjectStructureArtifactResponse): boolean {
-    return connection.kind === 'modelProvider';
+// Agents, how they are reached and their AI components come first; the plumbing follows in its existing order.
+const AGENT_BUILDER_ORDER = [
+    'agents', 'agentDefinitions', 'entryPoint', ...AI_COMPONENT_SECTIONS.map(({ kind }) => `${kind}s`),
+    'connections'
+];
+
+function orderForAgentBuilder(entries: ProjectExplorerEntry[]): ProjectExplorerEntry[] {
+    const rank = (entry: ProjectExplorerEntry) => {
+        const index = AGENT_BUILDER_ORDER.indexOf(entry.contextValue ?? '');
+        return index < 0 ? AGENT_BUILDER_ORDER.length : index;
+    };
+    return [...entries].sort((a, b) => rank(a) - rank(b));
+}
+
+function isAiComponent(connection: ProjectStructureArtifactResponse): boolean {
+    return AI_COMPONENT_SECTIONS.some(section => section.kind === connection.kind);
 }
 
 function getComponents(
