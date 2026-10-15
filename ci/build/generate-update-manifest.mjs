@@ -52,7 +52,10 @@
 //     --sequence 42 [--targets darwin-arm64,win32-x64] \
 //     --app-version 5.0.1.0 [--app-commit SHA] [--app-release-base URL] \
 //     [--app-applies-to '>=5.0.0'] [--app-rollout 25] [--out source.json] \
-//     [--artifacts-base https://cdn/artifacts --mirror-dir artifacts-mirror] [--no-download]
+//     [--artifacts-base https://cdn/artifacts --mirror-dir artifacts-mirror] [--no-download] \
+//     [--app-installer-dir app-installers]   app installers read from local files (a build's own
+//                                            artifacts) instead of fetched from the release; with
+//                                            no --app-release-base a missing file is an error
 //
 //   Components-only (ship a component fix without re-releasing the app):
 //     ... --components-only --carry-apps-from previous-source.json [--requires-app-version 5.1.5]
@@ -61,7 +64,7 @@
 // --no-download emits placeholder hashes (structure-only; for local validation, not for release).
 
 import { createHash } from 'node:crypto';
-import { copyFileSync, createReadStream, createWriteStream, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -521,15 +524,20 @@ async function main() {
 
 	const apps = [...carriedApps];
 	const releaseBase = typeof args['app-release-base'] === 'string' ? args['app-release-base'].replace(/\/+$/, '') : '';
+	// App installers taken from a local directory (a build's own artifacts) instead of the release:
+	// the editor-only -update.msi need not be a release asset at all then. A file found there is
+	// hashed and mirrored from disk; one not found falls back to the release when --app-release-base
+	// is given and is an error otherwise.
+	const appInstallerDir = typeof args['app-installer-dir'] === 'string' ? args['app-installer-dir'] : undefined;
 	if (componentsOnly) {
 		console.log(`components-only publish: no app entry generated, ${apps.length} carried, `
 			+ `requires.app pinned to ${requiresAppVersion}`);
 	}
-	if (!componentsOnly && artifactsBase && !releaseBase) {
+	if (!componentsOnly && artifactsBase && !releaseBase && !appInstallerDir) {
 		// The CDN base satisfies the URL the document points clients at, but the installer BYTES
 		// still have to come from somewhere to be hashed and mirrored. Without this the failure is
 		// a bare "Invalid URL" from deep inside the fetch.
-		throw new Error('an app entry needs --app-release-base: the release URL the installers are fetched from for hashing and mirroring');
+		throw new Error('an app entry needs --app-release-base (the release URL the installers are fetched from) or --app-installer-dir (their local files) for hashing and mirroring');
 	}
 	if (!componentsOnly && (releaseBase || artifactsBase)) {
 		const installerNames = config.app?.installers ?? {};
@@ -542,10 +550,21 @@ async function main() {
 			}
 			const fileName = safeSegment(substitute(installerName, { version: appVersion, appVersion }), 'installer file name');
 			const relPath = `app/${safeSegment(appVersion, 'app version')}/${fileName}`;
+			const localInstaller = appInstallerDir ? path.join(appInstallerDir, fileName) : undefined;
+			const useLocalInstaller = Boolean(localInstaller && existsSync(localInstaller));
+			if (localInstaller && !useLocalInstaller && !releaseBase) {
+				throw new Error(`${fileName} is not in --app-installer-dir ${appInstallerDir} and no --app-release-base was given to fall back to`);
+			}
+			if (useLocalInstaller && !artifactsBase && !noDownload) {
+				// A local-only installer has no public source URL; without the CDN the document
+				// would point clients at a release asset that may deliberately not be published.
+				throw new Error(`${fileName} is a local file with no public source; --artifacts-base is required to mirror it`);
+			}
 			const entry = {
 				installer: await resolveArtifact({
 					relPath,
-					sourceUrl: releaseBase ? `${releaseBase}/${fileName}` : undefined,
+					sourceUrl: releaseBase && !useLocalInstaller ? `${releaseBase}/${fileName}` : undefined,
+					sourceFile: useLocalInstaller ? localInstaller : undefined,
 					statement: { id: 'app', version: appVersion }
 				})
 			};
