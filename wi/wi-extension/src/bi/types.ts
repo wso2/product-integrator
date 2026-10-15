@@ -83,6 +83,7 @@ export interface ProjectStructureArtifactResponse {
     type: DIRECTORY_MAP;
     path: string;
     icon: string;
+    kind?: string;
     iconColor?: string;
     iconLight?: string;
     iconDark?: string;

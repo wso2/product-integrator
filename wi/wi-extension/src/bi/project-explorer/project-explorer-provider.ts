@@ -396,7 +396,9 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     );
     connections.resourceUri = Uri.parse(`bi-category:${projectPath}`);
     connections.contextValue = 'connections';
-    connections.children = getComponents(project.directoryMap[DIRECTORY_MAP.CONNECTION], DIRECTORY_MAP.CONNECTION, projectPath);
+    const allConnections = project.directoryMap[DIRECTORY_MAP.CONNECTION] ?? [];
+    connections.children = getComponents(
+        agentBuilder ? allConnections.filter(c => !isModelProvider(c)) : allConnections, DIRECTORY_MAP.CONNECTION, projectPath);
     if (connections.children.length > 0) {
         connections.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
     }
@@ -420,6 +422,23 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
         entries.unshift(agents);
     } else {
         entries.push(agents);
+    }
+
+    // ---------- Model Providers ----------
+    if (agentBuilder) {
+        const modelProviders = new ProjectExplorerEntry(
+            'Model Providers',
+            vscode.TreeItemCollapsibleState.Expanded,
+            null,
+            'sparkle',
+            true,
+            undefined,
+            new vscode.ThemeColor('icon.foreground')
+        );
+        modelProviders.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+        modelProviders.contextValue = 'modelProviders';
+        modelProviders.children = getComponents(allConnections.filter(isModelProvider), DIRECTORY_MAP.CONNECTION, projectPath);
+        entries.splice(entries.indexOf(agents) + 1, 0, modelProviders);
     }
 
     // ---------- Agent Definitions ----------
@@ -549,6 +568,10 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     }
 
     return entries;
+}
+
+function isModelProvider(connection: ProjectStructureArtifactResponse): boolean {
+    return connection.kind === 'modelProvider';
 }
 
 function getComponents(
