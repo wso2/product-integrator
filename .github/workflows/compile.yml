@@ -51,6 +51,11 @@ on:
         default: 'integrator'
         required: false
         type: string
+      publish_core:
+        description: 'Upload the Linux core (the editor the Linux installers are built from) for the release. build.yml sets it when a release will be published.'
+        default: false
+        required: false
+        type: boolean
 
 permissions:
   id-token: write
@@ -178,8 +183,79 @@ jobs:
           else
             echo "All required versions from component-versions.properties are available."
           fi
-  compile:
+
+  # The ballerina-runtime component, built once for every platform. Installers bundle this zip and
+  # publish-update-source mirrors the same file to the CDN, so seeded and updated runtimes match.
+  package-ballerina-runtime:
     needs: resolve-versions
+    if: ${{ inputs.build_packed_installers == true }}
+    name: Package Ballerina runtime
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Package
+        run: |
+          ./ci/build/package-ballerina-runtime.sh "${{ needs.resolve-versions.outputs.ballerina_version }}" out upstream.zip
+
+      # The CDN path has no build in it, so a re-publish of the same version must produce the same
+      # bytes; package a second time from the same upstream zip and compare.
+      - name: Check the package is reproducible
+        run: |
+          ./ci/build/package-ballerina-runtime.sh "${{ needs.resolve-versions.outputs.ballerina_version }}" out-check upstream.zip
+          cmp out/ballerina-runtime-*.zip out-check/ballerina-runtime-*.zip
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ballerina-runtime
+          # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
+          retention-days: 7
+          path: out/ballerina-runtime-*.zip
+          compression-level: 0
+          if-no-files-found: error
+
+  # Same for ICP: one zip with launchers patched for our JRE, shared by installers and the CDN.
+  package-icp:
+    needs: resolve-versions
+    if: ${{ inputs.build_packed_installers == true }}
+    name: Package ICP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Package
+        run: ./ci/build/package-icp.sh "${{ needs.resolve-versions.outputs.icp_version }}" out upstream.zip
+
+      # The CDN path has no build in it, so a re-publish of the same version must produce the same
+      # bytes; package a second time from the same upstream zip and compare.
+      - name: Check the package is reproducible
+        run: |
+          ./ci/build/package-icp.sh "${{ needs.resolve-versions.outputs.icp_version }}" out-check upstream.zip
+          cmp out/icp-*.zip out-check/icp-*.zip
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: icp
+          # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
+          retention-days: 7
+          path: out/icp-*.zip
+          compression-level: 0
+          if-no-files-found: error
+
+  compile:
+    needs: [resolve-versions, package-ballerina-runtime, package-icp]
+    # The package jobs are skipped when no installers are built; that must not skip this job.
+    if: ${{ !cancelled() && needs.resolve-versions.result == 'success' && needs.package-ballerina-runtime.result != 'failure' && needs.package-icp.result != 'failure' }}
     name: Build repo
     # A timeout here is self-perpetuating: the job is cancelled before the post-step that SAVES the
     # caches, so the next run starts cold and times out again. That mechanism is unchanged by the
@@ -290,10 +366,10 @@ jobs:
           # What the fallback does and does not hold fixed, since it is not uniform: Ballerina and MI
           # have their own key fields -- they are the two with a marketplace-vs-vsix source switch, and
           # the version came along with the switch -- so a fallback cannot cross their versions. The
-          # streaming-integrator, hurl-client and mcp-server-inspector versions live only inside the
+          # streaming-integrator, hurl-client, mcp-server-inspector and even-better-toml versions live only inside the
           # dropped hash, so a fallback CAN cross those, as it can WI's. That is safe but not free:
           # download-builtin-extensions re-validates by version string (isUpToDate), which catches those
-          # three because their versions move when their contents do. It cannot catch WI, whose version
+          # four because their versions move when their contents do. It cannot catch WI, whose version
           # is hand-bumped and stays constant across content changes -- hence the explicit removal in
           # "Install builtin extensions" below.
           restore-keys: |
@@ -549,7 +625,17 @@ jobs:
           ARCHIVE_PATH=../artifacts/vscode-linux-x64.tar.gz
           mkdir -p ../artifacts
           tar -czf "$ARCHIVE_PATH" -C .. VSCode-linux-x64
-      
+
+      # The exact editor ("core") the Linux installers below are built from; published as a release asset
+      # (build.yml, publish-github-release) so downstream builds reuse these binaries.
+      - name: Upload Linux core
+        if: ${{ inputs.build_packed_installers == true && inputs.publish_core == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-linux-x64
+          path: lib/artifacts/vscode-linux-x64.tar.gz
+          if-no-files-found: error
+
       - name: Copy Integrator artifact to build directories
         if: ${{ inputs.build_packed_installers == true}}
         run: |
@@ -557,20 +643,23 @@ jobs:
           cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-rpm/
           cp ../artifacts/vscode-linux-x64.tar.gz ../../installers/linux-tar/
 
-      # Fetched ONCE for the whole job. The deb, rpm and tar steps below each used to download their
-      # own copy of this ~370 MB zip; on a runner whose disk headroom is already thin (see the
-      # cleanup at the end of this job) four copies of the same file is the wrong trade.
-      # BALLERINA_ZIP is what the packaging steps pass to their build.sh.
-      - name: Download Ballerina distribution
+      # Fetched ONCE, and only for the pre-bundled package resolution below. The installers no
+      # longer read this zip: they bundle the packaged ballerina-runtime artifact (the
+      # package-ballerina-runtime job builds it from upstream's plain ballerina-<v>.zip). The
+      # swan-lake pack is still needed here because ci/build/bundle-ballerina-packages.sh resolves
+      # the closure against the distribution inside it with the JDK that pack ships, neither of
+      # which the plain runtime zip carries. Downloaded to BALLERINA_DIST_ZIP so it can never be
+      # mistaken for the BALLERINA_ZIP the packaging steps pass to their build.sh.
+      - name: Download Ballerina distribution for package resolution
         if: ${{ inputs.build_packed_installers == true}}
         env:
           BALLERINA_VERSION: ${{ needs.resolve-versions.outputs.ballerina_version }}
         run: |
           set -euo pipefail
           BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
-          wget -q -O "$RUNNER_TEMP/ballerina.zip" \
+          wget -q -O "$RUNNER_TEMP/ballerina-dist.zip" \
             "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-linux.zip"
-          echo "BALLERINA_ZIP=$RUNNER_TEMP/ballerina.zip" >> "$GITHUB_ENV"
+          echo "BALLERINA_DIST_ZIP=$RUNNER_TEMP/ballerina-dist.zip" >> "$GITHUB_ENV"
 
       # Resolve this flavor's pre-bundled packages into an overlay the installers merge (see
       # ci/build/ballerina-packages.properties). Done once here because a bala is OS-independent, so
@@ -583,7 +672,7 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
           OUT="$GITHUB_WORKSPACE/ballerina-packages"
-          ./ci/build/bundle-ballerina-packages.sh "$BALLERINA_ZIP" "$OUT" "$PRODUCT_FLAVOR"
+          ./ci/build/bundle-ballerina-packages.sh "$BALLERINA_DIST_ZIP" "$OUT" "$PRODUCT_FLAVOR"
           # Picked up by installers/*/build.sh for every Linux package built below. Points at the
           # overlay ROOT, not bala/: the root always holds bundled-packages.txt, which is how those
           # scripts tell "nothing to bundle" from "the overlay never arrived" instead of skipping.
@@ -603,6 +692,19 @@ jobs:
           name: ballerina-packages
           path: ballerina-packages
           if-no-files-found: error
+      - name: Download Ballerina runtime
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/download-artifact@v4
+        with:
+          name: ballerina-runtime
+          path: ballerina-runtime
+
+      - name: Download ICP
+        if: ${{ inputs.build_packed_installers == true}}
+        uses: actions/download-artifact@v4
+        with:
+          name: icp
+          path: icp-package
 
       - name: Build Linux packages - deb
         if: ${{ inputs.build_packed_installers == true}}
@@ -611,21 +713,15 @@ jobs:
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
+          BALLERINA_ZIP="${ROOT_DIR}/ballerina-runtime/ballerina-runtime-${BALLERINA_VERSION}.zip"
           ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
-          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
-          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
-            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
-          fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          ICP_ZIP="${ROOT_DIR}/icp-package/icp-${ICP_VERSION}.zip"
           JRE_VERSION="${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
           JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-deb
-          wget -O icp.zip "$ICP_URL"
           wget -O jre.zip "$JRE_URL"
-          # $BALLERINA_ZIP: downloaded once for this job, not per package (see "Download Ballerina
-          # distribution" above).
-          ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
+          ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION vscode-linux-x64.tar.gz "$ICP_ZIP" jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
 
       - name: Upload Deb artifacts
@@ -645,21 +741,15 @@ jobs:
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
+          BALLERINA_ZIP="${ROOT_DIR}/ballerina-runtime/ballerina-runtime-${BALLERINA_VERSION}.zip"
           ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
-          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
-          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
-            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
-          fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          ICP_ZIP="${ROOT_DIR}/icp-package/icp-${ICP_VERSION}.zip"
           JRE_VERSION="${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
           JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-rpm
-          wget -O icp.zip "$ICP_URL"
           wget -O jre.zip "$JRE_URL"
-          # $BALLERINA_ZIP: downloaded once for this job, not per package (see "Download Ballerina
-          # distribution" above).
-          ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
+          ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION vscode-linux-x64.tar.gz "$ICP_ZIP" jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       - name: Upload RPM artifacts
         if: ${{ inputs.build_packed_installers == true}}
@@ -677,21 +767,15 @@ jobs:
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
+          BALLERINA_ZIP="${ROOT_DIR}/ballerina-runtime/ballerina-runtime-${BALLERINA_VERSION}.zip"
           ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
-          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
-          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
-            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
-          fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          ICP_ZIP="${ROOT_DIR}/icp-package/icp-${ICP_VERSION}.zip"
           JRE_VERSION="${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
           JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-linux-64-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/linux-tar
-          wget -O icp.zip "$ICP_URL"
           wget -O jre.zip "$JRE_URL"
-          # $BALLERINA_ZIP: downloaded once for this job, not per package (see "Download Ballerina
-          # distribution" above).
-          ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION vscode-linux-x64.tar.gz icp.zip jre.zip $INTEGRATOR_VERSION
+          ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION vscode-linux-x64.tar.gz "$ICP_ZIP" jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       # Permanent diagnostic: the installer tail is the job's disk high-water mark, and headroom on
       # ubuntu-latest is thin. always() so the numbers are there on the run that runs out.

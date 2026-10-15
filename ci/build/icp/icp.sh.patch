@@ -1,0 +1,26 @@
+--- a/bin/icp.sh
++++ b/bin/icp.sh
+@@ -1,2 +1,13 @@
+ #!/bin/bash
++WSO2_ICP_JAVA=""
++_wso2_icp_sd="$(cd "$(dirname "$0")" && pwd)"
++if [ -n "$WSO2_INTEGRATOR_JRE_HOME" ] && [ -x "$WSO2_INTEGRATOR_JRE_HOME/bin/java" ]; then
++  WSO2_ICP_JAVA="$WSO2_INTEGRATOR_JRE_HOME/bin/java"
++else
++  WSO2_ICP_JAVA="$_wso2_icp_sd/../../dependencies/jdk-*/bin/java"
++  for _wso2_icp_jdk in "$_wso2_icp_sd"/../../dependencies/jdk-*; do
++    WSO2_ICP_JAVA="$_wso2_icp_jdk/bin/java"
++    break
++  done
++fi
+ 
+@@ -160,3 +171,3 @@
+     if [ "$mode" = "background" ]; then
+-        nohup java "${JAVA_OPTS[@]}" -cp "$icp_classpath" "$icp_main_class" "$@" >> "$LOG_FILE" 2>&1 &
++        nohup "$WSO2_ICP_JAVA" "${JAVA_OPTS[@]}" -cp "$icp_classpath" "$icp_main_class" "$@" >> "$LOG_FILE" 2>&1 &
+         server_pid=$!
+@@ -166,3 +177,3 @@
+     else
+-        exec java "${JAVA_OPTS[@]}" -cp "$icp_classpath" "$icp_main_class" "$@"
++        exec "$WSO2_ICP_JAVA" "${JAVA_OPTS[@]}" -cp "$icp_classpath" "$icp_main_class" "$@"
+     fi

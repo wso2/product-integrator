@@ -15,6 +15,18 @@
       <File Id="IntegratorExe"
         Source=".\payload\Integrator\@PRODUCT_NAME@.exe" />
 
+      <!-- File association: claim ONLY Ballerina sources (.bal). Do not add generic types such as
+           .json/.yaml here - the app must not become the default handler for them (#2708). The
+           ProgId is non-advertised, so for this per-user package MSI writes it under
+           HKCU\Software\Classes and it is removed again on uninstall. The ProgId is flavored
+           (@PROGID@: WSO2Integrator / WSO2AgentBuilder, substituted by build.bat) so the two
+           side-by-side products register their own and uninstalling one leaves the other's. -->
+      <ProgId Id="@PROGID@.bal" Description="Ballerina Source File" Icon="IntegratorExe" IconIndex="0">
+        <Extension Id="bal" ContentType="text/x-ballerina">
+          <Verb Id="open" Command="Open" TargetFile="IntegratorExe" Argument="&quot;%1&quot;" />
+        </Extension>
+      </ProgId>
+
       <!-- Desktop Shortcut -->
       <Shortcut Id="DesktopShortcut"
         Directory="DesktopFolder"

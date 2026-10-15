@@ -112,36 +112,13 @@ if [ -d "$CHOREO_CLI_DIR" ]; then
     done
 fi
 
-# Extract Ballerina zip
+# Extract the packaged ballerina-runtime (ci/build/package-ballerina-runtime.sh)
 print_info "Extracting Ballerina to package resources"
 COMPONENTS_DIR="$WORK_DIR/payload/Applications/$APP_BUNDLE/Contents/components"
 BALLERINA_TARGET="$COMPONENTS_DIR/ballerina"
 rm -rf "$BALLERINA_TARGET"
 mkdir -p "$BALLERINA_TARGET"
-unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
-BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$BALLERINA_ZIP" | head -1 | cut -d/ -f1)
-BALLERINA_UNZIPPED_PATH="$EXTRACTION_TARGET/$BALLERINA_UNZIPPED_FOLDER"
-
-# Create a temp directory for consolidation
-BALLERINA_TEMP="$WORK_DIR/ballerina_temp"
-rm -rf "$BALLERINA_TEMP"
-mkdir -p "$BALLERINA_TEMP"
-
-# Move distributions contents to temp
-print_info "Consolidating Ballerina distributions"
-if [ -d "$BALLERINA_UNZIPPED_PATH/distributions" ]; then
-    DIST_FOLDER=$(ls "$BALLERINA_UNZIPPED_PATH/distributions" | head -1)
-    if [ -n "$DIST_FOLDER" ]; then
-        cp -r "$BALLERINA_UNZIPPED_PATH/distributions/$DIST_FOLDER"/* "$BALLERINA_TEMP/"
-    fi
-fi
-
-# Move distributions contents to target (without JDK)
-mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
-
-# Remove unwanted Ballerina folders
-rm -rf "$BALLERINA_TARGET/docs"
-rm -rf "$BALLERINA_TARGET/examples"
+unzip -q -o "$BALLERINA_ZIP" -d "$BALLERINA_TARGET"
 
 # Pre-bundled Ballerina Central packages. ci/build/merge-ballerina-packages.sh owns the merge; see
 # ci/build/ballerina-packages.properties for what is bundled and why.
@@ -162,58 +139,14 @@ if [ -z "$JRE_FOLDER" ]; then
     exit 1
 fi
 
-rm -rf "$BALLERINA_UNZIPPED_PATH"
-rm -rf "$BALLERINA_TEMP"
-
-# Replace bal script with the one from balscript and update version
-print_info "Replacing bal script with updated version from balscript"
-cp "$WORK_DIR/balscript/bal" "$BALLERINA_TARGET/bin/bal"
-sed -i '' "s/@BALLERINA_VERSION@/$BALLERINA_VERSION/g" "$BALLERINA_TARGET/bin/bal"
-
 chmod +x "$BALLERINA_TARGET/bin"/*
 
 
-# Extract icp zip
+# Extract the packaged icp (ci/build/package-icp.sh): launchers already patched for our JRE
 ICP_TARGET="$COMPONENTS_DIR/icp"
 rm -rf "$ICP_TARGET"
 mkdir -p "$ICP_TARGET"
-unzip -o "$ICP_ZIP" -d "$EXTRACTION_TARGET"
-ICP_UNZIPPED_FOLDER=$(unzip -Z1 "$ICP_ZIP" | head -1 | cut -d/ -f1)
-ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
-mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
-rm -rf "$ICP_UNZIPPED_PATH"
-chmod +x "$ICP_TARGET/bin"/*
-
-# Make icp.sh resolve the JVM env-aware (§D8): prefer the resolved JDK home advertised by the
-# product runtime environment (WSO2_INTEGRATOR_JRE_HOME — set once ICP/JRE are seeded to the data
-# folder), else fall back to the JRE bundled next to ICP (../../dependencies). Replace icp's bare
-# `java` calls with $WSO2_ICP_JAVA, then prepend a resolver that sets it (added AFTER the replace
-# so its own `bin/java` isn't itself rewritten). Backward-compatible: with the env var unset it
-# resolves to exactly the previous relative path.
-ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
-if [ -f "$ICP_SCRIPT" ]; then
-    print_info "Modifying icp.sh to use JRE (env-aware, fallback $JRE_FOLDER)"
-    sed -i '' -E "s|[[:<:]]java[[:>:]]|\"\$WSO2_ICP_JAVA\"|g" "$ICP_SCRIPT"
-    ICP_TMP="$(mktemp)"
-    {
-        head -n 1 "$ICP_SCRIPT"
-        cat <<EOF
-WSO2_ICP_JAVA=""
-_wso2_icp_sd="\$(cd "\$(dirname "\$0")" && pwd)"
-if [ -n "\$WSO2_INTEGRATOR_JRE_HOME" ] && [ -x "\$WSO2_INTEGRATOR_JRE_HOME/bin/java" ]; then
-  WSO2_ICP_JAVA="\$WSO2_INTEGRATOR_JRE_HOME/bin/java"
-else
-  WSO2_ICP_JAVA="\$_wso2_icp_sd/../../dependencies/$JRE_FOLDER/bin/java"
-fi
-EOF
-        tail -n +2 "$ICP_SCRIPT"
-    } > "$ICP_TMP"
-    mv "$ICP_TMP" "$ICP_SCRIPT"
-    # 755 explicitly, not +x: the temp file was created 0600, and an icp.sh that group/other cannot
-    # READ cannot be executed by them either (the interpreter has to read it). Root-owned installs
-    # (deb/rpm) would otherwise ship an ICP that only root can launch.
-    chmod 755 "$ICP_SCRIPT"
-fi
+unzip -q -o "$ICP_ZIP" -d "$ICP_TARGET"
 
 # Fix ZIP epoch timestamps — unzip preserves 1980-01-01 dates from ZIP archives
 find "$WSO2_TARGET/$APP_BUNDLE" -exec touch {} +
@@ -226,6 +159,55 @@ find "$WSO2_TARGET/$APP_BUNDLE" -exec touch {} +
 # bundle (§D8) — stripping files breaks the seal, so the editor-only copy is re-signed.
 # -------------------------------------------------------------------
 ENTITLEMENTS="$WORK_DIR/entitlements.plist"
+
+# Apple refuses to notarize a Mach-O whose macOS deployment target predates 10.9, however
+# well it is signed. libjffi-1.2.jnilib -- vendored inside the streaming integrator's
+# language-server jar -- declares 10.6, and it failed the first release build that got far
+# enough for Apple to look past the missing signature. jnr's current release still ships an
+# x86_64 slice declaring 10.6, so upgrading the dependency does not settle it either.
+#
+# Bump only the slices that are actually too old. A blanket `vtool` rewrites an arm64
+# slice's LC_BUILD_VERSION into a meaningless 10.9 LC_VERSION_MIN_MACOSX -- arm64 macOS
+# starts at 11.0 -- so this walks architectures and leaves the rest alone. Must run before
+# codesign: vtool invalidates any existing signature.
+# True when a macOS version field is below the 10.9 floor the notary service enforces.
+# An absent field ("n/a", or a load command that carries neither) counts as not-old: it is
+# the caller's job to substitute a default, not this predicate's to invent one.
+_below_notary_floor() {
+    awk -v v="$1" 'BEGIN{
+        if (v == "" || v == "n/a") exit 1
+        split(v, p, ".")
+        exit (p[1] < 10 || (p[1] == 10 && p[2] < 9)) ? 0 : 1 }'
+}
+
+raise_old_deployment_target() {
+    local f="$1" arch load min sdk use_min use_sdk bumped=0
+    for arch in $(lipo -archs "$f" 2>/dev/null); do
+        # One otool per architecture. This runs for every Mach-O in the bundle and every
+        # native inside every jar, so reading it twice doubles the cost for nothing.
+        # `|| load=""` is load-bearing under `set -e`: a slice carrying neither load command
+        # makes grep exit 1, and a bare assignment would take the whole signing step down
+        # rather than skip one binary. The sibling assignments below are safe because their
+        # pipelines end in awk, which exits 0 on no input.
+        load=$(otool -l -arch "$arch" "$f" 2>/dev/null | grep -A4 -E 'LC_VERSION_MIN_MACOSX|LC_BUILD_VERSION') || load=""
+        min=$(printf '%s\n' "$load" | grep -E '^ +(version|minos) ' | head -1 | awk '{print $2}')
+        sdk=$(printf '%s\n' "$load" | grep -E '^ +sdk ' | head -1 | awk '{print $2}')
+        # Either field below the floor is enough for Apple to reject the whole archive.
+        _below_notary_floor "$min" || _below_notary_floor "$sdk" || continue
+        # Carry through whichever field was already fine. vtool sets both at once, so
+        # hardcoding either one downgrades a binary that only had the other problem --
+        # a compliant 10.13 deployment target must survive an old SDK being raised.
+        if _below_notary_floor "$min" || [ -z "$min" ] || [ "$min" = "n/a" ]; then use_min=10.9; else use_min="$min"; fi
+        if _below_notary_floor "$sdk" || [ -z "$sdk" ] || [ "$sdk" = "n/a" ]; then use_sdk=10.13; else use_sdk="$sdk"; fi
+        vtool -arch "$arch" -set-version-min macos "$use_min" "$use_sdk" -replace -output "$f" "$f"
+        bumped=1
+    done
+    # Not "raised to 10.9": when only the SDK was old the deployment target keeps its own,
+    # higher value, and the message should not claim otherwise.
+    [ "$bumped" = 1 ] && print_info "raised version fields below the 10.9 notarization floor: ${f##*/}"
+    return 0
+}
+
 sign_app_bundle() {
     local app="$1"
     if [ -n "${MAC_SIGNING_IDENTITY:-}" ]; then
@@ -265,6 +247,7 @@ sign_app_bundle() {
                         unzip -qo "$jar_abs" "$entry" || continue
                         [ -f "$entry" ] || continue
                         file -b "$entry" | grep -q "Mach-O" || continue
+                        raise_old_deployment_target "$entry"
                         codesign "${LIB_OPTS[@]}" "$entry"
                         zip -q "$jar_abs" "$entry"
                         # Read the entry back OUT of the archive and verify it. Nothing else
@@ -293,9 +276,33 @@ sign_app_bundle() {
                 # Match the Mach-O KIND, not just the string: `file` also says Mach-O for object
                 # files, dSYM companions and kext bundles, none of which codesign will accept --
                 # and under `set -e` one of those would stop the build.
-                case "$(file -b "$f" | tr '\n' ' ')" in
-                    *dSYM*|*kext*|*Mach-O*object*)
-                        : ;;
+                # LC_ALL=C, and not a bare assignment. `file` echoes bytes out of the file it
+                # inspects, so its output is not always valid UTF-8, and in a UTF-8 locale `tr`
+                # rejects that with "Illegal byte sequence". Under the old inline
+                # `case "$(...)"` that merely matched no arm and skipped the file silently; as
+                # an assignment it takes the whole signing step down under `set -e`, which is
+                # exactly what it did. C locale stops the error at its source so the file is
+                # classified rather than skipped; the guard keeps an unreadable one from being
+                # fatal, and says so instead of passing over it in silence.
+                # No pipeline here on purpose. Piping into `tr` meant the exit status came from
+                # `tr`, which succeeds on the empty input a failed `file` leaves behind -- so a
+                # `file` failure slipped past the guard and skipped the binary in silence, the
+                # very thing this check exists to prevent. `set -o pipefail` would fix that and
+                # break far more: this script is full of `... | grep | head`, and a grep with no
+                # match would become fatal. Checking `file` directly sidesteps both, and drops a
+                # subprocess from a loop that runs once per file in the bundle.
+                if ! desc=$(LC_ALL=C file -b "$f" 2>/dev/null); then
+                    print_warning "could not classify, leaving unsigned: $f"
+                    continue
+                fi
+                desc=${desc//$'\n'/ }
+                case "$desc" in
+                    *dSYM*|*kext*|*Mach-O*object*) continue ;;
+                    *Mach-O*executable*|*Mach-O*shared\ library*|*Mach-O*bundle*|*Mach-O*dynamically\ linked*) ;;
+                    *) continue ;;
+                esac
+                raise_old_deployment_target "$f"
+                case "$desc" in
                     *Mach-O*executable*)
                         # Entitlements stay where they were before this sweep existed: the bundled
                         # JVM and Ballerina launchers under components, and the repackaged CLI. The
@@ -310,8 +317,7 @@ sign_app_bundle() {
                                 codesign "${SIGN_OPTS[@]}" "$f" ;;
                             *)  codesign "${LIB_OPTS[@]}" "$f" ;;
                         esac ;;
-                    *Mach-O*shared\ library*|*Mach-O*bundle*|*Mach-O*dynamically\ linked*)
-                        codesign "${LIB_OPTS[@]}" "$f" ;;
+                    *)  codesign "${LIB_OPTS[@]}" "$f" ;;
                 esac
               done
 
