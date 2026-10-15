@@ -1696,6 +1696,17 @@ jobs:
             echo "name=WSO2 Integrator ${PUBLISH_TAG}" >> "$GITHUB_OUTPUT"
           fi
 
+      # Only what a user installs, and the build inputs downstream builds wrap, go on the release.
+      # The in-app update payloads are not release assets: the Squirrel.Mac zips are served from the
+      # update bucket alone (build-macos uploads them whenever a feed is published, and nothing names
+      # them otherwise), and the editor-only update MSI is read by publish-update-source from this
+      # run's Product-Integrator-Windows artifact (--app-installer-dir), never from the release.
+      - name: Keep the update payloads off the release
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f release-files/*-mac.zip release-files/*-update.msi release-files/*-update.msi.*
+
       - name: List release files
         env:
           PUBLISH_TAG: ${{ inputs.publish_tag }}
@@ -1892,6 +1903,19 @@ jobs:
           name: icp
           path: out
 
+      # The app installers the document names (the DMGs and the editor-only update MSI, config
+      # `app.installers`) come from this run's own build artifacts: the update MSI is not a release
+      # asset, and the DMGs need not be fetched back from the release. continue-on-error because a
+      # platform that was not built has no artifact; the generator fails on a missing installer for
+      # a target that IS published (--app-installer-dir with no --app-release-base to fall back to).
+      - name: Download the app installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '{Product-Integrator-Windows,Product-Integrator-Darwin-DMG-*}'
+          path: app-installers/
+          merge-multiple: true
+        continue-on-error: true
+
       # ONE document describes every platform this run actually built. A target that was not built
       # is left out entirely rather than published with URLs to release assets that never existed.
       - name: Resolve published targets
@@ -1941,7 +1965,7 @@ jobs:
             --targets "${{ steps.targets.outputs.targets }}" \
             --sequence "${SEQUENCE}" \
             --app-version "${{ needs.resolve-versions.outputs.integrator_version }}" \
-            --app-release-base "https://github.com/${{ github.repository }}/releases/download/${{ inputs.publish_tag }}" \
+            --app-installer-dir app-installers \
             --app-commit "${{ github.sha }}" \
             --source-flavors "wso2.ballerina=${{ inputs.ballerina_extension_source || 'marketplace' }},wso2.micro-integrator=${{ inputs.mi_extension_source || 'marketplace' }}" \
             "${MIRROR_ARGS[@]}" \
