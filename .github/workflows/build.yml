@@ -1645,9 +1645,15 @@ jobs:
           path: core/versions/
 
       # The packaged runtimes (ci/build/package-ballerina-runtime.sh, package-icp.sh) the installers
-      # above bundled and the update source serves. Published next to the cores for the same reason:
-      # a downstream build (the support distribution) must ship these exact bytes, not re-download
-      # or re-package the runtimes itself.
+      # above bundled and the update source serves, plus the JRE and the bundled extensions the feed
+      # serves. Published next to the cores for the same reason: a downstream build (the support
+      # distribution) must ship these exact bytes and fetch nothing from anywhere but this release.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
       - name: Download Ballerina runtime package
         uses: actions/download-artifact@v4
         with:
@@ -1666,6 +1672,8 @@ jobs:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
           BALLERINA_VERSION: ${{ needs.resolve-versions.outputs.ballerina_version }}
           ICP_VERSION: ${{ needs.resolve-versions.outputs.icp_version }}
+          BALLERINA_EXTENSION_SOURCE: ${{ inputs.ballerina_extension_source }}
+          MI_EXTENSION_SOURCE: ${{ inputs.mi_extension_source }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -1685,6 +1693,14 @@ jobs:
           # runtime version, and the roll step below tells superseded assets apart by name.
           stage "runtimes/ballerina-runtime-${BALLERINA_VERSION}.zip" "wso2-integrator-${INTEGRATOR_VERSION}-ballerina-runtime-${BALLERINA_VERSION}.zip"
           stage "runtimes/icp-${ICP_VERSION}.zip"                     "wso2-integrator-${INTEGRATOR_VERSION}-icp-${ICP_VERSION}.zip"
+          # The JRE for every target and the five bundled extensions, from the URLs the feed mirrors
+          # (ci/build/fetch-feed-components.sh), named <integrator>-<component id>-<file>.
+          bash ci/build/fetch-feed-components.sh --versions core/versions/ci/build/component-versions.properties --out feed-components \
+            --ballerina-source "${BALLERINA_EXTENSION_SOURCE:-marketplace}" --mi-source "${MI_EXTENSION_SOURCE:-marketplace}"
+          for f in feed-components/*/*; do
+            id=$(basename "$(dirname "${f}")")
+            stage "${f}" "wso2-integrator-${INTEGRATOR_VERSION}-${id}-$(basename "${f}")"
+          done
           cp core/versions/ci/build/component-versions.properties \
             "release-files/wso2-integrator-${INTEGRATOR_VERSION}-component-versions.properties"
 
@@ -1693,14 +1709,14 @@ jobs:
       - name: cosign-installer
         uses: sigstore/cosign-installer@v3.5.0
 
-      - name: Sign the core and runtime files
+      - name: Sign the core, runtime and component files
         shell: bash
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-{core-*,ballerina-runtime-*,icp-*}.{tar.gz,zip}; do
+          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-{core-*,ballerina-runtime-*,icp-*,jre-*}.{tar.gz,zip} release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-wso2.*.vsix; do
             cosign sign-blob "${F}" --output-certificate "${F}.pem" --output-signature "${F}.sig" --yes
             cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build.yml@${GITHUB_REF}" --certificate-oidc-issuer=https://token.actions.githubusercontent.com
           done
@@ -1751,6 +1767,12 @@ jobs:
           require "Component versions"  release-files/*-component-versions.properties
           require "Ballerina runtime"   release-files/*-ballerina-runtime-*.zip
           require "ICP package"         release-files/*-icp-*.zip
+          for t in linux-64 macos-arm-64 macos-64 win-64; do
+            require "JRE ${t}"          release-files/*-jre-ballerina-jre-${t}-*.zip
+          done
+          for e in wso2.ballerina wso2.micro-integrator wso2.streaming-integrator wso2.hurl-client wso2.mcp-server-inspector; do
+            require "Extension ${e}"    release-files/*-${e}-*.vsix
+          done
           if [ "${BUILD_MACOS}" = "true" ]; then
             require "macOS arm64 .dmg"  release-files/*arm64.dmg
             require "macOS x64 .dmg"    release-files/*x64.dmg
