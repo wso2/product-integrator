@@ -203,7 +203,8 @@ jobs:
           VERSION: ${{ inputs.version }}
           AGENT_BUILDER_RELEASE_TOKEN: ${{ secrets.AGENT_BUILDER_RELEASE_TOKEN }}
         run: |
-          if git ls-remote --exit-code --heads origin "${RELEASE_BRANCH}" >/dev/null 2>&1; then
+          # Full ref: a bare pattern suffix-matches, so '5.1.0' would hit 'staging/5.1.0'.
+          if git ls-remote --exit-code --heads origin "refs/heads/${RELEASE_BRANCH}" >/dev/null 2>&1; then
             echo "Error: branch '${RELEASE_BRANCH}' already exists. Pick a new version." >&2
             exit 1
           fi

@@ -166,6 +166,25 @@ jobs:
           # VSIX would otherwise surface later as a hashing error.
           ls -la wi/wi-extension/*.vsix
 
+      # No installer build here to take them from: package the runtimes with the same scripts the
+      # release uses. Carried ones are skipped (ids trimmed as the generator does); a dry run hashes nothing.
+      - name: Package runtimes
+        if: ${{ !inputs.dry_run }}
+        env:
+          CARRY_INPUT: ${{ inputs.carry_components }}
+        run: |
+          set -euo pipefail
+          CARRY=",$(printf '%s' "${CARRY_INPUT}" | tr -d '[:space:]'),"
+          read_version() {
+            awk -F= -v k="$1" '$1 == k { print substr($0, index($0, "=") + 1); exit }' ci/build/component-versions.properties | tr -d '\r'
+          }
+          if [[ "${CARRY}" != *,ballerina-runtime,* ]]; then
+            ./ci/build/package-ballerina-runtime.sh "$(read_version ballerina.version)" out
+          fi
+          if [[ "${CARRY}" != *,icp,* ]]; then
+            ./ci/build/package-icp.sh "$(read_version icp.version)" out
+          fi
+
       - name: Login to AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -197,6 +216,14 @@ jobs:
           python3 ci/build/plan-component-publish.py plan --index index.json --selector "${selector}" \
             --current current.json --stamp "$(date -u -d "@${SEQUENCE}" +%y%m%d%H%M)" > planned.env
           . ./planned.env
+
+          # This publish's own artifacts directory, through the helper build.yml uses too, so the
+          # layout cannot drift between a release and a component publish. Named after the line it
+          # serves, as `components`, and stamped with this document's sequence.
+          if ! ARTIFACTS_PATH=$(bash ci/build/artifacts-dir.sh --at "${SEQUENCE}" "${app_version:-${selector}}" components 2>naming.err); then
+            echo "::error::$(cat naming.err)" >&2
+            exit 1
+          fi
           {
             echo "selector=${selector}"
             echo "current_doc=${current_doc}"
@@ -204,7 +231,9 @@ jobs:
             echo "sequence=${SEQUENCE}"
             echo "doc=${doc}"
             echo "app_version=${app_version}"
+            echo "artifacts_path=${ARTIFACTS_PATH}"
           } >> "$GITHUB_OUTPUT"
+          echo "artifacts directory: ${ARTIFACTS_PATH}"
           echo "publishing ${doc} (sequence ${SEQUENCE}, up from ${current_sequence}) for line ${selector}"
 
       # Every target in the config: no installers are built here, so there is no per-run platform
@@ -212,6 +241,7 @@ jobs:
       - name: Generate source document
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACTS_PATH: ${{ steps.plan.outputs.artifacts_path }}
           REQUIRES_APP: ${{ inputs.requires_app_version }}
           # Free-form dispatch input: bound through env, never expanded into the script, so shell
           # syntax in the value stays data in a job that holds signing and cloud credentials.
@@ -242,7 +272,7 @@ jobs:
             --sequence "${{ steps.plan.outputs.sequence }}" \
             --components-only \
             --carry-apps-from current.json \
-            --artifacts-base "${ARTIFACTS_URL}" \
+            --artifacts-base "${ARTIFACTS_URL%/}/${ARTIFACTS_PATH:?artifacts_path from the plan step is empty}" \
             --mirror-dir artifacts-mirror \
             "${EXTRA[@]}" \
             --out source.json
@@ -393,13 +423,18 @@ jobs:
 
       - name: Upload mirrored artifacts to update bucket
         if: ${{ !inputs.dry_run }}
+        env:
+          ARTIFACTS_PATH: ${{ steps.plan.outputs.artifacts_path }}
         run: |
           set -euo pipefail
           if [ ! -d artifacts-mirror ]; then
             echo "Nothing to upload; every artifact this document names is already in the bucket."
             exit 0
           fi
-          aws s3 cp artifacts-mirror/ "s3://${BUCKET}/artifacts/" --recursive
+          # Immutable, as in build.yml: nothing writes this directory again once its document is
+          # published, so the CDN may keep every object indefinitely.
+          aws s3 cp artifacts-mirror/ "s3://${BUCKET}/artifacts/${ARTIFACTS_PATH:?artifacts_path from the plan step is empty}/" --recursive \
+            --cache-control "public, max-age=31536000, immutable"
 
       # Artifacts, then the document, then the index: nothing becomes reachable before what it
       # names is in place.
