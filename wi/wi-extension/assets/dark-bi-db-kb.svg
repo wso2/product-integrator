@@ -1,0 +1,22 @@
+<!--
+ ~ Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ ~
+ ~ WSO2 LLC. licenses this file to you under the Apache License,
+ ~ Version 2.0 (the "License"); you may not use this file except
+ ~ in compliance with the License.
+ ~ You may obtain a copy of the License at
+ ~
+ ~     http://www.apache.org/licenses/LICENSE-2.0
+ ~
+ ~ Unless required by applicable law or agreed to in writing,
+ ~ software distributed under the License is distributed on an
+ ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ ~ KIND, either express or implied. See the License for the
+ ~ specific language governing permissions and limitations
+ ~ under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="-2 -2 18 18">
+    <path fill="white" fill-rule="evenodd"
+        d="M11.188 1.045c-.182-.814-1.337-.808-1.513.007l-.017.081a2.15 2.15 0 0 1-1.715 1.674c-.84.149-.84 1.362 0 1.511a2.15 2.15 0 0 1 1.715 1.674l.017.081c.176.815 1.33.821 1.513.007l.022-.095a2.16 2.16 0 0 1 1.72-1.666c.843-.149.843-1.364 0-1.513a2.16 2.16 0 0 1-1.72-1.666zm-9.5.768v3.5h3.5v-3.5zm-1.25-.15a1.1 1.1 0 0 1 1.1-1.1h3.798a1.1 1.1 0 0 1 1.101 1.1v3.798a1.1 1.1 0 0 1-1.1 1.101H1.538a1.1 1.1 0 0 1-1.101-1.1zm1.25 7.15v3.5h3.5v-3.5zm-1.25-.15a1.1 1.1 0 0 1 1.1-1.1h3.798a1.1 1.1 0 0 1 1.101 1.1v3.798c0 .609-.493 1.102-1.1 1.102H1.538a1.1 1.1 0 0 1-1.1-1.103zm8.25 3.65v-3.5h3.5v3.5zm-.15-4.75a1.1 1.1 0 0 0-1.1 1.1v3.798a1.1 1.1 0 0 0 1.1 1.101h3.798a1.1 1.1 0 0 0 1.102-1.1V8.663c0-.608-.493-1.101-1.102-1.101z"
+        clip-rule="evenodd" />
+</svg>
