@@ -28,3 +28,73 @@ jobs:
       build_packed_installers: false
       ballerina_extension_source: github
       mi_extension_source: github
+
+  # Runs beside the compile job rather than after it so a broken unit test is
+  # reported in a couple of minutes instead of waiting on a full Integrator build.
+  #
+  # Auto-discovery by config filename is deliberate — a package gets covered by adding a
+  # jest.config.js, with no change here. Anything needing VSCode or a built product must use
+  # a different config name so it never lands in this gate.
+  fast-tests:
+    name: Fast tests (unit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          # rush.json lists projects inside external/wso2-vscode-extensions, and the
+          # rush install below fails outright on a missing project package.json.
+          submodules: recursive
+
+      - name: Setup Rush
+        uses: gigara/setup-rush@7ba3446572d15f5eacc85de383ad9679dfb7223c # v1.2.0
+        with:
+          pnpm: 10.11.0
+          node: 22.x
+          rush-install: true
+
+      - name: Run jest in every package that has a jest.config.js
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          failed=0
+          found=0
+          for cfg in wi/*/jest.config.js; do
+            pkg=$(dirname "$cfg")
+            found=1
+            echo "::group::jest ${pkg}"
+            if ! ( cd "$pkg" && node ./node_modules/jest/bin/jest.js --ci ); then
+              echo "::error::jest failed in ${pkg}"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          # A glob that silently matches nothing would turn this gate green while running
+          # nothing at all, which is the one outcome worth failing on.
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No jest.config.js found under wi/ - the fast-test gate ran nothing."
+            exit 1
+          fi
+          exit $failed
+
+      - name: Type-check test code
+        # Test files are excluded from the emitting build and ts-jest runs with
+        # isolatedModules, so neither type-checks them. Only errors located in test files
+        # gate: the production tree has pre-existing errors that this job must not own.
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          failed=0
+          for spec in wi/*/tsconfig.spec.json; do
+            pkg=$(dirname "$spec")
+            out=$( cd "$pkg" && npx tsc --noEmit -p tsconfig.spec.json 2>&1 || true )
+            test_errors=$(echo "$out" | grep -E "\.test\.tsx?\(" || true)
+            if [ -n "$test_errors" ]; then
+              echo "::error::test-code type errors in ${pkg}"
+              echo "$test_errors"
+              failed=1
+            fi
+          done
+          exit $failed
