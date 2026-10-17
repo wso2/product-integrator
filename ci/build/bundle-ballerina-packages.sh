@@ -251,32 +251,33 @@ if [ -f "${PROBE_DIR}/Dependencies.toml" ]; then
   cp "${PROBE_DIR}/Dependencies.toml" "${OUTPUT_DIR}/resolved-dependencies.toml"
 fi
 
-# --- drop the compiler's own caches from the resolved packages ----------------------------------
-# While it compiles, `bal` writes working state INSIDE each cached bala directory, at
-# <org>/<name>/<version>/<platform>/build/ (bala_unzipped/, extracted-stdlibs/, ...). That is not
-# part of the bala format -- bala.json, modules/, platform/, docs/, compiler-plugin/ are -- and the
-# compiler regenerates it wherever the package is next compiled from, so it has no business in the
-# overlay. It is small, but it nests bala trees inside bala trees (an extracted stdlib inside an
-# unzipped bala inside the cache), and on 2201.14.1 that produced a 300+ character path under
-# ballerina/http that the Windows MSI build could not add -- wixnative.exe is not long-path aware,
-# MAX_PATH is 260, and the subst drive the build uses only buys ~50 of them. What the compiler
-# leaves there differs by platform (one near-empty directory on macOS, the nested tree on the Linux
-# runner), so the directories are named in the log rather than only counted.
+# --- drop build debris the published balas carry -------------------------------------------------
+# Some standard-library balas on Central ship a stray <org>/<name>/<version>/<platform>/build/
+# directory: leftovers of the module's own release build (build/extracted-stdlibs/..., build/
+# bala_unzipped/..., build/jballerina-tools-<v>/repo/bala/...), holding nothing but nested copies
+# of metadata icons and trigger JSON. ballerina/http 2.18.x and ballerina/file 1.13.1 have it; the
+# archive on Central does, not just the extracted cache. It is not part of the bala format --
+# bala.json, modules/, platform/, docs/, compiler-plugin/, metadata/ are -- nothing resolves a path
+# under it, and the distribution's own copies of the same packages (repo/bala) do not carry it and
+# work. It is small, but it nests bala trees inside bala trees, and on 2201.14.1 -- the first
+# distribution where http entered this closure as an upgrade -- that produced a 300+ character path
+# that the Windows MSI build could not add: wixnative.exe is not long-path aware, MAX_PATH is 260,
+# and the subst drive the build uses only buys ~50 of them.
 #
 # Pruned BEFORE the verification below on purpose: what is proven to resolve offline is then exactly
-# what ships, caches and all (none). Run again right before the final copy, so nothing that appears
-# in between can ride along either.
-prune_compiler_caches() {
+# what ships. Run again right before the final copy, so nothing that appears in between can ride
+# along either. The directories are named in the log, so a new package bringing debris is visible.
+prune_build_debris() {
   local root="$1" dirs count size
   dirs=$(find "${root}" -mindepth 5 -maxdepth 5 -type d -name build | LC_ALL=C sort)
   [ -n "${dirs}" ] || return 0
   count=$(printf '%s\n' "${dirs}" | wc -l | tr -d ' ')
   size=$(printf '%s\n' "${dirs}" | xargs du -sk | awk '{ s += $1 } END { printf "%dK", s }')
   printf '%s\n' "${dirs}" | xargs rm -rf
-  echo "[bundle-ballerina-packages] dropped ${count} compiler cache dir(s) (${size}) from the resolved packages:"
+  echo "[bundle-ballerina-packages] dropped ${count} build-debris dir(s) (${size}) from the resolved packages:"
   printf '%s\n' "${dirs}" | sed "s|^${root}/||; s|^|    |"
 }
-prune_compiler_caches "${CENTRAL_BALA}"
+prune_build_debris "${CENTRAL_BALA}"
 
 # --- prove the overlay is self-sufficient, in the layout it actually ships in -------------------
 # Verifying against BAL_USER_HOME would only prove the dependency SET is complete: `bal` would still
@@ -325,7 +326,7 @@ if [ "${PULLED}" -ne 0 ]; then
   exit 1
 fi
 
-prune_compiler_caches "${CENTRAL_BALA}"
+prune_build_debris "${CENTRAL_BALA}"
 cp -R "${CENTRAL_BALA}/." "${OUTPUT_DIR}/bala/"
 write_manifest
 
