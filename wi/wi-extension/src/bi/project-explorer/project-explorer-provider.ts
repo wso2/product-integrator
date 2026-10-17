@@ -237,7 +237,7 @@ export class ProjectExplorerEntryProvider implements vscode.TreeDataProvider<Pro
                 return fileElement;
             }
         }
-        return element;
+        return undefined;
     }
 
     recursiveSearchParent(element: ProjectExplorerEntry, path: string): ProjectExplorerEntry | undefined {
