@@ -196,6 +196,7 @@ jobs:
       icp_version: ${{ steps.read-versions.outputs.icp_version }}
       integrator_version: ${{ steps.read-versions.outputs.integrator_version }}
       ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
+      artifacts_path: ${{ steps.artifacts-dir.outputs.artifacts_path }}
     steps:
       # Checked here rather than in Publish Update Source, because build-macos and build-windows
       # bake WSO2_UPDATE_URL and WSO2_UPDATE_PUBLIC_KEY into product.json long before that job
@@ -333,6 +334,42 @@ jobs:
           echo "integrator_version=${INTEGRATOR_VERSION}" >> "$GITHUB_OUTPUT"
           echo "ballerina_jre_version=${BALLERINA_JRE_VERSION}" >> "$GITHUB_OUTPUT"
 
+      # Every publish gets its own artifacts directory, so a later release can never overwrite what
+      # an earlier document points at. Sharing one key per component version broke clients: ICP
+      # 2.1.0's requires.app is rendered from the publishing app's version, so v5.1.0-beta2 and
+      # 5.1.0-RC1 wrote different signed statements to the same object, and a CloudFront edge kept
+      # serving beta2's to RC1 clients. With one directory per publish, a document and the bytes it
+      # names never change after it is written, so they can be cached as immutable.
+      #
+      # Minted here, before any build, because build-macos uploads the Squirrel.Mac payload itself,
+      # long before publish-update-source exists: both must land in the same directory.
+      - name: Name this build's artifacts directory
+        id: artifacts-dir
+        shell: bash
+        env:
+          INTEGRATOR_VERSION: ${{ steps.read-versions.outputs.integrator_version }}
+          # The runs that upload anything: the Squirrel.Mac step and publish-update-source both need
+          # packed installers, so a run without them must not fail on a name it never uses.
+          PUBLISHING: ${{ inputs.publish_update_source == true && inputs.build_packed_installers == true }}
+          # The product segment of the directory: every flavor's artifacts stay under their own
+          # prefix (artifacts/agent-builder/releases/... for agent builder), matching the
+          # manifests/agent-builder/<channel>/ split publish-update-source keeps for documents.
+          ARTIFACTS_PRODUCT: ${{ inputs.product_flavor == 'agent-builder' && 'agent-builder' || 'integrator' }}
+        run: |
+          set -euo pipefail
+          # The layout lives in one place, shared with publish-components.yml.
+          if ARTIFACTS_PATH=$(bash ci/build/artifacts-dir.sh --product "${ARTIFACTS_PRODUCT}" "${INTEGRATOR_VERSION}" 2>naming.err); then
+            :
+          elif [ "${PUBLISHING}" = "true" ]; then
+            echo "::error::$(cat naming.err)" >&2
+            exit 1
+          else
+            # Nothing is uploaded on this run, so a version the bucket would refuse cannot break it.
+            ARTIFACTS_PATH=$(bash ci/build/artifacts-dir.sh --product "${ARTIFACTS_PRODUCT}" unpublished)
+          fi
+          echo "artifacts_path=${ARTIFACTS_PATH}" >> "$GITHUB_OUTPUT"
+          echo "artifacts directory: ${ARTIFACTS_PATH}"
+
   compile:
     needs: [stamp-version, resolve-versions]
     uses: ./.github/workflows/compile.yml
@@ -346,6 +383,7 @@ jobs:
       ref: ${{ inputs.ref }}
       is_prerelease: ${{ inputs.is_prerelease }}
       product_flavor: ${{ inputs.product_flavor }}
+      publish_core: ${{ inputs.publish_tag != '' }}
 
   smoke-test:
     if: ${{ inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
@@ -458,10 +496,10 @@ jobs:
           # What the fallback does and does not hold fixed, since it is not uniform: Ballerina and MI
           # have their own key fields -- they are the two with a marketplace-vs-vsix source switch, and
           # the version came along with the switch -- so a fallback cannot cross their versions. The
-          # streaming-integrator, hurl-client and mcp-server-inspector versions live only inside the
+          # streaming-integrator, hurl-client, mcp-server-inspector and even-better-toml versions live only inside the
           # dropped hash, so a fallback CAN cross those, as it can WI's. That is safe but not free:
           # download-builtin-extensions re-validates by version string (isUpToDate), which catches those
-          # three because their versions move when their contents do. It cannot catch WI, whose version
+          # four because their versions move when their contents do. It cannot catch WI, whose version
           # is hand-bumped and stays constant across content changes -- hence the explicit removal in
           # "Install builtin extensions" below.
           restore-keys: |
@@ -695,6 +733,15 @@ jobs:
           mkdir -p ../artifacts
           (cd .. && zip -qry "artifacts/VSCode-darwin-${{ matrix.arch }}.zip" VSCode-darwin-${{ matrix.arch }})
           cp ../artifacts/VSCode-darwin-${{ matrix.arch }}.zip ../../installers/mac/
+
+      # The exact editor ("core") the DMG below is built from; published as a release asset.
+      - name: Upload macOS core
+        if: ${{ inputs.build_packed_installers == true && inputs.publish_tag != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-darwin-${{ matrix.arch }}
+          path: lib/artifacts/VSCode-darwin-${{ matrix.arch }}.zip
+          if-no-files-found: error
       # Imports the Developer ID Application cert (codesign: app bundles + DMG) into a temp
       # keychain, then derives the identity name from the imported cert so no separate identity
       # secret is needed. No Developer ID Installer cert: the DMG carries the app directly, and
@@ -758,6 +805,19 @@ jobs:
         with:
           name: ballerina-packages
           path: ${{ github.workspace }}/ballerina-packages
+      - name: Download Ballerina runtime
+        if: ${{ inputs.build_packed_installers == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ballerina-runtime
+          path: ballerina-runtime
+
+      - name: Download ICP
+        if: ${{ inputs.build_packed_installers == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: icp
+          path: icp-package
 
       - name: Build macOS installer packages
         if: ${{ inputs.build_packed_installers == true }}
@@ -768,30 +828,21 @@ jobs:
           ROOT_DIR=$(pwd)
           echo "Root dir: ${ROOT_DIR}"
           BALLERINA_VERSION="${{ needs.resolve-versions.outputs.ballerina_version }}"
-          BALLERINA_VERSION_FILENAME="${BALLERINA_VERSION%-*}"
           if [ "${{ matrix.arch }}" = "arm64" ]; then
-          BALLERINA_ARCH="macos-arm"
           JRE_PLATFORM="macos-arm-64"
           else
-          BALLERINA_ARCH="macos"
           JRE_PLATFORM="macos-64"
           fi
-          BALLERINA_URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-${BALLERINA_ARCH}.zip"
+          BALLERINA_ZIP="${ROOT_DIR}/ballerina-runtime/ballerina-runtime-${BALLERINA_VERSION}.zip"
           ICP_VERSION="${{ needs.resolve-versions.outputs.icp_version }}"
-          ICP_VERSION_FILENAME="${ICP_VERSION%-*}"
-          if [ "$ICP_VERSION" != "$ICP_VERSION_FILENAME" ]; then
-            ICP_VERSION_FILENAME="${ICP_VERSION_FILENAME}-SNAPSHOT"
-          fi
-          ICP_URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          ICP_ZIP="${ROOT_DIR}/icp-package/icp-${ICP_VERSION}.zip"
           JRE_VERSION="${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
           JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-${JRE_PLATFORM}-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/mac
-          wget -O ballerina.zip "$BALLERINA_URL"
-          wget -O icp.zip "$ICP_URL"
           wget -O jre.zip "$JRE_URL"
           # editor-update profile: full DMG (first install) + EDITOR-ONLY Squirrel zip (§D8).
-          INSTALLER_PROFILE=editor-update ./build.sh ballerina.zip $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip icp.zip jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
+          INSTALLER_PROFILE=editor-update ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip "$ICP_ZIP" jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
 
       # Apple-ID (app-specific password) notarytool auth. NOTARY_APP_PASSWORD is an
@@ -872,6 +923,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
           AWS_UPDATE_S3_BUCKET: ${{ secrets.AWS_UPDATE_S3_BUCKET }}
+          ARTIFACTS_PATH: ${{ needs.resolve-versions.outputs.artifacts_path }}
         run: |
           set -euo pipefail
           missing=()
@@ -888,12 +940,31 @@ jobs:
             echo "::error::Squirrel.Mac payload not found at $ZIP" >&2
             exit 1
           fi
-          # Same artifacts layout as everything else; the darwin manifest's app.squirrel.url
-          # (embedded by generate-update-manifest.mjs) points at this exact versioned CDN URL.
-          # Flavor-scoped prefix: agent-builder payloads live under artifacts/agent-builder/.
-          DEST="s3://${AWS_UPDATE_S3_BUCKET}/artifacts/${{ inputs.product_flavor == 'agent-builder' && 'agent-builder/' || '' }}app/${V}/"
-          aws s3 cp "$ZIP" "${DEST}${ARTIFACT_SLUG}-${V}-${{ matrix.arch }}-mac.zip" --content-type application/zip --cache-control no-cache
-          echo "Published Squirrel.Mac payload for darwin/${{ matrix.arch }} (v${V})"
+          # This build's own artifacts directory (see resolve-versions; it carries the product
+          # segment, so agent-builder payloads live under artifacts/agent-builder/releases/...). The
+          # darwin manifest's app.squirrel.url, embedded by generate-update-manifest.mjs, names this
+          # exact object.
+          KEY="artifacts/${ARTIFACTS_PATH:?artifacts_path from resolve-versions is empty}/app/${V}/${ARTIFACT_SLUG}-${V}-${{ matrix.arch }}-mac.zip"
+          # A conditional write, so S3 enforces "never overwrite" atomically and only its refusal
+          # means "already there". Probing first would read any failure -- a missing s3:GetObject, a
+          # network blip -- as an empty slot and overwrite it.
+          #
+          # And an existing payload FAILS the step rather than being kept. It can only come from an
+          # earlier attempt of this job in the same run: that attempt's .app, while this attempt's
+          # rebuilt DMG is what goes to the release and into the document. Keeping it would ship two
+          # builds of one version. Re-run all jobs instead: resolve-versions mints a new directory.
+          # Single-part, unlike `aws s3 cp`: put-object takes up to 5 GB, well above this payload.
+          if ! OUT=$(aws s3api put-object --bucket "${AWS_UPDATE_S3_BUCKET}" --key "${KEY}" --body "$ZIP" \
+              --content-type application/zip --cache-control "public, max-age=31536000, immutable" \
+              --if-none-match '*' 2>&1); then
+            if grep -q PreconditionFailed <<<"${OUT}"; then
+              echo "::error::s3://${AWS_UPDATE_S3_BUCKET}/${KEY} already holds a payload from an earlier attempt of this job. Re-run all jobs so resolve-versions mints a new artifacts directory." >&2
+              exit 1
+            fi
+            echo "${OUT}" >&2
+            exit 1
+          fi
+          echo "Published Squirrel.Mac payload for darwin/${{ matrix.arch }} (v${V}) to ${ARTIFACTS_PATH}"
 
       - name: Upload macOS DMG artifacts
         if: ${{ inputs.build_packed_installers == true }}
@@ -1012,10 +1083,10 @@ jobs:
           # What the fallback does and does not hold fixed, since it is not uniform: Ballerina and MI
           # have their own key fields -- they are the two with a marketplace-vs-vsix source switch, and
           # the version came along with the switch -- so a fallback cannot cross their versions. The
-          # streaming-integrator, hurl-client and mcp-server-inspector versions live only inside the
+          # streaming-integrator, hurl-client, mcp-server-inspector and even-better-toml versions live only inside the
           # dropped hash, so a fallback CAN cross those, as it can WI's. That is safe but not free:
           # download-builtin-extensions re-validates by version string (isUpToDate), which catches those
-          # three because their versions move when their contents do. It cannot catch WI, whose version
+          # four because their versions move when their contents do. It cannot catch WI, whose version
           # is hand-bumped and stays constant across content changes -- hence the explicit removal in
           # "Install builtin extensions" below.
           restore-keys: |
@@ -1302,6 +1373,15 @@ jobs:
         if: ${{ inputs.build_packed_installers == true }}
         run: |
           cp ../artifacts/VSCode-win32-x64.zip ../../installers/windows/
+
+      # The exact editor ("core") the MSIs below are built from; published as a release asset.
+      - name: Upload Windows core
+        if: ${{ inputs.build_packed_installers == true && inputs.publish_tag != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-win32-x64
+          path: lib/artifacts/VSCode-win32-x64.zip
+          if-no-files-found: error
       - name: Exclude build workspace from Windows Defender
         if: ${{ inputs.build_packed_installers == true }}
         continue-on-error: true
@@ -1321,6 +1401,19 @@ jobs:
         with:
           name: ballerina-packages
           path: ${{ github.workspace }}/ballerina-packages
+      - name: Download Ballerina runtime
+        if: ${{ inputs.build_packed_installers == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ballerina-runtime
+          path: ballerina-runtime
+
+      - name: Download ICP
+        if: ${{ inputs.build_packed_installers == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: icp
+          path: icp-package
 
       - name: Build Windows installer packages
         if: ${{ inputs.build_packed_installers == true }}
@@ -1332,29 +1425,22 @@ jobs:
           $ROOT_DIR = Get-Location
           Write-Host "Root dir: $ROOT_DIR"
           $BALLERINA_VERSION = "${{ needs.resolve-versions.outputs.ballerina_version }}"
-          $BALLERINA_VERSION_FILENAME = $BALLERINA_VERSION -replace '-.*$', ''
-          $BALLERINA_URL = "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION_FILENAME}-swan-lake-windows.zip"
+          $BALLERINA_ZIP = Join-Path $ROOT_DIR "ballerina-runtime\ballerina-runtime-${BALLERINA_VERSION}.zip"
           $ICP_VERSION = "${{ needs.resolve-versions.outputs.icp_version }}"
-          $ICP_VERSION_FILENAME = $ICP_VERSION -replace '-.*$', ''
-          if ($ICP_VERSION -ne $ICP_VERSION_FILENAME) {
-            $ICP_VERSION_FILENAME = "${ICP_VERSION_FILENAME}-SNAPSHOT"
-          }
-          $ICP_URL = "https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
+          $ICP_ZIP = Join-Path $ROOT_DIR "icp-package\icp-${ICP_VERSION}.zip"
           $JRE_VERSION = "${{ needs.resolve-versions.outputs.ballerina_jre_version }}"
           $JRE_URL = "https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-win-64-${JRE_VERSION}.zip"
           $INTEGRATOR_VERSION = "${{ needs.resolve-versions.outputs.integrator_version }}"
           cd .\installers\windows
-          Invoke-WebRequest -Uri $BALLERINA_URL -OutFile "ballerina.zip"
-          Invoke-WebRequest -Uri $ICP_URL -OutFile "icp.zip"
           Invoke-WebRequest -Uri $JRE_URL -OutFile "jre.zip"
           # Full first-install MSI (editor + Ballerina + ICP + JRE) -> <slug>-<v>.msi
           $env:INSTALLER_PROFILE = "full"
-          .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
+          .\build.bat $BALLERINA_ZIP $BALLERINA_VERSION .\VSCode-win32-x64.zip $ICP_ZIP .\jre.zip $INTEGRATOR_VERSION
           if ($LASTEXITCODE -ne 0) { throw "full MSI build failed" }
           # Editor-only update MSI (§D8) -> <slug>-<v>-update.msi. Ballerina is dropped;
           # the client seeds/resolves it from the per-user data folder so the upgrade can't strand it.
           $env:INSTALLER_PROFILE = "editor-update"
-          .\build.bat .\ballerina.zip $BALLERINA_VERSION .\VSCode-win32-x64.zip .\icp.zip .\jre.zip $INTEGRATOR_VERSION
+          .\build.bat $BALLERINA_ZIP $BALLERINA_VERSION .\VSCode-win32-x64.zip $ICP_ZIP .\jre.zip $INTEGRATOR_VERSION
           if ($LASTEXITCODE -ne 0) { throw "editor-update MSI build failed" }
           Remove-Item Env:\INSTALLER_PROFILE
 
@@ -1574,6 +1660,84 @@ jobs:
           path: release-files/
         continue-on-error: true
 
+      # The per-OS "core" editors the installers above were built from (VSCode + patches + bundled
+      # extensions + CLI, no Ballerina/ICP/JRE), and the versions they were built with, so
+      # downstream builds wrap these exact binaries instead of rebuilding them.
+      - name: Download Linux core
+        uses: actions/download-artifact@v4
+        with:
+          name: core-linux-x64
+          path: core/
+
+      - name: Download macOS core (arm64)
+        if: ${{ inputs.build_macos == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: core-darwin-arm64
+          path: core/
+
+      - name: Download macOS core (x64)
+        if: ${{ inputs.build_macos == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: core-darwin-x64
+          path: core/
+
+      - name: Download Windows core
+        if: ${{ inputs.build_windows == true }}
+        uses: actions/download-artifact@v4
+        with:
+          name: core-win32-x64
+          path: core/
+
+      - name: Download stamped versions
+        uses: actions/download-artifact@v4
+        with:
+          name: build-versions
+          path: core/versions/
+
+      - name: Stage core files
+        shell: bash
+        env:
+          INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
+          # Core assets carry the flavor slug like every other release asset.
+          ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          stage() {
+            local src="$1" name="$2"
+            [ -f "${src}" ] || return 0
+            mv "${src}" "release-files/${name}"
+            (cd release-files && openssl dgst -sha256 -out "${name}.sha256" "${name}")
+            ls -lh "release-files/${name}"
+          }
+          P="${ARTIFACT_SLUG}-${INTEGRATOR_VERSION}-core"
+          stage core/vscode-linux-x64.tar.gz    "${P}-linux-x64.tar.gz"
+          stage core/VSCode-darwin-arm64.zip    "${P}-darwin-arm64.zip"
+          stage core/VSCode-darwin-x64.zip      "${P}-darwin-x64.zip"
+          stage core/VSCode-win32-x64.zip       "${P}-win32-x64.zip"
+          cp core/versions/ci/build/component-versions.properties \
+            "release-files/${ARTIFACT_SLUG}-${INTEGRATOR_VERSION}-component-versions.properties"
+
+      # Signed because they are build inputs for downstream builds; a .sha256 in the same release
+      # cannot detect a replaced asset.
+      - name: cosign-installer
+        uses: sigstore/cosign-installer@v3.5.0
+
+      - name: Sign the core files
+        shell: bash
+        env:
+          INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
+          # Core assets carry the flavor slug like every other release asset.
+          ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for F in release-files/"${ARTIFACT_SLUG}"-"${INTEGRATOR_VERSION}"-core-*.{tar.gz,zip}; do
+            cosign sign-blob "${F}" --output-certificate "${F}.pem" --output-signature "${F}.sig" --yes
+            cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build.yml@${GITHUB_REF}" --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          done
       # Update-only artifacts must not ship as public release assets: the editor-only
       # -update.msi and the Squirrel .app zips are delivery payloads of the in-app update
       # mechanism, served from the update CDN (publish-update-source mirrors the MSI from the
@@ -1645,7 +1809,7 @@ jobs:
           BUILD_WINDOWS: ${{ inputs.build_windows }}
           ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
         run: |
-          shopt -s nullglob
+          shopt -s nullglob extglob
           missing=()
           require() {
             local label="$1"; shift
@@ -1657,14 +1821,19 @@ jobs:
           # name fails the publish instead of shipping under the wrong release.
           require "Linux .deb"          release-files/"${ARTIFACT_SLUG}"_*.deb
           require "Linux .rpm"          release-files/"${ARTIFACT_SLUG}"-*.rpm
-          require "Linux .tar.gz"       release-files/"${ARTIFACT_SLUG}"-*.tar.gz
+          require "Linux .tar.gz"       release-files/"${ARTIFACT_SLUG}"-!(*-core-*)linux-x64.tar.gz
           require "WI extension .vsix"  release-files/*.vsix
+          require "Linux core"          release-files/"${ARTIFACT_SLUG}"-*-core-linux-x64.tar.gz
+          require "Component versions"  release-files/"${ARTIFACT_SLUG}"-*-component-versions.properties
           if [ "${BUILD_MACOS}" = "true" ]; then
             require "macOS arm64 .dmg"  release-files/"${ARTIFACT_SLUG}"-*arm64.dmg
             require "macOS x64 .dmg"    release-files/"${ARTIFACT_SLUG}"-*x64.dmg
+            require "macOS arm64 core"  release-files/"${ARTIFACT_SLUG}"-*-core-darwin-arm64.zip
+            require "macOS x64 core"    release-files/"${ARTIFACT_SLUG}"-*-core-darwin-x64.zip
           fi
           if [ "${BUILD_WINDOWS}" = "true" ]; then
             require "Windows .msi"      release-files/"${ARTIFACT_SLUG}"-*.msi
+            require "Windows core"      release-files/"${ARTIFACT_SLUG}"-*-core-win32-x64.zip
           fi
 
           # Belt to the prune step: update-only payloads must never ship as release assets.
@@ -1783,8 +1952,10 @@ jobs:
       # New builds publish to the channel chosen at dispatch (default insider); the
       # promote-channel workflow later copies a source document down the ladder.
       CHANNEL: ${{ inputs.channel || 'insider' }}
-      # Flavor-scoped S3/CDN prefix ('' for integrator, 'agent-builder/' for agent builder):
-      # keeps the two products' manifests, indexes and mirrored artifacts fully disjoint.
+      # Flavor-scoped prefix for the manifests/ side ('' for integrator, 'agent-builder/' for agent
+      # builder): keeps the two products' source documents and indexes fully disjoint. Mirrored
+      # artifacts need no prefix here: their directory (resolve-versions' artifacts_path) already
+      # starts with the product segment.
       PRODUCT_PREFIX: ${{ inputs.product_flavor == 'agent-builder' && 'agent-builder/' || '' }}
     steps:
       - name: Checkout
@@ -1811,6 +1982,19 @@ jobs:
         with:
           name: wi-extension-vsix
           path: wi/wi-extension
+
+      # The same ballerina-runtime and icp zips the installers bundled (config `sourceFile`).
+      - name: Download Ballerina runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: ballerina-runtime
+          path: out
+
+      - name: Download ICP
+        uses: actions/download-artifact@v4
+        with:
+          name: icp
+          path: out
 
       # ONE document describes every platform this run actually built. A target that was not built
       # is left out entirely rather than published with URLs to release assets that never existed.
@@ -1848,10 +2032,15 @@ jobs:
 
       # WSO2_UPDATE_ARTIFACTS_URL = the CDN base fronting s3://$AWS_UPDATE_S3_BUCKET/artifacts.
       # When set, every artifact is mirrored into artifacts-mirror/ and the document points clients
-      # at the CDN only — no open-vsx/github in client URLs.
+      # at the CDN only — no open-vsx/github in client URLs. The base passed to the generator is this
+      # publish's own directory under it (see resolve-versions); the generator maps every URL to
+      # <base>/<path> and every mirrored file to artifacts-mirror/<path>, so uploading the mirror to
+      # the matching prefix is all that keeps the two in step.
       - name: Generate source document
         if: ${{ steps.targets.outputs.targets != '' }}
         env:
+          ARTIFACTS_PATH: ${{ needs.resolve-versions.outputs.artifacts_path }}
+          WSO2_UPDATE_ARTIFACTS_URL: ${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}
           # Lets the generator hash release assets on a private repo (the enterprise mirror);
           # public repos serve them unauthenticated and ignore this.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1863,12 +2052,13 @@ jobs:
           echo "document sequence ${SEQUENCE} (run ${{ github.run_number }})"
 
           MIRROR_ARGS=()
-          if [ -n "${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}" ]; then
-            ARTIFACTS_BASE="${{ secrets.WSO2_UPDATE_ARTIFACTS_URL }}"
-            if [ -n "${PRODUCT_PREFIX}" ]; then
-              ARTIFACTS_BASE="${ARTIFACTS_BASE%/}/${PRODUCT_PREFIX%/}"
-            fi
-            MIRROR_ARGS=(--artifacts-base "${ARTIFACTS_BASE}" --mirror-dir artifacts-mirror)
+          ARTIFACTS_URL="${WSO2_UPDATE_ARTIFACTS_URL:-}"
+          if [ -n "${ARTIFACTS_URL}" ]; then
+            # Fail fast on an empty path: it would quietly become <base>//components/... and write
+            # back into the shared layout this directory exists to leave. The path already starts
+            # with the product segment (artifacts-dir.sh --product), so PRODUCT_PREFIX is NOT added
+            # here: it scopes only the manifests/ side below.
+            MIRROR_ARGS=(--artifacts-base "${ARTIFACTS_URL%/}/${ARTIFACTS_PATH:?artifacts_path from resolve-versions is empty}" --mirror-dir artifacts-mirror)
           fi
           INSTALLER_DIR_ARGS=()
           if [ -d win-installers ]; then
@@ -1973,9 +2163,17 @@ jobs:
 
       - name: Upload mirrored artifacts to update bucket
         if: ${{ steps.targets.outputs.targets != '' }}
+        env:
+          ARTIFACTS_PATH: ${{ needs.resolve-versions.outputs.artifacts_path }}
         run: |
           if [ -d artifacts-mirror ]; then
-            aws s3 cp artifacts-mirror/ "s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/artifacts/${PRODUCT_PREFIX}" --recursive
+            # Immutable: nothing ever writes this directory again once its document is published,
+            # so the CDN may keep every object for as long as it likes. A re-run of this job before
+            # the index step re-uploads the same artifacts and statements (the signatures differ, as
+            # cosign's ECDSA signing is randomised, but both verify), and no client can see the
+            # directory until then.
+            aws s3 cp artifacts-mirror/ "s3://${{ secrets.AWS_UPDATE_S3_BUCKET }}/artifacts/${ARTIFACTS_PATH:?artifacts_path from resolve-versions is empty}/" --recursive \
+              --cache-control "public, max-age=31536000, immutable"
           else
             echo "WSO2_UPDATE_ARTIFACTS_URL unset — no mirrored artifacts; the document points at source URLs."
           fi

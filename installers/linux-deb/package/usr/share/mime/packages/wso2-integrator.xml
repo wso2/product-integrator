@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Registers the Ballerina source MIME type so WSO2 Integrator can be the default
+  handler for .bal files (see the MimeType= line in wso2-integrator.desktop).
+  Keep this to Ballerina sources only - the app must not claim generic types such
+  as JSON or YAML (wso2/product-integrator#2708).
+-->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="text/x-ballerina">
+    <comment>Ballerina source code</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.bal"/>
+  </mime-type>
+</mime-info>

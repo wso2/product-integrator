@@ -314,6 +314,12 @@
         "category": "WSO2 Integrator"
       },
       {
+        "command": "BI.project-explorer.add-model-provider",
+        "title": "Add Model Provider",
+        "icon": "$(add)",
+        "category": "WSO2 Integrator"
+      },
+      {
         "command": "BI.project-explorer.delete",
         "title": "Delete",
         "icon": "$(trash)",
@@ -439,6 +445,10 @@
           "when": "false"
         },
         {
+          "command": "BI.project-explorer.add-model-provider",
+          "when": "false"
+        },
+        {
           "command": "BI.project-explorer.delete",
           "when": "false"
         },
@@ -530,6 +540,11 @@
         {
           "command": "BI.project-explorer.add-agent-definition",
           "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == agentDefinitions",
+          "group": "inline"
+        },
+        {
+          "command": "BI.project-explorer.add-model-provider",
+          "when": "view == wso2-agent-builder.explorer && viewItem == modelProviders",
           "group": "inline"
         },
         {
