@@ -176,6 +176,23 @@ jobs:
           ref: ${{ github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # An agent-builder release publishes into wso2/product-agent-builder, which
+      # GITHUB_TOKEN cannot write to — fail here, before an hour of building, not in the
+      # publish job.
+      - name: Check cross-repo release token
+        if: ${{ inputs.product_flavor == 'agent-builder' }}
+        env:
+          AGENT_BUILDER_RELEASE_TOKEN: ${{ secrets.AGENT_BUILDER_RELEASE_TOKEN }}
+        run: |
+          if [ -z "${AGENT_BUILDER_RELEASE_TOKEN}" ]; then
+            echo "::error::secrets.AGENT_BUILDER_RELEASE_TOKEN is not set. Agent Builder releases are created in ${RELEASE_REPO}, which needs a token with contents:write there." >&2
+            exit 1
+          fi
+          GH_TOKEN="${AGENT_BUILDER_RELEASE_TOKEN}" gh api "repos/${RELEASE_REPO}" --jq .full_name >/dev/null || {
+            echo "::error::AGENT_BUILDER_RELEASE_TOKEN cannot read ${RELEASE_REPO}." >&2
+            exit 1
+          }
+
       # A release version is published exactly once. The branch check alone is not enough: deleting
       # the branch (or the release) and re-running would republish under a tag that already shipped,
       # so the tag and the release are checked too. The release BRANCH lives in this repo; the tag
