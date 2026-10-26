@@ -73,8 +73,6 @@ jobs:
             echo "releaseMode=" >> "$GITHUB_OUTPUT"
           fi
 
-      # No checkout in this job, so the root .nvmrc isn't available. Keep in step with it:
-      # this pins a Node.js with the CVE-2026-111497 fix.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
