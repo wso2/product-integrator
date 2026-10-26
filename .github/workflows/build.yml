@@ -383,10 +383,12 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
+      # Root .nvmrc rather than lib/vscode/.nvmrc: it pins a Node.js with the CVE-2026-111497
+      # fix. Keep it at or above lib/vscode/.nvmrc.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: lib/vscode/.nvmrc
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
@@ -932,10 +934,12 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
+      # Root .nvmrc rather than lib/vscode/.nvmrc: it pins a Node.js with the CVE-2026-111497
+      # fix. Keep it at or above lib/vscode/.nvmrc.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: lib/vscode/.nvmrc
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
@@ -1794,7 +1798,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: .nvmrc
 
       # The WI extension is built in-repo (no public download URL); its VSIX is mirrored to the
       # update bucket from this artifact (config `sourceFile`).

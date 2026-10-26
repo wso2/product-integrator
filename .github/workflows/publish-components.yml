@@ -119,10 +119,12 @@ jobs:
             exit 1
           fi
 
+      # Root .nvmrc rather than lib/vscode/.nvmrc: it pins a Node.js with the CVE-2026-111497
+      # fix. Keep it at or above lib/vscode/.nvmrc.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: lib/vscode/.nvmrc
+          node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
