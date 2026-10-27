@@ -639,18 +639,24 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.ts
-@@ -7,8 +7,9 @@ import { deepStrictEqual, strictEqual }
+@@ -5,10 +5,13 @@
+ 
+ import { deepStrictEqual, strictEqual } from 'assert';
  import { IStringDictionary } from '../../../../../base/common/collections.js';
- import { isWindows, OperatingSystem } from '../../../../../base/common/platform.js';
+-import { isWindows, OperatingSystem } from '../../../../../base/common/platform.js';
++import { IProcessEnvironment, isWindows, OperatingSystem } from '../../../../../base/common/platform.js';
  import { URI as Uri } from '../../../../../base/common/uri.js';
 -import { addTerminalEnvironmentKeys, createTerminalEnvironment, getUriLabelForShell, getCwd, getLangEnvVariable, getWorkspaceForTerminal, mergeEnvironments, preparePathForShell, shouldSetLangEnvVariable } from '../../common/terminalEnvironment.js';
+-import { GeneralShellType, PosixShellType, WindowsShellType } from '../../../../../platform/terminal/common/terminal.js';
 +import { addTerminalEnvironmentKeys, createTerminalEnvironment, reapplyProductRuntimeEnvironment, getUriLabelForShell, getCwd, getLangEnvVariable, getWorkspaceForTerminal, mergeEnvironments, preparePathForShell, shouldSetLangEnvVariable } from '../../common/terminalEnvironment.js';
- import { GeneralShellType, PosixShellType, WindowsShellType } from '../../../../../platform/terminal/common/terminal.js';
++import { GeneralShellType, IShellLaunchConfig, ITerminalEnvironment, PosixShellType, WindowsShellType } from '../../../../../platform/terminal/common/terminal.js';
++import { EnvironmentVariableMutatorType } from '../../../../../platform/terminal/common/environmentVariable.js';
++import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
 +import { storeProductRuntimeEnvironment } from '../../../../../platform/product/common/runtimeEnvironment.js';
  import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
  import { TestContextService, TestHistoryService } from '../../../../test/common/workbenchTestServices.js';
  import { testWorkspace } from '../../../../../platform/workspace/test/common/testWorkspace.js';
-@@ -315,12 +316,89 @@ suite('Workbench - TerminalEnvironment',
+@@ -315,12 +318,93 @@ suite('Workbench - TerminalEnvironment',
  			COLORTERM: 'truecolor',
  			TERM_PROGRAM: 'vscode'
  		};
@@ -661,6 +667,16 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
  				{ foo: 'bar', empty: '', ...commonVariables }
  			);
  		});
++		/**
++		 * What the terminal callers do: create the environment, apply the extensions' environment
++		 * variable collections, then re-apply the runtime env so it wins over them.
++		 */
++		async function createAsCallersDo(baseEnv: IProcessEnvironment, shellLaunchConfig: IShellLaunchConfig, envFromConfig?: ITerminalEnvironment, extensions?: MergedEnvironmentVariableCollection): Promise<IProcessEnvironment> {
++			const env = await createTerminalEnvironment(shellLaunchConfig, envFromConfig, undefined, undefined, 'off', baseEnv);
++			await extensions?.applyToProcessEnvironment(env, undefined);
++			reapplyProductRuntimeEnvironment(env);
++			return env;
++		}
 +		test('should re-apply stored runtime env after config and shell env merge', async () => {
 +			const baseEnv = {
 +				foo: 'base',
@@ -675,27 +691,15 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 +				pathRemovePattern: '(^|[/\\\\])ballerina([/\\\\]|$)'
 +			});
 +
-+			const env = await createTerminalEnvironment(
-+				{
-+					env: {
-+						foo: 'launch',
-+						PATH: [`/launch/bin`, `/opt/ballerina/launch`].join(pathSeparator)
-+					}
-+				},
-+				{
-+					foo: 'config',
-+					PATH: [`/config/bin`, `/opt/ballerina/config`].join(pathSeparator)
-+				},
-+				undefined,
-+				undefined,
-+				'off',
-+				baseEnv
-+			);
-+
-+			// What every caller does (terminalProcessManager, localTerminalBackend, remoteTerminalChannel):
-+			// createTerminalEnvironment carries the stored runtime env into the env it returns, and the
-+			// re-apply after it, past any extension contributions, is what puts that env on top.
-+			reapplyProductRuntimeEnvironment(env);
++			const env = await createAsCallersDo(baseEnv, {
++				env: {
++					foo: 'launch',
++					PATH: [`/launch/bin`, `/opt/ballerina/launch`].join(pathSeparator)
++				}
++			}, {
++				foo: 'config',
++				PATH: [`/config/bin`, `/opt/ballerina/config`].join(pathSeparator)
++			});
 +
 +			strictEqual(env.foo, 'runtime');
 +			strictEqual(env.BALLERINA_HOME, '/runtime/home');
@@ -713,29 +717,35 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/test/comm
 +				pathRemovePattern: '(^|[/\\\\])ballerina([/\\\\]|$)'
 +			});
 +
-+			const env = await createTerminalEnvironment(
-+				{
-+					strictEnv: true,
-+					env: {
-+						foo: 'launch',
-+						PATH: [`/strict/bin`, `/opt/ballerina/strict`].join(pathSeparator)
-+					}
-+				},
-+				undefined,
-+				undefined,
-+				undefined,
-+				'off',
-+				baseEnv
-+			);
-+
-+			// What every caller does (terminalProcessManager, localTerminalBackend, remoteTerminalChannel):
-+			// createTerminalEnvironment carries the stored runtime env into the env it returns, and the
-+			// re-apply after it, past any extension contributions, is what puts that env on top.
-+			reapplyProductRuntimeEnvironment(env);
++			const env = await createAsCallersDo(baseEnv, {
++				strictEnv: true,
++				env: {
++					foo: 'launch',
++					PATH: [`/strict/bin`, `/opt/ballerina/strict`].join(pathSeparator)
++				}
++			});
 +
 +			strictEqual(env.foo, 'runtime');
 +			strictEqual(env.PATH, [`/runtime/bin`, `/strict/bin`].join(pathSeparator));
 +			strictEqual(env.TERM_PROGRAM, undefined);
++		});
++		test('should keep the stored runtime env on top of extension contributions', async () => {
++			const baseEnv = { PATH: '/base/bin' };
++			storeProductRuntimeEnvironment(baseEnv, {
++				replace: { foo: 'runtime' },
++				pathPrepend: '/runtime/bin',
++				pathRemovePattern: '(^|[/\\\\])ballerina([/\\\\]|$)'
++			});
++			const extensions = new MergedEnvironmentVariableCollection(new Map([['ext', {
++				map: new Map([
++					['foo', { variable: 'foo', value: 'extension', type: EnvironmentVariableMutatorType.Replace }],
++					['PATH', { variable: 'PATH', value: ['/ext/bin', '/opt/ballerina/ext', ''].join(pathSeparator), type: EnvironmentVariableMutatorType.Prepend }]
++				])
++			}]]));
++
++			const env = await createAsCallersDo(baseEnv, {}, undefined, extensions);
++
++			deepStrictEqual({ foo: env.foo, PATH: env.PATH }, { foo: 'runtime', PATH: ['/runtime/bin', '/ext/bin', '/base/bin'].join(pathSeparator) });
 +		});
  	});
  	suite('getWorkspaceForTerminal', () => {
