@@ -73,10 +73,10 @@ jobs:
             echo "releaseMode=" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Use Node.js 20.x
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 24.22.1
 
       # Pinned: these run with marketplace tokens, so the version that publishes should be the
       # version that was reviewed, not whatever npm resolves that morning.

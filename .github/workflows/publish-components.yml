@@ -119,10 +119,11 @@ jobs:
             exit 1
           fi
 
+      # Pinned rather than read from lib/vscode/.nvmrc, which lags the current Node.js 24 release.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: lib/vscode/.nvmrc
+          node-version: 24.22.1
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 

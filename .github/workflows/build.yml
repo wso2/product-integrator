@@ -383,10 +383,11 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
+      # Pinned rather than read from lib/vscode/.nvmrc, which lags the current Node.js 24 release.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: lib/vscode/.nvmrc
+          node-version: 24.22.1
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
@@ -932,10 +933,11 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
+      # Pinned rather than read from lib/vscode/.nvmrc, which lags the current Node.js 24 release.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: lib/vscode/.nvmrc
+          node-version: 24.22.1
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
@@ -1794,7 +1796,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 24.22.1
 
       # The WI extension is built in-repo (no public download URL); its VSIX is mirrored to the
       # update bucket from this artifact (config `sourceFile`).
