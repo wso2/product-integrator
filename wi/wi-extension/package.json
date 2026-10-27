@@ -584,7 +584,7 @@
         },
         {
           "command": "BI.project-explorer.add-data-mapper",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == dataMappers",
+          "when": "view == wso2-integrator.explorer && viewItem == dataMappers",
           "group": "inline"
         },
         {
@@ -599,12 +599,12 @@
         },
         {
           "command": "BI.project-explorer.add-workflow",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == workflows",
+          "when": "view == wso2-integrator.explorer && viewItem == workflows",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.add-workflow-activity",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && viewItem == workflowActivities",
+          "when": "view == wso2-integrator.explorer && viewItem == workflowActivities",
           "group": "inline"
         }
       ],
