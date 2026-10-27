@@ -45,6 +45,9 @@ mv "${TOP_DIRS[0]}" "${STAGE}"
 # Change a patch only together with a new upstream version: the CDN keeps one object per version.
 apply_patch() {
   patch -s -N -F0 -p1 -d "${STAGE}" < "${SCRIPT_DIR}/icp/$1"
+  # A hunk that lands at an offset still applies, but GNU patch then keeps the pre-patch file as
+  # <name>.orig (--backup-if-mismatch is its default), and that backup would be zipped and shipped.
+  find "${STAGE}" -type f -name '*.orig' -delete
 }
 apply_patch icp.sh.patch
 # The patch is LF; restore CRLF after, since cmd.exe mis-parses labels and gotos in LF batch files.
