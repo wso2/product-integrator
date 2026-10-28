@@ -505,49 +505,54 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     }
     entries.push(functions);
 
-    if (!agentBuilder) {
-        // ---------- Data Mappers ----------
-        const dataMappers = new ProjectExplorerEntry(
-            'Data Mappers',
-            vscode.TreeItemCollapsibleState.Expanded,
-            null,
-            'dataMapper',
-            false
-        );
-        dataMappers.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-        dataMappers.contextValue = 'dataMappers';
-        dataMappers.children = getComponents(project.directoryMap[DIRECTORY_MAP.DATA_MAPPER], DIRECTORY_MAP.DATA_MAPPER, projectPath);
-        if (dataMappers.children.length > 0) {
-            dataMappers.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-        }
+    // ---------- Data Mappers ----------
+    // Agent Builder lists these only once the project has some; they are created from a flow.
+    const dataMappers = new ProjectExplorerEntry(
+        'Data Mappers',
+        vscode.TreeItemCollapsibleState.Expanded,
+        null,
+        'dataMapper',
+        false
+    );
+    dataMappers.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+    dataMappers.contextValue = 'dataMappers';
+    dataMappers.children = getComponents(project.directoryMap[DIRECTORY_MAP.DATA_MAPPER], DIRECTORY_MAP.DATA_MAPPER, projectPath);
+    if (dataMappers.children.length > 0) {
+        dataMappers.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+    }
+    if (!agentBuilder || dataMappers.children.length > 0) {
         entries.push(dataMappers);
+    }
 
-        // ---------- Workflows ----------
-        const workflowChildren = getComponents(project.directoryMap[DIRECTORY_MAP.WORKFLOW] ?? [], DIRECTORY_MAP.WORKFLOW, projectPath);
-        const workflows = new ProjectExplorerEntry(
-            'Workflows',
-            workflowChildren.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
-            null,
-            'workflow',
-            false
-        );
-        workflows.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-        workflows.contextValue = 'workflows';
-        workflows.children = workflowChildren;
+    // ---------- Workflows ----------
+    const workflowChildren = getComponents(project.directoryMap[DIRECTORY_MAP.WORKFLOW] ?? [], DIRECTORY_MAP.WORKFLOW, projectPath);
+    const workflows = new ProjectExplorerEntry(
+        'Workflows',
+        workflowChildren.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
+        null,
+        'workflow',
+        false
+    );
+    workflows.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+    workflows.contextValue = 'workflows';
+    workflows.children = workflowChildren;
+    if (!agentBuilder || workflows.children.length > 0) {
         entries.push(workflows);
+    }
 
-        // ---------- Workflow Activities ----------
-        const activityChildren = getComponents(project.directoryMap[DIRECTORY_MAP.ACTIVITY] ?? [], DIRECTORY_MAP.ACTIVITY, projectPath);
-        const workflowActivities = new ProjectExplorerEntry(
-            'Workflow Activities',
-            activityChildren.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
-            null,
-            'task',
-            false
-        );
-        workflowActivities.resourceUri = Uri.parse(`bi-category:${projectPath}`);
-        workflowActivities.contextValue = 'workflowActivities';
-        workflowActivities.children = activityChildren;
+    // ---------- Workflow Activities ----------
+    const activityChildren = getComponents(project.directoryMap[DIRECTORY_MAP.ACTIVITY] ?? [], DIRECTORY_MAP.ACTIVITY, projectPath);
+    const workflowActivities = new ProjectExplorerEntry(
+        'Workflow Activities',
+        activityChildren.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
+        null,
+        'task',
+        false
+    );
+    workflowActivities.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+    workflowActivities.contextValue = 'workflowActivities';
+    workflowActivities.children = activityChildren;
+    if (!agentBuilder || workflowActivities.children.length > 0) {
         entries.push(workflowActivities);
     }
 
