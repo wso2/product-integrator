@@ -162,7 +162,7 @@ jobs:
       # `persist-credentials: false`: this job pushes the pinned-build branch below, which needs the
       # credential to survive the checkout.
       - name: Checkout source ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ steps.configure.outputs.source_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -207,7 +207,7 @@ jobs:
           ./ci/build/apply-version.sh --force-product --force-extension
 
       - name: Upload versions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: versions
           path: |
