@@ -501,10 +501,31 @@ if [ "$_detach_ok" -eq 0 ]; then
     exit 1
 fi
 DMG_MOUNT_DIR=""  # Clear only after successful detach so the trap can still retry on failure
-hdiutil convert "$TEMP_DMG" \
-    -format UDZO \
-    -imagekey zlib-level=9 \
-    -o "$WORK_DIR/$DMG_NAME"
+# `hdiutil convert` intermittently fails with "Resource temporarily unavailable" (EAGAIN)
+# within seconds of a clean detach on the hosted macos-15-intel runners: it hit two of the
+# three x64 release attempts that reached this point on 2026-10-28, after the app had already
+# been signed, while the arm64 runner never saw it. A plain retry is enough -- the image is
+# intact, the kernel just has not finished releasing the device -- so back off and try again,
+# removing any partial output so a later attempt does not refuse to overwrite it.
+_convert_ok=0
+for _retry in 1 2 3 4 5; do
+    rm -f "$WORK_DIR/$DMG_NAME"
+    if hdiutil convert "$TEMP_DMG" \
+        -format UDZO \
+        -imagekey zlib-level=9 \
+        -o "$WORK_DIR/$DMG_NAME"; then
+        _convert_ok=1; break
+    fi
+    if [ "$_retry" -lt 5 ]; then
+        _wait=$((_retry * 5))
+        print_info "DMG convert attempt $_retry failed; retrying in ${_wait}s..."
+        sleep "$_wait"
+    fi
+done
+if [ "$_convert_ok" -eq 0 ]; then
+    print_error "hdiutil convert failed after 5 attempts"
+    exit 1
+fi
 
 if [ -f "$WORK_DIR/$DMG_NAME" ]; then
     print_info "Successfully created: $DMG_NAME"
