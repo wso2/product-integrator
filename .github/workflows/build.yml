@@ -1867,10 +1867,11 @@ jobs:
           # Only a non-pre-release becomes the repository Latest.
           make_latest: ${{ !inputs.is_prerelease }}
           files: release-files/*
-        env:
           # GITHUB_TOKEN cannot write to another repo; cross-repo releases use the dedicated
-          # fine-grained token (preflighted by release.yml before anything builds).
-          GITHUB_TOKEN: ${{ inputs.release_repository != '' && secrets.AGENT_BUILDER_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          # fine-grained token (preflighted by release.yml before anything builds). This must be
+          # the `token` input, not `env: GITHUB_TOKEN`: the input defaults to github.token and the
+          # action prefers it over the env var, so an env-only token is silently ignored.
+          token: ${{ inputs.release_repository != '' && secrets.AGENT_BUILDER_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       # A `nightly*` tag is rolling: every build's filenames carry a fresh timestamp, so the upload
       # above adds to the previous build's assets instead of replacing them. This step verifies the
@@ -2068,7 +2069,7 @@ jobs:
             --targets "${{ steps.targets.outputs.targets }}" \
             --sequence "${SEQUENCE}" \
             --app-version "${{ needs.resolve-versions.outputs.integrator_version }}" \
-            --app-release-base "https://github.com/${{ github.repository }}/releases/download/${{ inputs.publish_tag }}" \
+            --app-release-base "https://github.com/${{ inputs.release_repository || github.repository }}/releases/download/${{ inputs.publish_tag }}" \
             --app-commit "${{ github.sha }}" \
             --artifact-slug "${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}" \
             --source-flavors "wso2.ballerina=${{ inputs.ballerina_extension_source || 'marketplace' }},wso2.micro-integrator=${{ inputs.mi_extension_source || 'marketplace' }}" \
