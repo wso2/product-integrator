@@ -572,11 +572,12 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/te
 ===================================================================
 --- product-integrator.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
 +++ product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
-@@ -19,6 +19,11 @@ import { isNumber, isString } from '../.
+@@ -19,6 +19,12 @@ import { isNumber, isString } from '../.
  import { IHistoryService } from '../../../services/history/common/history.js';
  import { ILogService } from '../../../../platform/log/common/log.js';
  import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 +import {
++	applyProductRuntimeEnvironment,
 +	applyStoredProductRuntimeEnvironment,
 +	getStoredProductRuntimeEnvironment,
 +	storeProductRuntimeEnvironment
@@ -592,14 +593,16 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/terminal/common/te
  	if (shellLaunchConfig.strictEnv) {
  		// strictEnv is true, only use the requested env (ignoring null entries)
  		mergeNonNullKeys(env, shellLaunchConfig.env);
-@@ -297,13 +303,30 @@ export async function createTerminalEnvi
+@@ -297,13 +303,32 @@ export async function createTerminalEnvi
  		// Merge config (settings) and ShellLaunchConfig environments
  		mergeEnvironments(env, allowedEnvFromConfig);
  		mergeEnvironments(env, shellLaunchConfig.env);
 +	}
 +
 +	if (runtimeEnv) {
-+		applyStoredProductRuntimeEnvironment(env);
++		// From the value read off baseEnv above: by now env has been sanitised (or, with strictEnv,
++		// built from the launch config alone), so the stored keys are not on it to read back.
++		applyProductRuntimeEnvironment(env, runtimeEnv);
 +		storeProductRuntimeEnvironment(env, runtimeEnv);
 +	}
  
