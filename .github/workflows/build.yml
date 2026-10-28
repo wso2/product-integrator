@@ -905,7 +905,28 @@ jobs:
             fi
             exit 1
           fi
-          xcrun stapler staple "$DMG"
+          # Apple has accepted the DMG by here; `stapler` only fetches the ticket from Apple's
+          # CloudKit endpoint and attaches it. On the hosted macos-15-intel runners that fetch
+          # intermittently dies with "The network connection was lost" and exit 68, which cost
+          # two x64 release attempts on 2026-10-28 after a 20-minute notarization wait, while a
+          # fresh ticket can also take a moment to propagate (exit 65). Both are transient, so
+          # retry with backoff instead of failing the whole job on one dropped request.
+          _staple_ok=0
+          for _retry in 1 2 3 4 5; do
+            if xcrun stapler staple "$DMG"; then
+              _staple_ok=1; break
+            fi
+            if [ "$_retry" -lt 5 ]; then
+              _wait=$((_retry * 15))
+              echo "stapler attempt $_retry failed; retrying in ${_wait}s..."
+              sleep "$_wait"
+            fi
+          done
+          if [ "$_staple_ok" -eq 0 ]; then
+            echo "::error::stapler failed after 5 attempts for $DMG" >&2
+            exit 1
+          fi
+          xcrun stapler validate "$DMG"
 
       # This is the only AWS consumer in the job, so the credentials go in its own `env:` rather
       # than through configure-aws-credentials, which writes them to $GITHUB_ENV and would leave
