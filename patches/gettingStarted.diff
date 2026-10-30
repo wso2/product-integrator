@@ -1554,7 +1554,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 ===================================================================
 --- /dev/null
 +++ product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
-@@ -0,0 +1,592 @@
+@@ -0,0 +1,562 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -1622,9 +1622,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		logo.src = FileAccess.asBrowserUri('vs/workbench/browser/parts/editor/media/integrator-activity-icon-dark.svg').toString(true);
 +		logo.alt = 'WSO2 Integrator';
 +
-+		const heroBadge = append(leftSection, $('div.login-badge'));
-+		heroBadge.textContent = 'Get Started';
-+
 +		const headline = append(leftSection, $('h1.login-headline'));
 +		headline.textContent = 'Welcome to\nWSO2 Integrator';
 +
@@ -1635,9 +1632,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +		const rightSection = append(wrapper, $('.login-right-section'));
 +
 +		const formContainer = append(rightSection, $('.login-form-container'));
-+
-+		const formOverline = append(formContainer, $('div.form-overline'));
-+		formOverline.textContent = 'WSO2 Integrator';
 +
 +		const formTitle = append(formContainer, $('h2.form-title'));
 +		formTitle.textContent = 'Get Started';
@@ -1804,8 +1798,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +				--welcome-hero-muted: color-mix(in srgb, var(--wso2-brand-white) 78%, transparent);
 +				--welcome-hero-surface: color-mix(in srgb, var(--wso2-brand-white) 16%, transparent);
 +				--welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-white) 36%, transparent);
-+				--welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent);
-+				--welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent-soft) 52%, transparent);
 +				position: fixed;
 +				inset: 0;
 +				padding: 32px;
@@ -1874,8 +1866,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +				--welcome-hero-muted: color-mix(in srgb, var(--wso2-brand-ink) 76%, var(--wso2-brand-white));
 +				--welcome-hero-surface: color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
 +				--welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-ink-alt) 16%, transparent);
-+				--welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-white) 72%, transparent);
-+				--welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent) 34%, transparent);
 +			}
 +
 +			body.vscode-light .wso2-login-dialog .login-left-section {
@@ -1901,19 +1891,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +				display: flex;
 +				align-items: center;
 +				justify-content: center;
-+			}
-+
-+			.wso2-login-dialog .login-badge {
-+				display: inline-flex;
-+				align-items: center;
-+				padding: 8px 14px;
-+				border-radius: 999px;
-+				font-size: 13px;
-+				font-weight: 600;
-+				background: var(--welcome-hero-badge-bg);
-+				color: var(--welcome-hero-foreground);
-+				border: 1px solid var(--welcome-hero-badge-border);
-+				backdrop-filter: blur(10px);
 +			}
 +
 +			.wso2-login-dialog .logo {
@@ -1977,15 +1954,6 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +						#ffffff 100%
 +					);
 +				box-shadow: 0 18px 36px color-mix(in srgb, var(--wso2-brand-accent) 12%, transparent);
-+			}
-+
-+			.wso2-login-dialog .form-overline {
-+				margin-bottom: 10px;
-+				font-size: 12px;
-+				font-weight: 700;
-+				letter-spacing: 0.12em;
-+				text-transform: uppercase;
-+				color: var(--wso2-brand-accent);
 +			}
 +
 +			.wso2-login-dialog .form-title {
@@ -2087,36 +2055,38 @@ Index: product-integrator/lib/vscode/src/vs/workbench/browser/parts/editor/wso2L
 +					0 14px 24px color-mix(in srgb, var(--wso2-brand-neutral-900) 26%, transparent);
 +			}
 +
++			.monaco-workbench.vs-dark .wso2-login-dialog .wso2-sign-in-btn,
++			.monaco-workbench.hc-black .wso2-login-dialog .wso2-sign-in-btn {
++				background: var(--vscode-button-background);
++				color: var(--vscode-button-foreground);
++				border-color: var(--vscode-button-border, var(--vscode-button-background));
++			}
++
++			.monaco-workbench.vs-dark .wso2-login-dialog .wso2-sign-in-btn:hover:not(:disabled),
++			.monaco-workbench.hc-black .wso2-login-dialog .wso2-sign-in-btn:hover:not(:disabled) {
++				background: var(--vscode-button-hoverBackground);
++			}
++
 +			.wso2-login-dialog .wso2-sign-in-btn:disabled {
 +				opacity: 0.6;
 +				cursor: not-allowed;
 +			}
 +
 +			.wso2-login-dialog .skip-btn {
-+				width: 100%;
-+				height: 44px;
-+				font-size: 15px;
++				margin: 0 auto;
++				padding: 4px 8px;
++				font-size: 14px;
 +				font-weight: 500;
-+				border-radius: 12px;
-+				background: linear-gradient(
-+					180deg,
-+					color-mix(in srgb, var(--wso2-brand-accent-soft) 72%, var(--wso2-brand-white)) 0%,
-+					color-mix(in srgb, var(--wso2-brand-accent) 16%, var(--wso2-brand-white)) 100%
-+				);
-+				color: var(--wso2-brand-ink);
-+				border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 28%, var(--vscode-button-border));
++				background: none;
++				color: var(--vscode-textLink-foreground);
++				border: none;
++				border-radius: 4px;
 +				cursor: pointer;
-+				transition: all 0.2s ease;
-+				box-shadow: 0 8px 18px color-mix(in srgb, var(--wso2-brand-accent) 14%, transparent);
 +			}
 +
 +			.wso2-login-dialog .skip-btn:hover {
-+				background: linear-gradient(
-+					180deg,
-+					color-mix(in srgb, var(--wso2-brand-accent-soft) 82%, var(--wso2-brand-white)) 0%,
-+					color-mix(in srgb, var(--wso2-brand-accent) 24%, var(--wso2-brand-white)) 100%
-+				);
-+				transform: translateY(-1px);
++				color: var(--vscode-textLink-activeForeground);
++				text-decoration: underline;
 +			}
 +
 +			.wso2-login-dialog .cancel-btn {
