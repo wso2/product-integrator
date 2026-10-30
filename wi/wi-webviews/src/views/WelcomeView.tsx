@@ -73,8 +73,6 @@ const TopSection = styled.div`
     --welcome-hero-muted: color-mix(in srgb, var(--wso2-brand-white) 78%, transparent);
     --welcome-hero-surface: color-mix(in srgb, var(--wso2-brand-white) 16%, transparent);
     --welcome-hero-surface-border: color-mix(in srgb, var(--wso2-brand-white) 36%, transparent);
-    --welcome-hero-badge-bg: color-mix(in srgb, var(--wso2-brand-accent-soft) 18%, transparent);
-    --welcome-hero-badge-border: color-mix(in srgb, var(--wso2-brand-accent-soft) 52%, transparent);
     background: linear-gradient(180deg, var(--wso2-brand-hero-start) 0%, var(--wso2-brand-hero-end) 100%);
     padding: 40px 60px 80px;
     position: relative;
@@ -242,23 +240,13 @@ export const UserInitial = styled.span`
     text-transform: uppercase;
 `;
 
-const GetStartedBadge = styled.div`
-    display: inline-block;
-    backdrop-filter: blur(10px);
-    background: var(--welcome-hero-badge-bg);
-    border-radius: 20px;
-    padding: 8px 16px;
-    margin-bottom: 24px;
-    font-size: 13px;
-    color: var(--welcome-hero-foreground);
-    font-weight: 500;
-    width: 106px;
-`;
-
 const Headline = styled.h1`
     font-size: 48px;
     font-weight: 700;
     margin: 0;
+    /* Space the removed Get Started badge used to take, so the hero layout is unchanged:
+       13px text at Inter's normal line-height (1.21) + 8px top/bottom padding + 24px margin-bottom. */
+    margin-top: calc(13px * 1.21 + 8px * 2 + 24px);
     color: var(--welcome-hero-foreground);
     line-height: 1.2;
 `;
@@ -1024,7 +1012,6 @@ export const WelcomeView: React.FC = () => {
 						</ConfigureBtn>
 					</TopBtnSection>
 				</TopControlsSection>
-				<GetStartedBadge>Get Started</GetStartedBadge>
 				<Headline>WSO2 Integrator</Headline>
 				<Caption>
                     Build and connect integrations, long-running workflows, MCP servers,
