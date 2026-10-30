@@ -167,6 +167,25 @@ jobs:
           # VSIX would otherwise surface later as a hashing error.
           ls -la wi/wi-extension/*.vsix
 
+      # No installer build here to take them from: package the runtimes with the same scripts the
+      # release uses. Carried ones are skipped (ids trimmed as the generator does); a dry run hashes nothing.
+      - name: Package runtimes
+        if: ${{ !inputs.dry_run }}
+        env:
+          CARRY_INPUT: ${{ inputs.carry_components }}
+        run: |
+          set -euo pipefail
+          CARRY=",$(printf '%s' "${CARRY_INPUT}" | tr -d '[:space:]'),"
+          read_version() {
+            awk -F= -v k="$1" '$1 == k { print substr($0, index($0, "=") + 1); exit }' ci/build/component-versions.properties | tr -d '\r'
+          }
+          if [[ "${CARRY}" != *,ballerina-runtime,* ]]; then
+            ./ci/build/package-ballerina-runtime.sh "$(read_version ballerina.version)" out
+          fi
+          if [[ "${CARRY}" != *,icp,* ]]; then
+            ./ci/build/package-icp.sh "$(read_version icp.version)" out
+          fi
+
       - name: Login to AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
