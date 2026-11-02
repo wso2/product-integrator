@@ -139,14 +139,14 @@ jobs:
       wi_extension_version: ${{ steps.stamp.outputs.wi_extension_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
       - name: Download the caller's versions
         if: ${{ inputs.versions_artifact != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ${{ inputs.versions_artifact }}
           path: .
@@ -161,7 +161,7 @@ jobs:
           ./ci/build/apply-version.sh
 
       - name: Upload versions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: build-versions
           path: |
@@ -217,7 +217,7 @@ jobs:
 
       - name: cosign-installer
         if: ${{ inputs.publish_update_source == true && inputs.build_packed_installers == true && inputs.publish_tag != '' }}
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
       # Presence is not enough: a pinned key from the wrong pair passes every check downstream,
       # because the signing steps verify against the signing key itself. Only comparing the two
@@ -256,13 +256,13 @@ jobs:
           WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
       - name: Download stamped versions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: build-versions
           path: .
@@ -376,7 +376,7 @@ jobs:
             runner: macos-15-intel
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           submodules: recursive
@@ -385,14 +385,14 @@ jobs:
 
       # Pinned rather than read from lib/vscode/.nvmrc, which lags the current Node.js 24 release.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24.22.1
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
       - name: Cache Rust toolchain (macOS)
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/bin/
@@ -406,7 +406,7 @@ jobs:
 
       - name: Cache CLI compilation (macOS)
         id: cache-cli-macos
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             lib/vscode/cli/target/
@@ -415,7 +415,7 @@ jobs:
             cli-macos-${{ matrix.arch }}-
 
       - name: Cache native modules (macOS)
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             node_modules
@@ -427,7 +427,7 @@ jobs:
 
       - name: Cache built-in extensions
         id: cache-extensions-macos
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             lib/vscode/.build/builtInExtensions
@@ -450,7 +450,7 @@ jobs:
             extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-
 
       - name: Download compilation artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: compilation
           path: lib/vscode
@@ -459,7 +459,7 @@ jobs:
         run: tar -xzf compilation.tar.gz
 
       - name: Download WI extension VSIX
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wi-extension-vsix
           path: wi/wi-extension
@@ -499,7 +499,7 @@ jobs:
       # Deliberately after the cache steps: a timestamped version in
       # hashFiles('ci/build/component-versions.properties') would bust the extensions cache every run.
       - name: Download stamped versions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: build-versions
           path: .
@@ -660,7 +660,7 @@ jobs:
 
       - name: Upload macOS artifacts
         if: ${{ inputs.build_packed_installers == false }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: artifacts-darwin-${{ matrix.arch }}
           path: |
@@ -678,7 +678,7 @@ jobs:
       # The exact editor ("core") the DMG below is built from; published as a release asset.
       - name: Upload macOS core
         if: ${{ inputs.build_packed_installers == true && inputs.publish_tag != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: core-darwin-${{ matrix.arch }}
           path: lib/artifacts/VSCode-darwin-${{ matrix.arch }}.zip
@@ -874,7 +874,7 @@ jobs:
 
       - name: Upload macOS DMG artifacts
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Product-Integrator-Darwin-DMG-${{ matrix.arch }}
           path: |
@@ -884,7 +884,7 @@ jobs:
 
       - name: cosign-installer
         if: ${{ inputs.build_packed_installers == true }}
-        uses: sigstore/cosign-installer@v3.5.0
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
       - name: Sign the dmg installer
         if: ${{ inputs.build_packed_installers == true }}
         run: |
@@ -907,7 +907,7 @@ jobs:
 
       - name: Upload Signatures and Hashes for mac installers
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Signatures-and-Hashes-MAC-${{ matrix.arch }}
           path: |
@@ -926,7 +926,7 @@ jobs:
         working-directory: lib/vscode
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           submodules: recursive
@@ -935,14 +935,14 @@ jobs:
 
       # Pinned rather than read from lib/vscode/.nvmrc, which lags the current Node.js 24 release.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24.22.1
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
       - name: Cache native modules (Windows)
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             lib/vscode/node_modules
@@ -952,7 +952,7 @@ jobs:
             native-modules-windows-
 
       - name: Cache Rust toolchain (Windows)
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/bin/
@@ -965,7 +965,7 @@ jobs:
 
       - name: Cache CLI compilation (Windows)
         id: cache-cli-windows
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             lib/vscode/cli/target/
@@ -975,7 +975,7 @@ jobs:
 
       - name: Cache built-in extensions
         id: cache-extensions-windows
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             lib/vscode/.build/builtInExtensions
@@ -998,7 +998,7 @@ jobs:
             extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-
 
       - name: Download compilation artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: compilation
           path: lib/vscode
@@ -1008,7 +1008,7 @@ jobs:
         run: tar -xzf compilation.tar.gz
 
       - name: Download WI extension VSIX
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wi-extension-vsix
           path: wi/wi-extension
@@ -1062,7 +1062,7 @@ jobs:
       # Deliberately after the cache steps: a timestamped version in
       # hashFiles('ci/build/component-versions.properties') would bust the extensions cache every run.
       - name: Download stamped versions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: build-versions
           path: .
@@ -1264,7 +1264,7 @@ jobs:
 
       - name: Upload Windows artifacts
         if: ${{ inputs.build_packed_installers == false }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: artifacts-win32
           path: |
@@ -1279,7 +1279,7 @@ jobs:
       # The exact editor ("core") the MSIs below are built from; published as a release asset.
       - name: Upload Windows core
         if: ${{ inputs.build_packed_installers == true && inputs.publish_tag != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: core-win32-x64
           path: lib/artifacts/VSCode-win32-x64.zip
@@ -1332,7 +1332,7 @@ jobs:
 
       - name: Upload Windows artifacts
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Product-Integrator-Windows
           path: |
@@ -1341,7 +1341,7 @@ jobs:
       
       - name: cosign-installer
         if: ${{ inputs.build_packed_installers == true }}
-        uses: sigstore/cosign-installer@v3.5.0
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
       # Both MSIs are signed: the full first-install installer AND the small editor-only
       # `-update` MSI the in-place update mechanism downloads (§D8).
       - name: Sign the msi installers
@@ -1377,7 +1377,7 @@ jobs:
 
       - name: Upload Signatures and Hashes for msi installer
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Signatures-and-Hashes-MSI
           path: |
@@ -1393,7 +1393,7 @@ jobs:
     if: always() && (needs.compile.result == 'success') && (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') && (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') && (inputs.build_packed_installers == false) && (inputs.publish_tag == '')
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: all-artifacts
 
@@ -1424,7 +1424,7 @@ jobs:
           ls -la release-artifacts/
 
       - name: Upload unified release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wso2-integrator-release
           path: release-artifacts/*
@@ -1461,77 +1461,77 @@ jobs:
       (inputs.build_packed_installers == true)
     steps:
       - name: Download Linux DEB artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: Product-Integrator-DEB
           path: release-files/
         continue-on-error: true
 
       - name: Download Signatures and Hashes (DEB)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: Signatures-and-Hashes-DEB
           path: release-files/
         continue-on-error: true
 
       - name: Download Linux RPM artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: Product-Integrator-RPM
           path: release-files/
         continue-on-error: true
 
       - name: Download Signatures and Hashes (RPM)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: Signatures-and-Hashes-RPM
           path: release-files/
         continue-on-error: true
 
       - name: Download Linux TAR artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: Product-Integrator-TAR
           path: release-files/
         continue-on-error: true
 
       - name: Download macOS DMG artifacts (arm64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: Product-Integrator-Darwin-DMG-arm64
           path: release-files/
         continue-on-error: true
 
       - name: Download macOS DMG artifacts (x64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: Product-Integrator-Darwin-DMG-x64
           path: release-files/
         continue-on-error: true
 
       - name: Download Signatures and Hashes (MAC arm64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: Signatures-and-Hashes-MAC-arm64
           path: release-files/
         continue-on-error: true
 
       - name: Download Signatures and Hashes (MAC x64)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: Signatures-and-Hashes-MAC-x64
           path: release-files/
         continue-on-error: true
 
       - name: Download Windows MSI artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: Product-Integrator-Windows
           path: release-files/
         continue-on-error: true
 
       - name: Download Signatures and Hashes (MSI)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: Signatures-and-Hashes-MSI
           path: release-files/
@@ -1540,7 +1540,7 @@ jobs:
       # The WI extension ships as a release asset: for nightly, the rolling tag is how the vsix is
       # distributed (there is no Marketplace / Open VSX publish).
       - name: Download WI extension VSIX
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wi-extension-vsix
           path: release-files/
@@ -1550,34 +1550,34 @@ jobs:
       # extensions + CLI, no Ballerina/ICP/JRE), and the versions they were built with, so
       # downstream builds wrap these exact binaries instead of rebuilding them.
       - name: Download Linux core
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: core-linux-x64
           path: core/
 
       - name: Download macOS core (arm64)
         if: ${{ inputs.build_macos == true }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: core-darwin-arm64
           path: core/
 
       - name: Download macOS core (x64)
         if: ${{ inputs.build_macos == true }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: core-darwin-x64
           path: core/
 
       - name: Download Windows core
         if: ${{ inputs.build_windows == true }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: core-win32-x64
           path: core/
 
       - name: Download stamped versions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: build-versions
           path: core/versions/
@@ -1607,7 +1607,7 @@ jobs:
       # Signed because they are build inputs for downstream builds; a .sha256 in the same release
       # cannot detect a replaced asset.
       - name: cosign-installer
-        uses: sigstore/cosign-installer@v3.5.0
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
 
       - name: Sign the core files
         shell: bash
@@ -1684,7 +1684,7 @@ jobs:
           echo "All expected release assets are present."
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ inputs.publish_tag }}
           name: ${{ steps.release-tag.outputs.name }}
@@ -1782,7 +1782,7 @@ jobs:
       CHANNEL: ${{ inputs.channel || 'insider' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # This job only reads the repo; later steps hold signing and cloud credentials, so the
           # checkout token must not persist into .git/config.
@@ -1794,14 +1794,14 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24.22.1
 
       # The WI extension is built in-repo (no public download URL); its VSIX is mirrored to the
       # update bucket from this artifact (config `sourceFile`).
       - name: Download WI extension VSIX
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wi-extension-vsix
           path: wi/wi-extension
@@ -1865,7 +1865,7 @@ jobs:
 
       - name: cosign-installer
         if: ${{ steps.targets.outputs.targets != '' }}
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
       # The public half is DERIVED from the signing key rather than configured separately. A second
       # public-key secret can only agree or disagree with this one, and when it disagreed the
@@ -1896,7 +1896,7 @@ jobs:
 
       - name: Upload source artifact
         if: ${{ steps.targets.outputs.targets != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: update-source-${{ env.CHANNEL }}
           path: |
@@ -1905,7 +1905,7 @@ jobs:
 
       - name: Login to AWS
         if: ${{ steps.targets.outputs.targets != '' }}
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

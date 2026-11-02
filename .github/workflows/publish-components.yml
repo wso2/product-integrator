@@ -93,7 +93,7 @@ jobs:
           WSO2_UPDATE_PUBLIC_KEY: ${{ secrets.WSO2_UPDATE_PUBLIC_KEY }}
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # Read-only job with signing and cloud credentials in later steps: the checkout token
           # must not persist into .git/config.
@@ -121,7 +121,7 @@ jobs:
 
       # Pinned rather than read from lib/vscode/.nvmrc, which lags the current Node.js 24 release.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24.22.1
           cache: npm
@@ -145,7 +145,7 @@ jobs:
 
       - name: Setup WI
         if: ${{ inputs.rebuild_wi_extension }}
-        uses: gigara/setup-rush@v1.2.0
+        uses: gigara/setup-rush@7ba3446572d15f5eacc85de383ad9679dfb7223c # v1.2.0
         with:
           pnpm: 10.11.0
 
@@ -168,7 +168,7 @@ jobs:
           ls -la wi/wi-extension/*.vsix
 
       - name: Login to AWS
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -297,14 +297,14 @@ jobs:
 
       - name: Upload generated document for inspection
         if: ${{ inputs.dry_run }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dry-run-source-${{ inputs.channel }}
           path: source.json
 
       - name: cosign-installer
         if: ${{ !inputs.dry_run }}
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
       # Derived from the signing key, not configured separately: a second public-key secret could
       # only agree or disagree with this one, and a disagreement still verified in-run.
