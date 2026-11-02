@@ -71,6 +71,7 @@
 // with --fetch-components it prints what would be fetched and where.
 
 import { createHash } from 'node:crypto';
+import { once } from 'node:events';
 import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import * as path from 'node:path';
@@ -209,7 +210,10 @@ async function hashAndSize(url, mirrorPath) {
 			hash.update(chunk);
 			size += chunk.length;
 			if (out && !out.write(chunk)) {
-				await new Promise(resolve => out.once('drain', () => resolve()).once('error', () => resolve()));
+				// events.once removes both its listeners whichever fires, so the thousands of waits
+				// a ~350 MB mirror makes do not pile up 'error' listeners. An error rejects it; the
+				// listener above has already recorded it, and the next pass reports it.
+				await once(out, 'drain').catch(() => { });
 			}
 		}
 	} catch (err) {
