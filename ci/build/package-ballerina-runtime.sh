@@ -51,11 +51,10 @@ rm -rf "${STAGE}/docs" "${STAGE}/examples"
 # Our launcher changes ride on upstream's scripts as patches. No fuzz: if upstream reworks the lines
 # they touch, fail here and refresh the patch (diff -u against the new upstream script).
 # Change a patch only together with a new upstream version: the CDN keeps one object per version.
+# --no-backup-if-mismatch: a hunk that lands at an offset still applies, but GNU patch would then
+# keep the pre-patch launcher as <name>.orig and it would be zipped and shipped.
 apply_patch() {
-  patch -s -N -F0 -p1 -d "${STAGE}" < "${SCRIPT_DIR}/ballerina-runtime/$1"
-  # A hunk that lands at an offset still applies, but GNU patch then keeps the pre-patch file as
-  # <name>.orig (--backup-if-mismatch is its default), and that backup would be zipped and shipped.
-  find "${STAGE}" -type f -name '*.orig' -delete
+  patch -s -N -F0 --no-backup-if-mismatch -p1 -d "${STAGE}" < "${SCRIPT_DIR}/ballerina-runtime/$1"
 }
 apply_patch bal.patch
 # The patch is LF; restore CRLF after, since cmd.exe mis-parses labels and gotos in LF batch files.
