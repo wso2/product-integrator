@@ -43,11 +43,14 @@ mv "${TOP_DIRS[0]}" "${STAGE}"
 # Our launcher changes ride on upstream's scripts as patches. No fuzz: if upstream reworks the lines
 # they touch, fail here and refresh the patch (diff -u against the new upstream script).
 # Change a patch only together with a new upstream version: the CDN keeps one object per version.
+#
+# Known wart, kept on purpose: against ICP 2.1.0, icp.sh.patch lands one line off (hunks 2 and 3),
+# so GNU patch keeps the pre-patch launcher as bin/icp.sh.orig (--backup-if-mismatch is its default)
+# and the published 2.1.0 zip contains it. Dropping it now would change the bytes of a version that
+# signed documents already name. With the next ICP version: refresh icp.sh.patch against it and add
+# --no-backup-if-mismatch here, as package-ballerina-runtime.sh already does.
 apply_patch() {
   patch -s -N -F0 -p1 -d "${STAGE}" < "${SCRIPT_DIR}/icp/$1"
-  # A hunk that lands at an offset still applies, but GNU patch then keeps the pre-patch file as
-  # <name>.orig (--backup-if-mismatch is its default), and that backup would be zipped and shipped.
-  find "${STAGE}" -type f -name '*.orig' -delete
 }
 apply_patch icp.sh.patch
 # The patch is LF; restore CRLF after, since cmd.exe mis-parses labels and gotos in LF batch files.

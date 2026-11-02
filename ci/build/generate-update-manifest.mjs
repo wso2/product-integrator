@@ -135,19 +135,17 @@ function safeSegment(value, what) {
 	return value;
 }
 
-// Streams the artifact once: hashes it, and (when mirrorPath is set) writes the same bytes to
-// disk for the CI job to upload to the update bucket.
-// Fetch an artifact, coping with release assets on a PRIVATE GitHub repo (the enterprise mirror
-// we build test releases on). A token on the /releases/download/ browser URL is not enough there —
-// GitHub returns 404 for it regardless — so resolve the asset through the API and fetch it by id
-// with an octet-stream Accept header. The API then redirects to object storage, which rejects a
-// request carrying a second auth mechanism, so authenticate the first hop only and follow bare.
 // One cap on every download, request and body alike: a stalled upstream (Open VSX, GitHub) would
 // otherwise hang the publish job until the runner's 6 hour limit. Generous for the largest artifact
 // (a ~350 MB runtime takes well under a minute on a hosted runner); `--retry`-style retries are
 // not attempted, since a publish that needed one is worth a look.
 const FETCH_TIMEOUT_MS = 20 * 60 * 1000;
 
+// Fetch an artifact, coping with release assets on a PRIVATE GitHub repo (the enterprise mirror
+// we build test releases on). A token on the /releases/download/ browser URL is not enough there —
+// GitHub returns 404 for it regardless — so resolve the asset through the API and fetch it by id
+// with an octet-stream Accept header. The API then redirects to object storage, which rejects a
+// request carrying a second auth mechanism, so authenticate the first hop only and follow bare.
 async function fetchArtifact(url) {
 	const token = process.env['GITHUB_TOKEN'];
 	const parsed = new URL(url);
@@ -180,25 +178,30 @@ async function fetchArtifact(url) {
 	return location ? fetch(location, { redirect: 'follow', signal }) : res;
 }
 
+// Streams the artifact once: hashes it, and (when mirrorPath is set) writes the same bytes to
+// disk for the CI job to upload to the update bucket.
 async function hashAndSize(url, mirrorPath) {
-	const res = await fetchArtifact(url);
-	if (!res.ok || !res.body) {
-		throw new Error(`Failed to download ${url}: HTTP ${res.status}`);
-	}
 	const hash = createHash('sha256');
 	let size = 0;
 	let out;
 	let outError;
-	if (mirrorPath) {
-		mkdirSync(path.dirname(mirrorPath), { recursive: true });
-		out = createWriteStream(mirrorPath);
-		// Attached BEFORE the write loop: a stream that errors mid-download (disk full while
-		// mirroring a multi-hundred-MB runtime) would otherwise raise an uncaught 'error' event —
-		// or, if a write had just returned false, leave the loop awaiting a 'drain' that will
-		// never come.
-		out.on('error', err => { outError = err; });
-	}
+	// The request is inside the try with the body loop: the timeout signal can fire while waiting
+	// for headers (a connection that stalls before any response) as well as mid-body, and both
+	// must name the URL rather than surface the bare "operation was aborted due to timeout".
 	try {
+		const res = await fetchArtifact(url);
+		if (!res.ok || !res.body) {
+			throw new Error(`Failed to download ${url}: HTTP ${res.status}`);
+		}
+		if (mirrorPath) {
+			mkdirSync(path.dirname(mirrorPath), { recursive: true });
+			out = createWriteStream(mirrorPath);
+			// Attached BEFORE the write loop: a stream that errors mid-download (disk full while
+			// mirroring a multi-hundred-MB runtime) would otherwise raise an uncaught 'error' event —
+			// or, if a write had just returned false, leave the loop awaiting a 'drain' that will
+			// never come.
+			out.on('error', err => { outError = err; });
+		}
 		for await (const chunk of Readable.fromWeb(res.body)) {
 			if (outError) {
 				throw new Error(`Failed to mirror ${url} to ${mirrorPath}: ${outError.message}`);

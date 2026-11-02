@@ -1537,7 +1537,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Same pin as every other job that runs the generator: the fetch mode here has to agree
+          # byte for byte with what publish-update-source mirrors.
+          node-version: 24.22.1
 
       - name: Download Linux DEB artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0

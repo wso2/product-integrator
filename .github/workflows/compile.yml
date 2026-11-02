@@ -208,7 +208,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ballerina-runtime
-          # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
+          # Consumed within this run only (installers, publish-update-source, publish-github-release); 7 days covers re-runs.
           retention-days: 7
           path: out/ballerina-runtime-*.zip
           compression-level: 0
@@ -241,7 +241,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: icp
-          # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
+          # Consumed within this run only (installers, publish-update-source, publish-github-release); 7 days covers re-runs.
           retention-days: 7
           path: out/icp-*.zip
           compression-level: 0
