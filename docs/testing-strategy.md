@@ -3,7 +3,7 @@
 _Authors_: @NipunaRanasinghe \
 _Reviewers_: @keizer619, @anupama-pathirage, @nipunayf, @madushajg \
 _Created_: 2026/08/10 \
-_Updated_: 2026/10/15
+_Updated_: 2026/11/03
 
 This document defines the testing strategy for the WSO2 Integrator product, including the VS Code extensions and the IDE. It defines the test types and levels, when each suite runs in CI, the conventions that apply to every test, and the agent skills that apply them when a test is written.
 
@@ -15,11 +15,11 @@ Each test is described by three independent properties:
 - **Level:** how much of the product the test runs, from one function with mocked dependencies to the packaged IDE. Higher levels cover more of the product but run slower and cost more to maintain.
 - **Tier:** when the test runs in CI, and whether a failure blocks a merge or a release.
 
-The properties vary independently: a performance test can target a single function or the packaged IDE, and the same test can run in more than one tier. Tests are therefore not organized into a single pyramid. Each defect should be caught at the lowest-cost level that can detect it, in a tier that blocks the change before release.
+The properties vary independently: a performance test can target a single function or the packaged IDE, and the same test can run in more than one tier. Tests are therefore not organized into a single pyramid. Each defect should be caught at the lowest-cost level that can detect it, in a tier that blocks the change before release. E2E is the exception: it never blocks, so a defect that only E2E catches can ship after triage.
 
 ```mermaid
 flowchart TD
-    T(["WSO2 Integrator Test Framework"])
+    T(["WSO2 Integrator Testing Strategy"])
 
     T -->|test type| F["<b>Functional</b><br/>Does it behave correctly?"]
     T -->|test type| N["<b>Non-functional</b><br/>How well does it perform?"]
@@ -31,12 +31,12 @@ flowchart TD
 
     subgraph QUALITY ["Quality characteristics — ISO/IEC 25010"]
         direction LR
-        P["Performance"] ~~~ R["Reliability"] ~~~ SEC["Security"] ~~~ IC["Interaction<br/>Capability"]
+        P["Performance<br/>Efficiency"] ~~~ R["Reliability"] ~~~ SEC["Security"] ~~~ IC["Interaction<br/>Capability"]
     end
 
     subgraph TIER ["Execution tiers — when and where it runs"]
         direction LR
-        G1["PR gate"] ~~~ G2["Path-filtered<br/>PR checks"] ~~~ G3["On-demand<br/>PR checks"] ~~~ G4["Daily build"] ~~~ G5["Release"]
+        G1["PR gate"] ~~~ G2["Path-filtered<br/>PR checks"] ~~~ G3["On-demand<br/>PR checks"] ~~~ G4["Nightly"] ~~~ G5["Release"]
     end
 
     F --> LEVELS
@@ -69,10 +69,10 @@ Functional tests verify that the product behaves as specified. Five levels defin
 
 | Level | Purpose | Scope | Real vs mocked |
 |---|---|---|---|
-| L1 — Unit | Detect logic errors on the PR that introduces them | One function or class | Nothing external; local files only |
+| L1 — Unit | Detect logic errors on the PR that introduces them | One function or class | Nothing external; local files, recorded responses, and an installed runtime |
 | L2 — Component | Verify rendering and wiring without launching the IDE | One component and its direct dependencies | Component real; language server replaced by recorded responses |
 | L3 — Integration | Verify that independently released components work together | Real cross-process boundaries | Real language server, runtime, and files; no UI |
-| L4 — E2E | Verify complete user workflows in the packaged product | Full IDE, driven through its UI | Everything real (packaged build) |
+| L4 — E2E | Verify complete user workflows in the built product | Full UI, against built artifacts (VSIX or packaged IDE) | Everything real (built artifacts) |
 | L5 — Smoke | Determine whether a packaged build is fit to release | Packaged installer | Real installed product |
 
 ### Unit Tests
@@ -81,9 +81,11 @@ A unit test runs one function, class, or module in a single process, with no net
 
 Unit tests target code that transforms, parses, maps, or validates: request and response mappers, diagnostic parsers, state reducers, and language server logic such as completion, hover, and code actions. A failure identifies the function that broke, so it can be fixed in the same PR.
 
+Contract tests that check invariants on shared enums sent over the language server or webview RPC wire are also L1.
+
 ### Component Tests
 
-A component test runs one component with its direct dependencies, without starting a language server or launching the IDE. The component may be a webview UI component, extension activation, or the webview ↔ extension messaging bridge.
+A component test runs one component with its direct dependencies, without starting a language server or launching the IDE. The `vscode` API is mocked. The component may be a webview UI component, extension activation, or the webview ↔ extension messaging bridge.
 
 Component tests detect incorrect rendering in diagrams and form editors, broken webview ↔ extension messaging, and activation failures that prevent command registration. The language server is replaced with recorded responses (see [Test Conventions](#test-conventions)).
 
@@ -95,7 +97,7 @@ The extension, language server, and runtime are released independently. Integrat
 
 ### E2E Tests
 
-An E2E test drives a complete user journey through the UI of the packaged product, with a real language server and runtime. It must not use the development build. E2E tests detect journeys that fail even when their individual parts pass at lower levels.
+An E2E test drives a complete user journey through the UI, with a real language server and runtime. It runs against built artifacts: the VSIX installed into VS Code in the plugin repos, and the packaged IDE in `product-integrator`. It never runs the extension loaded from source. E2E tests detect journeys that fail even when their individual parts pass at lower levels.
 
 Tests use Playwright with the page object model, and capture screenshots, video, and logs on failure. Each test is independent and tagged by feature area for selective runs.
 
@@ -113,9 +115,9 @@ Non-functional tests measure how well the product performs rather than whether i
 
 | Type | Purpose | Runs In |
 |---|---|---|
-| Performance efficiency | Keep user-facing operations within a time budget | Daily build + PR pipeline (on demand) |
-| Reliability | Keep memory use and process count bounded over a long session | Daily build |
-| Security | Verify credential handling and the isolation of untrusted input | Daily build |
+| Performance efficiency | Keep user-facing operations within a time budget | Nightly + PR pipeline (on demand) |
+| Reliability | Keep memory use and process count bounded over a long session | Nightly |
+| Security | Verify credential handling and the isolation of untrusted input | Nightly |
 | Interaction capability | Verify accessibility of the rendered UI | PR pipeline, once adopted |
 
 ### Performance Efficiency
@@ -126,7 +128,7 @@ Performance tests detect latency regressions in CI rather than through user repo
 - Flow-model and diagram computation time for large integration files.
 - Extension activation time and language server cold-start time.
 
-The first run on the fixed runner class produces the baseline, which is committed with the tests. The gate is a percentage over that baseline. Until the threshold is set, the suite records results without failing, so the baseline captures normal run-to-run variance.
+The suite first runs on the fixed runner class and records results without failing. The baseline is set from those runs, so it includes normal run-to-run variance, and is committed with the tests. The gate is then a percentage over that baseline.
 
 ### Reliability
 
@@ -139,7 +141,7 @@ The IDE handles cloud credentials, and compiles and runs untrusted project code 
 - **Authentication and cloud integration:** token storage and refresh, session handling, and that credentials are never written to logs or to disk in cleartext.
 - **Untrusted input:** a malicious project or connector descriptor cannot read outside its workspace, run host commands, or crash the extension host.
 
-> **Note:** Static analysis, dependency scanning, and SBOM generation inspect source and third-party packages without running the product, so they are gates rather than tests. See [Quality & Security Gates](./quality-and-security-gates.md). Dynamic scanning does not apply, because the product exposes no network service.
+> **Note:** Static analysis and dependency scanning inspect source and third-party packages without running the product, so they are gates rather than tests. See [Quality & Security Gates](./quality-and-security-gates.md). Dynamic scanning does not apply to the IDE itself, because the IDE exposes no network service.
 
 ### Interaction Capability
 
@@ -151,15 +153,15 @@ A tier defines when a suite runs and whether a failure blocks a merge or a relea
 
 | Tier | Trigger | What runs | Blocking |
 |---|---|---|---|
-| PR gate | Every PR | L1 and L2 | Blocks merge |
+| PR gate | Every PR | L1 (except language server) and L2 | Blocks merge |
 | Path-filtered PR checks | PR changing language server source | Language server L1 | Blocks merge |
 | On-demand PR checks | PR with the matching label | L3, L4, and performance | Advisory |
-| Daily build | Scheduled | L1–L4 and all non-functional suites | L3 and every non-functional suite with a gate must pass |
-| Release | Release candidate packaging | L3, L4, and L5 | L3 blocks; L5 blocks when the release requires smoke tests |
+| Nightly | Scheduled | Plugin repos: L1–L4 and all non-functional suites. `product-integrator`: L5 | L3, L5, and every non-functional suite with a gate block the next stable release |
+| Release | Release candidate packaging | L5 | Blocks release |
 
 - **Language server unit tests** are L1 but run as a separate job, because they need a JDK, a Gradle build, and a runtime distribution.
-- **Integration tests** never block a merge, because they need real distributions on the runner and are too slow for the PR budget. A daily-build failure must be fixed before the next stable release, and the release pipeline runs them again as a gate.
-- **E2E tests** never block a merge or a release. Repo maintainers must triage a failing daily run before the next stable release.
+- **Integration tests** never block a merge, because they need real distributions on the runner and are too slow for the PR budget. A failing nightly L3 run blocks the next stable release. The release manager checks the latest nightly status before starting the release.
+- **E2E tests** never block a merge or a release. Repo maintainers must triage a failing nightly run before the next stable release.
 
 ### Platforms
 
@@ -169,10 +171,10 @@ A tier defines when a suite runs and whether a failure blocks a merge or a relea
 
 ## Test Conventions
 
-- **Test against recorded responses:** fast tests run against committed recorded responses, not a live language server. These are real responses captured from a language server or webview RPC exchange during an E2E run, deduplicated, and committed next to the tests that use them. A daily drift check re-runs the capture against the live language server and fails if the committed responses differ.
+- **Test against recorded responses:** fast tests run against committed recorded responses, not a live language server. These are real responses captured from a language server or webview RPC exchange during an E2E run, deduplicated, and committed next to the tests that use them. A nightly drift check re-runs the capture against the live language server and fails if the committed responses differ.
 - **Test invariants, not individual cases:** assert a rule that must hold across a set of inputs instead of writing one assertion per known input. When a bug is fixed, add the triggering input to that set; the existing invariant then covers the regression with no new assertion.
-- **Discover tests by config filename:** the fast CI job runs a package's tests only if its Jest config file is named exactly `jest.config.js`. Heavier suites use other config names, so they stay out of the fast gate. Moving a heavy test into the fast gate therefore requires renaming its config, which is visible in review.
-- **Place test files by level:** unit, component, and integration tests live in the package's `src/test/` directory, separate from source and from test-support code. Integration tests sit in their own subdirectory, which the fast config excludes. E2E tests sit outside `src/`, because they drive the packaged product rather than importing from it.
+- **Discover tests by config filename:** in Jest packages, the fast CI job runs a package's tests only if its Jest config file is named exactly `jest.config.js` and sits in a top-level package directory. A config with any other name or location is skipped without an error, so a suite that must run on every PR keeps this name. Heavier suites use other config names, so they stay out of the fast gate. Moving a heavy test into the fast gate therefore requires renaming its config, which is visible in review.
+- **Place test files by level:** unit, component, and integration tests live in the package's `src/test/` directory, separate from source and from test-support code. Integration tests sit in their own subdirectory, which the fast config excludes. E2E tests sit outside `src/`, because they drive the built product rather than importing from it.
 
 ## Test Skills
 
