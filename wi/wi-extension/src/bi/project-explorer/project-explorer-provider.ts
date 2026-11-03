@@ -356,6 +356,7 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     const projectPath = project.projectPath;
     const isLibrary = project.isLibrary ?? false;
     const agentBuilder = isAgentBuilderMode();
+    const agentBuilderLibrary = agentBuilder && isLibrary;
 
     // ---------- Entry Points ----------
     if (!isLibrary) {
@@ -468,8 +469,23 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
     agentDefinitions.contextValue = "agentDefinitions";
     agentDefinitions.children = getComponents(
         project.directoryMap[DIRECTORY_MAP.AGENT_DEFINITION], DIRECTORY_MAP.AGENT_DEFINITION, projectPath);
-    if (agentDefinitions.children.length > 0) {
+    if (agentDefinitions.children.length > 0 || agentBuilderLibrary) {
         entries.splice(entries.indexOf(agents) + 1, 0, agentDefinitions);
+    }
+
+    // ---------- Agent Tools ----------
+    if (agentBuilderLibrary) {
+        const agentTools = new ProjectExplorerEntry(
+            'Agent Tools',
+            vscode.TreeItemCollapsibleState.Expanded,
+            null,
+            'function',
+            false
+        );
+        agentTools.resourceUri = Uri.parse(`bi-category:${projectPath}`);
+        agentTools.contextValue = 'agentTools';
+        agentTools.children = getComponents(project.directoryMap[DIRECTORY_MAP.AGENT_TOOL], DIRECTORY_MAP.AGENT_TOOL, projectPath);
+        entries.push(agentTools);
     }
 
     // ---------- Types ----------
@@ -586,12 +602,21 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
         entries.push(naturalFunctions);
     }
 
+    if (agentBuilderLibrary) {
+        return orderForAgentBuilder(entries.filter(entry =>
+            !LIBRARY_SECTIONS_SHOWN_WHEN_USED.includes(entry.contextValue ?? '') || (entry.children?.length ?? 0) > 0));
+    }
     return agentBuilder ? orderForAgentBuilder(entries) : entries;
 }
 
+// Agent Builder libraries share agent definitions and tools; these sections appear only once they hold something.
+const LIBRARY_SECTIONS_SHOWN_WHEN_USED = [
+    'agents', 'connections', 'configurations', ...AI_COMPONENT_SECTIONS.map(({ kind }) => `${kind}s`)
+];
+
 // Agents, how they are reached and their AI components come first; the plumbing follows in its existing order.
 const AGENT_BUILDER_ORDER = [
-    'agents', 'agentDefinitions', 'entryPoint', ...AI_COMPONENT_SECTIONS.map(({ kind }) => `${kind}s`),
+    'agents', 'agentDefinitions', 'agentTools', 'entryPoint', ...AI_COMPONENT_SECTIONS.map(({ kind }) => `${kind}s`),
     'connections'
 ];
 

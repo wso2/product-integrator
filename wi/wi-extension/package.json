@@ -314,6 +314,12 @@
         "category": "WSO2 Integrator"
       },
       {
+        "command": "BI.project-explorer.add-agent-tool",
+        "title": "Add Agent Tool",
+        "icon": "$(add)",
+        "category": "WSO2 Integrator"
+      },
+      {
         "command": "BI.project-explorer.add-model-provider",
         "title": "Add Model Provider",
         "icon": "$(add)",
@@ -445,6 +451,10 @@
           "when": "false"
         },
         {
+          "command": "BI.project-explorer.add-agent-tool",
+          "when": "false"
+        },
+        {
           "command": "BI.project-explorer.add-model-provider",
           "when": "false"
         },
@@ -543,13 +553,18 @@
           "group": "inline"
         },
         {
+          "command": "BI.project-explorer.add-agent-tool",
+          "when": "view == wso2-agent-builder.explorer && viewItem == agentTools",
+          "group": "inline"
+        },
+        {
           "command": "BI.project-explorer.add-model-provider",
           "when": "view == wso2-agent-builder.explorer && viewItem == modelProviders",
           "group": "inline"
         },
         {
           "command": "BI.project-explorer.delete",
-          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && (viewItem == CONNECTION || viewItem == SERVICE || viewItem == FUNCTION || viewItem == AUTOMATION || viewItem == TYPE || viewItem == CONFIGURABLE || viewItem == DATA_MAPPER || viewItem == NP_FUNCTION || viewItem == localConnector || viewItem == WORKFLOW || viewItem == ACTIVITY || viewItem == AGENT || viewItem == AGENT_DEFINITION)",
+          "when": "(view == wso2-integrator.explorer || view == wso2-agent-builder.explorer) && (viewItem == CONNECTION || viewItem == SERVICE || viewItem == FUNCTION || viewItem == AUTOMATION || viewItem == TYPE || viewItem == CONFIGURABLE || viewItem == DATA_MAPPER || viewItem == NP_FUNCTION || viewItem == localConnector || viewItem == WORKFLOW || viewItem == ACTIVITY || viewItem == AGENT || viewItem == AGENT_DEFINITION || viewItem == AGENT_TOOL)",
           "group": "inline"
         },
         {
