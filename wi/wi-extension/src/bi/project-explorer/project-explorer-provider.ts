@@ -479,7 +479,7 @@ function getEntriesBI(project: ProjectStructure): ProjectExplorerEntry[] {
             'Agent Tools',
             vscode.TreeItemCollapsibleState.Expanded,
             null,
-            'function',
+            'wrench',
             false
         );
         agentTools.resourceUri = Uri.parse(`bi-category:${projectPath}`);
@@ -650,7 +650,8 @@ function getComponents(
             comp.name,
             vscode.TreeItemCollapsibleState.None,
             comp.path,
-            itemType === DIRECTORY_MAP.AGENT_DEFINITION ? 'symbol-class' : comp.icon,
+            itemType === DIRECTORY_MAP.AGENT_DEFINITION ? 'symbol-class'
+                : itemType === DIRECTORY_MAP.AGENT_TOOL ? 'wrench' : comp.icon,
             itemType === DIRECTORY_MAP.AGENT_DEFINITION,
             comp.position,
             itemType === DIRECTORY_MAP.AGENT_DEFINITION ? new vscode.ThemeColor('icon.foreground') : undefined,
