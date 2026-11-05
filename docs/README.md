@@ -26,5 +26,6 @@ Refer to the individual guides for detailed information on each topic:
 | [Component Architecture](component-architecture.md) | Repo and component inventory, dependency diagrams, and build constraints |
 | [Branching Strategy](branching-strategy.md) | Branch model, naming conventions, and per-branch merge rules |
 | [CI/CD Pipelines](cicd-pipelines.md) | PR, custom build, nightly, and release pipeline structures |
+| [Testing Strategy](testing-strategy.md) | Functional test levels, non-functional test types, execution tiers, test conventions, and test-writer skills |
 | [Quality & Security Gates](quality-and-security-gates.md) | Quality and security gates applied across the product distribution |
 | [Versioning Strategy](versioning-strategy.md) | Versioning rules per component type and how version changes propagate across repos |
