@@ -3,7 +3,7 @@
 _Authors_: @NipunaRanasinghe \
 _Reviewers_: @keizer619, @anupama-pathirage, @nipunayf, @madushajg \
 _Created_: 2026/08/10 \
-_Updated_: 2026/11/03
+_Updated_: 2026/11/05
 
 This document defines the testing strategy for the WSO2 Integrator product, including the VS Code extensions and the IDE. It defines the test types and levels, when each suite runs in CI, the conventions that apply to every test, and the agent skills that apply them when a test is written.
 
@@ -180,60 +180,68 @@ A tier defines when a suite runs and whether a failure blocks a merge or a relea
 
 Agent skills apply the level boundaries in this document when a test is written, so the choice of level does not depend on the contributor having read it. The skills read each repo's test documentation for implementation details and build recipes, rather than duplicating them.
 
-- **One writer skill per level:** unit, component, integration, and E2E. Each skill's description names its level and when to use it, so a developer can also invoke a writer directly.
-- **Each skill encodes its level's boundary:** what belongs at that level and what belongs at a cheaper one. It applies the [Test Conventions](#test-conventions), so a generated test lands in the right tier.
-- **A skill proposes, a developer commits:** generated tests are reviewed like any other code.
+One test-writer skill covers L1–L3, for both the TypeScript packages and the Java language server, and the performance and reliability suites in [Non-Functional Testing](#non-functional-testing). A separate E2E skill covers L4. L4 has its own skill because writing an E2E test means driving a running IDE, which the other levels do not need.
 
-A level-selection skill is the entry point for a change. It reads the git diff, names the levels that need coverage and the defect each one would catch, and presents them as a test plan. For example, a change to an LSP response mapper needs a unit test for the mapping and an integration test for the contract.
+The test-writer skill keeps one reference file per level and one for the performance and reliability suites, with the decisions and pitfalls for each. It works in two stages:
 
-After the developer confirms or edits the plan, the level-selection skill runs the writer skill for each level in the plan. It can also stop after the plan, for example when a reviewer checks the coverage of a PR.
+1. **Plan:** it reads the git diff, chooses the lowest level that can catch each defect the change could introduce, and presents a test plan. Each row names the level, the test file, the invariant the test checks, and the defect it catches. For example, a change to an LSP response mapper gets a unit test for the mapping and an integration test for the contract.
+2. **Write:** after the developer confirms or edits the plan, it writes each test using the reference file for its level. It applies the [Test Conventions](#test-conventions), so a generated test lands in the right tier. It passes L4 rows to the E2E skill.
+
+Before reporting a test as done, the skill runs it, type-checks it, and checks that it fails when the production change is reverted. The skill rewrites or drops a test that still passes without the change.
+
+- **A skill proposes, a developer commits:** a developer reviews generated tests like any other code.
+- **Plan only:** the skill stops after the plan, for example when a reviewer checks the coverage of a PR.
+- **Direct:** a developer names a level and a target, and the skill skips choosing the level.
 
 ```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 320}}}%%
 flowchart TD
-    DIFF(["Git diff of the change"])
-
-    ANALYZE["<b>Level-selection skill</b><br/>Names the levels that need coverage<br/>and the defect each one catches"]
-    PLAN[/"<b>Test plan</b><br/>Levels to cover, with the reason for each"/]
-    CONF{{"<b>Developer</b><br/>Confirms or edits the plan"}}
-    RUN["<b>Level-selection skill</b><br/>Runs one writer per level in the plan"]
-
-    subgraph WRITERS ["Per-level test-writer skills"]
+    subgraph PLANSTAGE ["1 · Plan"]
         direction LR
-        W1["Unit<br/>test writer"] ~~~ W2["Component<br/>test writer"] ~~~ W3["Integration<br/>test writer"] ~~~ W4["E2E<br/>test writer"]
+        DIFF(["Git diff of the change"]) --> PLANNER["<b>Test-writer skill</b><br/>Chooses the lowest level that<br/>catches each defect"] --> PLAN[/"<b>Test plan</b><br/>Level, file, rule, and defect<br/>for each test"/]
     end
 
+    CONF{{"<b>Developer</b><br/>Confirms or edits the plan"}}
+
+    subgraph WRITESTAGE ["2 · Write"]
+        direction LR
+        REFS["<b>Reference files</b><br/>Unit · Component · Integration<br/>Language server · Performance · Reliability"] -.-> WRITE["<b>Test-writer skill</b><br/>Writes each test"]
+        WRITE --> VERIFY["<b>Verify</b><br/>Runs, type-checks, and fails<br/>when the change is reverted"]
+    end
+
+    E2E["<b>E2E skill</b><br/>Writes and runs the L4 tests"]
+
     REV{{"<b>Developer</b><br/>Reviews and commits the generated tests"}}
-    OUT(["Committed tests at L1–L4"])
+    OUT(["Committed tests"])
 
+    DIRECT(["Developer names<br/>a level and a target"])
     STOP(["<b>Plan only</b><br/>e.g. a coverage check in PR review"])
-    DIRECT(["Developer invokes<br/>one writer directly"])
 
-    DIFF --> ANALYZE
-    ANALYZE --> PLAN
-    PLAN --> CONF
-    CONF -->|confirmed| RUN
-    RUN --> WRITERS
-    WRITERS -->|generated tests| REV
+    DIRECT -.-> PLANSTAGE
+    PLANSTAGE --> CONF
+    PLANSTAGE -.->|stop after the plan| STOP
+    CONF -->|confirmed| WRITESTAGE
+    WRITESTAGE --> REV
+    WRITESTAGE -->|L4 rows| E2E
+    E2E --> REV
     REV --> OUT
-
-    PLAN -.->|stop after the plan| STOP
-    DIRECT -.-> WRITERS
 
     classDef io fill:#1f2937,stroke:#111827,color:#ffffff,stroke-width:2px
     classDef skill fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px
-    classDef writer fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
+    classDef ref fill:#eff6ff,stroke:#60a5fa,color:#1e3a8a
     classDef artifact fill:#f3f4f6,stroke:#6b7280,color:#1f2937
     classDef human fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:2px
     classDef alt fill:#ffffff,stroke:#9ca3af,color:#374151,stroke-dasharray:4 3
 
     class DIFF,OUT io
-    class ANALYZE,RUN skill
-    class W1,W2,W3,W4 writer
+    class PLANNER,WRITE,E2E,VERIFY skill
+    class REFS ref
     class PLAN artifact
     class CONF,REV human
     class STOP,DIRECT alt
 
-    style WRITERS fill:#f8fafc,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    style PLANSTAGE fill:#f8fafc,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    style WRITESTAGE fill:#f8fafc,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
 ```
 
 ## Product-Specific Constraints
