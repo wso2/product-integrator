@@ -1687,6 +1687,9 @@ jobs:
           ICP_VERSION: ${{ needs.resolve-versions.outputs.icp_version }}
           BALLERINA_EXTENSION_SOURCE: ${{ inputs.ballerina_extension_source }}
           MI_EXTENSION_SOURCE: ${{ inputs.mi_extension_source }}
+          # As in "Generate source document": lets the generator's fetch mode read release assets on a
+          # private repo (the enterprise mirror), so it resolves sources exactly as the feed job does.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           shopt -s nullglob
