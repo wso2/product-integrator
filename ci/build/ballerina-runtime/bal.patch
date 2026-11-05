@@ -1,0 +1,80 @@
+--- a/bin/bal
++++ b/bin/bal
+@@ -36,6 +36,15 @@
+ if test -d "$JAVA_PATH"; then
+   JAVA_HOME=$JAVA_PATH
+ fi
++# WSO2 Integrator: the JRE ships separately, next to Ballerina (../../dependencies) or, once the
++# runtime is relocated by a component update, at $WSO2_INTEGRATOR_JRE_DIR.
++SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
++for jdk in "$SCRIPT_DIR"/../../dependencies/jdk-* "$WSO2_INTEGRATOR_JRE_DIR"/jdk-*; do
++    if [ -x "$jdk/bin/java" ]; then
++        JAVA_HOME="$jdk"
++        break
++    fi
++done
+ 
+ #ulimit -n 100000
+ BASE_DIR=$PWD
+@@ -215,7 +224,8 @@
+ # classpath locations, e.g. AWS Lambda function libraries.
+ BALLERINA_CLASSPATH=$BALLERINA_CLASSPATH:$BALLERINA_CLASSPATH_EXT
+ 
+-CMD_LINE_ARGS="-Xbootclasspath/a:"$BALLERINA_XBOOTCLASSPATH" \
++# WSO2 Integrator: an array, so paths with spaces stay single arguments.
++CMD_LINE_ARGS=("-Xbootclasspath/a:$BALLERINA_XBOOTCLASSPATH" \
+                -Xms256m -Xmx2048m \
+                -XX:+HeapDumpOnOutOfMemoryError \
+                -XX:+ExitOnOutOfMemoryError \
+@@ -228,7 +238,7 @@
+                -Djava.security.egd=file:/dev/./urandom \
+                -Dfile.encoding=UTF8 \
+                -Dballerina.target=jvm \
+-               -Djava.command=$JAVACMD"
++               "-Djava.command=$JAVACMD")
+ 
+ if [[ $1 == "native-img" ]]; then
+     if [[ ! -z "${GRAALVM_HOME}" ]]; then
+@@ -262,8 +272,8 @@
+ 
+ # handles "bal run <JAR_PATH>" command.
+ elif [[ $1 == "run" && $2 == *.jar ]]; then
+-      $JAVACMD \
+-        $CMD_LINE_ARGS \
++      "$JAVACMD" \
++        "${CMD_LINE_ARGS[@]}" \
+         -jar "${@:2}"
+ 
+ # handles "bal run --debug=<PORT> <JAR_PATH>" command.
+@@ -271,8 +281,8 @@
+       debugPort=$((echo $2) | cut -d "=" -f 2)
+       # validates the port.
+       if [[ $debugPort =~ ^[+]?([1-9][[:digit:]]*|0)$ && $debugPort -gt 0 ]]; then
+-          $JAVACMD \
+-            $CMD_LINE_ARGS \
++          "$JAVACMD" \
++            "${CMD_LINE_ARGS[@]}" \
+             -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=$debugPort \
+             -jar "${@:3}"
+       else
+@@ -283,8 +293,8 @@
+ elif [[ $1 == "run" && $2 == "--debug" && $4 == *.jar ]]; then
+       # validates the port.
+       if [[ $3 =~ ^[+]?([1-9][[:digit:]]*|0)$ && $3 -gt 0 ]]; then
+-          $JAVACMD \
+-            $CMD_LINE_ARGS \
++          "$JAVACMD" \
++            "${CMD_LINE_ARGS[@]}" \
+             -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=$3 \
+             -jar "${@:4}"
+       else
+@@ -292,7 +302,7 @@
+       fi
+ 
+ else
+-    $JAVACMD \
+-      $CMD_LINE_ARGS \
++    "$JAVACMD" \
++      "${CMD_LINE_ARGS[@]}" \
+       io.ballerina.cli.launcher.Main "$@"
+ fi

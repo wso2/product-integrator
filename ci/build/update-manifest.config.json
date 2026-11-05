@@ -6,12 +6,6 @@
     "linux-x64"
   ],
   "platformTokens": {
-    "ballerina": {
-      "darwin-x64": "macos",
-      "darwin-arm64": "macos-arm",
-      "linux-x64": "linux",
-      "win32-x64": "windows"
-    },
     "jre": {
       "darwin-x64": "macos-64",
       "darwin-arm64": "macos-arm-64",
@@ -35,7 +29,7 @@
       "id": "ballerina-runtime",
       "kind": "runtime",
       "versionKey": "ballerina.version",
-      "url": "https://github.com/ballerina-platform/ballerina-distribution/releases/download/v{version}/ballerina-{versionBase}-swan-lake-{ballerinaPlatform}.zip",
+      "sourceFile": "out/ballerina-runtime-{version}.zip",
       "requires": {
         "app": ">={appVersion}",
         "jre": ">={jreVersion}"
@@ -53,7 +47,7 @@
       "id": "icp",
       "kind": "runtime",
       "versionKey": "icp.version",
-      "url": "https://github.com/wso2/integration-control-plane/releases/download/v{version}/wso2-integration-control-plane-{version}.zip",
+      "sourceFile": "out/icp-{version}.zip",
       "requires": {
         "app": ">={appVersion}"
       },

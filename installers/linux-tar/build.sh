@@ -91,34 +91,10 @@ if [ -d "$CHOREO_CLI_DIR" ]; then
     done
 fi
 
-# Extract Ballerina zip
+# Extract the packaged ballerina-runtime (ci/build/package-ballerina-runtime.sh)
 print_info "Extracting Ballerina to components..."
-mkdir -p "$COMPONENTS_DIR"
-unzip -o "$BALLERINA_ZIP" -d "$EXTRACTION_TARGET"
-BALLERINA_UNZIPPED_FOLDER=$(unzip -Z1 "$BALLERINA_ZIP" | head -1 | cut -d/ -f1)
-BALLERINA_UNZIPPED_PATH="$EXTRACTION_TARGET/$BALLERINA_UNZIPPED_FOLDER"
-
-# Create a temp directory for consolidation
-BALLERINA_TEMP="$WORK_DIR/ballerina_temp"
-rm -rf "$BALLERINA_TEMP"
-mkdir -p "$BALLERINA_TEMP"
-
-# Move distributions contents to temp
-print_info "Consolidating Ballerina distributions..."
-if [ -d "$BALLERINA_UNZIPPED_PATH/distributions" ]; then
-    DIST_FOLDER=$(ls "$BALLERINA_UNZIPPED_PATH/distributions" | head -1)
-    if [ -n "$DIST_FOLDER" ]; then
-        cp -r "$BALLERINA_UNZIPPED_PATH/distributions/$DIST_FOLDER"/* "$BALLERINA_TEMP/"
-    fi
-fi
-
-# Move distributions contents to target (without JDK)
 mkdir -p "$BALLERINA_TARGET"
-mv "$BALLERINA_TEMP"/* "$BALLERINA_TARGET"
-
-# Remove unwanted Ballerina folders
-rm -rf "$BALLERINA_TARGET/docs"
-rm -rf "$BALLERINA_TARGET/examples"
+unzip -q -o "$BALLERINA_ZIP" -d "$BALLERINA_TARGET"
 
 # Extract JRE zip into shared dependencies directory
 print_info "Extracting JRE to shared dependencies directory..."
@@ -131,53 +107,12 @@ if [ -z "$JRE_FOLDER" ]; then
     exit 1
 fi
 
-rm -rf "$BALLERINA_UNZIPPED_PATH"
-rm -rf "$BALLERINA_TEMP"
-
-# Replace bal script with the one from balscript
-print_info "Replacing bal script with updated version from balscript..."
-cp "$WORK_DIR/balscript/bal" "$BALLERINA_TARGET/bin/bal"
-sed -i "s/@BALLERINA_VERSION@/$BALLERINA_VERSION/g" "$BALLERINA_TARGET/bin/bal"
 chmod +x "$BALLERINA_TARGET/bin"/*
 
-# Extract ICP zip
+# Extract the packaged icp (ci/build/package-icp.sh): launchers already patched for our JRE
 print_info "Extracting Integration Control Plane..."
 mkdir -p "$ICP_TARGET"
-unzip -o "$ICP_ZIP" -d "$EXTRACTION_TARGET"
-ICP_UNZIPPED_FOLDER=$(unzip -Z1 "$ICP_ZIP" | head -1 | cut -d/ -f1)
-ICP_UNZIPPED_PATH="$EXTRACTION_TARGET/$ICP_UNZIPPED_FOLDER"
-mv "$ICP_UNZIPPED_PATH"/* "$ICP_TARGET"
-rm -rf "$ICP_UNZIPPED_PATH"
-chmod +x "$ICP_TARGET/bin"/*
-
-# Make icp.sh resolve the JVM env-aware (§D8): prefer the resolved JDK home in WSO2_INTEGRATOR_JRE_HOME
-# (set once ICP/JRE are seeded to the data folder), else the JRE bundled next to ICP. Backward-compatible: with the
-# env var unset it resolves to the previous relative path. The resolver is prepended AFTER the
-# replace so its own `bin/java` is not itself rewritten.
-ICP_SCRIPT="$ICP_TARGET/bin/icp.sh"
-if [ -f "$ICP_SCRIPT" ]; then
-    print_info "Modifying icp.sh to use JRE (env-aware, fallback $JRE_FOLDER)"
-    sed -i "s|\bjava\b|\"\$WSO2_ICP_JAVA\"|g" "$ICP_SCRIPT"
-    ICP_TMP="$(mktemp)"
-    {
-        head -n 1 "$ICP_SCRIPT"
-        cat <<EOF
-WSO2_ICP_JAVA=""
-_wso2_icp_sd="\$(cd "\$(dirname "\$0")" && pwd)"
-if [ -n "\$WSO2_INTEGRATOR_JRE_HOME" ] && [ -x "\$WSO2_INTEGRATOR_JRE_HOME/bin/java" ]; then
-  WSO2_ICP_JAVA="\$WSO2_INTEGRATOR_JRE_HOME/bin/java"
-else
-  WSO2_ICP_JAVA="\$_wso2_icp_sd/../../dependencies/$JRE_FOLDER/bin/java"
-fi
-EOF
-        tail -n +2 "$ICP_SCRIPT"
-    } > "$ICP_TMP"
-    mv "$ICP_TMP" "$ICP_SCRIPT"
-    # 755 explicitly, not +x: the temp file was created 0600, and an icp.sh that group/other cannot
-    # READ cannot be executed by them either (the interpreter has to read it). Root-owned installs
-    # (deb/rpm) would otherwise ship an ICP that only root can launch.
-    chmod 755 "$ICP_SCRIPT"
-fi
+unzip -q -o "$ICP_ZIP" -d "$ICP_TARGET"
 
 # Set executable permissions
 print_info "Setting executable permissions..."

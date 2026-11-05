@@ -1,0 +1,25 @@
+--- a/bin/bal.bat
++++ b/bin/bal.bat
+@@ -39,4 +39,22 @@
+ )
+ 
++rem WSO2 Integrator: the JRE ships separately, next to Ballerina (..\..\dependencies) or, once the
++rem runtime is relocated by a component update, at %WSO2_INTEGRATOR_JRE_DIR%.
++for /d %%D in ("%~dp0..\..\dependencies\jdk-*") do (
++    if exist "%%D\bin\java.exe" (
++        set "JAVA_HOME=%%D"
++        goto jdkFound
++    )
++)
++if not "%WSO2_INTEGRATOR_JRE_DIR%"=="" (
++    for /d %%D in ("%WSO2_INTEGRATOR_JRE_DIR%\jdk-*") do (
++        if exist "%%D\bin\java.exe" (
++            set "JAVA_HOME=%%D"
++            goto jdkFound
++        )
++    )
++)
++:jdkFound
++
+ if "%JAVA_HOME%" == "" goto noJavaHome
+ if not exist "%JAVA_HOME%\bin\java.exe" goto invalidJavaHome
