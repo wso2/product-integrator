@@ -74,6 +74,7 @@ import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
+import { finished } from 'node:stream/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -136,11 +137,33 @@ function safeSegment(value, what) {
 	return value;
 }
 
-// One cap on every download, request and body alike: a stalled upstream (Open VSX, GitHub) would
-// otherwise hang the publish job until the runner's 6 hour limit. Generous for the largest artifact
-// (a ~350 MB runtime takes well under a minute on a hosted runner); `--retry`-style retries are
-// not attempted, since a publish that needed one is worth a look.
+// One cap on every download attempt, request and body alike: a stalled upstream (Open VSX, GitHub)
+// would otherwise hang the publish job until the runner's 6 hour limit. Generous for the largest
+// artifact (a ~350 MB runtime takes well under a minute on a hosted runner).
 const FETCH_TIMEOUT_MS = 20 * 60 * 1000;
+
+// A dropped connection or a 5xx from Open VSX or GitHub would otherwise fail a publish that runs
+// after every installer is built. Such failures are retried a bounded number of times with a short
+// backoff; a timeout (already 20 minutes) and any 4xx (a 404 is a wrong version or tag, which no
+// retry fixes) fail at once.
+const FETCH_ATTEMPTS = 3;
+const FETCH_RETRY_DELAY_MS = 10 * 1000;
+
+// An HTTP status worth retrying: a server-side error, or GitHub/Open VSX rate limiting.
+const isTransientStatus = status => status >= 500 || status === 429;
+
+// An error a retry may cure: one flagged as a transient HTTP status, or undici's own report of a
+// connection that failed ('fetch failed': reset, refused, DNS) or died mid-body ('terminated').
+function isTransient(err) {
+	return err?.transient === true
+		|| (err instanceof TypeError && (err.message === 'fetch failed' || err.message === 'terminated'));
+}
+
+function httpError(message, status) {
+	const err = new Error(message);
+	err.transient = isTransientStatus(status);
+	return err;
+}
 
 // Fetch an artifact, coping with release assets on a PRIVATE GitHub repo (the enterprise mirror
 // we build test releases on). A token on the /releases/download/ browser URL is not enough there —
@@ -163,7 +186,7 @@ async function fetchArtifact(url) {
 		signal
 	});
 	if (!meta.ok) {
-		throw new Error(`Failed to look up release ${tag} in ${owner}/${repo}: HTTP ${meta.status}`);
+		throw httpError(`Failed to look up release ${tag} in ${owner}/${repo}: HTTP ${meta.status}`, meta.status);
 	}
 	const wanted = decodeURIComponent(file);
 	const asset = ((await meta.json()).assets ?? []).find(a => a.name === wanted);
@@ -179,9 +202,24 @@ async function fetchArtifact(url) {
 	return location ? fetch(location, { redirect: 'follow', signal }) : res;
 }
 
-// Streams the artifact once: hashes it, and (when mirrorPath is set) writes the same bytes to
-// disk for the CI job to upload to the update bucket.
+// Streams the artifact: hashes it, and (when mirrorPath is set) writes the same bytes to disk for
+// the CI job to upload to the update bucket. A transient failure starts over from the first byte.
 async function hashAndSize(url, mirrorPath) {
+	for (let attempt = 1; ; attempt++) {
+		try {
+			return await downloadOnce(url, mirrorPath);
+		} catch (err) {
+			if (attempt >= FETCH_ATTEMPTS || !isTransient(err)) {
+				throw err;
+			}
+			const delayMs = FETCH_RETRY_DELAY_MS * attempt;
+			console.warn(`  attempt ${attempt} of ${FETCH_ATTEMPTS} failed for ${url}: ${err.message}${err.cause?.code ? ` (${err.cause.code})` : ''}; retrying in ${delayMs / 1000}s`);
+			await new Promise(resolve => setTimeout(resolve, delayMs));
+		}
+	}
+}
+
+async function downloadOnce(url, mirrorPath) {
 	const hash = createHash('sha256');
 	let size = 0;
 	let out;
@@ -192,7 +230,7 @@ async function hashAndSize(url, mirrorPath) {
 	try {
 		const res = await fetchArtifact(url);
 		if (!res.ok || !res.body) {
-			throw new Error(`Failed to download ${url}: HTTP ${res.status}`);
+			throw httpError(`Failed to download ${url}: HTTP ${res.status}`, res.status);
 		}
 		if (mirrorPath) {
 			mkdirSync(path.dirname(mirrorPath), { recursive: true });
@@ -217,6 +255,12 @@ async function hashAndSize(url, mirrorPath) {
 			}
 		}
 	} catch (err) {
+		// Closed before a retry opens the same path again, so a write still in flight on this
+		// stream cannot land in the next attempt's file.
+		if (out) {
+			out.destroy();
+			await finished(out).catch(() => { });
+		}
 		if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
 			throw new Error(`Timed out downloading ${url} after ${FETCH_TIMEOUT_MS / 60000} minutes`);
 		}
