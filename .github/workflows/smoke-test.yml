@@ -51,7 +51,7 @@ jobs:
       DISPLAY: ':99'
     steps:
       - name: Checkout smoke-test support
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
@@ -72,7 +72,7 @@ jobs:
 
       - name: Download build artifact
         if: inputs.artifact_name != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ${{ inputs.artifact_name }}
           path: artifact/
@@ -151,7 +151,7 @@ jobs:
           "$BAL" pull wso2/icp.runtime.bridge
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24.22.1
 
@@ -210,7 +210,7 @@ jobs:
 
       - name: Upload editor logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: smoke-test-editor-logs-${{ matrix.example }}-linux
           path: editor-logs/**
@@ -219,7 +219,7 @@ jobs:
 
       - name: Upload logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: smoke-test-logs-${{ matrix.example }}-linux
           path: |
@@ -229,7 +229,7 @@ jobs:
 
       - name: Upload screenshots on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: smoke-test-screenshots-${{ matrix.example }}-linux
           path: "*.png"
@@ -247,14 +247,14 @@ jobs:
         example: [hello-world-service, icp]
     steps:
       - name: Checkout smoke-test support
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
 
       - name: Download build artifact
         if: inputs.windows_artifact_name != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ${{ inputs.windows_artifact_name }}
           path: artifact/
@@ -309,7 +309,7 @@ jobs:
           & $bal pull wso2/icp.runtime.bridge
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24.22.1
 
@@ -373,7 +373,7 @@ jobs:
 
       - name: Upload editor logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: smoke-test-editor-logs-${{ matrix.example }}-windows
           path: editor-logs/**
@@ -382,7 +382,7 @@ jobs:
 
       - name: Upload screenshots on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: smoke-test-screenshots-${{ matrix.example }}-windows
           path: "*.png"

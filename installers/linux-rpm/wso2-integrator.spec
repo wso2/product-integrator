@@ -74,6 +74,9 @@ rm -rf %{buildroot}
 chown -R root:root /usr/share/wso2-integrator
 # Guarded: the editor-update package ships no components/icp, and recreating the directory here
 # (even just logs/) would make first-run seeding register a broken ICP baseline.
+# These are the paths ICP writes to at runtime. Keep them in step with RUNTIME_WRITABLE_PATHS in
+# src/vs/platform/wso2Update/node/wso2ComponentsManifest.ts (patches/wso2ComponentUpdate.diff),
+# which a seed repair must not overwrite.
 if [ -d /usr/share/wso2-integrator/components/icp ]; then
     chmod -R a+rwX /usr/share/wso2-integrator/components/icp/bin/database/ 2>/dev/null || true
     mkdir -p /usr/share/wso2-integrator/components/icp/logs
