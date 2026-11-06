@@ -1693,11 +1693,17 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
+          # Every file staged here is signed by the next step, from this list rather than a second
+          # set of globs, so the signed set cannot drift from the staged one. Kept out of
+          # release-files so it is not published.
+          SIGN_LIST="${RUNNER_TEMP}/release-sign.list"
+          : > "${SIGN_LIST}"
           stage() {
             local src="$1" name="$2"
             [ -f "${src}" ] || return 0
             mv "${src}" "release-files/${name}"
             (cd release-files && openssl dgst -sha256 -out "${name}.sha256" "${name}")
+            echo "${name}" >> "${SIGN_LIST}"
             ls -lh "release-files/${name}"
           }
           P="wso2-integrator-${INTEGRATOR_VERSION}-core"
@@ -1729,15 +1735,13 @@ jobs:
 
       - name: Sign the core, runtime and component files
         shell: bash
-        env:
-          INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-{core-*,ballerina-runtime-*,icp-*,jre-*}.{tar.gz,zip} release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-wso2.*.vsix; do
+          while IFS= read -r name; do
+            F="release-files/${name}"
             cosign sign-blob "${F}" --output-certificate "${F}.pem" --output-signature "${F}.sig" --yes
             cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build.yml@${GITHUB_REF}" --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-          done
+          done < "${RUNNER_TEMP}/release-sign.list"
 
       # The caller chose the tag; all that is derived here is the display name.
       - name: Resolve release name
