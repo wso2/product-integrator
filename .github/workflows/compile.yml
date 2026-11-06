@@ -76,14 +76,14 @@ jobs:
       ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
       - name: Download stamped versions
         if: ${{ inputs.versions_artifact != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ${{ inputs.versions_artifact }}
           path: .
@@ -100,7 +100,7 @@ jobs:
 
       - name: Upload stamped versions
         if: ${{ inputs.versions_artifact == '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: versions
           path: |
@@ -193,7 +193,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
@@ -210,7 +210,7 @@ jobs:
           cmp out/ballerina-runtime-*.zip out-check/ballerina-runtime-*.zip
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ballerina-runtime
           # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
@@ -227,7 +227,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
@@ -243,7 +243,7 @@ jobs:
           cmp out/icp-*.zip out-check/icp-*.zip
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: icp
           # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
@@ -290,7 +290,7 @@ jobs:
           swap-storage: false
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           submodules: recursive
@@ -326,21 +326,21 @@ jobs:
           fi    
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: lib/vscode/.nvmrc
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
       - name: Setup Rush
-        uses: gigara/setup-rush@v1.2.0
+        uses: gigara/setup-rush@7ba3446572d15f5eacc85de383ad9679dfb7223c # v1.2.0
         with:
           pnpm: 10.11.0
 
       # TODO: Enable TypeScript cache when stable    
       # - name: Cache TypeScript compilation
       #   id: cache-typescript
-      #   uses: actions/cache@v4
+      #   uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       #   with:
       #     path: |
       #       lib/vscode/out
@@ -353,7 +353,7 @@ jobs:
 
       - name: Cache built-in extensions
         id: cache-extensions
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             lib/vscode/.build/builtInExtensions
@@ -376,7 +376,7 @@ jobs:
             extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-
 
       - name: Cache Rust toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/bin/
@@ -389,7 +389,7 @@ jobs:
 
       - name: Cache CLI compilation
         id: cache-cli
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             lib/vscode/cli/target/
@@ -398,7 +398,7 @@ jobs:
             cli-${{ runner.os }}-
 
       - name: Cache Linux sysroots
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             lib/vscode/.build/sysroots
@@ -441,7 +441,7 @@ jobs:
   
       - name: Fetch prebuilt Code package from cache
         id: cache-vscode
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: lib/vscode-reh-web-*
           key: vscode-reh-package-v1-${{ inputs.product_flavor || 'integrator' }}-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
@@ -483,7 +483,7 @@ jobs:
       # This also lands before `rush build`, so the .vsix filename, product.json and the installer
       # names all carry the same stamp.
       - name: Download stamped versions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ${{ inputs.versions_artifact != '' && inputs.versions_artifact || 'versions' }}
           path: .
@@ -513,7 +513,7 @@ jobs:
           done
 
       - name: Setup WI
-        uses: gigara/setup-rush@v1.2.0
+        uses: gigara/setup-rush@7ba3446572d15f5eacc85de383ad9679dfb7223c # v1.2.0
 
       - name: Build WI extension
         working-directory: .
@@ -630,7 +630,7 @@ jobs:
       # (build.yml, publish-github-release) so downstream builds reuse these binaries.
       - name: Upload Linux core
         if: ${{ inputs.build_packed_installers == true && inputs.publish_core == true }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: core-linux-x64
           path: lib/artifacts/vscode-linux-x64.tar.gz
@@ -687,21 +687,21 @@ jobs:
       # it), and it is the only record of which package versions a given build shipped.
       - name: Upload pre-bundled Ballerina packages
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ballerina-packages
           path: ballerina-packages
           if-no-files-found: error
       - name: Download Ballerina runtime
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ballerina-runtime
           path: ballerina-runtime
 
       - name: Download ICP
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: icp
           path: icp-package
@@ -726,7 +726,7 @@ jobs:
 
       - name: Upload Deb artifacts
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Product-Integrator-DEB
           path: |
@@ -753,7 +753,7 @@ jobs:
           cd ${ROOT_DIR}
       - name: Upload RPM artifacts
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Product-Integrator-RPM
           path: |
@@ -785,7 +785,7 @@ jobs:
 
       - name: Upload TAR artifacts
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Product-Integrator-TAR
           path: |
@@ -794,7 +794,7 @@ jobs:
         
       - name: cosign-installer
         if: ${{ inputs.build_packed_installers == true}}
-        uses: sigstore/cosign-installer@v3.5.0
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
       - name: Sign the deb, rpm installers
         if: ${{ inputs.build_packed_installers == true}}
         run: |
@@ -841,7 +841,7 @@ jobs:
 
       - name: Upload Signatures and Hashes for deb installer
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Signatures-and-Hashes-DEB
           path: |
@@ -852,7 +852,7 @@ jobs:
         
       - name: Upload Signatures and Hashes for rpm installer
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4  
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Signatures-and-Hashes-RPM
           path: |
@@ -934,7 +934,7 @@ jobs:
 
       - name: Upload Linux artifacts (only Integrator)
         if: ${{ inputs.build_packed_installers == false && github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: artifacts-linux
           path: |
@@ -943,7 +943,7 @@ jobs:
 
       - name: Upload compilation artifact
         if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: compilation
           path: lib/compilation.tar.gz
@@ -951,7 +951,7 @@ jobs:
 
       - name: Upload WI extension VSIX
         if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wi-extension-vsix
           path: wi/wi-extension/wso2-integrator-*.vsix
