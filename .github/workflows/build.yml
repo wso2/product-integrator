@@ -1679,6 +1679,27 @@ jobs:
           name: icp
           path: runtimes/
 
+      # As in "Resolve published targets" for the feed: fetch and require the JRE only for the
+      # platforms this run built, the ones whose cores and installers the release carries.
+      - name: Resolve release targets
+        id: release-targets
+        shell: bash
+        env:
+          BUILD_MACOS: ${{ inputs.build_macos }}
+          BUILD_WINDOWS: ${{ inputs.build_windows }}
+          BUILD_LINUX: ${{ inputs.build_linux }}
+        run: |
+          set -euo pipefail
+          TARGETS=()
+          [ "${BUILD_MACOS}" = "true" ] && TARGETS+=("darwin-arm64" "darwin-x64")
+          [ "${BUILD_WINDOWS}" = "true" ] && TARGETS+=("win32-x64")
+          [ "${BUILD_LINUX}" = "true" ] && TARGETS+=("linux-x64")
+          # An empty --targets would mean every target to the generator, not none.
+          [ ${#TARGETS[@]} -gt 0 ] || { echo "Error: no platform was built" >&2; exit 1; }
+          printf -v JOINED '%s,' "${TARGETS[@]}"
+          echo "targets=${JOINED%,}" >> "$GITHUB_OUTPUT"
+          echo "release targets: ${JOINED%,}"
+
       - name: Stage core, runtime and component files
         shell: bash
         env:
@@ -1687,6 +1708,7 @@ jobs:
           ICP_VERSION: ${{ needs.resolve-versions.outputs.icp_version }}
           BALLERINA_EXTENSION_SOURCE: ${{ inputs.ballerina_extension_source }}
           MI_EXTENSION_SOURCE: ${{ inputs.mi_extension_source }}
+          RELEASE_TARGETS: ${{ steps.release-targets.outputs.targets }}
           # As in "Generate source document": lets the generator's fetch mode read release assets on a
           # private repo (the enterprise mirror), so it resolves sources exactly as the feed job does.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1715,10 +1737,11 @@ jobs:
           # runtime version, and the roll step below tells superseded assets apart by name.
           stage "runtimes/ballerina-runtime-${BALLERINA_VERSION}.zip" "wso2-integrator-${INTEGRATOR_VERSION}-ballerina-runtime-${BALLERINA_VERSION}.zip"
           stage "runtimes/icp-${ICP_VERSION}.zip"                     "wso2-integrator-${INTEGRATOR_VERSION}-icp-${ICP_VERSION}.zip"
-          # The JRE for every target and the bundled extensions, downloaded by the generator itself
-          # (fetch mode: the same resolution publish-update-source mirrors with, so the release and
-          # the feed cannot disagree), named <integrator>-<component id>-<file>.
+          # The JRE for every built target and the bundled extensions, downloaded by the generator
+          # itself (fetch mode: the same resolution publish-update-source mirrors with, so the release
+          # and the feed cannot disagree), named <integrator>-<component id>-<file>.
           node ci/build/generate-update-manifest.mjs --fetch-components feed-components \
+            --targets "${RELEASE_TARGETS}" \
             --versions core/versions/ci/build/component-versions.properties \
             --source-flavors "wso2.ballerina=${BALLERINA_EXTENSION_SOURCE:-marketplace},wso2.micro-integrator=${MI_EXTENSION_SOURCE:-marketplace}"
           for f in feed-components/*/*; do
@@ -1772,6 +1795,7 @@ jobs:
         env:
           BUILD_MACOS: ${{ inputs.build_macos }}
           BUILD_WINDOWS: ${{ inputs.build_windows }}
+          RELEASE_TARGETS: ${{ steps.release-targets.outputs.targets }}
         run: |
           shopt -s nullglob extglob
           missing=()
@@ -1791,9 +1815,11 @@ jobs:
           require "Ballerina runtime"   release-files/*-ballerina-runtime-*.zip
           require "ICP package"         release-files/*-icp-*.zip
           # The fetched components, from the same config the generator read: every component with
-          # a URL, and for the JRE one file per platform token, so the list cannot drift from it.
+          # a URL, and for the JRE one file per built target's platform token, so the list cannot
+          # drift from it.
           CONFIG=ci/build/update-manifest.config.json
-          for t in $(jq -r '.platformTokens.jre | to_entries[] | .value' "${CONFIG}" | sort -u); do
+          for t in $(jq -r --arg targets "${RELEASE_TARGETS}" \
+              '.platformTokens.jre as $tok | $targets | split(",")[] | $tok[.]' "${CONFIG}" | sort -u); do
             require "JRE ${t}"          release-files/*-jre-*-${t}-*.zip
           done
           for e in $(jq -r '.components[] | select(.url != null and .id != "jre") | .id' "${CONFIG}"); do
