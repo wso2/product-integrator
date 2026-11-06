@@ -62,7 +62,7 @@
 //     [--carry-components wso2.wso2-integrator]   components this publish is not changing
 //
 //   Fetch only (no document): download every component the feed would serve from a URL, resolved
-//   exactly as above (variants, flavors, {jrePlatform}/{version}/{versionBase}), into DIR/<id>/<file>,
+//   exactly as above (variants, flavors, {jrePlatform}/{version}/{versionBase}/{tag}), into DIR/<id>/<file>,
 //   so the release can publish them next to the cores:
 //     ... --fetch-components DIR [--source-flavors ...] [--targets ...]
 //   Components declared with `sourceFile` are built in this repo and are not fetched.
@@ -504,13 +504,23 @@ async function main() {
 			? Object.fromEntries(Object.entries(component.requires).map(([k, v]) => [k, substitute(v, commonVars)]))
 			: undefined;
 
+		// The upstream release {tag}. resolve-nightly-versions.sh writes `<versionKey>.tag` when the
+		// tag cannot be derived from the version (a rolling `nightly` release carrying
+		// ballerina-5.13.26101119.vsix); otherwise it is the component's conventional tag, `tag` in
+		// the config (default v{version}). The installers download from the same `.tag`, so this
+		// fetches from the release they were built from rather than 404 on a v<version> that does
+		// not exist. A rolling release that has moved on since no longer carries an asset named
+		// after this version, so that fails loudly instead of returning a newer build's bytes.
+		const tag = (component.versionKey && versions[`${component.versionKey}.tag`])
+			|| substitute(component.tag ?? 'v{version}', { version });
+
 		const perTarget = {};
 		for (const target of targets) {
 			// Some upstreams tag a pre-release with a suffix but name the assets inside it after the
 			// base version — Ballerina's v2201.13.6-alpha2 ships ballerina-2201.13.6-swan-lake-*.zip.
 			// {versionBase} keeps the full version in the tag and drops the suffix in the filename.
 			const versionBase = typeof version === 'string' ? version.split('-')[0] : version;
-			const vars = { ...varsFor(target), version, versionBase };
+			const vars = { ...varsFor(target), version, versionBase, tag: encodeURIComponent(tag) };
 			let sourceUrl;
 			let sourceFile;
 			if (component.sourceFile) {
