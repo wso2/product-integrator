@@ -139,22 +139,23 @@ jobs:
           glob=$(node -e "$MATCH_GLOBS" "$NODE_TESTS")
           npm run test-node -- --runGlob "$glob"
 
-      # The first electron-main suite arrives with the download watchdog change; until a tree has
-      # one, the Electron steps are skipped rather than failed.
+      # The Electron suite is required, exactly like the node one: a tree without it fails here
+      # with the same "No compiled tests match" error rather than passing with a notice. A skip
+      # would be the silent pass this workflow exists to prevent, and the runner's own
+      # assertCleanState test means a "N passing" line cannot be trusted to catch it instead.
+      # The assignment is deliberate — under `bash -e` it fails the step when the match does,
+      # where `echo "glob=$(...)"` would swallow the exit status.
       - name: Find Electron tests
         id: electron
         if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
         run: |
-          if glob=$(node -e "$MATCH_GLOBS" "$ELECTRON_TESTS" 2>/dev/null); then
-            echo "glob=$glob" >> "$GITHUB_OUTPUT"
-          else
-            echo '::notice::No wso2Update Electron tests in this tree'
-          fi
+          glob=$(node -e "$MATCH_GLOBS" "$ELECTRON_TESTS")
+          echo "glob=$glob" >> "$GITHUB_OUTPUT"
 
       # Fetched on its own, with retries, so a network hiccup cannot pass for a failing test.
       - name: Download Electron
         id: download-electron
-        if: ${{ !cancelled() && steps.electron.outputs.glob != '' }}
+        if: ${{ !cancelled() && steps.electron.outcome == 'success' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
