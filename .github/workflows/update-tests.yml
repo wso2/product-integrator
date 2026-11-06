@@ -13,6 +13,7 @@ on:
     branches:
       # Not 5.0.x: it has no update mechanism, so there would be nothing to run.
       - main
+      - '5.1.x'
       - 'staging/**'
     paths:
       # Every lib/vscode change in this repo, the update mechanism and its tests included, is
@@ -23,6 +24,7 @@ on:
   push:
     branches:
       - main
+      - '5.1.x'
       - 'staging/**'
     paths:
       - 'patches/**'
@@ -88,7 +90,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: lib/vscode/.nvmrc
+          # Pinned like every other workflow since #2860, not read from lib/vscode/.nvmrc, which
+          # still names a Node affected by CVE-2026-111497.
+          node-version: 24.22.1
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
