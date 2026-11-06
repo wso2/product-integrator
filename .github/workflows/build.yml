@@ -774,14 +774,14 @@ jobs:
 
       - name: Download Ballerina runtime
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ballerina-runtime
           path: ballerina-runtime
 
       - name: Download ICP
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: icp
           path: icp-package
@@ -1355,14 +1355,14 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
       - name: Download Ballerina runtime
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ballerina-runtime
           path: ballerina-runtime
 
       - name: Download ICP
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: icp
           path: icp-package
@@ -1529,13 +1529,13 @@ jobs:
       # fetched. The job reads ci/build/update-manifest.config.json and runs the generator in fetch
       # mode (see "Stage core, runtime and component files").
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # Same pin as every other job that runs the generator: the fetch mode here has to agree
           # byte for byte with what publish-update-source mirrors.
@@ -1668,13 +1668,13 @@ jobs:
       # serves. Published next to the cores for the same reason: a downstream build (the support
       # distribution) must ship these exact bytes and fetch nothing from anywhere but this release.
       - name: Download Ballerina runtime package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ballerina-runtime
           path: runtimes/
 
       - name: Download ICP package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: icp
           path: runtimes/
@@ -1938,13 +1938,13 @@ jobs:
 
       # The same ballerina-runtime and icp zips the installers bundled (config `sourceFile`).
       - name: Download Ballerina runtime
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ballerina-runtime
           path: out
 
       - name: Download ICP
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: icp
           path: out
