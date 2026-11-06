@@ -188,7 +188,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
@@ -205,10 +205,10 @@ jobs:
           cmp out/ballerina-runtime-*.zip out-check/ballerina-runtime-*.zip
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ballerina-runtime
-          # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
+          # Consumed within this run only (installers, publish-update-source, publish-github-release); 7 days covers re-runs.
           retention-days: 7
           path: out/ballerina-runtime-*.zip
           compression-level: 0
@@ -222,7 +222,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
@@ -238,10 +238,10 @@ jobs:
           cmp out/icp-*.zip out-check/icp-*.zip
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: icp
-          # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
+          # Consumed within this run only (installers, publish-update-source, publish-github-release); 7 days covers re-runs.
           retention-days: 7
           path: out/icp-*.zip
           compression-level: 0
@@ -638,14 +638,14 @@ jobs:
 
       - name: Download Ballerina runtime
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ballerina-runtime
           path: ballerina-runtime
 
       - name: Download ICP
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: icp
           path: icp-package

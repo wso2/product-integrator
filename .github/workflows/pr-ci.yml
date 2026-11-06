@@ -24,7 +24,10 @@ jobs:
     name: Compile Integrator (No Installers)
     uses: ./.github/workflows/compile.yml
     with:
-      runner: ubuntu-latest
+      # Not ubuntu-latest: since ubuntu-latest moved to 26.04, the Debian dependency step
+      # (vscode-linux-x64-prepare-deb) fails. VS Code's patched copy of dpkg-shlibdeps dies in 26.04's
+      # libdpkg-perl ("Can't use an undefined value as a HASH reference at Dpkg/Shlibs/SymbolFile.pm").
+      runner: ubuntu-24.04
       build_packed_installers: false
       ballerina_extension_source: github
       mi_extension_source: github
