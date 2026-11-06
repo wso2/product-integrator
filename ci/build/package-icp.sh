@@ -43,8 +43,19 @@ mv "${TOP_DIRS[0]}" "${STAGE}"
 # Our launcher changes ride on upstream's scripts as patches. No fuzz: if upstream reworks the lines
 # they touch, fail here and refresh the patch (diff -u against the new upstream script).
 # Change a patch only together with a new upstream version: the CDN keeps one object per version.
+#
+# --no-backup-if-mismatch: a hunk that lands at an offset still applies, but GNU patch would then keep
+# the pre-patch launcher as <name>.orig and it would be zipped and shipped. ICP 2.1.0 is the one
+# exception, kept on purpose: icp.sh.patch lands one line off against it (hunks 2 and 3), so its
+# published zip contains bin/icp.sh.orig, and dropping that now would change the bytes of a version
+# signed documents already name. Every other version gets the flag, so the exception cannot carry
+# over to the next ICP bump; refreshing icp.sh.patch for that version removes the offset too.
 apply_patch() {
-  patch -s -N -F0 -p1 -d "${STAGE}" < "${SCRIPT_DIR}/icp/$1"
+  if [ "${ICP_VERSION}" = "2.1.0" ]; then
+    patch -s -N -F0 -p1 -d "${STAGE}" < "${SCRIPT_DIR}/icp/$1"
+  else
+    patch -s -N -F0 --no-backup-if-mismatch -p1 -d "${STAGE}" < "${SCRIPT_DIR}/icp/$1"
+  fi
 }
 apply_patch icp.sh.patch
 # The patch is LF; restore CRLF after, since cmd.exe mis-parses labels and gotos in LF batch files.
