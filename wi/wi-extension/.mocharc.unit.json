@@ -1,0 +1,16 @@
+{
+	"spec": [
+		"src/test/unit/**/*.test.ts"
+	],
+	"require": [
+		"ts-node/register/transpile-only",
+		"src/test/unit/setup.ts"
+	],
+	"extension": [
+		"ts"
+	],
+	"timeout": 10000,
+	"node-option": [
+		"no-experimental-strip-types"
+	]
+}
