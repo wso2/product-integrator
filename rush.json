@@ -34,6 +34,12 @@
             "shouldPublish": false
         },
         {
+            "packageName": "@wso2/wso2-cloud-client",
+            "projectFolder": "external/wso2-vscode-extensions/workspaces/wso2-platform/wso2-cloud-client",
+            "reviewCategory": "production",
+            "shouldPublish": false
+        },
+        {
             "packageName": "@wso2/wi-core",
             "projectFolder": "wi/wi-core",
             "reviewCategory": "production",
