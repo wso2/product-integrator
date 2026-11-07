@@ -16,15 +16,15 @@
  * under the License.
  */
 
-import * as vscode from "vscode";
 import path from "path";
+import { ViewType } from "@wso2/wi-core";
+import type { IWso2PlatformExtensionAPI } from "@wso2/wso2-cloud-client";
+import * as vscode from "vscode";
+import { BridgeLayer } from "./BridgeLayer";
 import { activateCloudFunctionality } from "./cloud/activate";
+import { WICloudExtensionAPI } from "./cloud/cloud-ext-api";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
-import { WICloudExtensionAPI } from "./cloud/cloud-ext-api";
-import { IWso2PlatformExtensionAPI } from "@wso2/wso2-platform-core";
-import { BridgeLayer } from "./BridgeLayer";
-import { ViewType } from "@wso2/wi-core";
 import { getPlatform } from "./ws-managers/main/utils";
 
 interface ExtensionExports {

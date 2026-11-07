@@ -16,30 +16,52 @@
  * under the License.
  */
 
-import type {
-	AuthState,
-	ComponentKind,
-	ContextItemEnriched,
-	ContextStoreComponentState,
-	IWso2PlatformExtensionAPI,
-} from "@wso2/wso2-platform-core";
+import {
+	type AuthState,
+	type CloudClient,
+	type ContextItemEnriched,
+	type ContextStoreState,
+	type DirectoryIntegration,
+	type EnvVarGroup,
+	type IWso2PlatformExtensionAPI,
+	type LocalRuntimeEnv,
+	NotSupportedError,
+	type OpenClonedDirRequest,
+	PLATFORM_EXTENSION_API_VERSION,
+	type PlatformEnvConfig,
+	type PlatformSession,
+	orderByPipeline,
+} from "@wso2/wso2-cloud-client";
 import { ext } from "../extensionVariables";
-import { hasDirtyRepo } from "./git/util";
-import { openClonedDir } from "./cloud-uri-handlers";
-import { contextStore } from "./stores/context-store";
-import { webviewStateStore } from "./stores/webview-state-store";
-import { createConnectionConfig, deleteLocalConnectionConfig } from "./cloud-utils";
 import { isSamePath } from "../utils/pathUtils";
+import { openClonedDir } from "./cloud-uri-handlers";
+import { createConnectionConfig, deleteLocalConnectionConfig } from "./cloud-utils";
+import { linkContext } from "./context-file";
+import { hasDirtyRepo } from "./git/util";
+import { contextStore } from "./stores/context-store";
+
+const NO_PLATFORM_API = (what: string, dependency: string) =>
+	new NotSupportedError(`${what} is not available on WSO2 Cloud yet.`, { reason: dependency });
 
 /**
- * Implements IWso2PlatformExtensionAPI using wi-extension's own stores and RPC client.
- * Mirrors PlatformExtensionApi from the wso2-platform extension.
+ * What this extension exports as `cloudAPIs` for other extensions (the
+ * Ballerina extension reads it): the v2 contract over the platform client.
+ * Tokens are not here; a consumer calls `vscode.authentication.getSession("wso2-cloud", ["env:<env>"])`.
  */
-export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
-	public active: boolean;
-	constructor() {
-		this.active = false;
+/** The URL an endpoint is reached at, from the parts the platform reports; undefined when there is no host. */
+function endpointUrlOf(url: { scheme?: string; host?: string; port?: number; path?: string } | undefined): string | undefined {
+	if (!url?.host) {
+		return undefined;
 	}
+	const scheme = url.scheme || "https";
+	const port = url.port && !((scheme === "https" && url.port === 443) || (scheme === "http" && url.port === 80)) ? `:${url.port}` : "";
+	const path = url.path ? (url.path.startsWith("/") ? url.path : `/${url.path}`) : "";
+	return `${scheme}://${url.host}${port}${path}`;
+}
+
+export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
+	public readonly apiVersion = PLATFORM_EXTENSION_API_VERSION;
+	private active = false;
 
 	public setActive(active: boolean) {
 		this.active = active;
@@ -49,103 +71,250 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 		return this.active;
 	}
 
-	private getComponentsOfDir = (fsPath: string, components?: ContextStoreComponentState[]): ComponentKind[] =>
-		(components
-			?.filter((item) => isSamePath(item?.componentFsPath, fsPath))
-			?.map((item) => item?.component)
-			?.filter((item) => !!item) as ComponentKind[]) ?? [];
+	private get cloud(): CloudClient {
+		return ext.clients.platform.cloud;
+	}
 
-	// Auth
-	public getAuthState = (): AuthState =>
-		ext.authProvider?.getState().state ?? { userInfo: null, region: "US" as const };
-	public isLoggedIn = (): boolean => !!ext.authProvider?.getState().state?.userInfo;
-	public getStsToken = (): Promise<string> => ext.clients.rpcClient.getStsToken();
+	// A Ballerina workspace (no single package) asks with no path; nothing matches it.
+	private integrationsOfDir = (fsPath: string | undefined, integrations?: DirectoryIntegration[]): DirectoryIntegration[] =>
+		fsPath ? (integrations?.filter((item) => item.fsPath && isSamePath(item.fsPath, fsPath)) ?? []) : [];
 
-	// Project
-	public getProjects = (orgId: string) => ext.clients.rpcClient.getProjects(orgId);
-	public updateProject = (params: Parameters<IWso2PlatformExtensionAPI["updateProject"]>[0]) =>
-		ext.clients.rpcClient.updateProject(params);
-
-	// Context
-	public getDirectoryComponents = (fsPath: string): ComponentKind[] =>
-		this.getComponentsOfDir(fsPath, contextStore.getState().state?.components);
-	public getSelectedContext = (): ContextItemEnriched | null =>
-		contextStore.getState().state?.selected || null;
-	public getContextStateStore = () => contextStore.getState().state;
-	public getWebviewStateStore = () => webviewStateStore.getState().state;
-
-	// Git
-	public localRepoHasChanges = (fsPath: string): Promise<boolean> =>
-		hasDirtyRepo(fsPath, ext.context);
-
-	// Navigation
-	public openClonedDir = (params: Parameters<IWso2PlatformExtensionAPI["openClonedDir"]>[0]): Promise<void> =>
-		openClonedDir(params);
-
-	// Marketplace
-	public getMarketplaceItems = (params: Parameters<IWso2PlatformExtensionAPI["getMarketplaceItems"]>[0]) =>
-		ext.clients.rpcClient.getMarketplaceItems(params);
-	public getMarketplaceDatabases = (params: Parameters<IWso2PlatformExtensionAPI["getMarketplaceDatabases"]>[0]) =>
-		ext.clients.rpcClient.getMarketplaceDatabases(params);
-	public getMarketplaceDatabaseItem = (params: Parameters<IWso2PlatformExtensionAPI["getMarketplaceDatabaseItem"]>[0]) =>
-		ext.clients.rpcClient.getMarketplaceDatabaseItem(params);
-	public getMarketplaceItem = (params: Parameters<IWso2PlatformExtensionAPI["getMarketplaceItem"]>[0]) =>
-		ext.clients.rpcClient.getMarketplaceItem(params);
-	public getMarketplaceIdl = (params: Parameters<IWso2PlatformExtensionAPI["getMarketplaceIdl"]>[0]) =>
-		ext.clients.rpcClient.getMarketplaceIdl(params);
-
-	// Database
-	public getDatabaseServer = (params: Parameters<IWso2PlatformExtensionAPI["getDatabaseServer"]>[0]) =>
-		ext.clients.rpcClient.getDatabaseServer(params);
-	public getDatabaseAdminCredential = (params: Parameters<IWso2PlatformExtensionAPI["getDatabaseAdminCredential"]>[0]) =>
-		ext.clients.rpcClient.getDatabaseAdminCredential(params);
-	public getDatabaseCredentials = (params: Parameters<IWso2PlatformExtensionAPI["getDatabaseCredentials"]>[0]) =>
-		ext.clients.rpcClient.getDatabaseCredentials(params);
-	public createDatabaseConnection = (params: Parameters<IWso2PlatformExtensionAPI["createDatabaseConnection"]>[0]) =>
-		ext.clients.rpcClient.createDatabaseConnection(params);
-
-	// Connections
-	public createComponentConnection = (params: Parameters<IWso2PlatformExtensionAPI["createComponentConnection"]>[0]) =>
-		ext.clients.rpcClient.createComponentConnection(params);
-	public createThirdPartyConnection = (params: Parameters<IWso2PlatformExtensionAPI["createThirdPartyConnection"]>[0]) =>
-		ext.clients.rpcClient.createThirdPartyConnection(params);
-	public createConnectionConfig = (params: Parameters<IWso2PlatformExtensionAPI["createConnectionConfig"]>[0]) =>
-		createConnectionConfig(params);
-	public registerMarketplaceConnection = (params: Parameters<IWso2PlatformExtensionAPI["registerMarketplaceConnection"]>[0]) =>
-		ext.clients.rpcClient.registerMarketplaceConnection(params);
-	public getConnections = (params: Parameters<IWso2PlatformExtensionAPI["getConnections"]>[0]) =>
-		ext.clients.rpcClient.getConnections(params);
-	public getConnection = (params: Parameters<IWso2PlatformExtensionAPI["getConnection"]>[0]) =>
-		ext.clients.rpcClient.getConnectionItem(params);
-	public deleteConnection = (params: Parameters<IWso2PlatformExtensionAPI["deleteConnection"]>[0]) =>
-		ext.clients.rpcClient.deleteConnection(params);
-	public deleteLocalConnectionsConfig = (params: Parameters<IWso2PlatformExtensionAPI["deleteLocalConnectionsConfig"]>[0]): void =>
-		deleteLocalConnectionConfig(params);
-	public resolveConnectionSecrets = (params: Parameters<IWso2PlatformExtensionAPI["resolveConnectionSecrets"]>[0]) =>
-		ext.clients.rpcClient.resolveConnectionSecrets(params);
-
-	// Environments & console
-	public getDevantConsoleUrl = async (): Promise<string> => ext.config?.devantConsoleUrl;
-	public getProjectEnvs = (params: Parameters<IWso2PlatformExtensionAPI["getProjectEnvs"]>[0]) =>
-		ext.clients.rpcClient.getEnvs(params);
-	public getComponentList = (params: Parameters<IWso2PlatformExtensionAPI["getComponentList"]>[0]) =>
-		ext.clients.rpcClient.getComponentList(params);
-
-	// Proxy
-	public startProxyServer = (params: Parameters<IWso2PlatformExtensionAPI["startProxyServer"]>[0]) =>
-		ext.clients.rpcClient.startProxyServer(params);
-	public stopProxyServer = (params: Parameters<IWso2PlatformExtensionAPI["stopProxyServer"]>[0]) =>
-		ext.clients.rpcClient.stopProxyServer(params);
-
-	// Auth subscriptions
-	public subscribeAuthState = (callback: (state: AuthState) => void): (() => void) =>
-		ext.authProvider?.subscribe((s) => callback(s.state)) ?? (() => { });
+	// ---- auth ----
+	public getAuthState = (): AuthState => ext.authProvider?.state ?? { session: null, status: "signed-out" };
+	public isLoggedIn = (): boolean => !!ext.authProvider?.isLoggedIn;
+	public signIn = async (options?: { reselectOrganization?: boolean }): Promise<PlatformSession> => {
+		if (!ext.authProvider) {
+			throw new Error("The cloud layer is not active yet.");
+		}
+		return ext.authProvider.signIn(options);
+	};
+	public signOut = (): Promise<void> => ext.authProvider?.logout(true) ?? Promise.resolve();
+	public getPlatformConfig = (): PlatformEnvConfig => ext.config;
+	public subscribeAuthState = (callback: (state: AuthState) => void): (() => void) => ext.authProvider?.subscribe((s) => callback(s.state)) ?? (() => undefined);
 	public subscribeIsLoggedIn = (callback: (isLoggedIn: boolean) => void): (() => void) =>
-		ext.authProvider?.subscribe((s) => callback(!!s.state?.userInfo)) ?? (() => { });
+		ext.authProvider?.subscribe((s) => callback(s.state.status === "signed-in" && !!s.state.session)) ?? (() => undefined);
 
-	// Context subscriptions
+	// ---- workspace context ----
+	public getContextState = (): ContextStoreState => contextStore.getState().state;
+	public getSelectedContext = (): ContextItemEnriched | null => contextStore.getState().state?.selected || null;
 	public subscribeContextState = (callback: (state: ContextItemEnriched | undefined) => void): (() => void) =>
 		contextStore.subscribe((s) => callback(s.state?.selected));
-	public subscribeDirComponents = (fsPath: string, callback: (comps: ComponentKind[]) => void): (() => void) =>
-		contextStore.subscribe((s) => callback(this.getComponentsOfDir(fsPath, s.state.components)));
+	public getDirectoryIntegrations = (fsPath: string): DirectoryIntegration[] => this.integrationsOfDir(fsPath, contextStore.getState().state?.integrations);
+	public subscribeDirectoryIntegrations = (fsPath: string, callback: (integrations: DirectoryIntegration[]) => void): (() => void) =>
+		contextStore.subscribe((s) => callback(this.integrationsOfDir(fsPath, s.state.integrations)));
+	public localRepoHasChanges = (fsPath: string): Promise<boolean> => hasDirtyRepo(fsPath, ext.context);
+	public linkDirectory = async (fsPath: string, target: { project: string; env?: string }): Promise<void> => {
+		const org = ext.authProvider?.org;
+		if (!org) {
+			throw new Error("Not signed in to WSO2 Cloud.");
+		}
+		linkContext(fsPath, { org: org.handle, project: target.project, env: target.env });
+		await contextStore.getState().refreshState();
+	};
+	public openClonedDir = (request: OpenClonedDirRequest): Promise<void> => openClonedDir(request);
+	public refreshContext = (): Promise<void> => contextStore.getState().refreshState();
+
+	// ---- platform resources ----
+	public get org() {
+		const cloud = this.cloud;
+		const uuid = () => {
+			const value = ext.authProvider?.org?.uuid;
+			if (!value) {
+				throw new Error("The organization's id is not known yet; sign in again.");
+			}
+			return value;
+		};
+		return {
+			get: () => cloud.orgs.current(),
+			getSubscriptions: () => cloud.orgs.subscriptions(uuid()),
+			getComponentLimits: () => cloud.orgs.componentLimits(uuid()),
+		};
+	}
+	public get projects() {
+		return this.cloud.projects;
+	}
+	public get integrations() {
+		const components = this.cloud.components;
+		return {
+			list: (projectName?: string) => components.list(projectName),
+			get: (projectName: string, name: string) => components.get(projectName, name),
+			find: (ref: string, projectName?: string) => components.find(ref, projectName),
+			getRepository: (name: string, projectName?: string) => components.repository(name, projectName),
+			create: components.create.bind(components),
+			createRaw: components.createRaw.bind(components),
+			update: components.update.bind(components),
+			delete: components.delete.bind(components),
+			checkName: components.checkName.bind(components),
+			updateBuildParameters: components.updateBuildParameters.bind(components),
+			updateBuildpackConfig: components.updateBuildpackConfig.bind(components),
+			setAutoBuild: components.setAutoBuild.bind(components),
+			setAutoDeploy: components.setAutoDeploy.bind(components),
+			listCommits: components.listCommits.bind(components),
+			listTracks: components.listTracks.bind(components),
+			getDefaultTrack: components.getDefaultTrack.bind(components),
+		};
+	}
+	public get builds() {
+		return this.cloud.builds;
+	}
+	public get deployments() {
+		return this.cloud.deployments;
+	}
+	public get environments() {
+		const environments = this.cloud.environments;
+		const pipelines = this.cloud.pipelines;
+		return {
+			list: () => environments.list(),
+			get: (id: string) => environments.get(id),
+			resolve: (ref: string) => environments.resolve(ref),
+			listOrdered: async (projectName: string) => {
+				const [all, { pipeline }] = await Promise.all([environments.list(), pipelines.ofProject(projectName)]);
+				return orderByPipeline(all, pipeline);
+			},
+		};
+	}
+	public get pipelines() {
+		return this.cloud.pipelines;
+	}
+	public get endpoints() {
+		return this.cloud.endpoints;
+	}
+	public get config() {
+		return this.cloud.config;
+	}
+	public get observability() {
+		const observability = this.cloud.observability;
+		const builds = this.cloud.builds;
+		return {
+			queryBuildLogs: async (name: string, buildName: string, options: { tail?: number; signal?: AbortSignal; projectName?: string } = {}) => {
+				const build = await builds.get(name, buildName, options.projectName);
+				return observability.buildLogs(build, options);
+			},
+			queryRuntimeLogs: (projectName: string, name: string, environment: string, sinceMs: number, options?: { tail?: number; signal?: AbortSignal }) =>
+				observability.runtimeLogs({ project: projectName, component: name, environment }, sinceMs, options),
+		};
+	}
+	public get repos() {
+		return this.cloud.repos;
+	}
+	public get git() {
+		const proxy = this.cloud.git;
+		return {
+			// The git integration's routes are not in the platform's API document yet.
+			isRepoAuthorized: async (_owner: string, _repo: string) => {
+				throw NO_PLATFORM_API("Checking repository access", "git_app_service_routes");
+			},
+			listInstallations: async () => {
+				throw NO_PLATFORM_API("Listing GitHub installations", "git_app_service_routes");
+			},
+			connectGitHub: async () => {
+				throw NO_PLATFORM_API("Connecting GitHub", "git_app_service_routes");
+			},
+			raw: proxy.raw.bind(proxy),
+		};
+	}
+	public get dbServers() {
+		return this.cloud.dbServers;
+	}
+	public get knowledgeBases() {
+		return this.cloud.knowledgeBases;
+	}
+	public get applications() {
+		return this.cloud.applications;
+	}
+	public get codeServer() {
+		return this.cloud.codeServer;
+	}
+	public get ballerinaCentral() {
+		return this.cloud.ballerinaCentral;
+	}
+
+	// ---- compositions over the platform ----
+	public get connections() {
+		const cloud = this.cloud;
+		const environmentsFor = async (requested?: string[]) => (requested?.length ? requested : (await cloud.environments.list()).map((e) => e.id));
+		return {
+			list: (integration: string, environment: string, projectName?: string): Promise<EnvVarGroup[]> => cloud.config.listEnvGroups(integration, environment, projectName),
+			createDatabaseConnection: async (request: { integration: string; dbServerId: string; name: string; environments?: string[]; projectName?: string }) => {
+				const credentials = await cloud.dbServers.revealCredentials(request.dbServerId);
+				const data: Record<string, string> = {
+					DB_HOST: credentials.host ?? "",
+					DB_PORT: credentials.port ?? "",
+					DB_NAME: credentials.database ?? "",
+					DB_USER: credentials.username,
+					DB_PASSWORD: credentials.password,
+				};
+				if (credentials.caCertificate) {
+					data.DB_CA_CERT = credentials.caCertificate;
+				}
+				for (const environment of await environmentsFor(request.environments)) {
+					await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: true, data }, request.projectName);
+				}
+			},
+			createServiceConnection: async (request: { integration: string; target: { project: string; integration: string; endpoint: string }; name: string; environments?: string[]; projectName?: string }) => {
+				// Every environment's endpoint is found before anything is created, so a missing one leaves no half-made connection behind.
+				const targets: { environment: string; url: string }[] = [];
+				for (const environment of await environmentsFor(request.environments)) {
+					const endpoints = await cloud.endpoints.listForEnvironment(request.target.integration, environment, request.target.project);
+					const endpoint = endpoints.find((e) => e.name === request.target.endpoint);
+					if (!endpoint) {
+						throw new NotSupportedError(`${request.target.integration} exposes no endpoint ${request.target.endpoint} in ${environment}.`, { reason: "endpoint_missing" });
+					}
+					targets.push({ environment, url: endpointUrlOf(endpoint.urls?.external) ?? endpointUrlOf(endpoint.urls?.internal) ?? "" });
+				}
+				for (const { environment, url } of targets) {
+					const key = await cloud.endpoints.createApiKey(request.target.integration, environment, request.target.endpoint, { displayName: `${request.integration}-${request.name}` }, request.target.project);
+					await cloud.config.putEnvGroup(
+						request.integration,
+						environment,
+						request.name,
+						{ name: request.name, sensitive: true, data: { SERVICE_URL: url, API_KEY: key.apiKey } },
+						request.projectName,
+					);
+				}
+			},
+			delete: async (request: { integration: string; name: string; environments?: string[]; projectName?: string }) => {
+				for (const environment of await environmentsFor(request.environments)) {
+					await cloud.config.deleteEnvGroup(request.integration, environment, request.name, request.projectName).catch((): undefined => undefined);
+				}
+			},
+		};
+	}
+	public get runtime() {
+		const cloud = this.cloud;
+		return {
+			collectLocalEnv: async (request: { projectName: string; integration?: string; environment?: string; skip?: string[] }): Promise<LocalRuntimeEnv> => {
+				const result: LocalRuntimeEnv = { envVars: {}, missingSecrets: [] };
+				if (!request.integration) {
+					return result;
+				}
+				const environment = request.environment ?? (await cloud.pipelines.ofProject(request.projectName)).entry ?? (await cloud.environments.list())[0]?.id;
+				if (!environment) {
+					return result;
+				}
+				const groups = await cloud.config.listEnvGroups(request.integration, environment, request.projectName);
+				for (const group of groups) {
+					if (request.skip?.includes(group.name ?? "")) {
+						continue;
+					}
+					if (group.sensitive) {
+						// Secrets are write-only on the platform; the person sets them locally.
+						result.missingSecrets.push(...(group.keys ?? []));
+						continue;
+					}
+					const full = group.data ? group : await cloud.config.getEnvGroup(request.integration, environment, group.name ?? "", request.projectName);
+					Object.assign(result.envVars, full.data ?? {});
+				}
+				return result;
+			},
+		};
+	}
+
+	// ---- local files ----
+	public get local() {
+		return {
+			writeConnectionReference: (request: { componentDir: string; name: string; resourceRef: string }) => createConnectionConfig(request),
+			deleteConnectionReference: (request: { componentDir: string; name: string }) => deleteLocalConnectionConfig({ componentDir: request.componentDir, connectionName: request.name }),
+		};
+	}
 }

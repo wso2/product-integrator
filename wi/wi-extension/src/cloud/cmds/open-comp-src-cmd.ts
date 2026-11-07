@@ -16,87 +16,70 @@
  * under the License.
  */
 
-import { WICommandIds, type IOpenCompSrcCmdParams, type Organization, type Project } from "@wso2/wso2-platform-core";
+import type { Project } from "@wso2/wso2-cloud-client";
+import { type ICmdParamsBase, WICommandIds } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, commands, window } from "vscode";
 import { ext } from "../../extensionVariables";
+import { cloneOrOpenDir } from "../cloud-uri-handlers";
+import { handleCloudError } from "../platform/error-handler";
 import { waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
-import { cloneOrOpenDir } from "../cloud-uri-handlers";
-import { getUserInfoForCmd, isRpcActive, selectOrg, selectProject, setExtensionName } from "./cmd-utils";
+import { isPlatformReady, requireSession, selectProject, setExtensionName } from "./cmd-utils";
+
+export interface IOpenIntegrationSrcCmdParams extends ICmdParamsBase {
+	/** An organization handle; the link is refused when it is not the session's. */
+	org?: string;
+	/** A project name, or the project itself. */
+	project?: string | Project;
+	component?: string;
+	technology?: string;
+	integrationType?: string;
+	integrationDisplayType?: string;
+}
 
 export function openCompSrcCommand(context: ExtensionContext) {
 	context.subscriptions.push(
-		commands.registerCommand(WICommandIds.OpenCompSrcDir, async (params: IOpenCompSrcCmdParams) => {
+		commands.registerCommand(WICommandIds.OpenCompSrcDir, async (params: IOpenIntegrationSrcCmdParams) => {
 			setExtensionName(params?.extName);
 			try {
-				isRpcActive(ext);
-				const userInfo = await getUserInfoForCmd("clone project repository");
-				if (userInfo) {
-					let selectedOrg: Organization;
-					if (typeof params?.org === "string") {
-						selectedOrg =
-							userInfo.organizations.find((item) => item.handle === params?.org || item.name === params?.org) ??
-							(await selectOrg(userInfo, "Select organization"));
-						if (!selectedOrg) {
-							window
-								.showErrorMessage(`Unable to find the organization ${params?.org} in your account. Please try signing in again.`, "Sign in")
-								.then((res) => {
-									if (res === "Sign in") {
-										commands.executeCommand(WICommandIds.SignIn);
-									}
-								});
-							return;
-						}
-					} else if (params?.org) {
-						selectedOrg = params?.org;
-					} else {
-						selectedOrg = await selectOrg(userInfo, "Select organization");
-					}
-
-					let selectedProject: Project | undefined;
-					if (typeof params?.project === "string") {
-						const projectsCache = dataCacheStore.getState().getProjects(selectedOrg.handle);
-						selectedProject = projectsCache.find(
-							(item) => item.handler === params?.project || item.name === params?.project || item.id === params?.component,
-						);
-
-						if (!selectedProject) {
-							const projects = await window.withProgress(
-								{ title: `Fetching projects of organization ${selectedOrg.name}...`, location: ProgressLocation.Notification },
-								() => ext.clients.rpcClient.getProjects(selectedOrg.id.toString()),
-							);
-							dataCacheStore.getState().setProjects(selectedOrg.handle, projects);
-							selectedProject = projects.find(
-								(item) => item.handler === params?.project || item.name === params?.project || item.id === params?.component,
-							);
-						}
-					} else if (params?.project) {
-						selectedProject = params?.project;
-					}
-
-					if (!selectedProject) {
-						selectedProject = await selectProject(
-							selectedOrg,
-							`Loading projects from '${selectedOrg.name}'`,
-							`Select the project from '${selectedOrg.name}', that needs to be cloned`,
-						);
-					}
-
-					await waitForContextStoreToLoad();
-
-					cloneOrOpenDir(
-						selectedOrg,
-						selectedProject,
-						params?.component || null,
-						params?.technology || null,
-						params?.integrationType || null,
-						params?.integrationDisplayType || null,
-						params?.extName,
-					);
+				isPlatformReady(ext);
+				const session = await requireSession("clone project repository");
+				if (!session) {
+					return;
 				}
-			} catch (err: any) {
-				console.error(`Failed to open project/${ext.terminologies?.componentTerm}`, err);
-				window.showErrorMessage(err?.message || `Failed to open project/${ext.terminologies?.componentTerm}`);
+				if (params?.org && params.org !== session.org.handle && params.org !== session.org.name) {
+					window.showErrorMessage(`This is for the organization ${params.org}, and you are signed in to ${session.org.handle}.`, "Switch organization").then((res) => {
+						if (res === "Switch organization") {
+							commands.executeCommand(WICommandIds.SignIn, { reselectOrganization: true });
+						}
+					});
+					return;
+				}
+
+				let selectedProject: Project | undefined;
+				if (typeof params?.project === "string") {
+					const wanted = params.project;
+					const match = (p: Project) => p.id === wanted || p.handler === wanted || p.name === wanted;
+					selectedProject = dataCacheStore.getState().getProjects(session.org.handle).find(match);
+					if (!selectedProject) {
+						const projects = await window.withProgress({ title: `Fetching projects of organization ${session.org.name}...`, location: ProgressLocation.Notification }, () =>
+							ext.clients.platform.cloud.projects.list(),
+						);
+						dataCacheStore.getState().setProjects(session.org.handle, projects);
+						selectedProject = projects.find(match);
+					}
+				} else if (params?.project) {
+					selectedProject = params.project;
+				}
+				if (!selectedProject) {
+					selectedProject = await selectProject(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', that needs to be cloned`);
+				}
+
+				await waitForContextStoreToLoad();
+				await cloneOrOpenDir(selectedProject, params?.component || null, params?.technology || null, params?.integrationType || null, params?.integrationDisplayType || null, params?.extName);
+			} catch (err) {
+				ext.logError(`Failed to open project/${ext.terminologies?.componentTerm}`, err as Error);
+				handleCloudError(err, `Failed to open project/${ext.terminologies?.componentTerm}`);
 			}
 		}),
 	);
