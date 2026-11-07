@@ -3,7 +3,6 @@
   "displayName": "WSO2 Integrator",
   "description": "Integration development environment for WSO2 Integrator",
   "version": "1.1.26081017",
-  "cliVersion": "v1.2.212606121500",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
   "license": "Apache-2.0",
@@ -18,6 +17,7 @@
   ],
   "activationEvents": [
     "onStartupFinished",
+    "onUri",
     "onCommand:wso2.integrator.getEmbeddedWelcomeBootstrap",
     "workspaceContains:**/Ballerina.toml",
     "onLanguage:SynapseXml",
@@ -53,28 +53,17 @@
           "description": "The WSO2 Cloud Environment to use",
           "scope": "machine"
         },
-        "integrator.advanced.cloudRpcPath": {
+        "integrator.advanced.cloudClientId": {
           "type": "string",
           "default": "",
-          "description": "The path to Cloud RPC server",
-          "scope": "window"
+          "markdownDescription": "Overrides the OAuth client id used to sign in to WSO2 Cloud. Leave empty unless the WSO2 Cloud team told you to set it.",
+          "scope": "machine"
         },
-        "integrator.advanced.cloudRpcArchitecture": {
+        "integrator.advanced.cloudApiBaseUrl": {
           "type": "string",
-          "enum": [
-            "",
-            "amd64",
-            "arm64"
-          ],
           "default": "",
-          "description": "The architecture of Cloud RPC server. Change only if you are running within a container with a different architecture than your host machine.",
-          "scope": "window"
-        },
-        "integrator.advanced.skipKeyring": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable only if your system does not support keyring.",
-          "scope": "window"
+          "markdownDescription": "Overrides the WSO2 Cloud API base URL. Leave empty unless the WSO2 Cloud team told you to set it.",
+          "scope": "machine"
         }
       }
     },
@@ -595,14 +584,14 @@
     "lint:fix": "biome check --write .",
     "vscode:prepublish": "rm -rf resources/jslibs && npm run copyJSLibs",
     "prebuild": "rm -rf dist",
-    "build": "webpack --mode production && npm run download-choreo-cli && npm run package",
+    "build": "webpack --mode production && npm run package",
     "copyJSLibs": "copyfiles -E -f ../wi-webviews/build/main.js resources/jslibs",
     "watch": "webpack --mode development --watch",
     "compile": "webpack --mode development",
     "compile-tests": "tsc -p . --outDir out",
     "test": "node ./out/test/runTest.js",
-    "package": "node ../../external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js",
-    "download-choreo-cli": "node scripts/download-choreo-cli.js"
+    "test:unit": "mocha --config .mocharc.unit.json",
+    "package": "node ../../external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js"
   },
   "devDependencies": {
     "@types/byline": "4.2.33",
@@ -618,6 +607,7 @@
     "eslint": "9.27.0",
     "glob": "11.0.2",
     "mocha": "11.2.2",
+    "ts-node": "10.9.2",
     "typescript": "5.8.3",
     "copyfiles": "2.4.1",
     "copy-webpack-plugin": "13.0.0",
@@ -635,7 +625,6 @@
     "@wso2/wso2-cloud-client": "workspace:*",
     "vscode-messenger-common": "^0.5.1",
     "vscode-messenger": "~0.5.1",
-    "vscode-jsonrpc": "8.2.1",
     "zustand": "5.0.5",
     "byline": "5.0.0",
     "which": "5.0.0",
