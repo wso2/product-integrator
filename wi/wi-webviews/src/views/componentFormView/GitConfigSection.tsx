@@ -20,6 +20,7 @@ import React, { type FC, type ReactNode, useEffect, useState } from "react";
 import { Dropdown, ProgressIndicator, Codicon } from "@wso2/ui-toolkit";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { GitProvider, parseGitURL, toSentenceCase } from "@wso2/wso2-platform-core";
+import { buildConsoleUrl } from "@wso2/wso2-cloud-client/contract";
 import {
 	GitConfigGrid,
 	GitConfigLabel,
@@ -242,7 +243,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	}
 
 	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB && !isLoadingGitCred && gitCredentials?.length === 0) {
-		onInvalidRepoActionClick = () => wsClient.openExternal(`${consoleUrl}/organizations/${orgHandle}/settings/credentials`);
+		onInvalidRepoActionClick = () => wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" }));
 		invalidRepoMsg = `${toSentenceCase(gitProvider)} credentials needs to be configured.`;
 		invalidRepoAction = "Configure Credentials";
 		onInvalidRepoRefreshClick = refetchGitCred;
@@ -263,7 +264,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 				invalidRepoBannerType = "info";
 			}
 		} else {
-			onInvalidRepoActionClick = () => wsClient.openExternal(`${consoleUrl}/organizations/${orgHandle}/settings/credentials`);
+			onInvalidRepoActionClick = () => wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" }));
 			if (isRepoAuthorizedResp?.retrievedRepos) {
 				invalidRepoMsg = <span>Selected Credential does not have sufficient permissions to access the repository.</span>;
 				invalidRepoAction = "Manage Credentials";

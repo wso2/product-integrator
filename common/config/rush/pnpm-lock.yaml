@@ -283,9 +283,6 @@ importers:
       unzipper:
         specifier: 0.12.3
         version: 0.12.3
-      vscode-jsonrpc:
-        specifier: 8.2.1
-        version: 8.2.1
       vscode-messenger:
         specifier: ~0.5.1
         version: 0.5.1
@@ -362,6 +359,9 @@ importers:
       ts-loader:
         specifier: 9.5.2
         version: 9.5.2(typescript@5.8.3)(webpack@5.102.1)
+      ts-node:
+        specifier: 10.9.2
+        version: 10.9.2(@types/node@22.15.21)(typescript@5.8.3)
       typescript:
         specifier: 5.8.3
         version: 5.8.3
@@ -6782,10 +6782,6 @@ packages:
         optional: true
       yaml:
         optional: true
-
-  vscode-jsonrpc@8.2.1:
-    resolution: {integrity: sha512-kdjOSJ2lLIn7r1rtrMbbNCHjyMPfRnowdKjBQ+mGq6NAW5QY2bEZC/khaC5OR8svbbjvLEaIXkOq45e2X9BIbQ==}
-    engines: {node: '>=14.0.0'}
 
   vscode-messenger-common@0.5.1:
     resolution: {integrity: sha512-YJRUdK278/K7vNyhVoePINOHmz3xjQFQbSiuNXCm3+GfQ6NSmjjWTpumAYAzNs05HKAeF9glU532livdwc3W0A==}
@@ -14471,8 +14467,6 @@ snapshots:
       fsevents: 2.3.3
       terser: 5.44.1
       yaml: 2.8.0
-
-  vscode-jsonrpc@8.2.1: {}
 
   vscode-messenger-common@0.5.1: {}
 

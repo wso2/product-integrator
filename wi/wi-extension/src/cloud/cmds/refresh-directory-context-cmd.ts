@@ -16,27 +16,26 @@
  * under the License.
  */
 
-import { WICommandIds, type ICmdParamsBase } from "@wso2/wso2-platform-core";
-import { type ExtensionContext, commands, window } from "vscode";
-import { ext } from '../../extensionVariables';
+import { type ICmdParamsBase, WICommandIds } from "@wso2/wso2-platform-core";
+import { type ExtensionContext, commands } from "vscode";
+import { ext } from "../../extensionVariables";
+import { handleCloudError } from "../platform/error-handler";
 import { contextStore } from "../stores/context-store";
-import { isRpcActive, setExtensionName } from "./cmd-utils";
+import { isPlatformReady, setExtensionName } from "./cmd-utils";
 
 export function refreshContextCommand(context: ExtensionContext) {
 	context.subscriptions.push(
 		commands.registerCommand(WICommandIds.RefreshDirectoryContext, async (params: ICmdParamsBase) => {
 			try {
-				isRpcActive(ext);
+				isPlatformReady(ext);
 				setExtensionName(params?.extName);
-				const userInfo = ext.authProvider?.getState().state.userInfo;
-				if (!userInfo) {
-					throw new Error("You are not logged in. Please log in and retry.");
+				if (!ext.authProvider?.isLoggedIn) {
+					throw new Error("You are not signed in. Please sign in and retry.");
 				}
-
 				await contextStore.getState().refreshState();
-			} catch (err: any) {
-				console.error("Failed to refresh directory context", err);
-				window.showErrorMessage(err?.message || "Failed to refresh directory context");
+			} catch (err) {
+				ext.logError("Failed to refresh directory context", err as Error);
+				handleCloudError(err, "Failed to refresh directory context");
 			}
 		}),
 	);

@@ -16,118 +16,109 @@
  * under the License.
  */
 
+import type { Logger } from "@wso2/wso2-cloud-client";
+import { CLOUD_API_URL_SETTING, CLOUD_CLIENT_ID_SETTING, CLOUD_ENV_SETTING } from "@wso2/wso2-cloud-client/vscode";
 import * as vscode from "vscode";
 import type { ConfigurationChangeEvent } from "vscode";
-import { authentication, commands, window, workspace } from "vscode";
-import { WSO2AuthenticationProvider, WSO2_AUTH_PROVIDER_ID } from "./auth/wso2-auth-provider";
-import { ChoreoRPCClient } from "./choreo-cli-rpc";
-import { getCliVersion, installRPCServer } from "./choreo-cli-rpc/cli-install";
-import { activateCmds } from "./cmds";
+import { commands, window, workspace } from "vscode";
 import { ext } from "../extensionVariables";
+import { getExtVersion } from "../utils/commonUtils";
+import { WIAuthState } from "./auth/wso2-auth-provider";
+import type { WICloudExtensionAPI } from "./cloud-ext-api";
+import { activateURIHandlers } from "./cloud-uri-handlers";
+import { activateCmds } from "./cmds";
+import { handleCloudError } from "./platform/error-handler";
+import { createWIPlatform } from "./platform/platform-client";
 import { contextStore } from "./stores/context-store";
 import { dataCacheStore } from "./stores/data-cache-store";
 import { locationStore } from "./stores/location-store";
-import { activateURIHandlers } from "./cloud-uri-handlers";
-import { getExtVersion } from "../utils/commonUtils";
-import { WICloudExtensionAPI } from "./cloud-ext-api";
+import { clearPreviousStoreVersions } from "./stores/store-utils";
 
 /**
- * Boot the cloud-connected functionality — mirrors the platform extension's activate():
- * cloudEnv → store rehydration → auth provider → RPC client → initAuth → config → pre-init handler
+ * Boot the cloud functionality: environment → stores → platform client and the
+ * `wso2-cloud` authentication provider → commands and URI handlers → restore the
+ * session → mark the exported API active. Nothing is spawned and nothing waits
+ * on a process, so this completes in milliseconds.
  */
 export async function activateCloudFunctionality(context: vscode.ExtensionContext, cloudAPIs: WICloudExtensionAPI): Promise<void> {
-	// 1. Resolve cloud environment
-	ext.cloudEnv =
-		process.env.CHOREO_ENV ||
-		process.env.CLOUD_ENV ||
-		workspace.getConfiguration().get<string>("integrator.advanced.cloudEnv") ||
-		"prod";
+	const logger: Logger = {
+		debug: (message) => ext.log(message),
+		info: (message) => ext.log(message),
+		warn: (message) => ext.log(`WARN: ${message}`),
+		error: (message, error) => ext.logError(message, error as Error),
+	};
 
-	// 2. Log versions
+	// 1. The platform client, sessions and authentication provider, from the environment setting.
+	const platform = createWIPlatform({
+		context,
+		logger,
+		extensionVersion: getExtVersion(context),
+		onUnauthenticated: (error) => {
+			void ext.authProvider?.logout(true);
+			handleCloudError(error, "WSO2 Cloud rejected the session. Please sign in again.");
+		},
+	});
+	ext.clients = { platform };
+	ext.cloudEnv = platform.environment.name;
+	ext.config = platform.environment;
+	context.subscriptions.push(platform);
+
+	// 2. The sign-in state the commands, stores and webviews read, and the commands and URI
+	// handlers, before anything is awaited: activate() does not wait for this function, and a
+	// caller (the Ballerina extension's SSO flow) may run a command as soon as it returns.
+	const authProvider = new WIAuthState({ platform, log: ext.log.bind(ext), logError: ext.logError.bind(ext) });
+	ext.authProvider = authProvider;
+	context.subscriptions.push(authProvider);
+	context.subscriptions.push(
+		new vscode.Disposable(
+			authProvider.subscribe(() => {
+				vscode.commands.executeCommand("setContext", "isLoggedIn", authProvider.isLoggedIn);
+			}),
+		),
+	);
+	activateCmds(context);
+	activateURIHandlers(context);
+
+	// 3. Log versions
 	ext.log(`Extension version: ${getExtVersion(context)}`);
-	ext.log(`CLI version: ${getCliVersion()}`);
+	ext.log(`WSO2 Cloud environment: ${platform.environment.name} (${platform.environment.apiBaseUrl})`);
 
-	// 3. Rehydrate persistent stores
+	// 4. Rehydrate persistent stores, dropping what the CLI-era store versions kept.
+	await clearPreviousStoreVersions(context);
 	await contextStore.persist.rehydrate();
 	await dataCacheStore.persist.rehydrate();
 	await locationStore.persist.rehydrate();
 
-	// 4. Sync contextStore state to VS Code context keys
-	contextStore.subscribe(({ state }) => {
-		vscode.commands.executeCommand("setContext", "isLoadingContextDirs", state.loading);
-		vscode.commands.executeCommand("setContext", "hasSelectedProject", !!state.selected);
-	});
-
-	// 5. Install and start the Choreo RPC server
-	await installRPCServer();
-
-	// 6. Create RPC client and expose it immediately so commands are always registered.
-	// Commands are self-guarded by isRpcActive and will return a graceful error until
-	// the client finishes connecting; waitUntilActive() below can now throw without
-	// leaving them permanently absent.
-	const rpcClient = new ChoreoRPCClient();
-	ext.clients = { rpcClient };
-
-	// 14. Register VS Code commands and URI handlers early — before waiting for RPC
-	// so that callers (e.g. the Ballerina extension's SSO flow) can always find them.
-	activateCmds(context);
-	activateURIHandlers();
-
-	await rpcClient.waitUntilActive();
-
-	// 7. Register authentication provider
-	const authProvider = new WSO2AuthenticationProvider(context.secrets, {
-		rpcClient,
-		log: ext.log.bind(ext),
-		logError: ext.logError.bind(ext),
-	});
-	ext.authProvider = authProvider;
+	// 5. Sync contextStore state to VS Code context keys
 	context.subscriptions.push(
-		authentication.registerAuthenticationProvider(WSO2_AUTH_PROVIDER_ID, "WSO2 Integrator", authProvider, {
-			supportsMultipleAccounts: false,
-		}),
+		new vscode.Disposable(
+			contextStore.subscribe(({ state }) => {
+				vscode.commands.executeCommand("setContext", "isLoadingContextDirs", state.loading);
+				vscode.commands.executeCommand("setContext", "hasSelectedProject", !!state.selected);
+			}),
+		),
 	);
 
-	// 8. Sync auth state to VS Code context key
-	authProvider.subscribe(({ state }) => {
-		vscode.commands.executeCommand("setContext", "isLoggedIn", !!state.userInfo);
-	});
+	// 6. Restore the session (secret storage, or the cloud editor's injected token).
+	await authProvider.initAuth();
 
-	// 9. Initialize authentication (restores session from CLI if already signed in)
-	await authProvider.getState().initAuth();
+	// 7. Prompt restart when Advanced configuration keys change
+	context.subscriptions.push(registerPreInitHandlers());
 
-	// 10. Sync auth state when the login dialog signs in via the wso2-platform provider.
-	context.subscriptions.push(
-		authentication.onDidChangeSessions(async (e) => {
-			if (e.provider.id === "wso2-platform") {
-				await authProvider.getState().initAuth();
-			}
-		})
-	);
-
-	// 12. Fetch remote config (billing/console URLs etc.)
-	ext.config = await ext.clients.rpcClient.getConfigFromCli();
-
-	// 13. Prompt restart when Advanced configuration keys change
-	registerPreInitHandlers();
-
-	// 16. Mark cloud Cloud functionality APIs as active
+	// 8. Mark the exported cloud APIs as active
 	cloudAPIs.setActive(true);
 }
 
-function registerPreInitHandlers(): void {
-	workspace.onDidChangeConfiguration(async ({ affectsConfiguration }: ConfigurationChangeEvent) => {
-		if (
-			affectsConfiguration("integrator.advanced.cloudEnv") ||
-			affectsConfiguration("integrator.advanced.cloudRpcPath")
-		) {
+function registerPreInitHandlers(): vscode.Disposable {
+	return workspace.onDidChangeConfiguration(async ({ affectsConfiguration }: ConfigurationChangeEvent) => {
+		if (affectsConfiguration(CLOUD_ENV_SETTING) || affectsConfiguration(CLOUD_CLIENT_ID_SETTING) || affectsConfiguration(CLOUD_API_URL_SETTING)) {
 			const selection = await window.showInformationMessage(
 				"WSO2 Integrator extension configuration changed. Please restart the editor for changes to take effect.",
 				"Restart Now",
 			);
 			if (selection === "Restart Now") {
-				if (affectsConfiguration("integrator.advanced.cloudEnv")) {
-					ext.authProvider?.getState().logout();
+				if (affectsConfiguration(CLOUD_ENV_SETTING)) {
+					await ext.authProvider?.logout(true);
 				}
 				commands.executeCommand("workbench.action.reloadWindow");
 			}

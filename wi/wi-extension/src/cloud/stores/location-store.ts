@@ -17,34 +17,46 @@
  */
 
 import { existsSync } from "fs";
-import type { ContextItemEnriched, ContextStoreComponentState, LocationStoreState } from "@wso2/wso2-platform-core";
+import type { ContextItemEnriched, DirectoryIntegration } from "@wso2/wso2-cloud-client";
 import { createStore } from "zustand";
 import { persist } from "zustand/middleware";
 import { getGlobalStateStore } from "./store-utils";
 
+export interface LocationStoreState {
+	projectLocations: {
+		[projectKey: string]: {
+			[fsPath: string]: {
+				contextItem?: ContextItemEnriched;
+				integrations?: DirectoryIntegration[];
+			};
+		};
+	};
+}
+
+export interface ProjectLocation {
+	fsPath: string;
+	integrations: DirectoryIntegration[];
+	context?: ContextItemEnriched;
+}
+
 interface LocationStore {
 	state: LocationStoreState;
-	setLocation: (selectedContextItem: ContextItemEnriched, componentItems: ContextStoreComponentState[]) => void;
-	getLocations: (
-		projectHandle: string,
-		orgHandle: string,
-	) => {
-		fsPath: string;
-		componentItems: ContextStoreComponentState[];
-		context?: ContextItemEnriched;
-	}[];
+	setLocation: (selected: ContextItemEnriched, integrations: DirectoryIntegration[]) => void;
+	getLocations: (projectName: string, orgHandle: string) => ProjectLocation[];
 }
 
 const initialState: LocationStoreState = { projectLocations: {} };
 
-/** To keep track of the file system paths of opened cloud projects */
+export const projectLocationKey = (orgHandle: string, projectName: string) => `${orgHandle}-${projectName}`;
+
+/** Where on this machine each cloud project has been opened, so a link from the console can find it again. */
 export const locationStore = createStore(
 	persist<LocationStore>(
 		(set, get) => ({
 			state: initialState,
-			setLocation: (selectedContextItem, componentItems) => {
-				const projectKey = `${selectedContextItem.org?.handle}-${selectedContextItem.project?.handler}`;
-				for (const contextDirItem of selectedContextItem.contextDirs) {
+			setLocation: (selected, integrations) => {
+				const projectKey = projectLocationKey(selected.orgHandle, selected.projectName);
+				for (const contextDir of selected.contextDirs) {
 					set(({ state }) => ({
 						state: {
 							...state,
@@ -52,24 +64,18 @@ export const locationStore = createStore(
 								...state.projectLocations,
 								[projectKey]: {
 									...state.projectLocations?.[projectKey],
-									[contextDirItem.projectRootFsPath]: {
-										components: componentItems || [],
-										contextItem: selectedContextItem,
-									},
+									[contextDir.projectRootFsPath]: { integrations: integrations || [], contextItem: selected },
 								},
 							},
 						},
 					}));
 				}
 			},
-			getLocations: (projectHandle, orgHandle) => {
-				const projectKey = `${orgHandle}-${projectHandle}`;
-				return Object.keys(get().state.projectLocations?.[projectKey] ?? {})
-					.map((fsPath) => ({
-						fsPath,
-						componentItems: get().state.projectLocations?.[projectKey]?.[fsPath]?.components ?? [],
-						context: get().state.projectLocations?.[projectKey]?.[fsPath]?.contextItem,
-					}))
+			getLocations: (projectName, orgHandle) => {
+				const projectKey = projectLocationKey(orgHandle, projectName);
+				const locations = get().state.projectLocations?.[projectKey] ?? {};
+				return Object.keys(locations)
+					.map((fsPath) => ({ fsPath, integrations: locations[fsPath]?.integrations ?? [], context: locations[fsPath]?.contextItem }))
 					.filter((item) => existsSync(item.fsPath));
 			},
 		}),

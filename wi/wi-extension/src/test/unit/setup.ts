@@ -16,4 +16,19 @@
  * under the License.
  */
 
-export { ChoreoRPCClient } from "./client";
+/**
+ * Mocha root hook for the unit tests, which run outside VS Code: the
+ * `vscode` module is served from `./mocks/vscode.ts`.
+ */
+import Module from "module";
+import { join } from "path";
+
+const VSCODE_MOCK = join(__dirname, "mocks", "vscode.ts");
+const moduleWithResolver = Module as unknown as { _resolveFilename: (request: string, ...rest: unknown[]) => string };
+const originalResolve = moduleWithResolver._resolveFilename;
+moduleWithResolver._resolveFilename = function (request: string, ...rest: unknown[]) {
+	if (request === "vscode") {
+		return VSCODE_MOCK;
+	}
+	return originalResolve.call(this, request, ...rest);
+};
