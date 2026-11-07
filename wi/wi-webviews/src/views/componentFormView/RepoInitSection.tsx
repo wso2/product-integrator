@@ -16,6 +16,7 @@
  * under the License.
  */
 
+import { buildConsoleUrl } from "@wso2/wso2-cloud-client/contract";
 import React, { type FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dropdown, ProgressIndicator, TextField } from "@wso2/ui-toolkit";
@@ -279,7 +280,7 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
     }, [wsClient, gitProvider, org, serverUrl]);
 
     const handleClickCreateCreds = () => {
-        wsClient.openExternal(`${consoleUrl}/organizations/${orgHandle}/settings/credentials`);
+        wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" }));
     }
 
     const handleBranchChange = useCallback(
@@ -311,14 +312,14 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
                     {gitProvider === GitProvider.GITHUB && !loadingGitOrgs && errorFetchingOrgs && (
                         <RepoBanner variant="info">
                             <RepoBannerMessage>
-                                Please authorize WSO2 to access your GitHub repositories.
+                                {(errorFetchingOrgs as Error)?.message || "Please authorize WSO2 to access your GitHub repositories."}
                             </RepoBannerMessage>
                             <RepoBannerActions>
                                 <RepoBannerButton
                                     type="button"
                                     onClick={() => wsClient.triggerGithubAuthFlow(orgId)}
                                 >
-                                    Authorize
+                                    Open WSO2 Cloud console
                                 </RepoBannerButton>
                             </RepoBannerActions>
                         </RepoBanner>
