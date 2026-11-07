@@ -16,40 +16,60 @@
  * under the License.
  */
 
+import type { ExtensionContext } from "vscode";
 import { type PersistOptions, createJSONStorage } from "zustand/middleware";
-import { ext } from '../../extensionVariables';
+import { ext } from "../../extensionVariables";
 
-const versionInt = 5;
-const version = `v${versionInt}`;
+/**
+ * Bumped from 5 to 6 with the move from the Choreo CLI to the platform API:
+ * every cached shape (projects, integrations, the auth state) changed, and
+ * the old keys embedded a region that no longer exists.
+ */
+export const storeVersionInt = 6;
+const version = `v${storeVersionInt}`;
+
+export const STORE_NAMES = ["data-cache-zustand-storage", "location-zustand-storage", "dir-context-zustand-storage"] as const;
+
+export const storeKey = (storeName: string, versionInt = storeVersionInt): string => `${storeName}-v${versionInt}`;
 
 export const getGlobalStateStore = (storeName: string): PersistOptions<any, any> => {
-    return {
-        name: `${storeName}-${version}`,
-        storage: createJSONStorage(() => ({
-            getItem: async (name) => {
-                const value = await ext.context.globalState.get(name);
-                return value ? (value as string) : "";
-            },
-            removeItem: (name) => ext.context.globalState.update(name, undefined),
-            setItem: (name, value) => ext.context.globalState.update(name, value),
-        })),
-        version: versionInt,
-        skipHydration: true,
-    };
+	return {
+		name: `${storeName}-${version}`,
+		storage: createJSONStorage(() => ({
+			getItem: async (name) => {
+				const value = await ext.context.globalState.get(name);
+				return value ? (value as string) : "";
+			},
+			removeItem: (name) => ext.context.globalState.update(name, undefined),
+			setItem: (name, value) => ext.context.globalState.update(name, value),
+		})),
+		version: storeVersionInt,
+		skipHydration: true,
+	};
 };
 
 export const getWorkspaceStateStore = (storeName: string): PersistOptions<any, any> => {
-    return {
-        name: `${storeName}-${version}`,
-        storage: createJSONStorage(() => ({
-            getItem: async (name) => {
-                const value = await ext.context.workspaceState.get(name);
-                return value ? (value as string) : "";
-            },
-            removeItem: (name) => ext.context.workspaceState.update(name, undefined),
-            setItem: (name, value) => ext.context.workspaceState.update(name, value),
-        })),
-        version: versionInt,
-        skipHydration: true,
-    };
+	return {
+		name: `${storeName}-${version}`,
+		storage: createJSONStorage(() => ({
+			getItem: async (name) => {
+				const value = await ext.context.workspaceState.get(name);
+				return value ? (value as string) : "";
+			},
+			removeItem: (name) => ext.context.workspaceState.update(name, undefined),
+			setItem: (name, value) => ext.context.workspaceState.update(name, value),
+		})),
+		version: storeVersionInt,
+		skipHydration: true,
+	};
 };
+
+/** Forgets what the previous store version kept; zustand's persist has no migration, and the shapes changed. */
+export async function clearPreviousStoreVersions(context: ExtensionContext): Promise<void> {
+	for (const name of STORE_NAMES) {
+		for (let previous = 1; previous < storeVersionInt; previous++) {
+			await context.globalState.update(storeKey(name, previous), undefined);
+			await context.workspaceState.update(storeKey(name, previous), undefined);
+		}
+	}
+}

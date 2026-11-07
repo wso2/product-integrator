@@ -16,45 +16,46 @@
  * under the License.
  */
 
-import { env, Uri, commands, window, ProgressLocation } from "vscode";
+import fs, { readdirSync } from "fs";
+import path, { join } from "path";
 import {
 	type AuthState,
+	COMMANDS,
+	type CloneRepositoryIntoCompDirReq,
 	type ContextStoreState,
+	type CredentialItem,
+	type DefaultOrgNameResponse,
+	type GetAuthorizedGitOrgsReq,
+	type GetAuthorizedGitOrgsResp,
+	type GetBranchesReq,
+	type GetCloudProjectsReq,
+	type GetCloudProjectsResp,
+	type GetConfigFileDriftsReq,
+	type GetCredentialDetailsReq,
+	type GetCredentialsReq,
+	type GetGitMetadataReq,
+	type GetGitMetadataResp,
+	type GetLocalGitDataResp,
+	type IsRepoAuthorizedReq,
+	type IsRepoAuthorizedResp,
+	ViewType,
+	type WICloudAPI,
 	type WICloudFormContext,
 	type WICloudSubmitComponentsReq,
 	type WICloudSubmitComponentsResp,
-	type GetLocalGitDataResp,
-	type GetBranchesReq,
-	type GetAuthorizedGitOrgsReq,
-	type GetAuthorizedGitOrgsResp,
-	type GetCredentialsReq,
-	type CredentialItem,
-	type GetCredentialDetailsReq,
-	type GetGitMetadataReq,
-	type GetGitMetadataResp,
-	type IsRepoAuthorizedReq,
-	type IsRepoAuthorizedResp,
-	type CloneRepositoryIntoCompDirReq,
-	type GetConfigFileDriftsReq,
-	type GetCloudProjectsReq,
-	type GetCloudProjectsResp,
-	ViewType,
-	COMMANDS,
-	WICloudAPI,
-	DefaultOrgNameResponse,
 } from "@wso2/wi-core";
-import { buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
+import { NotSupportedError, buildConsoleUrl, parseGitHubRepoUrl } from "@wso2/wso2-cloud-client";
+import { GitProvider, WICommandIds, buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
+import { ProgressLocation, Uri, commands, env, window } from "vscode";
+import { enrichGitUsernamePassword } from "../../cloud/cmds/commit-and-push-to-git-cmd";
+import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-cmd";
+import type { IFileStatus } from "../../cloud/git/git";
+import { initGit } from "../../cloud/git/main";
+import { hasDirtyRepo as checkDirtyRepo, getGitHead, getGitRemotes, getGitRoot, relativePath, removeCredentialsFromGitURL } from "../../cloud/git/util";
+import { contextStore } from "../../cloud/stores/context-store";
+import { dataCacheStore } from "../../cloud/stores/data-cache-store";
 import { ext } from "../../extensionVariables";
 import { StateMachine } from "../../stateMachine";
-import { contextStore } from "../../cloud/stores/context-store";
-import { webviewStateStore } from "../../cloud/stores/webview-state-store";
-import { getGitHead, getGitRemotes, getGitRoot, hasDirtyRepo as checkDirtyRepo, removeCredentialsFromGitURL, relativePath } from "../../cloud/git/util";
-import { initGit } from "../../cloud/git/main";
-import fs, { readdirSync } from "fs";
-import path, { join } from "path";
-import type { IFileStatus } from "../../cloud/git/git";
-import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-cmd";
-import { enrichGitUsernamePassword } from "../../cloud/cmds/commit-and-push-to-git-cmd";
 import { getUsername } from "../main/utils";
 
 /**
@@ -71,6 +72,10 @@ export function openCloudFormWebview(context: WICloudFormContext): void {
 	StateMachine.openWebview(ViewType.CREATE_CLOUD_INTEGRATION);
 }
 
+/**
+ * What the cloud webviews ask the extension. The method names are the ones
+ * the views were written against; the answers come from the platform.
+ */
 export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "onContextStateChanged"> {
 	async getCloudFormContext(): Promise<WICloudFormContext> {
 		const ctx = _pendingContext;
@@ -90,45 +95,16 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async getAuthState(): Promise<AuthState> {
-		const authState = ext.authProvider?.state ?? { userInfo: null, region: "US" };
-		// Add selected org ID to auth state
-		const selectedOrgId = ext.context.globalState.get<string>("selectedOrgId");
-		return {
-			...authState,
-			selectedOrgId,
-		} as AuthState & { selectedOrgId?: string };
+		return ext.authProvider?.legacyAuthState() ?? { userInfo: null, status: "signed-out" };
 	}
 
 	async getContextState(): Promise<ContextStoreState> {
 		return contextStore.getState().state;
 	}
 
-	async changeOrgContext(orgId: string): Promise<void> {
-		try {
-			await ext.clients.rpcClient.changeOrgContext(orgId);
-
-			const userInfo = await ext.clients.rpcClient.getUserInfo();
-			if (!userInfo) {
-				throw new Error("Failed to retrieve user info after org context change");
-			}
-
-			const region = await ext.clients.rpcClient.getCurrentRegion();
-
-			if (!region || (region !== "US" && region !== "EU")) {
-				throw new Error("Region is not available or invalid. Expected 'US' or 'EU'.");
-			}
-
-			if (!ext.authProvider) {
-				throw new Error("Auth provider is not available");
-			}
-
-			await ext.context.globalState.update("selectedOrgId", orgId);
-
-			await ext.authProvider.getState().loginSuccess(userInfo, region);
-		} catch (error) {
-			console.error("Failed to change org context", error);
-			throw error;
-		}
+	/** An organization is fixed at sign-in; changing it means signing in again. */
+	async changeOrgContext(_orgId: string): Promise<void> {
+		await commands.executeCommand(WICommandIds.SignIn, { reselectOrganization: true });
 	}
 
 	async getLocalGitData(dirPath: string): Promise<GetLocalGitDataResp | undefined> {
@@ -147,11 +123,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 					}
 				}
 			});
-			return {
-				remotes: Array.from(remotesSet),
-				upstream: { name: head?.name, remote: head?.upstream?.remote, remoteUrl: headRemoteUrl },
-				gitRoot,
-			};
+			return { remotes: Array.from(remotesSet), upstream: { name: head?.name, remote: head?.upstream?.remote, remoteUrl: headRemoteUrl }, gitRoot };
 		} catch {
 			return undefined;
 		}
@@ -167,53 +139,37 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			const fileNames = new Set<string>();
 			const git = await initGit(ext.context);
 			const repoRoot = await git?.getRepositoryRoot(repoDir);
-			if (repoRoot) {
+			if (repoRoot && git) {
 				const subPath = relativePath(repoRoot, repoDir);
-
-				if (git) {
-					const gitRepo = git.open(repoRoot, { path: repoRoot });
-					const status = await gitRepo.getStatus({ untrackedChanges: "separate", subDirectory: subPath });
-
-					status.status.forEach((item: IFileStatus) => {
-						if (item.path.endsWith("component.yaml")) {
-							fileNames.add("component.yaml");
+				const gitRepo = git.open(repoRoot, { path: repoRoot });
+				const status = await gitRepo.getStatus({ untrackedChanges: "separate", subDirectory: subPath });
+				status.status.forEach((item: IFileStatus) => {
+					if (item.path.endsWith("component.yaml")) {
+						fileNames.add("component.yaml");
+					}
+				});
+				if (fileNames.size) {
+					return Array.from(fileNames);
+				}
+				const remotes = await getGitRemotes(ext.context, repoRoot);
+				const matchingRemoteName = remotes.find((item) => {
+					const parsed1 = parseGitURL(item.fetchUrl);
+					const parsed2 = parseGitURL(repoUrl);
+					return !!parsed1 && !!parsed2 && parsed1[0] === parsed2[0] && parsed1[1] === parsed2[1];
+				})?.name;
+				if (matchingRemoteName) {
+					try {
+						await gitRepo.fetch({ silent: true, remote: matchingRemoteName });
+					} catch {
+						// ignore
+					}
+					const changes = await gitRepo.diffWith(`${matchingRemoteName}/${branch}`);
+					const configPaths = [join(repoDir, ".wso2", "component.yaml"), join(repoDir, ".choreo", "component.yaml")];
+					changes.forEach((item) => {
+						if (configPaths.includes(item.uri.path)) {
+							fileNames.add(path.basename(item.uri.path));
 						}
 					});
-					if (fileNames.size) {
-						return Array.from(fileNames);
-					}
-
-					const remotes = await getGitRemotes(ext.context, repoRoot);
-					const matchingRemoteName = remotes.find((item) => {
-						const parsed1 = parseGitURL(item.fetchUrl);
-						const parsed2 = parseGitURL(repoUrl);
-						if (parsed1 && parsed2) {
-							const [org, repoName] = parsed1;
-							const [componentRepoOrg, componentRepoName] = parsed2;
-							return org === componentRepoOrg && repoName === componentRepoName;
-						}
-					})?.name;
-
-					if (matchingRemoteName) {
-						try {
-							await gitRepo.fetch({ silent: true, remote: matchingRemoteName });
-						} catch {
-							// ignore error
-						}
-						const changes = await gitRepo.diffWith(`${matchingRemoteName}/${branch}`);
-						const componentYamlPath = join(repoDir, ".wso2", "component.yaml");
-						const componentYamlLegacyPath = join(repoDir, ".choreo", "component.yaml");
-						const configPaths = [componentYamlPath, componentYamlLegacyPath];
-
-						changes.forEach((item) => {
-							if (configPaths.includes(item.uri.path)) {
-								fileNames.add(path.basename(item.uri.path));
-							}
-						});
-						if (fileNames.size) {
-							return Array.from(fileNames);
-						}
-					}
 				}
 			}
 			return Array.from(fileNames);
@@ -223,54 +179,69 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		}
 	}
 
-	async triggerGithubAuthFlow(orgId: string): Promise<void> {
-		const extName = webviewStateStore.getState().state?.extensionName;
-		const baseUrl = extName === "Devant" ? ext.config?.devantConsoleUrl : ext.config?.choreoConsoleUrl;
-		const callbackUrl = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
-		const state = Buffer.from(
-			JSON.stringify({ origin: "vscode.choreo.ext", orgId, callbackUri: callbackUrl.toString(), extensionName: extName }),
-			"binary",
-		).toString("base64");
-		const ghURL = Uri.parse(
-			`${ext.config?.ghApp.authUrl}?redirect_uri=${baseUrl}/ghapp&client_id=${ext.config?.ghApp.clientId}&state=${state}`,
-		);
-		await env.openExternal(ghURL);
+	/**
+	 * The platform's git integration has no documented route for the GitHub App
+	 * flows yet, so both open the console, where the connection is made.
+	 */
+	async triggerGithubAuthFlow(_orgId: string): Promise<void> {
+		await env.openExternal(Uri.parse(buildConsoleUrl(ext.config.consoleUrl, { orgHandle: ext.authProvider?.org?.handle })));
 	}
 
-	async triggerGithubInstallFlow(orgId: string): Promise<void> {
-		const extName = webviewStateStore.getState().state?.extensionName;
-		const callbackUrl = await env.asExternalUri(Uri.parse(`${env.uriScheme}://wso2.wso2-integrator/ghapp`));
-		const state = Buffer.from(
-			JSON.stringify({ origin: "vscode.choreo.ext", orgId, callbackUri: callbackUrl.toString(), extensionName: extName }),
-			"binary",
-		).toString("base64");
-		const ghURL = Uri.parse(`${ext.config?.ghApp.installUrl}?state=${state}`);
-		await env.openExternal(ghURL);
+	async triggerGithubInstallFlow(_orgId: string): Promise<void> {
+		await env.openExternal(Uri.parse(buildConsoleUrl(ext.config.consoleUrl, { orgHandle: ext.authProvider?.org?.handle })));
 	}
 
+	/** Branches of a public GitHub repository, which is what the platform can read; empty for anything else. */
 	async getBranches(params: GetBranchesReq): Promise<string[]> {
-		return ext.clients.rpcClient.getRepoBranches(params);
+		const github = parseGitHubRepoUrl(params.repoUrl ?? "");
+		if (!github) {
+			return [];
+		}
+		const branches = await ext.clients.platform.cloud.repos.listBranches(github.owner, github.repo);
+		return branches.map((b) => b.name);
 	}
 
-	async getAuthorizedGitOrgs(params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
-		return ext.clients.rpcClient.getAuthorizedGitOrgs(params);
+	/** The platform lists no GitHub organizations yet (D-5); the form shows this instead of an empty list it cannot act on. */
+	async getAuthorizedGitOrgs(_params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
+		throw new NotSupportedError(
+			"Creating a repository from here is not available on WSO2 Cloud yet. Create the repository on GitHub, push the integration to it, then deploy from it.",
+			{ reason: "git_orgs_unavailable" },
+		);
 	}
 
-	async getCredentials(params: GetCredentialsReq): Promise<CredentialItem[]> {
-		const result = await ext.clients.rpcClient.getCredentials(params);
-		return result ?? [];
+	async getCredentials(_params: GetCredentialsReq): Promise<CredentialItem[]> {
+		return [];
 	}
 
-	async getCredentialDetails(params: GetCredentialDetailsReq): Promise<CredentialItem> {
-		return ext.clients.rpcClient.getCredentialDetails(params);
+	async getCredentialDetails(_params: GetCredentialDetailsReq): Promise<CredentialItem> {
+		throw new Error("Git credentials are managed in the WSO2 Cloud console.");
 	}
 
+	/**
+	 * Whether the platform can read the repository. Until the git
+	 * integration's routes are documented, a public GitHub repository with
+	 * branches the platform can list counts as accessible.
+	 */
 	async isRepoAuthorized(params: IsRepoAuthorizedReq): Promise<IsRepoAuthorizedResp> {
-		return ext.clients.rpcClient.isRepoAuthorized(params);
+		const parsed = parseGitURL(params.repoUrl);
+		if (parsed && parsed[2] === GitProvider.GITHUB) {
+			const branches = await this.getBranches(params).catch((): string[] => []);
+			return { retrievedRepos: true, isAccessible: branches.length > 0 };
+		}
+		return { retrievedRepos: false, isAccessible: false };
 	}
 
 	async getGitRepoMetadata(params: GetGitMetadataReq): Promise<GetGitMetadataResp> {
-		return ext.clients.rpcClient.getGitRepoMetadata(params);
+		const inspection = await ext.clients.platform.cloud.repos.inspect(params.gitOrgName, params.gitRepoName, params.branch || undefined, params.relativePath);
+		return {
+			metadata: {
+				...inspection,
+				isValidRepo: !inspection.isBareRepo,
+				hasBallerinaTomlInPath: inspection.hasBallerinaToml,
+				hasPomXmlInPath: inspection.hasPomXml,
+				hasDockerfileInPath: inspection.hasDockerfile,
+			},
+		};
 	}
 
 	async cloneRepositoryIntoCompDir(params: CloneRepositoryIntoCompDirReq): Promise<string> {
@@ -278,26 +249,16 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		if (!newGit) {
 			throw new Error("failed to retrieve Git details");
 		}
-
 		const _repoUrl = buildGitURL(params.repo.orgHandler, params.repo.repo, params.repo.provider, true, params.repo.serverUrl);
 		if (!_repoUrl || !_repoUrl.startsWith("https://")) {
 			throw new Error("failed to parse git details");
 		}
 		const urlObj = new URL(_repoUrl);
-
-		const parsed = parseGitURL(_repoUrl);
-		if (parsed) {
-			const [repoOrg, repoName, provider] = parsed;
-			await enrichGitUsernamePassword(params.org, repoOrg, repoName, provider, urlObj, _repoUrl, params.repo.secretRef || "");
-		}
-
+		await enrichGitUsernamePassword(urlObj);
 		const repoUrl = urlObj.href;
 
 		const clonedPath = await window.withProgress(
-			{
-				title: `Cloning repository ${params.repo.orgHandler}/${params.repo.repo}`,
-				location: ProgressLocation.Notification,
-			},
+			{ title: `Cloning repository ${params.repo.orgHandler}/${params.repo.repo}`, location: ProgressLocation.Notification },
 			async (progress, cancellationToken) =>
 				newGit.clone(
 					repoUrl,
@@ -305,45 +266,46 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 						recursive: true,
 						ref: params.repo.branch,
 						parentPath: join(params.cwd, ".."),
-						progress: {
-							report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }),
-						},
+						progress: { report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }) },
 					},
 					cancellationToken,
 				),
 		);
 
-		// Move everything from cwd into the cloned directory at subpath
 		const cwdFiles = readdirSync(params.cwd);
 		const newPath = join(clonedPath, params.subpath);
 		fs.mkdirSync(newPath, { recursive: true });
-
 		for (const file of cwdFiles) {
-			const cwdFilePath = join(params.cwd, file);
-			const destFilePath = join(newPath, file);
-			fs.cpSync(cwdFilePath, destFilePath, { recursive: true });
+			fs.cpSync(join(params.cwd, file), join(newPath, file), { recursive: true });
 		}
 
 		const repoRoot = await newGit.getRepositoryRoot(newPath);
 		const dotGit = await newGit.getRepositoryDotGit(newPath);
 		const repo = newGit.open(repoRoot, dotGit);
-
-		await window.withProgress({ title: "Pushing the changes to your remote repository...", location: ProgressLocation.Notification }, async () => {
-			await repo.add(["."]);
-			await repo.commit(`Add integration source`);
-			const headRef = await repo.getHEADRef();
-			await repo.push(headRef?.upstream?.remote || "origin", headRef?.name || params.repo.branch);
-		});
-
+		try {
+			await window.withProgress({ title: "Pushing the changes to your remote repository...", location: ProgressLocation.Notification }, async () => {
+				await repo.add(["."]);
+				await repo.commit("Add integration source");
+				const headRef = await repo.getHEADRef();
+				await repo.push(headRef?.upstream?.remote || "origin", headRef?.name || params.repo.branch);
+			});
+		} finally {
+			// The clone and the push needed the credentials; the repository keeps the plain URL, whatever happened.
+			await repo.exec(["remote", "set-url", "origin", _repoUrl]).catch((error: unknown) => ext.logError("Could not reset the remote URL", error as Error));
+		}
 		return newPath;
 	}
 
 	async getConsoleUrl(): Promise<string> {
-		return ext.config?.devantConsoleUrl;
+		return ext.config.consoleUrl;
 	}
 
-	async getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
-		const projects = await ext.clients.rpcClient.getProjects(params.orgId);
+	async getCloudProjects(_params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
+		const projects = await ext.clients.platform.cloud.projects.list();
+		const orgHandle = ext.authProvider?.org?.handle;
+		if (orgHandle) {
+			dataCacheStore.getState().setProjects(orgHandle, projects);
+		}
 		return { projects };
 	}
 
@@ -354,13 +316,9 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	/**
 	 * Subscribe to auth/context state changes and forward via the provided callbacks.
 	 */
-	setupSubscriptions(
-		publishAuthState: (state: AuthState) => void,
-		publishContextState: (state: ContextStoreState) => void,
-	): void {
-		ext.authProvider?.subscribe(({ state }) => {
-			const selectedOrgId = ext.context.globalState.get<string>("selectedOrgId");
-			publishAuthState({ ...state, selectedOrgId } as AuthState & { selectedOrgId?: string });
+	setupSubscriptions(publishAuthState: (state: AuthState) => void, publishContextState: (state: ContextStoreState) => void): void {
+		ext.authProvider?.subscribe(() => {
+			publishAuthState(ext.authProvider?.legacyAuthState() ?? { userInfo: null, status: "signed-out" });
 		});
 		contextStore.subscribe(({ state }) => {
 			publishContextState(state);

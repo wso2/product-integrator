@@ -16,197 +16,162 @@
  * under the License.
  */
 
-import { WICommandIds, type ComponentKind, type ExtensionName, type Organization, type Project, type UserInfo } from "@wso2/wso2-platform-core";
+import { type Component, type Organization, type PlatformSession, type Project, RESOURCE_NAME } from "@wso2/wso2-cloud-client";
+import { type ExtensionName, WICommandIds } from "@wso2/wso2-platform-core";
 import { ProgressLocation, type QuickPickItem, QuickPickItemKind, type WorkspaceFolder, commands, window, workspace } from "vscode";
 import { type ExtensionVariables, ext } from "../../extensionVariables";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { webviewStateStore } from "../stores/webview-state-store";
 
-const waitForLogin = (): Promise<UserInfo> =>
-	new Promise((resolve) => {
-		ext.authProvider?.subscribe(({ state }) => {
-			if (state.userInfo) {
-				resolve(state.userInfo);
-			}
-		});
-	});
-
-export const selectComponent = async (
-	org: Organization,
+export const selectIntegration = async (
 	project: Project,
-	loadingTitle = "Loading Components/Integrations...",
-	selectTitle = "Select Component/Integrations",
-): Promise<ComponentKind> => {
-	const selectedComponent = await quickPickWithLoader({
+	loadingTitle = "Loading integrations...",
+	selectTitle = "Select integration",
+): Promise<Component> => {
+	const orgHandle = requireOrg().handle;
+	const selected = await quickPickWithLoader({
 		cacheQuickPicks: dataCacheStore
 			.getState()
-			.getComponents(org.handle, project.handler)
-			.map((item) => ({ label: item.metadata.displayName, item })),
+			.getIntegrations(orgHandle, project.id)
+			.map((item) => ({ label: item.displayName || item.name, detail: item.id, item })),
 		loadQuickPicks: async () => {
-			const components = await ext.clients.rpcClient.getComponentList({
-				orgId: org.id.toString(),
-				orgHandle: org.handle,
-				projectId: project.id,
-				projectHandle: project.handler,
-			});
-			dataCacheStore.getState().setComponents(org.handle, project.handler, components);
-
-			if (!components || components.length === 0) {
-				throw new Error(
-					`You do not have any existing ${ext.terminologies?.componentTermPlural} in your project. Please retry after creating one.`,
-				);
+			const integrations = await ext.clients.platform.cloud.components.list(project.id);
+			dataCacheStore.getState().setIntegrations(orgHandle, project.id, integrations);
+			if (integrations.length === 0) {
+				throw new Error(`You do not have any existing ${ext.terminologies?.componentTermPlural} in your project. Please retry after creating one.`);
 			}
-
-			return components.map((item) => ({ label: item.metadata.displayName, item }));
+			return integrations.map((item) => ({ label: item.displayName || item.name, detail: item.id, item }));
 		},
 		loadingTitle,
 		selectTitle,
 		placeholder: `${ext.terminologies?.componentTermCapitalized} Name`,
 	});
-
-	if (!selectedComponent) {
+	if (!selected) {
 		throw new Error(`Failed to select ${ext.terminologies?.componentTerm}`);
 	}
-
-	return selectedComponent;
+	return selected;
 };
 
-export const selectProject = async (org: Organization, loadingTitle = "Loading projects...", selectTitle = "Select project"): Promise<Project> => {
-	const selectedProject = await quickPickWithLoader({
+export const selectProject = async (loadingTitle = "Loading projects...", selectTitle = "Select project"): Promise<Project> => {
+	const orgHandle = requireOrg().handle;
+	const selected = await quickPickWithLoader({
 		cacheQuickPicks: dataCacheStore
 			.getState()
-			.getProjects(org.handle)
-			.map((item) => ({ label: item.name, detail: `Handle: ${item.handler}`, item })),
+			.getProjects(orgHandle)
+			.map((item) => ({ label: item.name, detail: `Name: ${item.id}`, item })),
 		loadQuickPicks: async () => {
-			const projects = await ext.clients.rpcClient.getProjects(org.id.toString());
-			dataCacheStore.getState().setProjects(org.handle, projects);
-
-			if (!projects || projects.length === 0) {
-				throw new Error(`You do not have any existing ${ext.terminologies?.componentTermPlural} or projects. Please try creating one.`);
+			const projects = await ext.clients.platform.cloud.projects.list();
+			dataCacheStore.getState().setProjects(orgHandle, projects);
+			if (projects.length === 0) {
+				throw new Error("You do not have any existing projects. Please try creating one.");
 			}
-
-			return projects.map((item) => ({ label: item.name, detail: `Handle: ${item.handler}`, item }));
+			return projects.map((item) => ({ label: item.name, detail: `Name: ${item.id}`, item }));
 		},
 		loadingTitle,
 		selectTitle,
 		placeholder: "Project Name",
 	});
-
-	if (!selectedProject) {
+	if (!selected) {
 		throw new Error("Failed to select project");
 	}
-
-	return selectedProject;
+	return selected;
 };
 
 export const selectProjectWithCreateNew = async (
-	org: Organization,
 	loadingTitle = "Loading projects...",
 	selectTitle = "Select project",
 ): Promise<{ selectedProject: Project; projectList: Project[] }> => {
+	const org = requireOrg();
 	type ProjectQuickPick = QuickPickItem & { item?: Project };
-	const projectQuickPicks: ProjectQuickPick[] = [];
-	const projectCachePicks = dataCacheStore
-		.getState()
-		.getProjects(org.handle)
-		.map((item) => ({ label: item.name, detail: `Handle: ${item.handler}`, item }));
-	if (projectCachePicks.length > 0) {
-		projectQuickPicks.push({ kind: QuickPickItemKind.Separator, label: "Existing projects" });
-		projectQuickPicks.push(...projectCachePicks);
-	}
-	projectQuickPicks.push({ kind: QuickPickItemKind.Separator, label: "New Project" });
-	projectQuickPicks.push({
-		label: "Create New",
-		detail: `Create new project within ${org.name} organization`,
-		alwaysShow: true,
-	});
+	const toPicks = (projects: Project[]): ProjectQuickPick[] => {
+		const picks: ProjectQuickPick[] = [];
+		if (projects.length > 0) {
+			picks.push({ kind: QuickPickItemKind.Separator, label: "Existing projects" }, ...projects.map((item) => ({ label: item.name, detail: `Name: ${item.id}`, item })));
+		}
+		picks.push({ kind: QuickPickItemKind.Separator, label: "New Project" }, { label: "Create New", detail: `Create new project within ${org.name} organization`, alwaysShow: true });
+		return picks;
+	};
 
-	const quickPick = window.createQuickPick();
+	const quickPick = window.createQuickPick<ProjectQuickPick>();
 	quickPick.busy = true;
 	quickPick.title = loadingTitle;
 	quickPick.ignoreFocusOut = true;
 	quickPick.placeholder = "Project Name";
-	quickPick.items = projectQuickPicks;
+	let projectList = dataCacheStore.getState().getProjects(org.handle);
+	quickPick.items = toPicks(projectList);
 	quickPick.show();
 
-	let projectList = dataCacheStore.getState().getProjects(org.handle);
-
-	ext.clients.rpcClient
-		.getProjects(org.id.toString())
+	let listError: unknown;
+	ext.clients.platform.cloud.projects
+		.list()
 		.then((projects) => {
 			dataCacheStore.getState().setProjects(org.handle, projects);
 			projectList = projects;
 			quickPick.busy = false;
-			quickPick.title = selectTitle || "Select an options";
-			const updatedQuickPicks: ProjectQuickPick[] = [];
-			const projectQuickPicks = projects?.map((item) => ({
-				label: item.name,
-				detail: `Handle: ${item.handler}`,
-				item,
-			}));
-			if (projects?.length > 0) {
-				updatedQuickPicks.push({ kind: QuickPickItemKind.Separator, label: "Existing projects" });
-				updatedQuickPicks.push(...projectQuickPicks);
-			}
-			updatedQuickPicks.push({ kind: QuickPickItemKind.Separator, label: "New Project" });
-			updatedQuickPicks.push({
-				label: "Create New",
-				detail: `Create new project within ${org.name} organization`,
-				alwaysShow: true,
-			});
-			quickPick.items = updatedQuickPicks;
+			quickPick.title = selectTitle;
+			quickPick.items = toPicks(projects);
 		})
 		.catch((err) => {
+			// Closing the pick resolves the wait below; the error is what the caller then gets.
+			listError = err;
 			quickPick.dispose();
-			throw err;
 		});
 
-	const selectedQuickPick = await new Promise((resolve) => {
-		quickPick.onDidAccept(() => resolve(quickPick.selectedItems[0]));
+	const selection = await new Promise<ProjectQuickPick | null>((resolve) => {
+		quickPick.onDidAccept(() => resolve(quickPick.selectedItems[0] ?? null));
 		quickPick.onDidHide(() => resolve(null));
 	});
 	quickPick.dispose();
-
-	if ((selectedQuickPick as QuickPickItem)?.label === "Create New") {
-		const project = await createNewProject(org);
-		return { projectList, selectedProject: project };
-	}
-	if ((selectedQuickPick as ProjectQuickPick)?.item) {
-		return { projectList, selectedProject: (selectedQuickPick as ProjectQuickPick)?.item! };
+	if (listError) {
+		throw listError;
 	}
 
+	if (selection?.label === "Create New") {
+		return { projectList, selectedProject: await createNewProject() };
+	}
+	if (selection?.item) {
+		return { projectList, selectedProject: selection.item };
+	}
 	throw new Error("Failed to select project");
 };
 
-export const createNewProject = async (
-	org: Organization,
-	projectName?: string,
-	isWorkspaceMapping?: boolean
-): Promise<Project> => {
+/** A name the platform accepts for a project or an integration, derived from what a person typed. */
+export const toResourceName = (displayName: string): string =>
+	displayName
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 63);
+
+export const toProjectName = toResourceName;
+
+export const createNewProject = async (projectName?: string, isWorkspaceMapping?: boolean): Promise<Project> => {
+	const org = requireOrg();
+	const cloud = ext.clients.platform.cloud;
 	let projectCache = dataCacheStore.getState().getProjects(org.handle);
 	try {
-		const latestProjects = await ext.clients.rpcClient.getProjects(org.id.toString());
-		dataCacheStore.getState().setProjects(org.handle, latestProjects);
-		projectCache = latestProjects;
+		projectCache = await cloud.projects.list();
+		dataCacheStore.getState().setProjects(org.handle, projectCache);
 	} catch {
-		// If fetching the latest projects fails, fall back to whatever is in the cache.
+		// Fall back to the cache.
 	}
 
 	const newProjectName = await window.showInputBox({
 		value: projectName || "",
 		placeHolder: "project-name",
 		prompt: isWorkspaceMapping
-			? "Your BI workspace will be mapped to a WSO2 cloud project. Project name is auto-picked from workspace name, you can edit if needed.\n"
+			? "Your BI workspace will be mapped to a WSO2 Cloud project. Project name is auto-picked from workspace name, you can edit if needed.\n"
 			: "Enter a name for your new project",
-		title: isWorkspaceMapping ? "Create WSO2 cloud Project for Workspace" : "New Project Name",
+		title: isWorkspaceMapping ? "Create WSO2 Cloud Project for Workspace" : "New Project Name",
 		validateInput: (val) => {
 			if (!val) {
 				return "Project name is required";
 			}
-			if (projectCache?.some((item) => item.name === val)) {
+			if (projectCache?.some((item) => item.name === val || item.id === toProjectName(val))) {
 				return "Project name already exists";
 			}
-			if (val?.length > 60 || val?.length < 3) {
+			if (val.length > 60 || val.length < 3) {
 				return "Project name must be between 3 and 60 characters";
 			}
 			if (!/^[A-Za-z]/.test(val)) {
@@ -218,72 +183,37 @@ export const createNewProject = async (
 			return null;
 		},
 	});
-
 	if (!newProjectName) {
 		throw new Error("New project name is required to proceed.");
 	}
 
-	const project = await window.withProgress(
-		{
-			title: `Creating new project ${newProjectName}...`,
-			location: ProgressLocation.Notification,
-		},
-		async () => {
-			const authRegion = ext.authProvider?.getState().state.region as "US" | "EU" | undefined;
-			let region = authRegion ?? "US";
-
-			if (!authRegion) {
-				try {
-					region = (await ext.clients.rpcClient.getCurrentRegion()) ?? "US";
-				} catch {
-					// If fetching the current region fails, fall back to the default.
-					region = "US";
-				}
+	const project = await window.withProgress({ title: `Creating new project ${newProjectName}...`, location: ProgressLocation.Notification }, async () => {
+		let name = toProjectName(newProjectName);
+		try {
+			const availability = await cloud.projects.checkHandler(name);
+			if (!availability.handlerUnique && availability.alternateHandlerCandidate) {
+				name = availability.alternateHandlerCandidate;
 			}
+		} catch {
+			// The check is advisory; the create answers 409 when the name is taken.
+		}
+		if (!RESOURCE_NAME.test(name)) {
+			throw new Error(`${name} is not a name the platform accepts.`);
+		}
+		return cloud.projects.create({ name, displayName: newProjectName });
+	});
 
-			return ext.clients.rpcClient.createProject({
-				orgHandler: org.handle,
-				orgId: org.id.toString(),
-				projectName: newProjectName,
-				region,
-			});
-		},
-	);
-
-	const currentProjects = dataCacheStore.getState().getProjects(org.handle);
-	dataCacheStore.getState().setProjects(org.handle, [...currentProjects, project]);
-
+	dataCacheStore.getState().setProjects(org.handle, [...dataCacheStore.getState().getProjects(org.handle).filter((p) => p.id !== project.id), project]);
 	return project;
 };
 
-export const selectOrg = async (userInfo: UserInfo, selectTitle = "Select organization"): Promise<Organization> => {
-	const items: QuickPickItem[] = userInfo.organizations?.map((item) => ({
-		label: item.name,
-		detail: `Handle: ${item.handle}`,
-	}));
-
-	if (!items || items.length === 0) {
-		const extensionName = webviewStateStore.getState().state.extensionName;
-		throw new Error(`Please visit ${extensionName} to create a new organization`);
+/** The organization of the session, which every command works inside. */
+export const requireOrg = (): Organization => {
+	const org = ext.authProvider?.org;
+	if (!org) {
+		throw new Error("You are not signed in to WSO2 Cloud. Please sign in and retry.");
 	}
-
-	if (userInfo.organizations.length === 1) {
-		return userInfo.organizations[0];
-	}
-
-	const orgSelection = await window.showQuickPick(items, {
-		title: selectTitle,
-		ignoreFocusOut: true,
-		placeHolder: "Organization Name",
-	});
-
-	const selectedOrg = userInfo.organizations.find((item) => item.name === orgSelection?.label);
-
-	if (!selectedOrg) {
-		throw new Error("Failed to select organization");
-	}
-
-	return selectedOrg;
+	return org;
 };
 
 export const resolveWorkspaceDirectory = async (): Promise<WorkspaceFolder> => {
@@ -293,23 +223,12 @@ export const resolveWorkspaceDirectory = async (): Promise<WorkspaceFolder> => {
 	if (workspace.workspaceFolders?.length === 1) {
 		return workspace.workspaceFolders[0];
 	}
-	const items: QuickPickItem[] = workspace.workspaceFolders!.map((item) => ({
-		label: item.name,
-		detail: item.uri.path,
-	}));
-
-	const directorySelection = await window.showQuickPick(items, {
-		title: "Select Workspace",
-		ignoreFocusOut: true,
-	});
+	const items: QuickPickItem[] = workspace.workspaceFolders!.map((item) => ({ label: item.name, detail: item.uri.path }));
+	const directorySelection = await window.showQuickPick(items, { title: "Select Workspace", ignoreFocusOut: true });
 	return workspace.workspaceFolders?.find((item) => item.name === directorySelection?.label)!;
 };
 
-export const resolveQuickPick = async <T>(
-	items: (QuickPickItem & { item: T })[] = [],
-	quickPickTitle = "selectItem",
-	emptyError = "No items found to pick",
-): Promise<T> => {
+export const resolveQuickPick = async <T>(items: (QuickPickItem & { item: T })[] = [], quickPickTitle = "selectItem", emptyError = "No items found to pick"): Promise<T> => {
 	if (!items || items?.length === 0) {
 		throw new Error(emptyError);
 	}
@@ -346,56 +265,45 @@ export async function quickPickWithLoader<T>(params: {
 		.then((quickPickItems) => {
 			quickPick.items = quickPickItems;
 			quickPick.busy = false;
-			quickPick.title = params.selectTitle || "Select an options";
+			quickPick.title = params.selectTitle || "Select an option";
 		})
 		.catch((err) => {
 			quickPick.dispose();
 			parentErr = err;
-			throw err;
 		});
 	const selectedQuickPick = await new Promise((resolve) => {
 		quickPick.onDidAccept(() => resolve(quickPick.selectedItems[0]));
 		quickPick.onDidHide(() => resolve(null));
 	});
-
 	quickPick.dispose();
-	const selectedT = (selectedQuickPick as QuickPickItem & { item?: T })?.item;
-
 	if (parentErr) {
 		throw parentErr;
 	}
-
-	return selectedT;
+	return (selectedQuickPick as QuickPickItem & { item?: T })?.item;
 }
 
-export const getUserInfoForCmd = async (message: string): Promise<UserInfo | null> => {
-	let userInfo = ext.authProvider?.getState().state.userInfo;
-	const extensionName = webviewStateStore.getState().state.extensionName;
-	if (!userInfo) {
-		const platform = extensionName === "Devant" ? "WSO2 Cloud" : extensionName;
-		const loginSelection = await window.showInformationMessage(
-			`You are not logged into ${platform}.`,
-			{ modal: true, detail: `Please login to continue and ${message}` },
-			"Login",
-		);
-		if (loginSelection === "Login") {
-			if (loginSelection === "Login") {
-				await commands.executeCommand(WICommandIds.SignIn);
-			}
-			userInfo = await waitForLogin();
-
-			const response = await window.showInformationMessage(
-				`Successfully logged into ${extensionName}`,
-				{ modal: true, detail: `Do you want to continue and ${message}` },
-				"Continue",
-			);
-			if (response === "Continue") {
-				return userInfo;
-			}
-			return null;
-		}
+/**
+ * The session a command needs. Offers to sign in when there is none, and
+ * answers `null` when the person declines or does not want to continue.
+ */
+export const requireSession = async (message: string): Promise<PlatformSession | null> => {
+	const current = ext.authProvider?.state;
+	if (current?.session && current.status === "signed-in") {
+		return current.session;
 	}
-	return userInfo!;
+	const loginSelection = await window.showInformationMessage("You are not signed in to WSO2 Cloud.", { modal: true, detail: `Please sign in to continue and ${message}` }, "Sign in");
+	if (loginSelection !== "Sign in") {
+		return null;
+	}
+	await commands.executeCommand(WICommandIds.SignIn);
+	// The command returns once the sign-in ended, completed or not; the state says which.
+	const after = ext.authProvider?.state;
+	if (!after?.session || after.status !== "signed-in") {
+		return null;
+	}
+	const session = after.session;
+	const response = await window.showInformationMessage(`Signed in to WSO2 Cloud as ${session.user.email ?? session.user.displayName}`, { modal: true, detail: `Do you want to continue and ${message}` }, "Continue");
+	return response === "Continue" ? session : null;
 };
 
 export const setExtensionName = (extName?: ExtensionName) => {
@@ -404,8 +312,10 @@ export const setExtensionName = (extName?: ExtensionName) => {
 	}
 };
 
-export const isRpcActive = (ext: ExtensionVariables) => {
-	if (!ext.clients?.rpcClient?.isActive()) {
+/** Refuses a command that runs before the cloud layer finished activating. */
+export const isPlatformReady = (ext: ExtensionVariables) => {
+	if (!ext.clients?.platform) {
 		throw new Error(`${webviewStateStore.getState().state.extensionName} extension still hasn't been initialized...`);
 	}
 };
+

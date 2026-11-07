@@ -18,11 +18,7 @@
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
-import type { CreateLocalConnectionsConfigReq, DeleteLocalConnectionsConfigReq, MarketplaceItem } from "@wso2/wso2-platform-core";
 import * as yaml from "js-yaml";
-import { ProgressLocation, window } from "vscode";
-import { ext } from "../extensionVariables";
-import { dataCacheStore } from "./stores/data-cache-store";
 
 const WSO2_DIR = ".wso2";
 const CHOREO_DIR_LEGACY = ".choreo";
@@ -53,114 +49,66 @@ interface ComponentYamlContent {
 	};
 }
 
-export const deleteLocalConnectionConfig = (params: DeleteLocalConnectionsConfigReq): void => {
+export interface DeleteLocalConnectionConfigParams {
+	componentDir: string;
+	connectionName: string;
+}
+
+export const deleteLocalConnectionConfig = (params: DeleteLocalConnectionConfigParams): void => {
 	const componentYamlPath = join(resolveConfigDir(params.componentDir), "component.yaml");
 	if (existsSync(componentYamlPath)) {
-		const componentYamlFileContent: ComponentYamlContent = yaml.load(readFileSync(componentYamlPath, "utf8")) as ComponentYamlContent;
-		if (componentYamlFileContent.dependencies?.connectionReferences) {
-			componentYamlFileContent.dependencies.connectionReferences = componentYamlFileContent.dependencies.connectionReferences.filter(
-				(item) => item.name !== params.connectionName,
-			);
+		const content = yaml.load(readFileSync(componentYamlPath, "utf8")) as ComponentYamlContent;
+		if (content.dependencies?.connectionReferences) {
+			content.dependencies.connectionReferences = content.dependencies.connectionReferences.filter((item) => item.name !== params.connectionName);
 		}
-		if (componentYamlFileContent.dependencies?.serviceReferences) {
-			componentYamlFileContent.dependencies.serviceReferences = componentYamlFileContent.dependencies.serviceReferences.filter(
-				(item) => item.name !== params.connectionName,
-			);
+		if (content.dependencies?.serviceReferences) {
+			content.dependencies.serviceReferences = content.dependencies.serviceReferences.filter((item) => item.name !== params.connectionName);
 		}
-		writeFileSync(componentYamlPath, yaml.dump(componentYamlFileContent));
+		writeFileSync(componentYamlPath, yaml.dump(content));
 	}
 };
 
-export const createConnectionConfig = async (params: CreateLocalConnectionsConfigReq): Promise<string> => {
-	const userInfo = ext.authProvider?.getUserInfo();
-	const org = userInfo?.organizations?.find((item) => item.uuid === params.marketplaceItem?.organizationId);
-	if (!org) {
-		return "";
-	}
+export interface CreateLocalConnectionConfigParams {
+	componentDir: string;
+	name: string;
+	/** What the connection points at, as the platform names it; the caller composes it. */
+	resourceRef: string;
+}
 
+/** Records a connection reference in `.wso2/component.yaml` (schema 1.2), creating the file when needed. */
+export const createConnectionConfig = async (params: CreateLocalConnectionConfigParams): Promise<string> => {
 	for (const dir of [WSO2_DIR, CHOREO_DIR_LEGACY]) {
-		if (existsSync(join(params.componentDir, dir, "endpoints.yaml"))) {
-			rmSync(join(params.componentDir, dir, "endpoints.yaml"));
-		}
-		if (existsSync(join(params.componentDir, dir, "component-config.yaml"))) {
-			rmSync(join(params.componentDir, dir, "component-config.yaml"));
+		for (const legacyFile of ["endpoints.yaml", "component-config.yaml"]) {
+			const legacyPath = join(params.componentDir, dir, legacyFile);
+			if (existsSync(legacyPath)) {
+				rmSync(legacyPath);
+			}
 		}
 	}
 	const componentYamlPath = join(resolveConfigDir(params.componentDir), "component.yaml");
-
-	let resourceRef = ``;
-	const marketplaceItem = params.marketplaceItem as MarketplaceItem;
-
-	if (marketplaceItem?.resourceType === "DATABASE") {
-		resourceRef = `database:${marketplaceItem?.name}/${marketplaceItem?.name}`;
-	} else if (marketplaceItem?.isThirdParty) {
-		resourceRef = `thirdparty:${marketplaceItem?.name}/${marketplaceItem?.version}`;
-	} else {
-		let project = dataCacheStore
-			.getState()
-			.getProjects(org.handle)
-			?.find((item) => item.id === marketplaceItem?.projectId);
-		if (!project) {
-			const projects = await window.withProgress(
-				{ title: `Fetching projects of organization ${org.name}...`, location: ProgressLocation.Notification },
-				() => ext.clients.rpcClient.getProjects(org.id.toString()),
-			);
-			project = projects?.find((item) => item.id === marketplaceItem?.projectId);
-			if (!project) {
-				return "";
-			}
-		}
-
-		let component = dataCacheStore
-			.getState()
-			.getComponents(org.handle, project.handler)
-			?.find((item) => item.metadata?.id === marketplaceItem?.component?.componentId);
-		if (!component) {
-			const components = await window.withProgress(
-				{
-					title: `Fetching ${ext.terminologies?.componentTermCapitalized} of project ${project.name}...`,
-					location: ProgressLocation.Notification,
-				},
-				() =>
-					ext.clients.rpcClient.getComponentList({
-						orgHandle: org!.handle,
-						orgId: org!.id.toString(),
-						projectHandle: project!.handler,
-						projectId: project!.id,
-					}),
-			);
-			component = components?.find((item) => item.metadata?.id === marketplaceItem?.component?.componentId);
-			if (!component) {
-				return "";
-			}
-		}
-		resourceRef = `service:/${project.handler}/${component?.metadata?.handler}/v1/${marketplaceItem?.component?.endpointId}/${params.visibility}`;
-	}
+	const reference: ComponentYamlConnectionRef = { name: params.name, resourceRef: params.resourceRef };
 
 	if (existsSync(componentYamlPath)) {
-		const componentYamlFileContent: ComponentYamlContent = yaml.load(readFileSync(componentYamlPath, "utf8")) as ComponentYamlContent;
-		const schemaVersion = Number(componentYamlFileContent.schemaVersion);
-		if (schemaVersion < 1.2) {
-			componentYamlFileContent.schemaVersion = "1.2";
+		const original = readFileSync(componentYamlPath, "utf8");
+		const content = (yaml.load(original) as ComponentYamlContent) ?? {};
+		if (Number(content.schemaVersion) < 1.2 || !content.schemaVersion) {
+			content.schemaVersion = "1.2";
 		}
-		componentYamlFileContent.dependencies = {
-			...componentYamlFileContent.dependencies,
-			connectionReferences: [...(componentYamlFileContent.dependencies?.connectionReferences ?? []), { name: params?.name, resourceRef }],
+		content.dependencies = {
+			...content.dependencies,
+			connectionReferences: [...(content.dependencies?.connectionReferences ?? []).filter((item) => item.name !== params.name), reference],
 		};
-		const originalContent: ComponentYamlContent = yaml.load(readFileSync(componentYamlPath, "utf8")) as ComponentYamlContent;
-		if (JSON.stringify(originalContent) !== JSON.stringify(componentYamlFileContent)) {
-			writeFileSync(componentYamlPath, yaml.dump(componentYamlFileContent));
+		const updated = yaml.dump(content);
+		if (updated !== original) {
+			writeFileSync(componentYamlPath, updated);
 		}
 	} else {
 		const newConfigDir = join(params.componentDir, WSO2_DIR);
 		if (!existsSync(newConfigDir)) {
-			mkdirSync(newConfigDir);
+			mkdirSync(newConfigDir, { recursive: true });
 		}
-		const endpointFileContent: ComponentYamlContent = {
-			schemaVersion: "1.2",
-			dependencies: { connectionReferences: [{ name: params?.name, resourceRef }] },
-		};
-		writeFileSync(componentYamlPath, yaml.dump(endpointFileContent));
+		const content: ComponentYamlContent = { schemaVersion: "1.2", dependencies: { connectionReferences: [reference] } };
+		writeFileSync(componentYamlPath, yaml.dump(content));
 	}
 	return componentYamlPath;
 };
