@@ -165,7 +165,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 
 					if (params?.component?.isPrebuilt) {
 						// For prebuilt integrations, clone only the subpath that holds the integration's source.
-						const clonedPath = await cloneRepoSubpathOnly(selectedCloneDir.fsPath, candidate.repoUrl, branch, subPath, [".wso2", ".choreo", ".git"]);
+						const clonedPath = await cloneRepoSubpathOnly(selectedCloneDir.fsPath, candidate.repoUrl, branch, subPath, [".wso2", ".git"]);
 						// Remembered until the cloned directory is opened, when it moves to workspace state.
 						await ext.context.globalState.update("SOURCE_COMPONENT_ID", params.component.id);
 						updateContextFile(clonedPath, selectedProject);

@@ -32,7 +32,6 @@ import { createWIPlatform } from "./platform/platform-client";
 import { contextStore } from "./stores/context-store";
 import { dataCacheStore } from "./stores/data-cache-store";
 import { locationStore } from "./stores/location-store";
-import { clearPreviousStoreVersions } from "./stores/store-utils";
 
 /**
  * Boot the cloud functionality: environment → stores → platform client and the
@@ -104,8 +103,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	ext.log(`Extension version: ${getExtVersion(context)}`);
 	ext.log(`WSO2 Cloud environment: ${platform.environment.name} (${platform.environment.apiBaseUrl})`);
 
-	// 4. Rehydrate persistent stores, dropping what the CLI-era store versions kept.
-	await clearPreviousStoreVersions(context);
+	// 4. Rehydrate persistent stores.
 	await contextStore.persist.rehydrate();
 	await dataCacheStore.persist.rehydrate();
 	await locationStore.persist.rehydrate();

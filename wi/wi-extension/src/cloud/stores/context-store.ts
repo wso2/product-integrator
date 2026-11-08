@@ -36,7 +36,7 @@ import { createStore } from "zustand";
 import { persist } from "zustand/middleware";
 import { ext } from "../../extensionVariables";
 import { isSamePath, isSubpath } from "../../utils";
-import { findContextFile, pickContextFiles, readContextFile } from "../context-file";
+import { findContextFile, readContextFile } from "../context-file";
 import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
 import { dataCacheStore } from "./data-cache-store";
 import { locationStore } from "./location-store";
@@ -123,7 +123,7 @@ let refreshGeneration = 0;
 
 /** Reads every context file in the workspace, or the one at each workspace folder's git root. */
 const getAllContexts = async (previousItems: { [key: string]: ContextItemEnriched }) => {
-	const contextFiles = pickContextFiles((await workspace.findFiles("**/{.wso2,.choreo}/context.yaml")).map((uri) => uri.fsPath));
+	const contextFiles = (await workspace.findFiles("**/.wso2/context.yaml")).map((uri) => uri.fsPath);
 	const contextItems: { [key: string]: ContextItemEnriched } = {};
 	const sessionOrg = ext.authProvider?.org?.handle;
 

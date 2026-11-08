@@ -233,12 +233,8 @@ export class WIAuthState implements Disposable {
 		}
 	}
 
-	/**
-	 * The shape the webviews were written against: a `userInfo` with one
-	 * organization. Kept at the bridge so the views need not change for the
-	 * platform move.
-	 */
-	public legacyAuthState(): WICloudAuthState {
+	/** The auth state as the webviews read it: a `userInfo` with the session's one organization. */
+	public webviewAuthState(): WICloudAuthState {
 		const session = this._state.session;
 		if (!session) {
 			return { userInfo: null, status: this._state.status };

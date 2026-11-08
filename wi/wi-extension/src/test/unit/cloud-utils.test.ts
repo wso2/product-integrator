@@ -45,9 +45,8 @@ describe("local connection references (.wso2/component.yaml)", () => {
 		assert.deepStrictEqual(readComponentYaml(dir), { schemaVersion: "1.2", dependencies: { connectionReferences: [{ name: "orders-db", resourceRef: "database:orders-db" }] } });
 	});
 
-	it("keeps the existing file's other content, replaces a same-named reference and removes the old config files", async () => {
+	it("keeps the existing file's other content, replaces a same-named reference", async () => {
 		mkdirSync(join(dir, ".wso2"));
-		writeFileSync(join(dir, ".wso2", "endpoints.yaml"), "version: 0.1\n");
 		writeFileSync(
 			join(dir, ".wso2", "component.yaml"),
 			yaml.dump({ schemaVersion: "1.1", endpoints: [{ name: "api" }], dependencies: { connectionReferences: [{ name: "orders-db", resourceRef: "old" }] } }),
@@ -61,15 +60,14 @@ describe("local connection references (.wso2/component.yaml)", () => {
 			{ name: "orders-db", resourceRef: "database:orders-db" },
 			{ name: "inventory", resourceRef: "service:inventory" },
 		]);
-		assert.ok(!existsSync(join(dir, ".wso2", "endpoints.yaml")));
 	});
 
-	it("writes into a legacy .choreo directory when that is what the integration has", async () => {
+	it("writes into .wso2 even when the integration still has a Choreo-era .choreo directory", async () => {
 		mkdirSync(join(dir, ".choreo"));
 		writeFileSync(join(dir, ".choreo", "component.yaml"), yaml.dump({ schemaVersion: "1.2" }));
 		await createConnectionConfig({ componentDir: dir, name: "orders-db", resourceRef: "database:orders-db" });
-		assert.ok(!existsSync(join(dir, ".wso2")));
-		assert.deepStrictEqual(readComponentYaml(dir, ".choreo").dependencies?.connectionReferences, [{ name: "orders-db", resourceRef: "database:orders-db" }]);
+		assert.deepStrictEqual(readComponentYaml(dir).dependencies?.connectionReferences, [{ name: "orders-db", resourceRef: "database:orders-db" }]);
+		assert.deepStrictEqual(readComponentYaml(dir, ".choreo").dependencies, undefined);
 	});
 
 	it("deletes a reference by name and tolerates a missing file", async () => {
