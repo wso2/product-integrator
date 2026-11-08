@@ -11,12 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 - **WSO2 Cloud without the CLI** — The extension signs in to WSO2 Cloud itself (ThunderID, through the `wso2-cloud` authentication provider other extensions can use) and calls the WSO2 Cloud Integration Platform API directly. The bundled Choreo CLI, its download at build time and its RPC bridge are gone.
 - **Deploy to WSO2 Cloud** — Creating an integration turns auto build on and follows the first build; where the platform does not auto deploy (Ballerina), the extension deploys the first build to the pipeline's entry environment itself.
-- **Project context** — `.wso2/context.yaml` (version 2) replaces `.choreo/context.yaml`, which is still read and migrated on the first write.
+- **Project context** — Repositories are linked to WSO2 Cloud projects in `.wso2/context.yaml` (version 2). Links to Choreo projects in `.choreo/context.yaml` and in the earlier `.wso2/context.yaml` list are no longer read.
 
 ### Removed
 
 - Settings `integrator.advanced.cloudRpcPath`, `integrator.advanced.cloudRpcArchitecture`, `integrator.advanced.skipKeyring` and `integrator.advanced.cloudDirectConnection`: there is no CLI to point at. `integrator.advanced.cloudEnv` stays; `integrator.advanced.cloudClientId` and `integrator.advanced.cloudApiBaseUrl` are new, machine-scoped overrides for the WSO2 Cloud team.
-- Environment variables `CHOREO_ENV`, `CLOUD_REGION`, `SKIP_KEYRING`, `CHOREO_DIRECT`; `CLOUD_STS_TOKEN` is read for one more release, `WSO2_CLOUD_TOKEN` and `WSO2_CLOUD_TOKEN_FILE` replace it.
+- Environment variables `CHOREO_ENV`, `CLOUD_REGION`, `SKIP_KEYRING`, `CHOREO_DIRECT` and `CLOUD_STS_TOKEN`; the cloud editor hands in `WSO2_CLOUD_TOKEN` or `WSO2_CLOUD_TOKEN_FILE`.
 
 ## [1.0.0](https://github.com/wso2/product-integrator/compare/v5.0.0-alpha...v5.0.0-rc1) - 2026-05-18
 

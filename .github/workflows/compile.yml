@@ -511,9 +511,6 @@ jobs:
       - name: Build WI extension
         working-directory: .
         env:
-          # Source refs from before the WSO2 Cloud client still run scripts/download-choreo-cli.js,
-          # which calls the GitHub API; unauthenticated it hits the 60 req/hour limit (HTTP 403).
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Read by external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js
           # to decide whether to `vsce package --pre-release`. This is the only place that flag is
           # set, so the vsix's embedded pre-release state always matches this input.
@@ -523,14 +520,7 @@ jobs:
 
       - name: WI extension unit tests
         working-directory: wi/wi-extension
-        shell: bash
-        # A source ref from before this suite has no test:unit script; it is not a failure there.
-        run: |
-          if node -e "process.exit(require('./package.json').scripts?.['test:unit'] ? 0 : 1)"; then
-            node ../../common/scripts/install-run-rushx.js test:unit
-          else
-            echo "test:unit is not defined on this ref; skipping the WI extension unit tests."
-          fi
+        run: node ../../common/scripts/install-run-rushx.js test:unit
 
       - name: Install dependencies
         env:

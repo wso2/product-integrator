@@ -36,6 +36,10 @@ ICP_ZIP="$4"
 JRE_ZIP="$5"
 VERSION="$6"
 ARCH="$7"
+case "$ARCH" in
+    amd64|arm64|x64) ;;
+    *) echo "Unsupported architecture '$ARCH' (expected amd64, x64 or arm64)" >&2; exit 1 ;;
+esac
 
 EXTRACTION_TARGET="$WORK_DIR/payload"
 

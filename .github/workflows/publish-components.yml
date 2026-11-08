@@ -153,10 +153,6 @@ jobs:
       # monorepo. lib/vscode is not a rush project, so no patches are needed here.
       - name: Build WI extension
         if: ${{ inputs.rebuild_wi_extension }}
-        env:
-          # Source refs from before the WSO2 Cloud client still run scripts/download-choreo-cli.js,
-          # which calls the GitHub API; unauthenticated it hits the 60 req/hour limit (HTTP 403).
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node common/scripts/install-run-rush.js build --to wso2-integrator --verbose
 
       - name: Verify the extension VSIX was produced
@@ -166,12 +162,6 @@ jobs:
           # The generator reads this component from a local file (config `sourceFile`); a missing
           # VSIX would otherwise surface later as a hashing error.
           ls -la wi/wi-extension/*.vsix
-          # The extension talks to WSO2 Cloud directly; a bundled CLI binary means a stale build. An
-          # older ref still downloads the CLI on purpose, so it is only checked where nothing does.
-          if [ ! -f wi/wi-extension/scripts/download-choreo-cli.js ] && unzip -l wi/wi-extension/*.vsix | grep -i "choreo-cli"; then
-            echo "The VSIX still bundles the Choreo CLI" >&2
-            exit 1
-          fi
 
       # No installer build here to take them from: package the runtimes with the same scripts the
       # release uses. Carried ones are skipped (ids trimmed as the generator does); a dry run hashes nothing.
