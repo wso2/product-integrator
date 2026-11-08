@@ -272,17 +272,15 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 				),
 		);
 
-		const cwdFiles = readdirSync(params.cwd);
 		const newPath = join(clonedPath, params.subpath);
-		fs.mkdirSync(newPath, { recursive: true });
-		for (const file of cwdFiles) {
-			fs.cpSync(join(params.cwd, file), join(newPath, file), { recursive: true });
-		}
-
-		const repoRoot = await newGit.getRepositoryRoot(newPath);
-		const dotGit = await newGit.getRepositoryDotGit(newPath);
-		const repo = newGit.open(repoRoot, dotGit);
 		try {
+			const cwdFiles = readdirSync(params.cwd);
+			fs.mkdirSync(newPath, { recursive: true });
+			for (const file of cwdFiles) {
+				fs.cpSync(join(params.cwd, file), join(newPath, file), { recursive: true });
+			}
+
+			const repo = newGit.open(await newGit.getRepositoryRoot(newPath), await newGit.getRepositoryDotGit(newPath));
 			await window.withProgress({ title: "Pushing the changes to your remote repository...", location: ProgressLocation.Notification }, async () => {
 				await repo.add(["."]);
 				await repo.commit("Add integration source");
@@ -290,8 +288,14 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 				await repo.push(headRef?.upstream?.remote || "origin", headRef?.name || params.repo.branch);
 			});
 		} finally {
-			// The clone and the push needed the credentials; the repository keeps the plain URL, whatever happened.
-			await repo.exec(["remote", "set-url", "origin", _repoUrl]).catch((error: unknown) => ext.logError("Could not reset the remote URL", error as Error));
+			// The clone and the push needed the credentials; from the moment the clone exists, whatever
+			// happens after it, the repository keeps the plain URL.
+			try {
+				const cloned = newGit.open(await newGit.getRepositoryRoot(clonedPath), await newGit.getRepositoryDotGit(clonedPath));
+				await cloned.exec(["remote", "set-url", "origin", _repoUrl]);
+			} catch (error) {
+				ext.logError("Could not reset the remote URL", error as Error);
+			}
 		}
 		return newPath;
 	}

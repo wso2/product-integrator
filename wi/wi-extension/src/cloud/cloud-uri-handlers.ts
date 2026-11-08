@@ -46,7 +46,7 @@ export function activateURIHandlers(context: ExtensionContext) {
 				// The browser came back from the sign-in; the login flow takes it from here.
 				BridgeLayer.notifySignInInitiated();
 				if (!receiver.pushUri(uri)) {
-					ext.log("A sign-in callback arrived with no sign-in waiting; it is kept for the next one");
+					ext.log("A sign-in callback arrived with no sign-in waiting for it; it was ignored");
 				}
 				return;
 			}

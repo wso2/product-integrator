@@ -27,3 +27,5 @@ test-results/**
 scripts/**
 *.log
 rush-logs
+# Left by builds from before the extension stopped bundling the Choreo CLI.
+resources/choreo-cli/**

@@ -48,16 +48,37 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		error: (message, error) => ext.logError(message, error as Error),
 	};
 
-	// 1. The platform client, sessions and authentication provider, from the environment setting.
-	const platform = createWIPlatform({
-		context,
-		logger,
-		extensionVersion: getExtVersion(context),
-		onUnauthenticated: (error) => {
-			void ext.authProvider?.logout(true);
-			handleCloudError(error, "WSO2 Cloud rejected the session. Please sign in again.");
-		},
+	// Commands registered below may run before the session is restored (a console link that
+	// activated the extension, the Ballerina SSO flow); they wait for this.
+	let restored: () => void = () => undefined;
+	ext.cloudReady = new Promise<void>((resolve) => {
+		restored = resolve;
 	});
+
+	// 1. The platform client, sessions and authentication provider, from the environment setting.
+	let platform: ReturnType<typeof createWIPlatform>;
+	try {
+		platform = createWIPlatform({
+			context,
+			logger,
+			extensionVersion: getExtVersion(context),
+			onUnauthenticated: (error) => {
+				// An editor started with a token cannot sign in again, and signing it out would only
+				// restore the same token and fail again: it is reported, not ended.
+				if (!platform.injected) {
+					void ext.authProvider?.logout(true);
+				}
+				handleCloudError(error, platform.injected ? "WSO2 Cloud rejected this editor's token." : "WSO2 Cloud rejected the session. Please sign in again.");
+			},
+		});
+	} catch (error) {
+		// An environment that cannot be used (a dev deployment with no hosts set) leaves the cloud
+		// features off rather than failing the extension.
+		ext.logError("WSO2 Cloud is not available", error as Error);
+		vscode.window.showErrorMessage(`WSO2 Cloud features are off: ${error instanceof Error ? error.message : String(error)}`);
+		restored();
+		return;
+	}
 	ext.clients = { platform };
 	ext.cloudEnv = platform.environment.name;
 	ext.config = platform.environment;
@@ -100,7 +121,11 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	);
 
 	// 6. Restore the session (secret storage, or the cloud editor's injected token).
-	await authProvider.initAuth();
+	try {
+		await authProvider.initAuth();
+	} finally {
+		restored();
+	}
 
 	// 7. Prompt restart when Advanced configuration keys change
 	context.subscriptions.push(registerPreInitHandlers());

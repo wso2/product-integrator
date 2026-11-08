@@ -20,6 +20,7 @@ import { existsSync } from "fs";
 import type { ContextItemEnriched, DirectoryIntegration } from "@wso2/wso2-cloud-client";
 import { createStore } from "zustand";
 import { persist } from "zustand/middleware";
+import { ext } from "../../extensionVariables";
 import { getGlobalStateStore } from "./store-utils";
 
 export interface LocationStoreState {
@@ -47,7 +48,8 @@ interface LocationStore {
 
 const initialState: LocationStoreState = { projectLocations: {} };
 
-export const projectLocationKey = (orgHandle: string, projectName: string) => `${orgHandle}-${projectName}`;
+/** The same handle on another deployment (prod, stage) is another organization, as in the data cache. */
+export const projectLocationKey = (orgHandle: string, projectName: string) => `${ext.cloudEnv}-${orgHandle}-${projectName}`;
 
 /** Where on this machine each cloud project has been opened, so a link from the console can find it again. */
 export const locationStore = createStore(
