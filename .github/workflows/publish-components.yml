@@ -166,8 +166,9 @@ jobs:
           # The generator reads this component from a local file (config `sourceFile`); a missing
           # VSIX would otherwise surface later as a hashing error.
           ls -la wi/wi-extension/*.vsix
-          # The extension talks to WSO2 Cloud directly; a bundled CLI binary means a stale build.
-          if unzip -l wi/wi-extension/*.vsix | grep -i "choreo-cli"; then
+          # The extension talks to WSO2 Cloud directly; a bundled CLI binary means a stale build. An
+          # older ref still downloads the CLI on purpose, so it is only checked where nothing does.
+          if [ ! -f wi/wi-extension/scripts/download-choreo-cli.js ] && unzip -l wi/wi-extension/*.vsix | grep -i "choreo-cli"; then
             echo "The VSIX still bundles the Choreo CLI" >&2
             exit 1
           fi
