@@ -16,21 +16,14 @@
  * under the License.
  */
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import * as yaml from "js-yaml";
 
 const WSO2_DIR = ".wso2";
-const CHOREO_DIR_LEGACY = ".choreo";
 
-/** Returns the config directory path. Prefers .wso2, falls back to .choreo (legacy), defaults to .wso2 for new creation. */
-const resolveConfigDir = (baseDir: string): string => {
-	const wso2Dir = join(baseDir, WSO2_DIR);
-	if (existsSync(wso2Dir)) return wso2Dir;
-	const choreoDir = join(baseDir, CHOREO_DIR_LEGACY);
-	if (existsSync(choreoDir)) return choreoDir;
-	return wso2Dir;
-};
+/** The integration's `.wso2/component.yaml`. */
+const componentYamlPathOf = (baseDir: string): string => join(baseDir, WSO2_DIR, "component.yaml");
 
 interface ComponentYamlConnectionRef {
 	name: string;
@@ -55,7 +48,7 @@ export interface DeleteLocalConnectionConfigParams {
 }
 
 export const deleteLocalConnectionConfig = (params: DeleteLocalConnectionConfigParams): void => {
-	const componentYamlPath = join(resolveConfigDir(params.componentDir), "component.yaml");
+	const componentYamlPath = componentYamlPathOf(params.componentDir);
 	if (existsSync(componentYamlPath)) {
 		const content = yaml.load(readFileSync(componentYamlPath, "utf8")) as ComponentYamlContent;
 		if (content.dependencies?.connectionReferences) {
@@ -77,15 +70,7 @@ export interface CreateLocalConnectionConfigParams {
 
 /** Records a connection reference in `.wso2/component.yaml` (schema 1.2), creating the file when needed. */
 export const createConnectionConfig = async (params: CreateLocalConnectionConfigParams): Promise<string> => {
-	for (const dir of [WSO2_DIR, CHOREO_DIR_LEGACY]) {
-		for (const legacyFile of ["endpoints.yaml", "component-config.yaml"]) {
-			const legacyPath = join(params.componentDir, dir, legacyFile);
-			if (existsSync(legacyPath)) {
-				rmSync(legacyPath);
-			}
-		}
-	}
-	const componentYamlPath = join(resolveConfigDir(params.componentDir), "component.yaml");
+	const componentYamlPath = componentYamlPathOf(params.componentDir);
 	const reference: ComponentYamlConnectionRef = { name: params.name, resourceRef: params.resourceRef };
 
 	if (existsSync(componentYamlPath)) {

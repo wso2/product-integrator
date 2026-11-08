@@ -21,7 +21,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "os";
 import { join } from "path";
 import * as yaml from "js-yaml";
-import { contextFilePath, findContextFile, legacyContextFilePath, linkContext, localContextEntry, readContextEntries, unlinkContext, writeContextEntries } from "../../cloud/context-file";
+import { contextFilePath, findContextFile, linkContext, localContextEntry, readContextEntries, unlinkContext, writeContextEntries } from "../../cloud/context-file";
 
 describe("context file (.wso2/context.yaml)", () => {
 	let root: string;
@@ -32,20 +32,21 @@ describe("context file (.wso2/context.yaml)", () => {
 		rmSync(root, { recursive: true, force: true });
 	});
 
-	it("reads the legacy .choreo v1 list and writes the v2 document under .wso2, leaving .choreo alone", () => {
+	it("writes the v2 document under .wso2 and ignores the Choreo-era .choreo file and v1 list", () => {
 		mkdirSync(join(root, ".choreo"));
-		const legacy = legacyContextFilePath(root);
-		writeFileSync(legacy, yaml.dump([{ org: "acme", project: "orders" }]));
-		assert.strictEqual(findContextFile(root), legacy);
-		assert.deepStrictEqual(readContextEntries(root), [{ org: "acme", project: "orders" }]);
+		writeFileSync(join(root, ".choreo", "context.yaml"), yaml.dump([{ org: "acme", project: "orders" }]));
+		assert.strictEqual(findContextFile(root), undefined);
+		assert.deepStrictEqual(readContextEntries(root), []);
+
+		mkdirSync(join(root, ".wso2"));
+		writeFileSync(contextFilePath(root), yaml.dump([{ org: "acme", project: "orders" }]));
+		assert.deepStrictEqual(readContextEntries(root), [], "a v1 list is not read");
 
 		linkContext(root, { org: "acme", project: "orders", env: "development" });
 
 		const written = yaml.load(readFileSync(contextFilePath(root), "utf8")) as { version: number; contexts: unknown[] };
 		assert.strictEqual(written.version, 2);
 		assert.deepStrictEqual(written.contexts, [{ org: "acme", project: "orders", env: "development" }]);
-		assert.strictEqual(readFileSync(legacy, "utf8"), yaml.dump([{ org: "acme", project: "orders" }]), "the legacy file is not rewritten");
-		assert.strictEqual(findContextFile(root), contextFilePath(root), ".wso2 wins once it exists");
 	});
 
 	it("links a second project and unlinks the first", () => {
@@ -63,17 +64,6 @@ describe("context file (.wso2/context.yaml)", () => {
 		unlinkContext([root], { org: "acme", project: "billing" });
 		assert.ok(!existsSync(contextFilePath(root)), "an empty document is removed");
 		assert.ok(!existsSync(join(root, ".wso2")), "and so is the directory it left empty");
-	});
-
-	it("unlinks a repository that only has the legacy .choreo file, which an empty document then shadows", () => {
-		mkdirSync(join(root, ".choreo"));
-		writeFileSync(legacyContextFilePath(root), yaml.dump([{ org: "acme", project: "orders" }]));
-
-		unlinkContext([root], { org: "acme", project: "orders" });
-
-		assert.deepStrictEqual(readContextEntries(root), [], "the legacy entry is not read again");
-		assert.strictEqual(findContextFile(root), contextFilePath(root));
-		assert.ok(existsSync(legacyContextFilePath(root)), "the legacy file is left alone");
 	});
 
 	it("updates an entry in place instead of duplicating it", () => {

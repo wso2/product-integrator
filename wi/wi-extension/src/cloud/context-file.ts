@@ -22,7 +22,6 @@ import {
 	CONTEXT_FILE_DIR,
 	CONTEXT_FILE_NAME,
 	type ContextEntry,
-	LEGACY_CONTEXT_FILE_DIR,
 	readContextDocument,
 	removeContextEntry,
 	toContextDocument,
@@ -30,31 +29,16 @@ import {
 } from "@wso2/wso2-cloud-client";
 import * as yaml from "js-yaml";
 
-/**
- * `.wso2/context.yaml`: which cloud project a repository belongs to.
- *
- * The file is read in every shape the extensions have written (the v2
- * document, the v1 list and the oldest single object) and from the legacy
- * `.choreo/` directory, and always written back as the v2 document under
- * `.wso2/`. The legacy file is left where it is; it may hold other things.
- */
+/** `.wso2/context.yaml`: which cloud project a repository belongs to, as the v2 document. */
 
 export function contextFilePath(gitRoot: string): string {
 	return path.join(gitRoot, CONTEXT_FILE_DIR, CONTEXT_FILE_NAME);
 }
 
-export function legacyContextFilePath(gitRoot: string): string {
-	return path.join(gitRoot, LEGACY_CONTEXT_FILE_DIR, CONTEXT_FILE_NAME);
-}
-
-/** The context file to read for a repository: `.wso2/` first, then the legacy `.choreo/`. */
+/** The repository's context file, when it has one. */
 export function findContextFile(gitRoot: string): string | undefined {
-	for (const candidate of [contextFilePath(gitRoot), legacyContextFilePath(gitRoot)]) {
-		if (existsSync(candidate)) {
-			return candidate;
-		}
-	}
-	return undefined;
+	const file = contextFilePath(gitRoot);
+	return existsSync(file) ? file : undefined;
 }
 
 export function readContextFile(filePath: string): ContextEntry[] {
@@ -70,14 +54,10 @@ export function readContextEntries(gitRoot: string): ContextEntry[] {
 	return file ? readContextFile(file) : [];
 }
 
-/**
- * Writes the v2 document under `.wso2/`, creating the directory; removes the
- * file when nothing is left, unless a legacy `.choreo/` file would then be
- * read in its place: an empty document is kept to shadow it.
- */
+/** Writes the v2 document under `.wso2/`, creating the directory; removes the file when nothing is left. */
 export function writeContextEntries(gitRoot: string, entries: ContextEntry[]): string {
 	const target = contextFilePath(gitRoot);
-	if (entries.length === 0 && !existsSync(legacyContextFilePath(gitRoot))) {
+	if (entries.length === 0) {
 		if (existsSync(target)) {
 			unlinkSync(target);
 			const dir = path.dirname(target);
@@ -113,21 +93,4 @@ export function unlinkContext(projectRoots: string[], entry: Pick<ContextEntry, 
 /** The entry marked `local: true`, which a deploy turns into a project. */
 export function localContextEntry(gitRoot: string): ContextEntry | undefined {
 	return readContextEntries(gitRoot).find((entry) => entry.local === true);
-}
-
-/**
- * One context file per repository: the `.wso2` one when both it and a
- * legacy `.choreo` one are there, since the migration leaves the old file
- * in place.
- */
-export function pickContextFiles(files: string[]): string[] {
-	const byRoot = new Map<string, string>();
-	for (const file of files) {
-		const root = path.dirname(path.dirname(file));
-		const current = byRoot.get(root);
-		if (!current || path.basename(path.dirname(file)) === ".wso2") {
-			byRoot.set(root, file);
-		}
-	}
-	return [...byRoot.values()];
 }

@@ -95,7 +95,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async getAuthState(): Promise<AuthState> {
-		return ext.authProvider?.legacyAuthState() ?? { userInfo: null, status: "signed-out" };
+		return ext.authProvider?.webviewAuthState() ?? { userInfo: null, status: "signed-out" };
 	}
 
 	async getContextState(): Promise<ContextStoreState> {
@@ -164,7 +164,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 						// ignore
 					}
 					const changes = await gitRepo.diffWith(`${matchingRemoteName}/${branch}`);
-					const configPaths = [join(repoDir, ".wso2", "component.yaml"), join(repoDir, ".choreo", "component.yaml")];
+					const configPaths = [join(repoDir, ".wso2", "component.yaml")];
 					changes.forEach((item) => {
 						if (configPaths.includes(item.uri.path)) {
 							fileNames.add(path.basename(item.uri.path));
@@ -322,7 +322,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	 */
 	setupSubscriptions(publishAuthState: (state: AuthState) => void, publishContextState: (state: ContextStoreState) => void): void {
 		ext.authProvider?.subscribe(() => {
-			publishAuthState(ext.authProvider?.legacyAuthState() ?? { userInfo: null, status: "signed-out" });
+			publishAuthState(ext.authProvider?.webviewAuthState() ?? { userInfo: null, status: "signed-out" });
 		});
 		contextStore.subscribe(({ state }) => {
 			publishContextState(state);
