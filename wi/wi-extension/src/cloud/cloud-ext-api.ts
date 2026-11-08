@@ -31,6 +31,10 @@ import {
 	type PlatformEnvConfig,
 	type PlatformSession,
 	orderByPipeline,
+	DATABASE_CA_CERT_VAR,
+	DATABASE_CONNECTION_VARS,
+	SERVICE_CONNECTION_VARS,
+	connectionVarName,
 } from "@wso2/wso2-cloud-client";
 import { ext } from "../extensionVariables";
 import { isSamePath } from "../utils/pathUtils";
@@ -250,15 +254,17 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 			list: (integration: string, environment: string, projectName?: string): Promise<EnvVarGroup[]> => cloud.config.listEnvGroups(integration, environment, projectName),
 			createDatabaseConnection: async (request: { integration: string; dbServerId: string; name: string; environments?: string[]; projectName?: string }) => {
 				const credentials = await cloud.dbServers.revealCredentials(request.dbServerId);
+				// Prefixed with the connection's name: every group lands in the same container.
+				const name = (suffix: string) => connectionVarName(request.name, suffix);
 				const data: Record<string, string> = {
-					DB_HOST: credentials.host ?? "",
-					DB_PORT: credentials.port ?? "",
-					DB_NAME: credentials.database ?? "",
-					DB_USER: credentials.username,
-					DB_PASSWORD: credentials.password,
+					[name(DATABASE_CONNECTION_VARS.HostName)]: credentials.host ?? "",
+					[name(DATABASE_CONNECTION_VARS.Port)]: credentials.port ?? "",
+					[name(DATABASE_CONNECTION_VARS.DatabaseName)]: credentials.database ?? "",
+					[name(DATABASE_CONNECTION_VARS.Username)]: credentials.username,
+					[name(DATABASE_CONNECTION_VARS.Password)]: credentials.password,
 				};
 				if (credentials.caCertificate) {
-					data.DB_CA_CERT = credentials.caCertificate;
+					data[name(DATABASE_CA_CERT_VAR)] = credentials.caCertificate;
 				}
 				for (const environment of await environmentsFor(request.environments)) {
 					await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: true, data }, request.projectName);
@@ -281,7 +287,14 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 						request.integration,
 						environment,
 						request.name,
-						{ name: request.name, sensitive: true, data: { SERVICE_URL: url, API_KEY: key.apiKey } },
+						{
+							name: request.name,
+							sensitive: true,
+							data: {
+								[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ServiceURL)]: url,
+								[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ChoreoAPIKey)]: key.apiKey,
+							},
+						},
 						request.projectName,
 					);
 				}
