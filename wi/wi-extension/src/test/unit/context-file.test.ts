@@ -65,6 +65,17 @@ describe("context file (.wso2/context.yaml)", () => {
 		assert.ok(!existsSync(join(root, ".wso2")), "and so is the directory it left empty");
 	});
 
+	it("unlinks a repository that only has the legacy .choreo file, which an empty document then shadows", () => {
+		mkdirSync(join(root, ".choreo"));
+		writeFileSync(legacyContextFilePath(root), yaml.dump([{ org: "acme", project: "orders" }]));
+
+		unlinkContext([root], { org: "acme", project: "orders" });
+
+		assert.deepStrictEqual(readContextEntries(root), [], "the legacy entry is not read again");
+		assert.strictEqual(findContextFile(root), contextFilePath(root));
+		assert.ok(existsSync(legacyContextFilePath(root)), "the legacy file is left alone");
+	});
+
 	it("updates an entry in place instead of duplicating it", () => {
 		linkContext(root, { org: "acme", project: "orders" });
 		linkContext(root, { org: "acme", project: "orders", env: "staging" });

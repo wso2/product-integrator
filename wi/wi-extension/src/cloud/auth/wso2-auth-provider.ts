@@ -18,7 +18,7 @@
 
 import type { CloudOrganization, AuthState as WICloudAuthState } from "@wso2/wi-core";
 import { type AuthState, type Organization, type PlatformSession, type StoredSession, isCloudError } from "@wso2/wso2-cloud-client";
-import { WSO2_CLOUD_AUTH_PROVIDER_ID, scopeForEnv } from "@wso2/wso2-cloud-client/vscode";
+import { PROMPT_LOGIN_SCOPE, WSO2_CLOUD_AUTH_PROVIDER_ID, scopeForEnv } from "@wso2/wso2-cloud-client/vscode";
 import { Disposable, EventEmitter, authentication, window } from "vscode";
 import type { WIPlatform } from "../platform/platform-client";
 import { contextStore } from "../stores/context-store";
@@ -156,9 +156,11 @@ export class WIAuthState implements Disposable {
 			}
 			const scopes = [scopeForEnv(this.deps.platform.environment.name)];
 			if (options.reselectOrganization) {
-				scopes.push("prompt:login");
+				scopes.push(PROMPT_LOGIN_SCOPE);
 			}
-			await authentication.getSession(WSO2_AUTH_PROVIDER_ID, scopes, { createIfNone: true });
+			// The provider is this extension's own: asking it directly skips the consent
+			// prompt VS Code shows when an extension asks a provider for a new session.
+			await this.deps.platform.auth.createSession(scopes);
 			await this.initAuth();
 			if (!this._state.session) {
 				throw new Error("The sign-in completed but no session was stored.");
@@ -202,9 +204,14 @@ export class WIAuthState implements Disposable {
 	}
 
 	private setSession(session: PlatformSession): void {
+		const previous = this._state.session;
 		this._state = { session, status: "signed-in" };
 		this._stateChangeEmitter.fire({ state: this._state });
-		void contextStore.getState().refreshState();
+		// A refreshed token is the same person in the same organization: the projects listed stay right.
+		const samePerson = previous?.user.userId === session.user.userId && previous?.org.id === session.org.id && previous?.env === session.env;
+		if (!samePerson) {
+			void contextStore.getState().refreshState();
+		}
 	}
 
 	/** Fills in the organization's uuid from the API, which the subscription routes take. */

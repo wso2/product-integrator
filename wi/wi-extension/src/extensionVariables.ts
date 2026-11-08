@@ -33,6 +33,8 @@ export class ExtensionVariables {
 	// --- Platform feature properties ---
 
 	/** Sign-in state and the `wso2-cloud` authentication provider — set during activation. */
+	/** Settles once the cloud layer has restored the session at startup; commands that need the session wait for it. */
+	public cloudReady: Promise<void> = Promise.resolve();
 	public authProvider?: WIAuthState;
 
 	/** The platform client, sessions and provider — set during activation. */

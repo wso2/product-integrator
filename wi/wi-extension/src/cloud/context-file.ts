@@ -70,10 +70,14 @@ export function readContextEntries(gitRoot: string): ContextEntry[] {
 	return file ? readContextFile(file) : [];
 }
 
-/** Writes the v2 document under `.wso2/`, creating the directory; removes the file when nothing is left. */
+/**
+ * Writes the v2 document under `.wso2/`, creating the directory; removes the
+ * file when nothing is left, unless a legacy `.choreo/` file would then be
+ * read in its place: an empty document is kept to shadow it.
+ */
 export function writeContextEntries(gitRoot: string, entries: ContextEntry[]): string {
 	const target = contextFilePath(gitRoot);
-	if (entries.length === 0) {
+	if (entries.length === 0 && !existsSync(legacyContextFilePath(gitRoot))) {
 		if (existsSync(target)) {
 			unlinkSync(target);
 			const dir = path.dirname(target);

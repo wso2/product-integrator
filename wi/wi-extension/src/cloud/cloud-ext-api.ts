@@ -91,8 +91,21 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public signOut = (): Promise<void> => ext.authProvider?.logout(true) ?? Promise.resolve();
 	public getPlatformConfig = (): PlatformEnvConfig => ext.config;
 	public subscribeAuthState = (callback: (state: AuthState) => void): (() => void) => ext.authProvider?.subscribe((s) => callback(s.state)) ?? (() => undefined);
-	public subscribeIsLoggedIn = (callback: (isLoggedIn: boolean) => void): (() => void) =>
-		ext.authProvider?.subscribe((s) => callback(s.state.status === "signed-in" && !!s.state.session)) ?? (() => undefined);
+	/** Tells `callback` whether there is a session now and whenever that changes, by the same rule as {@link isLoggedIn}. */
+	public subscribeIsLoggedIn = (callback: (isLoggedIn: boolean) => void): (() => void) => {
+		const auth = ext.authProvider;
+		if (!auth) {
+			return () => undefined;
+		}
+		let last: boolean | undefined;
+		return auth.subscribe(() => {
+			const now = auth.isLoggedIn;
+			if (now !== last) {
+				last = now;
+				callback(now);
+			}
+		});
+	};
 
 	// ---- workspace context ----
 	public getContextState = (): ContextStoreState => contextStore.getState().state;
@@ -136,9 +149,9 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public get integrations() {
 		const components = this.cloud.components;
 		return {
-			list: (projectName?: string) => components.list(projectName),
+			list: (projectName: string) => components.list(projectName),
 			get: (projectName: string, name: string) => components.get(projectName, name),
-			find: (ref: string, projectName?: string) => components.find(ref, projectName),
+			find: (ref: string, projectName: string) => components.find(ref, projectName),
 			getRepository: (name: string, projectName?: string) => components.repository(name, projectName),
 			create: components.create.bind(components),
 			createRaw: components.createRaw.bind(components),

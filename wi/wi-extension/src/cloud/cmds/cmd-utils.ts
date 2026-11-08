@@ -287,6 +287,8 @@ export async function quickPickWithLoader<T>(params: {
  * answers `null` when the person declines or does not want to continue.
  */
 export const requireSession = async (message: string): Promise<PlatformSession | null> => {
+	// A command run while the extension starts would otherwise see no session yet.
+	await ext.cloudReady;
 	const current = ext.authProvider?.state;
 	if (current?.session && current.status === "signed-in") {
 		return current.session;
@@ -295,7 +297,12 @@ export const requireSession = async (message: string): Promise<PlatformSession |
 	if (loginSelection !== "Sign in") {
 		return null;
 	}
-	await commands.executeCommand(WICommandIds.SignIn);
+	try {
+		await commands.executeCommand(WICommandIds.SignIn);
+	} catch {
+		// The sign-in command has already said what went wrong.
+		return null;
+	}
 	// The command returns once the sign-in ended, completed or not; the state says which.
 	const after = ext.authProvider?.state;
 	if (!after?.session || after.status !== "signed-in") {

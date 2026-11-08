@@ -5,3 +5,5 @@ dist
 .vscode-test
 resources/jslibs/*
 .env
+# Left by builds from before the extension stopped bundling the Choreo CLI.
+resources/choreo-cli/
