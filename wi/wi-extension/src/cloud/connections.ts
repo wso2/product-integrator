@@ -105,7 +105,7 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 				return;
 			}
 			// Every environment is checked before anything is created, so a missing endpoint or deployment leaves no half-made connection behind.
-			const targets: { environment: string; url: string }[] = [];
+			const targets: { environment: string; url: string; existed: boolean }[] = [];
 			for (const environment of await environmentsFor(request.environments)) {
 				// The connection is written into the integration's deployment in the environment, so there has to be one.
 				if (!(await cloud.deployments.get(request.integration, environment, request.projectName))) {
@@ -125,25 +125,44 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 						{ reason: "endpoint_not_exposed" },
 					);
 				}
-				targets.push({ environment, url });
+				// A group of the same name written before is replaced, and so is not removed if this write is taken back.
+				const groups = await cloud.config.listEnvGroups(request.integration, environment, request.projectName);
+				targets.push({ environment, url, existed: groups.some((group) => group.name === request.name) });
 			}
-			for (const { environment, url } of targets) {
-				const key = await cloud.endpoints.createApiKey(target.integration, environment, target.endpoint, { displayName: `${request.integration}-${request.name}` }, target.project);
-				const data = {
-					[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ServiceURL)]: url,
-					[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ChoreoAPIKey)]: key.apiKey,
-				};
-				try {
-					await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: true, data }, request.projectName);
-				} catch (error) {
-					// A key no connection carries is only a live credential: it is revoked, best effort.
-					if (key.keyId) {
-						await cloud.endpoints
-							.revokeApiKey(target.integration, environment, target.endpoint, key.keyId, target.project)
-							.catch((revokeError: unknown) => logError(`Could not revoke the API key ${key.keyId}`, revokeError as Error));
+			// A key no connection carries is only a live credential: it is revoked, best effort.
+			const revoke = (environment: string, keyId: string | undefined) =>
+				keyId
+					? cloud.endpoints
+							.revokeApiKey(target.integration, environment, target.endpoint, keyId, target.project)
+							.catch((revokeError: unknown) => logError(`Could not revoke the API key ${keyId}`, revokeError as Error))
+					: Promise.resolve();
+			const written: { environment: string; keyId?: string; existed: boolean }[] = [];
+			try {
+				for (const { environment, url, existed } of targets) {
+					const key = await cloud.endpoints.createApiKey(target.integration, environment, target.endpoint, { displayName: `${request.integration}-${request.name}` }, target.project);
+					const data = {
+						[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ServiceURL)]: url,
+						[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ChoreoAPIKey)]: key.apiKey,
+					};
+					try {
+						await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: true, data }, request.projectName);
+					} catch (error) {
+						await revoke(environment, key.keyId);
+						throw error;
 					}
-					throw error;
+					written.push({ environment, keyId: key.keyId, existed });
 				}
+			} catch (error) {
+				// The environments already written are taken back, so a failure in a later one leaves no half-made connection.
+				for (const done of written) {
+					if (!done.existed) {
+						await cloud.config
+							.deleteEnvGroup(request.integration, done.environment, request.name, request.projectName)
+							.catch((deleteError: unknown) => logError(`Could not remove the connection ${request.name} from ${done.environment}`, deleteError as Error));
+					}
+					await revoke(done.environment, done.keyId);
+				}
+				throw error;
 			}
 		},
 		listEndpointLinks: async (integration: string, projectName?: string): Promise<EndpointLink[]> => {
