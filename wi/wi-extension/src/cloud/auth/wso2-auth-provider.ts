@@ -167,16 +167,15 @@ export class WIAuthState implements Disposable {
 	/**
 	 * Signs in through the `wso2-cloud` provider, which opens the browser.
 	 * `reselectOrganization` asks the identity provider to let the person pick
-	 * an organization again, which is how an organization is switched.
+	 * an organization again, which is how an organization is switched. The
+	 * session there is stays until the new one is stored, which revokes it; a
+	 * sign-in given up on leaves the person where they were.
 	 */
 	public async signIn(options: { reselectOrganization?: boolean } = {}): Promise<PlatformSession> {
 		const previous = this._state;
 		this._state = { ...previous, status: "signing-in" };
 		this._stateChangeEmitter.fire({ state: this._state });
 		try {
-			if (options.reselectOrganization) {
-				await this.deps.platform.sessions.signOut({ revoke: true });
-			}
 			const scopes = [scopeForEnv(this.deps.platform.environment.name)];
 			if (options.reselectOrganization) {
 				scopes.push(PROMPT_LOGIN_SCOPE);
@@ -233,6 +232,10 @@ export class WIAuthState implements Disposable {
 		// A refreshed token is the same person in the same organization: the projects listed stay right.
 		const samePerson = previous?.user.userId === session.user.userId && previous?.org.id === session.org.id && previous?.env === session.env;
 		if (!samePerson) {
+			if (previous) {
+				// Another organization or person: nothing selected for the one before stays.
+				contextStore.getState().resetState();
+			}
 			void contextStore.getState().refreshState();
 		}
 	}

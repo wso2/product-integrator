@@ -246,6 +246,8 @@ export function normalizeCloneUrl(repoUrl: string): string {
 export const submitCreateComponentHandler = async ({ createParams, org, project, workspaceFsPath }: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> => {
 	const totalCount = createParams.length;
 	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: totalCount };
+	// Created, but the platform could not bind the repository: no build starts until that is fixed.
+	const unbound: { label: string; error: NonNullable<CreatedComponent["sourceBindingError"]> }[] = [];
 	const cloud = ext.clients.platform.cloud;
 	// The platform acts for the signed-in organization; a form opened for another one is not submitted to it.
 	if (ext.authProvider?.org?.handle !== org.handle) {
@@ -334,6 +336,9 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 					// (enableBuildAutomation), where the platform's refusal of auto deploy is seen.
 
 					result.created.push(created);
+					if (created.sourceBindingError) {
+						unbound.push({ label, error: created.sourceBindingError });
+					}
 					await enableBuildAutomation(created, org.handle, project);
 					const cache = dataCacheStore.getState().getIntegrations(org.handle, project.id);
 					dataCacheStore.getState().setIntegrations(org.handle, project.id, [created, ...cache]);
@@ -367,13 +372,17 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 					? "Successfully created integration in the cloud"
 					: "Successfully created multiple integrations in the cloud"
 				: `Successfully created ${result.created.length} of ${totalCount} integrations in the cloud`;
+		const bindingWarning = sourceBindingWarning(unbound);
 		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
 		if (workspace.workspaceFile) {
 			window.showErrorMessage("Please make sure newly created integrations are added to workspace.");
+			if (bindingWarning) {
+				showViewInConsoleMessage(bindingWarning, org.handle, project, result.created, true);
+			}
 		} else if (isWithinWorkspace) {
-			showViewInConsoleMessage(successMessage, org.handle, project, result.created);
+			showViewInConsoleMessage(bindingWarning ?? successMessage, org.handle, project, result.created, !!bindingWarning);
 		} else {
-			showReloadWorkspaceMessage(successMessage, workspaceFsPath);
+			showReloadWorkspaceMessage(bindingWarning ?? successMessage, workspaceFsPath, !!bindingWarning);
 		}
 	}
 	if (result.failed.length > 0) {
@@ -691,16 +700,26 @@ async function updateCodeServerWithCreatedComp(created: Component, repo: Reposit
 	}
 }
 
-const showReloadWorkspaceMessage = (message: string, workspaceFsPath: string) => {
-	window.showInformationMessage(`${message} Reload workspace to continue`, { modal: true }, "Continue").then(async (resp) => {
+/** What to tell the person instead of plain success when integrations were created without their source bound; undefined when all were bound. */
+const sourceBindingWarning = (unbound: { label: string; error: NonNullable<CreatedComponent["sourceBindingError"]> }[]): string | undefined => {
+	if (unbound.length === 0) {
+		return undefined;
+	}
+	const names = unbound.map((item) => item.label).join(", ");
+	const reasons = new Set(unbound.map((item) => (item.error === "github-auth-required" ? "GitHub has to be connected to WSO2 Cloud again" : "WSO2 Cloud could not link the source repository")));
+	return `Created ${names}, but no build can start: ${[...reasons].join("; ")}. Fix it in the console, then start a build.`;
+};
+
+const showReloadWorkspaceMessage = (message: string, workspaceFsPath: string, warn = false) => {
+	(warn ? window.showWarningMessage : window.showInformationMessage)(`${message} Reload workspace to continue`, { modal: true }, "Continue").then(async (resp) => {
 		if (resp === "Continue") {
 			commands.executeCommand("vscode.openFolder", Uri.file(workspaceFsPath), { forceNewWindow: false });
 		}
 	});
 };
 
-const showViewInConsoleMessage = (successMessage: string, orgHandle: string, project: Project, created: Component[]) => {
-	window.showInformationMessage(successMessage, "View in console").then(async (resp) => {
+const showViewInConsoleMessage = (message: string, orgHandle: string, project: Project, created: Component[], warn = false) => {
+	(warn ? window.showWarningMessage : window.showInformationMessage)(message, "View in console").then(async (resp) => {
 		if (resp === "View in console") {
 			const url = buildConsoleUrl(ext.config.consoleUrl, { orgHandle, project: project.id, integration: created.length === 1 ? created[0].id : undefined });
 			void env.openExternal(Uri.parse(url));

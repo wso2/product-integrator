@@ -137,14 +137,15 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 function registerPreInitHandlers(): vscode.Disposable {
 	return workspace.onDidChangeConfiguration(async ({ affectsConfiguration }: ConfigurationChangeEvent) => {
 		if (affectsConfiguration(CLOUD_ENV_SETTING) || affectsConfiguration(CLOUD_CLIENT_ID_SETTING) || affectsConfiguration(CLOUD_API_URL_SETTING)) {
+			// The session was issued for the configuration before: kept, its token would go to another
+			// API host or be refreshed for another client. Ended now, not only on "Restart Now", since the
+			// editor may be restarted some other way.
+			await ext.authProvider?.logout(true);
 			const selection = await window.showInformationMessage(
 				"WSO2 Integrator extension configuration changed. Please restart the editor for changes to take effect.",
 				"Restart Now",
 			);
 			if (selection === "Restart Now") {
-				if (affectsConfiguration(CLOUD_ENV_SETTING)) {
-					await ext.authProvider?.logout(true);
-				}
 				commands.executeCommand("workbench.action.reloadWindow");
 			}
 		}

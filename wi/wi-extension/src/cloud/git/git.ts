@@ -52,6 +52,7 @@ import {
 	Status,
 } from "./api/git";
 import { detectEncoding } from "./encoding";
+import { redactUrlCredentials } from "./redact";
 import {
 	Encoding,
 	type IDisposable,
@@ -508,7 +509,7 @@ export class Git {
 
 			lineStream.on("data", (line: string) => {
 				let match: RegExpExecArray | null = null;
-				ext.log(line);
+				ext.log(redactUrlCredentials(line));
 				if ((match = /Counting objects:\s*(\d+)%/i.exec(line))) {
 					totalProgress = Math.floor(Number.parseInt(match[1]) * 0.1);
 				} else if ((match = /Compressing objects:\s*(\d+)%/i.exec(line))) {
@@ -525,8 +526,8 @@ export class Git {
 				}
 
 				if (line.startsWith("fatal:")) {
-					window.showErrorMessage(line);
-					ext.logError(line);
+					window.showErrorMessage(redactUrlCredentials(line));
+					ext.logError(redactUrlCredentials(line));
 				}
 			});
 		};
@@ -823,7 +824,8 @@ export class Git {
 	}
 
 	private log(output: string): void {
-		this._onOutput.emit("log", output);
+		// The command line and git's own output can hold a remote URL with credentials in it.
+		this._onOutput.emit("log", redactUrlCredentials(output));
 	}
 
 	async mergeFile(options: { input1Path: string; input2Path: string; basePath: string; diff3?: boolean }): Promise<string> {

@@ -112,6 +112,28 @@ describe("cloud connections", () => {
 		assert.ok(!calls.some(([name]) => name === "endpoints.createApiKey" || name === "config.putEnvGroup"));
 	});
 
+	it("checks every environment before issuing a key, so a later one that fails leaves nothing behind", async () => {
+		const { cloud, calls } = fakeCloud({ deployed: true });
+		// Deployed to development only: production fails the check after development passed it.
+		cloud.deployments.get = async (...args: unknown[]) => {
+			calls.push(["deployments.get", ...args]);
+			return args[1] === "development" ? { status: "ACTIVE" } : undefined;
+		};
+		await assert.rejects(
+			apiWith(cloud).connections.createServiceConnection({
+				integration: "basket",
+				target,
+				access: "gateway",
+				name: "orders",
+				projectName: "shop",
+				environments: ["development", "production"],
+			}),
+			/Deploy basket to production first/,
+		);
+		assert.ok(calls.some(([name, , environment]) => name === "endpoints.listForEnvironment" && environment === "development"));
+		assert.ok(!calls.some(([name]) => name === "endpoints.createApiKey" || name === "config.putEnvGroup"));
+	});
+
 	it("writes the gateway URL and a key for a deployed consumer", async () => {
 		const { cloud, calls } = fakeCloud({ deployed: true });
 		await apiWith(cloud).connections.createServiceConnection({ integration: "basket", target, access: "gateway", name: "orders", projectName: "shop" });

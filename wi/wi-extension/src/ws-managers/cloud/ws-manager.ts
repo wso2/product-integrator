@@ -261,8 +261,14 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			try {
 				const cloned = newGit.open(await newGit.getRepositoryRoot(repoPath), await newGit.getRepositoryDotGit(repoPath));
 				await cloned.exec(["remote", "set-url", "origin", _repoUrl]);
+				// A relative submodule URL was resolved against the credentialed origin; resolving it again
+				// against the plain one rewrites the superproject's and each submodule's copy of it.
+				await cloned.exec(["submodule", "sync", "--recursive"]);
 			} catch (error) {
-				ext.logError("Could not reset the remote URL", error as Error);
+				ext.logError("Could not remove the credentials from the cloned repository", error as Error);
+				window.showWarningMessage(
+					`The Git credentials used to clone ${params.repo.orgHandler}/${params.repo.repo} could not be removed from ${repoPath}. Remove them from the remote URLs in its .git/config files.`,
+				);
 			}
 		};
 

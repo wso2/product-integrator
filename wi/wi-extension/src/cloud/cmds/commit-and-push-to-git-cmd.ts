@@ -86,12 +86,16 @@ export function commitAndPushToGitCommand(context: ExtensionContext) {
 
 				let matchingRemote = remotes.find((item) => {
 					if (item.pushUrl) {
-						const urlObj = new URL(item.pushUrl);
-						return !!urlObj.password;
+						try {
+							return !!new URL(item.pushUrl).password;
+						} catch {
+							return false; // an SSH remote (git@host:owner/repo.git) carries no password
+						}
 					}
 					return false;
 				});
-				let addedRemote: string | undefined;
+				// Earlier versions could leave the cloud editor's remote behind, credentials and all; it goes after this push too.
+				let addedRemote: string | undefined = remotes.some((item) => item.name === CLOUD_EDITOR_REMOTE) ? CLOUD_EDITOR_REMOTE : undefined;
 				try {
 					if (!matchingRemote && remotes[0].fetchUrl && ext.isDevantCloudEditor) {
 						// The cloud editor has no credential helper; ask, push through a remote that carries
