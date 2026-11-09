@@ -4,13 +4,13 @@ on:
   workflow_call:
     inputs: 
       # Runner for the Linux `compile` job below. Three values are in use today:
-      #   ubuntu-latest        GitHub-hosted (the default, and what pr-ci.yml uses)
+      #   ubuntu-24.04         GitHub-hosted (the default, and what pr-ci.yml uses)
       #   codebuild            AWS CodeBuild, expanded to the run-scoped project label in `runs-on`
       #   k8s-default-runners  the self-hosted Kubernetes runner set
       # Anything else is handed to `runs-on` verbatim, so another label needs no change here.
       runner:
-        description: 'Runner for the Linux compile job: ubuntu-latest, codebuild, k8s-default-runners, or any other runner label.'
-        default: 'ubuntu-latest'
+        description: 'Runner for the Linux compile job: ubuntu-24.04, codebuild, k8s-default-runners, or any other runner label.'
+        default: 'ubuntu-24.04'
         required: false
         type: string
       build_packed_installers:
@@ -59,7 +59,7 @@ permissions:
 jobs:
   resolve-versions:
     name: Resolve Component Versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
       ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
@@ -159,7 +159,7 @@ jobs:
     needs: resolve-versions
     if: ${{ inputs.build_packed_installers == true }}
     name: Validate Inputs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Validate required inputs
         run: |
@@ -185,7 +185,7 @@ jobs:
     needs: resolve-versions
     if: ${{ inputs.build_packed_installers == true }}
     name: Package Ballerina runtime
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -219,7 +219,7 @@ jobs:
     needs: resolve-versions
     if: ${{ inputs.build_packed_installers == true }}
     name: Package ICP
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -255,7 +255,7 @@ jobs:
     # A timeout here is self-perpetuating: the job is cancelled before the post-step that SAVES the
     # caches, so the next run starts cold and times out again. That mechanism is unchanged by the
     # bump, so keep the ceiling generous. 45 was too tight even for codebuild; raised 90 -> 120 when
-    # ubuntu-latest became the default, since it is slower and now also builds the installers.
+    # ubuntu-24.04 became the default, since it is slower and now also builds the installers.
     timeout-minutes: 120
     # `codebuild` is an alias rather than a label: CodeBuild matches on a run-scoped project name,
     # so it is expanded here. Every other value is already a runner label and passes through.
@@ -264,7 +264,7 @@ jobs:
       run:
         working-directory: lib/vscode
     steps:
-      # ubuntu-latest ships ~14 GB free and the installer tail stages Ballerina + ICP + JRE three
+      # ubuntu-24.04 ships ~14 GB free and the installer tail stages Ballerina + ICP + JRE three
       # times over (deb/rpm/tar). Reclaims ~19 GB. tool-cache is kept (Node and Java come from it)
       # and swap is kept (the gulp build runs an 8 GB heap); large-packages is slow for what it
       # returns. Not needed on the larger codebuild and self-hosted Kubernetes runners, and the
@@ -722,7 +722,7 @@ jobs:
           ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION vscode-linux-x64.tar.gz "$ICP_ZIP" jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       # Permanent diagnostic: the installer tail is the job's disk high-water mark, and headroom on
-      # ubuntu-latest is thin. always() so the numbers are there on the run that runs out.
+      # ubuntu-24.04 is thin. always() so the numbers are there on the run that runs out.
       - name: Report disk usage after packaging
         if: ${{ always() && inputs.build_packed_installers == true }}
         run: df -h
