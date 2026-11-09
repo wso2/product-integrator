@@ -107,8 +107,6 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	const {
 		data: gitCredentials = [],
 		isLoading: isLoadingGitCred,
-		refetch: refetchGitCred,
-		isFetching: isFetchingGitCred,
 	} = useQuery({
 		queryKey: ["git-creds", { gitProvider, orgId, orgUuid }],
 		queryFn: () =>
@@ -242,12 +240,10 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		}
 	}
 
-	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB && !isLoadingGitCred && gitCredentials?.length === 0) {
-		onInvalidRepoActionClick = () => wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" }));
-		invalidRepoMsg = `${toSentenceCase(gitProvider)} credentials needs to be configured.`;
-		invalidRepoAction = "Configure Credentials";
-		onInvalidRepoRefreshClick = refetchGitCred;
-		onInvalidRepoRefreshing = isFetchingGitCred;
+	// WSO2 Cloud builds from GitHub repositories only for now; no credential configured for another provider changes that.
+	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB) {
+		invalidRepoMsg = `Deploying from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and deploy from it.`;
+		onInvalidRepoRefreshClick = refetchGitData;
 		blockCreation = true;
 	}
 

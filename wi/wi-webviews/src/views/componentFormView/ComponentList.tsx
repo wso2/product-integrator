@@ -95,7 +95,7 @@ export function ComponentList({
 	const { consoleUrl } = useCloudContext();
 
 	const projectLink = <VSCodeLinkForeground title="View project in console" onClick={() => {
-		wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle: org?.handle, project: project?.handler }))
+		wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle: org?.handle, project: project?.id }))
 	}}>{project?.name}</VSCodeLinkForeground>
 
 	return (

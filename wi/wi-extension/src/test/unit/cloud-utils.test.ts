@@ -77,4 +77,21 @@ describe("local connection references (.wso2/component.yaml)", () => {
 		assert.deepStrictEqual(readComponentYaml(dir).dependencies?.connectionReferences, [{ name: "inventory", resourceRef: "service:inventory" }]);
 		deleteLocalConnectionConfig({ componentDir: join(dir, "nowhere"), connectionName: "x" });
 	});
+
+	it("deletes only the named service reference", () => {
+		mkdirSync(join(dir, ".wso2"));
+		const path = join(dir, ".wso2", "component.yaml");
+		writeFileSync(path, yaml.dump({ dependencies: { serviceReferences: [{ name: "orders-db" }, { name: "inventory" }] } }));
+		deleteLocalConnectionConfig({ componentDir: dir, connectionName: "orders-db" });
+		const content = yaml.load(readFileSync(path, "utf8")) as { dependencies: { serviceReferences: { name: string }[] } };
+		assert.deepStrictEqual(content.dependencies.serviceReferences, [{ name: "inventory" }]);
+	});
+
+	it("leaves an empty file as it is", () => {
+		mkdirSync(join(dir, ".wso2"));
+		const path = join(dir, ".wso2", "component.yaml");
+		writeFileSync(path, "");
+		deleteLocalConnectionConfig({ componentDir: dir, connectionName: "orders-db" });
+		assert.strictEqual(readFileSync(path, "utf8"), "");
+	});
 });

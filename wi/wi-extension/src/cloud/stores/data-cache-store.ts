@@ -47,7 +47,8 @@ interface DataCacheStore {
 	getProjects: (orgHandle: string) => Project[];
 	setIntegrations: (orgHandle: string, projectName: string, integrations: Component[]) => void;
 	getIntegrations: (orgHandle: string, projectName: string) => Component[];
-	setRepository: (orgHandle: string, projectName: string, integrationId: string, repository: ComponentRepository) => void;
+	/** `undefined` forgets the cached repository, so the next refresh reads it again. */
+	setRepository: (orgHandle: string, projectName: string, integrationId: string, repository: ComponentRepository | undefined) => void;
 	getRepository: (orgHandle: string, projectName: string, integrationId: string) => ComponentRepository | undefined;
 }
 

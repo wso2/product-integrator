@@ -27,7 +27,7 @@ import { WIAuthState } from "./auth/wso2-auth-provider";
 import type { WICloudExtensionAPI } from "./cloud-ext-api";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { activateCmds } from "./cmds";
-import { handleCloudError } from "./platform/error-handler";
+import { describeCloudError, handleCloudError } from "./platform/error-handler";
 import { createWIPlatform } from "./platform/platform-client";
 import { contextStore } from "./stores/context-store";
 import { dataCacheStore } from "./stores/data-cache-store";
@@ -54,6 +54,9 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		restored = resolve;
 	});
 
+	// Registered first: a configuration that leaves the cloud features off below is fixed by changing it.
+	context.subscriptions.push(registerPreInitHandlers());
+
 	// 1. The platform client, sessions and authentication provider, from the environment setting.
 	let platform: ReturnType<typeof createWIPlatform>;
 	try {
@@ -63,11 +66,13 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 			extensionVersion: getExtVersion(context),
 			onUnauthenticated: (error) => {
 				// An editor started with a token cannot sign in again, and signing it out would only
-				// restore the same token and fail again: it is reported, not ended.
-				if (!platform.injected) {
-					void ext.authProvider?.logout(true);
+				// restore the same token and fail again: it is reported, not ended, and offers no sign-in.
+				if (platform.injected) {
+					void window.showErrorMessage(describeCloudError(error, "WSO2 Cloud rejected this editor's token."));
+					return;
 				}
-				handleCloudError(error, platform.injected ? "WSO2 Cloud rejected this editor's token." : "WSO2 Cloud rejected the session. Please sign in again.");
+				void ext.authProvider?.logout(true);
+				handleCloudError(error, "WSO2 Cloud rejected the session. Please sign in again.");
 			},
 		});
 	} catch (error) {
@@ -125,10 +130,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		restored();
 	}
 
-	// 7. Prompt restart when Advanced configuration keys change
-	context.subscriptions.push(registerPreInitHandlers());
-
-	// 8. Mark the exported cloud APIs as active
+	// 7. Mark the exported cloud APIs as active
 	cloudAPIs.setActive(true);
 }
 

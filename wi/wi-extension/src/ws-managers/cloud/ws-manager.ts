@@ -256,21 +256,45 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		const urlObj = new URL(_repoUrl);
 		await enrichGitUsernamePassword(urlObj);
 		const repoUrl = urlObj.href;
+		// The clone needs the credentials in its URL; wherever it lands, the repository keeps the plain URL.
+		const removeCredentials = async (repoPath: string) => {
+			try {
+				const cloned = newGit.open(await newGit.getRepositoryRoot(repoPath), await newGit.getRepositoryDotGit(repoPath));
+				await cloned.exec(["remote", "set-url", "origin", _repoUrl]);
+			} catch (error) {
+				ext.logError("Could not reset the remote URL", error as Error);
+			}
+		};
 
-		const clonedPath = await window.withProgress(
-			{ title: `Cloning repository ${params.repo.orgHandler}/${params.repo.repo}`, location: ProgressLocation.Notification },
-			async (progress, cancellationToken) =>
-				newGit.clone(
-					repoUrl,
-					{
-						recursive: true,
-						ref: params.repo.branch,
-						parentPath: join(params.cwd, ".."),
-						progress: { report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }) },
-					},
-					cancellationToken,
-				),
-		);
+		const parentPath = join(params.cwd, "..");
+		const existingDirs = new Set(fs.existsSync(parentPath) ? readdirSync(parentPath) : []);
+		let clonedPath: string;
+		try {
+			clonedPath = await window.withProgress(
+				{ title: `Cloning repository ${params.repo.orgHandler}/${params.repo.repo}`, location: ProgressLocation.Notification },
+				async (progress, cancellationToken) =>
+					newGit.clone(
+						repoUrl,
+						{
+							recursive: true,
+							ref: params.repo.branch,
+							parentPath,
+							progress: { report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }) },
+						},
+						cancellationToken,
+					),
+			);
+		} catch (error) {
+			// A clone that fails after checking out (a submodule, say) leaves the checkout, and the credentials in it, behind.
+			const folderName = path.basename(new URL(_repoUrl).pathname).replace(/\.git$/, "");
+			const newDirs = fs.existsSync(parentPath) ? readdirSync(parentPath).filter((name) => !existingDirs.has(name)) : [];
+			for (const dir of newDirs) {
+				if ((dir === folderName || dir.startsWith(`${folderName}-`)) && fs.existsSync(join(parentPath, dir, ".git"))) {
+					await removeCredentials(join(parentPath, dir));
+				}
+			}
+			throw error;
+		}
 
 		const newPath = join(clonedPath, params.subpath);
 		try {
@@ -290,12 +314,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		} finally {
 			// The clone and the push needed the credentials; from the moment the clone exists, whatever
 			// happens after it, the repository keeps the plain URL.
-			try {
-				const cloned = newGit.open(await newGit.getRepositoryRoot(clonedPath), await newGit.getRepositoryDotGit(clonedPath));
-				await cloned.exec(["remote", "set-url", "origin", _repoUrl]);
-			} catch (error) {
-				ext.logError("Could not reset the remote URL", error as Error);
-			}
+			await removeCredentials(clonedPath);
 		}
 		return newPath;
 	}
@@ -304,10 +323,14 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		return ext.config.consoleUrl;
 	}
 
-	async getCloudProjects(_params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
-		const projects = await ext.clients.platform.cloud.projects.list();
+	async getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {
+		// The platform lists the signed-in organization's projects; a view asking for another gets none of them.
 		const orgHandle = ext.authProvider?.org?.handle;
-		if (orgHandle) {
+		if (!orgHandle || orgHandle !== params.orgHandle) {
+			throw new Error(`Not signed in to the organization ${params.orgHandle}.`);
+		}
+		const projects = await ext.clients.platform.cloud.projects.list();
+		if (ext.authProvider?.org?.handle === orgHandle) {
 			dataCacheStore.getState().setProjects(orgHandle, projects);
 		}
 		return { projects };

@@ -35,6 +35,7 @@ import {
 	DATABASE_CONNECTION_VARS,
 	SERVICE_CONNECTION_VARS,
 	connectionVarName,
+	isCloudError,
 } from "@wso2/wso2-cloud-client";
 import { ext } from "../extensionVariables";
 import { isSamePath } from "../utils/pathUtils";
@@ -279,29 +280,48 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 					if (!endpoint) {
 						throw new NotSupportedError(`${request.target.integration} exposes no endpoint ${request.target.endpoint} in ${environment}.`, { reason: "endpoint_missing" });
 					}
-					targets.push({ environment, url: endpointUrlOf(endpoint.urls?.external) ?? endpointUrlOf(endpoint.urls?.internal) ?? "" });
+					const url = endpointUrlOf(endpoint.urls?.external) ?? endpointUrlOf(endpoint.urls?.internal);
+					if (!url) {
+						throw new NotSupportedError(`${request.target.integration} has no URL for endpoint ${request.target.endpoint} in ${environment} yet.`, { reason: "endpoint_missing" });
+					}
+					targets.push({ environment, url });
 				}
 				for (const { environment, url } of targets) {
 					const key = await cloud.endpoints.createApiKey(request.target.integration, environment, request.target.endpoint, { displayName: `${request.integration}-${request.name}` }, request.target.project);
-					await cloud.config.putEnvGroup(
-						request.integration,
-						environment,
-						request.name,
-						{
-							name: request.name,
-							sensitive: true,
-							data: {
-								[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ServiceURL)]: url,
-								[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ChoreoAPIKey)]: key.apiKey,
+					try {
+						await cloud.config.putEnvGroup(
+							request.integration,
+							environment,
+							request.name,
+							{
+								name: request.name,
+								sensitive: true,
+								data: {
+									[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ServiceURL)]: url,
+									[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ChoreoAPIKey)]: key.apiKey,
+								},
 							},
-						},
-						request.projectName,
-					);
+							request.projectName,
+						);
+					} catch (error) {
+						// A key no connection carries is only a live credential: it is revoked, best effort.
+						if (key.keyId) {
+							await cloud.endpoints
+								.revokeApiKey(request.target.integration, environment, request.target.endpoint, key.keyId, request.target.project)
+								.catch((revokeError: unknown) => ext.logError(`Could not revoke the API key ${key.keyId}`, revokeError as Error));
+						}
+						throw error;
+					}
 				}
 			},
 			delete: async (request: { integration: string; name: string; environments?: string[]; projectName?: string }) => {
 				for (const environment of await environmentsFor(request.environments)) {
-					await cloud.config.deleteEnvGroup(request.integration, environment, request.name, request.projectName).catch((): undefined => undefined);
+					// An environment the connection was never made in has no group to delete; any other failure is the caller's to see.
+					await cloud.config.deleteEnvGroup(request.integration, environment, request.name, request.projectName).catch((error: unknown) => {
+						if (!(isCloudError(error) && error.code === "not_found")) {
+							throw error;
+						}
+					});
 				}
 			},
 		};

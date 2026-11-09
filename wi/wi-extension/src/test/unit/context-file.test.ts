@@ -82,7 +82,7 @@ describe("context file (.wso2/context.yaml)", () => {
 
 	it("treats an unreadable file as no context", () => {
 		mkdirSync(join(root, ".wso2"));
-		writeFileSync(contextFilePath(root), "::: not yaml {");
+		writeFileSync(contextFilePath(root), "version: 2\ncontexts: [\n");
 		assert.deepStrictEqual(readContextEntries(root), []);
 	});
 });
