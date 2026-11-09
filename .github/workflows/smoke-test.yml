@@ -40,7 +40,7 @@ jobs:
   linux:
     if: inputs.artifact_name != '' || inputs.integrator_version != ''
     name: ${{ matrix.example }} (Linux)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: ${{ inputs.allow_failure == true }}
     timeout-minutes: 25
     strategy:

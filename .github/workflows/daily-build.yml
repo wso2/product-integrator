@@ -57,10 +57,10 @@ on:
       runner:
         description: 'Select runner type. The scheduled nightly always uses the default; this only applies to manual dispatches.'
         required: true
-        default: 'ubuntu-latest'
+        default: 'ubuntu-24.04'
         type: choice
         options:
-          - ubuntu-latest
+          - ubuntu-24.04
           - codebuild
 
 permissions:
@@ -78,7 +78,7 @@ jobs:
   # out by SHA; the `versions` artifact carries the same two files so every job agrees.
   prepare-nightly:
     name: Sync pinned-build branch and pin versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Ignore dispatch inputs completely on a scheduled run. This keeps the production route an
@@ -247,7 +247,7 @@ jobs:
       versions_artifact: versions
       # build.yml replaces only the configured rolling release/tag, whichever that is.
       publish_tag: ${{ needs.prepare-nightly.outputs.publish_tag }}
-      runner: ${{ inputs.runner || 'ubuntu-latest' }}
+      runner: ${{ inputs.runner || 'ubuntu-24.04' }}
       build_linux: true
       build_macos: true
       build_windows: true

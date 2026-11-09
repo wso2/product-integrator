@@ -8,9 +8,9 @@ on:
   workflow_call:
     inputs:
       runner:
-        description: 'Runner for the Linux compile job: ubuntu-latest, codebuild, or k8s-default-runners. macOS and Windows are always GitHub-hosted.'
+        description: 'Runner for the Linux compile job: ubuntu-24.04, codebuild, or k8s-default-runners. macOS and Windows are always GitHub-hosted.'
         required: false
-        default: 'ubuntu-latest'
+        default: 'ubuntu-24.04'
         type: string
       build_linux:
         description: 'Build for Linux'
@@ -133,7 +133,7 @@ jobs:
   # passes through verbatim and the build ships exactly what the branch declares.
   stamp-version:
     name: Stamp Versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       integrator_version: ${{ steps.stamp.outputs.integrator_version }}
       wi_extension_version: ${{ steps.stamp.outputs.wi_extension_version }}
@@ -172,7 +172,7 @@ jobs:
   resolve-versions:
     name: Resolve Component Versions
     needs: stamp-version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
       ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
@@ -1452,7 +1452,7 @@ jobs:
 
   create-release:
     name: Create Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [resolve-versions, compile, build-macos, build-windows, smoke-test, smoke-test-windows]
     if: always() && (needs.compile.result == 'success') && (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') && (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') && (inputs.build_packed_installers == false) && (inputs.publish_tag == '')
     steps:
@@ -1496,7 +1496,7 @@ jobs:
 
   publish-github-release:
     name: Publish GitHub Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [resolve-versions, compile, build-macos, build-windows, smoke-test, smoke-test-windows]
     # A published tag is permanent and user-visible, so every platform that was asked for must have
     # succeeded. `skipped` is allowed for build-macos/build-windows because they are gated on their
@@ -1824,7 +1824,7 @@ jobs:
 
   publish-update-source:
     name: Publish Update Source
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Shared with the Publish Component Updates workflow: both read-modify-write the same
     # index.json, and two at once would drop one of the two lines they repointed.
     concurrency:

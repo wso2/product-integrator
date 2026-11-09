@@ -15,10 +15,10 @@ on:
       runner:
         description: 'Select runner type'
         required: true
-        default: 'ubuntu-latest'
+        default: 'ubuntu-24.04'
         type: choice
         options:
-          - ubuntu-latest
+          - ubuntu-24.04
           - codebuild
           - k8s-default-runners
       build_linux:
@@ -93,7 +93,7 @@ on:
         type: string
       runner:
         required: false
-        default: 'ubuntu-latest'
+        default: 'ubuntu-24.04'
         type: string
       build_linux:
         required: false

@@ -56,7 +56,7 @@ permissions:
 jobs:
   promote:
     name: Promote ${{ github.event.inputs.from_channel }} to ${{ github.event.inputs.to_channel }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Validate promotion
         env:
