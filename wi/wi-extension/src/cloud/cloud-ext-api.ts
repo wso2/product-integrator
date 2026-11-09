@@ -19,9 +19,11 @@
 import {
 	type AuthState,
 	type CloudClient,
+	type CloudServiceRequest,
 	type ContextItemEnriched,
 	type ContextStoreState,
 	type DirectoryIntegration,
+	type ExchangedToken,
 	type IWso2PlatformExtensionAPI,
 	type LocalRuntimeEnv,
 	NotSupportedError,
@@ -29,11 +31,13 @@ import {
 	PLATFORM_EXTENSION_API_VERSION,
 	type PlatformEnvConfig,
 	type PlatformSession,
+	type TokenExchangeRequest,
 	orderByPipeline,
 } from "@wso2/wso2-cloud-client";
 import { ext } from "../extensionVariables";
 import { isSamePath } from "../utils/pathUtils";
 import { openClonedDir } from "./cloud-uri-handlers";
+import { type CloudServiceDeps, callCloudService, exchangeToken } from "./cloud-services";
 import { createConnectionConfig, deleteLocalConnectionConfig } from "./cloud-utils";
 import { cloudConnections } from "./connections";
 import { linkContext } from "./context-file";
@@ -44,9 +48,10 @@ const NO_PLATFORM_API = (what: string, dependency: string) =>
 	new NotSupportedError(`${what} is not available on WSO2 Cloud yet.`, { reason: dependency });
 
 /**
- * What this extension exports as `cloudAPIs` for other extensions (the
- * Ballerina extension reads it): the v2 contract over the platform client.
- * Tokens are not here; a consumer calls `vscode.authentication.getSession("wso2-cloud", ["env:<env>"])`.
+ * The API other extensions (the Ballerina extension) reach through the
+ * `cloudAPIs` gate (`createExtensionGate`) with the key a `wso2-cloud`
+ * session carries: the v3 contract over the platform client. The WSO2 Cloud
+ * token is not here; calls are made with it in this extension.
  */
 export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public readonly apiVersion = PLATFORM_EXTENSION_API_VERSION;
@@ -78,7 +83,8 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 		return ext.authProvider.signIn(options);
 	};
 	public signOut = (): Promise<void> => ext.authProvider?.logout(true) ?? Promise.resolve();
-	public getPlatformConfig = (): PlatformEnvConfig => ext.config;
+	// A copy: the gate hands this to any extension, and the service URLs in it are where the token is sent.
+	public getPlatformConfig = (): PlatformEnvConfig => ({ ...ext.config });
 	public subscribeAuthState = (callback: (state: AuthState) => void): (() => void) => ext.authProvider?.subscribe((s) => callback(s.state)) ?? (() => undefined);
 	/** Tells `callback` whether there is a session now and whenever that changes, by the same rule as {@link isLoggedIn}. */
 	public subscribeIsLoggedIn = (callback: (isLoggedIn: boolean) => void): (() => void) => {
@@ -230,6 +236,15 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public get ballerinaCentral() {
 		return this.cloud.ballerinaCentral;
 	}
+
+	// ---- other WSO2 Cloud services ----
+	private get services(): CloudServiceDeps {
+		return { config: ext.config, tokenSource: ext.clients.platform.tokenSource };
+	}
+	// No endpoint yet: where it comes from (the caller's, checked against an allowlist) is still to be decided,
+	// so every exchange answers NotSupportedError until then.
+	public exchangeToken = (request: TokenExchangeRequest): Promise<ExchangedToken> => exchangeToken(request?.target, request?.endpoint, this.services);
+	public request = <T = unknown>(request: CloudServiceRequest): Promise<T> => callCloudService<T>(request, this.services);
 
 	// ---- compositions over the platform ----
 	public get connections() {
