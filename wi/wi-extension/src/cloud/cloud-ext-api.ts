@@ -22,8 +22,6 @@ import {
 	type ContextItemEnriched,
 	type ContextStoreState,
 	type DirectoryIntegration,
-	type EndpointResources,
-	type EnvVarGroup,
 	type IWso2PlatformExtensionAPI,
 	type LocalRuntimeEnv,
 	NotSupportedError,
@@ -31,18 +29,13 @@ import {
 	PLATFORM_EXTENSION_API_VERSION,
 	type PlatformEnvConfig,
 	type PlatformSession,
-	type ServiceConnectionAccess,
 	orderByPipeline,
-	DATABASE_CA_CERT_VAR,
-	DATABASE_CONNECTION_VARS,
-	SERVICE_CONNECTION_VARS,
-	connectionVarName,
-	isCloudError,
 } from "@wso2/wso2-cloud-client";
 import { ext } from "../extensionVariables";
 import { isSamePath } from "../utils/pathUtils";
 import { openClonedDir } from "./cloud-uri-handlers";
 import { createConnectionConfig, deleteLocalConnectionConfig } from "./cloud-utils";
+import { cloudConnections } from "./connections";
 import { linkContext } from "./context-file";
 import { hasDirtyRepo } from "./git/util";
 import { contextStore } from "./stores/context-store";
@@ -55,28 +48,6 @@ const NO_PLATFORM_API = (what: string, dependency: string) =>
  * Ballerina extension reads it): the v2 contract over the platform client.
  * Tokens are not here; a consumer calls `vscode.authentication.getSession("wso2-cloud", ["env:<env>"])`.
  */
-/** The URL an endpoint is reached at, from the parts the platform reports; undefined when there is no host. */
-/** The URL the gateway serves an exposed endpoint's API at: the public one, else the organization one; none when it is not exposed. */
-function gatewayUrlOf(endpoint: EndpointResources): string | undefined {
-	if (endpoint.exposure === "none") {
-		return undefined;
-	}
-	return (
-		endpointUrlOf(endpoint.urls?.external) ??
-		[endpoint.visibilityStatus?.public, endpoint.visibilityStatus?.organization].find((state) => state?.status === "ENABLED" && state.url)?.url
-	);
-}
-
-function endpointUrlOf(url: { scheme?: string; host?: string; port?: number; path?: string } | undefined): string | undefined {
-	if (!url?.host) {
-		return undefined;
-	}
-	const scheme = url.scheme || "https";
-	const port = url.port && !((scheme === "https" && url.port === 443) || (scheme === "http" && url.port === 80)) ? `:${url.port}` : "";
-	const path = url.path ? (url.path.startsWith("/") ? url.path : `/${url.path}`) : "";
-	return `${scheme}://${url.host}${port}${path}`;
-}
-
 export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public readonly apiVersion = PLATFORM_EXTENSION_API_VERSION;
 	private active = false;
@@ -262,100 +233,7 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 
 	// ---- compositions over the platform ----
 	public get connections() {
-		const cloud = this.cloud;
-		const environmentsFor = async (requested?: string[]) => (requested?.length ? requested : (await cloud.environments.list()).map((e) => e.id));
-		return {
-			list: (integration: string, environment: string, projectName?: string): Promise<EnvVarGroup[]> => cloud.config.listEnvGroups(integration, environment, projectName),
-			createDatabaseConnection: async (request: { integration: string; dbServerId: string; name: string; environments?: string[]; projectName?: string }) => {
-				const credentials = await cloud.dbServers.revealCredentials(request.dbServerId);
-				// Prefixed with the connection's name: every group lands in the same container.
-				const name = (suffix: string) => connectionVarName(request.name, suffix);
-				const data: Record<string, string> = {
-					[name(DATABASE_CONNECTION_VARS.HostName)]: credentials.host ?? "",
-					[name(DATABASE_CONNECTION_VARS.Port)]: credentials.port ?? "",
-					[name(DATABASE_CONNECTION_VARS.DatabaseName)]: credentials.database ?? "",
-					[name(DATABASE_CONNECTION_VARS.Username)]: credentials.username,
-					[name(DATABASE_CONNECTION_VARS.Password)]: credentials.password,
-				};
-				if (credentials.caCertificate) {
-					data[name(DATABASE_CA_CERT_VAR)] = credentials.caCertificate;
-				}
-				for (const environment of await environmentsFor(request.environments)) {
-					await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: true, data }, request.projectName);
-				}
-			},
-			createServiceConnection: async (request: {
-				integration: string;
-				target: { project: string; integration: string; endpoint: string };
-				access: ServiceConnectionAccess;
-				name: string;
-				environments?: string[];
-				projectName?: string;
-			}) => {
-				const { target } = request;
-				if (request.access === "project" && request.projectName && target.project !== request.projectName) {
-					throw new NotSupportedError(
-						`${target.integration} is in the project ${target.project}; reaching it from another project needs its endpoint exposed with organization or public access.`,
-						{ reason: "endpoint_not_exposed" },
-					);
-				}
-				// Every environment's endpoint is found before anything is created, so a missing one leaves no half-made connection behind.
-				const targets: { environment: string; url: string }[] = [];
-				for (const environment of await environmentsFor(request.environments)) {
-					const endpoints = await cloud.endpoints.listForEnvironment(target.integration, environment, target.project);
-					const endpoint = endpoints.find((e) => e.name === target.endpoint);
-					if (!endpoint) {
-						throw new NotSupportedError(`${target.integration} exposes no endpoint ${target.endpoint} in ${environment}.`, { reason: "endpoint_missing" });
-					}
-					const url = request.access === "project" ? endpointUrlOf(endpoint.urls?.internal) : gatewayUrlOf(endpoint);
-					if (!url) {
-						throw new NotSupportedError(
-							request.access === "project"
-								? `${target.integration} has no URL for endpoint ${target.endpoint} in ${environment} yet; deploy it there first.`
-								: `The endpoint ${target.endpoint} of ${target.integration} is not exposed as an API in ${environment}. Expose it with organization or public access, or connect with project access.`,
-							{ reason: request.access === "project" ? "endpoint_missing" : "endpoint_not_exposed" },
-						);
-					}
-					targets.push({ environment, url });
-				}
-				for (const { environment, url } of targets) {
-					const serviceUrl = { [connectionVarName(request.name, SERVICE_CONNECTION_VARS.ServiceURL)]: url };
-					if (request.access === "project") {
-						// Inside the project the endpoint takes no key: the URL is all the connection holds.
-						await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: false, data: serviceUrl }, request.projectName);
-						continue;
-					}
-					const key = await cloud.endpoints.createApiKey(target.integration, environment, target.endpoint, { displayName: `${request.integration}-${request.name}` }, target.project);
-					try {
-						await cloud.config.putEnvGroup(
-							request.integration,
-							environment,
-							request.name,
-							{ name: request.name, sensitive: true, data: { ...serviceUrl, [connectionVarName(request.name, SERVICE_CONNECTION_VARS.ChoreoAPIKey)]: key.apiKey } },
-							request.projectName,
-						);
-					} catch (error) {
-						// A key no connection carries is only a live credential: it is revoked, best effort.
-						if (key.keyId) {
-							await cloud.endpoints
-								.revokeApiKey(target.integration, environment, target.endpoint, key.keyId, target.project)
-								.catch((revokeError: unknown) => ext.logError(`Could not revoke the API key ${key.keyId}`, revokeError as Error));
-						}
-						throw error;
-					}
-				}
-			},
-			delete: async (request: { integration: string; name: string; environments?: string[]; projectName?: string }) => {
-				for (const environment of await environmentsFor(request.environments)) {
-					// An environment the connection was never made in has no group to delete; any other failure is the caller's to see.
-					await cloud.config.deleteEnvGroup(request.integration, environment, request.name, request.projectName).catch((error: unknown) => {
-						if (!(isCloudError(error) && error.code === "not_found")) {
-							throw error;
-						}
-					});
-				}
-			},
-		};
+		return cloudConnections(this.cloud, (message, error) => ext.logError(message, error));
 	}
 	public get runtime() {
 		const cloud = this.cloud;
