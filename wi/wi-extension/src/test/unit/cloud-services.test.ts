@@ -18,7 +18,7 @@
 
 import * as assert from "assert";
 import { type CloudError, type CloudServiceRequest, type PlatformEnvConfig, type TokenExchangeTarget, type TokenSource, isCloudError } from "@wso2/wso2-cloud-client";
-import { type CloudServiceDeps, callCloudService, exchangeToken } from "../../cloud/cloud-services";
+import { type CloudServiceDeps, callCloudService, exchangeEndpointsOf, exchangeToken } from "../../cloud/cloud-services";
 
 interface Sent {
 	url: string;
@@ -49,12 +49,13 @@ function deps(answers: (() => Response)[], config: Partial<PlatformEnvConfig> = 
 		config: { managedTokensBaseUrl: "https://tokens.example.com", ...config } as PlatformEnvConfig,
 		tokenSource,
 		fetch,
+		exchangeEndpoints: { copilot: [COPILOT_EXCHANGE] },
 	};
 	return { deps: value, sent, refreshes };
 }
 
 const json = (status: number, body: unknown) => () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
-const COPILOT_EXCHANGE = "https://7eff1239-64bb-4663-b256-30a00d187a5c-prod.e1-us-east-azure.choreoapis.dev/copilot/auth-api/v1.0/auth/token-exchange";
+const COPILOT_EXCHANGE = "https://apis.example.com/copilot/auth-api/v1.0/auth/token-exchange";
 const codeOf = (code: string, status?: number) => (error: unknown) =>
 	isCloudError(error) && error.code === code && (status === undefined || error.details.status === status);
 
@@ -97,13 +98,14 @@ describe("Copilot token exchange", () => {
 	it("sends the token only to an exchange endpoint on the target's list", async () => {
 		const refused = [
 			"https://copilot.example.com/auth-api/v1.0/auth/token-exchange",
-			"https://another-tenant-prod.e1-us-east-azure.choreoapis.dev/copilot/auth-api/v1.0/auth/token-exchange",
-			"http://7eff1239-64bb-4663-b256-30a00d187a5c-prod.e1-us-east-azure.choreoapis.dev/copilot/auth-api/v1.0/auth/token-exchange",
-			"https://7eff1239-64bb-4663-b256-30a00d187a5c-prod.e1-us-east-azure.choreoapis.dev:8443/copilot/auth-api/v1.0/auth/token-exchange",
-			"https://7eff1239-64bb-4663-b256-30a00d187a5c-prod.e1-us-east-azure.choreoapis.dev/copilot/other",
-			"https://u:p@7eff1239-64bb-4663-b256-30a00d187a5c-prod.e1-us-east-azure.choreoapis.dev/copilot/auth-api/v1.0/auth/token-exchange",
+			"https://apis.example.com/another-tenant/auth-api/v1.0/auth/token-exchange",
+			"http://apis.example.com/copilot/auth-api/v1.0/auth/token-exchange",
+			"https://apis.example.com:8443/copilot/auth-api/v1.0/auth/token-exchange",
+			"https://apis.example.com/copilot/auth-api/v1.0/auth/token-exchange?x=1",
+			"https://u:p@apis.example.com/copilot/auth-api/v1.0/auth/token-exchange",
 			"not a url",
 		];
+
 		for (const endpoint of refused) {
 			let read = false;
 			const deps = {
@@ -118,10 +120,24 @@ describe("Copilot token exchange", () => {
 				fetch: async () => {
 					throw new Error("nothing is sent");
 				},
+				exchangeEndpoints: { copilot: [COPILOT_EXCHANGE] },
 			};
 			await assert.rejects(exchangeToken("copilot", endpoint, deps), (error: CloudError) => error.code === "forbidden", endpoint);
 			assert.ok(!read, `the token is not even read for ${endpoint}`);
 		}
+	});
+
+	it("allows no endpoint at all when the build lists none", async () => {
+		const built = deps([]);
+		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, { ...built.deps, exchangeEndpoints: { copilot: [] } }), codeOf("forbidden"));
+		assert.strictEqual(built.sent.length, 0);
+	});
+
+	it("lists the exact exchange URL under each Copilot root", () => {
+		assert.deepStrictEqual(exchangeEndpointsOf(["https://apis.example.com/copilot/", "", "https://b.example.com/x"], "/auth"), [
+			"https://apis.example.com/copilot/auth",
+			"https://b.example.com/x/auth",
+		]);
 	});
 
 	it("knows no other target, and refuses one with no endpoint", async () => {
