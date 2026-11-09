@@ -1,0 +1,13 @@
+// Type-checks test code. The build tsconfig emits from src/ and ts-jest runs with
+// isolatedModules, so neither type-checks the tests themselves — this closes that gap.
+// Run: npm run test:typecheck
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "noEmit": true,
+        "skipLibCheck": true,
+        "types": ["jest", "node"]
+    },
+    "include": ["src/**/*.ts"],
+    "exclude": ["node_modules", "out", "dist"]
+}
