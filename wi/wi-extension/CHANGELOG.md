@@ -12,11 +12,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **WSO2 Cloud without the CLI** — The extension signs in to WSO2 Cloud itself (ThunderID, through the `wso2-cloud` authentication provider other extensions can use) and calls the WSO2 Cloud Integration Platform API directly. The bundled Choreo CLI, its download at build time and its RPC bridge are gone.
 - **Deploy to WSO2 Cloud** — Creating an integration turns auto build on and follows the first build; where the platform does not auto deploy (Ballerina), the extension deploys the first build to the pipeline's entry environment itself.
 - **Project context** — Repositories are linked to WSO2 Cloud projects in `.wso2/context.yaml` (version 2). Links to Choreo projects in `.choreo/context.yaml` and in the earlier `.wso2/context.yaml` list are no longer read.
+- **Sign in again** — Sessions from earlier versions are not carried over: after updating, sign in to WSO2 Cloud once more. The organization is chosen at sign-in; switching it signs in again.
+- **Connections to WSO2 Cloud services** — A connection to an integration in the same project links the connection's URL configurable to the endpoint, and WSO2 Cloud fills in its address in every environment from the next deploy. A connection through the gateway (organization or public access) is written into the integration's deployment with an API key, so the integration has to be deployed in that environment first.
+- **Overrides for the WSO2 Cloud team** — `WSO2_CLOUD_ENV` picks the environment (`prod`, `stage` or `dev`, ahead of the `integrator.advanced.cloudEnv` setting); `WSO2_CLOUD_API_URL`, `WSO2_CLOUD_ISSUER`, `WSO2_CLOUD_CLIENT_ID`, `WSO2_CLOUD_CONSOLE_URL` and `WSO2_CLOUD_OBSERVABILITY_URL` point an environment at other hosts.
 
 ### Removed
 
 - Settings `integrator.advanced.cloudRpcPath`, `integrator.advanced.cloudRpcArchitecture`, `integrator.advanced.skipKeyring` and `integrator.advanced.cloudDirectConnection`: there is no CLI to point at. `integrator.advanced.cloudEnv` stays; `integrator.advanced.cloudClientId` and `integrator.advanced.cloudApiBaseUrl` are new, machine-scoped overrides for the WSO2 Cloud team.
 - Environment variables `CHOREO_ENV`, `CLOUD_REGION`, `SKIP_KEYRING`, `CHOREO_DIRECT` and `CLOUD_STS_TOKEN`; the cloud editor hands in `WSO2_CLOUD_TOKEN` or `WSO2_CLOUD_TOKEN_FILE`.
+- Deploying from Bitbucket or GitLab, and deploying from the cloud editor without a repository: WSO2 Cloud builds from GitHub repositories only for now.
 
 ## [1.0.0](https://github.com/wso2/product-integrator/compare/v5.0.0-alpha...v5.0.0-rc1) - 2026-05-18
 
