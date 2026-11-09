@@ -18,17 +18,18 @@
 
 import path from "path";
 import { ViewType } from "@wso2/wi-core";
-import type { IWso2PlatformExtensionAPI } from "@wso2/wso2-cloud-client";
+import type { IWso2PlatformExtensionGate } from "@wso2/wso2-cloud-client";
 import * as vscode from "vscode";
 import { BridgeLayer } from "./BridgeLayer";
 import { activateCloudFunctionality } from "./cloud/activate";
+import { createExtensionGate } from "./cloud/api-gate";
 import { WICloudExtensionAPI } from "./cloud/cloud-ext-api";
 import { ext } from "./extensionVariables";
 import { StateMachine } from "./stateMachine";
 import { getPlatform } from "./ws-managers/main/utils";
 
 interface ExtensionExports {
-	cloudAPIs: IWso2PlatformExtensionAPI;
+	cloudAPIs: IWso2PlatformExtensionGate;
 }
 
 const EMBEDDED_WELCOME_PROJECT_URI = "__wso2_integrator_embedded_welcome__";
@@ -86,7 +87,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 			ext.logError("Cloud functionality failed to activate", error as Error);
 		});
 
-		const exports: ExtensionExports = { cloudAPIs };
+		// Other extensions get the gate, not the API: it answers to the key in their `wso2-cloud` session. No key
+		// verifies before the platform client exists. Frozen, so no extension can swap in a gate of its own.
+		const gate = createExtensionGate(cloudAPIs, (key) => ext.clients?.platform.apiKeys.verify(key) ?? false);
+		const exports: ExtensionExports = Object.freeze({ cloudAPIs: gate });
 		ext.log("WSO2 Integrator Extension activated successfully");
 		return exports;
 	} catch (error) {

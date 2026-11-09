@@ -17,7 +17,7 @@
  */
 
 import type { Logger } from "@wso2/wso2-cloud-client";
-import { CLOUD_API_URL_SETTING, CLOUD_CLIENT_ID_SETTING, CLOUD_ENV_SETTING } from "@wso2/wso2-cloud-client/vscode";
+import { CLOUD_API_URL_SETTING, CLOUD_CLIENT_ID_SETTING, CLOUD_ENV_SETTING, readCloudEnvName } from "@wso2/wso2-cloud-client/vscode";
 import * as vscode from "vscode";
 import type { ConfigurationChangeEvent } from "vscode";
 import { commands, window, workspace } from "vscode";
@@ -29,6 +29,7 @@ import { activateURIHandlers } from "./cloud-uri-handlers";
 import { activateCmds } from "./cmds";
 import { describeCloudError, handleCloudError } from "./platform/error-handler";
 import { createWIPlatform } from "./platform/platform-client";
+import { type CloudServiceUrls, readCloudServiceUrls } from "./service-urls";
 import { contextStore } from "./stores/context-store";
 import { dataCacheStore } from "./stores/data-cache-store";
 import { locationStore } from "./stores/location-store";
@@ -59,7 +60,11 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 
 	// 1. The platform client, sessions and authentication provider, from the environment setting.
 	let platform: ReturnType<typeof createWIPlatform>;
+	let services: CloudServiceUrls;
 	try {
+		// Before the clients: a managed-tokens URL that is not https leaves the cloud features off, as an
+		// API URL that is not does, rather than the token being sent there.
+		services = readCloudServiceUrls(readCloudEnvName());
 		platform = createWIPlatform({
 			context,
 			logger,
@@ -85,7 +90,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	}
 	ext.clients = { platform };
 	ext.cloudEnv = platform.environment.name;
-	ext.config = platform.environment;
+	ext.config = { ...platform.environment, ...services };
 	context.subscriptions.push(platform);
 
 	// 2. The sign-in state the commands, stores and webviews read, and the commands and URI
