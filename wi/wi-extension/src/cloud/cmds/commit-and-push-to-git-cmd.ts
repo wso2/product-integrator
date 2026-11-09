@@ -97,10 +97,12 @@ export function commitAndPushToGitCommand(context: ExtensionContext) {
 				// Earlier versions could leave the cloud editor's remote behind, credentials and all; it goes after this push too.
 				let addedRemote: string | undefined = remotes.some((item) => item.name === CLOUD_EDITOR_REMOTE) ? CLOUD_EDITOR_REMOTE : undefined;
 				try {
-					if (!matchingRemote && remotes[0].fetchUrl && ext.isDevantCloudEditor) {
+					const httpsRemote = httpUrlOf(remotes[0]?.fetchUrl);
+					if (!matchingRemote && httpsRemote && ext.isDevantCloudEditor) {
 						// The cloud editor has no credential helper; ask, push through a remote that carries
 						// the credentials, and take that remote away again below so nothing stays in .git/config.
-						const urlObj = new URL(remotes[0].fetchUrl);
+						// An SSH remote needs none of this: it is pushed to as it is.
+						const urlObj = httpsRemote;
 						await enrichGitUsernamePassword(urlObj);
 						await window.withProgress({ title: "Setting new remote...", location: ProgressLocation.Notification }, async () => {
 							addedRemote = CLOUD_EDITOR_REMOTE;
@@ -185,3 +187,16 @@ export const enrichGitUsernamePassword = async (urlObj: URL) => {
 		urlObj.password = password;
 	}
 };
+
+/** `url` as a URL when it is an http(s) one; an SSH remote (git@host:owner/repo.git) and anything else answer undefined. */
+function httpUrlOf(url: string | undefined): URL | undefined {
+	if (!url) {
+		return undefined;
+	}
+	try {
+		const parsed = new URL(url);
+		return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed : undefined;
+	} catch {
+		return undefined;
+	}
+}

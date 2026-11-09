@@ -154,12 +154,15 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 				}
 			} catch (error) {
 				// The environments already written are taken back, so a failure in a later one leaves no half-made connection.
+				// A group that was there before now holds the new key, and its old values can't be read back: it keeps
+				// the new key, which stays live, rather than end up with a revoked one.
 				for (const done of written) {
-					if (!done.existed) {
-						await cloud.config
-							.deleteEnvGroup(request.integration, done.environment, request.name, request.projectName)
-							.catch((deleteError: unknown) => logError(`Could not remove the connection ${request.name} from ${done.environment}`, deleteError as Error));
+					if (done.existed) {
+						continue;
 					}
+					await cloud.config
+						.deleteEnvGroup(request.integration, done.environment, request.name, request.projectName)
+						.catch((deleteError: unknown) => logError(`Could not remove the connection ${request.name} from ${done.environment}`, deleteError as Error));
 					await revoke(done.environment, done.keyId);
 				}
 				throw error;

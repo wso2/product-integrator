@@ -204,5 +204,7 @@ describe("cloud connections", () => {
 			}),
 		);
 		assert.ok(!calls.some(([name]) => name === "config.deleteEnvGroup"));
+		const revoked = calls.filter(([name]) => name === "endpoints.revokeApiKey").map(([, , environment]) => environment);
+		assert.deepStrictEqual(revoked, ["production"], "the key the kept development group now holds stays valid");
 	});
 });
