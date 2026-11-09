@@ -59,6 +59,13 @@ const config = {
 	},
 	plugins: [
         new webpack.DefinePlugin(envKeys),
+		// The Copilot backends the Copilot token exchange may send the WSO2 Cloud token to: from the build's environment
+		// (CI secrets, or a local .env), put into the bundle, and never read at run time.
+		new webpack.DefinePlugin({
+			__WI_COPILOT_ROOT_URLS__: JSON.stringify(
+				["COPILOT_ROOT_URL", "COPILOT_STAGE_ROOT_URL", "COPILOT_DEV_ROOT_URL"].map((name) => process.env[name]).filter(Boolean),
+			),
+		}),
 		new webpack.IgnorePlugin({ resourceRegExp: /^@aws-sdk\/client-s3$/ }),
 		new CopyPlugin({
 				patterns: [{ from: "src/cloud/git/*.sh", to: "[name][ext]" }],

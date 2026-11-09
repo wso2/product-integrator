@@ -43,48 +43,57 @@ export interface CloudServiceDeps {
 	config: PlatformEnvConfig;
 	tokenSource: TokenSource;
 	fetch?: FetchLike;
+	/** The exchange endpoints each target allows; the build's, unless a test gives its own. */
+	exchangeEndpoints?: Readonly<Record<TokenExchangeTarget, readonly string[]>>;
+}
+
+/**
+ * The Copilot backends of this build (`COPILOT_ROOT_URL`, `COPILOT_STAGE_ROOT_URL`, `COPILOT_DEV_ROOT_URL`), put in by
+ * the bundler from the build's environment: never read at run time, so nothing installed can add to them.
+ */
+declare const __WI_COPILOT_ROOT_URLS__: readonly string[] | undefined;
+const COPILOT_ROOT_URLS: readonly string[] = typeof __WI_COPILOT_ROOT_URLS__ !== "undefined" ? __WI_COPILOT_ROOT_URLS__ : [];
+
+/** The exchange URLs under `roots`: the exact endpoints the WSO2 Cloud token may be sent to. */
+export function exchangeEndpointsOf(roots: readonly string[], path: string): string[] {
+	return roots.filter((root) => !!root).map((root) => `${root.replace(/\/+$/, "")}${path}`);
 }
 
 interface TokenExchange {
 	/** Said when no endpoint is known for the target. */
 	missing: string;
-	/**
-	 * The hosts the WSO2 Cloud token may be sent to for the target: exact hosts, never a domain, since a shared
-	 * gateway domain also serves other tenants' APIs.
-	 */
-	hosts: readonly string[];
-	/** The exchange's path under a host's root, which the endpoint must end with. */
-	path: string;
 }
 
 /** The services whose own token WSO2 Integrator exchanges the WSO2 Cloud token for; no other target is reachable. */
 const TOKEN_EXCHANGES: Readonly<Record<TokenExchangeTarget, TokenExchange>> = {
-	copilot: {
-		missing: "This WSO2 Cloud deployment has no Copilot token exchange.",
-		// The Copilot backends the Ballerina extension is built against, production and development.
-		hosts: ["7eff1239-64bb-4663-b256-30a00d187a5c-prod.e1-us-east-azure.choreoapis.dev", "7eff1239-64bb-4663-b256-30a00d187a5c-dev.e1-us-east-azure.choreoapis.dev"],
-		path: "/auth-api/v1.0/auth/token-exchange",
-	},
+	copilot: { missing: "This WSO2 Cloud deployment has no Copilot token exchange." },
 };
 
-/** `endpoint` as a URL when it is one the target allows: https, one of its hosts, its exchange path; otherwise a `ForbiddenError`. */
-export function allowedExchangeEndpoint(target: TokenExchangeTarget, exchange: TokenExchange, endpoint: string): URL {
+/**
+ * Where each target's exchange may be: exact URLs, never a host or a domain, since a shared gateway serves other
+ * tenants' APIs on the same host under other paths.
+ */
+const EXCHANGE_ENDPOINTS: Readonly<Record<TokenExchangeTarget, readonly string[]>> = {
+	copilot: exchangeEndpointsOf(COPILOT_ROOT_URLS, "/auth-api/v1.0/auth/token-exchange"),
+};
+
+/** `endpoint` as a URL when it is exactly one of `allowed`, over https; otherwise a `ForbiddenError`. */
+export function allowedExchangeEndpoint(target: TokenExchangeTarget, allowed: readonly string[], endpoint: string): URL {
 	let url: URL;
 	try {
 		url = new URL(endpoint);
 	} catch {
 		throw new ForbiddenError(`The ${target} token exchange endpoint is not a URL.`, { reason: "token_exchange_endpoint_refused" });
 	}
-	const allowed =
-		url.protocol === "https:" &&
-		!url.username &&
-		!url.password &&
-		url.port === "" &&
-		exchange.hosts.includes(url.hostname.toLowerCase()) &&
-		url.pathname.endsWith(exchange.path) &&
-		!url.search &&
-		!url.hash;
-	if (!allowed) {
+	const listed = allowed.some((entry) => {
+		try {
+			const known = new URL(entry);
+			return known.origin === url.origin && known.pathname.replace(/\/+$/, "") === url.pathname.replace(/\/+$/, "");
+		} catch {
+			return false;
+		}
+	});
+	if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || !listed) {
 		throw new ForbiddenError(`WSO2 Integrator does not send the WSO2 Cloud token to ${url.origin} for ${target}.`, {
 			reason: "token_exchange_endpoint_refused",
 		});
@@ -135,7 +144,7 @@ export async function exchangeToken(target: TokenExchangeTarget, endpoint: strin
 		throw new NotSupportedError(exchange.missing, { reason: `${target}_token_exchange_not_configured` });
 	}
 	// Checked before the token is read: an endpoint off the list never sees it.
-	const url = allowedExchangeEndpoint(target, exchange, endpoint);
+	const url = allowedExchangeEndpoint(target, (deps.exchangeEndpoints ?? EXCHANGE_ENDPOINTS)[target] ?? [], endpoint);
 	const what = `The ${target} token exchange`;
 	const path = url.pathname;
 	for (let forceRefresh = false; ; forceRefresh = true) {
