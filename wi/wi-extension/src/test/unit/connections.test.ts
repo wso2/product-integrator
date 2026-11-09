@@ -23,7 +23,8 @@ import { cloudConnections } from "../../cloud/connections";
 type Call = [string, ...unknown[]];
 
 /** A cloud client that records what is asked of it, answering from `answers`. */
-function fakeCloud(answers: { deployed?: boolean; endpointLinks?: Record<string, string> } = {}) {
+function fakeCloud(answers: { deployed?: boolean; endpointLinks?: Record<string, string>; failPutIn?: string; existingGroupIn?: string } = {}) {
+	let keys = 0;
 	const calls: Call[] = [];
 	const cloud = {
 		environments: { list: async () => [{ id: "development" }] },
@@ -40,7 +41,11 @@ function fakeCloud(answers: { deployed?: boolean; endpointLinks?: Record<string,
 			},
 			createApiKey: async (...args: unknown[]) => {
 				calls.push(["endpoints.createApiKey", ...args]);
-				return { apiKey: "k", keyId: "k1" };
+				keys++;
+				return { apiKey: "k", keyId: `k${keys}` };
+			},
+			revokeApiKey: async (...args: unknown[]) => {
+				calls.push(["endpoints.revokeApiKey", ...args]);
 			},
 		},
 		config: {
@@ -52,8 +57,15 @@ function fakeCloud(answers: { deployed?: boolean; endpointLinks?: Record<string,
 				calls.push(["config.listLinks", ...args]);
 				return { kind: "ballerina", sourceDefined: false, endpointLinks: answers.endpointLinks };
 			},
+			listEnvGroups: async (_integration: string, environment: string) => (answers.existingGroupIn === environment ? [{ name: "orders" }] : []),
 			putEnvGroup: async (...args: unknown[]) => {
 				calls.push(["config.putEnvGroup", ...args]);
+				if (args[1] === answers.failPutIn) {
+					throw new Error("upsert env group failed");
+				}
+			},
+			deleteEnvGroup: async (...args: unknown[]) => {
+				calls.push(["config.deleteEnvGroup", ...args]);
 			},
 		},
 	};
@@ -156,5 +168,41 @@ describe("cloud connections", () => {
 		]);
 		await api.connections.unlinkEndpoint({ integration: "basket", configurable: "acme/basket:ordersUrl", projectName: "shop" });
 		assert.deepStrictEqual(calls.at(-1), ["config.putLink", "basket", { configurable: "acme/basket:ordersUrl" }, "shop"]);
+	});
+
+	it("takes back the environments already written when a later one fails", async () => {
+		const { cloud, calls } = fakeCloud({ deployed: true, failPutIn: "production" });
+		await assert.rejects(
+			apiWith(cloud).connections.createServiceConnection({
+				integration: "basket",
+				target,
+				access: "gateway",
+				name: "orders",
+				environments: ["development", "production"],
+				projectName: "shop",
+			}),
+			/upsert env group failed/,
+		);
+		const after = calls.filter(([name]) => name === "config.deleteEnvGroup" || name === "endpoints.revokeApiKey");
+		assert.deepStrictEqual(after, [
+			["endpoints.revokeApiKey", "orders", "production", "api", "k2", "shop"],
+			["config.deleteEnvGroup", "basket", "development", "orders", "shop"],
+			["endpoints.revokeApiKey", "orders", "development", "api", "k1", "shop"],
+		]);
+	});
+
+	it("does not remove a group of the same name that was there before", async () => {
+		const { cloud, calls } = fakeCloud({ deployed: true, failPutIn: "production", existingGroupIn: "development" });
+		await assert.rejects(
+			apiWith(cloud).connections.createServiceConnection({
+				integration: "basket",
+				target,
+				access: "gateway",
+				name: "orders",
+				environments: ["development", "production"],
+				projectName: "shop",
+			}),
+		);
+		assert.ok(!calls.some(([name]) => name === "config.deleteEnvGroup"));
 	});
 });

@@ -35,6 +35,10 @@ describe("redactUrlCredentials", () => {
 		);
 	});
 
+	it("masks a token that holds a quote", () => {
+		assert.strictEqual(redactUrlCredentials("> git clone https://jane:p'ss@host/r.git"), "> git clone https://***@host/r.git");
+	});
+
 	it("masks every URL on a line, and leaves text with no credentials alone", () => {
 		assert.strictEqual(redactUrlCredentials("a http://u:p@h1/x b https://t@h2"), "a http://***@h1/x b https://***@h2");
 		for (const text of ["> git push origin main", "https://github.com/acme/orders.git", "git@github.com:acme/orders.git", "Author: Jane <jane@acme.com>"]) {

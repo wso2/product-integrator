@@ -22,5 +22,5 @@
  * the token. Up to the last `@` before the host, as a password may hold one.
  */
 export function redactUrlCredentials(text: string): string {
-	return text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/'"]+@/gi, "$1***@");
+	return text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\s/]+@/gi, "$1***@");
 }
