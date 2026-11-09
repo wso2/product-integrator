@@ -227,15 +227,17 @@ export class WIAuthState implements Disposable {
 
 	private setSession(session: PlatformSession): void {
 		const previous = this._state.session;
-		this._state = { session, status: "signed-in" };
-		this._stateChangeEmitter.fire({ state: this._state });
 		// A refreshed token is the same person in the same organization: the projects listed stay right.
 		const samePerson = previous?.user.userId === session.user.userId && previous?.org.id === session.org.id && previous?.env === session.env;
+		// Another organization or person, or a selection restored from another organization's session:
+		// nothing selected for that one stays, and it is gone before the session is announced.
+		const restoredSelection = contextStore.getState().state.selected;
+		if (!samePerson && (previous || (restoredSelection && restoredSelection.orgHandle !== session.org.handle))) {
+			contextStore.getState().resetState();
+		}
+		this._state = { session, status: "signed-in" };
+		this._stateChangeEmitter.fire({ state: this._state });
 		if (!samePerson) {
-			if (previous) {
-				// Another organization or person: nothing selected for the one before stays.
-				contextStore.getState().resetState();
-			}
 			void contextStore.getState().refreshState();
 		}
 	}
