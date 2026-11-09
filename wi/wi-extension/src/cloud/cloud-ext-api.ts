@@ -22,6 +22,7 @@ import {
 	type ContextItemEnriched,
 	type ContextStoreState,
 	type DirectoryIntegration,
+	type EndpointResources,
 	type EnvVarGroup,
 	type IWso2PlatformExtensionAPI,
 	type LocalRuntimeEnv,
@@ -30,6 +31,7 @@ import {
 	PLATFORM_EXTENSION_API_VERSION,
 	type PlatformEnvConfig,
 	type PlatformSession,
+	type ServiceConnectionAccess,
 	orderByPipeline,
 	DATABASE_CA_CERT_VAR,
 	DATABASE_CONNECTION_VARS,
@@ -54,6 +56,17 @@ const NO_PLATFORM_API = (what: string, dependency: string) =>
  * Tokens are not here; a consumer calls `vscode.authentication.getSession("wso2-cloud", ["env:<env>"])`.
  */
 /** The URL an endpoint is reached at, from the parts the platform reports; undefined when there is no host. */
+/** The URL the gateway serves an exposed endpoint's API at: the public one, else the organization one; none when it is not exposed. */
+function gatewayUrlOf(endpoint: EndpointResources): string | undefined {
+	if (endpoint.exposure === "none") {
+		return undefined;
+	}
+	return (
+		endpointUrlOf(endpoint.urls?.external) ??
+		[endpoint.visibilityStatus?.public, endpoint.visibilityStatus?.organization].find((state) => state?.status === "ENABLED" && state.url)?.url
+	);
+}
+
 function endpointUrlOf(url: { scheme?: string; host?: string; port?: number; path?: string } | undefined): string | undefined {
 	if (!url?.host) {
 		return undefined;
@@ -271,43 +284,61 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 					await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: true, data }, request.projectName);
 				}
 			},
-			createServiceConnection: async (request: { integration: string; target: { project: string; integration: string; endpoint: string }; name: string; environments?: string[]; projectName?: string }) => {
+			createServiceConnection: async (request: {
+				integration: string;
+				target: { project: string; integration: string; endpoint: string };
+				access: ServiceConnectionAccess;
+				name: string;
+				environments?: string[];
+				projectName?: string;
+			}) => {
+				const { target } = request;
+				if (request.access === "project" && request.projectName && target.project !== request.projectName) {
+					throw new NotSupportedError(
+						`${target.integration} is in the project ${target.project}; reaching it from another project needs its endpoint exposed with organization or public access.`,
+						{ reason: "endpoint_not_exposed" },
+					);
+				}
 				// Every environment's endpoint is found before anything is created, so a missing one leaves no half-made connection behind.
 				const targets: { environment: string; url: string }[] = [];
 				for (const environment of await environmentsFor(request.environments)) {
-					const endpoints = await cloud.endpoints.listForEnvironment(request.target.integration, environment, request.target.project);
-					const endpoint = endpoints.find((e) => e.name === request.target.endpoint);
+					const endpoints = await cloud.endpoints.listForEnvironment(target.integration, environment, target.project);
+					const endpoint = endpoints.find((e) => e.name === target.endpoint);
 					if (!endpoint) {
-						throw new NotSupportedError(`${request.target.integration} exposes no endpoint ${request.target.endpoint} in ${environment}.`, { reason: "endpoint_missing" });
+						throw new NotSupportedError(`${target.integration} exposes no endpoint ${target.endpoint} in ${environment}.`, { reason: "endpoint_missing" });
 					}
-					const url = endpointUrlOf(endpoint.urls?.external) ?? endpointUrlOf(endpoint.urls?.internal);
+					const url = request.access === "project" ? endpointUrlOf(endpoint.urls?.internal) : gatewayUrlOf(endpoint);
 					if (!url) {
-						throw new NotSupportedError(`${request.target.integration} has no URL for endpoint ${request.target.endpoint} in ${environment} yet.`, { reason: "endpoint_missing" });
+						throw new NotSupportedError(
+							request.access === "project"
+								? `${target.integration} has no URL for endpoint ${target.endpoint} in ${environment} yet; deploy it there first.`
+								: `The endpoint ${target.endpoint} of ${target.integration} is not exposed as an API in ${environment}. Expose it with organization or public access, or connect with project access.`,
+							{ reason: request.access === "project" ? "endpoint_missing" : "endpoint_not_exposed" },
+						);
 					}
 					targets.push({ environment, url });
 				}
 				for (const { environment, url } of targets) {
-					const key = await cloud.endpoints.createApiKey(request.target.integration, environment, request.target.endpoint, { displayName: `${request.integration}-${request.name}` }, request.target.project);
+					const serviceUrl = { [connectionVarName(request.name, SERVICE_CONNECTION_VARS.ServiceURL)]: url };
+					if (request.access === "project") {
+						// Inside the project the endpoint takes no key: the URL is all the connection holds.
+						await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: false, data: serviceUrl }, request.projectName);
+						continue;
+					}
+					const key = await cloud.endpoints.createApiKey(target.integration, environment, target.endpoint, { displayName: `${request.integration}-${request.name}` }, target.project);
 					try {
 						await cloud.config.putEnvGroup(
 							request.integration,
 							environment,
 							request.name,
-							{
-								name: request.name,
-								sensitive: true,
-								data: {
-									[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ServiceURL)]: url,
-									[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ChoreoAPIKey)]: key.apiKey,
-								},
-							},
+							{ name: request.name, sensitive: true, data: { ...serviceUrl, [connectionVarName(request.name, SERVICE_CONNECTION_VARS.ChoreoAPIKey)]: key.apiKey } },
 							request.projectName,
 						);
 					} catch (error) {
 						// A key no connection carries is only a live credential: it is revoked, best effort.
 						if (key.keyId) {
 							await cloud.endpoints
-								.revokeApiKey(request.target.integration, environment, request.target.endpoint, key.keyId, request.target.project)
+								.revokeApiKey(target.integration, environment, target.endpoint, key.keyId, target.project)
 								.catch((revokeError: unknown) => ext.logError(`Could not revoke the API key ${key.keyId}`, revokeError as Error));
 						}
 						throw error;
