@@ -65,9 +65,15 @@ export const contextStore = createStore(
 				// A refresh that is overtaken by another, or by a sign-out, stops writing.
 				const run = ++refreshGeneration;
 				const stale = () => run !== refreshGeneration || !ext.authProvider?.isLoggedIn;
+				// A project picked while this refresh runs wins over the one it worked out from the state before.
+				const changeRun = changeGeneration;
+				const contextChanged = () => changeRun !== changeGeneration;
 				const write = (change: (state: ContextStoreState) => ContextStoreState) => {
 					if (!stale()) {
-						set(({ state }) => ({ state: change(state) }));
+						set(({ state }) => {
+							const next = change(state);
+							return { state: contextChanged() ? { ...next, selected: state.selected, integrations: state.integrations } : next };
+						});
 					}
 				};
 				try {
@@ -86,7 +92,7 @@ export const contextStore = createStore(
 					write((state) => ({ ...state, items, selected, integrations }));
 					integrations = await getIntegrationsFromPlatform(selected);
 					write((state) => ({ ...state, loading: false, items, selected, integrations }));
-					if (selected && !stale()) {
+					if (selected && !stale() && !contextChanged()) {
 						locationStore.getState().setLocation(selected, integrations);
 					}
 				} catch (err) {
