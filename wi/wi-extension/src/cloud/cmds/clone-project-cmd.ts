@@ -19,7 +19,7 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { basename, join } from "path";
-import type { Component, ComponentRepository, Project } from "@wso2/wso2-cloud-client";
+import { type Component, type ComponentRepository, type Project, isCloudError } from "@wso2/wso2-cloud-client";
 import { DevantScopes, type ICmdParamsBase, WICommandIds, parseGitURL } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, type QuickPickItem, QuickPickItemKind, Uri, commands, window } from "vscode";
 import { BridgeLayer } from "../../BridgeLayer";
@@ -113,8 +113,12 @@ export function cloneRepoCommand(context: ExtensionContext) {
 						try {
 							repository = await cloud.components.repository(integration.id, selectedProject.id);
 							dataCacheStore.getState().setRepository(orgHandle, selectedProject.id, integration.id, repository);
-						} catch {
-							continue;
+						} catch (error) {
+							// An integration without a repository has nothing to clone; any other failure is reported, not taken for that.
+							if (isCloudError(error) && error.code === "not_found") {
+								continue;
+							}
+							throw error;
 						}
 					}
 					const repoUrl = repositoryUrlOf(repository);
@@ -189,10 +193,13 @@ export function cloneRepoCommand(context: ExtensionContext) {
 					await openClonedDirectory(subDirFullPath);
 				} else if (chosenRepos.length > 1) {
 					const { dirPath: projectDirPath } = createDirectory(selectedCloneDir.fsPath, selectedProject.name);
-					await cloneRepositoryWithProgress(
+					const clonedResp = await cloneRepositoryWithProgress(
 						projectDirPath,
 						chosenRepos.map((repoUrl) => ({ repoUrl, branch: chosen.find((c) => c.repoUrl === repoUrl)?.repository.branch })),
 					);
+					for (const { clonedPath } of clonedResp) {
+						updateContextFile(clonedPath, selectedProject);
+					}
 					await openClonedDirectory(projectDirPath);
 				} else {
 					await ensureBallerinaFilesIfEmpty({ orgHandle, project: selectedProject, directoryPath: selectedCloneDir.fsPath });
@@ -215,7 +222,7 @@ async function ensureBallerinaFilesIfEmpty(params: { orgHandle: string; project?
 		if (params.componentName) {
 			writeFileSync(
 				join(directoryPath, "Ballerina.toml"),
-				`[package]\norg = "${params.orgHandle}"\nname = "${params.componentName.replace(/ /g, "_").replace(/-/g, "_")}"\nversion = "0.1.0"`,
+				`[package]\norg = "${params.orgHandle.replace(/[^a-zA-Z0-9_]/g, "_")}"\nname = "${params.componentName.replace(/ /g, "_").replace(/-/g, "_")}"\nversion = "0.1.0"`,
 				"utf8",
 			);
 		} else {

@@ -106,10 +106,24 @@ export class WIAuthState implements Disposable {
 	}
 
 	private async initAuthOnce(): Promise<void> {
+		// A sign-in or sign-out while the session is read makes what was read stale: nothing of it
+		// is published, and the session is read again.
+		const sessions = this.deps.platform.sessions;
+		let generation: number;
+		do {
+			generation = sessions.sessionGeneration;
+			await this.restore(() => generation === sessions.sessionGeneration);
+		} while (generation !== sessions.sessionGeneration);
+	}
+
+	private async restore(isCurrent: () => boolean): Promise<void> {
 		try {
 			const stored = await this.deps.platform.sessions.current();
 			if (!stored) {
 				const claims = await this.deps.platform.tokenSource.getClaims().catch((): undefined => undefined);
+				if (!isCurrent()) {
+					return;
+				}
 				if (this.deps.platform.injected && claims) {
 					// The cloud editor's token is a session too, read from the environment.
 					this.setSession(
@@ -127,17 +141,26 @@ export class WIAuthState implements Disposable {
 					await this.deps.platform.tokenSource.getAccessToken();
 				} catch (error) {
 					if (isCloudError(error) && (error.code === "unauthenticated" || error.code === "session_expired")) {
-						this.resetState("expired");
+						if (isCurrent()) {
+							this.resetState("expired");
+						}
 						return;
 					}
 					this.deps.logError("Could not refresh the WSO2 Cloud session; keeping it", error as Error);
 				}
 			}
-			this.setSession(toPlatformSession(stored));
+			// A refresh replaced the stored session; its expiry and claims are the ones to publish.
+			const current = (await this.deps.platform.sessions.current()) ?? stored;
+			if (!isCurrent()) {
+				return;
+			}
+			this.setSession(toPlatformSession(current));
 			await this.fillOrganization();
 		} catch (err) {
 			this.deps.logError("Error during auth initialization", err as Error);
-			this.resetState("signed-out");
+			if (isCurrent()) {
+				this.resetState("signed-out");
+			}
 		}
 	}
 
@@ -225,6 +248,9 @@ export class WIAuthState implements Disposable {
 			if (org && this._state.session === session) {
 				const filled: PlatformSession = { ...session, org: { ...session.org, uuid: org.uuid, numericId: org.numericId } };
 				await this.deps.platform.sessions.update((stored) => ({ ...stored, org: filled.org }));
+				if (this._state.session !== session) {
+					return; // signed out, or another session came, while it was saved
+				}
 				this._state = { session: filled, status: "signed-in" };
 				this._stateChangeEmitter.fire({ state: this._state });
 			}

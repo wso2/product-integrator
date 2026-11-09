@@ -57,7 +57,10 @@ export const contextStore = createStore(
 	persist<ContextStore>(
 		(set, get) => ({
 			state: initialState,
-			resetState: () => set(() => ({ state: initialState })),
+			resetState: () => {
+				changeGeneration++;
+				set(() => ({ state: initialState }));
+			},
 			refreshState: async () => {
 				// A refresh that is overtaken by another, or by a sign-out, stops writing.
 				const run = ++refreshGeneration;
@@ -98,20 +101,28 @@ export const contextStore = createStore(
 					return;
 				}
 				const item: ContextItemEnriched = { orgHandle, projectName: project.id, project, contextDirs: [contextDir], defaultEnv: env };
+				changeGeneration++;
 				set(({ state }) => ({
 					state: { ...state, items: { ...state.items, [contextKey({ org: orgHandle, project: project.id })]: item }, selected: item },
 				}));
 				void get().refreshState();
 			},
 			changeContext: async (selected) => {
+				// A change overtaken by a newer selection, or by a sign-out, stops writing.
+				const run = ++changeGeneration;
+				const write = (change: (state: ContextStoreState) => ContextStoreState) => {
+					if (run === changeGeneration && ext.authProvider?.isLoggedIn) {
+						set(({ state }) => ({ state: change(state) }));
+					}
+				};
 				try {
 					let integrations = await getIntegrationsFromCache(selected);
-					set(({ state }) => ({ state: { ...state, selected, loading: true, integrations } }));
+					write((state) => ({ ...state, selected, loading: true, integrations }));
 					integrations = await getIntegrationsFromPlatform(selected);
-					set(({ state }) => ({ state: { ...state, selected, loading: false, integrations } }));
+					write((state) => ({ ...state, selected, loading: false, integrations }));
 				} catch (err) {
 					ext.logError("Failed to change the project context", err as Error);
-					set(({ state }) => ({ state: { ...state, loading: false } }));
+					write((state) => ({ ...state, loading: false }));
 				}
 			},
 		}),
@@ -120,8 +131,9 @@ export const contextStore = createStore(
 );
 
 let refreshGeneration = 0;
+let changeGeneration = 0;
 
-/** Reads every context file in the workspace, or the one at each workspace folder's git root. */
+/** Reads every context file in the workspace and, for a workspace folder without one, the one at its git root. */
 const getAllContexts = async (previousItems: { [key: string]: ContextItemEnriched }) => {
 	const contextFiles = (await workspace.findFiles("**/.wso2/context.yaml")).map((uri) => uri.fsPath);
 	const contextItems: { [key: string]: ContextItemEnriched } = {};
@@ -156,12 +168,12 @@ const getAllContexts = async (previousItems: { [key: string]: ContextItemEnriche
 		}
 	};
 
-	if (contextFiles.length > 0) {
-		for (const contextFile of contextFiles) {
-			addEntries(contextFile);
-		}
-	} else if (workspace.workspaceFolders) {
-		for (const workspaceFolder of workspace.workspaceFolders) {
+	for (const contextFile of contextFiles) {
+		addEntries(contextFile);
+	}
+	// A workspace folder with no context file of its own may sit in a repository that has one at its root.
+	for (const workspaceFolder of workspace.workspaceFolders ?? []) {
+		if (!contextFiles.some((contextFile) => isSubpath(workspaceFolder.uri.fsPath, contextFile))) {
 			try {
 				const gitRoot = await getGitRoot(ext.context, workspaceFolder.uri.fsPath);
 				const contextPath = gitRoot ? findContextFile(gitRoot) : undefined;
@@ -210,7 +222,7 @@ const getSelected = async (items: { [key: string]: ContextItemEnriched }, prevSe
 	}
 
 	const matchingItem = Object.values(items).find(
-		(item) => prevSelected?.orgHandle === item.orgHandle && prevSelected?.projectName === item.projectName && prevSelected?.project,
+		(item) => prevSelected?.orgHandle === item.orgHandle && prevSelected?.projectName === item.projectName && item.project && !item.foreignOrg,
 	);
 
 	const openKey: string | null | undefined = ext.context.globalState.get("open-local-repo");

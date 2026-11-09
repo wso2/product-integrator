@@ -142,7 +142,8 @@ export const toResourceName = (displayName: string): string =>
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^-+|-+$/g, "")
-		.slice(0, 63);
+		.slice(0, 63)
+		.replace(/-+$/, ""); // the cut can end on a hyphen
 
 export const toProjectName = toResourceName;
 

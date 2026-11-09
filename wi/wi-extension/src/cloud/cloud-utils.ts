@@ -50,7 +50,10 @@ export interface DeleteLocalConnectionConfigParams {
 export const deleteLocalConnectionConfig = (params: DeleteLocalConnectionConfigParams): void => {
 	const componentYamlPath = componentYamlPathOf(params.componentDir);
 	if (existsSync(componentYamlPath)) {
-		const content = yaml.load(readFileSync(componentYamlPath, "utf8")) as ComponentYamlContent;
+		const content = yaml.load(readFileSync(componentYamlPath, "utf8")) as ComponentYamlContent | undefined;
+		if (!content) {
+			return; // an empty file has no reference to remove
+		}
 		if (content.dependencies?.connectionReferences) {
 			content.dependencies.connectionReferences = content.dependencies.connectionReferences.filter((item) => item.name !== params.connectionName);
 		}

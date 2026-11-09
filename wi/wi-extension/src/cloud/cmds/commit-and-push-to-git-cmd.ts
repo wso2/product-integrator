@@ -92,47 +92,47 @@ export function commitAndPushToGitCommand(context: ExtensionContext) {
 					return false;
 				});
 				let addedRemote: string | undefined;
-				if (!matchingRemote && remotes[0].fetchUrl && ext.isDevantCloudEditor) {
-					// The cloud editor has no credential helper; ask, push through a remote that carries
-					// the credentials, and take that remote away again below so nothing stays in .git/config.
-					const urlObj = new URL(remotes[0].fetchUrl);
-					await enrichGitUsernamePassword(urlObj);
-					await window.withProgress({ title: "Setting new remote...", location: ProgressLocation.Notification }, async () => {
-						await repo.addRemote(CLOUD_EDITOR_REMOTE, urlObj.href);
-						addedRemote = CLOUD_EDITOR_REMOTE;
-						const refreshed = await repo.getRemotes();
-						matchingRemote = refreshed.find((item) => item.name === CLOUD_EDITOR_REMOTE);
-					});
-				}
 				try {
+					if (!matchingRemote && remotes[0].fetchUrl && ext.isDevantCloudEditor) {
+						// The cloud editor has no credential helper; ask, push through a remote that carries
+						// the credentials, and take that remote away again below so nothing stays in .git/config.
+						const urlObj = new URL(remotes[0].fetchUrl);
+						await enrichGitUsernamePassword(urlObj);
+						await window.withProgress({ title: "Setting new remote...", location: ProgressLocation.Notification }, async () => {
+							addedRemote = CLOUD_EDITOR_REMOTE;
+							await repo.addRemote(CLOUD_EDITOR_REMOTE, urlObj.href);
+							const refreshed = await repo.getRemotes();
+							matchingRemote = refreshed.find((item) => item.name === CLOUD_EDITOR_REMOTE);
+						});
+					}
 
-				await window.withProgress({ title: "Adding changes to be committed...", location: ProgressLocation.Notification }, async () => {
-					await repo.add(["."]);
-				});
+					await window.withProgress({ title: "Adding changes to be committed...", location: ProgressLocation.Notification }, async () => {
+						await repo.add(["."]);
+					});
 
-				const commitMessage = await window.showInputBox({
-					placeHolder: "Message to describe the changes done to your integration",
-					title: "Enter commit message",
-					validateInput: (val) => (val ? null : "Commit message is required"),
-				});
-				if (!commitMessage) {
-					window.showErrorMessage("Commit message is required in order to proceed");
-					return;
-				}
+					const commitMessage = await window.showInputBox({
+						placeHolder: "Message to describe the changes done to your integration",
+						title: "Enter commit message",
+						validateInput: (val) => (val ? null : "Commit message is required"),
+					});
+					if (!commitMessage) {
+						window.showErrorMessage("Commit message is required in order to proceed");
+						return;
+					}
 
-				const headRef = await window.withProgress({ title: "Fetching remote repo metadata...", location: ProgressLocation.Notification }, async () => {
-					await repo.fetch({ silent: true, remote: matchingRemote?.name });
-					await repo.commit(commitMessage);
-					await delay(500);
-					return repo.getHEADRef();
-				});
+					const headRef = await window.withProgress({ title: "Fetching remote repo metadata...", location: ProgressLocation.Notification }, async () => {
+						await repo.fetch({ silent: true, remote: matchingRemote?.name });
+						await repo.commit(commitMessage);
+						await delay(500);
+						return repo.getHEADRef();
+					});
 
-				if (headRef?.ahead && (headRef?.behind === 0 || headRef?.behind === undefined)) {
-					await window.withProgress({ title: "Pushing changes to remote repository...", location: ProgressLocation.Notification }, () => repo.push(matchingRemote?.name));
-					window.showInformationMessage("Your changes have been successfully pushed to cloud");
-				} else {
-					await commands.executeCommand("git.sync");
-				}
+					if (headRef?.ahead && (headRef?.behind === 0 || headRef?.behind === undefined)) {
+						await window.withProgress({ title: "Pushing changes to remote repository...", location: ProgressLocation.Notification }, () => repo.push(matchingRemote?.name));
+						window.showInformationMessage("Your changes have been successfully pushed to cloud");
+					} else {
+						await commands.executeCommand("git.sync");
+					}
 				} finally {
 					if (addedRemote) {
 						await repo.removeRemote(addedRemote).catch((error: unknown) => ext.logError("Could not remove the temporary remote", error as Error));

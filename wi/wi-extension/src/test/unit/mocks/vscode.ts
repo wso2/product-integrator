@@ -21,8 +21,17 @@
 export class EventEmitter<T> {
 	private listeners: Array<(value: T) => void> = [];
 	public event = (listener: (value: T) => void) => {
-		this.listeners.push(listener);
-		return { dispose: () => this.listeners.splice(this.listeners.indexOf(listener), 1) };
+		// Each registration is its own entry, removed once: disposing twice leaves the others alone.
+		const registration = (value: T) => listener(value);
+		this.listeners.push(registration);
+		return {
+			dispose: () => {
+				const index = this.listeners.indexOf(registration);
+				if (index >= 0) {
+					this.listeners.splice(index, 1);
+				}
+			},
+		};
 	};
 	public fire(value: T) {
 		for (const listener of this.listeners) {

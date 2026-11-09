@@ -90,7 +90,10 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					selectedProject = (await selectProjectWithCreateNew(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', to deploy the integration in`)).selectedProject;
 				}
 
-				const integrations = params?.integrations || [];
+				// A directory passed without its integration types offers them all, as a directory picked here does.
+				const integrations = (params?.integrations || []).map((item) =>
+					item.supportedIntegrationTypes?.length ? item : { ...item, supportedIntegrationTypes: allIntegrationTypes },
+				);
 				let workspaceDir = params?.workspaceDir;
 				let buildPackLang = params?.buildPackLang;
 				if (!buildPackLang) {
@@ -193,6 +196,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 						candidate = `${baseName}-${counter++}`;
 					}
 					integration.name = candidate;
+					taken.add(candidate.toLowerCase());
 				}
 
 				if (isWithinWorkspace || workspace.workspaceFile) {
@@ -243,6 +247,10 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	const totalCount = createParams.length;
 	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: totalCount };
 	const cloud = ext.clients.platform.cloud;
+	// The platform acts for the signed-in organization; a form opened for another one is not submitted to it.
+	if (ext.authProvider?.org?.handle !== org.handle) {
+		throw new Error(`This form was opened for the organization ${org.name}, which is no longer the one signed in. Open the deployment form again.`);
+	}
 
 	const newGit = await initGit(ext.context);
 	const gitRoot = await newGit?.getRepositoryRoot(workspaceFsPath).catch((): undefined => undefined);
@@ -513,6 +521,9 @@ async function startFirstBuild(integrationId: string, projectName: string, signa
 				throw error;
 			}
 			await sleep(pause, signal);
+			if (signal.aborted) {
+				throw error;
+			}
 		}
 	}
 }
@@ -523,9 +534,10 @@ async function entryEnvironment(projectName: string): Promise<Environment> {
 	if (entry) {
 		return cloud.environments.resolve(entry);
 	}
-	const [first] = await cloud.environments.list();
+	// Without a pipeline entry, the first build goes to the first non-production environment, never to production.
+	const first = (await cloud.environments.list()).find((environment) => !environment.critical);
 	if (!first) {
-		throw new Error("The organization has no environment to deploy to.");
+		throw new Error("The organization has no non-production environment to deploy the first build to.");
 	}
 	return first;
 }
@@ -640,6 +652,8 @@ async function attachSourceToExistingIntegration(
 			);
 			await cloud.builds.trigger(integrationId, { projectName: project.id });
 		});
+		// The cached repository is the one the integration had; the next refresh reads the new one.
+		dataCacheStore.getState().setRepository(orgHandle, project.id, integrationId, undefined);
 		result.created.push(integration);
 		consumedSourceCompIds.add(integrationId);
 		await ext.context.workspaceState.update("SOURCE_COMPONENT_ID", null);
