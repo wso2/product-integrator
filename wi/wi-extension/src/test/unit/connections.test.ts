@@ -88,7 +88,7 @@ describe("cloud connections", () => {
 			projectName: "shop",
 			configurable: "acme/basket:ordersUrl",
 		});
-		assert.deepStrictEqual(calls, [["config.putLink", "basket", { configurable: "acme/basket:ordersUrl", endpoint: "orders/api" }, "shop"]]);
+		assert.deepStrictEqual(calls, [["config.putLink", "basket", { configurable: "acme/basket:ordersUrl", endpoint: "shop/orders/api" }, "shop"]]);
 	});
 
 	it("refuses a project connection with no configurable to fill", async () => {
@@ -161,10 +161,13 @@ describe("cloud connections", () => {
 	});
 
 	it("lists endpoint links and unlinks one", async () => {
-		const { cloud, calls } = fakeCloud({ endpointLinks: { "acme/basket:ordersUrl": "orders/api", "acme/basket:bad": "nope" } });
+		const { cloud, calls } = fakeCloud({
+			endpointLinks: { "acme/basket:ordersUrl": "shop/orders/api", "acme/basket:paths": "shop/orders/v1/api", "acme/basket:bad": "orders/api" },
+		});
 		const api = apiWith(cloud);
 		assert.deepStrictEqual(await api.connections.listEndpointLinks("basket", "shop"), [
 			{ configurable: "acme/basket:ordersUrl", component: "orders", endpoint: "api" },
+			{ configurable: "acme/basket:paths", component: "orders", endpoint: "v1/api" },
 		]);
 		await api.connections.unlinkEndpoint({ integration: "basket", configurable: "acme/basket:ordersUrl", projectName: "shop" });
 		assert.deepStrictEqual(calls.at(-1), ["config.putLink", "basket", { configurable: "acme/basket:ordersUrl" }, "shop"]);
