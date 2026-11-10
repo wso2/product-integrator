@@ -73,7 +73,7 @@
 
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { finished } from 'node:stream/promises';
 import * as path from 'node:path';
@@ -613,9 +613,17 @@ async function main() {
 				if (!fetched.has(sourceUrl)) {
 					const dest = path.join(fetchComponentsDir, safeSegment(component.id, 'component id'), fileName);
 					fetched.set(sourceUrl, dest);
-					const local = componentFilesDir
-						? path.join(componentFilesDir, safeSegment(component.id, 'component id'), fileName)
+					const localDir = componentFilesDir
+						? path.join(componentFilesDir, safeSegment(component.id, 'component id'))
 						: '';
+					const local = localDir ? path.join(localDir, fileName) : '';
+					// The build staged this component but under another name: a file name or version
+					// drift between its download and this config. Fetching instead would quietly
+					// reopen the rolling-tag failure the staged copy exists to prevent. (No directory
+					// at all is the Open VSX case, and is fetched.)
+					if (localDir && existsSync(localDir) && !existsSync(local)) {
+						throw new Error(`--component-files has ${localDir} for ${component.id} but not ${fileName} (it has: ${readdirSync(localDir).join(', ') || 'nothing'}); the build bundled a different file than this config resolves`);
+					}
 					if (local && existsSync(local)) {
 						const { sha256, sizeBytes } = await hashLocalFile(local, dest);
 						console.log(`using the build's own ${component.id} ${version} (${local}) for ${sourceUrl}`);
