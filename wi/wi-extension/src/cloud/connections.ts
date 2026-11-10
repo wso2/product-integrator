@@ -87,13 +87,13 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 				await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: true, data }, request.projectName);
 			}
 		},
-		listConnectable: (integration: string, projectName?: string) => cloud.config.listConnectableEndpoints(integration, projectName),
+		listConnectable: (integration: string, projectName: string) => cloud.config.listConnectableEndpoints(integration, projectName),
 		createServiceConnection: async (request: {
 			integration: string;
 			target: { project: string; integration: string; endpoint: string };
 			access: ServiceConnectionAccess;
 			configurables: { url: string; apiKey?: string };
-			projectName?: string;
+			projectName: string;
 		}) => {
 			const { target, configurables } = request;
 			const endpoint = `${target.project}/${target.integration}/${target.endpoint}`;
@@ -101,7 +101,7 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 				throw new BadRequestError("A service connection needs the configurable its URL fills.");
 			}
 			// The platform tells the two apart by the endpoint's project, so a mismatch is refused before anything is written.
-			if (request.projectName && (target.project === request.projectName) !== (request.access === "project")) {
+			if ((target.project === request.projectName) !== (request.access === "project")) {
 				throw new BadRequestError(
 					request.access === "project"
 						? `${target.integration} is in the project ${target.project}; connect to it with organization access.`
