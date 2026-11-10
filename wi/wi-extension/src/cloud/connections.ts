@@ -101,7 +101,11 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 					throw new BadRequestError("A connection inside the project needs the configurable the endpoint's address fills.");
 				}
 				// The platform resolves the endpoint's address in every environment, so nothing is written per environment.
-				await cloud.config.putLink(request.integration, { configurable: request.configurable, endpoint: `${target.integration}/${target.endpoint}` }, request.projectName);
+				await cloud.config.putLink(
+					request.integration,
+					{ configurable: request.configurable, endpoint: `${target.project}/${target.integration}/${target.endpoint}` },
+					request.projectName,
+				);
 				return;
 			}
 			// Every environment is checked before anything is created, so a missing endpoint or deployment leaves no half-made connection behind.
@@ -170,9 +174,10 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 		},
 		listEndpointLinks: async (integration: string, projectName?: string): Promise<EndpointLink[]> => {
 			const links = await cloud.config.listLinks(integration, projectName);
+			// Each is "<project>/<component>/<endpoint>": a project and a component hold no slash, an endpoint name may.
 			return Object.entries(links.endpointLinks ?? {}).flatMap(([configurable, id]) => {
-				const slash = id.indexOf("/");
-				return slash > 0 && slash < id.length - 1 ? [{ configurable, component: id.slice(0, slash), endpoint: id.slice(slash + 1) }] : [];
+				const [project, component, ...endpoint] = id.split("/");
+				return project && component && endpoint.join("/") ? [{ configurable, component, endpoint: endpoint.join("/") }] : [];
 			});
 		},
 		unlinkEndpoint: async (request: { integration: string; configurable: string; projectName?: string }) => {
