@@ -1689,23 +1689,21 @@ jobs:
           path: bundled-extensions/
         continue-on-error: true
 
-      # As in "Resolve published targets" for the feed: fetch and require the JRE only for the
-      # platforms this run built, the ones whose cores and installers the release carries.
+      # Fetch and require the JRE only for the platforms whose cores and installers the release
+      # carries. Linux always: build_linux scopes the update feed ("Resolve published targets") but
+      # never reaches the compile job, which builds the Linux core and installers on every run, and
+      # "Verify release assets" requires them unconditionally.
       - name: Resolve release targets
         id: release-targets
         shell: bash
         env:
           BUILD_MACOS: ${{ inputs.build_macos }}
           BUILD_WINDOWS: ${{ inputs.build_windows }}
-          BUILD_LINUX: ${{ inputs.build_linux }}
         run: |
           set -euo pipefail
-          TARGETS=()
+          TARGETS=("linux-x64")
           [ "${BUILD_MACOS}" = "true" ] && TARGETS+=("darwin-arm64" "darwin-x64")
           [ "${BUILD_WINDOWS}" = "true" ] && TARGETS+=("win32-x64")
-          [ "${BUILD_LINUX}" = "true" ] && TARGETS+=("linux-x64")
-          # An empty --targets would mean every target to the generator, not none.
-          [ ${#TARGETS[@]} -gt 0 ] || { echo "Error: no platform was built" >&2; exit 1; }
           printf -v JOINED '%s,' "${TARGETS[@]}"
           echo "targets=${JOINED%,}" >> "$GITHUB_OUTPUT"
           echo "release targets: ${JOINED%,}"
