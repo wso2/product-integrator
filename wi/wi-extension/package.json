@@ -28,6 +28,12 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "authentication": [
+      {
+        "id": "wso2-cloud",
+        "label": "WSO2 Cloud"
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "WSO2 Integrator",
