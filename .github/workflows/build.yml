@@ -1681,13 +1681,15 @@ jobs:
           path: runtimes/
 
       # The GitHub-release extensions the compile job bundled (absent when every extension came from
-      # Open VSX). The generator publishes these files rather than fetching them again.
+      # Open VSX). The generator publishes these files rather than fetching them again. Gated on the
+      # same condition the compile job stages them on, not continue-on-error: a failed download
+      # would otherwise send the generator back to a rolling tag that may have moved on.
       - name: Download the bundled GitHub-release extensions
+        if: ${{ (inputs.ballerina_extension_source == 'github' && needs.resolve-versions.outputs.ballerina_extension_version != '') || (inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '') }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: bundled-github-extensions
           path: bundled-extensions/
-        continue-on-error: true
 
       # Fetch and require the JRE only for the platforms whose cores and installers the release
       # carries. Linux always: build_linux scopes the update feed ("Resolve published targets") but
