@@ -471,6 +471,37 @@ jobs:
           MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.mi_extension_tag }}")
           echo "MI_VSIX_PATH=${MI_VSIX_PATH}" >> "$GITHUB_ENV"
 
+      # The GitHub-release extensions this build bundles, for publish-github-release to publish as
+      # they are (generate-update-manifest.mjs --component-files). Fetching them again there, after
+      # every installer is built, fails when a rolling upstream release (wso2/ballerina-vscode's
+      # `nightly`) has moved on in the meantime. Laid out as <component id>/<file>, as the generator
+      # fetches them. Open VSX downloads are versioned and immutable, so they are fetched there.
+      - name: Stage the bundled GitHub-release extensions
+        id: bundled-extensions
+        if: ${{ inputs.build_packed_installers == true && inputs.publish_core == true && (env.BALLERINA_VSIX_PATH != '' || env.MI_VSIX_PATH != '') }}
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+          stage() {
+            [ -n "$2" ] || return 0
+            mkdir -p "bundled-extensions/$1"
+            cp "lib/vscode/$2" "bundled-extensions/$1/"
+            ls -l "bundled-extensions/$1/"
+          }
+          stage wso2.ballerina "${BALLERINA_VSIX_PATH:-}"
+          stage wso2.micro-integrator "${MI_VSIX_PATH:-}"
+
+      - name: Upload the bundled GitHub-release extensions
+        if: ${{ steps.bundled-extensions.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bundled-github-extensions
+          path: bundled-extensions/
+          if-no-files-found: error
+          # Consumed within this run only (publish-github-release); 7 days covers re-runs.
+          retention-days: 7
+
       # Deliberately after the cache steps: a timestamped version in
       # hashFiles('ci/build/component-versions.properties') would bust the extensions cache every run.
       # This also lands before `rush build`, so the .vsix filename, product.json and the installer

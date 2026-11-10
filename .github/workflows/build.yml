@@ -1679,6 +1679,15 @@ jobs:
           name: icp
           path: runtimes/
 
+      # The GitHub-release extensions the compile job bundled (absent when every extension came from
+      # Open VSX). The generator publishes these files rather than fetching them again.
+      - name: Download the bundled GitHub-release extensions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: bundled-github-extensions
+          path: bundled-extensions/
+        continue-on-error: true
+
       # As in "Resolve published targets" for the feed: fetch and require the JRE only for the
       # platforms this run built, the ones whose cores and installers the release carries.
       - name: Resolve release targets
@@ -1741,6 +1750,7 @@ jobs:
           # itself (fetch mode: the same resolution publish-update-source mirrors with, so the release
           # and the feed cannot disagree), named <integrator>-<component id>-<file>.
           node ci/build/generate-update-manifest.mjs --fetch-components feed-components \
+            --component-files bundled-extensions \
             --targets "${RELEASE_TARGETS}" \
             --versions core/versions/ci/build/component-versions.properties \
             --source-flavors "wso2.ballerina=${BALLERINA_EXTENSION_SOURCE:-marketplace},wso2.micro-integrator=${MI_EXTENSION_SOURCE:-marketplace}"

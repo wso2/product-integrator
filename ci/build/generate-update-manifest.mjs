@@ -64,8 +64,9 @@
 //   Fetch only (no document): download every component the feed would serve from a URL, resolved
 //   exactly as above (variants, flavors, {jrePlatform}/{version}/{versionBase}/{tag}), into DIR/<id>/<file>,
 //   so the release can publish them next to the cores:
-//     ... --fetch-components DIR [--source-flavors ...] [--targets ...]
-//   Components declared with `sourceFile` are built in this repo and are not fetched.
+//     ... --fetch-components DIR [--source-flavors ...] [--targets ...] [--component-files FILES]
+//   Components declared with `sourceFile` are built in this repo and are not fetched. A file already
+//   at FILES/<id>/<file> (the build's own download) is used as it is instead of being fetched.
 //
 // --no-download emits placeholder hashes (structure-only; for local validation, not for release);
 // with --fetch-components it prints what would be fetched and where.
@@ -364,6 +365,14 @@ async function main() {
 	if (fetchComponentsDir && (artifactsBase || args['components-only'])) {
 		throw new Error('--fetch-components writes no document; it takes no --artifacts-base or --components-only');
 	}
+	// The files the build itself downloaded and bundled, laid out <id>/<file> as fetched here. A
+	// rolling upstream release (a `nightly` tag) can move on between the build and the release, so
+	// the release publishes these bytes rather than fetching the URL again. A missing directory or
+	// file just means "fetch it".
+	const componentFilesDir = typeof args['component-files'] === 'string' ? args['component-files'] : '';
+	if (componentFilesDir && !fetchComponentsDir) {
+		throw new Error('--component-files is only read with --fetch-components');
+	}
 
 	// A components-only publish ships component updates without a new app.
 	const componentsOnly = !!args['components-only'];
@@ -602,7 +611,14 @@ async function main() {
 				if (!fetched.has(sourceUrl)) {
 					const dest = path.join(fetchComponentsDir, safeSegment(component.id, 'component id'), fileName);
 					fetched.set(sourceUrl, dest);
-					if (noDownload) {
+					const local = componentFilesDir
+						? path.join(componentFilesDir, safeSegment(component.id, 'component id'), fileName)
+						: '';
+					if (local && existsSync(local)) {
+						const { sha256, sizeBytes } = await hashLocalFile(local, dest);
+						console.log(`using the build's own ${component.id} ${version} (${local}) for ${sourceUrl}`);
+						console.log(`  -> ${dest} (${sizeBytes} bytes, sha256 ${sha256})`);
+					} else if (noDownload) {
 						console.log(`would fetch ${component.id} ${version}: ${sourceUrl} -> ${dest}`);
 					} else {
 						console.log(`fetching ${component.id} ${version}: ${sourceUrl}`);
