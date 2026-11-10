@@ -33,28 +33,36 @@ permissions:
 jobs:
   publish:
     name: Publish vsix to marketplaces
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      # The release publishes the WI extension with the other bundled extensions, as
+      # wso2-integrator-<version>-wso2.wso2-integrator-<file>.vsix. A wso2-integrator-*.vsix pattern
+      # would match all six, so the asset is picked by name first and only that one is downloaded.
+      # Releases cut before that change carry it as plain wso2-integrator-<wi version>.vsix instead.
       - name: Download WI extension VSIX from release
-        env:
-          TAG: ${{ inputs.tag }}
-        run: gh release download "${TAG}" --repo "${{ github.repository }}" --pattern 'wso2-integrator-*.vsix'
-
-      - name: Get vsix path
         id: vsix
         shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          files=(wso2-integrator-*.vsix)
-          if [ "${#files[@]}" -ne 1 ]; then
-            echo "Error: expected exactly one wso2-integrator-*.vsix, found ${#files[@]}:" >&2
-            printf '  - %s\n' "${files[@]}" >&2
+          names=$(gh release view "${TAG}" --repo "${REPO}" --json assets --jq '.assets[].name')
+          files=$(grep -E '^wso2-integrator-.+-wso2\.wso2-integrator-.+\.vsix$' <<< "${names}" || true)
+          if [ -z "${files}" ]; then
+            files=$(grep -E '^wso2-integrator-.+\.vsix$' <<< "${names}" | grep -vF -- '-wso2.' || true)
+            [ -z "${files}" ] || echo "${TAG} predates the signed WI asset; using its plain-named vsix."
+          fi
+          count=$(grep -c . <<< "${files}" || true)
+          if [ "${count}" -ne 1 ]; then
+            echo "Error: expected exactly one WI extension vsix on ${TAG}, found ${count}:" >&2
+            printf '  - %s\n' ${files} >&2
             exit 1
           fi
-          echo "vsixName=${files[0]}" >> "$GITHUB_OUTPUT"
+          gh release download "${TAG}" --repo "${REPO}" --pattern "${files}"
+          echo "vsixName=${files}" >> "$GITHUB_OUTPUT"
 
       # The GitHub release's own prerelease flag is editable after the fact and can drift from
       # what was actually packaged, so read the ground truth out of the vsix itself: this is the
@@ -73,10 +81,10 @@ jobs:
             echo "releaseMode=" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Use Node.js 20.x
+      - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20.x
+          node-version: 24.22.1
 
       # Pinned: these run with marketplace tokens, so the version that publishes should be the
       # version that was reviewed, not whatever npm resolves that morning.

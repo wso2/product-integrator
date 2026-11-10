@@ -16,9 +16,11 @@
  * under the License.
  */
 
+import { buildConsoleUrl } from "@wso2/wso2-cloud-client/contract";
 import React from "react";
 import { CheckBox } from "@wso2/ui-toolkit";
-import { AUTOMATION_WITH_LISTENER_WARNING, DevantScopes, getIntegrationScopeText, ICreateNewIntegrationCmdIntegrations, Project, resolveIntegrationType } from "@wso2/wso2-platform-core";
+import type { Project } from "@wso2/wso2-cloud-client";
+import { AUTOMATION_WITH_LISTENER_WARNING, DevantScopes, getIntegrationScopeText, ICreateNewIntegrationCmdIntegrations, resolveIntegrationType } from "@wso2/wso2-platform-core";
 import {
 	CheckboxCell,
 	ComponentInfo,
@@ -93,7 +95,7 @@ export function ComponentList({
 	const { consoleUrl } = useCloudContext();
 
 	const projectLink = <VSCodeLinkForeground title="View project in console" onClick={() => {
-		wsClient.openExternal(`${consoleUrl}/organizations/${org?.handle}/projects/${project?.handler}`)
+		wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle: org?.handle, project: project?.id }))
 	}}>{project?.name}</VSCodeLinkForeground>
 
 	return (

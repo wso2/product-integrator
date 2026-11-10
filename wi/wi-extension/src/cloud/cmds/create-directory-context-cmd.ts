@@ -16,30 +16,21 @@
  * under the License.
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, unlinkSync, writeFileSync } from "fs";
 import * as os from "os";
 import * as path from "path";
-import { dirname } from "path";
-import {
-	WICommandIds,
-	type ContextItem,
-	type ICmdParamsBase,
-	type ICreateDirCtxCmdParams,
-	type Organization,
-	type Project,
-	type UserInfo,
-	getComponentKindRepoSource,
-	parseGitURL,
-} from "@wso2/wso2-platform-core";
-import * as yaml from "js-yaml";
+import type { Project } from "@wso2/wso2-cloud-client";
+import { type ICreateDirCtxCmdParams, WICommandIds, parseGitURL } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, Uri, commands, window, workspace } from "vscode";
-import { ext } from '../../extensionVariables';
-import { getGitRemotes, getGitRoot } from "../git/util";
+import { ext } from "../../extensionVariables";
+import { convertFsPathToUriPath, isSubpath, openDirectory } from "../../utils";
+import { linkContext } from "../context-file";
 import { initGit } from "../git/main";
-import { contextStore, getContextKey, waitForContextStoreToLoad } from "../stores/context-store";
+import { getGitRemotes, getGitRoot } from "../git/util";
+import { handleCloudError } from "../platform/error-handler";
+import { contextStore, getContextKey, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
+import { dataCacheStore } from "../stores/data-cache-store";
 import { webviewStateStore } from "../stores/webview-state-store";
-import { convertFsPathToUriPath, isSubpath, openDirectory } from '../../utils';
-import { getUserInfoForCmd, isRpcActive, selectOrg, selectProjectWithCreateNew, setExtensionName } from "./cmd-utils";
+import { isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensionName } from "./cmd-utils";
 
 export function createDirectoryContextCommand(context: ExtensionContext) {
 	context.subscriptions.push(
@@ -47,202 +38,126 @@ export function createDirectoryContextCommand(context: ExtensionContext) {
 			setExtensionName(params?.extName);
 			const extensionName = webviewStateStore.getState().state.extensionName;
 			try {
-				isRpcActive(ext);
-				const userInfo = await getUserInfoForCmd(`link a directory with a ${extensionName} project`);
+				isPlatformReady(ext);
+				const session = await requireSession(`link a directory with a ${extensionName} project`);
+				if (!session) {
+					return;
+				}
 				let gitRoot: string | undefined = "";
-				if (userInfo) {
-					let directoryUrl: Uri;
-					if (!workspace.workspaceFile && workspace.workspaceFolders?.length === 1) {
-						try {
-							gitRoot = await getGitRoot(context, workspace.workspaceFolders[0].uri?.fsPath);
-						} catch (err) {
-							// ignore error
-						}
-					}
-
-					if (gitRoot) {
-						directoryUrl = Uri.parse(convertFsPathToUriPath(gitRoot));
-					} else if (params?.fsPath) {
-						directoryUrl = Uri.parse(convertFsPathToUriPath(params.fsPath));
-					} else {
-						const componentDir = await window.showOpenDialog({
-							canSelectFolders: true,
-							canSelectFiles: false,
-							canSelectMany: false,
-							title: `Select directory that needs to be linked with ${extensionName}`,
-							defaultUri: workspace.workspaceFolders?.[0]?.uri || Uri.file(os.homedir()),
-						});
-
-						if (componentDir === undefined || componentDir.length === 0) {
-							throw new Error(`Directory is required to link with ${extensionName}`);
-						}
-
-						directoryUrl = componentDir[0];
-					}
-
+				let directoryUrl: Uri;
+				if (!workspace.workspaceFile && workspace.workspaceFolders?.length === 1) {
 					try {
-						gitRoot = await getGitRoot(context, directoryUrl.fsPath);
+						gitRoot = await getGitRoot(context, workspace.workspaceFolders[0].uri?.fsPath);
 					} catch {
-						// ignore error
+						// not a git repository
 					}
-					if (!gitRoot) {
-						if (params?.fsPath) {
-							const git = await initGit(context);
-							await git?.init(params?.fsPath);
-							gitRoot = params?.fsPath;
-						} else {
-							throw new Error("Selected directory is not within a git repository");
-						}
+				}
+
+				if (gitRoot) {
+					directoryUrl = Uri.parse(convertFsPathToUriPath(gitRoot));
+				} else if (params?.fsPath) {
+					directoryUrl = Uri.parse(convertFsPathToUriPath(params.fsPath));
+				} else {
+					const componentDir = await window.showOpenDialog({
+						canSelectFolders: true,
+						canSelectFiles: false,
+						canSelectMany: false,
+						title: `Select directory that needs to be linked with ${extensionName}`,
+						defaultUri: workspace.workspaceFolders?.[0]?.uri || Uri.file(os.homedir()),
+					});
+					if (componentDir === undefined || componentDir.length === 0) {
+						throw new Error(`Directory is required to link with ${extensionName}`);
 					}
+					directoryUrl = componentDir[0];
+				}
 
-					const selectedOrg = await selectOrg(userInfo, "Select organization");
+				try {
+					gitRoot = await getGitRoot(context, directoryUrl.fsPath);
+				} catch {
+					// not a git repository
+				}
+				if (!gitRoot) {
+					if (params?.fsPath) {
+						const git = await initGit(context);
+						await git?.init(params?.fsPath);
+						gitRoot = params?.fsPath;
+					} else {
+						throw new Error("Selected directory is not within a git repository");
+					}
+				}
 
-					const { projectList, selectedProject } = await selectProjectWithCreateNew(
-						selectedOrg,
-						`Loading projects from '${selectedOrg.name}'`,
-						`Select project from '${selectedOrg.name}'`,
+				const { selectedProject } = await selectProjectWithCreateNew(`Loading projects from '${session.org.name}'`, `Select project from '${session.org.name}'`);
+
+				if (!params?.skipComponentExistCheck) {
+					const remotes = await getGitRemotes(context, gitRoot);
+					if (remotes.length === 0) {
+						throw new Error("The Selected directory does not have any Git remotes");
+					}
+					const cloud = ext.clients.platform.cloud;
+					const integrations = await window.withProgress(
+						{ title: `Fetching ${ext.terminologies?.componentTermPlural} of project ${selectedProject.name}...`, location: ProgressLocation.Notification },
+						() => cloud.components.list(selectedProject.id),
 					);
+					dataCacheStore.getState().setIntegrations(session.org.handle, selectedProject.id, integrations);
 
-					await window.withProgress({ title: `Switching to organization ${selectedOrg.name}...`, location: ProgressLocation.Notification }, () =>
-						ext?.clients?.rpcClient?.changeOrgContext(selectedOrg?.id?.toString()!),
-					);
-
-					if (!params || !params?.skipComponentExistCheck) {
-						const remotes = await getGitRemotes(context, gitRoot);
-						if (remotes.length === 0) {
-							throw new Error("The Selected directory does not have any Git remotes");
-						}
-						const components = await window.withProgress(
-							{
-								title: `Fetching ${ext.terminologies?.componentTermPlural} of project ${selectedProject.name}...`,
-								location: ProgressLocation.Notification,
-							},
-							() =>
-								ext?.clients?.rpcClient?.getComponentList({
-									orgId: selectedOrg?.id?.toString(),
-									orgHandle: selectedOrg.handle,
-									projectHandle: selectedProject.handler,
-									projectId: selectedProject.id,
-								}),
+					if (integrations.length > 0) {
+						// Check whether the directory's remotes match any of the project's repositories.
+						const repositories = await Promise.all(
+							integrations.map((integration) => cloud.components.repository(integration.id, selectedProject.id).catch((): undefined => undefined)),
 						);
-
-						if (components.length > 0) {
-							// Check if user is trying to link with the correct Git directory
-							const hasMatchingRemote = components.some((componentItem) => {
-								const repoUrl = getComponentKindRepoSource(componentItem.spec.source).repo;
-								const parsedRepoUrl = parseGitURL(repoUrl);
-								if (parsedRepoUrl) {
-									const [repoOrg, repoName, repoProvider] = parsedRepoUrl;
-									return remotes.some((remoteItem) => {
-										const parsedRemoteUrl = parseGitURL(remoteItem.fetchUrl);
-										if (parsedRemoteUrl) {
-											const [repoRemoteOrg, repoRemoteName, repoRemoteProvider] = parsedRemoteUrl;
-											return repoOrg === repoRemoteOrg && repoName === repoRemoteName && repoRemoteProvider === repoProvider;
-										}
-									});
-								}
+						const hasMatchingRemote = repositories.some((repository) => {
+							const parsedRepoUrl = parseGitURL(repositoryUrlOf(repository) ?? "");
+							if (!parsedRepoUrl) {
+								return false;
+							}
+							const [repoOrg, repoName, repoProvider] = parsedRepoUrl;
+							return remotes.some((remote) => {
+								const parsed = parseGitURL(remote.fetchUrl);
+								return !!parsed && parsed[0] === repoOrg && parsed[1] === repoName && parsed[2] === repoProvider;
 							});
-
-							if (!hasMatchingRemote) {
-								const resp = await window.showInformationMessage(
-									"The selected directory does not have any Git remotes that match with the repositories associated with the selected project. Do you wish to continue?",
-									{ modal: true },
-									"Continue",
-								);
-								if (resp !== "Continue") {
-									return;
-								}
+						});
+						if (!hasMatchingRemote) {
+							const resp = await window.showInformationMessage(
+								"The selected directory does not have any Git remotes that match with the repositories associated with the selected project. Do you wish to continue?",
+								{ modal: true },
+								"Continue",
+							);
+							if (resp !== "Continue") {
+								return;
 							}
 						}
 					}
-
-					const contextFilePath = updateContextFile(gitRoot, userInfo, selectedProject, selectedOrg, projectList);
-
-					const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, gitRoot!));
-
-					if (isWithinWorkspace || params?.fsPath) {
-						contextStore.getState().refreshState();
-						await waitForContextStoreToLoad();
-
-						contextStore.getState().onSetNewContext(selectedOrg, selectedProject, {
-							contextFileFsPath: contextFilePath,
-							dirFsPath: directoryUrl.fsPath,
-							workspaceName: path.basename(gitRoot),
-							projectRootFsPath: path.dirname(path.dirname(contextFilePath)),
-						});
-					} else {
-						ext.context.globalState.update("open-local-repo", getContextKey(selectedOrg, selectedProject));
-						openDirectory(gitRoot, "Where do you want to open the project directory?");
-					}
 				}
-			} catch (err: any) {
-				console.error(`Failed to link directory with ${extensionName} project`, err);
-				window.showErrorMessage(`Failed to link directory with ${extensionName} project. ${err?.message}`);
+
+				const contextFilePath = linkContext(gitRoot, { org: session.org.handle, project: selectedProject.id });
+				const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, gitRoot!));
+
+				if (isWithinWorkspace || params?.fsPath) {
+					contextStore.getState().refreshState();
+					await waitForContextStoreToLoad();
+					contextStore.getState().onSetNewContext(selectedProject, {
+						contextFileFsPath: contextFilePath,
+						dirFsPath: directoryUrl.fsPath,
+						workspaceName: path.basename(gitRoot),
+						projectRootFsPath: path.dirname(path.dirname(contextFilePath)),
+					});
+				} else {
+					ext.context.globalState.update("open-local-repo", getContextKey(session.org.handle, selectedProject));
+					openDirectory(gitRoot, "Where do you want to open the project directory?");
+				}
+			} catch (err) {
+				ext.logError(`Failed to link directory with ${extensionName} project`, err as Error);
+				handleCloudError(err, `Failed to link directory with ${extensionName} project.`);
 			}
 		}),
 	);
 }
 
-export const updateContextFile = (
-	gitRoot: string,
-	userInfo: UserInfo,
-	selectedProject: Project,
-	selectedOrg: Organization,
-	projectList: Project[],
-) => {
-	const wso2ContextPath = path.join(gitRoot, ".wso2", "context.yaml");
-	const choreoContextPath = path.join(gitRoot, ".choreo", "context.yaml");
-	const contextFilePath = existsSync(wso2ContextPath) ? wso2ContextPath
-		: existsSync(choreoContextPath) ? choreoContextPath
-			: wso2ContextPath;
-	if (existsSync(contextFilePath)) {
-		let parsedData: ContextItem[] = yaml.load(readFileSync(contextFilePath, "utf8")) as any;
-		if (!Array.isArray(parsedData) && (parsedData as any)?.org && (parsedData as any)?.project) {
-			parsedData = [{ org: (parsedData as any).org, project: (parsedData as any).project }];
-		}
-
-		const newList = parsedData.filter(
-			(item) =>
-				userInfo.organizations.some((org) => org.handle === item.org) ||
-				(item.org === selectedOrg.handle && projectList.some((project) => project.handler === item.project)),
-		);
-		if (!newList.some((item) => item.org === selectedOrg.handle && item.project === selectedProject.handler)) {
-			newList.push({ org: selectedOrg.handle, project: selectedProject.handler });
-		}
-		writeFileSync(contextFilePath, yaml.dump(newList));
-	} else {
-		const wso2Dir = path.join(gitRoot, ".wso2");
-		if (!existsSync(wso2Dir)) {
-			mkdirSync(wso2Dir);
-		}
-		const contextYamlData: ContextItem[] = [{ org: selectedOrg.handle, project: selectedProject.handler }];
-		writeFileSync(path.join(wso2Dir, "context.yaml"), yaml.dump(contextYamlData));
+/** Links a repository to a project, writing `.wso2/context.yaml`; answers the file's path. */
+export const updateContextFile = (gitRoot: string, project: Project, env?: string): string => {
+	const org = ext.authProvider?.org;
+	if (!org) {
+		throw new Error("Not signed in to WSO2 Cloud.");
 	}
-
-	return contextFilePath;
-};
-
-export const removeContext = (selectedProject: Project, selectedOrg: Organization, projectRootsFsPaths: string[]) => {
-	for (const projectRootPath of projectRootsFsPaths) {
-		const wso2ContextPath = path.join(projectRootPath, ".wso2", "context.yaml");
-		const contextFilePath = existsSync(wso2ContextPath) ? wso2ContextPath : path.join(projectRootPath, ".choreo", "context.yaml");
-		if (existsSync(contextFilePath)) {
-			let parsedData: ContextItem[] = yaml.load(readFileSync(contextFilePath, "utf8")) as any;
-			if (!Array.isArray(parsedData) && (parsedData as any)?.org && (parsedData as any)?.project) {
-				parsedData = [{ org: (parsedData as any).org, project: (parsedData as any).project }];
-			}
-
-			const newList = parsedData.filter((item) => item.project !== selectedProject.handler && item.org !== selectedOrg.handle);
-			if (newList.length > 0) {
-				writeFileSync(contextFilePath, yaml.dump(newList));
-			} else {
-				unlinkSync(contextFilePath);
-				const choreoDirPath = dirname(contextFilePath);
-				const choreoDirFiles = readdirSync(choreoDirPath);
-				if (choreoDirFiles.length === 0) {
-					rmdirSync(choreoDirPath);
-				}
-			}
-		}
-	}
+	return linkContext(gitRoot, { org: org.handle, project: project.id, env });
 };

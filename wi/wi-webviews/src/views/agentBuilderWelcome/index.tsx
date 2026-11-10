@@ -37,7 +37,6 @@ import {
 	CardTitle,
 	CardsContainer,
 	CardsGrid,
-	GetStartedBadge,
 	Headline,
 	RecentProjectsPanel,
 	SigninBtn,
@@ -189,7 +188,6 @@ export const AgentBuilderWelcomeView: React.FC = () => {
 							)}
 						</TopBtnSection>
 					</TopControlsSection>
-					<GetStartedBadge>Get Started</GetStartedBadge>
 					<Headline>{productName}</Headline>
 					<Caption>
 						Design, build, and manage AI agents that connect to your APIs, data,

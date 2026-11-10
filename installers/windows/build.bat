@@ -94,9 +94,6 @@ if errorlevel 1 (
 )
 :after_ballerina_packages
 
-REM Prune choreo-cli to win32/amd64 and linux/amd64 (WSL) only
-powershell -nologo -noprofile -command "& { $choreoCliDir = '.\WixPackage\payload\Integrator\resources\app\extensions\wso2.wso2-integrator\resources\choreo-cli'; if (Test-Path $choreoCliDir) { Get-ChildItem $choreoCliDir -Directory | ForEach-Object { $vDir = $_.FullName; foreach ($target in @((Join-Path $vDir 'darwin'), (Join-Path $vDir 'linux\arm64'))) { if (Test-Path $target) { try { Remove-Item $target -Recurse -Force -ErrorAction Stop } catch [System.Management.Automation.ItemNotFoundException] { } catch { Write-Warning ('choreo-cli prune warning: ' + $_.Exception.Message) } } }; Write-Host ('Pruned choreo-cli in ' + $_.Name) } } else { Write-Host 'choreo-cli directory not found, skipping prune' } }"
-
 REM editor-update (§D8 / W-B): the small update MSI is truly editor-only — skip ICP + JRE too
 REM (in addition to Ballerina). The client seeds them to the data folder; ICP requires the MI
 REM extension to read WSO2_INTEGRATOR_ICP_HOME before this build is published (go-live gate).

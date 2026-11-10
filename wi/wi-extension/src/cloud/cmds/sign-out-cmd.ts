@@ -18,17 +18,21 @@
 
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, commands, window } from "vscode";
-import { ext } from '../../extensionVariables';
-import { isRpcActive } from "./cmd-utils";
+import { ext } from "../../extensionVariables";
+import { isPlatformReady } from "./cmd-utils";
 
 export function signOutCommand(context: ExtensionContext) {
 	context.subscriptions.push(
 		commands.registerCommand(WICommandIds.SignOut, async () => {
 			try {
-				isRpcActive(ext);
-				await ext.authProvider?.getState().logout(false);
+				isPlatformReady(ext);
+				if (ext.clients.platform.injected) {
+					window.showInformationMessage("This editor was started with a WSO2 Cloud token and cannot sign out.");
+					return;
+				}
+				await ext.authProvider?.logout(false);
 			} catch (error: any) {
-				ext.logError(`Error while signing out from WSO2 Integrator. ${error?.message}${error?.cause ? `\nCause: ${error.cause.message}` : ""}`, error as Error);
+				ext.logError("Error while signing out of WSO2 Cloud", error as Error);
 				if (error instanceof Error) {
 					window.showErrorMessage(error.message);
 				}
