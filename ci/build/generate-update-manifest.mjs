@@ -538,8 +538,10 @@ async function main() {
 			continue; // carried above, not rebuilt or re-mirrored
 		}
 		// Built in this repo, so there is nothing to fetch (the release publishes those from the
-		// build's own artifacts).
-		if (fetchComponentsDir && component.sourceFile) {
+		// build's own artifacts). Nor a variant: that is an older line served to older clients, not
+		// what this build bundled, and on the release it would sit next to the bundled one under the
+		// same <integrator>-<id>- prefix with nothing to tell the two apart.
+		if (fetchComponentsDir && (component.sourceFile || component.isVariant)) {
 			continue;
 		}
 		// Components that only exist as a repo-local build artifact (no public source URL) can only
