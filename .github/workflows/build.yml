@@ -1835,13 +1835,20 @@ jobs:
           require "ICP package"         release-files/*-icp-*.zip
           # The fetched components, from the same config the generator read: every component with
           # a URL, and for the JRE one file per built target's platform token, so the list cannot
-          # drift from it.
+          # drift from it. Read up front and required non-empty: this step has no `set -e`, and a jq
+          # failure inside `for x in $(...)` would just loop over nothing and pass every check.
           CONFIG=ci/build/update-manifest.config.json
-          for t in $(jq -r --arg targets "${RELEASE_TARGETS}" \
-              '.platformTokens.jre as $tok | $targets | split(",")[] | $tok[.]' "${CONFIG}" | sort -u); do
+          mapfile -t JRE_TOKENS < <(jq -r --arg targets "${RELEASE_TARGETS}" \
+              '.platformTokens.jre as $tok | $targets | split(",")[] | $tok[.] // "unknown-target"' "${CONFIG}" | sort -u)
+          mapfile -t COMPONENT_IDS < <(jq -r '.components[] | select(.url != null and .id != "jre") | .id' "${CONFIG}")
+          if [ ${#JRE_TOKENS[@]} -eq 0 ] || [ ${#COMPONENT_IDS[@]} -eq 0 ]; then
+            echo "Error: could not read the expected JRE targets and components from ${CONFIG}" >&2
+            exit 1
+          fi
+          for t in "${JRE_TOKENS[@]}"; do
             require "JRE ${t}"          release-files/*-jre-*-${t}-*.zip
           done
-          for e in $(jq -r '.components[] | select(.url != null and .id != "jre") | .id' "${CONFIG}"); do
+          for e in "${COMPONENT_IDS[@]}"; do
             require "Component ${e}"    release-files/*-${e}-*
           done
           if [ "${BUILD_MACOS}" = "true" ]; then
