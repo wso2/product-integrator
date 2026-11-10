@@ -17,119 +17,56 @@
  */
 
 import path, { join } from "path";
-import {
-	type ExtensionName,
-	type ICloneProjectCmdParams,
-	type Organization,
-	type Project,
-	type UserInfo,
-	WICommandIds,
-	getComponentKindRepoSource,
-	type openClonedDirReq,
-	parseGitURL,
-} from "@wso2/wso2-platform-core";
-import { ProgressLocation, type ProviderResult, type QuickPickItem, type Uri, commands, window, workspace } from "vscode";
-import { ResponseError } from "vscode-jsonrpc";
-import { ErrorCode } from "./choreo-cli-rpc/error-utils";
-import { getUserInfoForCmd, isRpcActive } from "./cmds/cmd-utils";
-import { updateContextFile } from "./cmds/create-directory-context-cmd";
+import type { Component, OpenClonedDirRequest, Project } from "@wso2/wso2-cloud-client";
+import { RESOURCE_NAME } from "@wso2/wso2-cloud-client";
+import { type ExtensionName, WICommandIds, parseGitURL } from "@wso2/wso2-platform-core";
+import { type ExtensionContext, ProgressLocation, type ProviderResult, type QuickPickItem, type Uri, commands, window, workspace } from "vscode";
+import { BridgeLayer } from "../BridgeLayer";
 import { ext } from "../extensionVariables";
+import { isSamePath, openDirectory } from "../utils/pathUtils";
+import type { ICloneIntegrationCmdParams } from "./cmds/clone-project-cmd";
+import { isPlatformReady, requireSession } from "./cmds/cmd-utils";
+import { linkContext } from "./context-file";
 import { getGitRemotes, getGitRoot } from "./git/util";
-import { contextStore, getContextKey, waitForContextStoreToLoad } from "./stores/context-store";
+import { handleCloudError } from "./platform/error-handler";
+import { contextStore, getContextKey, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "./stores/context-store";
 import { dataCacheStore } from "./stores/data-cache-store";
 import { locationStore } from "./stores/location-store";
-import { webviewStateStore } from "./stores/webview-state-store";
-import { isSamePath, openDirectory } from "../utils/pathUtils";
-import { BridgeLayer } from "../BridgeLayer";
 
-export function activateURIHandlers() {
-	window.registerUriHandler({
+/** Only what can be a name or a label goes on from a link into files the clone writes. */
+const nameFromLink = (value: string | null, pattern: RegExp): string | undefined => (value && pattern.test(value) ? value : undefined);
+const LABEL = /^[A-Za-z0-9 +_-]{1,64}$/;
+
+export function activateURIHandlers(context: ExtensionContext) {
+	const handler = window.registerUriHandler({
 		handleUri(uri: Uri): ProviderResult<void> {
-			ext.log(`Handling URI: ${uri.toString()}`);
-			const extName = webviewStateStore.getState().state.extensionName;
-
-			if (uri.path === "/signin") {
-				try {
-					isRpcActive(ext);
-					ext.log("WSO2 Integrator Login Callback hit");
-					BridgeLayer.notifySignInInitiated();
-					const urlParams = new URLSearchParams(uri.query);
-					const authCode = urlParams.get("code");
-					const region = urlParams.get("region") || "";
-					if (authCode) {
-						ext.log("Initiating WSO2 Integrator sign in flow from auth code");
-						window.withProgress(
-							{
-								title: `Verifying user details and logging into ${ext.terminologies?.cloudName}...`,
-								location: ProgressLocation.Notification,
-							},
-							async () => {
-								try {
-									const orgId = contextStore?.getState().state?.selected?.org?.id?.toString();
-									let userInfo: UserInfo | undefined;
-									if (extName === "Devant") {
-										userInfo = await ext.clients.rpcClient.signInDevantWithAuthCode(authCode, region, orgId);
-									} else {
-										userInfo = await ext.clients.rpcClient.signInWithAuthCode(authCode, region, orgId);
-									}
-									if (userInfo) {
-										if (contextStore?.getState().state?.selected) {
-											const includesOrg = userInfo.organizations?.some((item) => item.handle === contextStore?.getState().state?.selected?.orgHandle);
-											if (!includesOrg) {
-												contextStore.getState().resetState();
-											}
-										}
-										const region = await ext.clients.rpcClient.getCurrentRegion();
-										await ext.authProvider?.getState().loginSuccess(userInfo, region);
-										window.showInformationMessage(`Successfully signed into ${ext.terminologies?.cloudName}`);
-									}
-								} catch (error: any) {
-									if (!(error instanceof ResponseError) || ![ErrorCode.NoOrgsAvailable, ErrorCode.NoAccountAvailable].includes(error.code)) {
-										window.showErrorMessage("Sign in failed. Please check the logs for more details.");
-									}
-									ext.logError(`WSO2 Integrator sign in Failed: ${error.message}`, error as Error);
-								}
-							},
-						);
-					} else {
-						ext.logError("WSO2 Integrator Login Failed: Authorization code not found!", new Error("No auth code"));
-						window.showErrorMessage("WSO2 Integrator Login Failed: Authorization code not found!");
-					}
-				} catch (err: any) {
-					console.error("Failed to handle /signin uri handler", err);
-					window.showErrorMessage(err?.message || "Failed to handle /signin uri handler");
+			ext.log(`Handling URI: ${uri.path}`);
+			const receiver = ext.clients?.platform?.uriReceiver;
+			if (receiver?.accepts(uri)) {
+				// The browser came back from the sign-in; the login flow takes it from here.
+				BridgeLayer.notifySignInInitiated();
+				if (!receiver.pushUri(uri)) {
+					ext.log("A sign-in callback arrived with no sign-in waiting for it; it was ignored");
 				}
-			} else if (uri.path === "/ghapp") {
+				return;
+			}
+			if (uri.path === "/ghapp") {
+				// The GitHub App callback was handled by the CLI; the platform's git integration
+				// has no documented route for it yet, so the person is pointed at the console.
+				window.showInformationMessage("Finish connecting GitHub in the WSO2 Cloud console, then refresh the repository check here.");
+				return;
+			}
+			if (uri.path === "/open") {
 				try {
-					isRpcActive(ext);
-					ext.log("WSO2 Integrator Github auth Callback hit");
+					isPlatformReady(ext);
 					const urlParams = new URLSearchParams(uri.query);
-					const authCode = urlParams.get("code");
-					const orgId = urlParams.get("orgId");
-					if (authCode && orgId) {
-						ext.clients.rpcClient.obtainGithubToken({ code: authCode, orgId });
-					}
-				} catch (err: any) {
-					console.error("Failed to handle /ghapp uri handler", err);
-					window.showErrorMessage(err?.message || "Failed to handle /ghapp uri handler");
-				}
-			} else if (uri.path === "/open") {
-				try {
-					isRpcActive(ext);
-					const urlParams = new URLSearchParams(uri.query);
-					const orgHandle = urlParams.get("org") || "";
-					const projectHandle = urlParams.get("project") || "";
-					const componentName = urlParams.get("component") || "";
-					const technology = urlParams.get("technology") || "";
-					const integrationType = urlParams.get("integrationType") || "";
-					const integrationDisplayType = urlParams.get("integrationDisplayType") || "";
 					openClonedDir({
-						orgHandle,
-						projectHandle,
-						componentName,
-						technology,
-						integrationType,
-						integrationDisplayType,
+						orgHandle: nameFromLink(urlParams.get("org"), RESOURCE_NAME),
+						projectName: nameFromLink(urlParams.get("project"), RESOURCE_NAME) ?? "",
+						integrationName: nameFromLink(urlParams.get("component") || urlParams.get("integration"), RESOURCE_NAME),
+						technology: nameFromLink(urlParams.get("technology"), LABEL),
+						integrationType: nameFromLink(urlParams.get("integrationType"), LABEL),
+						integrationDisplayType: nameFromLink(urlParams.get("integrationDisplayType"), LABEL),
 					});
 				} catch (err: any) {
 					console.error("Failed to handle /open uri handler", err);
@@ -138,80 +75,98 @@ export function activateURIHandlers() {
 			}
 		},
 	});
+	context.subscriptions.push(handler);
 }
 
-export const openClonedDir = async (params: openClonedDirReq) => {
-	if (!params.orgHandle || !params.projectHandle) {
+export const openClonedDir = async (params: OpenClonedDirRequest & { orgHandle?: string }) => {
+	if (!params.projectName) {
 		return;
 	}
-	getUserInfoForCmd("open project").then(async (userInfo) => {
-		const org = userInfo?.organizations.find((item) => item.handle === params.orgHandle);
-		if (!org) {
-			window.showErrorMessage(`Failed to find project organization for ${params.orgHandle}`);
-			return;
-		}
-		const cacheProjects = dataCacheStore.getState().getProjects(params.orgHandle);
-		let project = cacheProjects?.find((item) => item.handler === params.projectHandle);
+	const session = await requireSession("open project");
+	if (!session) {
+		return;
+	}
+	if (params.orgHandle && params.orgHandle !== session.org.handle) {
+		window
+			.showErrorMessage(`This link is for the organization ${params.orgHandle}, and you are signed in to ${session.org.handle}. Sign in to ${params.orgHandle} to open it.`, "Switch organization")
+			.then((choice) => {
+				if (choice === "Switch organization") {
+					commands.executeCommand(WICommandIds.SignIn, { reselectOrganization: true });
+				}
+			});
+		return;
+	}
+	try {
+		const cached = dataCacheStore.getState().getProjects(session.org.handle);
+		let project = cached.find((item) => item.id === params.projectName || item.handler === params.projectName);
 		if (!project) {
-			const projects = await window.withProgress(
-				{ title: `Fetching projects of organization ${org.name}...`, location: ProgressLocation.Notification },
-				() => ext.clients.rpcClient.getProjects(org.id.toString()),
+			const projects = await window.withProgress({ title: `Fetching projects of organization ${session.org.name}...`, location: ProgressLocation.Notification }, () =>
+				ext.clients.platform.cloud.projects.list(),
 			);
-			project = projects?.find((item) => item.handler === params.projectHandle);
+			dataCacheStore.getState().setProjects(session.org.handle, projects);
+			project = projects.find((item) => item.id === params.projectName || item.handler === params.projectName);
 		}
 		if (!project) {
-			window.showErrorMessage(`Failed to find project for ${params.projectHandle}`);
+			window.showErrorMessage(`Failed to find project ${params.projectName}`);
 			return;
 		}
-
 		await waitForContextStoreToLoad();
-
-		await cloneOrOpenDir(org, project, params.componentName, params.technology, params.integrationType, params.integrationDisplayType);
-	});
+		await cloneOrOpenDir(project, params.integrationName ?? null, params.technology ?? null, params.integrationType ?? null, params.integrationDisplayType ?? null);
+	} catch (error) {
+		handleCloudError(error, "Failed to open the project");
+	}
 };
 
 export const cloneOrOpenDir = async (
-	org: Organization,
 	project: Project,
-	componentName: string | null,
+	integrationName: string | null,
 	technology: string | null,
 	integrationType: string | null,
 	integrationDisplayType: string | null,
 	extName?: ExtensionName,
 ) => {
-	const projectLocations = locationStore.getState().getLocations(project.handler, org.handle);
+	const orgHandle = ext.authProvider?.org?.handle;
+	if (!orgHandle) {
+		return;
+	}
+	const cloud = ext.clients.platform.cloud;
+	const projectLocations = locationStore.getState().getLocations(project.id, orgHandle);
 
-	if (componentName) {
-		const componentCache = dataCacheStore?.getState().getComponents(org.handle, project.handler);
-		let matchingComp = componentCache?.find((item) => item.metadata.name === componentName);
-		if (!matchingComp) {
-			matchingComp = await window.withProgress(
-				{ title: `Fetching ${ext.terminologies?.componentTerm} details...`, location: ProgressLocation.Notification },
-				() => ext.clients.rpcClient.getComponentItem({ componentName, orgId: org.id.toString(), projectHandle: project.handler }),
+	if (integrationName) {
+		const cache = dataCacheStore.getState().getIntegrations(orgHandle, project.id);
+		let integration: Component | undefined = cache.find((item) => item.id === integrationName || item.name === integrationName);
+		if (!integration) {
+			integration = await window.withProgress({ title: `Fetching ${ext.terminologies?.componentTerm} details...`, location: ProgressLocation.Notification }, () =>
+				cloud.components.find(integrationName, project.id),
 			);
 		}
-		if (!matchingComp) {
-			window.showErrorMessage(`Failed to find ${ext.terminologies?.componentTerm} matching ${componentName}`);
+		if (!integration) {
+			window.showErrorMessage(`Failed to find ${ext.terminologies?.componentTerm} matching ${integrationName}`);
 			return;
+		}
+		let repository = dataCacheStore.getState().getRepository(orgHandle, project.id, integration.id);
+		if (!repository) {
+			try {
+				repository = await cloud.components.repository(integration.id, project.id);
+				dataCacheStore.getState().setRepository(orgHandle, project.id, integration.id, repository);
+			} catch (error) {
+				ext.logError(`Failed to read the repository of ${integration.id}`, error as Error);
+			}
 		}
 
 		const selectedPaths = new Set<string>();
-		const subDir = matchingComp?.spec?.source ? getComponentKindRepoSource(matchingComp?.spec?.source)?.path || "" : "";
-		const repoUrl = getComponentKindRepoSource(matchingComp.spec.source).repo;
-		const parsedRepoUrl = parseGitURL(repoUrl);
+		const subDir = repositorySubPathOf(repository);
+		const parsedRepoUrl = parseGitURL(repositoryUrlOf(repository) ?? "");
 		if (parsedRepoUrl) {
 			const [repoOrg, repoName, repoProvider] = parsedRepoUrl;
 			for (const projectLocation of projectLocations) {
-				if (projectLocation.componentItems.some((item) => item.component?.metadata?.name === componentName)) {
+				if (projectLocation.integrations.some((item) => item.integration.id === integration?.id)) {
 					const gitRoot = await getGitRoot(ext.context, projectLocation.fsPath);
 					if (gitRoot) {
 						const remotes = await getGitRemotes(ext.context, gitRoot);
 						const hasMatchingRemote = remotes.some((remote) => {
-							const parsedRemoteUrl = parseGitURL(remote.fetchUrl);
-							if (parsedRemoteUrl) {
-								const [remoteRepoOrg, remoteRepoName, remoteRepoProvider] = parsedRemoteUrl;
-								return remoteRepoOrg === repoOrg && remoteRepoName === repoName && remoteRepoProvider === repoProvider;
-							}
+							const parsed = parseGitURL(remote.fetchUrl);
+							return !!parsed && parsed[0] === repoOrg && parsed[1] === repoName && parsed[2] === repoProvider;
 						});
 						if (hasMatchingRemote) {
 							selectedPaths.add(projectLocation.fsPath);
@@ -223,74 +178,60 @@ export const cloneOrOpenDir = async (
 		if (selectedPaths.size > 0) {
 			const selectedPath = await getSelectedPath(Array.from(selectedPaths));
 			if (selectedPath) {
-				await switchContextAndOpenDir(join(selectedPath, subDir), org, project, matchingComp ? componentName : null);
+				await switchContextAndOpenDir(join(selectedPath, subDir), project, integrationName);
 			}
 		} else {
 			commands.executeCommand(WICommandIds.CloneProject, {
-				organization: org,
 				project,
-				componentName,
-				component: matchingComp,
+				componentName: integrationName,
+				component: integration,
+				repository,
 				technology,
 				integrationType,
 				integrationDisplayType,
 				extName,
-			} as ICloneProjectCmdParams);
+			} satisfies ICloneIntegrationCmdParams);
 		}
 	} else if (projectLocations.length > 0) {
 		const selectedPath = await getSelectedPath(projectLocations.map((item) => item.fsPath));
 		if (selectedPath) {
-			await switchContextAndOpenDir(selectedPath, org, project);
+			await switchContextAndOpenDir(selectedPath, project);
 		}
 	} else {
 		commands.executeCommand(WICommandIds.CloneProject, {
-			organization: org,
 			project,
-			componentName,
+			componentName: integrationName,
 			technology,
 			integrationType,
 			integrationDisplayType,
-		} as ICloneProjectCmdParams);
+		} satisfies ICloneIntegrationCmdParams);
 	}
 };
 
-const switchContextAndOpenDir = async (selectedPath: string, org: Organization, project: Project, componentName?: string | null) => {
+const switchContextAndOpenDir = async (selectedPath: string, project: Project, integrationName?: string | null) => {
+	const org = ext.authProvider?.org;
+	if (!org) {
+		window.showErrorMessage("You are not signed in to WSO2 Cloud. Please sign in and try again.");
+		return;
+	}
 	const gitRoot = await getGitRoot(ext.context, selectedPath);
 	if (!gitRoot) {
 		window.showErrorMessage(`Failed to find Git root of ${selectedPath}`);
 		return;
 	}
-	const projectCache = dataCacheStore.getState().getProjects(org?.handle);
-	const userInfo = ext.authProvider?.getState().state.userInfo;
-	if (!userInfo) {
-		window.showErrorMessage("User information is not available. Please sign in and try again.");
-		return;
-	}
-	const contextFilePath = updateContextFile(gitRoot, userInfo, project, org, projectCache);
+	const contextFilePath = linkContext(gitRoot, { org: org.handle, project: project.id });
 
 	const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSamePath(item.uri?.fsPath, selectedPath));
 	if (isWithinWorkspace) {
-		if (
-			contextStore.getState().state?.selected?.orgHandle === org.handle &&
-			contextStore.getState().state?.selected?.projectHandle === project.handler
-		) {
-			window.showInformationMessage(
-				`You are already within the ${componentName ? ext.terminologies?.componentTerm : "project"} directory`,
-			);
+		const selected = contextStore.getState().state?.selected;
+		if (selected?.orgHandle === org.handle && selected?.projectName === project.id) {
+			window.showInformationMessage(`You are already within the ${integrationName ? ext.terminologies?.componentTerm : "project"} directory`);
 		} else {
-			const matching = contextStore.getState().state.items[getContextKey(org, project)];
+			const matching = contextStore.getState().state.items[getContextKey(org.handle, project)];
 			if (matching) {
 				contextStore.getState().changeContext(matching);
 			} else {
-				contextStore.getState().refreshState();
-				await waitForContextStoreToLoad();
-				if (contextStore.getState().state?.selected?.orgHandle !== org.handle) {
-					await window.withProgress({ title: `Switching to organization ${org.name}...`, location: ProgressLocation.Notification }, () =>
-						ext?.clients?.rpcClient?.changeOrgContext(org?.id?.toString()!),
-					);
-				}
-
-				contextStore.getState().onSetNewContext(org, project, {
+				contextStore.getState().onSetNewContext(project, {
 					contextFileFsPath: contextFilePath,
 					dirFsPath: selectedPath,
 					workspaceName: path.basename(gitRoot),
@@ -300,11 +241,8 @@ const switchContextAndOpenDir = async (selectedPath: string, org: Organization, 
 			window.showInformationMessage(`Switching to ${project.name} within organization ${org.name}`);
 		}
 	} else {
-		ext.context.globalState.update("open-local-repo", getContextKey(org, project));
-		openDirectory(
-			selectedPath,
-			`Where do you want to open the ${componentName ? ext.terminologies?.componentTerm : "project"} directory ${selectedPath} ?`,
-		);
+		ext.context.globalState.update("open-local-repo", getContextKey(org.handle, project));
+		openDirectory(selectedPath, `Where do you want to open the ${integrationName ? ext.terminologies?.componentTerm : "project"} directory ${selectedPath} ?`);
 	}
 };
 

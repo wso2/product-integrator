@@ -16,11 +16,12 @@
  * under the License.
  */
 
-import type { GetCliRpcResp, WSO2Terminologies } from "@wso2/wso2-platform-core";
+import { type CloudEnvName, ENVIRONMENTS, type PlatformEnvConfig, hasInjectedToken } from "@wso2/wso2-cloud-client";
+import type { WSO2Terminologies } from "@wso2/wso2-platform-core";
 import * as vscode from "vscode";
-import type { ChoreoRPCClient } from "./cloud/choreo-cli-rpc";
+import type { WIAuthState } from "./cloud/auth/wso2-auth-provider";
+import type { WIPlatform } from "./cloud/platform/platform-client";
 import { defaultTerminologies, webviewStateStore } from "./cloud/stores/webview-state-store";
-import type { WSO2AuthenticationProvider } from "./cloud/auth/wso2-auth-provider";
 
 /**
  * Extension context wrapper
@@ -31,20 +32,22 @@ export class ExtensionVariables {
 
 	// --- Platform feature properties ---
 
-	/** WSO2 auth provider — set during activation. */
-	public authProvider?: WSO2AuthenticationProvider;
+	/** Sign-in state and the `wso2-cloud` authentication provider — set during activation. */
+	/** Settles once the cloud layer has restored the session at startup; commands that need the session wait for it. */
+	public cloudReady: Promise<void> = Promise.resolve();
+	public authProvider?: WIAuthState;
 
-	/** Choreo RPC client — set during activation (Stage 4). */
-	public clients!: { rpcClient: ChoreoRPCClient };
+	/** The platform client, sessions and provider — set during activation. */
+	public clients!: { platform: WIPlatform };
 
-	/** Active Cloud environment name (e.g. "prod", "stage", "dev"). */
-	public cloudEnv: string = "prod";
+	/** Active Cloud environment name ("prod", "stage" or "dev"). */
+	public cloudEnv: CloudEnvName = "prod";
 
-	/** True when running inside the Devant cloud editor (CLOUD_STS_TOKEN is set). */
-	public isDevantCloudEditor: boolean = !!process.env.CLOUD_STS_TOKEN;
+	/** True when running inside the cloud editor, which starts the extension with a WSO2 Cloud token. */
+	public isDevantCloudEditor: boolean = hasInjectedToken();
 
-	/** Extension config with console URLs and GitHub app config — populated during activation. */
-	public config?: GetCliRpcResp;
+	/** Where the deployment in use lives: API, identity provider, console. */
+	public config: PlatformEnvConfig = { ...ENVIRONMENTS.prod };
 
 	/** Active terminology set — updated reactively from webviewStateStore. */
 	public terminologies: WSO2Terminologies = defaultTerminologies;

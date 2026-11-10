@@ -36,6 +36,10 @@ ICP_ZIP="$4"
 JRE_ZIP="$5"
 VERSION="$6"
 ARCH="$7"
+case "$ARCH" in
+    amd64|arm64|x64) ;;
+    *) echo "Unsupported architecture '$ARCH' (expected amd64, x64 or arm64)" >&2; exit 1 ;;
+esac
 
 EXTRACTION_TARGET="$WORK_DIR/payload"
 
@@ -52,37 +56,6 @@ chmod +x "$WSO2_TARGET/WSO2 Integrator.app/Contents/MacOS"/* 2>/dev/null || true
 xattr -cr "$WSO2_TARGET/WSO2 Integrator.app"
 
 rm -rf "$EXTRACTION_TARGET/__MACOSX"
-
-# Prune choreo-cli to darwin/$ARCH only
-case "$ARCH" in
-    amd64|arm64|x64) ;;
-    *) print_error "Unsupported ARCH '$ARCH' for choreo-cli pruning (expected amd64, x64, or arm64)"; exit 1 ;;
-esac
-# choreo-cli uses Go/Docker naming (amd64), while VSCode/matrix uses x64 for Intel
-if [ "$ARCH" = "x64" ]; then
-    CHOREO_ARCH="amd64"
-else
-    CHOREO_ARCH="$ARCH"
-fi
-CHOREO_CLI_DIR="$WSO2_TARGET/WSO2 Integrator.app/Contents/Resources/app/extensions/wso2.wso2-integrator/resources/choreo-cli"
-if [ -d "$CHOREO_CLI_DIR" ]; then
-    print_info "Pruning choreo-cli binaries to darwin/$CHOREO_ARCH only"
-    for VERSION_DIR in "$CHOREO_CLI_DIR"/*/; do
-        [ -d "$VERSION_DIR" ] || continue
-        rm -rf "${VERSION_DIR}linux"
-        rm -rf "${VERSION_DIR}win32"
-        for ARCH_DIR in "${VERSION_DIR}darwin"/*/; do
-            [ -d "$ARCH_DIR" ] || continue
-            if [ "$(basename "$ARCH_DIR")" != "$CHOREO_ARCH" ]; then
-                rm -rf "$ARCH_DIR"
-            fi
-        done
-        if [ -d "${VERSION_DIR}darwin" ] && [ ! -d "${VERSION_DIR}darwin/$CHOREO_ARCH" ]; then
-            print_error "choreo-cli darwin/$CHOREO_ARCH not found after pruning in ${VERSION_DIR}"
-            exit 1
-        fi
-    done
-fi
 
 # Extract the packaged ballerina-runtime (ci/build/package-ballerina-runtime.sh)
 print_info "Extracting Ballerina to package resources"
@@ -229,7 +202,7 @@ sign_app_bundle() {
 
         # 2) Every Mach-O in the bundle, wherever it lives and whatever it is called. Matching by
         #    extension and location missed six binaries that notarization rejected:
-        #    chrome_crashpad_handler and ShipIt nested in frameworks, and choreo/tgrep/rg/
+        #    chrome_crashpad_handler and ShipIt nested in frameworks, and tgrep/rg/
         #    spawn-helper under Resources -- none of which carry an extension. `file` is the only
         #    reliable test, and it is architecture-agnostic: an arm64 build ships x86_64 slices
         #    and an x64 build ships arm64 ones. Executables take the entitlements (the union
@@ -271,7 +244,7 @@ sign_app_bundle() {
                     *Mach-O*executable*)
                         # Entitlements stay where they were before this sweep existed: the bundled
                         # JVM and Ballerina launchers under components, and the repackaged CLI. The
-                        # executables this sweep newly reaches -- rg, tgrep, choreo, spawn-helper,
+                        # executables this sweep newly reaches -- rg, tgrep, spawn-helper,
                         # ShipIt, chrome_crashpad_handler -- get the hardened runtime and nothing
                         # else. Handing them disable-library-validation and
                         # allow-dyld-environment-variables would let DYLD_INSERT_LIBRARIES load

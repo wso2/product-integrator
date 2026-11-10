@@ -542,17 +542,20 @@ jobs:
       - name: Build WI extension
         working-directory: .
         env:
-          # The wso2-integrator build downloads Choreo CLI binaries from the GitHub API
-          # (scripts/download-choreo-cli.js). Without a token those calls are unauthenticated
-          # and hit the 60 req/hour limit -> "HTTP 403: rate limit exceeded". Authenticate to
-          # raise the limit to 5000/hour, matching the other steps in this job.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Read by external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js
           # to decide whether to `vsce package --pre-release`. This is the only place that flag is
           # set, so the vsix's embedded pre-release state always matches this input.
           isPreRelease: ${{ inputs.is_prerelease }}
+          # The Copilot backends the Copilot token exchange may send the WSO2 Cloud token to; built into the bundle.
+          COPILOT_ROOT_URL: ${{ secrets.COPILOT_ROOT_URL }}
+          COPILOT_STAGE_ROOT_URL: ${{ secrets.COPILOT_STAGE_ROOT_URL }}
+          COPILOT_DEV_ROOT_URL: ${{ secrets.COPILOT_DEV_ROOT_URL }}
         run: |
           node common/scripts/install-run-rush.js build --verbose
+
+      - name: WI extension unit tests
+        working-directory: wi/wi-extension
+        run: node ../../common/scripts/install-run-rushx.js test:unit
 
       - name: Install dependencies
         env:

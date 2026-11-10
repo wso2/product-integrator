@@ -154,9 +154,10 @@ jobs:
       - name: Build WI extension
         if: ${{ inputs.rebuild_wi_extension }}
         env:
-          # scripts/download-choreo-cli.js calls the GitHub API; unauthenticated it hits the 60/hour
-          # limit and fails the build with a 403.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The Copilot backends the Copilot token exchange may send the WSO2 Cloud token to; built into the bundle.
+          COPILOT_ROOT_URL: ${{ secrets.COPILOT_ROOT_URL }}
+          COPILOT_STAGE_ROOT_URL: ${{ secrets.COPILOT_STAGE_ROOT_URL }}
+          COPILOT_DEV_ROOT_URL: ${{ secrets.COPILOT_DEV_ROOT_URL }}
         run: node common/scripts/install-run-rush.js build --to wso2-integrator --verbose
 
       - name: Verify the extension VSIX was produced
