@@ -186,6 +186,7 @@ async function fetchArtifact(url) {
 		signal
 	});
 	if (!meta.ok) {
+		await meta.body?.cancel().catch(() => { });
 		throw httpError(`Failed to look up release ${tag} in ${owner}/${repo}: HTTP ${meta.status}`, meta.status);
 	}
 	const wanted = decodeURIComponent(file);
@@ -199,7 +200,11 @@ async function fetchArtifact(url) {
 		signal
 	});
 	const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : undefined;
-	return location ? fetch(location, { redirect: 'follow', signal }) : res;
+	if (!location) {
+		return res;
+	}
+	await res.body?.cancel().catch(() => { });
+	return fetch(location, { redirect: 'follow', signal });
 }
 
 // Streams the artifact: hashes it, and (when mirrorPath is set) writes the same bytes to disk for
@@ -230,6 +235,8 @@ async function downloadOnce(url, mirrorPath) {
 	try {
 		const res = await fetchArtifact(url);
 		if (!res.ok || !res.body) {
+			// Released before a retry, rather than holding the connection until GC.
+			await res.body?.cancel().catch(() => { });
 			throw httpError(`Failed to download ${url}: HTTP ${res.status}`, res.status);
 		}
 		if (mirrorPath) {
