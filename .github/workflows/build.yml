@@ -1619,12 +1619,13 @@ jobs:
         continue-on-error: true
 
       # The WI extension ships as a release asset: for nightly, the rolling tag is how the vsix is
-      # distributed (there is no Marketplace / Open VSX publish).
+      # distributed (there is no Marketplace / Open VSX publish), and publish-vsix takes it to the
+      # marketplaces from here. Staged and signed below with the extensions it is bundled with.
       - name: Download WI extension VSIX
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wi-extension-vsix
-          path: release-files/
+          path: wi-extension/
         continue-on-error: true
 
       # The per-OS "core" editors the installers above were built from (VSCode + patches + bundled
@@ -1758,8 +1759,17 @@ jobs:
             id=$(basename "$(dirname "${f}")")
             stage "${f}" "wso2-integrator-${INTEGRATOR_VERSION}-${id}-$(basename "${f}")"
           done
-          cp core/versions/ci/build/component-versions.properties \
-            "release-files/wso2-integrator-${INTEGRATOR_VERSION}-component-versions.properties"
+          # The WI extension is built here rather than fetched, but ships with the five above, so it
+          # is published under the same <integrator>-<component id>-<file> name and signed like
+          # them. This is its only copy on the release (publish-vsix reads it by that name).
+          for f in wi-extension/wso2-integrator-*.vsix; do
+            stage "${f}" "wso2-integrator-${INTEGRATOR_VERSION}-wso2.wso2-integrator-$(basename "${f}")"
+          done
+          # The versions everything above was built with. Downstream builds read every version from
+          # it, so it is signed too; a copy, since the stamped file is read again below.
+          cp core/versions/ci/build/component-versions.properties "${RUNNER_TEMP}/component-versions.properties"
+          stage "${RUNNER_TEMP}/component-versions.properties" \
+            "wso2-integrator-${INTEGRATOR_VERSION}-component-versions.properties"
 
       # Signed because they are build inputs for downstream builds; a .sha256 in the same release
       # cannot detect a replaced asset.
@@ -1818,8 +1828,7 @@ jobs:
           require "Linux .deb"          release-files/*.deb
           require "Linux .rpm"          release-files/*.rpm
           require "Linux .tar.gz"       release-files/!(*-core-*)linux-x64.tar.gz
-          # Not the bundled extensions' vsix (named -wso2.<id>-), only the WI extension's own.
-          require "WI extension .vsix"  release-files/!(*-wso2.*).vsix
+          require "WI extension .vsix"  release-files/*-wso2.wso2-integrator-*.vsix
           require "Linux core"          release-files/*-core-linux-x64.tar.gz
           require "Component versions"  release-files/*-component-versions.properties
           require "Ballerina runtime"   release-files/*-ballerina-runtime-*.zip
