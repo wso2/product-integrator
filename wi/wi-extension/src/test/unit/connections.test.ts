@@ -77,6 +77,7 @@ describe("cloud connections", () => {
 			projectName: "shop",
 		});
 		assert.deepStrictEqual(calls, [
+			["config.listLinks", "basket", "shop"],
 			["config.putLink", "basket", { configurable: "acme/basket:billingUrl", endpoint: "finance/billing/api", key: "url" }, "shop"],
 			["config.putLink", "basket", { configurable: "acme/basket:billingKey", endpoint: "finance/billing/api", key: "apiKey" }, "shop"],
 		]);
@@ -94,7 +95,7 @@ describe("cloud connections", () => {
 		assert.deepStrictEqual(calls, [["config.putLink", "basket", { configurable: "acme/basket:billingUrl", endpoint: "finance/billing/api", key: "url" }, "shop"]]);
 	});
 
-	it("takes the URL's link back when the API key's fails", async () => {
+	it("unlinks a new URL when the API key's link fails", async () => {
 		const { cloud, calls } = fakeCloud({ failKeyLink: true });
 		await assert.rejects(
 			apiWith(cloud).connections.createServiceConnection({
@@ -107,6 +108,30 @@ describe("cloud connections", () => {
 			/binding refused/,
 		);
 		assert.deepStrictEqual(calls.at(-1), ["config.putLink", "basket", { configurable: "acme/basket:billingUrl" }, "shop"]);
+	});
+
+	it("puts back the URL's earlier link, not none, when the API key's fails", async () => {
+		const target = { project: "finance", integration: "invoices", endpoint: "api" };
+		const request = {
+			integration: "basket",
+			target,
+			access: "organization" as const,
+			configurables: { url: "acme/basket:billingUrl", apiKey: "acme/basket:billingKey" },
+			projectName: "shop",
+		};
+		const earlier: [Record<string, unknown>, unknown][] = [
+			[{ fieldLinks: { "acme/basket:billingUrl": { ref: "finance-billing-api", key: "url" } } }, { configurable: "acme/basket:billingUrl", ref: "finance-billing-api", key: "url" }],
+			[{ endpointLinks: { "acme/basket:billingUrl": "shop/orders/api" } }, { configurable: "acme/basket:billingUrl", endpoint: "shop/orders/api" }],
+			[
+				{ orphaned: [{ target: "acme/basket:billingUrl", kind: "configurable", ref: "finance-billing-api", key: "url" }] },
+				{ configurable: "acme/basket:billingUrl", ref: "finance-billing-api", key: "url" },
+			],
+		];
+		for (const [links, putBack] of earlier) {
+			const { cloud, calls } = fakeCloud({ failKeyLink: true, links });
+			await assert.rejects(apiWith(cloud).connections.createServiceConnection(request), /binding refused/);
+			assert.deepStrictEqual(calls.at(-1), ["config.putLink", "basket", putBack, "shop"]);
+		}
 	});
 
 	it("refuses an access that does not match the endpoint's project, before writing anything", async () => {
@@ -163,5 +188,15 @@ describe("cloud connections", () => {
 			{ configurable: "acme/basket:billingUrl", project: "finance", component: "billing", endpoint: "api", key: "url" },
 			{ configurable: "acme/basket:billingKey", project: "finance", component: "billing", endpoint: "api", key: "apiKey" },
 		]);
+	});
+
+	it("reads no connectable endpoints for links to other resources' keys", async () => {
+		const { cloud, calls } = fakeCloud({
+			links: { endpointLinks: { "acme/basket:ordersUrl": "shop/orders/api" }, fieldLinks: { "acme/basket:dbHost": { ref: "orders-db", key: "host" } } },
+		});
+		assert.deepStrictEqual(await apiWith(cloud).connections.listEndpointLinks("basket", "shop"), [
+			{ configurable: "acme/basket:ordersUrl", project: "shop", component: "orders", endpoint: "api" },
+		]);
+		assert.ok(!calls.some(([name]) => name === "config.listConnectableEndpoints"));
 	});
 });

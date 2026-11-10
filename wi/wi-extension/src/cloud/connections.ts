@@ -23,6 +23,8 @@ import {
 	DATABASE_CONNECTION_VARS,
 	type EndpointLink,
 	type EnvVarGroup,
+	type IntegrationLinks,
+	type LinkRequest,
 	type ServiceConnectionAccess,
 	connectionVarName,
 	isCloudError,
@@ -33,6 +35,29 @@ function parseEndpointId(id: string): { project: string; component: string; endp
 	const [project, component, ...rest] = id.split("/");
 	const endpoint = rest.join("/");
 	return project && component && endpoint ? { project, component, endpoint } : undefined;
+}
+
+/** The keys of the project's connection to another project's endpoint: a key link with any other key is to another resource. */
+const CONNECTION_KEYS = new Set(["url", "apiKey", "apiKeyHeader"]);
+
+/** The link that fills `configurable` now, as the request that writes it again; undefined when nothing fills it. */
+function currentLink(links: IntegrationLinks, configurable: string): LinkRequest | undefined {
+	const endpoint = links.endpointLinks?.[configurable];
+	if (endpoint) {
+		return { configurable, endpoint };
+	}
+	const field = links.fieldLinks?.[configurable];
+	if (field) {
+		return { configurable, ref: field.ref, key: field.key };
+	}
+	const orphaned = links.orphaned?.find((link) => link.target === configurable);
+	if (orphaned?.kind === "endpoint") {
+		return { configurable, endpoint: orphaned.ref };
+	}
+	if (orphaned?.kind === "configurable" && orphaned.key) {
+		return { configurable, ref: orphaned.ref, key: orphaned.key };
+	}
+	return undefined;
 }
 
 /**
@@ -90,17 +115,21 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 			}
 			// The first link makes the project's connection to the endpoint, the second reuses it; the platform binds it,
 			// with an API key, in each environment the integration is deployed to.
-			await cloud.config.putLink(request.integration, { configurable: configurables.url, endpoint, key: "url" }, request.projectName);
 			if (!configurables.apiKey) {
+				await cloud.config.putLink(request.integration, { configurable: configurables.url, endpoint, key: "url" }, request.projectName);
 				return;
 			}
+			// Read first, so a failed key link puts the URL back as it was, not unlinked: the connection may be one
+			// being repaired or moved, whose URL link worked.
+			const before = currentLink(await cloud.config.listLinks(request.integration, request.projectName), configurables.url);
+			await cloud.config.putLink(request.integration, { configurable: configurables.url, endpoint, key: "url" }, request.projectName);
 			try {
 				await cloud.config.putLink(request.integration, { configurable: configurables.apiKey, endpoint, key: "apiKey" }, request.projectName);
 			} catch (error) {
-				// A connection with its URL and no key would call without one: the URL's link is taken back.
+				// The key the API takes isn't linked, so the URL is not left pointing at it.
 				await cloud.config
-					.putLink(request.integration, { configurable: configurables.url }, request.projectName)
-					.catch((unlinkError: unknown) => logError(`Could not unlink ${configurables.url}`, unlinkError as Error));
+					.putLink(request.integration, before ?? { configurable: configurables.url }, request.projectName)
+					.catch((undoError: unknown) => logError(`Could not put back the link of ${configurables.url}`, undoError as Error));
 				throw error;
 			}
 		},
@@ -112,12 +141,13 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 				...Object.entries(links.endpointLinks ?? {}),
 				...orphaned.filter((link) => link.kind === "endpoint").map((link): [string, string] => [link.target, link.ref]),
 			];
+			// Only keys of a connection can be an endpoint's: a database's keys never need the connectable endpoints read.
 			const keyLinks: [string, { ref: string; key: string }][] = [
 				...Object.entries(links.fieldLinks ?? {}),
 				...orphaned
 					.filter((link) => link.kind === "configurable" && link.key)
 					.map((link): [string, { ref: string; key: string }] => [link.target, { ref: link.ref, key: link.key ?? "" }]),
-			];
+			].filter(([, { key }]) => CONNECTION_KEYS.has(key));
 			const result: EndpointLink[] = addressLinks.flatMap(([configurable, id]) => {
 				const endpoint = parseEndpointId(id);
 				return endpoint ? [{ configurable, ...endpoint }] : [];
