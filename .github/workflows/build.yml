@@ -774,14 +774,14 @@ jobs:
 
       - name: Download Ballerina runtime
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ballerina-runtime
           path: ballerina-runtime
 
       - name: Download ICP
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: icp
           path: icp-package
@@ -1355,14 +1355,14 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
       - name: Download Ballerina runtime
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ballerina-runtime
           path: ballerina-runtime
 
       - name: Download ICP
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: icp
           path: icp-package
@@ -1524,6 +1524,23 @@ jobs:
       (inputs.publish_tag != '') &&
       (inputs.build_packed_installers == true)
     steps:
+      # First, before any download: actions/checkout clears a workspace that holds no .git before it
+      # clones, so a checkout after the downloads below would silently delete every artifact they
+      # fetched. The job reads ci/build/update-manifest.config.json and runs the generator in fetch
+      # mode (see "Stage core, runtime and component files").
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          # Same pin as every other job that runs the generator: the fetch mode here has to agree
+          # byte for byte with what publish-update-source mirrors.
+          node-version: 24.22.1
+
       - name: Download Linux DEB artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -1602,12 +1619,13 @@ jobs:
         continue-on-error: true
 
       # The WI extension ships as a release asset: for nightly, the rolling tag is how the vsix is
-      # distributed (there is no Marketplace / Open VSX publish).
+      # distributed (there is no Marketplace / Open VSX publish), and publish-vsix takes it to the
+      # marketplaces from here. Staged and signed below with the extensions it is bundled with.
       - name: Download WI extension VSIX
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wi-extension-vsix
-          path: release-files/
+          path: wi-extension/
         continue-on-error: true
 
       # The per-OS "core" editors the installers above were built from (VSCode + patches + bundled
@@ -1646,18 +1664,78 @@ jobs:
           name: build-versions
           path: core/versions/
 
-      - name: Stage core files
+      # The packaged runtimes (ci/build/package-ballerina-runtime.sh, package-icp.sh) the installers
+      # above bundled and the update source serves, plus the JRE and the bundled extensions the feed
+      # serves. Published next to the cores for the same reason: a downstream build (the support
+      # distribution) must ship these exact bytes and fetch nothing from anywhere but this release.
+      - name: Download Ballerina runtime package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ballerina-runtime
+          path: runtimes/
+
+      - name: Download ICP package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: icp
+          path: runtimes/
+
+      # The GitHub-release extensions the compile job bundled (absent when every extension came from
+      # Open VSX). The generator publishes these files rather than fetching them again. Gated on the
+      # same condition the compile job stages them on, not continue-on-error: a failed download
+      # would otherwise send the generator back to a rolling tag that may have moved on.
+      - name: Download the bundled GitHub-release extensions
+        if: ${{ (inputs.ballerina_extension_source == 'github' && needs.resolve-versions.outputs.ballerina_extension_version != '') || (inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '') }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: bundled-github-extensions
+          path: bundled-extensions/
+
+      # Fetch and require the JRE only for the platforms whose cores and installers the release
+      # carries. Linux always: build_linux scopes the update feed ("Resolve published targets") but
+      # never reaches the compile job, which builds the Linux core and installers on every run, and
+      # "Verify release assets" requires them unconditionally.
+      - name: Resolve release targets
+        id: release-targets
+        shell: bash
+        env:
+          BUILD_MACOS: ${{ inputs.build_macos }}
+          BUILD_WINDOWS: ${{ inputs.build_windows }}
+        run: |
+          set -euo pipefail
+          TARGETS=("linux-x64")
+          [ "${BUILD_MACOS}" = "true" ] && TARGETS+=("darwin-arm64" "darwin-x64")
+          [ "${BUILD_WINDOWS}" = "true" ] && TARGETS+=("win32-x64")
+          printf -v JOINED '%s,' "${TARGETS[@]}"
+          echo "targets=${JOINED%,}" >> "$GITHUB_OUTPUT"
+          echo "release targets: ${JOINED%,}"
+
+      - name: Stage core, runtime and component files
         shell: bash
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
+          BALLERINA_VERSION: ${{ needs.resolve-versions.outputs.ballerina_version }}
+          ICP_VERSION: ${{ needs.resolve-versions.outputs.icp_version }}
+          BALLERINA_EXTENSION_SOURCE: ${{ inputs.ballerina_extension_source }}
+          MI_EXTENSION_SOURCE: ${{ inputs.mi_extension_source }}
+          RELEASE_TARGETS: ${{ steps.release-targets.outputs.targets }}
+          # As in "Generate source document": lets the generator's fetch mode read release assets on a
+          # private repo (the enterprise mirror), so it resolves sources exactly as the feed job does.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           shopt -s nullglob
+          # Every file staged here is signed by the next step, from this list rather than a second
+          # set of globs, so the signed set cannot drift from the staged one. Kept out of
+          # release-files so it is not published.
+          SIGN_LIST="${RUNNER_TEMP}/release-sign.list"
+          : > "${SIGN_LIST}"
           stage() {
             local src="$1" name="$2"
             [ -f "${src}" ] || return 0
             mv "${src}" "release-files/${name}"
             (cd release-files && openssl dgst -sha256 -out "${name}.sha256" "${name}")
+            echo "${name}" >> "${SIGN_LIST}"
             ls -lh "release-files/${name}"
           }
           P="wso2-integrator-${INTEGRATOR_VERSION}-core"
@@ -1665,25 +1743,48 @@ jobs:
           stage core/VSCode-darwin-arm64.zip    "${P}-darwin-arm64.zip"
           stage core/VSCode-darwin-x64.zip      "${P}-darwin-x64.zip"
           stage core/VSCode-win32-x64.zip       "${P}-win32-x64.zip"
-          cp core/versions/ci/build/component-versions.properties \
-            "release-files/wso2-integrator-${INTEGRATOR_VERSION}-component-versions.properties"
+          # Prefixed with the integrator version: on the rolling nightly two builds can share a
+          # runtime version, and the roll step below tells superseded assets apart by name.
+          stage "runtimes/ballerina-runtime-${BALLERINA_VERSION}.zip" "wso2-integrator-${INTEGRATOR_VERSION}-ballerina-runtime-${BALLERINA_VERSION}.zip"
+          stage "runtimes/icp-${ICP_VERSION}.zip"                     "wso2-integrator-${INTEGRATOR_VERSION}-icp-${ICP_VERSION}.zip"
+          # The JRE for every built target and the bundled extensions, downloaded by the generator
+          # itself (fetch mode: the same resolution publish-update-source mirrors with, so the release
+          # and the feed cannot disagree), named <integrator>-<component id>-<file>.
+          node ci/build/generate-update-manifest.mjs --fetch-components feed-components \
+            --component-files bundled-extensions \
+            --targets "${RELEASE_TARGETS}" \
+            --versions core/versions/ci/build/component-versions.properties \
+            --source-flavors "wso2.ballerina=${BALLERINA_EXTENSION_SOURCE:-marketplace},wso2.micro-integrator=${MI_EXTENSION_SOURCE:-marketplace}"
+          for f in feed-components/*/*; do
+            id=$(basename "$(dirname "${f}")")
+            stage "${f}" "wso2-integrator-${INTEGRATOR_VERSION}-${id}-$(basename "${f}")"
+          done
+          # The WI extension is built here rather than fetched, but ships with the five above, so it
+          # is published under the same <integrator>-<component id>-<file> name and signed like
+          # them. This is its only copy on the release (publish-vsix reads it by that name).
+          for f in wi-extension/wso2-integrator-*.vsix; do
+            stage "${f}" "wso2-integrator-${INTEGRATOR_VERSION}-wso2.wso2-integrator-$(basename "${f}")"
+          done
+          # The versions everything above was built with. Downstream builds read every version from
+          # it, so it is signed too; a copy, since the stamped file is read again below.
+          cp core/versions/ci/build/component-versions.properties "${RUNNER_TEMP}/component-versions.properties"
+          stage "${RUNNER_TEMP}/component-versions.properties" \
+            "wso2-integrator-${INTEGRATOR_VERSION}-component-versions.properties"
 
       # Signed because they are build inputs for downstream builds; a .sha256 in the same release
       # cannot detect a replaced asset.
       - name: cosign-installer
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
 
-      - name: Sign the core files
+      - name: Sign the core, runtime and component files
         shell: bash
-        env:
-          INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          for F in release-files/wso2-integrator-"${INTEGRATOR_VERSION}"-core-*.{tar.gz,zip}; do
+          while IFS= read -r name; do
+            F="release-files/${name}"
             cosign sign-blob "${F}" --output-certificate "${F}.pem" --output-signature "${F}.sig" --yes
             cosign verify-blob "${F}" --certificate "${F}.pem" --signature "${F}.sig" --certificate-identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build.yml@${GITHUB_REF}" --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-          done
+          done < "${RUNNER_TEMP}/release-sign.list"
 
       # The caller chose the tag; all that is derived here is the display name.
       - name: Resolve release name
@@ -1714,6 +1815,7 @@ jobs:
         env:
           BUILD_MACOS: ${{ inputs.build_macos }}
           BUILD_WINDOWS: ${{ inputs.build_windows }}
+          RELEASE_TARGETS: ${{ steps.release-targets.outputs.targets }}
         run: |
           shopt -s nullglob extglob
           missing=()
@@ -1726,9 +1828,29 @@ jobs:
           require "Linux .deb"          release-files/*.deb
           require "Linux .rpm"          release-files/*.rpm
           require "Linux .tar.gz"       release-files/!(*-core-*)linux-x64.tar.gz
-          require "WI extension .vsix"  release-files/*.vsix
+          require "WI extension .vsix"  release-files/*-wso2.wso2-integrator-*.vsix
           require "Linux core"          release-files/*-core-linux-x64.tar.gz
           require "Component versions"  release-files/*-component-versions.properties
+          require "Ballerina runtime"   release-files/*-ballerina-runtime-*.zip
+          require "ICP package"         release-files/*-icp-*.zip
+          # The fetched components, from the same config the generator read: every component with
+          # a URL, and for the JRE one file per built target's platform token, so the list cannot
+          # drift from it. Read up front and required non-empty: this step has no `set -e`, and a jq
+          # failure inside `for x in $(...)` would just loop over nothing and pass every check.
+          CONFIG=ci/build/update-manifest.config.json
+          mapfile -t JRE_TOKENS < <(jq -r --arg targets "${RELEASE_TARGETS}" \
+              '.platformTokens.jre as $tok | $targets | split(",")[] | $tok[.] // "unknown-target"' "${CONFIG}" | sort -u)
+          mapfile -t COMPONENT_IDS < <(jq -r '.components[] | select(.url != null and .id != "jre") | .id' "${CONFIG}")
+          if [ ${#JRE_TOKENS[@]} -eq 0 ] || [ ${#COMPONENT_IDS[@]} -eq 0 ]; then
+            echo "Error: could not read the expected JRE targets and components from ${CONFIG}" >&2
+            exit 1
+          fi
+          for t in "${JRE_TOKENS[@]}"; do
+            require "JRE ${t}"          release-files/*-jre-*-${t}-*.zip
+          done
+          for e in "${COMPONENT_IDS[@]}"; do
+            require "Component ${e}"    release-files/*-${e}-*
+          done
           if [ "${BUILD_MACOS}" = "true" ]; then
             require "macOS arm64 .dmg"  release-files/*arm64.dmg
             require "macOS x64 .dmg"    release-files/*x64.dmg
@@ -1872,13 +1994,13 @@ jobs:
 
       # The same ballerina-runtime and icp zips the installers bundled (config `sourceFile`).
       - name: Download Ballerina runtime
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ballerina-runtime
           path: out
 
       - name: Download ICP
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: icp
           path: out
