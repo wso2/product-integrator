@@ -17,55 +17,30 @@
  */
 
 import * as assert from "assert";
-import { type CloudClient, NotSupportedError } from "@wso2/wso2-cloud-client";
+import { BadRequestError, type CloudClient } from "@wso2/wso2-cloud-client";
 import { cloudConnections } from "../../cloud/connections";
 
 type Call = [string, ...unknown[]];
 
 /** A cloud client that records what is asked of it, answering from `answers`. */
-function fakeCloud(answers: { deployed?: boolean; endpointLinks?: Record<string, string>; failPutIn?: string; existingGroupIn?: string } = {}) {
-	let keys = 0;
+function fakeCloud(answers: { links?: Record<string, unknown>; connectable?: unknown[]; failKeyLink?: boolean } = {}) {
 	const calls: Call[] = [];
 	const cloud = {
-		environments: { list: async () => [{ id: "development" }] },
-		deployments: {
-			get: async (...args: unknown[]) => {
-				calls.push(["deployments.get", ...args]);
-				return answers.deployed ? { status: "ACTIVE" } : undefined;
-			},
-		},
-		endpoints: {
-			listForEnvironment: async (...args: unknown[]) => {
-				calls.push(["endpoints.listForEnvironment", ...args]);
-				return [{ name: "api", exposure: "organization", visibilityStatus: { organization: { status: "ENABLED", url: "https://gw/orders" } } }];
-			},
-			createApiKey: async (...args: unknown[]) => {
-				calls.push(["endpoints.createApiKey", ...args]);
-				keys++;
-				return { apiKey: "k", keyId: `k${keys}` };
-			},
-			revokeApiKey: async (...args: unknown[]) => {
-				calls.push(["endpoints.revokeApiKey", ...args]);
-			},
-		},
 		config: {
 			putLink: async (...args: unknown[]) => {
 				calls.push(["config.putLink", ...args]);
+				if (answers.failKeyLink && (args[1] as { key?: string }).key === "apiKey") {
+					throw new Error("binding refused");
+				}
 				return { workload: "next_deploy" };
 			},
 			listLinks: async (...args: unknown[]) => {
 				calls.push(["config.listLinks", ...args]);
-				return { kind: "ballerina", sourceDefined: false, endpointLinks: answers.endpointLinks };
+				return { kind: "ballerina", sourceDefined: false, ...answers.links };
 			},
-			listEnvGroups: async (_integration: string, environment: string) => (answers.existingGroupIn === environment ? [{ name: "orders" }] : []),
-			putEnvGroup: async (...args: unknown[]) => {
-				calls.push(["config.putEnvGroup", ...args]);
-				if (args[1] === answers.failPutIn) {
-					throw new Error("upsert env group failed");
-				}
-			},
-			deleteEnvGroup: async (...args: unknown[]) => {
-				calls.push(["config.deleteEnvGroup", ...args]);
+			listConnectableEndpoints: async (...args: unknown[]) => {
+				calls.push(["config.listConnectableEndpoints", ...args]);
+				return answers.connectable ?? [];
 			},
 		},
 	};
@@ -75,139 +50,118 @@ function fakeCloud(answers: { deployed?: boolean; endpointLinks?: Record<string,
 const logged: string[] = [];
 const apiWith = (cloud: unknown) => ({ connections: cloudConnections(cloud as CloudClient, (message) => logged.push(message)) });
 
-const target = { project: "shop", integration: "orders", endpoint: "api" };
+const sameProject = { project: "shop", integration: "orders", endpoint: "api" };
+const otherProject = { project: "finance", integration: "billing", endpoint: "api" };
+const billing = { project: "finance", component: "billing", endpoint: "api", displayName: "Billing", scope: "organization", ref: "finance-billing-api", environments: [] as unknown[] };
 
 describe("cloud connections", () => {
-	it("links the configurable to an endpoint of the same project, and writes no env group", async () => {
+	it("links the URL configurable to an endpoint of the same project", async () => {
 		const { cloud, calls } = fakeCloud();
 		await apiWith(cloud).connections.createServiceConnection({
 			integration: "basket",
-			target,
+			target: sameProject,
 			access: "project",
-			name: "orders",
+			configurables: { url: "acme/basket:ordersUrl" },
 			projectName: "shop",
-			configurable: "acme/basket:ordersUrl",
 		});
 		assert.deepStrictEqual(calls, [["config.putLink", "basket", { configurable: "acme/basket:ordersUrl", endpoint: "shop/orders/api" }, "shop"]]);
 	});
 
-	it("refuses a project connection with no configurable to fill", async () => {
+	it("links the URL and the API key to the outputs of another project's endpoint", async () => {
 		const { cloud, calls } = fakeCloud();
+		await apiWith(cloud).connections.createServiceConnection({
+			integration: "basket",
+			target: otherProject,
+			access: "organization",
+			configurables: { url: "acme/basket:billingUrl", apiKey: "acme/basket:billingKey" },
+			projectName: "shop",
+		});
+		assert.deepStrictEqual(calls, [
+			["config.putLink", "basket", { configurable: "acme/basket:billingUrl", endpoint: "finance/billing/api", key: "url" }, "shop"],
+			["config.putLink", "basket", { configurable: "acme/basket:billingKey", endpoint: "finance/billing/api", key: "apiKey" }, "shop"],
+		]);
+	});
+
+	it("links only the URL of an API that takes no key", async () => {
+		const { cloud, calls } = fakeCloud();
+		await apiWith(cloud).connections.createServiceConnection({
+			integration: "basket",
+			target: otherProject,
+			access: "organization",
+			configurables: { url: "acme/basket:billingUrl" },
+			projectName: "shop",
+		});
+		assert.deepStrictEqual(calls, [["config.putLink", "basket", { configurable: "acme/basket:billingUrl", endpoint: "finance/billing/api", key: "url" }, "shop"]]);
+	});
+
+	it("takes the URL's link back when the API key's fails", async () => {
+		const { cloud, calls } = fakeCloud({ failKeyLink: true });
 		await assert.rejects(
-			apiWith(cloud).connections.createServiceConnection({ integration: "basket", target, access: "project", name: "orders", projectName: "shop" }),
+			apiWith(cloud).connections.createServiceConnection({
+				integration: "basket",
+				target: otherProject,
+				access: "organization",
+				configurables: { url: "acme/basket:billingUrl", apiKey: "acme/basket:billingKey" },
+				projectName: "shop",
+			}),
+			/binding refused/,
+		);
+		assert.deepStrictEqual(calls.at(-1), ["config.putLink", "basket", { configurable: "acme/basket:billingUrl" }, "shop"]);
+	});
+
+	it("refuses an access that does not match the endpoint's project, before writing anything", async () => {
+		const { cloud, calls } = fakeCloud();
+		const connections = apiWith(cloud).connections;
+		await assert.rejects(
+			connections.createServiceConnection({ integration: "basket", target: otherProject, access: "project", configurables: { url: "acme/basket:u" }, projectName: "shop" }),
+			(error: unknown) => error instanceof BadRequestError && /organization access/.test(error.message),
+		);
+		await assert.rejects(
+			connections.createServiceConnection({ integration: "basket", target: sameProject, access: "organization", configurables: { url: "acme/basket:u" }, projectName: "shop" }),
+			(error: unknown) => error instanceof BadRequestError && /project access/.test(error.message),
+		);
+		await assert.rejects(
+			connections.createServiceConnection({ integration: "basket", target: sameProject, access: "project", configurables: { url: "" }, projectName: "shop" }),
 			/needs the configurable/,
 		);
 		assert.deepStrictEqual(calls, []);
 	});
 
-	it("refuses project access to another project's endpoint", async () => {
-		const { cloud } = fakeCloud();
-		await assert.rejects(
-			apiWith(cloud).connections.createServiceConnection({
-				integration: "basket",
-				target,
-				access: "project",
-				name: "orders",
-				projectName: "other",
-				configurable: "acme/basket:ordersUrl",
-			}),
-			(error: unknown) => error instanceof NotSupportedError,
-		);
+	it("lists the connectable endpoints", async () => {
+		const { cloud, calls } = fakeCloud({ connectable: [billing] });
+		assert.deepStrictEqual(await apiWith(cloud).connections.listConnectable("basket", "shop"), [billing]);
+		assert.deepStrictEqual(calls, [["config.listConnectableEndpoints", "basket", "shop"]]);
 	});
 
-	it("asks for a deploy before a gateway connection, and issues no key", async () => {
-		const { cloud, calls } = fakeCloud({ deployed: false });
-		await assert.rejects(
-			apiWith(cloud).connections.createServiceConnection({ integration: "basket", target, access: "gateway", name: "orders", projectName: "shop" }),
-			/Deploy basket to development first/,
-		);
-		assert.ok(!calls.some(([name]) => name === "endpoints.createApiKey" || name === "config.putEnvGroup"));
-	});
-
-	it("checks every environment before issuing a key, so a later one that fails leaves nothing behind", async () => {
-		const { cloud, calls } = fakeCloud({ deployed: true });
-		// Deployed to development only: production fails the check after development passed it.
-		cloud.deployments.get = async (...args: unknown[]) => {
-			calls.push(["deployments.get", ...args]);
-			return args[1] === "development" ? { status: "ACTIVE" } : undefined;
-		};
-		await assert.rejects(
-			apiWith(cloud).connections.createServiceConnection({
-				integration: "basket",
-				target,
-				access: "gateway",
-				name: "orders",
-				projectName: "shop",
-				environments: ["development", "production"],
-			}),
-			/Deploy basket to production first/,
-		);
-		assert.ok(calls.some(([name, , environment]) => name === "endpoints.listForEnvironment" && environment === "development"));
-		assert.ok(!calls.some(([name]) => name === "endpoints.createApiKey" || name === "config.putEnvGroup"));
-	});
-
-	it("writes the gateway URL and a key for a deployed consumer", async () => {
-		const { cloud, calls } = fakeCloud({ deployed: true });
-		await apiWith(cloud).connections.createServiceConnection({ integration: "basket", target, access: "gateway", name: "orders", projectName: "shop" });
-		const put = calls.find(([name]) => name === "config.putEnvGroup");
-		assert.deepStrictEqual(put, [
-			"config.putEnvGroup",
-			"basket",
-			"development",
-			"orders",
-			{ name: "orders", sensitive: true, data: { ORDERS_SERVICE_URL: "https://gw/orders", ORDERS_API_KEY: "k" } },
-			"shop",
-		]);
-	});
-
-	it("lists endpoint links and unlinks one", async () => {
+	it("lists address links, without reading the connectable endpoints, and unlinks one", async () => {
 		const { cloud, calls } = fakeCloud({
-			endpointLinks: { "acme/basket:ordersUrl": "shop/orders/api", "acme/basket:paths": "shop/orders/v1/api", "acme/basket:bad": "orders/api" },
+			links: {
+				endpointLinks: { "acme/basket:ordersUrl": "shop/orders/api", "acme/basket:paths": "shop/orders/v1/api", "acme/basket:bad": "orders/api" },
+				orphaned: [{ target: "acme/basket:newUrl", kind: "endpoint", ref: "shop/cart/api" }],
+			},
 		});
 		const api = apiWith(cloud);
 		assert.deepStrictEqual(await api.connections.listEndpointLinks("basket", "shop"), [
-			{ configurable: "acme/basket:ordersUrl", component: "orders", endpoint: "api" },
-			{ configurable: "acme/basket:paths", component: "orders", endpoint: "v1/api" },
+			{ configurable: "acme/basket:ordersUrl", project: "shop", component: "orders", endpoint: "api" },
+			{ configurable: "acme/basket:paths", project: "shop", component: "orders", endpoint: "v1/api" },
+			{ configurable: "acme/basket:newUrl", project: "shop", component: "cart", endpoint: "api" },
 		]);
+		assert.ok(!calls.some(([name]) => name === "config.listConnectableEndpoints"));
 		await api.connections.unlinkEndpoint({ integration: "basket", configurable: "acme/basket:ordersUrl", projectName: "shop" });
 		assert.deepStrictEqual(calls.at(-1), ["config.putLink", "basket", { configurable: "acme/basket:ordersUrl" }, "shop"]);
 	});
 
-	it("takes back the environments already written when a later one fails", async () => {
-		const { cloud, calls } = fakeCloud({ deployed: true, failPutIn: "production" });
-		await assert.rejects(
-			apiWith(cloud).connections.createServiceConnection({
-				integration: "basket",
-				target,
-				access: "gateway",
-				name: "orders",
-				environments: ["development", "production"],
-				projectName: "shop",
-			}),
-			/upsert env group failed/,
-		);
-		const after = calls.filter(([name]) => name === "config.deleteEnvGroup" || name === "endpoints.revokeApiKey");
-		assert.deepStrictEqual(after, [
-			["endpoints.revokeApiKey", "orders", "production", "api", "k2", "shop"],
-			["config.deleteEnvGroup", "basket", "development", "orders", "shop"],
-			["endpoints.revokeApiKey", "orders", "development", "api", "k1", "shop"],
+	it("lists the links to another project's endpoint by the connection they read", async () => {
+		const { cloud } = fakeCloud({
+			links: {
+				fieldLinks: { "acme/basket:billingUrl": { ref: "finance-billing-api", key: "url" }, "acme/basket:dbHost": { ref: "orders-db", key: "host" } },
+				orphaned: [{ target: "acme/basket:billingKey", kind: "configurable", ref: "finance-billing-api", key: "apiKey" }],
+			},
+			connectable: [billing],
+		});
+		assert.deepStrictEqual(await apiWith(cloud).connections.listEndpointLinks("basket", "shop"), [
+			{ configurable: "acme/basket:billingUrl", project: "finance", component: "billing", endpoint: "api", key: "url" },
+			{ configurable: "acme/basket:billingKey", project: "finance", component: "billing", endpoint: "api", key: "apiKey" },
 		]);
-	});
-
-	it("does not remove a group of the same name that was there before", async () => {
-		const { cloud, calls } = fakeCloud({ deployed: true, failPutIn: "production", existingGroupIn: "development" });
-		await assert.rejects(
-			apiWith(cloud).connections.createServiceConnection({
-				integration: "basket",
-				target,
-				access: "gateway",
-				name: "orders",
-				environments: ["development", "production"],
-				projectName: "shop",
-			}),
-		);
-		assert.ok(!calls.some(([name]) => name === "config.deleteEnvGroup"));
-		const revoked = calls.filter(([name]) => name === "endpoints.revokeApiKey").map(([, , environment]) => environment);
-		assert.deepStrictEqual(revoked, ["production"], "the key the kept development group now holds stays valid");
 	});
 });
