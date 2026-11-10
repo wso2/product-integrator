@@ -128,6 +128,10 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		),
 	);
 
+	// 5b. A context file created, edited or deleted outside the commands (by hand, by git) is read
+	// again, so the link it records, or its absence, takes effect without a reload.
+	context.subscriptions.push(watchContextFiles());
+
 	// 6. Restore the session (secret storage, or the cloud editor's injected token).
 	try {
 		await authProvider.initAuth();
@@ -137,6 +141,27 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 
 	// 7. Mark the exported cloud APIs as active
 	cloudAPIs.setActive(true);
+}
+
+function watchContextFiles(): vscode.Disposable {
+	const watcher = workspace.createFileSystemWatcher("**/.wso2/context.yaml");
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	// A checkout or a save can touch the file several times in a row: read it once they settle.
+	const refresh = () => {
+		clearTimeout(timer);
+		timer = setTimeout(() => {
+			if (ext.authProvider?.isLoggedIn) {
+				void contextStore.getState().refreshState();
+			}
+		}, 500);
+	};
+	return vscode.Disposable.from(
+		watcher,
+		watcher.onDidCreate(refresh),
+		watcher.onDidChange(refresh),
+		watcher.onDidDelete(refresh),
+		new vscode.Disposable(() => clearTimeout(timer)),
+	);
 }
 
 function registerPreInitHandlers(): vscode.Disposable {
