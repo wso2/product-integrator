@@ -16,30 +16,46 @@
  * under the License.
  */
 
-import type {
-	AuthState,
-	ComponentKind,
-	ContextItemEnriched,
-	ContextStoreComponentState,
-	IWso2PlatformExtensionAPI,
-} from "@wso2/wso2-platform-core";
+import {
+	type AuthState,
+	type CloudClient,
+	type CloudServiceRequest,
+	type ContextItemEnriched,
+	type ContextStoreState,
+	type DirectoryIntegration,
+	type ExchangedToken,
+	type IWso2PlatformExtensionAPI,
+	type LocalRuntimeEnv,
+	NotSupportedError,
+	type OpenClonedDirRequest,
+	PLATFORM_EXTENSION_API_VERSION,
+	type PlatformEnvConfig,
+	type PlatformSession,
+	type TokenExchangeRequest,
+	orderByPipeline,
+} from "@wso2/wso2-cloud-client";
 import { ext } from "../extensionVariables";
-import { hasDirtyRepo } from "./git/util";
-import { openClonedDir } from "./cloud-uri-handlers";
-import { contextStore } from "./stores/context-store";
-import { webviewStateStore } from "./stores/webview-state-store";
-import { createConnectionConfig, deleteLocalConnectionConfig } from "./cloud-utils";
 import { isSamePath } from "../utils/pathUtils";
+import { openClonedDir } from "./cloud-uri-handlers";
+import { type CloudServiceDeps, callCloudService, exchangeToken } from "./cloud-services";
+import { createConnectionConfig, deleteLocalConnectionConfig } from "./cloud-utils";
+import { cloudConnections } from "./connections";
+import { linkContext } from "./context-file";
+import { hasDirtyRepo } from "./git/util";
+import { contextStore } from "./stores/context-store";
+
+const NO_PLATFORM_API = (what: string, dependency: string) =>
+	new NotSupportedError(`${what} is not available on WSO2 Cloud yet.`, { reason: dependency });
 
 /**
- * Implements IWso2PlatformExtensionAPI using wi-extension's own stores and RPC client.
- * Mirrors PlatformExtensionApi from the wso2-platform extension.
+ * The API other extensions (the Ballerina extension) reach through the
+ * `cloudAPIs` gate (`createExtensionGate`) with the key a `wso2-cloud`
+ * session carries: the v3 contract over the platform client. The WSO2 Cloud
+ * token is not here; calls are made with it in this extension.
  */
 export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
-	public active: boolean;
-	constructor() {
-		this.active = false;
-	}
+	public readonly apiVersion = PLATFORM_EXTENSION_API_VERSION;
+	private active = false;
 
 	public setActive(active: boolean) {
 		this.active = active;
@@ -49,103 +65,226 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 		return this.active;
 	}
 
-	private getComponentsOfDir = (fsPath: string, components?: ContextStoreComponentState[]): ComponentKind[] =>
-		(components
-			?.filter((item) => isSamePath(item?.componentFsPath, fsPath))
-			?.map((item) => item?.component)
-			?.filter((item) => !!item) as ComponentKind[]) ?? [];
+	private get cloud(): CloudClient {
+		return ext.clients.platform.cloud;
+	}
 
-	// Auth
-	public getAuthState = (): AuthState =>
-		ext.authProvider?.getState().state ?? { userInfo: null, region: "US" as const };
-	public isLoggedIn = (): boolean => !!ext.authProvider?.getState().state?.userInfo;
-	public getStsToken = (): Promise<string> => ext.clients.rpcClient.getStsToken();
+	// A Ballerina workspace (no single package) asks with no path; nothing matches it.
+	private integrationsOfDir = (fsPath: string | undefined, integrations?: DirectoryIntegration[]): DirectoryIntegration[] =>
+		fsPath ? (integrations?.filter((item) => item.fsPath && isSamePath(item.fsPath, fsPath)) ?? []) : [];
 
-	// Project
-	public getProjects = (orgId: string) => ext.clients.rpcClient.getProjects(orgId);
-	public updateProject = (params: Parameters<IWso2PlatformExtensionAPI["updateProject"]>[0]) =>
-		ext.clients.rpcClient.updateProject(params);
+	// ---- auth ----
+	public getAuthState = (): AuthState => ext.authProvider?.state ?? { session: null, status: "signed-out" };
+	public isLoggedIn = (): boolean => !!ext.authProvider?.isLoggedIn;
+	public signIn = async (options?: { reselectOrganization?: boolean }): Promise<PlatformSession> => {
+		if (!ext.authProvider) {
+			throw new Error("The cloud layer is not active yet.");
+		}
+		return ext.authProvider.signIn(options);
+	};
+	public signOut = (): Promise<void> => ext.authProvider?.logout(true) ?? Promise.resolve();
+	// A copy: the gate hands this to any extension, and the service URLs in it are where the token is sent.
+	public getPlatformConfig = (): PlatformEnvConfig => ({ ...ext.config });
+	public subscribeAuthState = (callback: (state: AuthState) => void): (() => void) => ext.authProvider?.subscribe((s) => callback(s.state)) ?? (() => undefined);
+	/** Tells `callback` whether there is a session now and whenever that changes, by the same rule as {@link isLoggedIn}. */
+	public subscribeIsLoggedIn = (callback: (isLoggedIn: boolean) => void): (() => void) => {
+		const auth = ext.authProvider;
+		if (!auth) {
+			return () => undefined;
+		}
+		let last: boolean | undefined;
+		return auth.subscribe(() => {
+			const now = auth.isLoggedIn;
+			if (now !== last) {
+				last = now;
+				callback(now);
+			}
+		});
+	};
 
-	// Context
-	public getDirectoryComponents = (fsPath: string): ComponentKind[] =>
-		this.getComponentsOfDir(fsPath, contextStore.getState().state?.components);
-	public getSelectedContext = (): ContextItemEnriched | null =>
-		contextStore.getState().state?.selected || null;
-	public getContextStateStore = () => contextStore.getState().state;
-	public getWebviewStateStore = () => webviewStateStore.getState().state;
-
-	// Git
-	public localRepoHasChanges = (fsPath: string): Promise<boolean> =>
-		hasDirtyRepo(fsPath, ext.context);
-
-	// Navigation
-	public openClonedDir = (params: Parameters<IWso2PlatformExtensionAPI["openClonedDir"]>[0]): Promise<void> =>
-		openClonedDir(params);
-
-	// Marketplace
-	public getMarketplaceItems = (params: Parameters<IWso2PlatformExtensionAPI["getMarketplaceItems"]>[0]) =>
-		ext.clients.rpcClient.getMarketplaceItems(params);
-	public getMarketplaceDatabases = (params: Parameters<IWso2PlatformExtensionAPI["getMarketplaceDatabases"]>[0]) =>
-		ext.clients.rpcClient.getMarketplaceDatabases(params);
-	public getMarketplaceDatabaseItem = (params: Parameters<IWso2PlatformExtensionAPI["getMarketplaceDatabaseItem"]>[0]) =>
-		ext.clients.rpcClient.getMarketplaceDatabaseItem(params);
-	public getMarketplaceItem = (params: Parameters<IWso2PlatformExtensionAPI["getMarketplaceItem"]>[0]) =>
-		ext.clients.rpcClient.getMarketplaceItem(params);
-	public getMarketplaceIdl = (params: Parameters<IWso2PlatformExtensionAPI["getMarketplaceIdl"]>[0]) =>
-		ext.clients.rpcClient.getMarketplaceIdl(params);
-
-	// Database
-	public getDatabaseServer = (params: Parameters<IWso2PlatformExtensionAPI["getDatabaseServer"]>[0]) =>
-		ext.clients.rpcClient.getDatabaseServer(params);
-	public getDatabaseAdminCredential = (params: Parameters<IWso2PlatformExtensionAPI["getDatabaseAdminCredential"]>[0]) =>
-		ext.clients.rpcClient.getDatabaseAdminCredential(params);
-	public getDatabaseCredentials = (params: Parameters<IWso2PlatformExtensionAPI["getDatabaseCredentials"]>[0]) =>
-		ext.clients.rpcClient.getDatabaseCredentials(params);
-	public createDatabaseConnection = (params: Parameters<IWso2PlatformExtensionAPI["createDatabaseConnection"]>[0]) =>
-		ext.clients.rpcClient.createDatabaseConnection(params);
-
-	// Connections
-	public createComponentConnection = (params: Parameters<IWso2PlatformExtensionAPI["createComponentConnection"]>[0]) =>
-		ext.clients.rpcClient.createComponentConnection(params);
-	public createThirdPartyConnection = (params: Parameters<IWso2PlatformExtensionAPI["createThirdPartyConnection"]>[0]) =>
-		ext.clients.rpcClient.createThirdPartyConnection(params);
-	public createConnectionConfig = (params: Parameters<IWso2PlatformExtensionAPI["createConnectionConfig"]>[0]) =>
-		createConnectionConfig(params);
-	public registerMarketplaceConnection = (params: Parameters<IWso2PlatformExtensionAPI["registerMarketplaceConnection"]>[0]) =>
-		ext.clients.rpcClient.registerMarketplaceConnection(params);
-	public getConnections = (params: Parameters<IWso2PlatformExtensionAPI["getConnections"]>[0]) =>
-		ext.clients.rpcClient.getConnections(params);
-	public getConnection = (params: Parameters<IWso2PlatformExtensionAPI["getConnection"]>[0]) =>
-		ext.clients.rpcClient.getConnectionItem(params);
-	public deleteConnection = (params: Parameters<IWso2PlatformExtensionAPI["deleteConnection"]>[0]) =>
-		ext.clients.rpcClient.deleteConnection(params);
-	public deleteLocalConnectionsConfig = (params: Parameters<IWso2PlatformExtensionAPI["deleteLocalConnectionsConfig"]>[0]): void =>
-		deleteLocalConnectionConfig(params);
-	public resolveConnectionSecrets = (params: Parameters<IWso2PlatformExtensionAPI["resolveConnectionSecrets"]>[0]) =>
-		ext.clients.rpcClient.resolveConnectionSecrets(params);
-
-	// Environments & console
-	public getDevantConsoleUrl = async (): Promise<string> => ext.config?.devantConsoleUrl;
-	public getProjectEnvs = (params: Parameters<IWso2PlatformExtensionAPI["getProjectEnvs"]>[0]) =>
-		ext.clients.rpcClient.getEnvs(params);
-	public getComponentList = (params: Parameters<IWso2PlatformExtensionAPI["getComponentList"]>[0]) =>
-		ext.clients.rpcClient.getComponentList(params);
-
-	// Proxy
-	public startProxyServer = (params: Parameters<IWso2PlatformExtensionAPI["startProxyServer"]>[0]) =>
-		ext.clients.rpcClient.startProxyServer(params);
-	public stopProxyServer = (params: Parameters<IWso2PlatformExtensionAPI["stopProxyServer"]>[0]) =>
-		ext.clients.rpcClient.stopProxyServer(params);
-
-	// Auth subscriptions
-	public subscribeAuthState = (callback: (state: AuthState) => void): (() => void) =>
-		ext.authProvider?.subscribe((s) => callback(s.state)) ?? (() => { });
-	public subscribeIsLoggedIn = (callback: (isLoggedIn: boolean) => void): (() => void) =>
-		ext.authProvider?.subscribe((s) => callback(!!s.state?.userInfo)) ?? (() => { });
-
-	// Context subscriptions
+	// ---- workspace context ----
+	public getContextState = (): ContextStoreState => contextStore.getState().state;
+	public getSelectedContext = (): ContextItemEnriched | null => contextStore.getState().state?.selected || null;
 	public subscribeContextState = (callback: (state: ContextItemEnriched | undefined) => void): (() => void) =>
 		contextStore.subscribe((s) => callback(s.state?.selected));
-	public subscribeDirComponents = (fsPath: string, callback: (comps: ComponentKind[]) => void): (() => void) =>
-		contextStore.subscribe((s) => callback(this.getComponentsOfDir(fsPath, s.state.components)));
+	public getDirectoryIntegrations = (fsPath: string): DirectoryIntegration[] => this.integrationsOfDir(fsPath, contextStore.getState().state?.integrations);
+	public subscribeDirectoryIntegrations = (fsPath: string, callback: (integrations: DirectoryIntegration[]) => void): (() => void) =>
+		contextStore.subscribe((s) => callback(this.integrationsOfDir(fsPath, s.state.integrations)));
+	public localRepoHasChanges = (fsPath: string): Promise<boolean> => hasDirtyRepo(fsPath, ext.context);
+	public linkDirectory = async (fsPath: string, target: { project: string; env?: string }): Promise<void> => {
+		const org = ext.authProvider?.org;
+		if (!org) {
+			throw new Error("Not signed in to WSO2 Cloud.");
+		}
+		linkContext(fsPath, { org: org.handle, project: target.project, env: target.env });
+		await contextStore.getState().refreshState();
+	};
+	public openClonedDir = (request: OpenClonedDirRequest): Promise<void> => openClonedDir(request);
+	public refreshContext = (): Promise<void> => contextStore.getState().refreshState();
+
+	// ---- platform resources ----
+	public get org() {
+		const cloud = this.cloud;
+		const uuid = () => {
+			const value = ext.authProvider?.org?.uuid;
+			if (!value) {
+				throw new Error("The organization's id is not known yet; sign in again.");
+			}
+			return value;
+		};
+		return {
+			get: () => cloud.orgs.current(),
+			getSubscriptions: () => cloud.orgs.subscriptions(uuid()),
+			getComponentLimits: () => cloud.orgs.componentLimits(uuid()),
+		};
+	}
+	public get projects() {
+		return this.cloud.projects;
+	}
+	public get integrations() {
+		const components = this.cloud.components;
+		return {
+			list: (projectName: string) => components.list(projectName),
+			get: (projectName: string, name: string) => components.get(projectName, name),
+			find: (ref: string, projectName: string) => components.find(ref, projectName),
+			getRepository: (name: string, projectName?: string) => components.repository(name, projectName),
+			create: components.create.bind(components),
+			createRaw: components.createRaw.bind(components),
+			update: components.update.bind(components),
+			delete: components.delete.bind(components),
+			checkName: components.checkName.bind(components),
+			updateBuildParameters: components.updateBuildParameters.bind(components),
+			updateBuildpackConfig: components.updateBuildpackConfig.bind(components),
+			setAutoBuild: components.setAutoBuild.bind(components),
+			setAutoDeploy: components.setAutoDeploy.bind(components),
+			listCommits: components.listCommits.bind(components),
+			listTracks: components.listTracks.bind(components),
+			getDefaultTrack: components.getDefaultTrack.bind(components),
+		};
+	}
+	public get builds() {
+		return this.cloud.builds;
+	}
+	public get deployments() {
+		return this.cloud.deployments;
+	}
+	public get environments() {
+		const environments = this.cloud.environments;
+		const pipelines = this.cloud.pipelines;
+		return {
+			list: () => environments.list(),
+			get: (id: string) => environments.get(id),
+			resolve: (ref: string) => environments.resolve(ref),
+			listOrdered: async (projectName: string) => {
+				const [all, { pipeline }] = await Promise.all([environments.list(), pipelines.ofProject(projectName)]);
+				return orderByPipeline(all, pipeline);
+			},
+		};
+	}
+	public get pipelines() {
+		return this.cloud.pipelines;
+	}
+	public get endpoints() {
+		return this.cloud.endpoints;
+	}
+	public get config() {
+		return this.cloud.config;
+	}
+	public get observability() {
+		const observability = this.cloud.observability;
+		const builds = this.cloud.builds;
+		return {
+			queryBuildLogs: async (name: string, buildName: string, options: { tail?: number; signal?: AbortSignal; projectName?: string } = {}) => {
+				const build = await builds.get(name, buildName, options.projectName);
+				return observability.buildLogs(build, options);
+			},
+			queryRuntimeLogs: (projectName: string, name: string, environment: string, sinceMs: number, options?: { tail?: number; signal?: AbortSignal }) =>
+				observability.runtimeLogs({ project: projectName, component: name, environment }, sinceMs, options),
+		};
+	}
+	public get repos() {
+		return this.cloud.repos;
+	}
+	public get git() {
+		const proxy = this.cloud.git;
+		return {
+			// The git integration's routes are not in the platform's API document yet.
+			isRepoAuthorized: async (_owner: string, _repo: string) => {
+				throw NO_PLATFORM_API("Checking repository access", "git_app_service_routes");
+			},
+			listInstallations: async () => {
+				throw NO_PLATFORM_API("Listing GitHub installations", "git_app_service_routes");
+			},
+			connectGitHub: async () => {
+				throw NO_PLATFORM_API("Connecting GitHub", "git_app_service_routes");
+			},
+			raw: proxy.raw.bind(proxy),
+		};
+	}
+	public get dbServers() {
+		return this.cloud.dbServers;
+	}
+	public get knowledgeBases() {
+		return this.cloud.knowledgeBases;
+	}
+	public get applications() {
+		return this.cloud.applications;
+	}
+	public get codeServer() {
+		return this.cloud.codeServer;
+	}
+	public get ballerinaCentral() {
+		return this.cloud.ballerinaCentral;
+	}
+
+	// ---- other WSO2 Cloud services ----
+	private get services(): CloudServiceDeps {
+		return { config: ext.config, tokenSource: ext.clients.platform.tokenSource };
+	}
+	// No endpoint yet: where it comes from (the caller's, checked against an allowlist) is still to be decided,
+	// so every exchange answers NotSupportedError until then.
+	public exchangeToken = (request: TokenExchangeRequest): Promise<ExchangedToken> => exchangeToken(request?.target, request?.endpoint, this.services);
+	public request = <T = unknown>(request: CloudServiceRequest): Promise<T> => callCloudService<T>(request, this.services);
+
+	// ---- compositions over the platform ----
+	public get connections() {
+		return cloudConnections(this.cloud, (message, error) => ext.logError(message, error));
+	}
+	public get runtime() {
+		const cloud = this.cloud;
+		return {
+			collectLocalEnv: async (request: { projectName: string; integration?: string; environment?: string; skip?: string[] }): Promise<LocalRuntimeEnv> => {
+				const result: LocalRuntimeEnv = { envVars: {}, missingSecrets: [] };
+				if (!request.integration) {
+					return result;
+				}
+				const environment = request.environment ?? (await cloud.pipelines.ofProject(request.projectName)).entry ?? (await cloud.environments.list())[0]?.id;
+				if (!environment) {
+					return result;
+				}
+				const groups = await cloud.config.listEnvGroups(request.integration, environment, request.projectName);
+				for (const group of groups) {
+					if (request.skip?.includes(group.name ?? "")) {
+						continue;
+					}
+					if (group.sensitive) {
+						// Secrets are write-only on the platform; the person sets them locally.
+						result.missingSecrets.push(...(group.keys ?? []));
+						continue;
+					}
+					const full = group.data ? group : await cloud.config.getEnvGroup(request.integration, environment, group.name ?? "", request.projectName);
+					Object.assign(result.envVars, full.data ?? {});
+				}
+				return result;
+			},
+		};
+	}
+
+	// ---- local files ----
+	public get local() {
+		return {
+			writeConnectionReference: (request: { componentDir: string; name: string; resourceRef: string }) => createConnectionConfig(request),
+			deleteConnectionReference: (request: { componentDir: string; name: string }) => deleteLocalConnectionConfig({ componentDir: request.componentDir, connectionName: request.name }),
+		};
+	}
 }

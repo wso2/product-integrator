@@ -16,406 +16,391 @@
  * under the License.
  */
 
-import { existsSync, readFileSync, rmSync } from "fs";
+import { existsSync, rmSync } from "fs";
 import * as path from "path";
 import {
-    type ComponentKind,
-    type ContextItem,
-    type ContextItemDir,
-    type ContextItemEnriched,
-    type ContextStoreComponentState,
-    type ContextStoreState,
-    type Environment,
-    type Organization,
-    type Project,
-    getComponentKindRepoSource,
-    parseGitURL,
-} from "@wso2/wso2-platform-core";
-import * as yaml from "js-yaml";
+	type Component,
+	type ComponentRepository,
+	type ContextEntry,
+	type ContextItemDir,
+	type ContextItemEnriched,
+	type ContextStoreState,
+	type DirectoryIntegration,
+	type Project,
+	contextKey,
+	isCloudError,
+} from "@wso2/wso2-cloud-client";
+import { parseGitURL } from "@wso2/wso2-platform-core";
 import { ProgressLocation, window, workspace } from "vscode";
 import { createStore } from "zustand";
 import { persist } from "zustand/middleware";
-import { ext } from '../../extensionVariables';
+import { ext } from "../../extensionVariables";
+import { isSamePath, isSubpath } from "../../utils";
+import { findContextFile, readContextFile } from "../context-file";
 import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
-import { isSamePath, isSubpath } from '../../utils';
 import { dataCacheStore } from "./data-cache-store";
 import { locationStore } from "./location-store";
 import { getWorkspaceStateStore } from "./store-utils";
 
 interface ContextStore {
-    state: ContextStoreState;
-    resetState: () => void;
-    getValidItems: () => ContextItemEnriched[];
-    refreshState: () => Promise<void>;
-    changeContext: (selected: ContextItemEnriched) => Promise<void>;
-    onSetNewContext: (org: Organization, project: Project, contextDir: ContextItemDir) => void;
+	state: ContextStoreState;
+	resetState: () => void;
+	getValidItems: () => ContextItemEnriched[];
+	refreshState: () => Promise<void>;
+	changeContext: (selected: ContextItemEnriched) => Promise<void>;
+	onSetNewContext: (project: Project, contextDir: ContextItemDir, env?: string) => void;
 }
 
-const initialState: ContextStoreState = { items: {}, components: [], loading: false };
+const initialState: ContextStoreState = { items: {}, integrations: [], loading: false };
 
 export const contextStore = createStore(
-    persist<ContextStore>(
-        (set, get) => ({
-            state: initialState,
-            resetState: () => set(() => ({ state: initialState })),
-            refreshState: async () => {
-                try {
-                    if (ext.authProvider?.getState().state?.userInfo) {
-                        set(({ state }) => ({ state: { ...state, loading: true } }));
-                        let items = await getAllContexts(get().state?.items);
-                        let selected = await getSelected(items, get().state?.selected);
-                        set(({ state }) => ({ state: { ...state, items, selected } }));
-                        let components = await getComponentsInfoCache(selected);
-                        set(({ state }) => ({ state: { ...state, items, selected, components } }));
-                        items = await getEnrichedContexts(get().state?.items);
-                        selected = await getSelected(items, selected);
-                        components = await getComponentsInfoCache(selected);
-                        set(({ state }) => ({ state: { ...state, items, selected, components } }));
-                        components = await getComponentsInfo(selected);
-                        set(({ state }) => ({ state: { ...state, loading: false, items, selected, components } }));
-                        if (selected) {
-                            locationStore.getState().setLocation(selected, components);
-                            updateProjectEnvCache(selected);
-                        }
-                    }
-                } catch (err) {
-                    set(({ state }) => ({ state: { ...state, loading: false, error: err as Error } }));
-                }
-            },
-            getValidItems: () => Object.values(get().state.items).filter((item) => item.org && item.project),
-            onSetNewContext: async (org, project, contextDir) => {
-                try {
-                    const item: ContextItemEnriched = {
-                        orgHandle: org.handle,
-                        org,
-                        projectHandle: project.handler,
-                        project,
-                        contextDirs: [contextDir],
-                    };
-                    set(({ state }) => ({
-                        state: {
-                            ...state,
-                            items: { ...state.items, [getContextKey(org, project)]: item },
-                            selected: item,
-                        },
-                    }));
-                    get().refreshState();
-                } catch (err) {
-                    set(({ state }) => ({ state: { ...state, loading: false, error: err as Error } }));
-                }
-            },
-            changeContext: async (selected) => {
-                try {
-                    let components = await getComponentsInfoCache(selected);
-                    set(({ state }) => ({ state: { ...state, selected, loading: true, components } }));
-                    components = await getComponentsInfo(selected);
-                    set(({ state }) => ({ state: { ...state, selected, loading: false, components } }));
-                } catch (err) {
-                    set(({ state }) => ({ state: { ...state, loading: false, error: err as Error } }));
-                }
-            },
-        }),
-        getWorkspaceStateStore("dir-context-zustand-storage"),
-    ),
+	persist<ContextStore>(
+		(set, get) => ({
+			state: initialState,
+			resetState: () => {
+				changeGeneration++;
+				set(() => ({ state: initialState }));
+			},
+			refreshState: async () => {
+				// A refresh that is overtaken by another, or by a sign-out, stops writing.
+				const run = ++refreshGeneration;
+				const stale = () => run !== refreshGeneration || !ext.authProvider?.isLoggedIn;
+				// A project picked while this refresh runs wins over the one it worked out from the state before.
+				const changeRun = changeGeneration;
+				const contextChanged = () => changeRun !== changeGeneration;
+				const write = (change: (state: ContextStoreState) => ContextStoreState) => {
+					if (!stale()) {
+						set(({ state }) => {
+							const next = change(state);
+							return { state: contextChanged() ? { ...next, selected: state.selected, integrations: state.integrations } : next };
+						});
+					}
+				};
+				try {
+					if (stale()) {
+						return;
+					}
+					write((state) => ({ ...state, loading: true }));
+					let items = await getAllContexts(get().state?.items);
+					let selected = await getSelected(items, get().state?.selected);
+					write((state) => ({ ...state, items, selected }));
+					let integrations = await getIntegrationsFromCache(selected);
+					write((state) => ({ ...state, items, selected, integrations }));
+					items = await getEnrichedContexts(get().state?.items);
+					selected = await getSelected(items, selected);
+					integrations = await getIntegrationsFromCache(selected);
+					write((state) => ({ ...state, items, selected, integrations }));
+					integrations = await getIntegrationsFromPlatform(selected);
+					write((state) => ({ ...state, loading: false, items, selected, integrations }));
+					if (selected && !stale() && !contextChanged()) {
+						locationStore.getState().setLocation(selected, integrations);
+					}
+				} catch (err) {
+					ext.logError("Failed to refresh the project context", err as Error);
+					write((state) => ({ ...state, loading: false }));
+				}
+			},
+			getValidItems: () => Object.values(get().state.items).filter((item) => item.project && !item.foreignOrg),
+			onSetNewContext: async (project, contextDir, env) => {
+				const orgHandle = ext.authProvider?.org?.handle;
+				if (!orgHandle) {
+					return;
+				}
+				const item: ContextItemEnriched = { orgHandle, projectName: project.id, project, contextDirs: [contextDir], defaultEnv: env };
+				changeGeneration++;
+				set(({ state }) => ({
+					state: { ...state, items: { ...state.items, [contextKey({ org: orgHandle, project: project.id })]: item }, selected: item },
+				}));
+				void get().refreshState();
+			},
+			changeContext: async (selected) => {
+				// A change overtaken by a newer selection, or by a sign-out, stops writing.
+				const run = ++changeGeneration;
+				const write = (change: (state: ContextStoreState) => ContextStoreState) => {
+					if (run === changeGeneration && ext.authProvider?.isLoggedIn) {
+						set(({ state }) => ({ state: change(state) }));
+					}
+				};
+				try {
+					let integrations = await getIntegrationsFromCache(selected);
+					write((state) => ({ ...state, selected, loading: true, integrations }));
+					integrations = await getIntegrationsFromPlatform(selected);
+					write((state) => ({ ...state, selected, loading: false, integrations }));
+				} catch (err) {
+					ext.logError("Failed to change the project context", err as Error);
+					write((state) => ({ ...state, loading: false }));
+				}
+			},
+		}),
+		getWorkspaceStateStore("dir-context-zustand-storage"),
+	),
 );
 
+let refreshGeneration = 0;
+let changeGeneration = 0;
+
+/** Reads every context file in the workspace and, for a workspace folder without one, the one at its git root. */
 const getAllContexts = async (previousItems: { [key: string]: ContextItemEnriched }) => {
-    const contextFiles = await workspace.findFiles("**/{.wso2,.choreo}/context.yaml");
-    const contextItems: { [key: string]: ContextItemEnriched } = {};
+	const contextFiles = (await workspace.findFiles("**/.wso2/context.yaml")).map((uri) => uri.fsPath);
+	const contextItems: { [key: string]: ContextItemEnriched } = {};
+	const sessionOrg = ext.authProvider?.org?.handle;
 
-    const setContextObj = (contextFilePath: string, dirPath?: string, workspaceName?: string) => {
-        let parsedData: ContextItem[] = yaml.load(readFileSync(contextFilePath, "utf8")) as any;
-        if (!Array.isArray(parsedData) && (parsedData as any)?.org && (parsedData as any)?.project) {
-            parsedData = [{ org: (parsedData as any).org, project: (parsedData as any).project }];
-        } else if (parsedData === undefined) {
-            parsedData = [];
-        }
+	const addEntries = (contextFilePath: string, dirPath?: string, workspaceName?: string) => {
+		for (const entry of readContextFile(contextFilePath)) {
+			const key = contextKey(entry);
+			const workspaceDir = dirPath ?? path.dirname(path.dirname(contextFilePath));
+			const projectRootFsPath = path.dirname(path.dirname(contextFilePath));
+			const contextDir: ContextItemDir = {
+				contextFileFsPath: contextFilePath,
+				dirFsPath: workspaceDir,
+				workspaceName: workspaceName ?? path.basename(workspaceDir),
+				projectRootFsPath,
+			};
+			if (contextItems[key]) {
+				contextItems[key] = { ...contextItems[key], contextDirs: [...contextItems[key].contextDirs, contextDir] };
+			} else if (previousItems?.[key]?.project) {
+				contextItems[key] = { ...previousItems[key], contextDirs: [contextDir], defaultEnv: entry.env ?? previousItems[key].defaultEnv };
+			} else {
+				contextItems[key] = {
+					orgHandle: entry.org,
+					projectName: entry.project,
+					project: dataCacheStore.getState().getProjects(entry.org).find((p) => p.id === entry.project),
+					contextDirs: [contextDir],
+					defaultEnv: entry.env,
+					local: entry.local,
+					foreignOrg: !!sessionOrg && entry.org !== sessionOrg,
+				};
+			}
+		}
+	};
 
-        for (const contextItem of parsedData) {
-            const key = `${contextItem.org}-${contextItem.project}`;
-
-            const workspaceDir = dirPath ?? path.dirname(path.dirname(contextFilePath));
-            const projectRootFsPath = path.dirname(path.dirname(contextFilePath));
-            const wsName = workspaceName ?? path.basename(workspaceDir);
-
-            const contextDir: ContextItemDir = {
-                contextFileFsPath: contextFilePath,
-                dirFsPath: workspaceDir,
-                workspaceName: wsName,
-                projectRootFsPath,
-            };
-
-            if (contextItems[key]) {
-                contextItems[key] = {
-                    ...contextItems[key],
-                    contextDirs: [...contextItems[key].contextDirs, contextDir],
-                };
-            } else if (previousItems?.[key]?.org && previousItems?.[key].project) {
-                contextItems[key] = { ...previousItems?.[key], contextDirs: [contextDir] };
-            } else {
-                const userOrgs = ext.authProvider?.getState().state.userInfo?.organizations;
-                const matchingOrg = userOrgs?.find((item: Organization) => item.handle === contextItem.org);
-
-                const projectsOfOrg = dataCacheStore.getState().getProjects(contextItem.org);
-                const matchingProject = projectsOfOrg.find((item) => item.handler === contextItem.project);
-
-                contextItems[key] = {
-                    orgHandle: contextItem.org,
-                    org: matchingOrg,
-                    projectHandle: contextItem.project,
-                    project: matchingProject,
-                    contextDirs: [contextDir],
-                };
-            }
-        }
-    };
-
-    if (contextFiles.length > 0) {
-        for (const contextFile of contextFiles) {
-            setContextObj(contextFile.fsPath);
-        }
-    } else if (workspace.workspaceFolders) {
-        for (const workspaceFolder of workspace.workspaceFolders) {
-            try {
-                const gitRoot = await getGitRoot(ext.context, workspaceFolder.uri.fsPath);
-                if (gitRoot) {
-                    const wso2ContextPath = path.join(gitRoot, ".wso2", "context.yaml");
-                    const contextPath = existsSync(wso2ContextPath) ? wso2ContextPath : path.join(gitRoot, ".choreo", "context.yaml");
-                    if (existsSync(contextPath)) {
-                        setContextObj(contextPath, workspaceFolder.uri.fsPath, workspaceFolder.name);
-                    }
-                }
-            } catch {
-                console.log("workspaceFolder.uri.fsPat is not a Git repo");
-            }
-        }
-    }
-
-    return contextItems;
+	for (const contextFile of contextFiles) {
+		addEntries(contextFile);
+	}
+	// A workspace folder with no context file of its own may sit in a repository that has one at its root.
+	for (const workspaceFolder of workspace.workspaceFolders ?? []) {
+		if (!contextFiles.some((contextFile) => isSubpath(workspaceFolder.uri.fsPath, contextFile))) {
+			try {
+				const gitRoot = await getGitRoot(ext.context, workspaceFolder.uri.fsPath);
+				const contextPath = gitRoot ? findContextFile(gitRoot) : undefined;
+				if (contextPath) {
+					addEntries(contextPath, workspaceFolder.uri.fsPath, workspaceFolder.name);
+				}
+			} catch {
+				// not a git repository
+			}
+		}
+	}
+	return contextItems;
 };
 
 const getSelected = async (items: { [key: string]: ContextItemEnriched }, prevSelected?: ContextItemEnriched) => {
-    if (ext.isDevantCloudEditor && process.env.CLOUD_INITIAL_ORG_ID && process.env.CLOUD_INITIAL_PROJECT_ID) {
-        const userOrgs = ext.authProvider?.getState().state.userInfo?.organizations;
-        const matchingOrg = userOrgs?.find(
-            (item: Organization) => item.uuid === process.env.CLOUD_INITIAL_ORG_ID || item.id?.toString() === process.env.CLOUD_INITIAL_ORG_ID,
-        );
-        if (matchingOrg) {
-            let projectsCache = dataCacheStore.getState().getProjects(matchingOrg.handle);
-            if (projectsCache.length === 0) {
-                const projects = await ext.clients.rpcClient.getProjects(matchingOrg.id.toString());
-                dataCacheStore.getState().setProjects(matchingOrg.handle, projects);
-                projectsCache = projects;
-            }
-            const matchingProject = projectsCache.find((item) => item.id === process.env.CLOUD_INITIAL_PROJECT_ID);
-            if (matchingProject) {
-                return {
-                    orgHandle: matchingOrg.handle,
-                    projectHandle: matchingProject.handler,
-                    org: matchingOrg,
-                    project: matchingProject,
-                    contextDirs:
-                        workspace.workspaceFolders?.map((item) => ({
-                            workspaceName: item.name,
-                            projectRootFsPath: item.uri.fsPath,
-                            dirFsPath: item.uri.fsPath,
-                        })) ?? [],
-                } as ContextItemEnriched;
-            }
-        }
-    }
+	const orgHandle = ext.authProvider?.org?.handle;
+	// The cloud editor names the project it was opened for.
+	if (ext.isDevantCloudEditor && orgHandle && process.env.CLOUD_INITIAL_PROJECT_ID) {
+		let projectsCache = dataCacheStore.getState().getProjects(orgHandle);
+		if (projectsCache.length === 0) {
+			projectsCache = await ext.clients.platform.cloud.projects.list();
+			dataCacheStore.getState().setProjects(orgHandle, projectsCache);
+		}
+		const wanted = process.env.CLOUD_INITIAL_PROJECT_ID;
+		const matchingProject = projectsCache.find((item) => item.id === wanted || item.handler === wanted);
+		if (matchingProject) {
+			return {
+				orgHandle,
+				projectName: matchingProject.id,
+				project: matchingProject,
+				contextDirs:
+					workspace.workspaceFolders?.map((item) => ({
+						workspaceName: item.name,
+						projectRootFsPath: item.uri.fsPath,
+						dirFsPath: item.uri.fsPath,
+						contextFileFsPath: "",
+					})) ?? [],
+			} as ContextItemEnriched;
+		}
+	}
 
-    const globalCompId: string | null | undefined = ext.context.globalState.get("SOURCE_COMPONENT_ID");
-    if (globalCompId) {
-        await ext.context.globalState.update("SOURCE_COMPONENT_ID", null);
-        await ext.context.workspaceState.update("SOURCE_COMPONENT_ID", globalCompId);
-    }
+	const globalCompId: string | null | undefined = ext.context.globalState.get("SOURCE_COMPONENT_ID");
+	if (globalCompId) {
+		await ext.context.globalState.update("SOURCE_COMPONENT_ID", null);
+		await ext.context.workspaceState.update("SOURCE_COMPONENT_ID", globalCompId);
+	}
 
-    let selected: ContextItemEnriched | undefined = undefined;
-    const matchingItem = Object.values(items).find(
-        (item) =>
-            prevSelected?.orgHandle === item.orgHandle &&
-            prevSelected?.projectHandle === item.projectHandle &&
-            prevSelected?.org &&
-            prevSelected?.project,
-    );
+	const matchingItem = Object.values(items).find(
+		(item) => prevSelected?.orgHandle === item.orgHandle && prevSelected?.projectName === item.projectName && item.project && !item.foreignOrg,
+	);
 
-    const openKey: string | null | undefined = ext.context.globalState.get("open-local-repo");
-    ext.context.globalState.update("open-local-repo", null);
-    if (openKey) {
-        const selected = items[openKey];
-        if (selected?.org && selected?.project) {
-            return selected;
-        }
-    }
+	const openKey: string | null | undefined = ext.context.globalState.get("open-local-repo");
+	void ext.context.globalState.update("open-local-repo", null);
+	if (openKey && items[openKey]?.project) {
+		return items[openKey];
+	}
 
-    if (!prevSelected || !matchingItem) {
-        const filtered = Object.values(items).filter((item) => item.org && item.project);
-        if (filtered.length > 0) {
-            selected = filtered[0];
-        }
-    }
-
-    return selected || matchingItem;
+	if (!prevSelected || !matchingItem) {
+		const filtered = Object.values(items).filter((item) => item.project && !item.foreignOrg);
+		return filtered[0] ?? matchingItem;
+	}
+	return matchingItem;
 };
 
+/** Fills each entry's project in from the platform, once per refresh. */
 const getEnrichedContexts = async (items: { [key: string]: ContextItemEnriched }) => {
-    const userOrgs = ext.authProvider?.getState().state.userInfo?.organizations;
-
-    const orgsSet = new Set<string>();
-    Object.values(items).forEach((item) => {
-        if (item.org) {
-            orgsSet.add(item.org.handle);
-        }
-    });
-    const orgHandleList = Array.from(orgsSet);
-
-    const projectsMap = new Map<string, Project[]>();
-    await Promise.all(
-        orgHandleList.map(async (orgHandle) => {
-            const matchingOrg = userOrgs?.find((item: Organization) => item.handle === orgHandle);
-            if (matchingOrg) {
-                try {
-                    const projects = await ext.clients.rpcClient.getProjects(matchingOrg.id.toString());
-                    dataCacheStore.getState().setProjects(matchingOrg.handle, projects);
-                    projectsMap.set(orgHandle, projects);
-                } catch (err) {
-                    console.log("failed to fetch project", err);
-                }
-            }
-        }),
-    );
-
-    const enrichedItems: { [key: string]: ContextItemEnriched } = {};
-    Object.keys(items).forEach((itemKey) => {
-        const itemToEnrich = items[itemKey];
-        const matchingProject = projectsMap.get(itemToEnrich.orgHandle)?.find((item) => item.handler === itemToEnrich.projectHandle);
-        enrichedItems[itemKey] = { ...itemToEnrich, project: matchingProject };
-    });
-
-    return enrichedItems;
+	const orgHandle = ext.authProvider?.org?.handle;
+	if (!orgHandle) {
+		return items;
+	}
+	let projects: Project[] = [];
+	try {
+		projects = await ext.clients.platform.cloud.projects.list();
+		dataCacheStore.getState().setProjects(orgHandle, projects);
+	} catch (err) {
+		ext.logError("Failed to list the organization's projects", err as Error);
+		projects = dataCacheStore.getState().getProjects(orgHandle);
+	}
+	const enriched: { [key: string]: ContextItemEnriched } = {};
+	for (const [key, item] of Object.entries(items)) {
+		const foreignOrg = item.orgHandle !== orgHandle;
+		const project = foreignOrg ? undefined : projects.find((p) => p.id === item.projectName || p.handler === item.projectName);
+		enriched[key] = { ...item, project, foreignOrg };
+	}
+	return enriched;
 };
 
-const getComponentsInfoCache = async (selected?: ContextItemEnriched): Promise<ContextStoreComponentState[]> => {
-    if (!selected) {
-        return [];
-    }
-
-    const componentCache = dataCacheStore.getState().getComponents(selected.orgHandle, selected.projectHandle);
-    return mapComponentList(componentCache, selected);
+const getIntegrationsFromCache = async (selected?: ContextItemEnriched): Promise<DirectoryIntegration[]> => {
+	if (!selected) {
+		return [];
+	}
+	const cache = dataCacheStore.getState();
+	const integrations = cache.getIntegrations(selected.orgHandle, selected.projectName);
+	return mapIntegrationList(integrations, selected, (id) => cache.getRepository(selected.orgHandle, selected.projectName, id));
 };
 
-const updateProjectEnvCache = async (selected: ContextItemEnriched): Promise<void> => {
-    if (selected) {
-        ext.clients.rpcClient
-            .getEnvs({
-                orgId: selected?.org?.id.toString()!,
-                orgUuid: selected?.org?.uuid!,
-                projectId: selected?.project?.id!,
-            })
-            .then((envs: Environment[]) => {
-                dataCacheStore.getState().setEnvs(selected?.orgHandle, selected?.projectHandle, envs);
-            });
-    }
+const getIntegrationsFromPlatform = async (selected?: ContextItemEnriched): Promise<DirectoryIntegration[]> => {
+	if (!selected?.project || selected.foreignOrg) {
+		return getIntegrationsFromCache(selected);
+	}
+	const cloud = ext.clients.platform.cloud;
+	const integrations = await cloud.components.list(selected.projectName);
+	dataCacheStore.getState().setIntegrations(selected.orgHandle, selected.projectName, integrations);
+	// The listing carries no repository; each is read once and cached.
+	const repositories = new Map<string, ComponentRepository | undefined>();
+	await Promise.all(
+		integrations.map(async (integration) => {
+			const cached = dataCacheStore.getState().getRepository(selected.orgHandle, selected.projectName, integration.id);
+			if (cached) {
+				repositories.set(integration.id, cached);
+				return;
+			}
+			try {
+				const repository = await cloud.components.repository(integration.id, selected.projectName);
+				dataCacheStore.getState().setRepository(selected.orgHandle, selected.projectName, integration.id, repository);
+				repositories.set(integration.id, repository);
+			} catch (error) {
+				if (!(isCloudError(error) && error.code === "not_found")) {
+					ext.logError(`Failed to read the repository of ${integration.id}`, error as Error);
+				}
+			}
+		}),
+	);
+	return mapIntegrationList(integrations, selected, (id) => repositories.get(id));
 };
 
-const getComponentsInfo = async (selected?: ContextItemEnriched): Promise<ContextStoreComponentState[]> => {
-    if (!selected || !selected?.org?.id) {
-        return getComponentsInfoCache(selected);
-    }
-
-    const components = await ext.clients.rpcClient.getComponentList({
-        orgId: selected?.org?.id.toString(),
-        orgHandle: selected?.org?.handle,
-        projectHandle: selected.projectHandle,
-        projectId: selected.project?.id!,
-    });
-
-    dataCacheStore.getState().setComponents(selected.orgHandle, selected.projectHandle, components);
-    return mapComponentList(components, selected);
+const getFilteredIntegrations = (integrations: Component[]) => {
+	const workspaceCompId = process.env.SOURCE_COMPONENT_ID;
+	if (workspaceCompId) {
+		const filtered = integrations.filter((item) => item.id === workspaceCompId);
+		if (filtered.length === 1) {
+			return filtered;
+		}
+	}
+	return integrations;
 };
 
-const getFilteredComponents = (components: ComponentKind[]) => {
-    const workspaceCompId: string | null | undefined = process.env.SOURCE_COMPONENT_ID;
-    if (workspaceCompId) {
-        const filteredComps = components.filter((item) => item.metadata?.id === workspaceCompId);
-        if (filteredComps.length === 1) {
-            return filteredComps;
-        }
-    }
-    return components;
+/** The clone URL and the sub path of a repository, in the words `parseGitURL` reads. */
+export const repositoryUrlOf = (repository: ComponentRepository | undefined): string | undefined => {
+	if (!repository) {
+		return undefined;
+	}
+	if (repository.serverUrl) {
+		return repository.serverUrl;
+	}
+	if (repository.organizationApp && repository.nameApp) {
+		const host = repository.gitProvider === "bitbucket" ? "bitbucket.org" : "github.com";
+		return `https://${host}/${repository.organizationApp}/${repository.nameApp}`;
+	}
+	return undefined;
 };
 
-const mapComponentList = async (components: ComponentKind[], selected?: ContextItemEnriched): Promise<ContextStoreComponentState[]> => {
-    const comps: ContextStoreComponentState[] = [];
-    for (const componentItem of getFilteredComponents(components)) {
-        if (selected?.contextDirs) {
-            // biome-ignore lint/correctness/noUnsafeOptionalChaining:
-            for (const item of selected?.contextDirs) {
-                const gitRoot = await getGitRoot(ext.context, item.projectRootFsPath);
-                if (gitRoot) {
-                    const remotes = await getGitRemotes(ext.context, gitRoot);
-                    const repoUrl = getComponentKindRepoSource(componentItem.spec.source).repo;
-                    const parsedRepoUrl = parseGitURL(repoUrl);
-                    if (parsedRepoUrl) {
-                        const [repoOrg, repoName, repoProvider] = parsedRepoUrl;
-                        const hasMatchingRemote = remotes.some((remoteItem) => {
-                            const parsedRemoteUrl = parseGitURL(remoteItem.fetchUrl);
-                            if (parsedRemoteUrl) {
-                                const [repoRemoteOrg, repoRemoteName, repoRemoteProvider] = parsedRemoteUrl;
-                                return repoOrg === repoRemoteOrg && repoName === repoRemoteName && repoRemoteProvider === repoProvider;
-                            }
-                        });
+export const repositorySubPathOf = (repository: ComponentRepository | undefined): string => (repository?.appSubPath ?? "").replace(/^\/+|\/+$/g, "");
 
-                        if (hasMatchingRemote) {
-                            const subPathDir = path.join(gitRoot, getComponentKindRepoSource(componentItem.spec.source)?.path);
-                            const isSubPath = isSubpath(item.dirFsPath, subPathDir);
-                            const isPathSame = isSamePath(item.dirFsPath, subPathDir);
-                            if (
-                                (isPathSame || isSubPath) &&
-                                existsSync(subPathDir) &&
-                                !comps.some((item) => item.component?.metadata?.id === componentItem.metadata?.id)
-                            ) {
-                                if (componentItem.metadata?.isPrebuilt && ext.isDevantCloudEditor) {
-                                    // if its a prebuilt integration(we are in the samples repo), we will remove the .git directory 
-                                    // thus making sure that when user tries to deploy it, we will update associated repo
-                                    ext.context.workspaceState.update("SOURCE_COMPONENT_ID", componentItem?.metadata?.id);
-                                    rmSync(path.join(gitRoot, ".git"), { recursive: true, force: true });
-                                    continue;
-                                }
-                                comps.push({
-                                    component: componentItem,
-                                    workspaceName: item.workspaceName,
-                                    componentFsPath: subPathDir,
-                                    componentRelativePath: relativePath(item.dirFsPath, subPathDir),
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    return comps;
+/** Matches each integration's repository against the directories' git remotes. */
+const mapIntegrationList = async (
+	integrations: Component[],
+	selected: ContextItemEnriched | undefined,
+	repositoryOf: (integrationId: string) => ComponentRepository | undefined,
+): Promise<DirectoryIntegration[]> => {
+	const found: DirectoryIntegration[] = [];
+	if (!selected?.contextDirs) {
+		return found;
+	}
+	for (const integration of getFilteredIntegrations(integrations)) {
+		const repository = repositoryOf(integration.id);
+		const parsedRepoUrl = parseGitURL(repositoryUrlOf(repository) ?? "");
+		if (!parsedRepoUrl) {
+			continue;
+		}
+		const [repoOrg, repoName, repoProvider] = parsedRepoUrl;
+		for (const dir of selected.contextDirs) {
+			const gitRoot = await getGitRoot(ext.context, dir.projectRootFsPath);
+			if (!gitRoot) {
+				continue;
+			}
+			const remotes = await getGitRemotes(ext.context, gitRoot);
+			const hasMatchingRemote = remotes.some((remote) => {
+				const parsed = parseGitURL(remote.fetchUrl);
+				return !!parsed && parsed[0] === repoOrg && parsed[1] === repoName && parsed[2] === repoProvider;
+			});
+			if (!hasMatchingRemote) {
+				continue;
+			}
+			const subPathDir = path.join(gitRoot, repositorySubPathOf(repository));
+			const within = isSamePath(dir.dirFsPath, subPathDir) || isSubpath(dir.dirFsPath, subPathDir);
+			if (within && existsSync(subPathDir) && !found.some((item) => item.integration.id === integration.id)) {
+				if (integration.isPrebuilt && ext.isDevantCloudEditor) {
+					// A prebuilt integration opened in the cloud editor: drop the sample's .git so a deploy attaches the person's own repository.
+					void ext.context.workspaceState.update("SOURCE_COMPONENT_ID", integration.id);
+					rmSync(path.join(gitRoot, ".git"), { recursive: true, force: true });
+					continue;
+				}
+				found.push({
+					integration,
+					repository,
+					workspaceName: dir.workspaceName,
+					fsPath: subPathDir,
+					relativePath: relativePath(dir.dirFsPath, subPathDir),
+				});
+			}
+		}
+	}
+	return found;
 };
 
 export const waitForContextStoreToLoad = async (): Promise<void> => {
-    const isLoading = contextStore.getState().state.loading;
-    if (!isLoading) {
-        return;
-    }
-
-    const listenToLoad = (): Promise<void> => {
-        return new Promise((resolve) => {
-            contextStore.subscribe(({ state }) => {
-                if (!state.loading) {
-                    resolve();
-                }
-            });
-        });
-    };
-    return window.withProgress({ title: "Loading project directory...", location: ProgressLocation.Notification }, () => listenToLoad());
+	if (!contextStore.getState().state.loading) {
+		return;
+	}
+	const listenToLoad = (): Promise<void> =>
+		new Promise((resolve) => {
+			const unsubscribe = contextStore.subscribe(({ state }) => {
+				if (!state.loading) {
+					unsubscribe();
+					resolve();
+				}
+			});
+		});
+	return window.withProgress({ title: "Loading project directory...", location: ProgressLocation.Notification }, () => listenToLoad());
 };
 
-export const getContextKey = (org: Organization, project: Project) => `${org.handle}-${project.handler}`;
+export const getContextKey = (orgHandle: string, project: Project | string) => contextKey({ org: orgHandle, project: typeof project === "string" ? project : project.id });
+

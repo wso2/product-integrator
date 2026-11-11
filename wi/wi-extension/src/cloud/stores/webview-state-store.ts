@@ -16,8 +16,8 @@
  * under the License.
  */
 
-import type { ComponentViewDrawers, ExtensionName, WebviewState, WSO2Terminologies } from "@wso2/wso2-platform-core";
-import { workspace } from "vscode";
+import { readCloudEnvName } from "@wso2/wso2-cloud-client/vscode";
+import type { ComponentViewDrawers, ExtensionName, WSO2Terminologies, WebviewState } from "@wso2/wso2-platform-core";
 import { createStore } from "zustand";
 
 interface WebviewStateStore {
@@ -42,24 +42,10 @@ export const webviewStateStore = createStore<WebviewStateStore>((set) => ({
 		extensionName: "Devant",
 		openedComponentKey: "",
 		componentViews: {},
-		choreoEnv:
-			process.env.CHOREO_ENV ||
-			process.env.CLOUD_ENV ||
-			workspace.getConfiguration().get<string>("integrator.advanced.cloudEnv") ||
-			"prod",
+		choreoEnv: readCloudEnvName(),
 	},
 	setExtensionName: (extensionName) => {
-		let terminologies: WSO2Terminologies = defaultTerminologies;
-		if (extensionName === "Devant") {
-			terminologies = {
-				cloudName: "WSO2 Integration Platform",
-				componentTerm: "integration",
-				componentTermPlural: "integrations",
-				componentTermCapitalized: "Integration",
-				articleComponentTerm: "an integration",
-			};
-		}
-		set(({ state }) => ({ state: { ...state, extensionName, terminologies } }));
+		set(({ state }) => ({ state: { ...state, extensionName, terminologies: defaultTerminologies } }));
 	},
 	setOpenedComponentKey: (openedComponentKey) => set(({ state }) => ({ state: { ...state, openedComponentKey } })),
 	onCloseComponentView: (openedComponentKey) =>

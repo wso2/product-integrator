@@ -67,7 +67,7 @@ on:
         type: choice
         options:
           - codebuild
-          - ubuntu-latest
+          - ubuntu-24.04
           - k8s-default-runners
       build_linux:
         description: 'Build for Linux'
@@ -135,7 +135,7 @@ concurrency:
 jobs:
   prepare-release-branch:
     name: Prepare ${{ inputs.version }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Agent Builder releases live in a separate public repo with their own independent

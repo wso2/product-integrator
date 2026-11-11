@@ -63,7 +63,7 @@ concurrency:
 jobs:
   publish:
     name: Publish components to ${{ inputs.channel }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       id-token: write
       contents: read
@@ -119,10 +119,11 @@ jobs:
             exit 1
           fi
 
+      # Pinned rather than read from lib/vscode/.nvmrc, which lags the current Node.js 24 release.
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version-file: lib/vscode/.nvmrc
+          node-version: 24.22.1
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
@@ -153,9 +154,10 @@ jobs:
       - name: Build WI extension
         if: ${{ inputs.rebuild_wi_extension }}
         env:
-          # scripts/download-choreo-cli.js calls the GitHub API; unauthenticated it hits the 60/hour
-          # limit and fails the build with a 403.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The Copilot backends the Copilot token exchange may send the WSO2 Cloud token to; built into the bundle.
+          COPILOT_ROOT_URL: ${{ secrets.COPILOT_ROOT_URL }}
+          COPILOT_STAGE_ROOT_URL: ${{ secrets.COPILOT_STAGE_ROOT_URL }}
+          COPILOT_DEV_ROOT_URL: ${{ secrets.COPILOT_DEV_ROOT_URL }}
         run: node common/scripts/install-run-rush.js build --to wso2-integrator --verbose
 
       - name: Verify the extension VSIX was produced

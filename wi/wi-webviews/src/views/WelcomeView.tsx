@@ -48,7 +48,6 @@ import {
 	CardsLoadingState,
 	Caption,
 	ConfigureBtn,
-	GetStartedBadge,
 	Headline,
 	RecentProjectsPanel,
 	SigninBtn,
@@ -457,7 +456,6 @@ export const WelcomeView: React.FC = () => {
 						</ConfigureBtn>
 					</TopBtnSection>
 				</TopControlsSection>
-				<GetStartedBadge>Get Started</GetStartedBadge>
 				<Headline>WSO2 Integrator</Headline>
 				<Caption>
                     Build and connect integrations, long-running workflows, MCP servers,
