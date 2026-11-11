@@ -1753,6 +1753,17 @@ jobs:
           name: icp
           path: runtimes/
 
+      # Agent Builder pre-bundles Ballerina Central packages (ci/build/ballerina-packages.properties).
+      # The overlay the installers above merged is published next to the cores, so a downstream
+      # build (the EULA distribution) ships these exact balas instead of resolving them again.
+      # Integrator bundles none, so its release does not carry it.
+      - name: Download pre-bundled Ballerina packages
+        if: ${{ inputs.product_flavor == 'agent-builder' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ballerina-packages
+          path: ballerina-packages/
+
       # The GitHub-release extensions the compile job bundled (absent when every extension came from
       # Open VSX). The generator publishes these files rather than fetching them again. Gated on the
       # same condition the compile job stages them on, not continue-on-error: a failed download
@@ -1789,6 +1800,7 @@ jobs:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
           # Core assets carry the flavor slug like every other release asset.
           ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
+          PRODUCT_FLAVOR: ${{ inputs.product_flavor }}
           BALLERINA_VERSION: ${{ needs.resolve-versions.outputs.ballerina_version }}
           ICP_VERSION: ${{ needs.resolve-versions.outputs.icp_version }}
           BALLERINA_EXTENSION_SOURCE: ${{ inputs.ballerina_extension_source }}
@@ -1840,6 +1852,14 @@ jobs:
           for f in wi-extension/wso2-integrator-*.vsix; do
             stage "${f}" "${ARTIFACT_SLUG}-${INTEGRATOR_VERSION}-wso2.wso2-integrator-$(basename "${f}")"
           done
+          # The pre-bundled packages overlay (Agent Builder only; downloaded above): zipped from the
+          # overlay ROOT, so bundled-packages.txt and bala/ sit at the top of the zip, which is the
+          # BALLERINA_PACKAGES_DIR layout ci/build/merge-ballerina-packages.sh expects.
+          if [ "${PRODUCT_FLAVOR}" = "agent-builder" ]; then
+            [ -f ballerina-packages/bundled-packages.txt ] || { echo "Error: the ballerina-packages overlay has no bundled-packages.txt" >&2; exit 1; }
+            (cd ballerina-packages && zip -qr -X "${RUNNER_TEMP}/ballerina-packages.zip" .)
+            stage "${RUNNER_TEMP}/ballerina-packages.zip" "${ARTIFACT_SLUG}-${INTEGRATOR_VERSION}-ballerina-packages.zip"
+          fi
           # The versions everything above was built with. Downstream builds read every version from
           # it, so it is signed too; a copy, since the stamped file is read again below.
           cp core/versions/ci/build/component-versions.properties "${RUNNER_TEMP}/component-versions.properties"
@@ -1931,6 +1951,7 @@ jobs:
           BUILD_MACOS: ${{ inputs.build_macos }}
           BUILD_WINDOWS: ${{ inputs.build_windows }}
           ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
+          PRODUCT_FLAVOR: ${{ inputs.product_flavor }}
           RELEASE_TARGETS: ${{ steps.release-targets.outputs.targets }}
         run: |
           shopt -s nullglob extglob
@@ -1951,6 +1972,9 @@ jobs:
           require "Component versions"  release-files/"${ARTIFACT_SLUG}"-*-component-versions.properties
           require "Ballerina runtime"   release-files/"${ARTIFACT_SLUG}"-*-ballerina-runtime-*.zip
           require "ICP package"         release-files/"${ARTIFACT_SLUG}"-*-icp-*.zip
+          if [ "${PRODUCT_FLAVOR}" = "agent-builder" ]; then
+            require "Ballerina packages" release-files/"${ARTIFACT_SLUG}"-*-ballerina-packages.zip
+          fi
           # The fetched components, from the same config the generator read: every component with
           # a URL, and for the JRE one file per built target's platform token, so the list cannot
           # drift from it. Read up front and required non-empty: this step has no `set -e`, and a jq
