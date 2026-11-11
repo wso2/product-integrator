@@ -134,7 +134,7 @@ describe("cloud connections", () => {
 		}
 	});
 
-	it("refuses an access that does not match the endpoint's project, before writing anything", async () => {
+	it("refuses a mismatched access, a missing URL or one configurable for both, before writing anything", async () => {
 		const { cloud, calls } = fakeCloud();
 		const connections = apiWith(cloud).connections;
 		await assert.rejects(
@@ -148,6 +148,16 @@ describe("cloud connections", () => {
 		await assert.rejects(
 			connections.createServiceConnection({ integration: "basket", target: sameProject, access: "project", configurables: { url: "" }, projectName: "shop" }),
 			/needs the configurable/,
+		);
+		await assert.rejects(
+			connections.createServiceConnection({
+				integration: "basket",
+				target: otherProject,
+				access: "organization",
+				configurables: { url: "acme/basket:billing", apiKey: "acme/basket:billing" },
+				projectName: "shop",
+			}),
+			(error: unknown) => error instanceof BadRequestError && /different configurables/.test(error.message),
 		);
 		assert.deepStrictEqual(calls, []);
 	});

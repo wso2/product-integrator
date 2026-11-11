@@ -100,6 +100,10 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 			if (!configurables.url) {
 				throw new BadRequestError("A service connection needs the configurable its URL fills.");
 			}
+			// A configurable is filled by one link, so a key written to the URL's would replace the URL.
+			if (configurables.apiKey === configurables.url) {
+				throw new BadRequestError("The URL and the API key of a service connection need different configurables.");
+			}
 			// The platform tells the two apart by the endpoint's project, so a mismatch is refused before anything is written.
 			if ((target.project === request.projectName) !== (request.access === "project")) {
 				throw new BadRequestError(
