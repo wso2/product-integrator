@@ -200,6 +200,22 @@ describe("cloud connections", () => {
 		]);
 	});
 
+	it("refuses to match API key links to endpoints without the project, and lists address links without it", async () => {
+		const { cloud, calls } = fakeCloud({
+			links: { fieldLinks: { "acme/basket:billingUrl": { ref: "finance-billing-api", key: "url" } } },
+			connectable: [billing],
+		});
+		await assert.rejects(
+			apiWith(cloud).connections.listEndpointLinks("basket"),
+			(error: unknown) => error instanceof BadRequestError && /Name the project of basket/.test(error.message),
+		);
+		assert.ok(!calls.some(([name]) => name === "config.listConnectableEndpoints"));
+		const addressOnly = fakeCloud({ links: { endpointLinks: { "acme/basket:ordersUrl": "shop/orders/api" } } });
+		assert.deepStrictEqual(await apiWith(addressOnly.cloud).connections.listEndpointLinks("basket"), [
+			{ configurable: "acme/basket:ordersUrl", project: "shop", component: "orders", endpoint: "api" },
+		]);
+	});
+
 	it("reads no connectable endpoints for links to other resources' keys", async () => {
 		const { cloud, calls } = fakeCloud({
 			links: { endpointLinks: { "acme/basket:ordersUrl": "shop/orders/api" }, fieldLinks: { "acme/basket:dbHost": { ref: "orders-db", key: "host" } } },

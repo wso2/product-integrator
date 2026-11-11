@@ -159,6 +159,10 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 			if (keyLinks.length === 0) {
 				return result;
 			}
+			// The links route finds the integration's project itself; the connectable endpoints don't, and without it would match none.
+			if (!projectName) {
+				throw new BadRequestError(`Name the project of ${integration}: its API key links are matched to endpoints through the project's connections.`);
+			}
 			// A key link names the project's connection, not the endpoint: the connectable endpoints say which endpoint
 			// each connection is for. Links to other resources, a connection the listing no longer has among them, are not endpoints.
 			const byRef = new Map<string, { project: string; component: string; endpoint: string }>();
