@@ -22,41 +22,48 @@ import {
 	DATABASE_CA_CERT_VAR,
 	DATABASE_CONNECTION_VARS,
 	type EndpointLink,
-	type EndpointResources,
 	type EnvVarGroup,
-	NotSupportedError,
-	SERVICE_CONNECTION_VARS,
+	type IntegrationLinks,
+	type LinkRequest,
 	type ServiceConnectionAccess,
 	connectionVarName,
 	isCloudError,
 } from "@wso2/wso2-cloud-client";
 
-/** The URL the gateway serves an exposed endpoint's API at: the public one, else the organization one; none when it is not exposed. */
-function gatewayUrlOf(endpoint: EndpointResources): string | undefined {
-	if (endpoint.exposure === "none") {
-		return undefined;
-	}
-	return (
-		endpointUrlOf(endpoint.urls?.external) ??
-		[endpoint.visibilityStatus?.public, endpoint.visibilityStatus?.organization].find((state) => state?.status === "ENABLED" && state.url)?.url
-	);
+/** `<project>/<component>/<endpoint>`: a project and a component hold no slash, an endpoint name may. */
+function parseEndpointId(id: string): { project: string; component: string; endpoint: string } | undefined {
+	const [project, component, ...rest] = id.split("/");
+	const endpoint = rest.join("/");
+	return project && component && endpoint ? { project, component, endpoint } : undefined;
 }
 
-/** The URL an endpoint is reached at, from the parts the platform reports; undefined when there is no host. */
-function endpointUrlOf(url: { scheme?: string; host?: string; port?: number; path?: string } | undefined): string | undefined {
-	if (!url?.host) {
-		return undefined;
+/** The keys of the project's connection to another project's endpoint: a key link with any other key is to another resource. */
+const CONNECTION_KEYS = new Set(["url", "apiKey", "apiKeyHeader"]);
+
+/** The link that fills `configurable` now, as the request that writes it again; undefined when nothing fills it. */
+function currentLink(links: IntegrationLinks, configurable: string): LinkRequest | undefined {
+	const endpoint = links.endpointLinks?.[configurable];
+	if (endpoint) {
+		return { configurable, endpoint };
 	}
-	const scheme = url.scheme || "https";
-	const port = url.port && !((scheme === "https" && url.port === 443) || (scheme === "http" && url.port === 80)) ? `:${url.port}` : "";
-	const path = url.path ? (url.path.startsWith("/") ? url.path : `/${url.path}`) : "";
-	return `${scheme}://${url.host}${port}${path}`;
+	const field = links.fieldLinks?.[configurable];
+	if (field) {
+		return { configurable, ref: field.ref, key: field.key };
+	}
+	const orphaned = links.orphaned?.find((link) => link.target === configurable);
+	if (orphaned?.kind === "endpoint") {
+		return { configurable, endpoint: orphaned.ref };
+	}
+	if (orphaned?.kind === "configurable" && orphaned.key) {
+		return { configurable, ref: orphaned.ref, key: orphaned.key };
+	}
+	return undefined;
 }
 
 /**
- * Connections composed over the platform, as `cloudAPIs.connections`: a database's credentials and a
- * gateway connection are env groups on the consumer; a connection inside the project is a link the
- * platform resolves.
+ * Connections composed over the platform, as `cloudAPIs.connections`: a database's credentials are an env
+ * group on the consumer; a service connection is the platform filling the consumer's configurables from the
+ * endpoint, directly inside the project and through the project's connection to it across projects.
  */
 export function cloudConnections(cloud: CloudClient, logError: (message: string, error: Error) => void) {
 	const environmentsFor = async (requested?: string[]) => (requested?.length ? requested : (await cloud.environments.list()).map((e) => e.id));
@@ -80,105 +87,97 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 				await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: true, data }, request.projectName);
 			}
 		},
+		listConnectable: (integration: string, projectName: string) => cloud.config.listConnectableEndpoints(integration, projectName),
 		createServiceConnection: async (request: {
 			integration: string;
 			target: { project: string; integration: string; endpoint: string };
 			access: ServiceConnectionAccess;
-			name: string;
-			environments?: string[];
-			projectName?: string;
-			configurable?: string;
+			configurables: { url: string; apiKey?: string };
+			projectName: string;
 		}) => {
-			const { target } = request;
-			if (request.access === "project") {
-				if (request.projectName && target.project !== request.projectName) {
-					throw new NotSupportedError(
-						`${target.integration} is in the project ${target.project}; reaching it from another project needs its endpoint exposed with organization or public access.`,
-						{ reason: "endpoint_not_exposed" },
-					);
-				}
-				if (!request.configurable) {
-					throw new BadRequestError("A connection inside the project needs the configurable the endpoint's address fills.");
-				}
-				// The platform resolves the endpoint's address in every environment, so nothing is written per environment.
-				await cloud.config.putLink(
-					request.integration,
-					{ configurable: request.configurable, endpoint: `${target.project}/${target.integration}/${target.endpoint}` },
-					request.projectName,
+			const { target, configurables } = request;
+			const endpoint = `${target.project}/${target.integration}/${target.endpoint}`;
+			if (!configurables.url) {
+				throw new BadRequestError("A service connection needs the configurable its URL fills.");
+			}
+			// A configurable is filled by one link, so a key written to the URL's would replace the URL.
+			if (configurables.apiKey === configurables.url) {
+				throw new BadRequestError("The URL and the API key of a service connection need different configurables.");
+			}
+			// The platform tells the two apart by the endpoint's project, so a mismatch is refused before anything is written.
+			if ((target.project === request.projectName) !== (request.access === "project")) {
+				throw new BadRequestError(
+					request.access === "project"
+						? `${target.integration} is in the project ${target.project}; connect to it with organization access.`
+						: `${target.integration} is in this project; connect to it with project access.`,
 				);
+			}
+			if (request.access === "project") {
+				// The platform resolves the endpoint's address in every environment, so nothing is written per environment.
+				await cloud.config.putLink(request.integration, { configurable: configurables.url, endpoint }, request.projectName);
 				return;
 			}
-			// Every environment is checked before anything is created, so a missing endpoint or deployment leaves no half-made connection behind.
-			const targets: { environment: string; url: string; existed: boolean }[] = [];
-			for (const environment of await environmentsFor(request.environments)) {
-				// The connection is written into the integration's deployment in the environment, so there has to be one.
-				if (!(await cloud.deployments.get(request.integration, environment, request.projectName))) {
-					throw new NotSupportedError(`Deploy ${request.integration} to ${environment} first: the connection is written into its deployment there.`, {
-						reason: "not_deployed",
-					});
-				}
-				const endpoints = await cloud.endpoints.listForEnvironment(target.integration, environment, target.project);
-				const endpoint = endpoints.find((e) => e.name === target.endpoint);
-				if (!endpoint) {
-					throw new NotSupportedError(`${target.integration} exposes no endpoint ${target.endpoint} in ${environment}.`, { reason: "endpoint_missing" });
-				}
-				const url = gatewayUrlOf(endpoint);
-				if (!url) {
-					throw new NotSupportedError(
-						`The endpoint ${target.endpoint} of ${target.integration} is not exposed as an API in ${environment}. Expose it with organization or public access, or connect with project access.`,
-						{ reason: "endpoint_not_exposed" },
-					);
-				}
-				// A group of the same name written before is replaced, and so is not removed if this write is taken back.
-				const groups = await cloud.config.listEnvGroups(request.integration, environment, request.projectName);
-				targets.push({ environment, url, existed: groups.some((group) => group.name === request.name) });
+			// The first link makes the project's connection to the endpoint, the second reuses it; the platform binds it,
+			// with an API key, in each environment the integration is deployed to.
+			if (!configurables.apiKey) {
+				await cloud.config.putLink(request.integration, { configurable: configurables.url, endpoint, key: "url" }, request.projectName);
+				return;
 			}
-			// A key no connection carries is only a live credential: it is revoked, best effort.
-			const revoke = (environment: string, keyId: string | undefined) =>
-				keyId
-					? cloud.endpoints
-							.revokeApiKey(target.integration, environment, target.endpoint, keyId, target.project)
-							.catch((revokeError: unknown) => logError(`Could not revoke the API key ${keyId}`, revokeError as Error))
-					: Promise.resolve();
-			const written: { environment: string; keyId?: string; existed: boolean }[] = [];
+			// Read first, so a failed key link puts the URL back as it was, not unlinked: the connection may be one
+			// being repaired or moved, whose URL link worked.
+			const before = currentLink(await cloud.config.listLinks(request.integration, request.projectName), configurables.url);
+			await cloud.config.putLink(request.integration, { configurable: configurables.url, endpoint, key: "url" }, request.projectName);
 			try {
-				for (const { environment, url, existed } of targets) {
-					const key = await cloud.endpoints.createApiKey(target.integration, environment, target.endpoint, { displayName: `${request.integration}-${request.name}` }, target.project);
-					const data = {
-						[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ServiceURL)]: url,
-						[connectionVarName(request.name, SERVICE_CONNECTION_VARS.ChoreoAPIKey)]: key.apiKey,
-					};
-					try {
-						await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: true, data }, request.projectName);
-					} catch (error) {
-						await revoke(environment, key.keyId);
-						throw error;
-					}
-					written.push({ environment, keyId: key.keyId, existed });
-				}
+				await cloud.config.putLink(request.integration, { configurable: configurables.apiKey, endpoint, key: "apiKey" }, request.projectName);
 			} catch (error) {
-				// The environments already written are taken back, so a failure in a later one leaves no half-made connection.
-				// A group that was there before now holds the new key, and its old values can't be read back: it keeps
-				// the new key, which stays live, rather than end up with a revoked one.
-				for (const done of written) {
-					if (done.existed) {
-						continue;
-					}
-					await cloud.config
-						.deleteEnvGroup(request.integration, done.environment, request.name, request.projectName)
-						.catch((deleteError: unknown) => logError(`Could not remove the connection ${request.name} from ${done.environment}`, deleteError as Error));
-					await revoke(done.environment, done.keyId);
-				}
+				// The key the API takes isn't linked, so the URL is not left pointing at it.
+				await cloud.config
+					.putLink(request.integration, before ?? { configurable: configurables.url }, request.projectName)
+					.catch((undoError: unknown) => logError(`Could not put back the link of ${configurables.url}`, undoError as Error));
 				throw error;
 			}
 		},
 		listEndpointLinks: async (integration: string, projectName?: string): Promise<EndpointLink[]> => {
 			const links = await cloud.config.listLinks(integration, projectName);
-			// Each is "<project>/<component>/<endpoint>": a project and a component hold no slash, an endpoint name may.
-			return Object.entries(links.endpointLinks ?? {}).flatMap(([configurable, id]) => {
-				const [project, component, ...endpoint] = id.split("/");
-				return project && component && endpoint.join("/") ? [{ configurable, component, endpoint: endpoint.join("/") }] : [];
+			// A link the build does not declare yet, such as one made before the build with its configurable, is orphaned.
+			const orphaned = links.orphaned ?? [];
+			const addressLinks: [string, string][] = [
+				...Object.entries(links.endpointLinks ?? {}),
+				...orphaned.filter((link) => link.kind === "endpoint").map((link): [string, string] => [link.target, link.ref]),
+			];
+			// Only keys of a connection can be an endpoint's: a database's keys never need the connectable endpoints read.
+			const keyLinks: [string, { ref: string; key: string }][] = [
+				...Object.entries(links.fieldLinks ?? {}),
+				...orphaned
+					.filter((link) => link.kind === "configurable" && link.key)
+					.map((link): [string, { ref: string; key: string }] => [link.target, { ref: link.ref, key: link.key ?? "" }]),
+			].filter(([, { key }]) => CONNECTION_KEYS.has(key));
+			const result: EndpointLink[] = addressLinks.flatMap(([configurable, id]) => {
+				const endpoint = parseEndpointId(id);
+				return endpoint ? [{ configurable, ...endpoint }] : [];
 			});
+			if (keyLinks.length === 0) {
+				return result;
+			}
+			// The links route finds the integration's project itself; the connectable endpoints don't, and without it would match none.
+			if (!projectName) {
+				throw new BadRequestError(`Name the project of ${integration}: its API key links are matched to endpoints through the project's connections.`);
+			}
+			// A key link names the project's connection, not the endpoint: the connectable endpoints say which endpoint
+			// each connection is for. Links to other resources, a connection the listing no longer has among them, are not endpoints.
+			const byRef = new Map<string, { project: string; component: string; endpoint: string }>();
+			for (const item of await cloud.config.listConnectableEndpoints(integration, projectName)) {
+				if (item.ref) {
+					byRef.set(item.ref, { project: item.project, component: item.component, endpoint: item.endpoint });
+				}
+			}
+			for (const [configurable, { ref, key }] of keyLinks) {
+				const endpoint = byRef.get(ref);
+				if (endpoint) {
+					result.push({ configurable, ...endpoint, key });
+				}
+			}
+			return result;
 		},
 		unlinkEndpoint: async (request: { integration: string; configurable: string; projectName?: string }) => {
 			await cloud.config.putLink(request.integration, { configurable: request.configurable }, request.projectName);
