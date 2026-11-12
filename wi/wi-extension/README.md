@@ -50,7 +50,7 @@ If these prerequisites are not met on your local workstation, the extension offe
 
 ## **Get Started**
 
-Start building with the quickstarts in the [official documentation](https://wso2.com/integration-platform/docs/get-started/introduction/).
+Start building with the quickstarts in the [official documentation](https://wso2.com/integration-platform/docs/integrator/get-started).
 
 ## **Contributing**
 
