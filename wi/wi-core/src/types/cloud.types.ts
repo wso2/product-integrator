@@ -74,9 +74,10 @@ export interface WICloudCreateIntegrationParam {
 	branch: string;
 	gitProvider: string;
 	gitCredRef?: string;
-	/** For an AI agent: the LLM providers and MCP servers Agent Manager attaches. */
+	/** For an AI agent: the LLM providers and MCP servers Agent Manager attaches, and whether it traces the agent. */
 	modelConfig?: AgentModelConfig[];
 	mcpConfig?: AgentMcpConfig[];
+	autoInstrumentation?: boolean;
 }
 
 /**
@@ -273,6 +274,7 @@ export interface WICloudDeployReq {
 		integrationType: string;
 		modelConfig?: AgentModelConfig[];
 		mcpConfig?: AgentMcpConfig[];
+		autoInstrumentation?: boolean;
 	};
 	/** An existing project's id, or the display name of a project to create. */
 	project: { id: string } | { newName: string };

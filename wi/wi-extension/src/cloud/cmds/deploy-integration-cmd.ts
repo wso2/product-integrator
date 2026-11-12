@@ -183,6 +183,7 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 					integrationType: req.integration.integrationType,
 					modelConfig: req.integration.modelConfig,
 					mcpConfig: req.integration.mcpConfig,
+					autoInstrumentation: req.integration.autoInstrumentation,
 					buildPackLang: req.buildPackLang,
 					repoUrl: req.gitRemote,
 					branch: req.branch,
