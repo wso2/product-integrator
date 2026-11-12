@@ -1,36 +1,42 @@
 # **WSO2 Integrator Extension for Visual Studio Code**
 
-The **WSO2 Integrator** VS Code extension is a complete development environment for modern integration. 
+Open-source integration for the agentic enterprise
 
-It combines visual low-code development with full pro-code flexibility, AI-assisted tooling, local debugging, and cloud-native deployment in a single developer experience. Design integrations visually while maintaining full access to the underlying source code with real-time synchronization.
+---
 
-Whether you are building API integrations, event-driven systems, automations, file processing pipelines, or AI-powered workflows, WSO2 Integrator helps you connect anything, anywhere.
+The **WSO2 Integrator** extension for VS Code brings an AI-first integration development experience to Visual Studio Code. Build integrations, long-running workflows, MCP servers, and AI agents in one place: describe what you need in natural language, and let AI help you build, map data, test, and debug.
 
-## **Features**
+Connect agents, APIs, data, and events wherever they run, across cloud, on-premises, and hybrid environments, with governance built in. WSO2 Integrator is 100% open source and built on open standards, so you keep full ownership of your integration stack with no vendor lock-in.
 
-The extension has strong graphical and text tools to speed up your entire integration process:
+## **What You Can Build**
 
-* **Visual Designer:** Quickly build complex flows with a visual interface that updates the source code in real time.
+A single, integrated development experience for everything the agentic enterprise needs to connect:
 
-* **Low-Code / Pro-Code Parity:** Switch between the visual design and source code easily, giving you full control over development.
+* **Integrations:** Scheduled [automations](https://wso2.com/integration-platform/docs/integrator/get-started/quickstarts/build-automation), [integrations as APIs](https://wso2.com/integration-platform/docs/integrator/get-started/quickstarts/build-integration-api) (REST, GraphQL, gRPC, WebSocket, and async APIs), [event-driven integrations](https://wso2.com/integration-platform/docs/integrator/get-started/quickstarts/build-event-driven-integration) over Kafka, AMQP, MQTT, and JMS, and [file-driven integrations](https://wso2.com/integration-platform/docs/integrator/get-started/quickstarts/build-file-driven-integration) that trigger when files arrive.
 
-<img src="https://github.com/wso2/ballerina-vscode/blob/main/resources/images/wso2-integrator-diagram.gif?raw=true" width="100%" />
+* **Long-running workflows:** Stateful, multi-step [workflows](https://wso2.com/integration-platform/docs/integrator/get-started/quickstarts/build-durable-workflow) that span systems, agents, and people, with human tasks and approvals, agent-triggered workflows, and built-in error handling and retry.
 
-* **AI-Assisted Development:** Use AI assistance and natural language to automatically create components, map data, and improve flows.
+* **MCP servers:** Build an [MCP server](https://wso2.com/integration-platform/docs/integrator/develop-and-test/integration-artifacts/ai-integrations/mcp) from scratch with no boilerplate, or convert an existing REST API into one, and test it with the MCP inspector, making enterprise data and systems available to agents.
+
+* **AI agents:** Build autonomous [agents](https://wso2.com/integration-platform/docs/integrator/get-started/quickstarts/build-ai-agent) in natural language, connect them to tools over MCP, give them short- and long-term memory, and orchestrate multiple agents with human-in-the-loop guardrails. Combine an agent with a long-running workflow to create a [durable agent](https://wso2.com/integration-platform/docs/integrator/get-started/quickstarts/build-durable-agent) that saves its progress and resumes where it left off.
+
+## **Key Features**
+
+* **AI-First Development:** Describe what you want to build in natural language. The AI assistant generates the integration, maps data between systems, and helps you refine your flows as you go.
 
 <img src="https://github.com/wso2/ballerina-vscode/blob/main/resources/images/wso2-integrator-ai.gif?raw=true" width="100%" />
 
-* **Local Execution & Debugging:** Run, test, and debug locally in VS Code before deployment to ensure reliable CI/CD pipelines.
+* **Governance Built In:** Govern what agents know, do, and did. Connect agents to trusted enterprise context, evaluate their reasoning at development time, add human-in-the-loop approvals, and trace every step they take.
+
+* **600+ Pre-Built Connectors:** Connect to SaaS APIs, databases, event streams, and files, with native support for MCP, HTTP, GraphQL, gRPC, and more.
+
+* **Local Testing & Debugging:** Run, test, and debug locally in VS Code before you deploy, with AI-assisted testing and debugging and OpenTelemetry-based observability during development.
 
 <img src="https://github.com/wso2/ballerina-vscode/blob/main/resources/images/wso2-integrator-debug.gif?raw=true" width="100%" />
 
-* **Integrated Deployment:** Deploy your integration solutions directly to WSO2 Cloud.
+* **Deploy Your Way:** Deploy directly from VS Code to a WSO2-managed SaaS, or self-host on your own infrastructure (Kubernetes, Docker, VMs, or bare metal) for complete data sovereignty.
 
 <img src="https://github.com/wso2/ballerina-vscode/blob/main/resources/images/wso2-integrator-deploy.gif?raw=true" width="100%" />
-
-* **Profile Selection:** Choose from runtime profiles (Default, MI, and SI) in configuration or settings to match your integration architecture.
-
-<img src="https://github.com/wso2/ballerina-vscode/blob/main/resources/images/wso2-integrator-profile.gif?raw=true" width="100%" />
 
 ## **Prerequisites**
 
@@ -44,7 +50,7 @@ If these prerequisites are not met on your local workstation, the extension offe
 
 ## **Get Started**
 
-Start your integration journey with the [official documentation](https://wso2.com/integration-platform/docs/get-started/introduction/) 
+Start building with the quickstarts in the [official documentation](https://wso2.com/integration-platform/docs/get-started/introduction/).
 
 ## **Contributing**
 
@@ -52,6 +58,8 @@ We welcome developer contributions. Please see our [repository documentation](ht
 
 ## **Support & Resources**
 
+* **Product Overview:** Learn more about [WSO2 Integrator](https://wso2.com/integration-platform/integrator/) and the [WSO2 Integration Platform](https://wso2.com/integration-platform/).
+
 * **Product Documentation:** See the full [WSO2 Integration Platform Documentation](https://wso2.com/integration-platform/docs/).
 
-* **Issue Tracker:** Report bugs, request features, or track development status on the [WSO2 Product Integrator](https://github.com/wso2/product-integrator/issues) 
+* **Issue Tracker:** Report bugs, request features, or track development status on the [WSO2 Product Integrator](https://github.com/wso2/product-integrator/issues) repository.
