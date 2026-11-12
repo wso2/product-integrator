@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { Codicon } from "@wso2/ui-toolkit";
+import { Codicon, Icon } from "@wso2/ui-toolkit";
 import React, { useEffect, useRef, useState } from "react";
 import { useVisualizerContext } from "../../contexts";
 import { useCloudContext } from "../../providers";
@@ -204,8 +204,8 @@ export const AgentBuilderWelcomeView: React.FC = () => {
 						>
 							<CardIconContainer>
 								<CardIcon bgColor="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-primary-deep) 100%)">
-									<Codicon
-										name="hubot"
+									<Icon
+										name="bi-ai-agent"
 										iconSx={{ fontSize: "25px" }}
 										sx={{ width: "23px", height: "25px" }}
 									/>
