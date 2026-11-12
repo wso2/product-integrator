@@ -165,29 +165,37 @@ export const createNewProject = async (projectName?: string, isWorkspaceMapping?
 			? "Your BI workspace will be mapped to a WSO2 Cloud project. Project name is auto-picked from workspace name, you can edit if needed.\n"
 			: "Enter a name for your new project",
 		title: isWorkspaceMapping ? "Create WSO2 Cloud Project for Workspace" : "New Project Name",
-		validateInput: (val) => {
-			if (!val) {
-				return "Project name is required";
-			}
-			if (projectCache?.some((item) => item.name === val || item.id === toProjectName(val))) {
-				return "Project name already exists";
-			}
-			if (val.length > 60 || val.length < 3) {
-				return "Project name must be between 3 and 60 characters";
-			}
-			if (!/^[A-Za-z]/.test(val)) {
-				return "Project name must start with an alphabetic letter";
-			}
-			if (!/^[A-Za-z\s\d\-_]+$/.test(val)) {
-				return "Project name cannot have any special characters";
-			}
-			return null;
-		},
+		validateInput: (val) => validateProjectName(val, projectCache),
 	});
 	if (!newProjectName) {
 		throw new Error("New project name is required to proceed.");
 	}
+	return createProjectNamed(newProjectName);
+};
 
+export const validateProjectName = (val: string, projectCache?: Project[]): string | null => {
+	if (!val) {
+		return "Project name is required";
+	}
+	if (projectCache?.some((item) => item.name === val || item.id === toProjectName(val))) {
+		return "Project name already exists";
+	}
+	if (val.length > 60 || val.length < 3) {
+		return "Project name must be between 3 and 60 characters";
+	}
+	if (!/^[A-Za-z]/.test(val)) {
+		return "Project name must start with an alphabetic letter";
+	}
+	if (!/^[A-Za-z\s\d\-_]+$/.test(val)) {
+		return "Project name cannot have any special characters";
+	}
+	return null;
+};
+
+/** Creates a project whose display name has already been validated, picking a free handler. */
+export const createProjectNamed = async (newProjectName: string): Promise<Project> => {
+	const org = requireOrg();
+	const cloud = ext.clients.platform.cloud;
 	const project = await window.withProgress({ title: `Creating new project ${newProjectName}...`, location: ProgressLocation.Notification }, async () => {
 		let name = toProjectName(newProjectName);
 		try {

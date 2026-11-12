@@ -20,6 +20,7 @@ import type { ExtensionContext } from "vscode";
 import { cloneRepoCommand } from "./clone-project-cmd";
 import { commitAndPushToGitCommand } from "./commit-and-push-to-git-cmd";
 import { createNewComponentCommand } from "./create-component-cmd";
+import { deployIntegrationCommands } from "./deploy-integration-cmd";
 import { createDirectoryContextCommand } from "./create-directory-context-cmd";
 import { deleteComponentCommand } from "./delete-component-cmd";
 import { manageProjectContextCommand } from "./manage-dir-context-cmd";
@@ -35,6 +36,7 @@ import { signOutCommand } from "./sign-out-cmd";
 
 export function activateCmds(context: ExtensionContext) {
 	createNewComponentCommand(context);
+	deployIntegrationCommands(context);
 	refreshContextCommand(context);
 	deleteComponentCommand(context);
 	signInCommand(context);
