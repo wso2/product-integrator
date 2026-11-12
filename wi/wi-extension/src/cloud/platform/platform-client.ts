@@ -19,6 +19,7 @@
 import type { CloudClient, CloudEnvironment, Logger, PlatformEnvConfig, UnauthenticatedError } from "@wso2/wso2-cloud-client";
 import { type PlatformClients, createPlatformClients, readCloudEnvironment } from "@wso2/wso2-cloud-client/vscode";
 import type { ExtensionContext } from "vscode";
+import { getProductName } from "../../productMode";
 
 /** `publisher.name` of this extension; the sign-in URI's authority. */
 export const WI_EXTENSION_ID = "wso2.wso2-integrator";
@@ -41,6 +42,7 @@ export function createWIPlatform(options: WIPlatformOptions): WIPlatform {
 	const environment: CloudEnvironment = readCloudEnvironment();
 	return createPlatformClients({
 		extensionId: WI_EXTENSION_ID,
+		productName: getProductName(),
 		context: options.context,
 		environment,
 		userAgent: `wso2-integrator-vscode/${options.extensionVersion}`,
