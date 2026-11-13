@@ -370,9 +370,8 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
 		if (workspace.workspaceFile) {
 			window.showErrorMessage("Please make sure newly created integrations are added to workspace.");
-			if (bindingWarning) {
-				showViewInConsoleMessage(bindingWarning, org.handle, project, result.created, true);
-			}
+			// Builds and deployments are done in the console, so the way there is offered here too.
+			showViewInConsoleMessage(bindingWarning ?? successMessage, org.handle, project, result.created, !!bindingWarning);
 		} else if (isWithinWorkspace) {
 			showViewInConsoleMessage(bindingWarning ?? successMessage, org.handle, project, result.created, !!bindingWarning);
 		} else {
