@@ -934,9 +934,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Product-Integrator-Darwin-DMG-${{ matrix.arch }}
-          path: |
-            installers/mac/*.dmg
-            installers/mac/*-mac.zip
+          # The DMGs only. The Squirrel.Mac zip is served from the update bucket alone (the "Publish
+          # Squirrel.Mac update payload" step above puts it there), so nothing downstream reads it.
+          path: installers/mac/*.dmg
           if-no-files-found: error
 
       - name: cosign-installer
@@ -1394,26 +1394,37 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "editor-update MSI build failed" }
           Remove-Item Env:\INSTALLER_PROFILE
 
+      # Two artifacts, so each consumer gets only the MSI it uses: the full installer goes to the
+      # release and the Windows smoke test; the editor-only update MSI goes to publish-update-source
+      # alone (it is an update payload, never a release asset). Exact names: a renamed MSI fails here.
       - name: Upload Windows artifacts
         if: ${{ inputs.build_packed_installers == true }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Product-Integrator-Windows
-          path: |
-            installers\windows\WixPackage\bin\x64\Release\en-US\*.msi
+          path: installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}.msi
           if-no-files-found: error
-      
+
+      - name: Upload the Windows update MSI
+        if: ${{ inputs.build_packed_installers == true }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Product-Integrator-Windows-Update
+          path: installers\windows\WixPackage\bin\x64\Release\en-US\wso2-integrator-${{ needs.resolve-versions.outputs.integrator_version }}-update.msi
+          if-no-files-found: error
+
       - name: cosign-installer
         if: ${{ inputs.build_packed_installers == true }}
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
-      # Both MSIs are signed: the full first-install installer AND the small editor-only
-      # `-update` MSI the in-place update mechanism downloads (§D8).
+      # The full installer only: these signatures and hashes are release assets, and the editor-only
+      # update MSI is not on the release. The update mechanism verifies that MSI by the sha256 in the
+      # signed update document (publish-update-source), not by a cosign signature.
       - name: Sign the msi installers
         if: ${{ inputs.build_packed_installers == true }}
         run: |
           cd ../..
           $V = "${{ needs.resolve-versions.outputs.integrator_version }}"
-          foreach ($name in @("wso2-integrator-$V", "wso2-integrator-$V-update")) {
+          foreach ($name in @("wso2-integrator-$V")) {
             $msi = "installers\windows\WixPackage\bin\x64\Release\en-US\$name.msi"
             cosign sign-blob $msi --output-certificate "installers\windows\$name.msi.pem" --output-signature "installers\windows\$name.msi.sig" --yes
             if ($LASTEXITCODE -ne 0) { throw "cosign sign-blob failed for $name.msi" }
@@ -1423,7 +1434,7 @@ jobs:
         run: |
           cd ../..
           $V = "${{ needs.resolve-versions.outputs.integrator_version }}"
-          foreach ($name in @("wso2-integrator-$V", "wso2-integrator-$V-update")) {
+          foreach ($name in @("wso2-integrator-$V")) {
             $msi = "installers\windows\WixPackage\bin\x64\Release\en-US\$name.msi"
             cosign verify-blob $msi --certificate "installers\windows\$name.msi.pem" --signature "installers\windows\$name.msi.sig" --certificate-identity=https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }} --certificate-oidc-issuer=https://token.actions.githubusercontent.com
             if ($LASTEXITCODE -ne 0) { throw "cosign verify-blob failed for $name.msi" }
@@ -1435,7 +1446,7 @@ jobs:
         run: |
           cd ../..
           $V = "${{ needs.resolve-versions.outputs.integrator_version }}"
-          foreach ($name in @("wso2-integrator-$V", "wso2-integrator-$V-update")) {
+          foreach ($name in @("wso2-integrator-$V")) {
             openssl dgst -sha256 -out "installers\windows\$name.msi.sha256" "installers\windows\WixPackage\bin\x64\Release\en-US\$name.msi"
           }
 
@@ -1800,6 +1811,36 @@ jobs:
             echo "name=WSO2 Integrator ${PUBLISH_TAG}" >> "$GITHUB_OUTPUT"
           fi
 
+      # Only what a user installs, and the build inputs downstream builds wrap, go on the release.
+      # The in-app update payloads are not release assets, and none of the artifacts downloaded above
+      # holds one: the Squirrel.Mac zips are served from the update bucket alone (build-macos uploads
+      # them there, and its DMG artifact carries only the DMGs), and the editor-only update MSI is in
+      # its own Product-Integrator-Windows-Update artifact, read by publish-update-source alone.
+      # Assert it, with the names taken from the config the update document is generated from, so a
+      # payload that reaches release-files again fails the run instead of being published.
+      - name: Check that no update payload is on the release
+        shell: bash
+        env:
+          INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
+        run: |
+          set -euo pipefail
+          CONFIG=ci/build/update-manifest.config.json
+          mapfile -t PAYLOADS < <(jq -r --arg v "${INTEGRATOR_VERSION}" \
+            '[(.app.squirrel // {} | .[]), .app.installers["win32-x64"]] | .[] | select(. != null) | gsub("\\{version\\}"; $v)' "${CONFIG}")
+          if [ ${#PAYLOADS[@]} -eq 0 ]; then
+            echo "Error: could not read the update payload names from ${CONFIG}" >&2
+            exit 1
+          fi
+          found=()
+          for name in "${PAYLOADS[@]}"; do
+            [ -e "release-files/${name}" ] && found+=("${name}")
+          done
+          if [ ${#found[@]} -gt 0 ]; then
+            printf 'Error: update payload on the release: %s\n' "${found[@]}" >&2
+            exit 1
+          fi
+          printf 'Not on the release (update payloads): %s\n' "${PAYLOADS[@]}"
+
       - name: List release files
         env:
           PUBLISH_TAG: ${{ inputs.publish_tag }}
@@ -2005,6 +2046,21 @@ jobs:
           name: icp
           path: out
 
+      # The app installers the document names (the DMGs and the editor-only update MSI, config
+      # `app.installers`) come from this run's own build artifacts: the update MSI is not a release
+      # asset, and the DMGs need not be fetched back from the release. Only the artifacts holding
+      # those files: the full MSI is never read here. A platform that was not built has no artifact,
+      # and a pattern that matches nothing downloads nothing and succeeds (only `name` fails on a
+      # miss), so no continue-on-error: a real download failure must fail the job. The generator
+      # fails on a missing installer for a target that IS published (--app-installer-dir with no
+      # --app-release-base to fall back to).
+      - name: Download the app installers
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: '{Product-Integrator-Windows-Update,Product-Integrator-Darwin-DMG-*}'
+          path: app-installers/
+          merge-multiple: true
+
       # ONE document describes every platform this run actually built. A target that was not built
       # is left out entirely rather than published with URLs to release assets that never existed.
       - name: Resolve published targets
@@ -2062,7 +2118,7 @@ jobs:
             --targets "${{ steps.targets.outputs.targets }}" \
             --sequence "${SEQUENCE}" \
             --app-version "${{ needs.resolve-versions.outputs.integrator_version }}" \
-            --app-release-base "https://github.com/${{ github.repository }}/releases/download/${{ inputs.publish_tag }}" \
+            --app-installer-dir app-installers \
             --app-commit "${{ github.sha }}" \
             --source-flavors "wso2.ballerina=${{ inputs.ballerina_extension_source || 'marketplace' }},wso2.micro-integrator=${{ inputs.mi_extension_source || 'marketplace' }}" \
             "${MIRROR_ARGS[@]}" \
