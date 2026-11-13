@@ -175,6 +175,7 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 			org: { id: org.id, uuid: org.uuid, handle: org.handle, name: org.name },
 			project,
 			workspaceFsPath: req.workspaceDir,
+			quiet: req.quiet,
 			createParams: [
 				{
 					componentDir: req.integration.fsPath,

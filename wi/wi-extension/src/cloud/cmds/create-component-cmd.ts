@@ -256,7 +256,7 @@ export function normalizeCloneUrl(repoUrl: string): string {
 	return trimmed.endsWith(".git") ? trimmed : `${trimmed}.git`;
 }
 
-export const submitCreateComponentHandler = async ({ createParams, org, project, workspaceFsPath }: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> => {
+export const submitCreateComponentHandler = async ({ createParams, org, project, workspaceFsPath, quiet }: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> => {
 	const totalCount = createParams.length;
 	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: totalCount };
 	// Created, but the platform could not bind the repository: no build starts until that is fixed.
@@ -317,7 +317,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	await window.withProgress(
 		{
 			title: totalCount === 1 ? `Creating integration '${createParams[0].displayName || createParams[0].name}'... ` : `Creating ${totalCount} integrations... `,
-			location: ProgressLocation.Notification,
+			location: quiet ? ProgressLocation.Window : ProgressLocation.Notification,
 			cancellable: false,
 		},
 		async (progress) => {
@@ -352,7 +352,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 					if (created.sourceBindingError) {
 						unbound.push({ label, error: created.sourceBindingError });
 					}
-					await enableBuildAutomation(created, org.handle, project);
+					await enableBuildAutomation(created, org.handle, project, quiet);
 					const cache = dataCacheStore.getState().getIntegrations(org.handle, project.id);
 					dataCacheStore.getState().setIntegrations(org.handle, project.id, [created, ...cache]);
 					if (repo) {
@@ -392,6 +392,8 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 			if (bindingWarning) {
 				showViewInConsoleMessage(bindingWarning, org.handle, project, result.created, true);
 			}
+		} else if (quiet && !bindingWarning) {
+			ext.log(successMessage);
 		} else if (isWithinWorkspace) {
 			showViewInConsoleMessage(bindingWarning ?? successMessage, org.handle, project, result.created, !!bindingWarning);
 		} else {
@@ -458,7 +460,7 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegr
  * so the first build is followed from here and, when the platform will not deploy it,
  * deployed to the pipeline's entry environment by the extension.
  */
-async function enableBuildAutomation(created: CreatedComponent, orgHandle: string, project: Project): Promise<void> {
+async function enableBuildAutomation(created: CreatedComponent, orgHandle: string, project: Project, quiet?: boolean): Promise<void> {
 	const cloud = ext.clients.platform.cloud;
 	ext.log(
 		`Created ${created.id}${created.warning ? `; warning: ${created.warning}` : ""}${created.sourceBindingError ? `; source binding: ${created.sourceBindingError}` : ""}`,
@@ -482,7 +484,7 @@ async function enableBuildAutomation(created: CreatedComponent, orgHandle: strin
 		return;
 	}
 	// Not awaited: the create command returns while the build runs.
-	void followFirstBuild(created, orgHandle, project, !platformDeploys);
+	void followFirstBuild(created, orgHandle, project, !platformDeploys, quiet);
 }
 
 /** How long the platform's own first build is given to show up before one is started here. */
@@ -600,11 +602,15 @@ export async function waitForRelease(integrationId: string, projectName: string,
  * Follows the first build in a progress notification and, when asked, deploys it to the
  * pipeline's entry environment. Every outcome ends in a message with a link to the console.
  */
-async function followFirstBuild(created: CreatedComponent, orgHandle: string, project: Project, deployAfter: boolean): Promise<void> {
+async function followFirstBuild(created: CreatedComponent, orgHandle: string, project: Project, deployAfter: boolean, quiet?: boolean): Promise<void> {
 	const cloud = ext.clients.platform.cloud;
 	const label = created.displayName || created.id;
 	const consoleUrl = buildConsoleUrl(ext.config.consoleUrl, { orgHandle, project: project.id, integration: created.id });
 	const tell = (message: string, level: "info" | "warning" | "error") => {
+		if (quiet && level === "info") {
+			ext.log(message);
+			return;
+		}
 		const show = level === "info" ? window.showInformationMessage : level === "warning" ? window.showWarningMessage : window.showErrorMessage;
 		show(message, "View in console").then((resp) => {
 			if (resp === "View in console") {
@@ -615,7 +621,8 @@ async function followFirstBuild(created: CreatedComponent, orgHandle: string, pr
 	const controller = new AbortController();
 	const signal = controller.signal;
 	try {
-		await window.withProgress({ location: ProgressLocation.Notification, title: `${label} in WSO2 Cloud`, cancellable: true }, async (progress, token) => {
+		const location = quiet ? ProgressLocation.Window : ProgressLocation.Notification;
+		await window.withProgress({ location, title: `${label} in WSO2 Cloud`, cancellable: !quiet }, async (progress, token) => {
 			token.onCancellationRequested(() => controller.abort());
 			progress.report({ message: "waiting for the first build to start" });
 			let build = await findFirstBuild(created.id, project.id, signal, FIRST_BUILD_APPEAR_MS);
