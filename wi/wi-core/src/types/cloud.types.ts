@@ -89,6 +89,8 @@ export interface WICloudSubmitComponentsReq {
 	project: Project;
 	workspaceFsPath: string;
 	createParams: WICloudCreateIntegrationParam[];
+	/** The caller shows the progress itself: report it in the status bar and skip the success messages. */
+	quiet?: boolean;
 }
 
 export interface WICloudSubmitComponentsResp {
@@ -280,6 +282,8 @@ export interface WICloudDeployReq {
 	project: { id: string } | { newName: string };
 	gitRemote: string;
 	branch: string;
+	/** The caller shows the progress itself: report it in the status bar and skip the success messages. */
+	quiet?: boolean;
 }
 
 export interface WICloudDeployBuildReq {
