@@ -11,9 +11,13 @@ name: Update Mechanism Tests
 on:
   pull_request:
     branches:
-      # Not 5.0.x: it has no update mechanism, so there would be nothing to run.
+      # The patch-line and hotfix patterns are pr-ci.yml's, so a new N.N.x line needs no edit here.
+      # A branch only runs this workflow if its own tree has the file, which keeps 5.0.x and hotfixes
+      # cut from it out. Don't cherry-pick it there: 5.0.x has no update mechanism, so every test
+      # glob would match nothing and the job could only fail.
       - main
-      - '5.1.x'
+      - '[0-9]+.[0-9]+.x'
+      - 'hotfix/**'
       - 'staging/**'
     paths:
       # Every lib/vscode change in this repo, the update mechanism and its tests included, is
@@ -24,7 +28,8 @@ on:
   push:
     branches:
       - main
-      - '5.1.x'
+      - '[0-9]+.[0-9]+.x'
+      - 'hotfix/**'
       - 'staging/**'
     paths:
       - 'patches/**'
@@ -56,16 +61,18 @@ jobs:
     env:
       # One glob per line, relative to out/, where transpile-client writes the compiled tests. Each
       # must match at least one file, so a moved or renamed suite fails the job instead of quietly
-      # dropping out of it. This is the only such guard: the runners' "N passing" cannot be, as each
+      # dropping out of it. Keep one test directory per line, with no {a,b} alternatives: a brace
+      # glob passes while any one alternative still matches, so it would hide the others moving. This is the only such guard: the runners' "N passing" cannot be, as each
       # adds a test of its own (node: `Errors`; Electron: `assertCleanState`) that passes when none
       # of ours ran. Outside wso2Update: runtimeEnvironment resolves ${COMPONENT:*} to an
       # installed component update, and terminalEnvironment re-applies that env to terminals.
       NODE_TESTS: |
-        vs/**/wso2Update/test/{common,node}/**/*.test.js
+        vs/**/wso2Update/test/common/**/*.test.js
+        vs/**/wso2Update/test/node/**/*.test.js
         vs/platform/product/test/common/runtimeEnvironment.test.js
         vs/workbench/contrib/terminal/test/common/terminalEnvironment.test.js
       ELECTRON_TESTS: |
-        vs/**/wso2Update/test/{electron-main,electron-browser}/**/*.test.js
+        vs/**/wso2Update/test/electron-main/**/*.test.js
       # Checks every glob in argv[1] against out/ with the glob module the test runners use, and
       # prints them as the single --runGlob the runners take.
       MATCH_GLOBS: |
@@ -77,7 +84,7 @@ jobs:
         console.log(patterns.length === 1 ? patterns[0] : `{${patterns.join(',')}}`);
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
 
@@ -88,7 +95,7 @@ jobs:
         run: git submodule update --init --depth 1 lib/vscode external/wso2-vscode-extensions
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # Pinned like every other workflow since #2860, not read from lib/vscode/.nvmrc, which
           # still names a Node affected by CVE-2026-111497.
