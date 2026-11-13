@@ -143,61 +143,13 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					// not a git repository
 				}
 
-				// Is there already an integration for one of the selected directories?
-				let integrationAlreadyExists = false;
-				if (gitRoot) {
-					const remotes = await getGitRemotes(ext.context, gitRoot);
-					for (const integration of existing) {
-						let repository = dataCacheStore.getState().getRepository(orgHandle, selectedProject.id, integration.id);
-						if (!repository) {
-							repository = await cloud.components.repository(integration.id, selectedProject.id).catch((): undefined => undefined);
-							if (repository) {
-								dataCacheStore.getState().setRepository(orgHandle, selectedProject.id, integration.id, repository);
-							}
-						}
-						const parsedRepoUrl = parseGitURL(repositoryUrlOf(repository) ?? "");
-						if (!parsedRepoUrl) {
-							continue;
-						}
-						const [repoOrg, repoName, repoProvider] = parsedRepoUrl;
-						const hasMatchingRemote = remotes.some((remote) => {
-							const parsed = parseGitURL(remote.fetchUrl);
-							return !!parsed && parsed[0] === repoOrg && parsed[1] === repoName && parsed[2] === repoProvider;
-						});
-						if (hasMatchingRemote) {
-							const subPathDir = path.join(gitRoot, repositorySubPathOf(repository));
-							if (integrations.some((item) => isSamePath(subPathDir, item.fsPath))) {
-								integrationAlreadyExists = true;
-								break;
-							}
-						}
-					}
-				}
-				if (integrationAlreadyExists && gitRoot) {
-					const resp = await window.showInformationMessage(
-						`An integration for the selected directory already exists within your project (${selectedProject.name}). Do you want to proceed and create another integration?`,
-						{ modal: true },
-						"Proceed",
-					);
-					if (resp !== "Proceed") {
-						linkContext(gitRoot, { org: orgHandle, project: selectedProject.id });
-						contextStore.getState().refreshState();
-						return;
-					}
+				const integrationAlreadyExists = !!gitRoot && (await hasIntegrationForDirs(orgHandle, selectedProject.id, existing, gitRoot, integrations.map((item) => item.fsPath)));
+				if (integrationAlreadyExists && gitRoot && !(await confirmAnotherIntegration(orgHandle, selectedProject, gitRoot))) {
+					return;
 				}
 
 				const isWithinWorkspace = workspace.workspaceFolders?.some((item) => integrations.every((int) => isSubpath(item.uri?.fsPath, int.fsPath)));
-				const taken = new Set(existing.flatMap((c) => [c.id.toLowerCase(), c.name.toLowerCase(), (c.displayName ?? "").toLowerCase()]));
-				for (const integration of integrations) {
-					const baseName = integration?.name || path.basename(integration.fsPath);
-					let candidate = baseName;
-					let counter = 1;
-					while (taken.has(candidate.toLowerCase())) {
-						candidate = `${baseName}-${counter++}`;
-					}
-					integration.name = candidate;
-					taken.add(candidate.toLowerCase());
-				}
+				assignUniqueNames(existing, integrations);
 
 				if (isWithinWorkspace || workspace.workspaceFile) {
 					if (gitRoot || params?.workspaceDir) {
@@ -224,6 +176,67 @@ export function createNewComponentCommand(context: ExtensionContext) {
 }
 
 /** The https clone URL the platform builds from, for whatever remote form git reported. */
+/** Whether an integration in the project already builds one of `dirs` from this repository. */
+export async function hasIntegrationForDirs(orgHandle: string, projectId: string, existing: Component[], gitRoot: string, dirs: string[]): Promise<boolean> {
+	const cloud = ext.clients.platform.cloud;
+	const remotes = await getGitRemotes(ext.context, gitRoot);
+	for (const integration of existing) {
+		let repository = dataCacheStore.getState().getRepository(orgHandle, projectId, integration.id);
+		if (!repository) {
+			repository = await cloud.components.repository(integration.id, projectId).catch((): undefined => undefined);
+			if (repository) {
+				dataCacheStore.getState().setRepository(orgHandle, projectId, integration.id, repository);
+			}
+		}
+		const parsedRepoUrl = parseGitURL(repositoryUrlOf(repository) ?? "");
+		if (!parsedRepoUrl) {
+			continue;
+		}
+		const [repoOrg, repoName, repoProvider] = parsedRepoUrl;
+		const hasMatchingRemote = remotes.some((remote) => {
+			const parsed = parseGitURL(remote.fetchUrl);
+			return !!parsed && parsed[0] === repoOrg && parsed[1] === repoName && parsed[2] === repoProvider;
+		});
+		if (hasMatchingRemote) {
+			const subPathDir = path.join(gitRoot, repositorySubPathOf(repository));
+			if (dirs.some((dir) => isSamePath(subPathDir, dir))) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+/** Asks before a second integration is created for the same directory; declining links the directory to the project instead. */
+export async function confirmAnotherIntegration(orgHandle: string, project: Project, gitRoot: string): Promise<boolean> {
+	const resp = await window.showInformationMessage(
+		`An integration for the selected directory already exists within your project (${project.name}). Do you want to proceed and create another integration?`,
+		{ modal: true },
+		"Proceed",
+	);
+	if (resp !== "Proceed") {
+		linkContext(gitRoot, { org: orgHandle, project: project.id });
+		contextStore.getState().refreshState();
+		return false;
+	}
+	return true;
+}
+
+/** Suffixes each name that an existing integration of the project already uses. */
+export function assignUniqueNames(existing: Component[], integrations: { name?: string; fsPath: string }[]): void {
+	const taken = new Set(existing.flatMap((c) => [c.id.toLowerCase(), c.name.toLowerCase(), (c.displayName ?? "").toLowerCase()]));
+	for (const integration of integrations) {
+		const baseName = integration?.name || path.basename(integration.fsPath);
+		let candidate = baseName;
+		let counter = 1;
+		while (taken.has(candidate.toLowerCase())) {
+			candidate = `${baseName}-${counter++}`;
+		}
+		integration.name = candidate;
+		taken.add(candidate.toLowerCase());
+	}
+}
+
 export function normalizeCloneUrl(repoUrl: string): string {
 	const parsed = parseGitURL(repoUrl);
 	if (parsed) {
@@ -243,7 +256,7 @@ export function normalizeCloneUrl(repoUrl: string): string {
 	return trimmed.endsWith(".git") ? trimmed : `${trimmed}.git`;
 }
 
-export const submitCreateComponentHandler = async ({ createParams, org, project, workspaceFsPath }: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> => {
+export const submitCreateComponentHandler = async ({ createParams, org, project, workspaceFsPath, quiet }: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> => {
 	const totalCount = createParams.length;
 	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: totalCount };
 	// Created, but the platform could not bind the repository: no build starts until that is fixed.
@@ -304,7 +317,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	await window.withProgress(
 		{
 			title: totalCount === 1 ? `Creating integration '${createParams[0].displayName || createParams[0].name}'... ` : `Creating ${totalCount} integrations... `,
-			location: ProgressLocation.Notification,
+			location: quiet ? ProgressLocation.Window : ProgressLocation.Notification,
 			cancellable: false,
 		},
 		async (progress) => {
@@ -339,7 +352,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 					if (created.sourceBindingError) {
 						unbound.push({ label, error: created.sourceBindingError });
 					}
-					await enableBuildAutomation(created, org.handle, project);
+					await enableBuildAutomation(created, org.handle, project, quiet);
 					const cache = dataCacheStore.getState().getIntegrations(org.handle, project.id);
 					dataCacheStore.getState().setIntegrations(org.handle, project.id, [created, ...cache]);
 					if (repo) {
@@ -379,6 +392,8 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 			if (bindingWarning) {
 				showViewInConsoleMessage(bindingWarning, org.handle, project, result.created, true);
 			}
+		} else if (quiet && !bindingWarning) {
+			ext.log(successMessage);
 		} else if (isWithinWorkspace) {
 			showViewInConsoleMessage(bindingWarning ?? successMessage, org.handle, project, result.created, !!bindingWarning);
 		} else {
@@ -445,7 +460,7 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegr
  * so the first build is followed from here and, when the platform will not deploy it,
  * deployed to the pipeline's entry environment by the extension.
  */
-async function enableBuildAutomation(created: CreatedComponent, orgHandle: string, project: Project): Promise<void> {
+async function enableBuildAutomation(created: CreatedComponent, orgHandle: string, project: Project, quiet?: boolean): Promise<void> {
 	const cloud = ext.clients.platform.cloud;
 	ext.log(
 		`Created ${created.id}${created.warning ? `; warning: ${created.warning}` : ""}${created.sourceBindingError ? `; source binding: ${created.sourceBindingError}` : ""}`,
@@ -469,7 +484,7 @@ async function enableBuildAutomation(created: CreatedComponent, orgHandle: strin
 		return;
 	}
 	// Not awaited: the create command returns while the build runs.
-	void followFirstBuild(created, orgHandle, project, !platformDeploys);
+	void followFirstBuild(created, orgHandle, project, !platformDeploys, quiet);
 }
 
 /** How long the platform's own first build is given to show up before one is started here. */
@@ -551,15 +566,51 @@ async function entryEnvironment(projectName: string): Promise<Environment> {
 	return first;
 }
 
+interface Release {
+	target: Environment;
+	releaseId?: string;
+}
+
+/** Deploys a built image to the project's entry environment. */
+export async function deployBuild(integrationId: string, buildName: string, projectName: string, report: (message: string) => void): Promise<Release> {
+	const target = await entryEnvironment(projectName);
+	report(`deploying to ${target.name}`);
+	const { releaseId, observed } = await ext.clients.platform.cloud.deployments.deploy(integrationId, {
+		environment: target.id,
+		imageId: buildName,
+		projectName,
+		allowAnyEnvironment: true,
+	});
+	ext.log(
+		`Deploying build ${buildName} of ${integrationId} to ${target.name}${releaseId ? ` as release ${releaseId}` : ""}${
+			observed ? " (the gateway lost the platform's answer; the deployment was found by reading the environment)" : ""
+		}`,
+	);
+	return { target, releaseId: releaseId || undefined };
+}
+
+export async function waitForRelease(integrationId: string, projectName: string, { target, releaseId }: Release, signal: AbortSignal, report: (message: string) => void) {
+	await ext.clients.platform.cloud.deployments.waitForRollout(integrationId, target.id, {
+		releaseId,
+		projectName,
+		signal,
+		onProgress: (current) => report(`deploying to ${target.name}: ${current?.deploymentStatusV2 ?? "starting"}`),
+	});
+}
+
 /**
  * Follows the first build in a progress notification and, when asked, deploys it to the
  * pipeline's entry environment. Every outcome ends in a message with a link to the console.
  */
-async function followFirstBuild(created: CreatedComponent, orgHandle: string, project: Project, deployAfter: boolean): Promise<void> {
+async function followFirstBuild(created: CreatedComponent, orgHandle: string, project: Project, deployAfter: boolean, quiet?: boolean): Promise<void> {
 	const cloud = ext.clients.platform.cloud;
 	const label = created.displayName || created.id;
 	const consoleUrl = buildConsoleUrl(ext.config.consoleUrl, { orgHandle, project: project.id, integration: created.id });
 	const tell = (message: string, level: "info" | "warning" | "error") => {
+		if (quiet && level === "info") {
+			ext.log(message);
+			return;
+		}
 		const show = level === "info" ? window.showInformationMessage : level === "warning" ? window.showWarningMessage : window.showErrorMessage;
 		show(message, "View in console").then((resp) => {
 			if (resp === "View in console") {
@@ -570,7 +621,8 @@ async function followFirstBuild(created: CreatedComponent, orgHandle: string, pr
 	const controller = new AbortController();
 	const signal = controller.signal;
 	try {
-		await window.withProgress({ location: ProgressLocation.Notification, title: `${label} in WSO2 Cloud`, cancellable: true }, async (progress, token) => {
+		const location = quiet ? ProgressLocation.Window : ProgressLocation.Notification;
+		await window.withProgress({ location, title: `${label} in WSO2 Cloud`, cancellable: !quiet }, async (progress, token) => {
 			token.onCancellationRequested(() => controller.abort());
 			progress.report({ message: "waiting for the first build to start" });
 			let build = await findFirstBuild(created.id, project.id, signal, FIRST_BUILD_APPEAR_MS);
@@ -599,26 +651,10 @@ async function followFirstBuild(created: CreatedComponent, orgHandle: string, pr
 				tell(`${label} is built; WSO2 Cloud deploys it automatically.`, "info");
 				return;
 			}
-			const target = await entryEnvironment(project.id);
-			progress.report({ message: `deploying to ${target.name}` });
-			const { releaseId, observed } = await cloud.deployments.deploy(created.id, {
-				environment: target.id,
-				imageId: buildName,
-				projectName: project.id,
-				allowAnyEnvironment: true,
-			});
-			ext.log(
-				`Deploying build ${buildName} of ${created.id} to ${target.name}${releaseId ? ` as release ${releaseId}` : ""}${
-					observed ? " (the gateway lost the platform's answer; the deployment was found by reading the environment)" : ""
-				}`,
-			);
-			await cloud.deployments.waitForRollout(created.id, target.id, {
-				releaseId: releaseId || undefined,
-				projectName: project.id,
-				signal,
-				onProgress: (current) => progress.report({ message: `deploying to ${target.name}: ${current?.deploymentStatusV2 ?? "starting"}` }),
-			});
-			tell(`Deployed ${label} to ${target.name}.`, "info");
+			const report = (message: string) => progress.report({ message });
+			const release = await deployBuild(created.id, buildName, project.id, report);
+			await waitForRelease(created.id, project.id, release, signal, report);
+			tell(`Deployed ${label} to ${release.target.name}.`, "info");
 		});
 	} catch (error) {
 		if (signal.aborted) {
@@ -749,7 +785,7 @@ const markCodeServerDeployed = async () => {
 };
 
 /** If the context file has an entry marked `local: true`, creates the project it names and clears the mark. */
-const createProjectFromLocalMetadata = async (workspacePath: string): Promise<Project | undefined> => {
+export const createProjectFromLocalMetadata = async (workspacePath: string): Promise<Project | undefined> => {
 	try {
 		const localEntry = localContextEntry(workspacePath);
 		if (!localEntry) {

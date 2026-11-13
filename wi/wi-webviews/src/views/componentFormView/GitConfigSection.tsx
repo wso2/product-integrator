@@ -16,10 +16,11 @@
  * under the License.
  */
 
-import React, { type FC, type ReactNode, useEffect, useState } from "react";
+import React, { type FC, useEffect, useState } from "react";
 import { Dropdown, ProgressIndicator, Codicon } from "@wso2/ui-toolkit";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { GitProvider, parseGitURL, toSentenceCase } from "@wso2/wso2-platform-core";
+import { SOURCE_READINESS_ACTION_LABELS, type SourceReadinessAction, type SourceReadinessRefresh, sourceReadiness } from "@wso2/wi-core";
 import { buildConsoleUrl } from "@wso2/wso2-cloud-client/contract";
 import {
 	GitConfigGrid,
@@ -216,97 +217,38 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 
 	// ── Compute validation / block state ─────────────────────────────────────
 
-	let invalidRepoMsg: ReactNode = "";
-	let blockCreation = false;
-	let invalidRepoAction = "";
-	let invalidRepoBannerType: "error" | "warning" | "info" | "neutral" = "warning";
-	let onInvalidRepoActionClick: (() => void) | undefined;
-	let onInvalidRepoRefreshClick: (() => void) | undefined;
-	let onInvalidRepoRefreshing = false;
-
-	if (!isLoadingGitData) {
-		if (gitData === null) {
-			invalidRepoMsg = "Please initialize the selected directory as a Git repository to proceed.";
-			invalidRepoAction = "Source Control";
-			onInvalidRepoActionClick = openSourceControl;
-			onInvalidRepoRefreshClick = refetchGitData;
-			blockCreation = true;
-		} else if (gitData?.remotes?.length === 0) {
-			invalidRepoMsg = "The selected Git repository has no configured remotes. Please add a remote to proceed.";
-			invalidRepoAction = "Source Control";
-			onInvalidRepoActionClick = openSourceControl;
-			onInvalidRepoRefreshClick = refetchGitData;
-			blockCreation = true;
-		}
-	}
-
-	// WSO2 Cloud builds from GitHub repositories only for now; no credential configured for another provider changes that.
-	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB) {
-		invalidRepoMsg = `Deploying from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and deploy from it.`;
-		onInvalidRepoRefreshClick = refetchGitData;
-		blockCreation = true;
-	}
-
-	if (!invalidRepoMsg && !isLoadingRepoAccess && gitRemote && !isRepoAuthorizedResp?.isAccessible && gitProvider) {
-		if (gitProvider === GitProvider.GITHUB) {
-			if (isRepoAuthorizedResp?.retrievedRepos) {
-				invalidRepoMsg = <span>WSO2 lacks access to the selected repository.</span>;
-				invalidRepoAction = "Grant Access";
-				onInvalidRepoActionClick = () => wsClient.triggerGithubInstallFlow(orgId);
-			} else {
-				invalidRepoMsg = "Please authorize WSO2 to access your GitHub repositories.";
-				invalidRepoAction = "Authorize";
-				onInvalidRepoActionClick = () => wsClient.triggerGithubAuthFlow(orgId);
-				invalidRepoBannerType = "info";
-			}
-		} else {
-			onInvalidRepoActionClick = () => wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" }));
-			if (isRepoAuthorizedResp?.retrievedRepos) {
-				invalidRepoMsg = <span>Selected Credential does not have sufficient permissions to access the repository.</span>;
-				invalidRepoAction = "Manage Credentials";
-			} else {
-				invalidRepoMsg = `Failed to retrieve ${toSentenceCase(gitProvider)} repositories using the selected credential.`;
-				invalidRepoAction = "Manage Credentials";
-			}
-		}
-
-		onInvalidRepoRefreshClick = refetchRepoAccess;
-		onInvalidRepoRefreshing = isFetchingRepoAccess;
-		blockCreation = true;
-	}
-
-	if (isLoadingGitData) {
-		blockCreation = true;
-	}
-
-	if (!blockCreation && gitRemote && !branch) {
-		blockCreation = true;
-	}
-
-	if (!invalidRepoMsg && !!gitRemote && !isLoadingBranches && branches?.length === 0) {
-		invalidRepoMsg = "The selected remote repository has no branches. Please publish your local branch to the remote repository.";
-		invalidRepoAction = "Push Changes";
-		onInvalidRepoActionClick = pushChanges;
-		onInvalidRepoRefreshClick = refetchBranches;
-		onInvalidRepoRefreshing = isFetchingBranches;
-		invalidRepoBannerType = "info";
-		blockCreation = true;
-	}
-
-	if (!invalidRepoMsg && configDriftFiles?.length > 0) {
-		invalidRepoMsg = `Cloud deployment requires the metadata in the ${configDriftFiles.join(",")} ${configDriftFiles?.length > 1 ? "files" : "file"} to be committed and pushed to the selected remote repository for proper functionality.`;
-		onInvalidRepoRefreshClick = refetchConfigDrift;
-		onInvalidRepoRefreshing = isFetchingConfigDrift;
-		invalidRepoBannerType = "warning";
-		blockCreation = true;
-	}
-
-	if (!invalidRepoMsg && hasDirtyRepo) {
-		invalidRepoMsg = "WSO2 cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.";
-		onInvalidRepoRefreshClick = refetchHasDirtyRepo;
-		onInvalidRepoRefreshing = isFetchingHasDirtyRepo;
-		invalidRepoBannerType = "neutral";
-	}
+	const readiness = sourceReadiness({
+		gitData: isLoadingGitData ? undefined : gitData,
+		gitRemote,
+		gitProvider,
+		branch,
+		branches: branches ?? [],
+		branchesLoading: isLoadingBranches,
+		repoAccess: isRepoAuthorizedResp,
+		repoAccessLoading: isLoadingRepoAccess,
+		configDriftFiles: configDriftFiles ?? [],
+		hasDirtyRepo: !!hasDirtyRepo,
+	});
+	const actionHandlers: Record<SourceReadinessAction, () => void> = {
+		sourceControl: () => openSourceControl(),
+		pushChanges: () => pushChanges(),
+		grantAccess: () => wsClient.triggerGithubInstallFlow(orgId),
+		authorize: () => wsClient.triggerGithubAuthFlow(orgId),
+		manageCredentials: () => wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" })),
+	};
+	const refreshers: Record<SourceReadinessRefresh, [() => void, boolean]> = {
+		gitData: [refetchGitData, false],
+		branches: [refetchBranches, isFetchingBranches],
+		repoAccess: [refetchRepoAccess, isFetchingRepoAccess],
+		configDrift: [refetchConfigDrift, isFetchingConfigDrift],
+		dirtyRepo: [refetchHasDirtyRepo, isFetchingHasDirtyRepo],
+	};
+	const invalidRepoMsg = readiness.message;
+	const blockCreation = readiness.blocking;
+	const invalidRepoAction = readiness.action ? SOURCE_READINESS_ACTION_LABELS[readiness.action] : "";
+	const invalidRepoBannerType = readiness.tone;
+	const onInvalidRepoActionClick = readiness.action ? actionHandlers[readiness.action] : undefined;
+	const [onInvalidRepoRefreshClick, onInvalidRepoRefreshing] = readiness.refresh ? refreshers[readiness.refresh] : [undefined, false];
 
 	useEffect(() => {
 		onBlockCreationChange(blockCreation);

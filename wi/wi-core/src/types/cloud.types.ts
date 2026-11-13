@@ -85,6 +85,8 @@ export interface WICloudSubmitComponentsReq {
 	project: Project;
 	workspaceFsPath: string;
 	createParams: WICloudCreateIntegrationParam[];
+	/** The caller shows the progress itself: report it in the status bar and skip the success messages. */
+	quiet?: boolean;
 }
 
 export interface WICloudSubmitComponentsResp {
@@ -218,3 +220,74 @@ export interface WICloudAPI {
 	// Projects
 	getCloudProjects: (params: GetCloudProjectsReq) => Promise<GetCloudProjectsResp>;
 }
+
+/** Commands another extension's deploy UI drives; WSO2 Integrator runs the same steps as its deploy form. */
+export const WICloudDeployCommands = {
+	/** The project, its integrations' suggested names and the integration types, read without prompting. */
+	GetDeployContext: "wso2.integrator.cloud.integration.getDeployContext",
+	/** The repository checks the deploy form shows as a banner. */
+	InspectSource: "wso2.integrator.cloud.integration.inspectSource",
+	/** Runs the deploy form's submit for one integration. */
+	Deploy: "wso2.integrator.cloud.integration.deploy",
+	/** Deploys an integration's latest successful build to its project's entry environment. */
+	DeployBuild: "wso2.integrator.cloud.integration.deployBuild",
+} as const;
+
+export interface WICloudDeployContextReq {
+	/** A workspace whose context file names a project that does not exist yet; it is created, as a deploy does. */
+	workspaceDir?: string;
+	integrations: { fsPath: string; name: string; supportedIntegrationTypes: string[] }[];
+}
+
+export interface WICloudDeployContext {
+	signedIn: boolean;
+	/** The project the workspace is linked to, which the deploy form uses without asking. */
+	linkedProject?: { id: string; name: string };
+	projects: { id: string; name: string }[];
+	/** The integrations with names no integration of the linked project already uses. */
+	integrations: { fsPath: string; name: string; supportedIntegrationTypes: string[] }[];
+}
+
+export interface WICloudInspectSourceReq {
+	workspaceDir: string;
+	gitRemote?: string;
+	branch?: string;
+}
+
+export interface WICloudInspectSourceResp {
+	remotes: string[];
+	gitRemote: string | null;
+	gitProvider: string | null;
+	branches: string[];
+	branch: string | null;
+	readiness: import("../source-readiness").SourceReadiness;
+}
+
+export interface WICloudDeployReq {
+	workspaceDir: string;
+	buildPackLang: "ballerina" | "microintegrator";
+	integration: { fsPath: string; displayName: string; integrationType: string };
+	/** An existing project's id, or the display name of a project to create. */
+	project: { id: string } | { newName: string };
+	gitRemote: string;
+	branch: string;
+	/** The caller shows the progress itself: report it in the status bar and skip the success messages. */
+	quiet?: boolean;
+}
+
+export interface WICloudDeployBuildReq {
+	integrationId: string;
+	projectId: string;
+}
+
+export interface WICloudDeployBuildResp {
+	success: boolean;
+	message?: string;
+}
+
+export type WICloudDeployResp =
+	| ({ outcome: "submitted" } & WICloudSubmitComponentsResp)
+	/** An integration already builds this directory and the person chose not to create another. */
+	| { outcome: "linkedExisting" }
+	| { outcome: "cancelled" }
+	| { outcome: "failed"; message: string };
