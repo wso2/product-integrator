@@ -188,6 +188,14 @@ describe("WSO2 Cloud service requests", () => {
 		assert.strictEqual(sent.length, 0);
 	});
 
+	it("calls Agent Manager on the WSO2 Cloud API's gateway", async () => {
+		const { deps: d, sent } = deps([json(200, { organizations: [] })], { apiBaseUrl: "https://gw.example.com/ipaas-service-ipaas-api-endpoint" });
+		await callCloudService({ service: "agent-manager", method: "GET", path: "/orgs/acme/projects?limit=50" }, d);
+		assert.strictEqual(sent[0].url, "https://gw.example.com/agent-manager-service-agent-manager-api/api/v1/orgs/acme/projects?limit=50");
+		assert.strictEqual((sent[0].init.headers as Record<string, string>).Authorization, "Bearer wso2-token-1");
+		await assert.rejects(callCloudService({ service: "agent-manager", method: "GET", path: "/orgs" }, deps([]).deps), codeOf("not_supported"));
+	});
+
 	it("knows no other service, and none the deployment has no host for", async () => {
 		const { deps: d } = deps([]);
 		await assert.rejects(callCloudService(managed({ service: "billing" as CloudServiceRequest["service"] }), d), codeOf("not_supported"));

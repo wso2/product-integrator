@@ -116,6 +116,12 @@ const CLOUD_SERVICES: Readonly<Record<CloudServiceName, CloudService>> = {
 		prefix: "/managed-tokens/v1.0/api/v1",
 		missing: "This WSO2 Cloud deployment has no managed-tokens service configured (set WSO2_CLOUD_MANAGED_TOKENS_URL).",
 	},
+	// Agent Manager sits behind the same gateway as the WSO2 Cloud API; consumers pass `/orgs/...`.
+	"agent-manager": {
+		baseUrl: (config) => (config.apiBaseUrl ? `${new URL(config.apiBaseUrl).origin}/agent-manager-service-agent-manager-api` : undefined),
+		prefix: "/api/v1",
+		missing: "This WSO2 Cloud deployment has no API URL to reach Agent Manager at.",
+	},
 };
 
 const METHODS = new Set<string>(["GET", "POST", "PUT", "DELETE"]);
