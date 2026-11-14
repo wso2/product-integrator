@@ -202,8 +202,10 @@ export interface WICloudAPI {
 	hasDirtyRepo: (dirPath: string) => Promise<boolean>;
 	getConfigFileDrifts: (params: import("@wso2/wso2-platform-core").GetConfigFileDriftsReq) => Promise<string[]>;
 	// GitHub flows
-	triggerGithubAuthFlow: (orgId: string) => Promise<void>;
-	triggerGithubInstallFlow: (orgId: string) => Promise<void>;
+	/** Connects GitHub to the organization; `repoUrl` (may be empty) names the repository whose owner needs the app. */
+	triggerGithubAuthFlow: (repoUrl: string) => Promise<void>;
+	/** Gives the WSO2 Cloud app access to the repository, installing it on the owner when needed. */
+	triggerGithubInstallFlow: (repoUrl: string) => Promise<void>;
 	// Repo
 	getBranches: (params: GetBranchesReq) => Promise<string[]>;
 	getAuthorizedGitOrgs: (params: GetAuthorizedGitOrgsReq) => Promise<GetAuthorizedGitOrgsResp>;

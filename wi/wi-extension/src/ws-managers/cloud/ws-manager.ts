@@ -44,14 +44,15 @@ import {
 	type WICloudSubmitComponentsReq,
 	type WICloudSubmitComponentsResp,
 } from "@wso2/wi-core";
-import { NotSupportedError, buildConsoleUrl, parseGitHubRepoUrl } from "@wso2/wso2-cloud-client";
-import { GitProvider, WICommandIds, buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
+import { NotSupportedError, parseGitHubRepoUrl } from "@wso2/wso2-cloud-client";
+import { WICommandIds, buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ProgressLocation, Uri, commands, env, window } from "vscode";
 import { enrichGitUsernamePassword } from "../../cloud/cmds/commit-and-push-to-git-cmd";
 import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-cmd";
 import type { IFileStatus } from "../../cloud/git/git";
 import { initGit } from "../../cloud/git/main";
 import { hasDirtyRepo as checkDirtyRepo, getGitHead, getGitRemotes, getGitRoot, relativePath, removeCredentialsFromGitURL } from "../../cloud/git/util";
+import { type GitHubAppConnector, inspectReadablePath, installationSettingsUrl, listReadableBranches, resolveGitHubAccess } from "../../cloud/github-app";
 import { contextStore } from "../../cloud/stores/context-store";
 import { dataCacheStore } from "../../cloud/stores/data-cache-store";
 import { ext } from "../../extensionVariables";
@@ -179,26 +180,44 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		}
 	}
 
+	/** Connects GitHub to the organization, with the app on the repository's owner. */
+	async triggerGithubAuthFlow(repoUrl: string): Promise<void> {
+		await this.githubApp().connect(parseGitHubRepoUrl(repoUrl ?? "")?.owner, "authorize");
+	}
+
 	/**
-	 * The platform's git integration has no documented route for the GitHub App
-	 * flows yet, so both open the console, where the connection is made.
+	 * Gives the WSO2 Cloud app access to the repository: on GitHub's own page for the
+	 * installation when the owner is connected already, otherwise by installing it there.
 	 */
-	async triggerGithubAuthFlow(_orgId: string): Promise<void> {
-		await env.openExternal(Uri.parse(buildConsoleUrl(ext.config.consoleUrl, { orgHandle: ext.authProvider?.org?.handle })));
+	async triggerGithubInstallFlow(repoUrl: string): Promise<void> {
+		const github = parseGitHubRepoUrl(repoUrl ?? "");
+		if (!github) {
+			await this.githubApp().connect(undefined, "install");
+			return;
+		}
+		const access = await resolveGitHubAccess(ext.clients.platform.cloud, github.owner, github.repo, ext.log.bind(ext));
+		if (access.kind === "not-granted") {
+			await env.openExternal(Uri.parse(await installationSettingsUrl(github.owner, access.installation.installationId)));
+			return;
+		}
+		await this.githubApp().connect(github.owner, "install");
 	}
 
-	async triggerGithubInstallFlow(_orgId: string): Promise<void> {
-		await env.openExternal(Uri.parse(buildConsoleUrl(ext.config.consoleUrl, { orgHandle: ext.authProvider?.org?.handle })));
+	private githubApp(): GitHubAppConnector {
+		if (!ext.githubApp) {
+			throw new Error("WSO2 Cloud is not available.");
+		}
+		return ext.githubApp;
 	}
 
-	/** Branches of a public GitHub repository, which is what the platform can read; empty for anything else. */
+	/** Branches of a GitHub repository WSO2 Cloud can read, through the GitHub App or because it is public; empty otherwise. */
 	async getBranches(params: GetBranchesReq): Promise<string[]> {
 		const github = parseGitHubRepoUrl(params.repoUrl ?? "");
 		if (!github) {
 			return [];
 		}
-		const branches = await ext.clients.platform.cloud.repos.listBranches(github.owner, github.repo);
-		return branches.map((b) => b.name);
+		const cloud = ext.clients.platform.cloud;
+		return listReadableBranches(cloud, await resolveGitHubAccess(cloud, github.owner, github.repo, ext.log.bind(ext)));
 	}
 
 	/** The platform lists no GitHub organizations yet; the form shows this instead of an empty list it cannot act on. */
@@ -223,16 +242,23 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	 * branches the platform can list counts as accessible.
 	 */
 	async isRepoAuthorized(params: IsRepoAuthorizedReq): Promise<IsRepoAuthorizedResp> {
-		const parsed = parseGitURL(params.repoUrl);
-		if (parsed && parsed[2] === GitProvider.GITHUB) {
-			const branches = await this.getBranches(params).catch((): string[] => []);
-			return { retrievedRepos: true, isAccessible: branches.length > 0 };
+		const github = parseGitHubRepoUrl(params.repoUrl ?? "");
+		if (!github) {
+			return { retrievedRepos: false, isAccessible: false };
 		}
-		return { retrievedRepos: false, isAccessible: false };
+		// `retrievedRepos` is set when the app is on the owner: the form then asks for this
+		// repository's access rather than for GitHub to be connected.
+		const access = await resolveGitHubAccess(ext.clients.platform.cloud, github.owner, github.repo, ext.log.bind(ext));
+		return {
+			retrievedRepos: access.kind === "installation" || access.kind === "not-granted",
+			isAccessible: access.kind === "installation" || access.kind === "public",
+		};
 	}
 
 	async getGitRepoMetadata(params: GetGitMetadataReq): Promise<GetGitMetadataResp> {
-		const inspection = await ext.clients.platform.cloud.repos.inspect(params.gitOrgName, params.gitRepoName, params.branch || undefined, params.relativePath);
+		const cloud = ext.clients.platform.cloud;
+		const access = await resolveGitHubAccess(cloud, params.gitOrgName, params.gitRepoName, ext.log.bind(ext));
+		const inspection = await inspectReadablePath(cloud, access, params.branch || undefined, params.relativePath);
 		return {
 			metadata: {
 				...inspection,

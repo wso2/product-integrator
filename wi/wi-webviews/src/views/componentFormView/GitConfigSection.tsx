@@ -156,6 +156,17 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		refetchOnWindowFocus: true,
 	});
 
+	// GitHub connected from the editor: what WSO2 Cloud can read has changed.
+	useEffect(() => {
+		const unsubscribe = wsClient.onGitHubConnected(() => {
+			void refetchRepoAccess();
+			void refetchBranches();
+		});
+		return () => {
+			unsubscribe();
+		};
+	}, [refetchRepoAccess, refetchBranches]);
+
 	useEffect(() => {
 		if (branches?.length > 0 && (!branch || !branches.includes(branch))) {
 			if (branches.includes(gitData?.upstream?.name)) {
@@ -252,11 +263,11 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 			if (isRepoAuthorizedResp?.retrievedRepos) {
 				invalidRepoMsg = <span>WSO2 lacks access to the selected repository.</span>;
 				invalidRepoAction = "Grant Access";
-				onInvalidRepoActionClick = () => wsClient.triggerGithubInstallFlow(orgId);
+				onInvalidRepoActionClick = () => wsClient.triggerGithubInstallFlow(gitRemote ?? "");
 			} else {
 				invalidRepoMsg = "Please authorize WSO2 to access your GitHub repositories.";
 				invalidRepoAction = "Authorize";
-				onInvalidRepoActionClick = () => wsClient.triggerGithubAuthFlow(orgId);
+				onInvalidRepoActionClick = () => wsClient.triggerGithubAuthFlow(gitRemote ?? "");
 				invalidRepoBannerType = "info";
 			}
 		} else {

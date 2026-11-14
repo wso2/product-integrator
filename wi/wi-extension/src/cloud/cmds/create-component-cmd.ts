@@ -46,6 +46,7 @@ import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 import { linkContext, localContextEntry, readContextEntries, writeContextEntries } from "../context-file";
 import type { Repository } from "../git/git";
 import { initGit } from "../git/main";
+import { type GitHubRepoAccess, gitHubSourceFor, inspectReadablePath, resolveGitHubAccess } from "../github-app";
 import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
 import { handleCloudError } from "../platform/error-handler";
 import { contextStore, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
@@ -324,13 +325,18 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 						throw new Error(`${createParam.name} is not a name the platform accepts.`);
 					}
 					const appPath = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
+					const repoUrl = normalizeCloneUrl(createParam.repoUrl);
+					const repoAppPath = appPath && appPath !== "." ? appPath : undefined;
+					const access = await gitHubAccessOf(createParam.repoUrl);
 					const created = await cloud.components.create({
 						projectName: project.id,
 						name,
 						displayName: createParam.displayName,
 						type,
 						runtime: runtimeForBuildPack(createParam.buildPackLang),
-						repo: { url: normalizeCloneUrl(createParam.repoUrl), branch: createParam.branch, appPath: appPath && appPath !== "." ? appPath : undefined },
+						repo: { url: repoUrl, branch: createParam.branch, appPath: repoAppPath },
+						// A private repository is read through the GitHub App installation.
+						githubApp: access ? gitHubSourceFor(access, createParam.branch, repoAppPath, repoUrl) : undefined,
 					});
 					// Auto build and auto deploy are the component's own switches, set after the create
 					// (enableBuildAutomation), where the platform's refusal of auto deploy is seen.
@@ -410,6 +416,12 @@ const checkSubscription = async () => {
 	}
 };
 
+/** How WSO2 Cloud can read a GitHub repository; undefined for any other host. */
+const gitHubAccessOf = async (repoUrl: string): Promise<GitHubRepoAccess | undefined> => {
+	const github = parseGitHubRepoUrl(repoUrl);
+	return github ? resolveGitHubAccess(ext.clients.platform.cloud, github.owner, github.repo, ext.log.bind(ext)) : undefined;
+};
+
 const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegrationParam[], gitRoot: string) => {
 	if (ext.isDevantCloudEditor) {
 		return; // the editor pushed the changes itself
@@ -420,12 +432,12 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegr
 			if (createParams.length > 1) {
 				progress.report({ message: `(${i + 1}/${createParams.length}) ${createParam.displayName || createParam.name}`, increment: 100 / createParams.length });
 			}
-			const github = parseGitHubRepoUrl(createParam.repoUrl);
-			if (!github) {
-				continue; // the platform reads public GitHub repositories only
+			const access = await gitHubAccessOf(createParam.repoUrl);
+			if (!access) {
+				continue; // the platform reads GitHub repositories only
 			}
 			const subPathDir = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
-			const inspection = await ext.clients.platform.cloud.repos.inspect(github.owner, github.repo, createParam.branch, subPathDir === "." ? "" : subPathDir);
+			const inspection = await inspectReadablePath(ext.clients.platform.cloud, access, createParam.branch, subPathDir === "." ? "" : subPathDir);
 			if (subPathDir && subPathDir !== ".") {
 				if (!inspection.isSubPathValid || inspection.isSubPathEmpty) {
 					throw new Error(`The selected directory ${subPathDir} appears to be empty or invalid in the remote repository. Please push your changes and try again.`);
@@ -653,12 +665,20 @@ async function attachSourceToExistingIntegration(
 	try {
 		const cloud = ext.clients.platform.cloud;
 		const appPath = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
+		const repoUrl = normalizeCloneUrl(createParam.repoUrl);
+		const repoAppPath = appPath && appPath !== "." ? appPath : undefined;
 		await window.withProgress({ title, location: ProgressLocation.Notification }, async () => {
 			await cloud.components.updateBuildParameters(
 				integrationId,
-				cloud.components.workflowFor(runtimeForBuildPack(createParam.buildPackLang), { url: normalizeCloneUrl(createParam.repoUrl), branch: createParam.branch, appPath: appPath && appPath !== "." ? appPath : undefined }),
+				cloud.components.workflowFor(runtimeForBuildPack(createParam.buildPackLang), { url: repoUrl, branch: createParam.branch, appPath: repoAppPath }),
 				project.id,
 			);
+			// A private repository is read through the GitHub App installation, bound before the build.
+			const access = await gitHubAccessOf(createParam.repoUrl);
+			const source = access ? gitHubSourceFor(access, createParam.branch, repoAppPath, repoUrl) : undefined;
+			if (source) {
+				await cloud.git.putGitHubSource(project.id, integrationId, source);
+			}
 			await cloud.builds.trigger(integrationId, { projectName: project.id });
 		});
 		// The cached repository is the one the integration had; the next refresh reads the new one.

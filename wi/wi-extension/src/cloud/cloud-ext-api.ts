@@ -26,7 +26,6 @@ import {
 	type ExchangedToken,
 	type IWso2PlatformExtensionAPI,
 	type LocalRuntimeEnv,
-	NotSupportedError,
 	type OpenClonedDirRequest,
 	PLATFORM_EXTENSION_API_VERSION,
 	type PlatformEnvConfig,
@@ -43,9 +42,6 @@ import { cloudConnections } from "./connections";
 import { linkContext } from "./context-file";
 import { hasDirtyRepo } from "./git/util";
 import { contextStore } from "./stores/context-store";
-
-const NO_PLATFORM_API = (what: string, dependency: string) =>
-	new NotSupportedError(`${what} is not available on WSO2 Cloud yet.`, { reason: dependency });
 
 /**
  * The API other extensions (the Ballerina extension) reach through the
@@ -206,20 +202,7 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 		return this.cloud.repos;
 	}
 	public get git() {
-		const proxy = this.cloud.git;
-		return {
-			// The git integration's routes are not in the platform's API document yet.
-			isRepoAuthorized: async (_owner: string, _repo: string) => {
-				throw NO_PLATFORM_API("Checking repository access", "git_app_service_routes");
-			},
-			listInstallations: async () => {
-				throw NO_PLATFORM_API("Listing GitHub installations", "git_app_service_routes");
-			},
-			connectGitHub: async () => {
-				throw NO_PLATFORM_API("Connecting GitHub", "git_app_service_routes");
-			},
-			raw: proxy.raw.bind(proxy),
-		};
+		return this.cloud.git;
 	}
 	public get dbServers() {
 		return this.cloud.dbServers;

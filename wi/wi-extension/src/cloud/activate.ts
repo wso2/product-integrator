@@ -27,6 +27,7 @@ import { WIAuthState } from "./auth/wso2-auth-provider";
 import type { WICloudExtensionAPI } from "./cloud-ext-api";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { activateCmds } from "./cmds";
+import { createGitHubAppConnector } from "./github-app-host";
 import { describeCloudError, handleCloudError } from "./platform/error-handler";
 import { createWIPlatform } from "./platform/platform-client";
 import { type CloudServiceUrls, readCloudServiceUrls } from "./service-urls";
@@ -107,6 +108,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 			}),
 		),
 	);
+	ext.githubApp = createGitHubAppConnector();
 	activateCmds(context);
 	activateURIHandlers(context);
 

@@ -136,6 +136,12 @@ export class BridgeLayer {
         });
     }
 
+    static notifyGitHubConnected(projectUri: string = "global"): void {
+        this.publish(projectUri, {
+            type: WI_BRIDGE_EVENTS.GITHUB_CONNECTED,
+        });
+    }
+
     static notifyAuthStateChanged(projectUri: string, state: AuthState): void {
         this.publish(projectUri, {
             type: WI_BRIDGE_EVENTS.AUTH_STATE_CHANGED,
