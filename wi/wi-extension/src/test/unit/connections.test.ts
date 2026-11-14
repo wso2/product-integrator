@@ -38,8 +38,8 @@ function fakeCloud(answers: { links?: Record<string, unknown>; connectable?: unk
 				calls.push(["config.listLinks", ...args]);
 				return { kind: "ballerina", sourceDefined: false, ...answers.links };
 			},
-			listConnectableEndpoints: async (...args: unknown[]) => {
-				calls.push(["config.listConnectableEndpoints", ...args]);
+			listConnectableServices: async (...args: unknown[]) => {
+				calls.push(["config.listConnectableServices", ...args]);
 				return answers.connectable ?? [];
 			},
 		},
@@ -165,7 +165,7 @@ describe("cloud connections", () => {
 	it("lists the connectable endpoints", async () => {
 		const { cloud, calls } = fakeCloud({ connectable: [billing] });
 		assert.deepStrictEqual(await apiWith(cloud).connections.listConnectable("basket", "shop"), [billing]);
-		assert.deepStrictEqual(calls, [["config.listConnectableEndpoints", "basket", "shop"]]);
+		assert.deepStrictEqual(calls, [["config.listConnectableServices", "basket", "shop"]]);
 	});
 
 	it("lists address links, without reading the connectable endpoints, and unlinks one", async () => {
@@ -181,7 +181,7 @@ describe("cloud connections", () => {
 			{ configurable: "acme/basket:paths", project: "shop", component: "orders", endpoint: "v1/api" },
 			{ configurable: "acme/basket:newUrl", project: "shop", component: "cart", endpoint: "api" },
 		]);
-		assert.ok(!calls.some(([name]) => name === "config.listConnectableEndpoints"));
+		assert.ok(!calls.some(([name]) => name === "config.listConnectableServices"));
 		await api.connections.unlinkEndpoint({ integration: "basket", configurable: "acme/basket:ordersUrl", projectName: "shop" });
 		assert.deepStrictEqual(calls.at(-1), ["config.putLink", "basket", { configurable: "acme/basket:ordersUrl" }, "shop"]);
 	});
@@ -209,7 +209,7 @@ describe("cloud connections", () => {
 			apiWith(cloud).connections.listEndpointLinks("basket"),
 			(error: unknown) => error instanceof BadRequestError && /Name the project of basket/.test(error.message),
 		);
-		assert.ok(!calls.some(([name]) => name === "config.listConnectableEndpoints"));
+		assert.ok(!calls.some(([name]) => name === "config.listConnectableServices"));
 		const addressOnly = fakeCloud({ links: { endpointLinks: { "acme/basket:ordersUrl": "shop/orders/api" } } });
 		assert.deepStrictEqual(await apiWith(addressOnly.cloud).connections.listEndpointLinks("basket"), [
 			{ configurable: "acme/basket:ordersUrl", project: "shop", component: "orders", endpoint: "api" },
@@ -223,6 +223,6 @@ describe("cloud connections", () => {
 		assert.deepStrictEqual(await apiWith(cloud).connections.listEndpointLinks("basket", "shop"), [
 			{ configurable: "acme/basket:ordersUrl", project: "shop", component: "orders", endpoint: "api" },
 		]);
-		assert.ok(!calls.some(([name]) => name === "config.listConnectableEndpoints"));
+		assert.ok(!calls.some(([name]) => name === "config.listConnectableServices"));
 	});
 });
