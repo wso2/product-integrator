@@ -106,6 +106,8 @@ interface CloudService {
 	/** The service's API root under its base; a consumer's path is relative to it and cannot leave it. */
 	prefix: string;
 	missing: string;
+	/** The base is a path on a gateway other APIs share, which may decode `%2F` or `%5C` before routing. */
+	sharedGateway?: boolean;
 }
 
 /** The services a consumer may call through WSO2 Integrator; no other host gets the WSO2 Cloud token. */
@@ -115,6 +117,13 @@ const CLOUD_SERVICES: Readonly<Record<CloudServiceName, CloudService>> = {
 		baseUrl: (config) => config.managedTokensBaseUrl,
 		prefix: "/managed-tokens/v1.0/api/v1",
 		missing: "This WSO2 Cloud deployment has no managed-tokens service configured (set WSO2_CLOUD_MANAGED_TOKENS_URL).",
+	},
+	// Agent Manager sits behind the same gateway as the WSO2 Cloud API; consumers pass `/orgs/...`.
+	"agent-manager": {
+		baseUrl: (config) => (config.apiBaseUrl ? `${new URL(config.apiBaseUrl).origin}/agent-manager-service-agent-manager-api` : undefined),
+		prefix: "/api/v1",
+		missing: "This WSO2 Cloud deployment has no API URL to reach Agent Manager at.",
+		sharedGateway: true,
 	},
 };
 
@@ -225,7 +234,8 @@ export async function callCloudService<T>(request: CloudServiceRequest, deps: Cl
 	}
 	const root = baseUrl + service.prefix;
 	// The resolved URL, not the text: `..` (or `%2e%2e`) in the path would otherwise climb out of the API root to another API on the host.
-	if (typeof request.path !== "string" || !request.path.startsWith("/") || !isBelow(root, root + request.path)) {
+	const encodedSeparator = service.sharedGateway && typeof request.path === "string" && /%2f|%5c/i.test(request.path.split("?")[0]);
+	if (typeof request.path !== "string" || !request.path.startsWith("/") || encodedSeparator || !isBelow(root, root + request.path)) {
 		throw new BadRequestError(`"${String(request.path)}" is not a path in the ${request.service} API.`);
 	}
 	const client = new HttpClient({ baseUrl: root, tokenSource: deps.tokenSource, fetch: deps.fetch });

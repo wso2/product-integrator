@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import type { AuthStatus, Component, ContextStoreState, Project, RepoPathInspection } from "@wso2/wso2-cloud-client";
+import type { AgentMcpConfig, AgentModelConfig, AuthStatus, Component, ContextStoreState, Project, RepoPathInspection } from "@wso2/wso2-cloud-client";
 import type { GetLocalGitDataResp, ICreateNewIntegrationCmdIntegrations } from "@wso2/wso2-platform-core";
 
 export type { Component, ContextStoreState, Project } from "@wso2/wso2-cloud-client";
@@ -74,6 +74,10 @@ export interface WICloudCreateIntegrationParam {
 	branch: string;
 	gitProvider: string;
 	gitCredRef?: string;
+	/** For an AI agent: the LLM providers and MCP servers Agent Manager attaches, and whether it traces the agent. */
+	modelConfig?: AgentModelConfig[];
+	mcpConfig?: AgentMcpConfig[];
+	autoInstrumentation?: boolean;
 }
 
 /**
@@ -266,7 +270,14 @@ export interface WICloudInspectSourceResp {
 export interface WICloudDeployReq {
 	workspaceDir: string;
 	buildPackLang: "ballerina" | "microintegrator";
-	integration: { fsPath: string; displayName: string; integrationType: string };
+	integration: {
+		fsPath: string;
+		displayName: string;
+		integrationType: string;
+		modelConfig?: AgentModelConfig[];
+		mcpConfig?: AgentMcpConfig[];
+		autoInstrumentation?: boolean;
+	};
 	/** An existing project's id, or the display name of a project to create. */
 	project: { id: string } | { newName: string };
 	gitRemote: string;

@@ -344,6 +344,9 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 						type,
 						runtime: runtimeForBuildPack(createParam.buildPackLang),
 						repo: { url: normalizeCloneUrl(createParam.repoUrl), branch: createParam.branch, appPath: appPath && appPath !== "." ? appPath : undefined },
+						modelConfig: createParam.modelConfig,
+						mcpConfig: createParam.mcpConfig,
+						autoInstrumentation: createParam.autoInstrumentation,
 					});
 					// Auto build and auto deploy are the component's own switches, set after the create
 					// (enableBuildAutomation), where the platform's refusal of auto deploy is seen.
