@@ -23,6 +23,7 @@
     "@vscode/webview-ui-toolkit": "1.4.0",
     "@wso2/wi-core": "workspace:*",
     "@wso2/wso2-platform-core": "workspace:*",
+    "@wso2/wso2-cloud-client": "workspace:*",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "@wso2/webview-giga-bridge": "workspace:*",

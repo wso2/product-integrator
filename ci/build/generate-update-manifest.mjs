@@ -54,18 +54,29 @@
 //     [--artifact-slug wso2-agent-builder] \
 //     [--app-applies-to '>=5.0.0'] [--app-rollout 25] [--out source.json] \
 //     [--artifacts-base https://cdn/artifacts --mirror-dir artifacts-mirror] [--no-download] \
-//     [--app-installer-dir win-installers]   installers taken from local files instead of the release
-//                                            (the editor-only -update.msi is not a public release asset)
+//     [--app-installer-dir app-installers]   app installers read from local files (a build's own
+//                                            artifacts) instead of fetched from the release; with
+//                                            no --app-release-base a missing file is an error
 //
 //   Components-only (ship a component fix without re-releasing the app):
 //     ... --components-only --carry-apps-from previous-source.json [--requires-app-version 5.1.5]
 //     [--carry-components wso2.wso2-integrator]   components this publish is not changing
 //
-// --no-download emits placeholder hashes (structure-only; for local validation, not for release).
+//   Fetch only (no document): download every component the feed would serve from a URL, resolved
+//   exactly as above (variants, flavors, {jrePlatform}/{version}/{versionBase}/{tag}), into DIR/<id>/<file>,
+//   so the release can publish them next to the cores:
+//     ... --fetch-components DIR [--source-flavors ...] [--targets ...] [--component-files FILES]
+//   Components declared with `sourceFile` are built in this repo and are not fetched. A file already
+//   at FILES/<id>/<file> (the build's own download) is used as it is instead of being fetched.
+//
+// --no-download emits placeholder hashes (structure-only; for local validation, not for release);
+// with --fetch-components it prints what would be fetched and where.
 
 import { createHash } from 'node:crypto';
-import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { once } from 'node:events';
+import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
+import { finished } from 'node:stream/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -128,8 +139,34 @@ function safeSegment(value, what) {
 	return value;
 }
 
-// Streams the artifact once: hashes it, and (when mirrorPath is set) writes the same bytes to
-// disk for the CI job to upload to the update bucket.
+// One cap on every download attempt, request and body alike: a stalled upstream (Open VSX, GitHub)
+// would otherwise hang the publish job until the runner's 6 hour limit. Generous for the largest
+// artifact (a ~350 MB runtime takes well under a minute on a hosted runner).
+const FETCH_TIMEOUT_MS = 20 * 60 * 1000;
+
+// A dropped connection or a 5xx from Open VSX or GitHub would otherwise fail a publish that runs
+// after every installer is built. Such failures are retried a bounded number of times with a short
+// backoff; a timeout (already 20 minutes) and any 4xx (a 404 is a wrong version or tag, which no
+// retry fixes) fail at once.
+const FETCH_ATTEMPTS = 3;
+const FETCH_RETRY_DELAY_MS = 10 * 1000;
+
+// An HTTP status worth retrying: a server-side error, or GitHub/Open VSX rate limiting.
+const isTransientStatus = status => status >= 500 || status === 429;
+
+// An error a retry may cure: one flagged as a transient HTTP status, or undici's own report of a
+// connection that failed ('fetch failed': reset, refused, DNS) or died mid-body ('terminated').
+function isTransient(err) {
+	return err?.transient === true
+		|| (err instanceof TypeError && (err.message === 'fetch failed' || err.message === 'terminated'));
+}
+
+function httpError(message, status) {
+	const err = new Error(message);
+	err.transient = isTransientStatus(status);
+	return err;
+}
+
 // Fetch an artifact, coping with release assets on a PRIVATE GitHub repo (the enterprise mirror
 // we build test releases on). A token on the /releases/download/ browser URL is not enough there —
 // GitHub returns 404 for it regardless — so resolve the asset through the API and fetch it by id
@@ -138,18 +175,21 @@ function safeSegment(value, what) {
 async function fetchArtifact(url) {
 	const token = process.env['GITHUB_TOKEN'];
 	const parsed = new URL(url);
+	const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
 	const release = token && parsed.hostname === 'github.com'
 		? /^\/([^/]+)\/([^/]+)\/releases\/download\/([^/]+)\/(.+)$/.exec(parsed.pathname)
 		: undefined;
 	if (!release) {
-		return fetch(url, { redirect: 'follow' });
+		return fetch(url, { redirect: 'follow', signal });
 	}
 	const [, owner, repo, tag, file] = release;
 	const meta = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}`, {
-		headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' }
+		headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+		signal
 	});
 	if (!meta.ok) {
-		throw new Error(`Failed to look up release ${tag} in ${owner}/${repo}: HTTP ${meta.status}`);
+		await meta.body?.cancel().catch(() => { });
+		throw httpError(`Failed to look up release ${tag} in ${owner}/${repo}: HTTP ${meta.status}`, meta.status);
 	}
 	const wanted = decodeURIComponent(file);
 	const asset = ((await meta.json()).assets ?? []).find(a => a.name === wanted);
@@ -158,39 +198,82 @@ async function fetchArtifact(url) {
 	}
 	const res = await fetch(asset.url, {
 		headers: { Authorization: `Bearer ${token}`, Accept: 'application/octet-stream' },
-		redirect: 'manual'
+		redirect: 'manual',
+		signal
 	});
 	const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : undefined;
-	return location ? fetch(location, { redirect: 'follow' }) : res;
+	if (!location) {
+		return res;
+	}
+	await res.body?.cancel().catch(() => { });
+	return fetch(location, { redirect: 'follow', signal });
 }
 
+// Streams the artifact: hashes it, and (when mirrorPath is set) writes the same bytes to disk for
+// the CI job to upload to the update bucket. A transient failure starts over from the first byte.
 async function hashAndSize(url, mirrorPath) {
-	const res = await fetchArtifact(url);
-	if (!res.ok || !res.body) {
-		throw new Error(`Failed to download ${url}: HTTP ${res.status}`);
+	for (let attempt = 1; ; attempt++) {
+		try {
+			return await downloadOnce(url, mirrorPath);
+		} catch (err) {
+			if (attempt >= FETCH_ATTEMPTS || !isTransient(err)) {
+				throw err;
+			}
+			const delayMs = FETCH_RETRY_DELAY_MS * attempt;
+			console.warn(`  attempt ${attempt} of ${FETCH_ATTEMPTS} failed for ${url}: ${err.message}${err.cause?.code ? ` (${err.cause.code})` : ''}; retrying in ${delayMs / 1000}s`);
+			await new Promise(resolve => setTimeout(resolve, delayMs));
+		}
 	}
+}
+
+async function downloadOnce(url, mirrorPath) {
 	const hash = createHash('sha256');
 	let size = 0;
 	let out;
 	let outError;
-	if (mirrorPath) {
-		mkdirSync(path.dirname(mirrorPath), { recursive: true });
-		out = createWriteStream(mirrorPath);
-		// Attached BEFORE the write loop: a stream that errors mid-download (disk full while
-		// mirroring a multi-hundred-MB runtime) would otherwise raise an uncaught 'error' event —
-		// or, if a write had just returned false, leave the loop awaiting a 'drain' that will
-		// never come.
-		out.on('error', err => { outError = err; });
-	}
-	for await (const chunk of Readable.fromWeb(res.body)) {
-		if (outError) {
-			throw new Error(`Failed to mirror ${url} to ${mirrorPath}: ${outError.message}`);
+	// The request is inside the try with the body loop: the timeout signal can fire while waiting
+	// for headers (a connection that stalls before any response) as well as mid-body, and both
+	// must name the URL rather than surface the bare "operation was aborted due to timeout".
+	try {
+		const res = await fetchArtifact(url);
+		if (!res.ok || !res.body) {
+			// Released before a retry, rather than holding the connection until GC.
+			await res.body?.cancel().catch(() => { });
+			throw httpError(`Failed to download ${url}: HTTP ${res.status}`, res.status);
 		}
-		hash.update(chunk);
-		size += chunk.length;
-		if (out && !out.write(chunk)) {
-			await new Promise(resolve => out.once('drain', () => resolve()).once('error', () => resolve()));
+		if (mirrorPath) {
+			mkdirSync(path.dirname(mirrorPath), { recursive: true });
+			out = createWriteStream(mirrorPath);
+			// Attached BEFORE the write loop: a stream that errors mid-download (disk full while
+			// mirroring a multi-hundred-MB runtime) would otherwise raise an uncaught 'error' event —
+			// or, if a write had just returned false, leave the loop awaiting a 'drain' that will
+			// never come.
+			out.on('error', err => { outError = err; });
 		}
+		for await (const chunk of Readable.fromWeb(res.body)) {
+			if (outError) {
+				throw new Error(`Failed to mirror ${url} to ${mirrorPath}: ${outError.message}`);
+			}
+			hash.update(chunk);
+			size += chunk.length;
+			if (out && !out.write(chunk)) {
+				// events.once removes both its listeners whichever fires, so the thousands of waits
+				// a ~350 MB mirror makes do not pile up 'error' listeners. An error rejects it; the
+				// listener above has already recorded it, and the next pass reports it.
+				await once(out, 'drain').catch(() => { });
+			}
+		}
+	} catch (err) {
+		// Closed before a retry opens the same path again, so a write still in flight on this
+		// stream cannot land in the next attempt's file.
+		if (out) {
+			out.destroy();
+			await finished(out).catch(() => { });
+		}
+		if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+			throw new Error(`Timed out downloading ${url} after ${FETCH_TIMEOUT_MS / 60000} minutes`);
+		}
+		throw err;
 	}
 	if (out) {
 		await new Promise((resolve, reject) => out.end(() => outError ? reject(outError) : resolve()));
@@ -277,9 +360,22 @@ async function main() {
 	const appVersion = args['app-version'] || versions['integrator.version'];
 	// Flavors share every name template; only the {slug} differs (wso2-integrator vs wso2-agent-builder).
 	const artifactSlug = safeSegment(args['artifact-slug'] || 'wso2-integrator', 'artifact slug');
-	// Update-only installers (the editor-only -update.msi) are NOT public release assets; when this
-	// directory holds the file, its bytes are hashed and mirrored from disk instead of the release.
-	const appInstallerDir = typeof args['app-installer-dir'] === 'string' ? args['app-installer-dir'] : undefined;
+
+	// Fetch-only mode: download the URL-sourced components into <dir>/<id>/<file> and write no
+	// document. The release job uses it to publish the JRE and the bundled extensions next to the
+	// cores, from the SAME resolution the feed uses, so the two can never disagree.
+	const fetchComponentsDir = typeof args['fetch-components'] === 'string' ? args['fetch-components'] : '';
+	if (fetchComponentsDir && (artifactsBase || args['components-only'])) {
+		throw new Error('--fetch-components writes no document; it takes no --artifacts-base or --components-only');
+	}
+	// The files the build itself downloaded and bundled, laid out <id>/<file> as fetched here. A
+	// rolling upstream release (a `nightly` tag) can move on between the build and the release, so
+	// the release publishes these bytes rather than fetching the URL again. A missing directory or
+	// file just means "fetch it".
+	const componentFilesDir = typeof args['component-files'] === 'string' ? args['component-files'] : '';
+	if (componentFilesDir && !fetchComponentsDir) {
+		throw new Error('--component-files is only read with --fetch-components');
+	}
 
 	// A components-only publish ships component updates without a new app.
 	const componentsOnly = !!args['components-only'];
@@ -430,6 +526,7 @@ async function main() {
 	}
 
 	const components = [];
+	const fetched = new Map();
 	if (carryComponentIds.size > 0) {
 		// Every entry for the id, so a component published as several variants keeps all of them.
 		for (const entry of carriedDocument.components ?? []) {
@@ -442,6 +539,13 @@ async function main() {
 	for (const component of declared) {
 		if (carryComponentIds.has(component.id)) {
 			continue; // carried above, not rebuilt or re-mirrored
+		}
+		// Built in this repo, so there is nothing to fetch (the release publishes those from the
+		// build's own artifacts). Nor a variant: that is an older line served to older clients, not
+		// what this build bundled, and on the release it would sit next to the bundled one under the
+		// same <integrator>-<id>- prefix with nothing to tell the two apart.
+		if (fetchComponentsDir && (component.sourceFile || component.isVariant)) {
+			continue;
 		}
 		// Components that only exist as a repo-local build artifact (no public source URL) can only
 		// be published when mirroring is on. Skip LOUDLY rather than failing the whole document.
@@ -465,13 +569,23 @@ async function main() {
 			? Object.fromEntries(Object.entries(component.requires).map(([k, v]) => [k, substitute(v, commonVars)]))
 			: undefined;
 
+		// The upstream release {tag}. resolve-nightly-versions.sh writes `<versionKey>.tag` when the
+		// tag cannot be derived from the version (a rolling `nightly` release carrying
+		// ballerina-5.13.26101119.vsix); otherwise it is the component's conventional tag, `tag` in
+		// the config (default v{version}). The installers download from the same `.tag`, so this
+		// fetches from the release they were built from rather than 404 on a v<version> that does
+		// not exist. A rolling release that has moved on since no longer carries an asset named
+		// after this version, so that fails loudly instead of returning a newer build's bytes.
+		const tag = (component.versionKey && versions[`${component.versionKey}.tag`])
+			|| substitute(component.tag ?? 'v{version}', { version });
+
 		const perTarget = {};
 		for (const target of targets) {
 			// Some upstreams tag a pre-release with a suffix but name the assets inside it after the
 			// base version — Ballerina's v2201.13.6-alpha2 ships ballerina-2201.13.6-swan-lake-*.zip.
 			// {versionBase} keeps the full version in the tag and drops the suffix in the filename.
 			const versionBase = typeof version === 'string' ? version.split('-')[0] : version;
-			const vars = { ...varsFor(target), version, versionBase };
+			const vars = { ...varsFor(target), version, versionBase, tag: encodeURIComponent(tag) };
 			let sourceUrl;
 			let sourceFile;
 			if (component.sourceFile) {
@@ -497,6 +611,36 @@ async function main() {
 			const fileName = safeSegment(sourceFile
 				? path.basename(sourceFile)
 				: path.posix.basename(decodeURIComponent(new URL(sourceUrl).pathname)), 'file name');
+			if (fetchComponentsDir) {
+				// Each distinct URL once (a VSIX resolves to the same URL for every target).
+				if (!fetched.has(sourceUrl)) {
+					const dest = path.join(fetchComponentsDir, safeSegment(component.id, 'component id'), fileName);
+					fetched.set(sourceUrl, dest);
+					const localDir = componentFilesDir
+						? path.join(componentFilesDir, safeSegment(component.id, 'component id'))
+						: '';
+					const local = localDir ? path.join(localDir, fileName) : '';
+					// The build staged this component but under another name: a file name or version
+					// drift between its download and this config. Fetching instead would quietly
+					// reopen the rolling-tag failure the staged copy exists to prevent. (No directory
+					// at all is the Open VSX case, and is fetched.)
+					if (localDir && existsSync(localDir) && !existsSync(local)) {
+						throw new Error(`--component-files has ${localDir} for ${component.id} but not ${fileName} (it has: ${readdirSync(localDir).join(', ') || 'nothing'}); the build bundled a different file than this config resolves`);
+					}
+					if (local && existsSync(local)) {
+						const { sha256, sizeBytes } = await hashLocalFile(local, dest);
+						console.log(`using the build's own ${component.id} ${version} (${local}) for ${sourceUrl}`);
+						console.log(`  -> ${dest} (${sizeBytes} bytes, sha256 ${sha256})`);
+					} else if (noDownload) {
+						console.log(`would fetch ${component.id} ${version}: ${sourceUrl} -> ${dest}`);
+					} else {
+						console.log(`fetching ${component.id} ${version}: ${sourceUrl}`);
+						const { sha256, sizeBytes } = await hashAndSize(sourceUrl, dest);
+						console.log(`  -> ${dest} (${sizeBytes} bytes, sha256 ${sha256})`);
+					}
+				}
+				continue;
+			}
 			const relPath = `components/${safeSegment(component.id, 'component id')}/${safeSegment(version, 'version')}/${fileName}`;
 			perTarget[target] = await resolveArtifact({
 				relPath,
@@ -506,6 +650,9 @@ async function main() {
 			});
 		}
 
+		if (fetchComponentsDir) {
+			continue;
+		}
 		components.push({
 			id: component.id,
 			kind: component.kind,
@@ -515,6 +662,11 @@ async function main() {
 			recommended: !!component.recommended,
 			targets: perTarget
 		});
+	}
+
+	if (fetchComponentsDir) {
+		process.stderr.write(`${noDownload ? 'Would fetch' : 'Fetched'} ${fetched.size} component file${fetched.size === 1 ? '' : 's'} into ${fetchComponentsDir}\n`);
+		return;
 	}
 
 	// Core-app entry. `appliesTo` is a range over the CLIENT's CURRENT version, which is how one
@@ -529,17 +681,22 @@ async function main() {
 
 	const apps = [...carriedApps];
 	const releaseBase = typeof args['app-release-base'] === 'string' ? args['app-release-base'].replace(/\/+$/, '') : '';
+	// App installers taken from a local directory (a build's own artifacts) instead of the release:
+	// the editor-only -update.msi need not be a release asset at all then. A file found there is
+	// hashed and mirrored from disk; one not found falls back to the release when --app-release-base
+	// is given and is an error otherwise.
+	const appInstallerDir = typeof args['app-installer-dir'] === 'string' ? args['app-installer-dir'] : undefined;
 	if (componentsOnly) {
 		console.log(`components-only publish: no app entry generated, ${apps.length} carried, `
 			+ `requires.app pinned to ${requiresAppVersion}`);
 	}
-	if (!componentsOnly && artifactsBase && !releaseBase) {
+	if (!componentsOnly && artifactsBase && !releaseBase && !appInstallerDir) {
 		// The CDN base satisfies the URL the document points clients at, but the installer BYTES
 		// still have to come from somewhere to be hashed and mirrored. Without this the failure is
 		// a bare "Invalid URL" from deep inside the fetch.
-		throw new Error('an app entry needs --app-release-base: the release URL the installers are fetched from for hashing and mirroring');
+		throw new Error('an app entry needs --app-release-base (the release URL the installers are fetched from) or --app-installer-dir (their local files) for hashing and mirroring');
 	}
-	if (!componentsOnly && (releaseBase || artifactsBase)) {
+	if (!componentsOnly && (releaseBase || artifactsBase || appInstallerDir)) {
 		const installerNames = config.app?.installers ?? {};
 		const squirrelNames = config.app?.squirrel ?? {};
 		const perTarget = {};
@@ -552,9 +709,15 @@ async function main() {
 			const relPath = `app/${safeSegment(appVersion, 'app version')}/${fileName}`;
 			const localInstaller = appInstallerDir ? path.join(appInstallerDir, fileName) : undefined;
 			const useLocalInstaller = Boolean(localInstaller && existsSync(localInstaller));
+			if (localInstaller && !useLocalInstaller) {
+				if (!releaseBase) {
+					throw new Error(`${fileName} is not in --app-installer-dir ${appInstallerDir} and no --app-release-base was given to fall back to`);
+				}
+				console.log(`${fileName} is not in --app-installer-dir ${appInstallerDir}; fetching it from ${releaseBase}`);
+			}
 			if (useLocalInstaller && !artifactsBase && !noDownload) {
 				// A local-only installer has no public source URL; without the CDN the document
-				// would point clients at a release asset that is deliberately not published.
+				// would point clients at a release asset that may deliberately not be published.
 				throw new Error(`${fileName} is a local file with no public source; --artifacts-base is required to mirror it`);
 			}
 			const entry = {

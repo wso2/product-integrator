@@ -19,7 +19,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import styled from "@emotion/styled";
 import { Codicon, ProgressRing, ThemeColors } from "@wso2/ui-toolkit";
-import { Project, WICommandIds } from "@wso2/wso2-platform-core";
+import type { Project } from "@wso2/wso2-cloud-client";
+import { WICommandIds } from "@wso2/wso2-platform-core";
 import {
     BackButton,
     FormBody,

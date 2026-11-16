@@ -105,6 +105,26 @@ def find_unreachable(entries):
                 break
 
 
+def insert_position(entries, selector: str) -> int:
+    """Where a NEW entry for `selector` belongs: just above the first entry that would otherwise
+    shadow it, or at the end when nothing would.
+
+    Appending blindly puts a new line below a catch-all such as '*' or '5.x', and the writer then has
+    to refuse its own entry with the index editable only by hand. Prepending blindly lets a broad
+    line shadow a pinned hotfix placed above it on purpose. An exact entry is skipped the same way
+    find_unreachable skips it, and a range (no probe version) is appended."""
+    probe = sample_version(selector)
+    if probe is None:
+        return len(entries)
+    for pos, entry in enumerate(entries):
+        other = (entry.get("match") or "").strip()
+        if is_exact(other) and other != selector.strip():
+            continue
+        if matches_selector(probe, other):
+            return pos
+    return len(entries)
+
+
 if __name__ == "__main__":
     # Self-check vectors, runnable anywhere: python3 update_index_common.py
     assert compare_versions("5.1.3-a1", "5.1.3") < 0
@@ -118,4 +138,8 @@ if __name__ == "__main__":
     assert list(find_unreachable([{"match": ">=5.0.0 <6.0.0"}, {"match": "5.1.x"}])) \
         == [(1, "5.1.x", ">=5.0.0 <6.0.0")]
     assert list(find_unreachable([{"match": "5.1.0"}, {"match": "5.1.x"}])) == []
+    assert insert_position([{"match": "5.0.x"}, {"match": "*"}], "5.1.x") == 1
+    assert insert_position([{"match": "5.1.3"}, {"match": "5.x"}], "5.1.x") == 1
+    assert insert_position([{"match": "5.0.x"}], "5.1.x") == 1
+    assert insert_position([{"match": "5.1.x"}, {"match": "*"}], ">=5.0.0 <6.0.0") == 2
     print("update_index_common: all self-checks pass")

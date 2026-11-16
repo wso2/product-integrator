@@ -16,53 +16,47 @@
  * under the License.
  */
 
-import { WICommandIds, type ICmdParamsBase } from "@wso2/wso2-platform-core";
+import { isCloudError } from "@wso2/wso2-cloud-client";
+import { type ICmdParamsBase, WICommandIds } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, commands, window } from "vscode";
-import * as vscode from "vscode";
-import { ext } from '../../extensionVariables';
-import { webviewStateStore } from "../stores/webview-state-store";
-import { isRpcActive, setExtensionName } from "./cmd-utils";
+import { BridgeLayer } from "../../BridgeLayer";
+import { ext } from "../../extensionVariables";
+import { handleCloudError } from "../platform/error-handler";
+import { isPlatformReady, setExtensionName } from "./cmd-utils";
 
 export function signInCommand(context: ExtensionContext) {
 	context.subscriptions.push(
-		commands.registerCommand(WICommandIds.SignIn, async (params: ICmdParamsBase) => {
+		commands.registerCommand(WICommandIds.SignIn, async (params: ICmdParamsBase & { reselectOrganization?: boolean }) => {
 			setExtensionName(params?.extName);
 			try {
-				isRpcActive(ext);
-				// Cancel any pending session creation from accounts menu
-				ext.authProvider?.cancelPendingSessionCreation();
-				ext.log("Signing in to WSO2 Integrator");
-				const callbackUrl = await vscode.env.asExternalUri(vscode.Uri.parse(`${vscode.env.uriScheme}://wso2.wso2-integrator/signin`));
-
-				ext.log("Generating WSO2 Integrator login URL for " + callbackUrl.toString());
-				const loginUrl = await window.withProgress({ title: "Generating Login URL...", location: ProgressLocation.Notification }, async () => {
-					if (webviewStateStore.getState().state?.extensionName === "Devant") {
-						return ext.clients.rpcClient.getDevantSignInUrl({ callbackUrl: callbackUrl.toString() });
-					}
-					return ext.clients.rpcClient.getSignInUrl({ callbackUrl: callbackUrl.toString() });
-				});
-
-				if (loginUrl) {
-					await vscode.env.openExternal(vscode.Uri.parse(loginUrl));
-				} else {
-					ext.logError("Unable to open external link for authentication.", new Error("No login URL"));
-					window.showErrorMessage("Unable to open external link for authentication.");
+				isPlatformReady(ext);
+				if (!ext.authProvider) {
+					throw new Error("The cloud layer is not active yet.");
 				}
-			} catch (error: any) {
-				ext.logError(`Error while signing in to WSO2 Integrator. ${error?.message}${error?.cause ? `\nCause: ${error.cause.message}` : ""}`, error as Error);
-				if (error instanceof Error) {
-					window.showErrorMessage(error.message);
+				ext.log("Signing in to WSO2 Cloud");
+				BridgeLayer.notifySignInInitiated();
+				const session = await window.withProgress(
+					{ title: "Waiting for the sign-in in your browser...", location: ProgressLocation.Notification, cancellable: true },
+					async (_progress, token) => {
+						token.onCancellationRequested(() => ext.authProvider?.cancelPendingSignIn());
+						return ext.authProvider!.signIn({ reselectOrganization: params?.reselectOrganization });
+					},
+				);
+				window.showInformationMessage(`Signed in to WSO2 Cloud as ${session.user.email ?? session.user.displayName} (${session.org.name})`);
+			} catch (error) {
+				if (isCloudError(error) && error.code === "login_cancelled") {
+					ext.log("Sign-in cancelled");
+					return;
 				}
+				ext.logError("Error while signing in to WSO2 Cloud", error as Error);
+				handleCloudError(error, "Sign in failed. Please check the logs for more details.");
 				// Re-throw so that callers who await executeCommand (e.g. the SSO flow
-				// in the migration wizard) receive the failure immediately instead of
-				// waiting for the 120-second sign-in timeout.
+				// in the migration wizard) receive the failure immediately.
 				throw error;
 			}
 		}),
-		// Register cancellation command
 		commands.registerCommand(WICommandIds.CancelSignIn, () => {
-			console.log("Cancelling pending session creation via command");
-			ext.authProvider?.cancelPendingSessionCreation();
-		})
+			ext.authProvider?.cancelPendingSignIn();
+		}),
 	);
 }

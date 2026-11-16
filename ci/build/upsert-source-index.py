@@ -21,7 +21,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from update_index_common import find_unreachable  # noqa: E402
+from update_index_common import find_unreachable, insert_position  # noqa: E402
 
 
 def main():
@@ -49,10 +49,12 @@ def main():
             entry["manifest"] = args.manifest      # same line, newer document
             break
     else:
-        # Appended, not prepended: first match wins, so inserting at the front would let this line
-        # shadow a more specific entry (a pinned hotfix) placed above it on purpose.
-        entries.append({"match": args.selector, "manifest": args.manifest})
-        position = len(entries) - 1
+        # Neither prepended nor appended: first match wins, so the front would let this line shadow
+        # a pinned hotfix placed above it on purpose, and the end would put it below a catch-all
+        # such as '*' and make it unreachable. It goes just above the first entry that would
+        # shadow it (shared rule, see update_index_common).
+        position = insert_position(entries, args.selector)
+        entries.insert(position, {"match": args.selector, "manifest": args.manifest})
 
     # An unreachable entry looks published and never arrives, so fail and let the operator reorder.
     # Matching mirrors the update server's semantics (shared module), ranges included.

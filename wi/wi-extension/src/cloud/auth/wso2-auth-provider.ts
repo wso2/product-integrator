@@ -16,427 +16,301 @@
  * under the License.
  */
 
-import { WICommandIds, type AuthState, type UserInfo } from "@wso2/wso2-platform-core";
-import {
-	type AuthenticationProvider,
-	type AuthenticationProviderAuthenticationSessionsChangeEvent,
-	type AuthenticationProviderSessionOptions,
-	type AuthenticationSession,
-	commands,
-	Disposable,
-	EventEmitter,
-	type SecretStorage,
-	window,
-} from "vscode";
-import type { ChoreoRPCClient } from "../choreo-cli-rpc";
+import type { CloudOrganization, AuthState as WICloudAuthState } from "@wso2/wi-core";
+import { type AuthState, type Organization, type PlatformSession, type StoredSession, isCloudError } from "@wso2/wso2-cloud-client";
+import { PROMPT_LOGIN_SCOPE, WSO2_CLOUD_AUTH_PROVIDER_ID, scopeForEnv } from "@wso2/wso2-cloud-client/vscode";
+import { Disposable, EventEmitter, authentication, window } from "vscode";
+import type { WIPlatform } from "../platform/platform-client";
 import { contextStore } from "../stores/context-store";
-import { dataCacheStore } from "../stores/data-cache-store";
 
-export const WSO2_AUTH_PROVIDER_ID = "wso2-wi";
-const WSO2_SESSIONS_SECRET_KEY = `${WSO2_AUTH_PROVIDER_ID}.sessions`;
+/** The id other extensions pass to `vscode.authentication.getSession`. */
+export const WSO2_AUTH_PROVIDER_ID = WSO2_CLOUD_AUTH_PROVIDER_ID;
 
-interface AuthProviderDeps {
-	rpcClient: ChoreoRPCClient;
+interface AuthStateDeps {
+	platform: WIPlatform;
 	log: (msg: string) => void;
 	logError: (msg: string, err?: Error) => void;
 }
 
-interface SessionData {
-	id: string;
-	accessToken: string;
-	account: {
-		id: string;
-		label: string;
-	};
-	scopes: string[];
-	userInfo: UserInfo;
-	region: "US" | "EU";
-}
+const SIGNED_OUT: AuthState = { session: null, status: "signed-out" };
 
-export class WSO2AuthenticationProvider implements AuthenticationProvider, Disposable {
-	private _sessionChangeEmitter = new EventEmitter<AuthenticationProviderAuthenticationSessionsChangeEvent>();
-	private _stateChangeEmitter = new EventEmitter<{ state: AuthState }>();
-	private _disposable: Disposable;
-	private _state: AuthState = { userInfo: null, region: "US" };
-	private _pendingSessionCreation: { resolve: (session: AuthenticationSession) => void; reject: (error: Error) => void; timeout: NodeJS.Timeout } | undefined;
+/**
+ * The sign-in state the extension's commands, stores and webviews read.
+ *
+ * The `wso2-cloud` authentication provider in `@wso2/wso2-cloud-client` owns
+ * the tokens; this holds the derived state (who is signed in, to which
+ * organization) and tells the rest of the extension when it changes.
+ */
+export class WIAuthState implements Disposable {
+	private _state: AuthState = SIGNED_OUT;
+	private initializing?: Promise<void>;
+	private readonly _stateChangeEmitter = new EventEmitter<{ state: AuthState }>();
+	private readonly _disposables: Disposable[] = [];
 
-	constructor(
-		private readonly secretStorage: SecretStorage,
-		private readonly deps: AuthProviderDeps,
-	) {
-		console.log("WSO2AuthenticationProvider initialized");
-		this._disposable = Disposable.from(
-			this._sessionChangeEmitter,
-			this._stateChangeEmitter
+	constructor(private readonly deps: AuthStateDeps) {
+		this._disposables.push(
+			this._stateChangeEmitter,
+			authentication.onDidChangeSessions((e) => {
+				if (e.provider.id === WSO2_AUTH_PROVIDER_ID) {
+					void this.initAuth();
+				}
+			}),
+		);
+		this._disposables.push(
+			new Disposable(
+				deps.platform.sessions.onDidChange((event) => {
+					if (event.reason === "expired" || event.reason === "signed-out") {
+						this.resetState(event.reason === "expired" ? "expired" : "signed-out");
+					}
+				}),
+			),
 		);
 	}
 
-	get onDidChangeSessions() {
-		return this._sessionChangeEmitter.event;
+	/** The current state. */
+	get state(): AuthState {
+		return this._state;
 	}
 
-	/**
-	 * Subscribe to auth state changes
-	 */
+	get session(): PlatformSession | null {
+		return this._state.session;
+	}
+
+	get org(): Organization | undefined {
+		return this._state.session?.org;
+	}
+
+	/** Whether there is a session to work with; a sign-in in progress keeps the one there is. */
+	get isLoggedIn(): boolean {
+		return (this._state.status === "signed-in" || this._state.status === "signing-in") && !!this._state.session;
+	}
+
+	/** Subscribe to state changes; the callback is called at once with the current state. */
 	public subscribe(callback: (store: { state: AuthState }) => void): () => void {
 		const disposable = this._stateChangeEmitter.event(callback);
-		// Call immediately with current state
 		callback({ state: this._state });
 		return () => disposable.dispose();
 	}
 
 	/**
-	 * Get the current state
+	 * Restores the state from the stored session on startup, or after the
+	 * provider changed. One at a time: a second call while one runs awaits it.
 	 */
-	public getState() {
-		return {
-			state: this._state,
-			resetState: this.resetState.bind(this),
-			loginSuccess: this.loginSuccess.bind(this),
-			logout: this.logout.bind(this),
-			initAuth: this.initAuth.bind(this),
-		};
-	}
-
-	/**
-	 * Get current auth state
-	 */
-	get state(): AuthState {
-		return this._state;
-	}
-
-	/**
-	 * Get the existing sessions
-	 */
-	public async getSessions(scopes?: readonly string[]): Promise<AuthenticationSession[]>;
-	public async getSessions(scopes: readonly string[] | undefined, options: AuthenticationProviderSessionOptions): Promise<AuthenticationSession[]>;
-	public async getSessions(scopes?: readonly string[], options?: AuthenticationProviderSessionOptions): Promise<AuthenticationSession[]> {
-		const allSessions = await this.readSessions();
-
-		if (scopes && scopes.length > 0) {
-			const sessions = allSessions.filter((session) => scopes.every((scope) => session.scopes.includes(scope)));
-			return sessions;
-		}
-
-		return allSessions;
-	}
-
-	/**
-	 * Cancel any pending session creation
-	 * This is called when user initiates a new sign-in while one is already pending
-	 */
-	public cancelPendingSessionCreation() {
-		if (this._pendingSessionCreation) {
-			console.log("Cancelling pending session creation");
-			clearTimeout(this._pendingSessionCreation.timeout);
-			const oldPending = this._pendingSessionCreation;
-			this._pendingSessionCreation = undefined;
-			oldPending.reject(new Error("Sign-in cancelled"));
-		}
-	}
-
-	/**
-	 * Create a new auth session by triggering the sign-in flow
-	 * This is called when user clicks "Sign in" in the Editor Accounts menu
-	 */
-	public async createSession(scopes: string[], options?: AuthenticationProviderSessionOptions): Promise<AuthenticationSession> {
-		console.log("Creating new auth session via the Editor Accounts menu");
-		const customOptions = options as any;
-		const platform = customOptions?.platform;
-
-		// Return a promise that will be resolved when login succeeds or timeout occurs
-		return new Promise<AuthenticationSession>((resolve, reject) => {
-			commands.executeCommand(WICommandIds.SignIn).then(undefined, (error) => {
-				console.error("Sign-in command failed:", error);
+	public initAuth(): Promise<void> {
+		if (!this.initializing) {
+			this.initializing = this.initAuthOnce().finally(() => {
+				this.initializing = undefined;
 			});
-
-			// Set up timeout
-			const timeout = setTimeout(() => {
-				console.log("Sign-in timeout reached");
-				if (this._pendingSessionCreation) {
-					this._pendingSessionCreation = undefined;
-					reject(new Error("Sign-in timeout: User did not complete authentication within 2 minutes"));
-				}
-			}, 2 * 60 * 1000); // 2 minutes
-
-			// Store the promise handlers so we can resolve/reject from loginSuccess
-			this._pendingSessionCreation = { resolve, reject, timeout };
-		});
-	}
-
-	/**
-	 * Reset state to initial values
-	 */
-	public resetState() {
-		this._state = { userInfo: null, region: "US" };
-		this._stateChangeEmitter.fire({ state: this._state });
-	}
-
-	/**
-	 * Handle successful login - updates state and stores session
-	 */
-	public async loginSuccess(userInfo: UserInfo, region: "US" | "EU") {
-		// Update local state
-		this._state = { userInfo, region };
-
-		// Update related stores
-		dataCacheStore.getState().setOrgs(userInfo.organizations);
-		contextStore.getState().refreshState();
-
-		// Store session in secure storage
-		const session = await this.storeSession(userInfo, region);
-
-		// Notify subscribers
-		this._stateChangeEmitter.fire({ state: this._state });
-
-		// Resolve pending session creation if there is one
-		if (this._pendingSessionCreation) {
-			clearTimeout(this._pendingSessionCreation.timeout);
-			this._pendingSessionCreation.resolve(session);
-			this._pendingSessionCreation = undefined;
 		}
+		return this.initializing;
 	}
 
-	/**
-	 * Handle logout - signs out from RPC and clears all state
-	 */
-	public async logout(silent = true, skipClearSessions = false) {
-		this.deps.log("Signing out from WSO2 Integrator");
+	private async initAuthOnce(): Promise<void> {
+		// A sign-in or sign-out while the session is read makes what was read stale: nothing of it
+		// is published, and the session is read again.
+		const sessions = this.deps.platform.sessions;
+		let generation: number;
+		do {
+			generation = sessions.sessionGeneration;
+			await this.restore(() => generation === sessions.sessionGeneration);
+		} while (generation !== sessions.sessionGeneration);
+	}
 
-		// Reset local state immediately so subscribers (e.g. the webview) are notified
-		// right away, before any potentially-slow async operations.
-		this.resetState();
-
-		// Clear VS Code session storage (unless already cleared by removeSession)
-		if (!skipClearSessions) {
-			try {
-				await this.clearSessions();
-			} catch (error) {
-				this.deps.logError("Error clearing sessions", error as Error);
-			}
-		}
-
-		// Tell the RPC server to sign out
+	private async restore(isCurrent: () => boolean): Promise<void> {
 		try {
-			await this.deps.rpcClient.signOut();
-		} catch (error) {
-			this.deps.logError("Error during RPC signOut", error as Error);
-		}
-
-		if (!silent) {
-			window.showInformationMessage("Successfully signed out from WSO2 account!");
-		}
-	}
-
-	/**
-	 * Initialize authentication on startup
-	 */
-	public async initAuth() {
-		try {
-			const userInfo = await this.deps.rpcClient.getUserInfo();
-			if (userInfo) {
-				const region = await this.deps.rpcClient.getCurrentRegion();
-				
-				if (!region) {
-					throw new Error("Region is not available or invalid");
+			const stored = await this.deps.platform.sessions.current();
+			if (!stored) {
+				const claims = await this.deps.platform.tokenSource.getClaims().catch((): undefined => undefined);
+				if (!isCurrent()) {
+					return;
 				}
-				
-				await this.loginSuccess(userInfo, region);
-				const contextStoreState = contextStore.getState().state;
-				if (contextStoreState.selected?.org) {
-					this.deps.rpcClient.changeOrgContext(contextStoreState.selected?.org?.id?.toString());
+				if (this.deps.platform.injected && claims) {
+					// The cloud editor's token is a session too, read from the environment.
+					this.setSession(
+						sessionFromClaims(this.deps.platform.environment.name, claims.sub, claims.email, claims.name, claims.picture, { id: claims.ouId, handle: claims.ouHandle, name: claims.ouName }, claims.exp),
+					);
+					await this.fillOrganization();
+					return;
 				}
-			} else {
-				this.resetState();
-				this.clearSessions();
+				this.resetState("signed-out");
+				return;
 			}
+			if (!this.deps.platform.sessions.isFresh(stored)) {
+				// Refresh now, so a stale token is not handed to the first call.
+				try {
+					await this.deps.platform.tokenSource.getAccessToken();
+				} catch (error) {
+					if (isCloudError(error) && (error.code === "unauthenticated" || error.code === "session_expired")) {
+						if (isCurrent()) {
+							this.resetState("expired");
+						}
+						return;
+					}
+					this.deps.logError("Could not refresh the WSO2 Cloud session; keeping it", error as Error);
+				}
+			}
+			// A refresh replaced the stored session; its expiry and claims are the ones to publish.
+			const current = (await this.deps.platform.sessions.current()) ?? stored;
+			if (!isCurrent()) {
+				return;
+			}
+			this.setSession(toPlatformSession(current));
+			await this.fillOrganization();
 		} catch (err) {
 			this.deps.logError("Error during auth initialization", err as Error);
-			this.resetState();
-			this.clearSessions();
-		}
-	}
-
-	/**
-	 * Store or update a session with user info and region
-	 * Called internally after successful RPC authentication
-	 */
-	private async storeSession(userInfo: UserInfo, region: "US" | "EU"): Promise<AuthenticationSession> {
-		// Remove any existing sessions first (single account support)
-		const existingSessions = await this.readSessions();
-		const removedSessions = [...existingSessions];
-
-		const sessionId = this.generateSessionId();
-		const sessionData: SessionData = {
-			id: sessionId,
-			accessToken: "rpc-authenticated", // Placeholder since RPC handles auth
-			account: {
-				label: userInfo.displayName || userInfo.userEmail,
-				id: userInfo.userId,
-			},
-			scopes: [],
-			userInfo,
-			region,
-		};
-
-		const session: AuthenticationSession = {
-			id: sessionData.id,
-			accessToken: sessionData.accessToken,
-			account: sessionData.account,
-			scopes: sessionData.scopes,
-		};
-
-		await this.storeSessions([session], sessionData);
-
-		this._sessionChangeEmitter.fire({
-			added: [session],
-			removed: removedSessions,
-			changed: []
-		});
-
-		return session;
-	}
-
-	/**
-	 * Remove an existing session
-	 * This is called when user signs out from VS Code's Accounts menu
-	 */
-	public async removeSession(sessionId: string): Promise<void> {
-		const allSessions = await this.readSessions();
-		const sessionIdx = allSessions.findIndex((s) => s.id === sessionId);
-		const session = allSessions[sessionIdx];
-		if (!session) {
-			return;
-		}
-
-		allSessions.splice(sessionIdx, 1);
-		await this.storeSessions(allSessions);
-		this._sessionChangeEmitter.fire({ added: [], removed: [session], changed: [] });
-
-		// Trigger full logout flow (skipClearSessions=true to avoid loop)
-		await this.logout(false, true);
-	}
-
-	/**
-	 * Remove all sessions
-	 */
-	public async clearSessions(): Promise<void> {
-		const allSessions = await this.readSessions();
-		if (allSessions.length === 0) {
-			return;
-		}
-
-		await this.secretStorage.delete(WSO2_SESSIONS_SECRET_KEY);
-
-		this._sessionChangeEmitter.fire({ added: [], removed: allSessions, changed: [] });
-	}
-
-	/**
-	 * Get session data including userInfo and region
-	 */
-	public async getSessionData(sessionId?: string): Promise<SessionData | undefined> {
-		const sessions = await this.readSessionsData();
-		if (sessionId) {
-			return sessions.find((s) => s.id === sessionId);
-		}
-		// Return the first session if no ID is provided (single account support)
-		return sessions[0];
-	}
-
-	/**
-	 * Dispose the provider
-	 */
-	public async dispose() {
-		this._disposable.dispose();
-	}
-
-	/**
-	 * Get the user info from stored session (for backward compatibility)
-	 */
-	public getUserInfo(): UserInfo | null {
-		return this._state.userInfo;
-	}
-
-	/**
-	 * Get the region from stored session (for backward compatibility)
-	 */
-	public getRegion(): "US" | "EU" {
-		return this._state.region;
-	}
-
-	/**
-	 * Read sessions from secret storage
-	 */
-	private async readSessions(): Promise<AuthenticationSession[]> {
-		try {
-			const sessionsJson = await this.secretStorage.get(WSO2_SESSIONS_SECRET_KEY);
-			if (!sessionsJson) {
-				return [];
+			if (isCurrent()) {
+				this.resetState("signed-out");
 			}
-
-			const sessionData: SessionData[] = JSON.parse(sessionsJson);
-			return sessionData.map((data) => ({
-				id: data.id,
-				accessToken: data.accessToken,
-				account: data.account,
-				scopes: data.scopes,
-			}));
-		} catch (e) {
-			this.deps.logError("Error reading sessions", e as Error);
-			return [];
 		}
 	}
 
 	/**
-	 * Store sessions to secret storage
+	 * Signs in through the `wso2-cloud` provider, which opens the browser.
+	 * `reselectOrganization` asks the identity provider to let the person pick
+	 * an organization again, which is how an organization is switched. The
+	 * session there is stays until the new one is stored, which revokes it; a
+	 * sign-in given up on leaves the person where they were.
 	 */
-	private async storeSessions(sessions: readonly AuthenticationSession[], newSessionData?: SessionData): Promise<void> {
+	public async signIn(options: { reselectOrganization?: boolean } = {}): Promise<PlatformSession> {
+		const previous = this._state;
+		this._state = { ...previous, status: "signing-in" };
+		this._stateChangeEmitter.fire({ state: this._state });
 		try {
-			const existingSessions = await this.readSessionsData();
-			let updatedSessions: SessionData[];
+			const scopes = [scopeForEnv(this.deps.platform.environment.name)];
+			if (options.reselectOrganization) {
+				scopes.push(PROMPT_LOGIN_SCOPE);
+			}
+			// The provider is this extension's own: asking it directly skips the consent
+			// prompt VS Code shows when an extension asks a provider for a new session.
+			await this.deps.platform.auth.createSession(scopes);
+			await this.initAuth();
+			if (!this._state.session) {
+				throw new Error("The sign-in completed but no session was stored.");
+			}
+			return this._state.session;
+		} catch (error) {
+			// Back to where it was: the session there was, or none.
+			if (this._state.status === "signing-in") {
+				this._state = previous.session ? { session: previous.session, status: "signed-in" } : { session: null, status: previous.status === "signing-in" ? "signed-out" : previous.status };
+				this._stateChangeEmitter.fire({ state: this._state });
+			}
+			throw error;
+		}
+	}
 
-			if (newSessionData) {
-				// Add or update session
-				const existingIndex = existingSessions.findIndex((s) => s.id === newSessionData.id);
-				if (existingIndex >= 0) {
-					updatedSessions = [...existingSessions];
-					updatedSessions[existingIndex] = newSessionData;
-				} else {
-					updatedSessions = [...existingSessions, newSessionData];
+	public cancelPendingSignIn(): void {
+		this.deps.platform.auth.cancelPendingLogin();
+	}
+
+	/** Ends the session, telling the identity provider to revoke it. */
+	public async logout(silent = true): Promise<void> {
+		this.deps.log("Signing out from WSO2 Cloud");
+		this.resetState("signed-out");
+		try {
+			await this.deps.platform.sessions.signOut({ revoke: true });
+		} catch (error) {
+			this.deps.logError("Error while signing out", error as Error);
+		}
+		if (!silent) {
+			window.showInformationMessage("Signed out of WSO2 Cloud.");
+		}
+	}
+
+	public resetState(status: AuthState["status"] = "signed-out"): void {
+		this._state = status === "signed-in" && this._state.session ? this._state : { session: null, status };
+		if (!this._state.session) {
+			// Nothing of the person who left stays selected.
+			contextStore.getState().resetState();
+		}
+		this._stateChangeEmitter.fire({ state: this._state });
+	}
+
+	private setSession(session: PlatformSession): void {
+		const previous = this._state.session;
+		// A refreshed token is the same person in the same organization: the projects listed stay right.
+		const samePerson = previous?.user.userId === session.user.userId && previous?.org.id === session.org.id && previous?.env === session.env;
+		// Another organization or person, or a selection restored from another organization's session:
+		// nothing selected for that one stays, and it is gone before the session is announced.
+		const restoredSelection = contextStore.getState().state.selected;
+		if (!samePerson && (previous || (restoredSelection && restoredSelection.orgHandle !== session.org.handle))) {
+			contextStore.getState().resetState();
+		}
+		this._state = { session, status: "signed-in" };
+		this._stateChangeEmitter.fire({ state: this._state });
+		if (!samePerson) {
+			void contextStore.getState().refreshState();
+		}
+	}
+
+	/** Fills in the organization's uuid from the API, which the subscription routes take. */
+	private async fillOrganization(): Promise<void> {
+		const session = this._state.session;
+		if (!session || session.org.uuid) {
+			return;
+		}
+		try {
+			const org = await this.deps.platform.cloud.orgs.current();
+			if (org && this._state.session === session) {
+				const filled: PlatformSession = { ...session, org: { ...session.org, uuid: org.uuid, numericId: org.numericId } };
+				await this.deps.platform.sessions.update((stored) => ({ ...stored, org: filled.org }));
+				if (this._state.session !== session) {
+					return; // signed out, or another session came, while it was saved
 				}
-			} else {
-				// Filter out removed sessions
-				const sessionIds = sessions.map((s) => s.id);
-				updatedSessions = existingSessions.filter((s) => sessionIds.includes(s.id));
+				this._state = { session: filled, status: "signed-in" };
+				this._stateChangeEmitter.fire({ state: this._state });
 			}
-
-			await this.secretStorage.store(WSO2_SESSIONS_SECRET_KEY, JSON.stringify(updatedSessions));
-		} catch (e) {
-			this.deps.logError("Error storing sessions", e as Error);
+		} catch (error) {
+			this.deps.logError("Could not read the organization from the platform", error as Error);
 		}
 	}
 
-	/**
-	 * Read full session data including userInfo and region
-	 */
-	private async readSessionsData(): Promise<SessionData[]> {
-		try {
-			const sessionsJson = await this.secretStorage.get(WSO2_SESSIONS_SECRET_KEY);
-			if (!sessionsJson) {
-				return [];
-			}
+	/** The auth state as the webviews read it: a `userInfo` with the session's one organization. */
+	public webviewAuthState(): WICloudAuthState {
+		const session = this._state.session;
+		if (!session) {
+			return { userInfo: null, status: this._state.status };
+		}
+		const org: CloudOrganization = { id: session.org.id, uuid: session.org.uuid, handle: session.org.handle, name: session.org.name };
+		return {
+			status: this._state.status,
+			selectedOrgId: org.id,
+			userInfo: {
+				userId: session.user.userId,
+				displayName: session.user.displayName,
+				userEmail: session.user.email ?? "",
+				userProfilePictureUrl: session.user.pictureUrl,
+				organizations: [org],
+			},
+		};
+	}
 
-			return JSON.parse(sessionsJson);
-		} catch (e) {
-			this.deps.logError("Error reading session data", e as Error);
-			return [];
+	public dispose(): void {
+		for (const disposable of this._disposables) {
+			disposable.dispose();
 		}
 	}
+}
 
-	/**
-	 * Generate a session ID
-	 */
-	private generateSessionId(): string {
-		return `wso2-${Date.now()}-${Math.random().toString(36).substring(2)}`;
-	}
+export function toPlatformSession(stored: StoredSession): PlatformSession {
+	return sessionFromClaims(stored.env, stored.account.id, stored.claims.email, stored.claims.name ?? stored.account.label, stored.claims.picture, stored.org, undefined, stored.tokens.expiresAt, stored.obtainedVia);
+}
+
+function sessionFromClaims(
+	env: PlatformSession["env"],
+	userId: string,
+	email: string | undefined,
+	name: string | undefined,
+	picture: string | undefined,
+	org: Organization,
+	exp?: number,
+	expiresAt?: string,
+	obtainedVia: PlatformSession["obtainedVia"] = "injected",
+): PlatformSession {
+	return {
+		user: { userId, email, displayName: name ?? email ?? userId, pictureUrl: picture },
+		org,
+		env,
+		expiresAt: expiresAt ?? (exp ? new Date(exp * 1000).toISOString() : new Date().toISOString()),
+		obtainedVia,
+	};
 }

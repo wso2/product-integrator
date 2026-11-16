@@ -40,7 +40,8 @@
       "id": "jre",
       "kind": "runtime",
       "versionKey": "ballerina.jre.version",
-      "url": "https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/{version}/ballerina-jre-{jrePlatform}-{version}.zip",
+      "url": "https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/{tag}/ballerina-jre-{jrePlatform}-{version}.zip",
+      "tag": "{version}",
       "recommended": true
     },
     {
@@ -59,7 +60,7 @@
       "versionKey": "ballerina.extension.version",
       "url": "https://open-vsx.org/api/wso2/ballerina/{version}/file/wso2.ballerina-{version}.vsix",
       "sources": {
-        "github": "https://github.com/wso2/ballerina-vscode/releases/download/v{version}/ballerina-{version}.vsix"
+        "github": "https://github.com/wso2/ballerina-vscode/releases/download/{tag}/ballerina-{version}.vsix"
       },
       "requires": {
         "app": ">={appVersion}",
@@ -73,7 +74,7 @@
       "versionKey": "wso2.micro-integrator.extension.version",
       "url": "https://open-vsx.org/api/wso2/micro-integrator/{version}/file/wso2.micro-integrator-{version}.vsix",
       "sources": {
-        "github": "https://github.com/wso2/mi-vscode/releases/download/v{version}/micro-integrator-{version}.vsix"
+        "github": "https://github.com/wso2/mi-vscode/releases/download/{tag}/micro-integrator-{version}.vsix"
       },
       "requires": {
         "app": ">={appVersion}",

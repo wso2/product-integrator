@@ -18,8 +18,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
-import { GetGitMetadataResp, type WICloudFormContext, type WICloudSubmitComponentsReq } from "@wso2/wi-core";
-import { buildGitURL, type CreateComponentReq, DevantScopes, getTypeOfIntegrationType, type ICreateNewIntegrationCmdIntegrations, makeURLSafe, resolveIntegrationType, WICommandIds } from "@wso2/wso2-platform-core";
+import { GetGitMetadataResp, type WICloudCreateIntegrationParam, type WICloudFormContext, type WICloudSubmitComponentsReq } from "@wso2/wi-core";
+import { buildGitURL, DevantScopes, type ICreateNewIntegrationCmdIntegrations, makeURLSafe, resolveIntegrationType, WICommandIds } from "@wso2/wso2-platform-core";
 import { useVisualizerContext } from "../../contexts";
 import { useCloudContext } from "../../providers";
 import {
@@ -257,27 +257,19 @@ function ComponentForm() {
 					.filter(({ state, integration }) =>
 						state.selected && !integration.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY)
 					)
-					.map(({ state }) => {
-						const mappedType = getTypeOfIntegrationType(state.selectedIntegrationType);
-
-						return {
+					.map(
+						({ state }): WICloudCreateIntegrationParam => ({
 							branch,
 							buildPackLang: params!.buildPackLang,
 							componentDir: state.fsPath,
 							displayName: state.displayName,
 							repoUrl,
-							projectId: params!.project.id,
-							projectHandle: params!.project.handler,
-							type: mappedType.type,
-							componentSubType: mappedType.subType,
+							integrationType: state.selectedIntegrationType,
 							gitProvider,
 							gitCredRef: credential,
 							name: makeURLSafe(state.displayName),
-							orgId: params!.org.id?.toString(),
-							orgUUID: params!.org.uuid,
-							originCloud: "devant",
-						} as CreateComponentReq;
-					}),
+						}),
+					),
 			};
 
 			const created = await wsClient.submitComponents(req);

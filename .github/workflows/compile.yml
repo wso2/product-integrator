@@ -4,13 +4,13 @@ on:
   workflow_call:
     inputs: 
       # Runner for the Linux `compile` job below. Three values are in use today:
-      #   ubuntu-latest        GitHub-hosted (the default, and what pr-ci.yml uses)
+      #   ubuntu-24.04         GitHub-hosted (the default, and what pr-ci.yml uses)
       #   codebuild            AWS CodeBuild, expanded to the run-scoped project label in `runs-on`
       #   k8s-default-runners  the self-hosted Kubernetes runner set
       # Anything else is handed to `runs-on` verbatim, so another label needs no change here.
       runner:
-        description: 'Runner for the Linux compile job: ubuntu-latest, codebuild, k8s-default-runners, or any other runner label.'
-        default: 'ubuntu-latest'
+        description: 'Runner for the Linux compile job: ubuntu-24.04, codebuild, k8s-default-runners, or any other runner label.'
+        default: 'ubuntu-24.04'
         required: false
         type: string
       build_packed_installers:
@@ -64,7 +64,7 @@ permissions:
 jobs:
   resolve-versions:
     name: Resolve Component Versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       ballerina_version: ${{ steps.read-versions.outputs.ballerina_version }}
       ballerina_extension_version: ${{ steps.read-versions.outputs.ballerina_extension_version }}
@@ -76,14 +76,14 @@ jobs:
       ballerina_jre_version: ${{ steps.read-versions.outputs.ballerina_jre_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
 
       - name: Download stamped versions
         if: ${{ inputs.versions_artifact != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ${{ inputs.versions_artifact }}
           path: .
@@ -100,7 +100,7 @@ jobs:
 
       - name: Upload stamped versions
         if: ${{ inputs.versions_artifact == '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: versions
           path: |
@@ -164,7 +164,7 @@ jobs:
     needs: resolve-versions
     if: ${{ inputs.build_packed_installers == true }}
     name: Validate Inputs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Validate required inputs
         run: |
@@ -190,10 +190,10 @@ jobs:
     needs: resolve-versions
     if: ${{ inputs.build_packed_installers == true }}
     name: Package Ballerina runtime
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
@@ -210,10 +210,10 @@ jobs:
           cmp out/ballerina-runtime-*.zip out-check/ballerina-runtime-*.zip
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ballerina-runtime
-          # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
+          # Consumed within this run only (installers, publish-update-source, publish-github-release); 7 days covers re-runs.
           retention-days: 7
           path: out/ballerina-runtime-*.zip
           compression-level: 0
@@ -224,10 +224,10 @@ jobs:
     needs: resolve-versions
     if: ${{ inputs.build_packed_installers == true }}
     name: Package ICP
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
@@ -243,10 +243,10 @@ jobs:
           cmp out/icp-*.zip out-check/icp-*.zip
 
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: icp
-          # Consumed within this run only (installers, publish-update-source); 7 days covers re-runs.
+          # Consumed within this run only (installers, publish-update-source, publish-github-release); 7 days covers re-runs.
           retention-days: 7
           path: out/icp-*.zip
           compression-level: 0
@@ -260,7 +260,7 @@ jobs:
     # A timeout here is self-perpetuating: the job is cancelled before the post-step that SAVES the
     # caches, so the next run starts cold and times out again. That mechanism is unchanged by the
     # bump, so keep the ceiling generous. 45 was too tight even for codebuild; raised 90 -> 120 when
-    # ubuntu-latest became the default, since it is slower and now also builds the installers.
+    # ubuntu-24.04 became the default, since it is slower and now also builds the installers.
     timeout-minutes: 120
     # `codebuild` is an alias rather than a label: CodeBuild matches on a run-scoped project name,
     # so it is expanded here. Every other value is already a runner label and passes through.
@@ -272,7 +272,7 @@ jobs:
       run:
         working-directory: lib/vscode
     steps:
-      # ubuntu-latest ships ~14 GB free and the installer tail stages Ballerina + ICP + JRE three
+      # ubuntu-24.04 ships ~14 GB free and the installer tail stages Ballerina + ICP + JRE three
       # times over (deb/rpm/tar). Reclaims ~19 GB. tool-cache is kept (Node and Java come from it)
       # and swap is kept (the gulp build runs an 8 GB heap); large-packages is slow for what it
       # returns. Not needed on the larger codebuild and self-hosted Kubernetes runners, and the
@@ -290,7 +290,7 @@ jobs:
           swap-storage: false
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           submodules: recursive
@@ -325,22 +325,23 @@ jobs:
             exit 1
           fi    
 
+      # Pinned rather than read from lib/vscode/.nvmrc, which lags the current Node.js 24 release.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version-file: lib/vscode/.nvmrc
+          node-version: 24.22.1
           cache: npm
           cache-dependency-path: lib/vscode/package-lock.json
 
       - name: Setup Rush
-        uses: gigara/setup-rush@v1.2.0
+        uses: gigara/setup-rush@7ba3446572d15f5eacc85de383ad9679dfb7223c # v1.2.0
         with:
           pnpm: 10.11.0
 
       # TODO: Enable TypeScript cache when stable    
       # - name: Cache TypeScript compilation
       #   id: cache-typescript
-      #   uses: actions/cache@v4
+      #   uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       #   with:
       #     path: |
       #       lib/vscode/out
@@ -353,7 +354,7 @@ jobs:
 
       - name: Cache built-in extensions
         id: cache-extensions
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             lib/vscode/.build/builtInExtensions
@@ -376,7 +377,7 @@ jobs:
             extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-
 
       - name: Cache Rust toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ~/.cargo/bin/
@@ -389,7 +390,7 @@ jobs:
 
       - name: Cache CLI compilation
         id: cache-cli
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             lib/vscode/cli/target/
@@ -398,7 +399,7 @@ jobs:
             cli-${{ runner.os }}-
 
       - name: Cache Linux sysroots
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             lib/vscode/.build/sysroots
@@ -441,7 +442,7 @@ jobs:
   
       - name: Fetch prebuilt Code package from cache
         id: cache-vscode
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: lib/vscode-reh-web-*
           key: vscode-reh-package-v1-${{ inputs.product_flavor || 'integrator' }}-${{ steps.vscode-rev.outputs.rev }}-${{ hashFiles('patches/*.diff', 'ci/build/update-product.sh', 'lib/vscode/package.json') }}
@@ -478,12 +479,43 @@ jobs:
           MI_VSIX_PATH=$(./ci/download-vsix.sh "wso2/mi-vscode" "${{ needs.resolve-versions.outputs.mi_extension_version }}" "micro-integrator-${{ needs.resolve-versions.outputs.mi_extension_version }}.vsix" "$PWD" "${{ needs.resolve-versions.outputs.mi_extension_tag }}")
           echo "MI_VSIX_PATH=${MI_VSIX_PATH}" >> "$GITHUB_ENV"
 
+      # The GitHub-release extensions this build bundles, for publish-github-release to publish as
+      # they are (generate-update-manifest.mjs --component-files). Fetching them again there, after
+      # every installer is built, fails when a rolling upstream release (wso2/ballerina-vscode's
+      # `nightly`) has moved on in the meantime. Laid out as <component id>/<file>, as the generator
+      # fetches them. Open VSX downloads are versioned and immutable, so they are fetched there.
+      - name: Stage the bundled GitHub-release extensions
+        id: bundled-extensions
+        if: ${{ inputs.build_packed_installers == true && inputs.publish_core == true && (env.BALLERINA_VSIX_PATH != '' || env.MI_VSIX_PATH != '') }}
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+          stage() {
+            [ -n "$2" ] || return 0
+            mkdir -p "bundled-extensions/$1"
+            cp "lib/vscode/$2" "bundled-extensions/$1/"
+            ls -l "bundled-extensions/$1/"
+          }
+          stage wso2.ballerina "${BALLERINA_VSIX_PATH:-}"
+          stage wso2.micro-integrator "${MI_VSIX_PATH:-}"
+
+      - name: Upload the bundled GitHub-release extensions
+        if: ${{ steps.bundled-extensions.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bundled-github-extensions
+          path: bundled-extensions/
+          if-no-files-found: error
+          # Consumed within this run only (publish-github-release); 7 days covers re-runs.
+          retention-days: 7
+
       # Deliberately after the cache steps: a timestamped version in
       # hashFiles('ci/build/component-versions.properties') would bust the extensions cache every run.
       # This also lands before `rush build`, so the .vsix filename, product.json and the installer
       # names all carry the same stamp.
       - name: Download stamped versions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ${{ inputs.versions_artifact != '' && inputs.versions_artifact || 'versions' }}
           path: .
@@ -513,22 +545,25 @@ jobs:
           done
 
       - name: Setup WI
-        uses: gigara/setup-rush@v1.2.0
+        uses: gigara/setup-rush@7ba3446572d15f5eacc85de383ad9679dfb7223c # v1.2.0
 
       - name: Build WI extension
         working-directory: .
         env:
-          # The wso2-integrator build downloads Choreo CLI binaries from the GitHub API
-          # (scripts/download-choreo-cli.js). Without a token those calls are unauthenticated
-          # and hit the 60 req/hour limit -> "HTTP 403: rate limit exceeded". Authenticate to
-          # raise the limit to 5000/hour, matching the other steps in this job.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Read by external/wso2-vscode-extensions/workspaces/common-libs/scripts/package-vsix.js
           # to decide whether to `vsce package --pre-release`. This is the only place that flag is
           # set, so the vsix's embedded pre-release state always matches this input.
           isPreRelease: ${{ inputs.is_prerelease }}
+          # The Copilot backends the Copilot token exchange may send the WSO2 Cloud token to; built into the bundle.
+          COPILOT_ROOT_URL: ${{ secrets.COPILOT_ROOT_URL }}
+          COPILOT_STAGE_ROOT_URL: ${{ secrets.COPILOT_STAGE_ROOT_URL }}
+          COPILOT_DEV_ROOT_URL: ${{ secrets.COPILOT_DEV_ROOT_URL }}
         run: |
           node common/scripts/install-run-rush.js build --verbose
+
+      - name: WI extension unit tests
+        working-directory: wi/wi-extension
+        run: node ../../common/scripts/install-run-rushx.js test:unit
 
       - name: Install dependencies
         env:
@@ -630,7 +665,7 @@ jobs:
       # (build.yml, publish-github-release) so downstream builds reuse these binaries.
       - name: Upload Linux core
         if: ${{ inputs.build_packed_installers == true && inputs.publish_core == true }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: core-linux-x64
           path: lib/artifacts/vscode-linux-x64.tar.gz
@@ -687,21 +722,21 @@ jobs:
       # it), and it is the only record of which package versions a given build shipped.
       - name: Upload pre-bundled Ballerina packages
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ballerina-packages
           path: ballerina-packages
           if-no-files-found: error
       - name: Download Ballerina runtime
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ballerina-runtime
           path: ballerina-runtime
 
       - name: Download ICP
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: icp
           path: icp-package
@@ -726,7 +761,7 @@ jobs:
 
       - name: Upload Deb artifacts
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Product-Integrator-DEB
           path: |
@@ -753,7 +788,7 @@ jobs:
           cd ${ROOT_DIR}
       - name: Upload RPM artifacts
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Product-Integrator-RPM
           path: |
@@ -778,14 +813,14 @@ jobs:
           ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION vscode-linux-x64.tar.gz "$ICP_ZIP" jre.zip $INTEGRATOR_VERSION
           cd ${ROOT_DIR}
       # Permanent diagnostic: the installer tail is the job's disk high-water mark, and headroom on
-      # ubuntu-latest is thin. always() so the numbers are there on the run that runs out.
+      # ubuntu-24.04 is thin. always() so the numbers are there on the run that runs out.
       - name: Report disk usage after packaging
         if: ${{ always() && inputs.build_packed_installers == true }}
         run: df -h
 
       - name: Upload TAR artifacts
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Product-Integrator-TAR
           path: |
@@ -794,7 +829,7 @@ jobs:
         
       - name: cosign-installer
         if: ${{ inputs.build_packed_installers == true}}
-        uses: sigstore/cosign-installer@v3.5.0
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
       - name: Sign the deb, rpm installers
         if: ${{ inputs.build_packed_installers == true}}
         run: |
@@ -841,7 +876,7 @@ jobs:
 
       - name: Upload Signatures and Hashes for deb installer
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Signatures-and-Hashes-DEB
           path: |
@@ -852,7 +887,7 @@ jobs:
         
       - name: Upload Signatures and Hashes for rpm installer
         if: ${{ inputs.build_packed_installers == true}}
-        uses: actions/upload-artifact@v4  
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Signatures-and-Hashes-RPM
           path: |
@@ -934,7 +969,7 @@ jobs:
 
       - name: Upload Linux artifacts (only Integrator)
         if: ${{ inputs.build_packed_installers == false && github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: artifacts-linux
           path: |
@@ -943,7 +978,7 @@ jobs:
 
       - name: Upload compilation artifact
         if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: compilation
           path: lib/compilation.tar.gz
@@ -951,7 +986,7 @@ jobs:
 
       - name: Upload WI extension VSIX
         if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wi-extension-vsix
           path: wi/wi-extension/wso2-integrator-*.vsix

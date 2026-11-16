@@ -16,99 +16,84 @@
  * under the License.
  */
 
-import { WICommandIds, type ContextItemEnriched, type IManageDirContextCmdParams, type IOpenInConsoleCmdParams } from "@wso2/wso2-platform-core";
-import { type ExtensionContext, ProgressLocation, type QuickPickItem, QuickPickItemKind, commands, window } from "vscode";
-import { ext } from '../../extensionVariables';
+import type { ContextItemEnriched } from "@wso2/wso2-cloud-client";
+import { type IManageDirContextCmdParams, WICommandIds } from "@wso2/wso2-platform-core";
+import { type ExtensionContext, type QuickPickItem, QuickPickItemKind, commands, window } from "vscode";
+import { ext } from "../../extensionVariables";
+import { handleCloudError } from "../platform/error-handler";
+import { unlinkContext } from "../context-file";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
-import { getUserInfoForCmd, isRpcActive, setExtensionName } from "./cmd-utils";
-import { removeContext } from "./create-directory-context-cmd";
+import { isPlatformReady, requireSession, setExtensionName } from "./cmd-utils";
+import type { IOpenInConsoleParams } from "./open-in-console-cmd";
 
 export function manageProjectContextCommand(context: ExtensionContext) {
 	context.subscriptions.push(
 		commands.registerCommand(WICommandIds.ManageDirectoryContext, async (params: IManageDirContextCmdParams) => {
 			setExtensionName(params?.extName);
 			try {
-				isRpcActive(ext);
-				const userInfo = await getUserInfoForCmd("manage project");
-				if (userInfo) {
-					const quickPickOptions: QuickPickItem[] = [];
-					const selected = contextStore.getState().state?.selected;
-					if (selected) {
-						quickPickOptions.push(
-							{ kind: QuickPickItemKind.Separator, label: "Selected Project" },
-							{ label: selected?.project?.name!, detail: selected?.org?.name, picked: true },
-							{ label: "Open in Console", detail: `Open the project '${selected.project?.name}' in web console` },
-						);
-					}
-
-					const contextItems = contextStore.getState().getValidItems();
-					const unSelectedItems = contextItems.filter((item) => item.project?.id !== selected?.project?.id);
-					if (unSelectedItems.length > 0) {
-						quickPickOptions.push(
-							{ kind: QuickPickItemKind.Separator, label: "Associated Projects" },
-							...unSelectedItems.map((item) => ({
-								label: item.project?.name!,
-								detail: item.org?.name,
-								item,
-							})),
-						);
-					}
-
-					quickPickOptions.push(
-						{ kind: QuickPickItemKind.Separator, label: "Other options" },
-						{
-							label: selected ? "Link with a different project" : "Link with a project",
-							detail: `Associate your workspace with a${selected ? " different" : ""} project`,
-						},
-					);
-
-					if (!params?.onlyShowSwitchProject) {
-						if (selected) {
-							quickPickOptions.push({
-								label: "Unlink workspace",
-								detail: `Remove the association between ${selected?.project?.name} and currently opened workspace`,
-							});
-						}
-					}
-
-					quickPickOptions.push(
-						{ kind: QuickPickItemKind.Separator, label: "Account" },
-						{
-							label: "Sign Out",
-							description: `Logged in as ${userInfo.userEmail}`,
-							detail: "Sign Out of your account",
-						},
-					);
-
-					const selection = await window.showQuickPick(quickPickOptions, {
-						title: "Manage Project",
-					});
-
-					if (selection?.label === "Open in Console") {
-						commands.executeCommand(WICommandIds.OpenInConsole, { project: selected?.project, organization: selected?.org } as IOpenInConsoleCmdParams);
-					} else if (selection?.label === "Link with a different project" || selection?.label === "Link with a project") {
-						commands.executeCommand(WICommandIds.CreateDirectoryContext);
-					} else if ((selection as any)?.item) {
-						const selectedItem: ContextItemEnriched = (selection as any)?.item;
-						await waitForContextStoreToLoad();
-						if (selectedItem.org?.id) {
-							await window.withProgress(
-								{ title: `Switching to organization ${selectedItem.org.name}...`, location: ProgressLocation.Notification },
-								() => ext?.clients?.rpcClient?.changeOrgContext(selectedItem.org?.id?.toString()!),
-							);
-						}
-						contextStore.getState().changeContext(selectedItem);
-					} else if (selection?.label === "Unlink workspace") {
-						await waitForContextStoreToLoad();
-						removeContext(selected?.project!, selected?.org!, selected?.contextDirs.map((item) => item.projectRootFsPath)!);
-						contextStore.getState().refreshState();
-					} else if (selection?.label === "Sign Out") {
-						commands.executeCommand(WICommandIds.SignOut);
-					}
+				isPlatformReady(ext);
+				const session = await requireSession("manage project");
+				if (!session) {
+					return;
 				}
-			} catch (err: any) {
-				console.error("Failed to run manage project context", err);
-				window.showErrorMessage(`Failed to run manage project context. ${err?.message}`);
+				type Pick = QuickPickItem & { item?: ContextItemEnriched };
+				const quickPickOptions: Pick[] = [];
+				const selected = contextStore.getState().state?.selected;
+				if (selected) {
+					quickPickOptions.push(
+						{ kind: QuickPickItemKind.Separator, label: "Selected Project" },
+						{ label: selected.project?.name ?? selected.projectName, detail: session.org.name, picked: true },
+						{ label: "Open in Console", detail: `Open the project '${selected.project?.name ?? selected.projectName}' in web console` },
+					);
+				}
+
+				const unSelectedItems = contextStore
+					.getState()
+					.getValidItems()
+					.filter((item) => item.projectName !== selected?.projectName);
+				if (unSelectedItems.length > 0) {
+					quickPickOptions.push(
+						{ kind: QuickPickItemKind.Separator, label: "Associated Projects" },
+						...unSelectedItems.map((item) => ({ label: item.project?.name ?? item.projectName, detail: item.orgHandle, item })),
+					);
+				}
+
+				quickPickOptions.push(
+					{ kind: QuickPickItemKind.Separator, label: "Other options" },
+					{ label: selected ? "Link with a different project" : "Link with a project", detail: `Associate your workspace with a${selected ? " different" : ""} project` },
+				);
+				if (!params?.onlyShowSwitchProject && selected) {
+					quickPickOptions.push({ label: "Unlink workspace", detail: `Remove the association between ${selected.project?.name ?? selected.projectName} and currently opened workspace` });
+				}
+				quickPickOptions.push(
+					{ kind: QuickPickItemKind.Separator, label: "Account" },
+					{ label: "Switch Organization", description: `Signed in to ${session.org.name}`, detail: "Sign in again and choose another organization" },
+					{ label: "Sign Out", description: `Signed in as ${session.user.email ?? session.user.displayName}`, detail: "Sign Out of your account" },
+				);
+
+				const selection = await window.showQuickPick(quickPickOptions, { title: "Manage Project" });
+				if (selection?.label === "Open in Console") {
+					commands.executeCommand(WICommandIds.OpenInConsole, { project: selected?.project } satisfies IOpenInConsoleParams);
+				} else if (selection?.label === "Link with a different project" || selection?.label === "Link with a project") {
+					commands.executeCommand(WICommandIds.CreateDirectoryContext);
+				} else if (selection?.item) {
+					await waitForContextStoreToLoad();
+					contextStore.getState().changeContext(selection.item);
+				} else if (selection?.label === "Unlink workspace" && selected) {
+					await waitForContextStoreToLoad();
+					unlinkContext(
+						selected.contextDirs.map((item) => item.projectRootFsPath),
+						{ org: selected.orgHandle, project: selected.projectName },
+					);
+					contextStore.getState().refreshState();
+				} else if (selection?.label === "Switch Organization") {
+					commands.executeCommand(WICommandIds.SignIn, { reselectOrganization: true });
+				} else if (selection?.label === "Sign Out") {
+					commands.executeCommand(WICommandIds.SignOut);
+				}
+			} catch (err) {
+				ext.logError("Failed to run manage project context", err as Error);
+				handleCloudError(err, "Failed to run manage project context");
 			}
 		}),
 	);

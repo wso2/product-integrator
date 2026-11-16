@@ -17,39 +17,40 @@
  */
 
 import { type PersistOptions, createJSONStorage } from "zustand/middleware";
-import { ext } from '../../extensionVariables';
+import { ext } from "../../extensionVariables";
 
-const versionInt = 5;
-const version = `v${versionInt}`;
+/** The version in every persisted store's key; bump it when a cached shape changes. */
+export const storeVersionInt = 6;
+const version = `v${storeVersionInt}`;
 
 export const getGlobalStateStore = (storeName: string): PersistOptions<any, any> => {
-    return {
-        name: `${storeName}-${version}`,
-        storage: createJSONStorage(() => ({
-            getItem: async (name) => {
-                const value = await ext.context.globalState.get(name);
-                return value ? (value as string) : "";
-            },
-            removeItem: (name) => ext.context.globalState.update(name, undefined),
-            setItem: (name, value) => ext.context.globalState.update(name, value),
-        })),
-        version: versionInt,
-        skipHydration: true,
-    };
+	return {
+		name: `${storeName}-${version}`,
+		storage: createJSONStorage(() => ({
+			getItem: async (name) => {
+				const value = await ext.context.globalState.get(name);
+				return value ? (value as string) : "";
+			},
+			removeItem: (name) => ext.context.globalState.update(name, undefined),
+			setItem: (name, value) => ext.context.globalState.update(name, value),
+		})),
+		version: storeVersionInt,
+		skipHydration: true,
+	};
 };
 
 export const getWorkspaceStateStore = (storeName: string): PersistOptions<any, any> => {
-    return {
-        name: `${storeName}-${version}`,
-        storage: createJSONStorage(() => ({
-            getItem: async (name) => {
-                const value = await ext.context.workspaceState.get(name);
-                return value ? (value as string) : "";
-            },
-            removeItem: (name) => ext.context.workspaceState.update(name, undefined),
-            setItem: (name, value) => ext.context.workspaceState.update(name, value),
-        })),
-        version: versionInt,
-        skipHydration: true,
-    };
+	return {
+		name: `${storeName}-${version}`,
+		storage: createJSONStorage(() => ({
+			getItem: async (name) => {
+				const value = await ext.context.workspaceState.get(name);
+				return value ? (value as string) : "";
+			},
+			removeItem: (name) => ext.context.workspaceState.update(name, undefined),
+			setItem: (name, value) => ext.context.workspaceState.update(name, value),
+		})),
+		version: storeVersionInt,
+		skipHydration: true,
+	};
 };

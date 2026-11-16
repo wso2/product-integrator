@@ -16,39 +16,41 @@
  * under the License.
  */
 
+import { existsSync, readFileSync } from "fs";
 import * as os from "os";
 import * as path from "path";
+import type { WICloudCreateIntegrationParam, WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import {
-	WICommandIds,
-	DevantScopes,
-	getComponentKindRepoSource,
-	parseGitURL,
-	GitProvider,
-	ICreateNewIntegrationCmdParams,
-	ContextItem,
-	UserInfo,
-	Organization,
-	Project,
-	ComponentKind,
-	CreateComponentReq,
-} from "@wso2/wso2-platform-core";
-import { type ExtensionContext, ProgressLocation, Uri, commands, window, workspace } from "vscode";
+	type Build,
+	type Component,
+	type CreatedComponent,
+	type Environment,
+	type Project,
+	RESOURCE_NAME,
+	buildConsoleUrl,
+	buildInProgress,
+	buildSucceeded,
+	integrationTypeFromScope,
+	integrationTypeLabel,
+	isCloudError,
+	parseGitHubRepoUrl,
+	poll,
+	runtimeForBuildPack,
+} from "@wso2/wso2-cloud-client";
+import { DevantScopes, GitProvider, type ICreateNewIntegrationCmdParams, WICommandIds, parseGitURL } from "@wso2/wso2-platform-core";
+import { type ExtensionContext, ProgressLocation, Uri, commands, env, window, workspace } from "vscode";
 import { ext } from "../../extensionVariables";
-import { initGit } from "../git/main";
-import { Repository } from "../git/git";
-import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
-import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
-import { dataCacheStore } from "../stores/data-cache-store";
+import { ProjectType, StateMachine } from "../../stateMachine";
 import { isSamePath, isSubpath } from "../../utils/pathUtils";
-import { getUserInfoForCmd, isRpcActive, selectOrg, selectProjectWithCreateNew, setExtensionName } from "./cmd-utils";
-import { updateContextFile } from "./create-directory-context-cmd";
-import { attachMCPProxyRepositoryToExistingTrack, fetchComponentSummary, isMcpProxyFromExistingApi } from "../graphql/cp-graphql-client";
-import { WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
-import { ProjectType, StateMachine, stateService } from "../../stateMachine";
-import { existsSync, readFileSync, writeFileSync } from "fs";
-import * as yaml from "js-yaml";
-
+import { linkContext, localContextEntry, readContextEntries, writeContextEntries } from "../context-file";
+import type { Repository } from "../git/git";
+import { initGit } from "../git/main";
+import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
+import { handleCloudError } from "../platform/error-handler";
+import { contextStore, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
+import { dataCacheStore } from "../stores/data-cache-store";
+import { isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensionName, toProjectName, toResourceName } from "./cmd-utils";
 
 /**
  * Source component ids already acted on. Clearing `SOURCE_COMPONENT_ID` from workspace state cannot
@@ -71,326 +73,286 @@ export function createNewComponentCommand(context: ExtensionContext) {
 	context.subscriptions.push(
 		commands.registerCommand(WICommandIds.CreateNewComponent, async (params: ICreateNewIntegrationCmdParams) => {
 			try {
-				isRpcActive(ext);
-				const userInfo = await getUserInfoForCmd(`Deploy Integration`);
-				if (userInfo) {
-					await waitForContextStoreToLoad();
-					const selected = contextStore.getState().state.selected;
-					let selectedProject = selected?.project;
-					let selectedOrg = selected?.org;
+				isPlatformReady(ext);
+				const session = await requireSession("Deploy Integration");
+				if (!session) {
+					return;
+				}
+				const orgHandle = session.org.handle;
+				const cloud = ext.clients.platform.cloud;
+				await waitForContextStoreToLoad();
+				let selectedProject = contextStore.getState().state.selected?.project;
 
-					if (params?.workspaceDir && (!selectedOrg || !selectedProject)) {
-						const contextFileEntry = await createProjectFromLocalMetadata(userInfo, params?.workspaceDir);
-						selectedOrg = contextFileEntry?.org;
-						selectedProject = contextFileEntry?.project;
+				if (params?.workspaceDir && !selectedProject) {
+					selectedProject = await createProjectFromLocalMetadata(params.workspaceDir);
+				}
+				if (!selectedProject) {
+					selectedProject = (await selectProjectWithCreateNew(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', to deploy the integration in`)).selectedProject;
+				}
+
+				// A directory passed without its integration types offers them all, as a directory picked here does.
+				const integrations = (params?.integrations || []).map((item) =>
+					item.supportedIntegrationTypes?.length ? item : { ...item, supportedIntegrationTypes: allIntegrationTypes },
+				);
+				let workspaceDir = params?.workspaceDir;
+				let buildPackLang = params?.buildPackLang;
+				if (!buildPackLang) {
+					if (StateMachine.getContext().projectType === ProjectType.BI_BALLERINA) {
+						buildPackLang = "ballerina";
+					} else if (StateMachine.getContext().projectType === ProjectType.MI) {
+						buildPackLang = "microintegrator";
+					} else {
+						throw new Error("Please ensure that you are within a valid Ballerina or MI project to deploy an integration in the cloud");
 					}
+				}
+				if (ext.isDevantCloudEditor && params?.integrations?.length > 1) {
+					throw new Error("Workspace deployments are not yet supported in the cloud editor. Please select individual integration to deploy.");
+				}
 
-					if (!selectedOrg) {
-						selectedOrg = await selectOrg(userInfo, "Select organization");
+				if (!params?.workspaceDir || integrations.length === 0) {
+					let defaultUri: Uri;
+					if (workspace.workspaceFile && workspace.workspaceFile.scheme !== "untitled") {
+						defaultUri = workspace.workspaceFile;
+					} else if (workspace.workspaceFolders && workspace.workspaceFolders?.length > 0) {
+						defaultUri = workspace.workspaceFolders[0].uri;
+					} else {
+						defaultUri = Uri.file(os.homedir());
 					}
-
-					if (!selectedProject) {
-						const createdProjectRes = await selectProjectWithCreateNew(
-							selectedOrg,
-							`Loading projects from '${selectedOrg.name}'`,
-							`Select the project from '${selectedOrg.name}', to deploy the integration in`,
-						);
-						selectedProject = createdProjectRes.selectedProject;
+					const supPathUri = await window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: true, title: "Select integration directory", defaultUri });
+					if (!supPathUri || supPathUri.length === 0) {
+						throw new Error("Integration directory selection is required");
 					}
+					for (const item of supPathUri) {
+						integrations.push({ fsPath: item.fsPath, name: path.basename(item.fsPath), supportedIntegrationTypes: allIntegrationTypes });
+					}
+					workspaceDir = workspace.workspaceFolders?.find((folder) => isSubpath(folder.uri.fsPath, supPathUri[0].fsPath))?.uri.fsPath;
+				}
 
-					let integrations = params?.integrations || [];
-					let workspaceDir = params?.workspaceDir;
-					let buildPackLang = params?.buildPackLang;
-					if (!buildPackLang) {
-						if (StateMachine.getContext().projectType === ProjectType.BI_BALLERINA) {
-							buildPackLang = "ballerina";
-						} else if (StateMachine.getContext().projectType === ProjectType.MI) {
-							buildPackLang = "microintegrator";
-						} else {
-							throw new Error(`Please ensure that you are within a valid Ballerina or MI project to deploy an integration in the cloud`);
+				const existing = await window.withProgress(
+					{ title: `Fetching integrations of cloud project ${selectedProject.name}...`, location: ProgressLocation.Notification },
+					() => cloud.components.list(selectedProject!.id),
+				);
+				dataCacheStore.getState().setIntegrations(orgHandle, selectedProject.id, existing);
+
+				let gitRoot: string | undefined;
+				let isGitInitialized = false;
+				try {
+					gitRoot = await getGitRoot(context, workspaceDir!);
+					isGitInitialized = !!gitRoot;
+				} catch {
+					// not a git repository
+				}
+
+				// Is there already an integration for one of the selected directories?
+				let integrationAlreadyExists = false;
+				if (gitRoot) {
+					const remotes = await getGitRemotes(ext.context, gitRoot);
+					for (const integration of existing) {
+						let repository = dataCacheStore.getState().getRepository(orgHandle, selectedProject.id, integration.id);
+						if (!repository) {
+							repository = await cloud.components.repository(integration.id, selectedProject.id).catch((): undefined => undefined);
+							if (repository) {
+								dataCacheStore.getState().setRepository(orgHandle, selectedProject.id, integration.id, repository);
+							}
 						}
-					}
-
-					if (ext.isDevantCloudEditor && params?.integrations?.length > 1) {
-						// todo: need to add support for workspace deployments in cloud editor
-						throw new Error(`Workspace deployments are not yet supported in the cloud editor. Please select individual integration to deploy.`);
-					}
-
-					if (!params?.workspaceDir || integrations.length === 0) {
-						let defaultUri: Uri;
-						if (workspace.workspaceFile && workspace.workspaceFile.scheme !== "untitled") {
-							defaultUri = workspace.workspaceFile;
-						} else if (workspace.workspaceFolders && workspace.workspaceFolders?.length > 0) {
-							defaultUri = workspace.workspaceFolders[0].uri;
-						} else {
-							defaultUri = Uri.file(os.homedir());
+						const parsedRepoUrl = parseGitURL(repositoryUrlOf(repository) ?? "");
+						if (!parsedRepoUrl) {
+							continue;
 						}
-						const supPathUri = await window.showOpenDialog({
-							canSelectFolders: true,
-							canSelectFiles: false,
-							canSelectMany: true,
-							title: `Select integration directory`,
-							defaultUri: defaultUri,
+						const [repoOrg, repoName, repoProvider] = parsedRepoUrl;
+						const hasMatchingRemote = remotes.some((remote) => {
+							const parsed = parseGitURL(remote.fetchUrl);
+							return !!parsed && parsed[0] === repoOrg && parsed[1] === repoName && parsed[2] === repoProvider;
 						});
-						if (!supPathUri || supPathUri.length === 0) {
-							throw new Error(`Integration directory selection is required`);
-						}
-
-						supPathUri.forEach(item => {
-							integrations.push({
-								fsPath: item.fsPath,
-								name: path.basename(item.fsPath),
-								supportedIntegrationTypes: allIntegrationTypes,
-							})
-						})
-
-						workspaceDir = workspace.workspaceFolders?.find((folder) => isSubpath(folder.uri.fsPath, supPathUri[0].fsPath))?.uri.fsPath;
-					}
-
-					const components = await window.withProgress(
-						{
-							title: `Fetching integrations of cloud project ${selectedProject.name}...`,
-							location: ProgressLocation.Notification,
-						},
-						() =>
-							ext.clients.rpcClient.getComponentList({
-								orgId: selectedOrg?.id?.toString()!,
-								orgHandle: selectedOrg?.handle!,
-								projectId: selectedProject?.id!,
-								projectHandle: selectedProject?.handler!,
-							}),
-					);
-					dataCacheStore.getState().setComponents(selectedOrg.handle, selectedProject.handler, components);
-
-					let gitRoot: string | undefined;
-					let isGitInitialized = false;
-					try {
-						gitRoot = await getGitRoot(context, workspaceDir);
-						isGitInitialized = true;
-					} catch (err) {
-						// ignore error
-					}
-
-					// check if user already has a component in the same path
-					let componentAlreadyExists = false;
-					for (const componentItem of components) {
-						if (gitRoot) {
-							const remotes = await getGitRemotes(ext.context, gitRoot);
-							const repoUrl = getComponentKindRepoSource(componentItem.spec.source).repo;
-							const parsedRepoUrl = parseGitURL(repoUrl);
-							if (parsedRepoUrl) {
-								const [repoOrg, repoName, repoProvider] = parsedRepoUrl;
-								const hasMatchingRemote = remotes.some((remoteItem) => {
-									const parsedRemoteUrl = parseGitURL(remoteItem.fetchUrl);
-									if (parsedRemoteUrl) {
-										const [repoRemoteOrg, repoRemoteName, repoRemoteProvider] = parsedRemoteUrl;
-										return repoOrg === repoRemoteOrg && repoName === repoRemoteName && repoRemoteProvider === repoProvider;
-									}
-								});
-
-								if (hasMatchingRemote) {
-									const subPathDir = path.join(gitRoot, getComponentKindRepoSource(componentItem.spec.source)?.path);
-									if (integrations.some(item => isSamePath(subPathDir, item.fsPath))) {
-										componentAlreadyExists = true;
-										break;
-									}
-								}
+						if (hasMatchingRemote) {
+							const subPathDir = path.join(gitRoot, repositorySubPathOf(repository));
+							if (integrations.some((item) => isSamePath(subPathDir, item.fsPath))) {
+								integrationAlreadyExists = true;
+								break;
 							}
 						}
 					}
-
-					if (componentAlreadyExists && gitRoot && selectedProject && selectedOrg) {
-						const resp = await window.showInformationMessage(
-							`An integration for the selected directory already exists within you project(${selectedProject?.name}). Do you want to proceed and create another integration?`,
-							{ modal: true },
-							"Proceed",
-						);
-						if (resp !== "Proceed") {
-							const projectCache = dataCacheStore.getState().getProjects(selectedOrg?.handle);
-							updateContextFile(gitRoot, ext.authProvider?.getState().state.userInfo!, selectedProject, selectedOrg, projectCache);
-							contextStore.getState().refreshState();
-							return;
-						}
-					}
-
-					const isWithinWorkspace = workspace.workspaceFolders?.some((item) => integrations.every(int => isSubpath(item.uri?.fsPath, int.fsPath)));
-
-					for (const integration of integrations) {
-						let compInitialName = integration?.name || path.basename(integration.fsPath);
-						const existingNames = components.map((c) => c.metadata?.name?.toLowerCase?.());
-						const baseIntName = compInitialName;
-						let counter = 1;
-						while (existingNames.includes(compInitialName.toLowerCase())) {
-							compInitialName = `${baseIntName}-${counter}`;
-							counter++;
-						}
-						integration.name = compInitialName;
-					}
-
-					if (isWithinWorkspace || workspace.workspaceFile) {
-						// Update context.yaml file when opening the integration creation form
-						if (gitRoot || params?.workspaceDir) {
-							const projectCache = dataCacheStore.getState().getProjects(selectedOrg?.handle);
-							updateContextFile(gitRoot || params?.workspaceDir, ext.authProvider?.getState().state.userInfo!, selectedProject, selectedOrg, projectCache);
-							contextStore.getState().refreshState();
-						}
-
-						openCloudFormWebview({
-							org: selectedOrg,
-							project: selectedProject,
-							workspaceFsPath: workspaceDir!,
-							isNewCodeServerComp: !isGitInitialized && ext.isDevantCloudEditor,
-							buildPackLang: buildPackLang!,
-							integrations: integrations,
-						})
-					} else {
-						throw new Error(`Selected directory is outside of the workspace. Please select a directory within the workspace to create the integration.`);
+				}
+				if (integrationAlreadyExists && gitRoot) {
+					const resp = await window.showInformationMessage(
+						`An integration for the selected directory already exists within your project (${selectedProject.name}). Do you want to proceed and create another integration?`,
+						{ modal: true },
+						"Proceed",
+					);
+					if (resp !== "Proceed") {
+						linkContext(gitRoot, { org: orgHandle, project: selectedProject.id });
+						contextStore.getState().refreshState();
+						return;
 					}
 				}
-			} catch (err: any) {
-				console.error(`Failed to deploy integration`, err);
-				window.showErrorMessage(err?.message || "Failed to create component");
+
+				const isWithinWorkspace = workspace.workspaceFolders?.some((item) => integrations.every((int) => isSubpath(item.uri?.fsPath, int.fsPath)));
+				const taken = new Set(existing.flatMap((c) => [c.id.toLowerCase(), c.name.toLowerCase(), (c.displayName ?? "").toLowerCase()]));
+				for (const integration of integrations) {
+					const baseName = integration?.name || path.basename(integration.fsPath);
+					let candidate = baseName;
+					let counter = 1;
+					while (taken.has(candidate.toLowerCase())) {
+						candidate = `${baseName}-${counter++}`;
+					}
+					integration.name = candidate;
+					taken.add(candidate.toLowerCase());
+				}
+
+				if (isWithinWorkspace || workspace.workspaceFile) {
+					if (gitRoot || params?.workspaceDir) {
+						linkContext((gitRoot || params?.workspaceDir)!, { org: orgHandle, project: selectedProject.id });
+						contextStore.getState().refreshState();
+					}
+					openCloudFormWebview({
+						org: { id: session.org.id, uuid: session.org.uuid, handle: session.org.handle, name: session.org.name },
+						project: selectedProject,
+						workspaceFsPath: workspaceDir!,
+						isNewCodeServerComp: !isGitInitialized && ext.isDevantCloudEditor,
+						buildPackLang: buildPackLang!,
+						integrations,
+					});
+				} else {
+					throw new Error("Selected directory is outside of the workspace. Please select a directory within the workspace to create the integration.");
+				}
+			} catch (err) {
+				ext.logError("Failed to deploy integration", err as Error);
+				handleCloudError(err, "Failed to deploy the integration");
 			}
 		}),
 	);
 }
 
+/** The https clone URL the platform builds from, for whatever remote form git reported. */
+export function normalizeCloneUrl(repoUrl: string): string {
+	const parsed = parseGitURL(repoUrl);
+	if (parsed) {
+		const [org, repo, provider] = parsed;
+		if (provider === GitProvider.GITHUB) {
+			return `https://github.com/${org}/${repo}.git`;
+		}
+		if (provider === GitProvider.BITBUCKET) {
+			return `https://bitbucket.org/${org}/${repo}.git`;
+		}
+	}
+	const trimmed = repoUrl.trim();
+	const ssh = /^git@([^:]+):(.+?)(?:\.git)?$/.exec(trimmed);
+	if (ssh) {
+		return `https://${ssh[1]}/${ssh[2]}.git`;
+	}
+	return trimmed.endsWith(".git") ? trimmed : `${trimmed}.git`;
+}
+
 export const submitCreateComponentHandler = async ({ createParams, org, project, workspaceFsPath }: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> => {
 	const totalCount = createParams.length;
-	const result: WICloudSubmitComponentsResp = {
-		created: [],
-		failed: [],
-		total: totalCount,
-	};
+	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: totalCount };
+	// Created, but the platform could not bind the repository: no build starts until that is fixed.
+	const unbound: { label: string; error: NonNullable<CreatedComponent["sourceBindingError"]> }[] = [];
+	const cloud = ext.clients.platform.cloud;
+	// The platform acts for the signed-in organization; a form opened for another one is not submitted to it.
+	if (ext.authProvider?.org?.handle !== org.handle) {
+		throw new Error(`This form was opened for the organization ${org.name}, which is no longer the one signed in. Open the deployment form again.`);
+	}
 
 	const newGit = await initGit(ext.context);
-	const gitRoot = await newGit?.getRepositoryRoot(workspaceFsPath);
+	const gitRoot = await newGit?.getRepositoryRoot(workspaceFsPath).catch((): undefined => undefined);
+	if (!gitRoot) {
+		throw new Error(`${workspaceFsPath} is not inside a git repository. Initialize one, push it to GitHub, then deploy from it.`);
+	}
 	const dotGit = await newGit?.getRepositoryDotGit(workspaceFsPath);
-	const repo = newGit.open(gitRoot, dotGit);
+	const repo = newGit?.open(gitRoot, dotGit);
 
 	// The clone and prebuilt flows persist the source component in workspace state, while the cloud
-	// editor only injects it into the environment. `context-store.ts` reads the env var too, but only
-	// as a list filter, and its state write is reached via a git-remote match that an MCP proxy — which
-	// has no repository yet — can never satisfy. So both have to be consulted here.
+	// editor only injects it into the environment; both are consulted.
 	const stateCompId: string | null | undefined = ext.context.workspaceState.get("SOURCE_COMPONENT_ID");
-	const envCompId: string | undefined = consumedSourceCompIds.has(process.env.SOURCE_COMPONENT_ID ?? "")
-		? undefined
-		: process.env.SOURCE_COMPONENT_ID;
-	const workspaceCompId: string | null | undefined = stateCompId || envCompId;
-	// Logged unconditionally: an absent line here means this build predates the source-component
-	// handling, which is otherwise indistinguishable from the id simply not being set.
-	ext.log(
-		`Resolving source component: workspaceState='${stateCompId ?? ""}', env='${envCompId ?? ""}', ` +
-			`resolved='${workspaceCompId ?? ""}', cloudEditor=${ext.isDevantCloudEditor}, cloudEnv=${ext.cloudEnv}`,
-	);
+	const envCompId = consumedSourceCompIds.has(process.env.SOURCE_COMPONENT_ID ?? "") ? undefined : process.env.SOURCE_COMPONENT_ID;
+	const workspaceCompId = stateCompId || envCompId;
+	ext.log(`Resolving source component: workspaceState='${stateCompId ?? ""}', env='${envCompId ?? ""}', resolved='${workspaceCompId ?? ""}', cloudEditor=${ext.isDevantCloudEditor}, cloudEnv=${ext.cloudEnv}`);
 	if (workspaceCompId) {
-		const component = dataCacheStore.getState().getComponents(org.handle, project.handler)?.find(comp => comp.metadata?.id === workspaceCompId);
-		if (component?.metadata?.isPrebuilt) {
-			// if its pre-built integration, we need to update the existing component with new repo details instead of creating a new component.
-			return await handlePrebuiltComponentUpdate(workspaceCompId, component, org, project, createParams[0], workspaceFsPath, gitRoot!);
-		}
-
-		// Prefer the sub-type from the component list, which is empty unless the CLI's list query
-		// selects `componentSubType`. Only then ask the control plane, which also supplies the
-		// identity needed when the component is missing from the list altogether.
-		let componentSubType: string | undefined = component?.spec?.subType || undefined;
-		let subTypeSource = "component list";
-		let summary: Awaited<ReturnType<typeof fetchComponentSummary>>;
-		if (!componentSubType) {
-			subTypeSource = "control plane";
+		let component = dataCacheStore.getState().getIntegrations(org.handle, project.id).find((c) => c.id === workspaceCompId);
+		if (!component) {
 			try {
-				summary = await window.withProgress(
-					{ title: "Checking integration type...", location: ProgressLocation.Notification },
-					() => fetchComponentSummary({ orgHandler: org.handle, projectId: project.id, componentId: workspaceCompId }),
-				);
+				component = await window.withProgress({ title: "Checking integration type...", location: ProgressLocation.Notification }, () => cloud.components.find(workspaceCompId, project.id));
 			} catch (err) {
-				// A failed lookup is not the same as "not an MCP proxy", and guessing wrong creates a
-				// component beside an unconverted proxy, which cannot be undone from the editor. Stop
-				// instead, and let the user retry.
-				ext.logError(`Failed to resolve the sub-type of component ${workspaceCompId}`, err as Error);
+				ext.logError(`Failed to resolve the source integration ${workspaceCompId}`, err as Error);
 				return {
 					created: [],
-					failed: createParams.map((item) => ({
-						name: item.displayName || item.name,
-						error: `Could not determine whether the linked integration is an MCP proxy: ${(err as Error).message}. Nothing was deployed, please retry.`,
-					})),
+					failed: createParams.map((item) => ({ name: item.displayName || item.name, error: `Could not read the linked integration: ${(err as Error).message}. Nothing was deployed, please retry.` })),
 					total: totalCount,
 				};
 			}
-			componentSubType = summary?.componentSubType ?? undefined;
 		}
-		ext.log(
-			`Source component ${workspaceCompId} has sub-type '${componentSubType ?? "<unknown>"}' (from ${subTypeSource}), ` +
-				`isPrebuilt=${component?.metadata?.isPrebuilt}, foundInList=${!!component}`,
-		);
-
-		if (isMcpProxyFromExistingApi(componentSubType)) {
-			// if its an MCP proxy over an existing API, attach the sources to its existing track instead of
-			// creating a new component. This converts the proxy into an MCP server built from source.
-			// The list may not carry the component, so fall back to the control plane's identity for it
-			// rather than creating a duplicate alongside the proxy.
-			const proxyComponent: ComponentKind | undefined = component ?? (summary && ({
-				apiVersion: "",
-				kind: "Component",
-				metadata: {
-					id: summary.id,
-					name: summary.name,
-					displayName: summary.displayName,
-					handler: summary.handler,
-					projectName: project.name,
-				},
-				spec: { type: "", subType: summary.componentSubType ?? "", source: {}, build: {} },
-			} as unknown as ComponentKind));
-			if (proxyComponent) {
-				return await handleMcpProxyRepositoryAttach(workspaceCompId, proxyComponent, org, project, createParams[0], workspaceFsPath, gitRoot!);
+		if (component?.isPrebuilt) {
+			// A prebuilt integration gets this repository as its source instead of a new integration being created.
+			return await attachSourceToExistingIntegration(workspaceCompId, component, org.handle, project, createParams[0], workspaceFsPath, gitRoot, "Updating prebuilt integration repository...");
+		}
+		if (component?.componentType === "mcpServer") {
+			// An MCP server created from an existing API has no source; attaching one turns it into a server built from source.
+			const hasRepository = await cloud.components
+				.repository(component.id, project.id)
+				.then(() => true)
+				.catch((error) => !(isCloudError(error) && error.code === "not_found"));
+			if (!hasRepository) {
+				return await attachSourceToExistingIntegration(workspaceCompId, component, org.handle, project, createParams[0], workspaceFsPath, gitRoot, "Attaching sources to MCP server...");
 			}
 		}
 	}
 
-	await checkComponentLimitReached(createParams, org);
-
-	// Verify if the source code has been pushed to remote repo
-	await checkIfSourcePushedToRemoteRepo(createParams, org, gitRoot!);
+	await checkSubscription();
+	await checkIfSourcePushedToRemoteRepo(createParams, gitRoot);
 
 	await window.withProgress(
 		{
-			title: totalCount === 1
-				? `Creating integration '${createParams[0].displayName || createParams[0].name}'... `
-				: `Creating ${totalCount} integrations... `,
+			title: totalCount === 1 ? `Creating integration '${createParams[0].displayName || createParams[0].name}'... ` : `Creating ${totalCount} integrations... `,
 			location: ProgressLocation.Notification,
 			cancellable: false,
 		},
 		async (progress) => {
 			for (let i = 0; i < totalCount; i++) {
 				const createParam = createParams[i];
-				const componentName = createParam.displayName || createParam.name;
-
+				const label = createParam.displayName || createParam.name;
 				if (totalCount > 1) {
-					// Update progress
-					progress.report({
-						message: `(${i + 1}/${totalCount}) ${componentName}`,
-						increment: (100 / totalCount),
-					});
+					progress.report({ message: `(${i + 1}/${totalCount}) ${label}`, increment: 100 / totalCount });
 				}
-
 				try {
-					const createdComponent = await ext.clients.rpcClient.createComponent(createParam);
+					const type = integrationTypeFromScope(createParam.integrationType);
+					if (!type) {
+						throw new Error(`${integrationTypeLabel(createParam.integrationType) || createParam.integrationType} integrations cannot be deployed to WSO2 Cloud yet.`);
+					}
+					const name = toResourceName(createParam.name);
+					if (!RESOURCE_NAME.test(name)) {
+						throw new Error(`${createParam.name} is not a name the platform accepts.`);
+					}
+					const appPath = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
+					const created = await cloud.components.create({
+						projectName: project.id,
+						name,
+						displayName: createParam.displayName,
+						type,
+						runtime: runtimeForBuildPack(createParam.buildPackLang),
+						repo: { url: normalizeCloneUrl(createParam.repoUrl), branch: createParam.branch, appPath: appPath && appPath !== "." ? appPath : undefined },
+					});
+					// Auto build and auto deploy are the component's own switches, set after the create
+					// (enableBuildAutomation), where the platform's refusal of auto deploy is seen.
 
-					if (createdComponent?.metadata?.id) {
-						result.created.push(createdComponent);
-
-						// Update component cache
-						const compCache = dataCacheStore.getState().getComponents(org.handle, project.handler);
-						dataCacheStore.getState().setComponents(org.handle, project.handler, [createdComponent, ...compCache]);
-
-						await updateCodeServerWithCreatedComp(createdComponent, org, repo!, project);
-					} else {
-						result.failed.push({ name: componentName, error: "Creation returned null" });
+					result.created.push(created);
+					if (created.sourceBindingError) {
+						unbound.push({ label, error: created.sourceBindingError });
+					}
+					await enableBuildAutomation(created, org.handle, project);
+					const cache = dataCacheStore.getState().getIntegrations(org.handle, project.id);
+					dataCacheStore.getState().setIntegrations(org.handle, project.id, [created, ...cache]);
+					if (repo) {
+						await updateCodeServerWithCreatedComp(created, repo, project);
 					}
 				} catch (error) {
-					const errorMessage = error instanceof Error ? error.message : String(error);
-					result.failed.push({ name: componentName, error: errorMessage });
-					ext.logError(`Failed to create ${ext.terminologies?.componentTerm} ${componentName}:`, error as Error);
+					const errorMessage = isCloudError(error) ? error.message : error instanceof Error ? error.message : String(error);
+					result.failed.push({ name: label, error: errorMessage });
+					ext.logError(`Failed to create ${ext.terminologies?.componentTerm} ${label}:`, error as Error);
+					if (isCloudError(error) && error.code === "plan_limit") {
+						handleCloudError(error, errorMessage);
+						break;
+					}
 				}
 			}
 		},
@@ -399,332 +361,383 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	if (result.created.length > 0) {
 		clearCodeServerLocalStorage();
 		markCodeServerDeployed();
-		const projectCache = dataCacheStore.getState().getProjects(org?.handle);
-		updateContextFile(gitRoot, ext.authProvider?.getState().state.userInfo!, project, org, projectCache);
+		if (gitRoot) {
+			linkContext(gitRoot, { org: org.handle, project: project.id });
+		}
 		contextStore.getState().refreshState();
-	}
 
-	if (result.created.length > 0) {
-		let successMessage: string;
-		if (result.failed?.length === 0) {
-			successMessage = result.created.length === 1
-				? "Successfully created integration in the cloud"
-				: "Successfully created multiple integrations in the cloud";
-		} else {
-			successMessage = `Successfully created ${result.created.length} of ${totalCount} integrations in the cloud`;
-		}
-
+		const successMessage =
+			result.failed.length === 0
+				? result.created.length === 1
+					? "Successfully created integration in the cloud"
+					: "Successfully created multiple integrations in the cloud"
+				: `Successfully created ${result.created.length} of ${totalCount} integrations in the cloud`;
+		const bindingWarning = sourceBindingWarning(unbound);
 		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
-
 		if (workspace.workspaceFile) {
-			window.showErrorMessage("Please make sure newly created integrations are added to workspace.")
-			// const workspaceContent: WorkspaceConfig = JSON.parse(readFileSync(workspace.workspaceFile.fsPath, "utf8"));
-			// workspaceContent.folders = [
-			// 	...workspaceContent.folders,
-			// 	{
-			// 		name: createdComponent.metadata.name, // name not needed?
-			// 		path: path.normalize((path.dirname(workspace.workspaceFile.fsPath), createParams.componentDir)),
-			// 	},
-			// ];
+			window.showErrorMessage("Please make sure newly created integrations are added to workspace.");
+			if (bindingWarning) {
+				showViewInConsoleMessage(bindingWarning, org.handle, project, result.created, true);
+			}
 		} else if (isWithinWorkspace) {
-			showViewInConsoleMessage(successMessage, org, project, result.created);
+			showViewInConsoleMessage(bindingWarning ?? successMessage, org.handle, project, result.created, !!bindingWarning);
 		} else {
-			showReloadWorkspaceMessage(successMessage, workspaceFsPath);
+			showReloadWorkspaceMessage(bindingWarning ?? successMessage, workspaceFsPath, !!bindingWarning);
 		}
 	}
-
-	if (result.failed?.length > 0) {
-		const failedNames = result.failed.map(item => item.name).join(", ");
-		window.showErrorMessage(`Failed to create the following integrations: ${failedNames}`);
+	if (result.failed.length > 0) {
+		window.showErrorMessage(`Failed to create the following integrations: ${result.failed.map((item) => item.name).join(", ")}`);
 	}
 	return result;
 };
 
-const checkComponentLimitReached = async (createParams: CreateComponentReq[], org: Organization) => {
-	const subscriptions = await window.withProgress(
-		{ title: "Checking organization subscription...", location: ProgressLocation.Notification },
-		() =>
-			ext.clients?.rpcClient?.getSubscriptions({
-				orgId: org.id.toString(),
-				cloudType: "devant",
-			})
-	);
-	const isSubscribed = subscriptions?.list?.some(sub => sub.subscriptionType === 'devant-subscription');
-	if (!isSubscribed) {
-		const FREE_COMPONENT_LIMIT = 5;
-		const componentUsage = await window.withProgress(
-			{ title: "Checking integration usage within your organization...", location: ProgressLocation.Notification },
-			() =>
-				ext.clients?.rpcClient?.getComponentUsage({
-					orgId: org.id.toString(),
-					orgUuid: org.uuid,
-					cloudOrigin: "devant",
-				})
-		);
-		const remainingLimit = FREE_COMPONENT_LIMIT - componentUsage?.data?.billableComponentCount;
-		if (createParams?.length > remainingLimit) {
-			const limitReachedMsg = remainingLimit <= 0 ?
-				`Your organization has reached the free usage limit. Please upgrade your subscription to create more integrations` :
-				`You can only create ${remainingLimit} more integration(s). Please upgrade your subscription to create more integrations.`
-			window.showErrorMessage(limitReachedMsg, "Upgrade",).then((res) => {
-				if (res === "Upgrade") {
-					commands.executeCommand(
-						"vscode.open",
-						`${ext.config?.billingConsoleUrl}/cloud/devant/upgrade?orgId=${org.uuid.toString()}`,
-					);
-				}
-			});
-			throw new Error(limitReachedMsg);
-		}
+/**
+ * The platform enforces the plan on create (a 402), so this only warns early
+ * when the organization has no active subscription at all.
+ */
+const checkSubscription = async () => {
+	const uuid = ext.authProvider?.org?.uuid;
+	if (!uuid) {
+		return;
 	}
-}
-
-
-const checkIfSourcePushedToRemoteRepo = async (createParams: CreateComponentReq[], org: Organization, gitRoot: string) => {
-	const totalCount = createParams.length;
-	await window.withProgress(
-		{
-			title: `Verifying source in remote repo`,
-			location: ProgressLocation.Notification,
-			cancellable: false,
-		},
-		async (progress) => {
-			for (let i = 0; i < totalCount; i++) {
-				const createParam = createParams[i];
-				const componentName = createParam.displayName || createParam.name;
-
-				if (totalCount > 1) {
-					// Update progress
-					progress.report({
-						message: `(${i + 1}/${totalCount}) ${componentName}`,
-						increment: (100 / totalCount),
-					});
-				}
-
-				const parsedGit = parseGitURL(createParam.repoUrl);
-				if (!parsedGit) {
-					throw new Error(`Failed to parse git URL: ${createParam.repoUrl}`);
-				}
-				const [repoOrg, repoName, repoProvider] = parsedGit;
-				const subPathDir = relativePath(gitRoot!, createParam.componentDir);
-				if (!ext.isDevantCloudEditor && repoProvider === GitProvider.GITHUB) {
-					// This check is not needed in cloud editor, as we have pushed the changes to remote repo
-					const repoMetadata = await ext.clients.rpcClient?.getGitRepoMetadata({
-						branch: createParam.branch,
-						gitOrgName: repoOrg,
-						gitRepoName: repoName,
-						orgId: org.id.toString(),
-						relativePath: subPathDir,
-						secretRef: createParam.gitCredRef,
-					})
-					if (subPathDir) {
-						if (repoMetadata?.metadata?.isSubPathEmpty || !repoMetadata?.metadata?.isSubPathValid) {
-							throw new Error(`The selected directory ${subPathDir} appears to be empty or invalid. Please push your changes to remote repo and try again.`);
-						}
-					} else if (repoMetadata?.metadata?.isBareRepo) {
-						throw new Error(`The selected repository appears to be empty. Please push your changes to remote repo and try again.`);
-					}
-				}
-			}
-		},
-	);
-}
-
-async function handlePrebuiltComponentUpdate(
-	workspaceCompId: string,
-	component: ComponentKind,
-	org: Organization,
-	project: Project,
-	createParam: WICloudSubmitComponentsReq['createParams'][number],
-	workspaceFsPath: string,
-	gitRoot: string,
-): Promise<WICloudSubmitComponentsResp> {
-	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: 1 };
 	try {
-		await window.withProgress(
-			{ title: "Updating prebuilt integration repository...", location: ProgressLocation.Notification },
-			() =>
-				ext.clients.rpcClient?.changePrebuiltIntegrationRepository({
-					componentId: workspaceCompId,
-					isPublicRepo: false,
-					orgHandler: org.handle,
-					orgId: org.id.toString(),
-					projectId: project.id,
-					srcGitRepoUrl: createParam.repoUrl,
-					repositorySubPath: relativePath(workspaceFsPath, createParam.componentDir),
-					originCloud: "devant",
-					repositoryBranch: createParam.branch,
-					secretRef: createParam.gitCredRef,
-				}),
-		);
-		result.created.push(component);
-		await ext.context.workspaceState.update("SOURCE_COMPONENT_ID", null);
-
-		clearCodeServerLocalStorage();
-		const projectCache = dataCacheStore.getState().getProjects(org?.handle);
-		updateContextFile(gitRoot, ext.authProvider?.getState().state.userInfo!, project, org, projectCache);
-		contextStore.getState().refreshState();
-
-		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
-		const successMessage = "Successfully updated the prebuilt integration repository with new repo details";
-		if (isWithinWorkspace) {
-			showViewInConsoleMessage(successMessage, org, project, result.created);
-		} else {
-			showReloadWorkspaceMessage(successMessage, workspaceFsPath);
+		const subscriptions = await ext.clients.platform.cloud.orgs.subscriptions(uuid);
+		if (subscriptions.length === 0) {
+			ext.log("The organization has no subscription recorded; the platform decides on create");
 		}
-	} catch (err) {
-		ext.logError(`Failed to update prebuilt integration repository for component ${component.metadata?.name}`, err as Error);
-		result.failed.push({ name: component.metadata?.name || "Unknown", error: `Failed to update prebuilt integration repository: ${(err as Error).message}` });
+	} catch (error) {
+		ext.log(`Could not read the organization's subscription: ${(error as Error).message}`);
 	}
-	return result;
+};
+
+const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegrationParam[], gitRoot: string) => {
+	if (ext.isDevantCloudEditor) {
+		return; // the editor pushed the changes itself
+	}
+	await window.withProgress({ title: "Verifying source in remote repo", location: ProgressLocation.Notification, cancellable: false }, async (progress) => {
+		for (let i = 0; i < createParams.length; i++) {
+			const createParam = createParams[i];
+			if (createParams.length > 1) {
+				progress.report({ message: `(${i + 1}/${createParams.length}) ${createParam.displayName || createParam.name}`, increment: 100 / createParams.length });
+			}
+			const github = parseGitHubRepoUrl(createParam.repoUrl);
+			if (!github) {
+				continue; // the platform reads public GitHub repositories only
+			}
+			const subPathDir = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
+			const inspection = await ext.clients.platform.cloud.repos.inspect(github.owner, github.repo, createParam.branch, subPathDir === "." ? "" : subPathDir);
+			if (subPathDir && subPathDir !== ".") {
+				if (!inspection.isSubPathValid || inspection.isSubPathEmpty) {
+					throw new Error(`The selected directory ${subPathDir} appears to be empty or invalid in the remote repository. Please push your changes and try again.`);
+				}
+			} else if (inspection.isBareRepo) {
+				throw new Error("The selected repository appears to be empty. Please push your changes to the remote repository and try again.");
+			}
+		}
+	});
+};
+
+/**
+ * The Choreo CLI created every integration with auto build on commit and auto deploy on
+ * build switched on, so a deploy from the editor ended in a running integration. The
+ * platform keeps those as the component's own switches, set here after the create. It
+ * refuses auto deploy for some runtimes (Ballerina: "deploy builds from the Deploy page"),
+ * so the first build is followed from here and, when the platform will not deploy it,
+ * deployed to the pipeline's entry environment by the extension.
+ */
+async function enableBuildAutomation(created: CreatedComponent, orgHandle: string, project: Project): Promise<void> {
+	const cloud = ext.clients.platform.cloud;
+	ext.log(
+		`Created ${created.id}${created.warning ? `; warning: ${created.warning}` : ""}${created.sourceBindingError ? `; source binding: ${created.sourceBindingError}` : ""}`,
+	);
+	try {
+		await cloud.components.setAutoBuild(created.id, true, project.id);
+		ext.log(`Turned auto build on for ${created.id}`);
+	} catch (error) {
+		ext.log(`Could not turn auto build on for ${created.id}: ${(error as Error).message}`);
+	}
+	let platformDeploys = false;
+	try {
+		await cloud.components.setAutoDeploy(created.id, true, project.id);
+		platformDeploys = true;
+		ext.log(`Turned auto deploy on for ${created.id}`);
+	} catch (error) {
+		ext.log(`The platform will not auto deploy ${created.id} (${(error as Error).message}); the first build is deployed from here instead`);
+	}
+	if (created.sourceBindingError) {
+		ext.log(`No build can start for ${created.id} until its source binding is fixed (${created.sourceBindingError})`);
+		return;
+	}
+	// Not awaited: the create command returns while the build runs.
+	void followFirstBuild(created, orgHandle, project, !platformDeploys);
+}
+
+/** How long the platform's own first build is given to show up before one is started here. */
+const FIRST_BUILD_APPEAR_MS = 45_000;
+const BUILD_LIST_INTERVAL_MS = 5_000;
+/**
+ * Pauses between build triggers the platform refuses as unavailable. Its 502 means the
+ * component's source binding could not be read, which happens for a while after the
+ * create, so the pauses grow to about four minutes in all.
+ */
+const BUILD_TRIGGER_BACKOFF_MS = [10_000, 20_000, 30_000, 45_000, 60_000, 60_000];
+
+const sleep = (ms: number, signal: AbortSignal) =>
+	new Promise<void>((resolve) => {
+		const timer = setTimeout(done, ms);
+		function done() {
+			clearTimeout(timer);
+			signal.removeEventListener("abort", done);
+			resolve();
+		}
+		signal.addEventListener("abort", done, { once: true });
+	});
+
+/** The newest build of the integration, waiting a while for the platform to start the first. */
+async function findFirstBuild(integrationId: string, projectName: string, signal: AbortSignal, waitMs: number): Promise<Build | undefined> {
+	const cloud = ext.clients.platform.cloud;
+	try {
+		return await poll(
+			async () => {
+				const builds = await cloud.builds.list(integrationId, projectName);
+				return { done: builds.length > 0, value: builds[0] as Build | undefined };
+			},
+			{ timeoutMs: waitMs, intervalMs: BUILD_LIST_INTERVAL_MS, signal, describe: () => `The first build of ${integrationId}` },
+		);
+	} catch (error) {
+		if (isCloudError(error) && error.code === "timeout" && error.details.reason === "wait_timeout") {
+			return undefined;
+		}
+		throw error;
+	}
+}
+
+/** Starts a build, retrying while the platform's git integration is unavailable. */
+async function startFirstBuild(integrationId: string, projectName: string, signal: AbortSignal): Promise<void> {
+	const cloud = ext.clients.platform.cloud;
+	for (let attempt = 1; ; attempt++) {
+		try {
+			await cloud.builds.trigger(integrationId, { projectName });
+			ext.log(`Started the first build of ${integrationId}, since the platform had not`);
+			return;
+		} catch (error) {
+			const pause = BUILD_TRIGGER_BACKOFF_MS[attempt - 1];
+			const retryable = isCloudError(error) && error.code === "unavailable" && pause !== undefined && !signal.aborted;
+			ext.log(
+				`Could not start the first build of ${integrationId} (attempt ${attempt}): ${(error as Error).message}${retryable ? `; retrying in ${pause / 1000} s` : ""}`,
+			);
+			if (!retryable) {
+				throw error;
+			}
+			await sleep(pause, signal);
+			if (signal.aborted) {
+				throw error;
+			}
+		}
+	}
+}
+
+async function entryEnvironment(projectName: string): Promise<Environment> {
+	const cloud = ext.clients.platform.cloud;
+	const { entry } = await cloud.pipelines.ofProject(projectName);
+	if (entry) {
+		return cloud.environments.resolve(entry);
+	}
+	// Without a pipeline entry, the first build goes to the first non-production environment, never to production.
+	const first = (await cloud.environments.list()).find((environment) => !environment.critical);
+	if (!first) {
+		throw new Error("The organization has no non-production environment to deploy the first build to.");
+	}
+	return first;
 }
 
 /**
- * Convert an MCP proxy component into an MCP server built from source, by attaching the pushed
- * repository to the component's existing deployment track.
+ * Follows the first build in a progress notification and, when asked, deploys it to the
+ * pipeline's entry environment. Every outcome ends in a message with a link to the console.
  */
-async function handleMcpProxyRepositoryAttach(
-	workspaceCompId: string,
-	component: ComponentKind,
-	org: Organization,
+async function followFirstBuild(created: CreatedComponent, orgHandle: string, project: Project, deployAfter: boolean): Promise<void> {
+	const cloud = ext.clients.platform.cloud;
+	const label = created.displayName || created.id;
+	const consoleUrl = buildConsoleUrl(ext.config.consoleUrl, { orgHandle, project: project.id, integration: created.id });
+	const tell = (message: string, level: "info" | "warning" | "error") => {
+		const show = level === "info" ? window.showInformationMessage : level === "warning" ? window.showWarningMessage : window.showErrorMessage;
+		show(message, "View in console").then((resp) => {
+			if (resp === "View in console") {
+				void env.openExternal(Uri.parse(consoleUrl));
+			}
+		});
+	};
+	const controller = new AbortController();
+	const signal = controller.signal;
+	try {
+		await window.withProgress({ location: ProgressLocation.Notification, title: `${label} in WSO2 Cloud`, cancellable: true }, async (progress, token) => {
+			token.onCancellationRequested(() => controller.abort());
+			progress.report({ message: "waiting for the first build to start" });
+			let build = await findFirstBuild(created.id, project.id, signal, FIRST_BUILD_APPEAR_MS);
+			if (!build) {
+				progress.report({ message: "starting the first build" });
+				await startFirstBuild(created.id, project.id, signal);
+				build = await findFirstBuild(created.id, project.id, signal, FIRST_BUILD_APPEAR_MS);
+				if (!build) {
+					throw new Error("The build was accepted but has not appeared in the build list.");
+				}
+			}
+			const buildName = build.name as string;
+			build = await poll(
+				async () => {
+					const current = await cloud.builds.get(created.id, buildName, project.id);
+					progress.report({ message: `build ${buildName}: ${current.status ?? "running"}` });
+					return { done: !buildInProgress(current.status), value: current };
+				},
+				{ signal, describe: () => `The first build of ${label}` },
+			);
+			if (!buildSucceeded(build)) {
+				tell(`The first build of ${label} finished as ${build.status ?? "unknown"}.`, "error");
+				return;
+			}
+			if (!deployAfter) {
+				tell(`${label} is built; WSO2 Cloud deploys it automatically.`, "info");
+				return;
+			}
+			const target = await entryEnvironment(project.id);
+			progress.report({ message: `deploying to ${target.name}` });
+			const { releaseId, observed } = await cloud.deployments.deploy(created.id, {
+				environment: target.id,
+				imageId: buildName,
+				projectName: project.id,
+				allowAnyEnvironment: true,
+			});
+			ext.log(
+				`Deploying build ${buildName} of ${created.id} to ${target.name}${releaseId ? ` as release ${releaseId}` : ""}${
+					observed ? " (the gateway lost the platform's answer; the deployment was found by reading the environment)" : ""
+				}`,
+			);
+			await cloud.deployments.waitForRollout(created.id, target.id, {
+				releaseId: releaseId || undefined,
+				projectName: project.id,
+				signal,
+				onProgress: (current) => progress.report({ message: `deploying to ${target.name}: ${current?.deploymentStatusV2 ?? "starting"}` }),
+			});
+			tell(`Deployed ${label} to ${target.name}.`, "info");
+		});
+	} catch (error) {
+		if (signal.aborted) {
+			ext.log(`Stopped following the first build of ${created.id}`);
+			return;
+		}
+		ext.logError(`The first build of ${created.id} could not be followed to a deployment`, error as Error);
+		tell(`${label}: ${(error as Error).message}`, "warning");
+	}
+}
+
+/** Points an existing integration's build at this repository and starts a build. */
+async function attachSourceToExistingIntegration(
+	integrationId: string,
+	integration: Component,
+	orgHandle: string,
 	project: Project,
-	createParam: WICloudSubmitComponentsReq['createParams'][number],
+	createParam: WICloudCreateIntegrationParam,
 	workspaceFsPath: string,
 	gitRoot: string,
+	title: string,
 ): Promise<WICloudSubmitComponentsResp> {
 	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: 1 };
-	const componentName = component.metadata?.name || createParam?.displayName || "Unknown";
-
-	const missing = !createParam
-		? ["integration details"]
-		: [
-			!gitRoot && "git repository root",
-			!createParam.repoUrl && "repository URL",
-			!createParam.branch && "repository branch",
-		].filter((item): item is string => typeof item === "string");
+	const label = integration.displayName || integration.name;
+	const missing = [!gitRoot && "git repository root", !createParam?.repoUrl && "repository URL", !createParam?.branch && "repository branch"].filter((item): item is string => typeof item === "string");
 	if (missing.length > 0) {
-		const error = `Cannot attach sources to the MCP proxy: missing ${missing.join(", ")}.`;
+		const error = `Cannot attach sources to ${label}: missing ${missing.join(", ")}.`;
 		ext.logError(error, new Error(error));
-		result.failed.push({ name: componentName, error });
+		result.failed.push({ name: label, error });
 		return result;
 	}
-
-	const repositorySubPath = relativePath(gitRoot, createParam.componentDir);
-	ext.log(`Attaching git repository to MCP proxy component '${componentName}' instead of creating a new component`);
-
 	try {
-		await window.withProgress(
-			{ title: "Attaching sources to MCP proxy...", location: ProgressLocation.Notification },
-			() =>
-				attachMCPProxyRepositoryToExistingTrack({
-					componentId: workspaceCompId,
-					isPublicRepo: false,
-					orgHandler: org.handle,
-					orgId: org.id,
-					projectId: project.id,
-					srcGitRepoUrl: createParam.repoUrl,
-					repositorySubPath,
-					originCloud: "devant",
-					repositoryBranch: createParam.branch,
-					secretRef: createParam.gitCredRef,
-				}),
-		);
-		ext.log(`Attached git repository to MCP proxy component '${componentName}'`);
-		result.created.push(component);
-		consumedSourceCompIds.add(workspaceCompId);
+		const cloud = ext.clients.platform.cloud;
+		const appPath = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
+		await window.withProgress({ title, location: ProgressLocation.Notification }, async () => {
+			await cloud.components.updateBuildParameters(
+				integrationId,
+				cloud.components.workflowFor(runtimeForBuildPack(createParam.buildPackLang), { url: normalizeCloneUrl(createParam.repoUrl), branch: createParam.branch, appPath: appPath && appPath !== "." ? appPath : undefined }),
+				project.id,
+			);
+			await cloud.builds.trigger(integrationId, { projectName: project.id });
+		});
+		// The cached repository is the one the integration had; the next refresh reads the new one.
+		dataCacheStore.getState().setRepository(orgHandle, project.id, integrationId, undefined);
+		result.created.push(integration);
+		consumedSourceCompIds.add(integrationId);
 		await ext.context.workspaceState.update("SOURCE_COMPONENT_ID", null);
-
 		clearCodeServerLocalStorage();
-		const projectCache = dataCacheStore.getState().getProjects(org?.handle);
-		updateContextFile(gitRoot, ext.authProvider?.getState().state.userInfo!, project, org, projectCache);
+		linkContext(gitRoot, { org: orgHandle, project: project.id });
 		contextStore.getState().refreshState();
-
 		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
-		const successMessage = "Successfully attached the sources to the MCP proxy";
+		const successMessage = `Successfully attached the sources to ${label}`;
 		if (isWithinWorkspace) {
-			showViewInConsoleMessage(successMessage, org, project, result.created);
+			showViewInConsoleMessage(successMessage, orgHandle, project, result.created);
 		} else {
 			showReloadWorkspaceMessage(successMessage, workspaceFsPath);
 		}
 	} catch (err) {
-		ext.logError(`Failed to attach the repository to MCP proxy component ${componentName}`, err as Error);
-		result.failed.push({ name: componentName, error: `Failed to attach the repository to the MCP proxy: ${(err as Error).message}` });
+		ext.logError(`Failed to attach the repository to ${label}`, err as Error);
+		result.failed.push({ name: label, error: `Failed to attach the repository: ${(err as Error).message}` });
 	}
 	return result;
 }
 
-async function updateCodeServerWithCreatedComp(
-	createdComponent: ComponentKind,
-	org: Organization,
-	repo: Repository,
-	project: Project,
-): Promise<void> {
+async function updateCodeServerWithCreatedComp(created: Component, repo: Repository, project: Project): Promise<void> {
+	if (!ext.isDevantCloudEditor) {
+		return;
+	}
 	try {
 		const head = await repo.getHEAD();
-		if (ext.isDevantCloudEditor && head?.name) {
+		if (head?.name) {
 			const commit = await repo.getCommit(head.name);
-			try {
-				await window.withProgress(
-					{ title: "Updating cloud editor with newly created component...", location: ProgressLocation.Notification },
-					() =>
-						ext.clients.rpcClient.updateCodeServer({
-							componentId: createdComponent.metadata.id,
-							orgHandle: org.handle,
-							orgId: org.id.toString(),
-							orgUuid: org.uuid,
-							projectId: project.id,
-							sourceCommitHash: commit.hash,
-						}),
-				);
-			} catch (err) {
-				ext.logError("Failed to updated code server after creating the component", err as Error);
-			}
+			await window.withProgress({ title: "Updating cloud editor with newly created integration...", location: ProgressLocation.Notification }, () =>
+				ext.clients.platform.cloud.codeServer.ensure({ projectId: project.id, componentId: created.id, sourceCommitHash: commit.hash }),
+			);
 		}
 	} catch (err) {
-		ext.logError("Failed to updated code server after creating the component", err as Error);
+		ext.logError("Failed to update the code server after creating the integration", err as Error);
 	}
 }
 
-const showReloadWorkspaceMessage = (message: string, workspaceFsPath: string) => {
-	window.showInformationMessage(`${message} Reload workspace to continue`, { modal: true }, "Continue").then(async (resp) => {
+/** What to tell the person instead of plain success when integrations were created without their source bound; undefined when all were bound. */
+const sourceBindingWarning = (unbound: { label: string; error: NonNullable<CreatedComponent["sourceBindingError"]> }[]): string | undefined => {
+	if (unbound.length === 0) {
+		return undefined;
+	}
+	const names = unbound.map((item) => item.label).join(", ");
+	const reasons = new Set(unbound.map((item) => (item.error === "github-auth-required" ? "GitHub has to be connected to WSO2 Cloud again" : "WSO2 Cloud could not link the source repository")));
+	return `Created ${names}, but no build can start: ${[...reasons].join("; ")}. Fix it in the console, then start a build.`;
+};
+
+const showReloadWorkspaceMessage = (message: string, workspaceFsPath: string, warn = false) => {
+	(warn ? window.showWarningMessage : window.showInformationMessage)(`${message} Reload workspace to continue`, { modal: true }, "Continue").then(async (resp) => {
 		if (resp === "Continue") {
 			commands.executeCommand("vscode.openFolder", Uri.file(workspaceFsPath), { forceNewWindow: false });
 		}
 	});
-}
+};
 
-const showViewInConsoleMessage = (successMessage: string, org: Organization, project: Project, created: ComponentKind[]) => {
-	window.showInformationMessage(successMessage, `View in console`).then(async (resp) => {
-		if (resp === `View in console`) {
-			let consoleProjectPath = `${ext.config?.devantConsoleUrl}/organizations/${org.handle}/projects/${project.handler}`;
-			if (created.length === 1) {
-				consoleProjectPath += `/components/${created[0]?.metadata.handler}/overview`;
-			}
-			commands.executeCommand("vscode.open", consoleProjectPath,);
+const showViewInConsoleMessage = (message: string, orgHandle: string, project: Project, created: Component[], warn = false) => {
+	(warn ? window.showWarningMessage : window.showInformationMessage)(message, "View in console").then(async (resp) => {
+		if (resp === "View in console") {
+			const url = buildConsoleUrl(ext.config.consoleUrl, { orgHandle, project: project.id, integration: created.length === 1 ? created[0].id : undefined });
+			void env.openExternal(Uri.parse(url));
 		}
 	});
-}
+};
 
 const clearCodeServerLocalStorage = async () => {
 	if (ext.isDevantCloudEditor) {
-		// Clear code server local storage data data
 		try {
 			await commands.executeCommand("devantEditor.clearLocalStorage");
 		} catch (err) {
 			ext.logError(`Failed to execute devantEditor.clearLocalStorage command: ${err}`, err as Error);
 		}
 	}
-}
+};
 
-/**
- * Tell the cloud editor that the work in this session has been deployed, so it drops the
- * project's "undeployed changes" entry and the console stops showing a draft row for it.
- *
- * Not awaited by the caller: the command is only registered by the cloud editor build, and
- * an unknown command id is resolved against a `*` activation race before it rejects, which
- * can take a while in a cold window. An older editor image without the command logs here
- * and leaves the console's draft row in place until the user starts a new session.
- */
+/** Tells the cloud editor the work in this session was deployed; only the editor build registers the command. */
 const markCodeServerDeployed = async () => {
 	if (ext.isDevantCloudEditor) {
 		try {
@@ -733,81 +746,54 @@ const markCodeServerDeployed = async () => {
 			ext.logError(`Failed to execute devantEditor.markDeployed command: ${err}`, err as Error);
 		}
 	}
-}
+};
 
-/** If the context.yaml exists with `local: true`, create project from its data, automatically  */
-const createProjectFromLocalMetadata = async (userInfo: UserInfo, workspacePath?: string): Promise<{ org?: Organization; project?: Project }> => {
+/** If the context file has an entry marked `local: true`, creates the project it names and clears the mark. */
+const createProjectFromLocalMetadata = async (workspacePath: string): Promise<Project | undefined> => {
 	try {
-		const wso2ContextPath = path.join(workspacePath, ".wso2", "context.yaml");
-		const contextFilePath = existsSync(wso2ContextPath) ? wso2ContextPath : path.join(workspacePath, ".choreo", "context.yaml");
-		if (!existsSync(contextFilePath)) {
-			return undefined;
-		}
-
-		type LocalContextItem = ContextItem & { local?: boolean };
-		const contextList: LocalContextItem[] = (yaml.load(readFileSync(contextFilePath, "utf8")) as LocalContextItem[]) ?? [];
-		const localEntry = contextList.find((entry) => entry.local === true);
+		const localEntry = localContextEntry(workspacePath);
 		if (!localEntry) {
 			return undefined;
 		}
+		const session = ext.authProvider?.session;
+		if (!session) {
+			return undefined;
+		}
+		if (localEntry.org !== session.org.handle) {
+			window.showWarningMessage(`The workspace is linked to the organization ${localEntry.org}; you are signed in to ${session.org.handle}. The project is created in ${session.org.handle}.`);
+		}
+		const cloud = ext.clients.platform.cloud;
+		const projects = await window.withProgress({ title: `Fetching cloud projects of organization ${session.org.name}...`, location: ProgressLocation.Notification }, () => cloud.projects.list());
+		dataCacheStore.getState().setProjects(session.org.handle, projects);
 
-		let selectedOrg = userInfo.organizations.find((org) => org.handle === localEntry.org);
-		if (!selectedOrg) {
-			selectedOrg = await selectOrg(userInfo, "Select organization");
+		const finish = (project: Project) => {
+			const entries = readContextEntries(workspacePath).map((entry) => (entry.org === localEntry.org && entry.project === localEntry.project ? { ...entry, org: session.org.handle, project: project.id, local: undefined } : entry));
+			writeContextEntries(workspacePath, entries);
+			return project;
+		};
+
+		const existing = projects.find((project) => project.id === localEntry.project || project.handler === localEntry.project);
+		if (existing) {
+			return finish(existing);
 		}
 
-		const projects = await window.withProgress(
-			{
-				title: `Fetching cloud projects of organization ${selectedOrg.name}...`,
-				location: ProgressLocation.Notification,
-			},
-			() => ext.clients.rpcClient.getProjects(selectedOrg.id.toString()),
-		);
-		dataCacheStore.getState().setProjects(selectedOrg.handle, projects);
-
-		// Strip the `local` flag from the matched entry and write the updated list back in-place.
-		const stripLocalFlag = (list: LocalContextItem[]): ContextItem[] =>
-			list.map(({ local: _local, ...rest }) => rest);
-
-		const matchingProject = projects.find((project) => project.handler === localEntry.project);
-		if (matchingProject) {
-			writeFileSync(contextFilePath, yaml.dump(stripLocalFlag(contextList)));
-			return { org: selectedOrg, project: matchingProject };
-		}
-
-		// Derive a human-readable name from Ballerina.toml [workspace].title, falling back to the handler.
-		let projectName: string | undefined;
+		// A readable name from Ballerina.toml [workspace].title, else from the handle.
+		let displayName: string | undefined;
 		const ballerinaTomlPath = path.join(workspacePath, "Ballerina.toml");
 		if (existsSync(ballerinaTomlPath)) {
-			const tomlContent = readFileSync(ballerinaTomlPath, "utf8");
-			const titleMatch = tomlContent.match(/^\[workspace\][^\[]*title\s*=\s*"([^"]+)"/ms);
-			projectName = titleMatch?.[1];
+			const titleMatch = readFileSync(ballerinaTomlPath, "utf8").match(/^\[workspace\][^[]*title\s*=\s*"([^"]+)"/ms);
+			displayName = titleMatch?.[1];
 		}
-		if (!projectName) {
-			projectName = localEntry.project
-				.split("-")
-				.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-				.join(" ");
-		}
-
-		const createdProject = await window.withProgress(
-			{
-				title: `Creating new cloud project ${selectedOrg.name}...`,
-				location: ProgressLocation.Notification,
-			},
-			() => ext.clients.rpcClient.createProject({
-				orgId: selectedOrg.id.toString(),
-				orgHandler: selectedOrg.handle,
-				projectName,
-				projectHandler: localEntry.project,
-				region: ext.authProvider?.getState().state.region || "US"
-			}),
-		);
-
-		writeFileSync(contextFilePath, yaml.dump(stripLocalFlag(contextList)));
-		return { org: selectedOrg, project: createdProject };
+		displayName ??= localEntry.project
+			.split("-")
+			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+			.join(" ");
+		const name = toProjectName(localEntry.project);
+		const created = await window.withProgress({ title: `Creating new cloud project ${displayName}...`, location: ProgressLocation.Notification }, () => cloud.projects.create({ name, displayName }));
+		dataCacheStore.getState().setProjects(session.org.handle, [...projects, created]);
+		return finish(created);
 	} catch (err) {
-		ext.logError(`Failed to get context file entry`, err as Error);
-		return
+		ext.logError("Failed to create the project from the workspace's context file", err as Error);
+		return undefined;
 	}
-}
+};
