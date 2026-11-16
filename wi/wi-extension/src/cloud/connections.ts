@@ -87,7 +87,7 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 				await cloud.config.putEnvGroup(request.integration, environment, request.name, { name: request.name, sensitive: true, data }, request.projectName);
 			}
 		},
-		listConnectable: (integration: string, projectName: string) => cloud.config.listConnectableEndpoints(integration, projectName),
+		listConnectable: (integration: string, projectName: string) => cloud.config.listConnectableServices(integration, projectName),
 		createServiceConnection: async (request: {
 			integration: string;
 			target: { project: string; integration: string; endpoint: string };
@@ -166,7 +166,7 @@ export function cloudConnections(cloud: CloudClient, logError: (message: string,
 			// A key link names the project's connection, not the endpoint: the connectable endpoints say which endpoint
 			// each connection is for. Links to other resources, a connection the listing no longer has among them, are not endpoints.
 			const byRef = new Map<string, { project: string; component: string; endpoint: string }>();
-			for (const item of await cloud.config.listConnectableEndpoints(integration, projectName)) {
+			for (const item of await cloud.config.listConnectableServices(integration, projectName)) {
 				if (item.ref) {
 					byRef.set(item.ref, { project: item.project, component: item.component, endpoint: item.endpoint });
 				}
