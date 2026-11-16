@@ -29,7 +29,7 @@ import {
 	sourceReadiness,
 	validateIntegrationDisplayName,
 } from "@wso2/wi-core";
-import { type Project, buildConsoleUrl, buildSucceeded } from "@wso2/wso2-cloud-client";
+import { type Project, buildConsoleUrl, buildSucceeded, parseGitHubRepoUrl } from "@wso2/wso2-cloud-client";
 import { parseGitURL } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, Uri, commands, env, window, workspace } from "vscode";
 import { ext } from "../../extensionVariables";
@@ -37,6 +37,7 @@ import { isSubpath } from "../../utils/pathUtils";
 import { CloudWsManager } from "../../ws-managers/cloud/ws-manager";
 import { linkContext } from "../context-file";
 import { getGitRoot } from "../git/util";
+import { type GitHubRepoAccess, connectGitHub, githubRepoAccess, installGitHubApp } from "../github-app";
 import { handleCloudError } from "../platform/error-handler";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
@@ -88,18 +89,25 @@ function pickBranch(branches: string[], ...preferred: (string | undefined | null
 	return [...preferred, "main", "master"].find((branch) => !!branch && branches.includes(branch)) ?? branches[0] ?? null;
 }
 
+const NO_ACCESS: GitHubRepoAccess = { retrievedRepos: false, isAccessible: false, branches: [] };
+
+// The GitHub account of the repository a deploy from `workspaceDir` builds from, as the check reads it.
+async function sourceOwner(workspaceDir?: string): Promise<string | undefined> {
+	const gitData = workspaceDir ? await new CloudWsManager().getLocalGitData(workspaceDir) : undefined;
+	const remote = gitData?.upstream?.remoteUrl || gitData?.remotes?.[0];
+	return remote ? parseGitHubRepoUrl(remote)?.owner : undefined;
+}
+
 // The same reads the deploy form makes for its repository section, judged by the same rules.
 async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspectSourceResp> {
 	const ws = new CloudWsManager();
-	const orgId = ext.authProvider?.org?.id?.toString() ?? "";
 	const gitData = (await ws.getLocalGitData(req.workspaceDir)) ?? null;
 	const remotes = gitData?.remotes ?? [];
 	const gitRemote = (req.gitRemote && remotes.includes(req.gitRemote) ? req.gitRemote : gitData?.upstream?.remoteUrl || remotes[0]) || null;
 	const gitProvider = (gitRemote && parseGitURL(gitRemote)?.[2]) || null;
-	const target = gitRemote && gitProvider ? { repoUrl: gitRemote, orgId, credRef: "" } : undefined;
-	const [repoAccess, branches] = target
-		? await Promise.all([ws.isRepoAuthorized(target), ws.getBranches(target).catch((): string[] => [])])
-		: [undefined, [] as string[]];
+	const github = gitRemote && gitProvider ? parseGitHubRepoUrl(gitRemote) : undefined;
+	const repoAccess = gitRemote && gitProvider ? await (github ? githubRepoAccess(github.owner, github.repo) : NO_ACCESS) : undefined;
+	const branches = repoAccess?.branches ?? [];
 	const branch = pickBranch(branches, req.branch, gitData?.upstream?.name);
 	const [configDriftFiles, hasDirtyRepo] = await Promise.all([
 		gitRemote && branch ? ws.getConfigFileDrifts({ type: "", repoDir: req.workspaceDir, branch, repoUrl: gitRemote }) : Promise.resolve([] as string[]),
@@ -238,5 +246,7 @@ export function deployIntegrationCommands(context: ExtensionContext) {
 		commands.registerCommand(WICloudDeployCommands.InspectSource, inspectSource),
 		commands.registerCommand(WICloudDeployCommands.Deploy, deploy),
 		commands.registerCommand(WICloudDeployCommands.DeployBuild, deployLatestBuild),
+		commands.registerCommand(WICloudDeployCommands.ConnectGitHub, async (req?: { workspaceDir?: string }) => connectGitHub(await sourceOwner(req?.workspaceDir))),
+		commands.registerCommand(WICloudDeployCommands.InstallGitHubApp, async (req?: { workspaceDir?: string }) => installGitHubApp(await sourceOwner(req?.workspaceDir))),
 	);
 }

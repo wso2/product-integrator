@@ -104,8 +104,8 @@ function accessIssue(input: SourceReadinessInput): SourceReadiness | undefined {
 		};
 	}
 	return repoAccess?.retrievedRepos
-		? { ...issue, message: "WSO2 lacks access to the selected repository.", action: "grantAccess" }
-		: { ...issue, message: "Please authorize WSO2 to access your GitHub repositories.", action: "authorize", tone: "info" };
+		? { ...issue, message: "WSO2 Cloud Git Connect has no access to this repository on GitHub.", action: "grantAccess" }
+		: { ...issue, message: "Authorize WSO2 Cloud Git Connect on GitHub to deploy from this repository.", action: "authorize", tone: "info" };
 }
 
 function branchIssue(input: SourceReadinessInput): SourceReadiness | undefined {

@@ -235,6 +235,10 @@ export const WICloudDeployCommands = {
 	Deploy: "wso2.integrator.cloud.integration.deploy",
 	/** Deploys an integration's latest successful build to its project's entry environment. */
 	DeployBuild: "wso2.integrator.cloud.integration.deployBuild",
+	/** The repository check's Authorize action: authorizes the GitHub App and connects its installations. */
+	ConnectGitHub: "wso2.integrator.cloud.integration.connectGitHub",
+	/** The repository check's Grant Access action: installs the GitHub App or gives it the repository. */
+	InstallGitHubApp: "wso2.integrator.cloud.integration.installGitHubApp",
 } as const;
 
 export interface WICloudDeployContextReq {

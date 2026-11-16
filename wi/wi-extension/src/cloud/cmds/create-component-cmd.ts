@@ -25,11 +25,13 @@ import {
 	type Component,
 	type CreatedComponent,
 	type Environment,
+	type GitHubAppSource,
 	type Project,
 	RESOURCE_NAME,
 	buildConsoleUrl,
 	buildInProgress,
 	buildSucceeded,
+	inspectGitHubTree,
 	integrationTypeFromScope,
 	integrationTypeLabel,
 	isCloudError,
@@ -47,6 +49,7 @@ import { linkContext, localContextEntry, readContextEntries, writeContextEntries
 import type { Repository } from "../git/git";
 import { initGit } from "../git/main";
 import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
+import { githubRepoAccess } from "../github-app";
 import { handleCloudError } from "../platform/error-handler";
 import { contextStore, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
@@ -312,7 +315,8 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	}
 
 	await checkSubscription();
-	await checkIfSourcePushedToRemoteRepo(createParams, gitRoot);
+	const githubApps = await Promise.all(createParams.map((createParam) => githubAppSource(createParam, gitRoot)));
+	await checkIfSourcePushedToRemoteRepo(createParams, gitRoot, githubApps);
 
 	await window.withProgress(
 		{
@@ -344,6 +348,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 						type,
 						runtime: runtimeForBuildPack(createParam.buildPackLang),
 						repo: { url: normalizeCloneUrl(createParam.repoUrl), branch: createParam.branch, appPath: appPath && appPath !== "." ? appPath : undefined },
+						githubApp: githubApps[i],
 						modelConfig: createParam.modelConfig,
 						mcpConfig: createParam.mcpConfig,
 						autoInstrumentation: createParam.autoInstrumentation,
@@ -428,7 +433,25 @@ const checkSubscription = async () => {
 	}
 };
 
-const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegrationParam[], gitRoot: string) => {
+/** The GitHub App binding for the integration's repository when the app reads it; none for a public repository it does not cover. */
+async function githubAppSource(createParam: WICloudCreateIntegrationParam, gitRoot: string): Promise<GitHubAppSource | undefined> {
+	const github = parseGitHubRepoUrl(createParam.repoUrl);
+	const installationId = github && (await githubRepoAccess(github.owner, github.repo)).installationId;
+	if (!github || !installationId) {
+		return undefined;
+	}
+	const appPath = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
+	return {
+		installationId,
+		owner: github.owner,
+		repo: github.repo,
+		branch: createParam.branch,
+		appPath: appPath && appPath !== "." ? appPath : undefined,
+		repositoryUrl: normalizeCloneUrl(createParam.repoUrl),
+	};
+}
+
+const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegrationParam[], gitRoot: string, githubApps: (GitHubAppSource | undefined)[]) => {
 	if (ext.isDevantCloudEditor) {
 		return; // the editor pushed the changes itself
 	}
@@ -440,10 +463,14 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegr
 			}
 			const github = parseGitHubRepoUrl(createParam.repoUrl);
 			if (!github) {
-				continue; // the platform reads public GitHub repositories only
+				continue; // the platform reads GitHub repositories only
 			}
 			const subPathDir = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
-			const inspection = await ext.clients.platform.cloud.repos.inspect(github.owner, github.repo, createParam.branch, subPathDir === "." ? "" : subPathDir);
+			const subPath = subPathDir === "." ? "" : subPathDir;
+			const installationId = githubApps[i]?.installationId;
+			const inspection = installationId
+				? inspectGitHubTree(await ext.clients.platform.cloud.git.listGitHubTree(installationId, github.owner, github.repo, createParam.branch), subPath)
+				: await ext.clients.platform.cloud.repos.inspect(github.owner, github.repo, createParam.branch, subPath);
 			if (subPathDir && subPathDir !== ".") {
 				if (!inspection.isSubPathValid || inspection.isSubPathEmpty) {
 					throw new Error(`The selected directory ${subPathDir} appears to be empty or invalid in the remote repository. Please push your changes and try again.`);

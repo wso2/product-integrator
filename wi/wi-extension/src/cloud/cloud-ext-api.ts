@@ -42,6 +42,7 @@ import { createConnectionConfig, deleteLocalConnectionConfig } from "./cloud-uti
 import { cloudConnections } from "./connections";
 import { linkContext } from "./context-file";
 import { hasDirtyRepo } from "./git/util";
+import { connectGitHub, githubRepoAccess } from "./github-app";
 import { contextStore } from "./stores/context-store";
 
 const NO_PLATFORM_API = (what: string, dependency: string) =>
@@ -208,16 +209,14 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public get git() {
 		const proxy = this.cloud.git;
 		return {
-			// The git integration's routes are not in the platform's API document yet.
-			isRepoAuthorized: async (_owner: string, _repo: string) => {
-				throw NO_PLATFORM_API("Checking repository access", "git_app_service_routes");
+			isRepoAuthorized: async (owner: string, repo: string) => {
+				const { branches: _branches, ...access } = await githubRepoAccess(owner, repo);
+				return access;
 			},
 			listInstallations: async () => {
 				throw NO_PLATFORM_API("Listing GitHub installations", "git_app_service_routes");
 			},
-			connectGitHub: async () => {
-				throw NO_PLATFORM_API("Connecting GitHub", "git_app_service_routes");
-			},
+			connectGitHub,
 			raw: proxy.raw.bind(proxy),
 		};
 	}
