@@ -242,7 +242,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 
 	// WSO2 Cloud builds from GitHub repositories only for now; no credential configured for another provider changes that.
 	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB) {
-		invalidRepoMsg = `Deploying from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and deploy from it.`;
+		invalidRepoMsg = `Creating integrations from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and create it from there.`;
 		onInvalidRepoRefreshClick = refetchGitData;
 		blockCreation = true;
 	}

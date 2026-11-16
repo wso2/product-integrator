@@ -254,7 +254,7 @@ export class WebviewManager {
 			case ViewType.IMPORT_EXTERNAL:
 				return "Import Project";
 			case ViewType.CREATE_CLOUD_INTEGRATION:
-				return "Deploy Integration";
+				return "Create Integration";
 			case ViewType.SETUP_BALLERINA:
 				return "Setup Ballerina";
 			case ViewType.WELCOME:

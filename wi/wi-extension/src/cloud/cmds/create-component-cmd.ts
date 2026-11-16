@@ -69,7 +69,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 		commands.registerCommand(WICommandIds.CreateNewComponent, async (params: ICreateNewIntegrationCmdParams) => {
 			try {
 				isPlatformReady(ext);
-				const session = await requireSession("Deploy Integration");
+				const session = await requireSession("Create Integration");
 				if (!session) {
 					return;
 				}
@@ -211,7 +211,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					throw new Error("Selected directory is outside of the workspace. Please select a directory within the workspace to create the integration.");
 				}
 			} catch (err) {
-				ext.logError("Failed to deploy integration", err as Error);
+				ext.logError("Failed to create integration", err as Error);
 				handleCloudError(err, "Failed to deploy the integration");
 			}
 		}),
@@ -243,6 +243,8 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: totalCount };
 	// Created, but the platform could not bind the repository: no build starts until that is fixed.
 	const unbound: { label: string; error: NonNullable<CreatedComponent["sourceBindingError"]> }[] = [];
+	// Created, but the platform could not start the first build it starts with the create.
+	const unbuilt: string[] = [];
 	const cloud = ext.clients.platform.cloud;
 	// The platform acts for the signed-in organization; a form opened for another one is not submitted to it.
 	if (ext.authProvider?.org?.handle !== org.handle) {
@@ -312,7 +314,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				try {
 					const type = integrationTypeFromScope(createParam.integrationType);
 					if (!type) {
-						throw new Error(`${integrationTypeLabel(createParam.integrationType) || createParam.integrationType} integrations cannot be deployed to WSO2 Cloud yet.`);
+						throw new Error(`${integrationTypeLabel(createParam.integrationType) || createParam.integrationType} integrations cannot be created in WSO2 Cloud yet.`);
 					}
 					const name = toResourceName(createParam.name);
 					if (!RESOURCE_NAME.test(name)) {
@@ -333,6 +335,9 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 					result.created.push(created);
 					if (created.sourceBindingError) {
 						unbound.push({ label, error: created.sourceBindingError });
+					} else if (created.warning) {
+						// The platform starts the first build with the create, and says so here when it could not.
+						unbuilt.push(label);
 					}
 					const cache = dataCacheStore.getState().getIntegrations(org.handle, project.id);
 					dataCacheStore.getState().setIntegrations(org.handle, project.id, [created, ...cache]);
@@ -366,16 +371,16 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 					? "Created the integration in WSO2 Cloud. Build and deploy it from the console."
 					: "Created the integrations in WSO2 Cloud. Build and deploy them from the console."
 				: `Created ${result.created.length} of ${totalCount} integrations in WSO2 Cloud. Build and deploy them from the console.`;
-		const bindingWarning = sourceBindingWarning(unbound);
+		const createWarning = [sourceBindingWarning(unbound), firstBuildWarning(unbuilt)].filter(Boolean).join(" ") || undefined;
 		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
 		if (workspace.workspaceFile) {
 			window.showErrorMessage("Please make sure newly created integrations are added to workspace.");
 			// Builds and deployments are done in the console, so the way there is offered here too.
-			showViewInConsoleMessage(bindingWarning ?? successMessage, org.handle, project, result.created, !!bindingWarning);
+			showViewInConsoleMessage(createWarning ?? successMessage, org.handle, project, result.created, !!createWarning);
 		} else if (isWithinWorkspace) {
-			showViewInConsoleMessage(bindingWarning ?? successMessage, org.handle, project, result.created, !!bindingWarning);
+			showViewInConsoleMessage(createWarning ?? successMessage, org.handle, project, result.created, !!createWarning);
 		} else {
-			showReloadWorkspaceMessage(bindingWarning ?? successMessage, workspaceFsPath, !!bindingWarning);
+			showReloadWorkspaceMessage(createWarning ?? successMessage, workspaceFsPath, !!createWarning);
 		}
 	}
 	if (result.failed.length > 0) {
@@ -508,6 +513,15 @@ async function updateCodeServerWithCreatedComp(created: Component, repo: Reposit
 }
 
 /** What to tell the person instead of plain success when integrations were created without their source bound; undefined when all were bound. */
+/** The integrations whose first build WSO2 Cloud could not start with the create. */
+const firstBuildWarning = (unbuilt: string[]): string | undefined => {
+	if (unbuilt.length === 0) {
+		return undefined;
+	}
+	const one = unbuilt.length === 1;
+	return `WSO2 Cloud created ${unbuilt.join(", ")} but could not start ${one ? "its" : "their"} first build. Start ${one ? "it" : "them"} from the console.`;
+};
+
 const sourceBindingWarning = (unbound: { label: string; error: NonNullable<CreatedComponent["sourceBindingError"]> }[]): string | undefined => {
 	if (unbound.length === 0) {
 		return undefined;
@@ -544,7 +558,10 @@ const clearCodeServerLocalStorage = async () => {
 	}
 };
 
-/** Tells the cloud editor the work in this session was deployed; only the editor build registers the command. */
+/**
+ * Tells the cloud editor the session's work is now an integration in WSO2 Cloud, so the console stops showing
+ * the project's draft of it; only the editor build registers the command, whose name is the editor's.
+ */
 const markCodeServerDeployed = async () => {
 	if (ext.isDevantCloudEditor) {
 		try {
