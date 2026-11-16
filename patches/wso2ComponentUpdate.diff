@@ -2401,7 +2401,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			'<html>',
 +			'<head>',
 +			'<meta http-equiv="x-ua-compatible" content="ie=edge" />',
-+			'<title>WSO2 Integrator Update</title>',
++			'<title>Choreo Integrator Update</title>',
 +			'<hta:application id="app" border="none" caption="no" showintaskbar="yes" sysmenu="no" maximizebutton="no" minimizebutton="no" scroll="no" singleinstance="yes" innerborder="no" contextmenu="no" selection="no" />',
 +			'<style>',
 +			`html,body{margin:0;height:100%;font-family:'Segoe UI',Tahoma,sans-serif;background:#1b1b1f;color:#e8e8ea;overflow:hidden;}`,
@@ -2415,7 +2415,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/electron-main/ws
 +			'</head>',
 +			'<body>',
 +			'<div class="wrap">',
-+			'<p class="title">Updating WSO2 Integrator&hellip;</p>',
++			'<p class="title">Updating Choreo Integrator&hellip;</p>',
 +			'<p class="sub">This may take a few minutes. The editor will reopen automatically when the update is complete.</p>',
 +			'<div class="bar"><div class="fill"></div></div>',
 +			'</div>',
@@ -4079,7 +4079,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +const WSO2_UPDATES_AVAILABLE_KEY = 'wso2UpdatesAvailable';
 +const WSO2_UPDATES_AVAILABLE = new RawContextKey<boolean>(WSO2_UPDATES_AVAILABLE_KEY, false);
 +
-+const CATEGORY = localize2('wso2.updates.category', "WSO2 Integrator");
++const CATEGORY = localize2('wso2.updates.category', "Choreo Integrator");
 +
 +/**
 + * Whether Squirrel.Mac owns core-app updates, which is where the stock "Check for Updates..."
@@ -4099,7 +4099,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	id: 'wso2Update',
 +	order: 100,
 +	type: 'object',
-+	title: localize('wso2.updates.title', "WSO2 Integrator Updates"),
++	title: localize('wso2.updates.title', "Choreo Integrator Updates"),
 +	properties: {
 +		'wso2.updates.mode': {
 +			type: 'string',
@@ -4111,14 +4111,14 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +			],
 +			default: 'default',
 +			scope: ConfigurationScope.APPLICATION,
-+			description: localize('wso2.updates.mode.description', "Controls how WSO2 Integrator checks for component updates.")
++			description: localize('wso2.updates.mode.description', "Controls how Choreo Integrator checks for component updates.")
 +		},
 +		'wso2.updates.channel': {
 +			type: 'string',
 +			enum: ['stable', 'beta', 'insider'],
 +			default: 'stable',
 +			scope: ConfigurationScope.APPLICATION,
-+			description: localize('wso2.updates.channel.description', "The update channel to receive updates from. Applies to both WSO2 Integrator itself and its components.")
++			description: localize('wso2.updates.channel.description', "The update channel to receive updates from. Applies to both Choreo Integrator itself and its components.")
 +		},
 +		'wso2.updates.titleBar': {
 +			type: 'boolean',
@@ -4163,7 +4163,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		await updateService.checkForUpdates(true);
 +		const state = await updateService.getState();
 +		if (state.type === Wso2UpdateStateType.Idle) {
-+			notificationService.info(localize('wso2.updates.upToDate', "WSO2 Integrator components are up to date."));
++			notificationService.info(localize('wso2.updates.upToDate', "Choreo Integrator components are up to date."));
 +		} else if (state.type === Wso2UpdateStateType.Error) {
 +			notificationService.error(localize('wso2.updates.checkError', "Checking for component updates failed: {0}", state.message));
 +		}
@@ -4185,8 +4185,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		return;
 +	}
 +	const { confirmed } = await dialogService.confirm({
-+		message: localize("wso2.updates.appConfirm", "Update WSO2 Integrator to {0}?", version),
-+		detail: localize("wso2.updates.appConfirmDetail", "WSO2 Integrator will close to install the update. This can take a few minutes — a progress window will show while it installs, and the editor will reopen automatically when it's done."),
++		message: localize("wso2.updates.appConfirm", "Update Choreo Integrator to {0}?", version),
++		detail: localize("wso2.updates.appConfirmDetail", "Choreo Integrator will close to install the update. This can take a few minutes — a progress window will show while it installs, and the editor will reopen automatically when it's done."),
 +		primaryButton: localize("wso2.updates.appConfirmYes", "Update and Restart")
 +	});
 +	if (!confirmed) {
@@ -4194,13 +4194,13 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	}
 +	const progress = notificationService.notify({
 +		severity: Severity.Info,
-+		message: localize("wso2.updates.appDownloading", "Downloading the WSO2 Integrator update…"),
++		message: localize("wso2.updates.appDownloading", "Downloading the Choreo Integrator update…"),
 +		sticky: true
 +	});
 +	try {
 +		await updateService.applyAppUpdate();
 +	} catch (err) {
-+		notificationService.error(localize("wso2.updates.appFailed", "Failed to install the WSO2 Integrator update: {0}", String(err)));
++		notificationService.error(localize("wso2.updates.appFailed", "Failed to install the Choreo Integrator update: {0}", String(err)));
 +	} finally {
 +		progress.close();
 +	}
@@ -4293,7 +4293,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		const picked = await quickInputService.pick(items, {
 +			placeHolder: anyActionable
 +				? localize('wso2.updates.componentsPlaceholderUpdatable', "Select a component to update or restart; Esc to close")
-+				: localize('wso2.updates.componentsPlaceholder', "Installed WSO2 Integrator components")
++				: localize('wso2.updates.componentsPlaceholder', "Installed Choreo Integrator components")
 +		});
 +		if (!picked) {
 +			return;
@@ -4302,9 +4302,9 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +			await updateService.downloadUpdates([picked.componentId]);
 +		} else if (picked.awaitsAppUpdate) {
 +			// No Restart button: a plain restart keeps this app, and this component waits for the next one.
-+			notificationService.info(localize('wso2.updates.componentAwaitsApp', "{0} is downloaded and will be installed with the WSO2 Integrator update.", picked.componentId));
++			notificationService.info(localize('wso2.updates.componentAwaitsApp', "{0} is downloaded and will be installed with the Choreo Integrator update.", picked.componentId));
 +		} else if (picked.pending) {
-+			notificationService.prompt(Severity.Info, localize('wso2.updates.componentPending', "{0} is downloaded. Restart WSO2 Integrator to finish updating.", picked.componentId), [
++			notificationService.prompt(Severity.Info, localize('wso2.updates.componentPending', "{0} is downloaded. Restart Choreo Integrator to finish updating.", picked.componentId), [
 +				{ label: localize('wso2.updates.restartNow', "Restart"), run: () => hostService.restart() }
 +			]);
 +		} else {
@@ -4317,7 +4317,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +	constructor() {
 +		super({
 +			id: 'wso2.updates.titleBarIndicator',
-+			title: localize2('wso2.updates.titleBarIndicator', "Update WSO2 Integrator Components"),
++			title: localize2('wso2.updates.titleBarIndicator', "Update Choreo Integrator Components"),
 +			icon: Codicon.cloudDownload,
 +			f1: false,
 +			// No menu placement: components share the core app's title-bar indicator (see
@@ -4428,7 +4428,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +
 +		const promptComponentsOnly = () => this.notificationService.prompt(
 +			Severity.Info,
-+			localize('wso2.updates.restart', "Restart WSO2 Integrator to finish updating components."),
++			localize('wso2.updates.restart', "Restart Choreo Integrator to finish updating components."),
 +			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => this.hostService.restart() }]
 +		);
 +		const current = this.stockUpdateService.state.type;
@@ -4510,8 +4510,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +		this.notificationService.prompt(
 +			Severity.Info,
 +			version
-+				? localize('wso2.updates.appReadyVersion', "WSO2 Integrator {0} is ready. Restart to finish updating.", version)
-+				: localize('wso2.updates.appReady', "A WSO2 Integrator update is ready. Restart to finish updating."),
++				? localize('wso2.updates.appReadyVersion', "Choreo Integrator {0} is ready. Restart to finish updating.", version)
++				: localize('wso2.updates.appReady', "A Choreo Integrator update is ready. Restart to finish updating."),
 +			[{ label: localize('wso2.updates.restartNow', "Restart"), run: () => this.restartIntoAppUpdate() }]
 +		);
 +	}
@@ -4574,7 +4574,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +			// A timed-out stock check leaves the core-app outcome unknown, so stay silent rather than
 +			// claim an all-clear we cannot vouch for.
 +			if (stockState?.type === StateType.Idle && componentState.type === Wso2UpdateStateType.Idle) {
-+				this.notificationService.info(localize('wso2.updates.allUpToDate', "WSO2 Integrator is up to date."));
++				this.notificationService.info(localize('wso2.updates.allUpToDate', "Choreo Integrator is up to date."));
 +			}
 +		} finally {
 +			this.explicitCheckInFlight = false;
@@ -4641,8 +4641,8 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +
 +		const names = state.updates.map(u => `${u.id} ${u.toVersion}`).join(', ');
 +		const message = state.updates.length
-+			? localize('wso2.updates.available', "Updates are available for WSO2 Integrator components: {0}", names)
-+			: localize('wso2.updates.appAvailable', "A new version of WSO2 Integrator is available: {0}", state.appUpdate!.version);
++			? localize('wso2.updates.available', "Updates are available for Choreo Integrator components: {0}", names)
++			: localize('wso2.updates.appAvailable', "A new version of Choreo Integrator is available: {0}", state.appUpdate!.version);
 +
 +		const actions: IPromptChoice[] = [];
 +		if (state.updates.length) {
@@ -4685,7 +4685,7 @@ Index: product-integrator/lib/vscode/src/vs/workbench/contrib/wso2Update/browser
 +			.catch(err => this.logService.error('[wso2Update] failed to clear the downloaded state', err));
 +
 +		if (failed > 0) {
-+			this.notificationService.error(localize('wso2.updates.installFailed', "{0} component update(s) could not be installed. See the log (WSO2 Integrator) for details.", failed));
++			this.notificationService.error(localize('wso2.updates.installFailed', "{0} component update(s) could not be installed. See the log (Choreo Integrator) for details.", failed));
 +		}
 +
 +		if (state.restartRequired) {
@@ -4840,14 +4840,14 @@ Index: product-integrator/lib/vscode/src/vs/platform/menubar/electron-main/menub
 +				const items: MenuItem[] = [];
 +				if (state.updates.length) {
 +					items.push(new MenuItem({
-+						label: this.mnemonicLabel(nls.localize('miWso2UpdateComponents', "Update WSO2 Integrator &&Components")), click: () => {
++						label: this.mnemonicLabel(nls.localize('miWso2UpdateComponents', "Update Choreo Integrator &&Components")), click: () => {
 +							this.wso2UpdateService.downloadUpdates();
 +						}
 +					}));
 +				}
 +				if (state.appUpdate) {
 +					items.push(new MenuItem({
-+						label: this.mnemonicLabel(nls.localize('miWso2DownloadApp', "Download WSO2 Integrator &&Update")), click: () => {
++						label: this.mnemonicLabel(nls.localize('miWso2DownloadApp', "Download Choreo Integrator &&Update")), click: () => {
 +							this.wso2UpdateService.downloadAppInstaller();
 +						}
 +					}));

@@ -395,7 +395,7 @@ jobs:
       # must read that script from the commit under test, not from the caller's triggering ref.
       ref: ${{ inputs.ref }}
       allow_failure: ${{ inputs.smoke_tests_required == false }}
-      product_name: ${{ inputs.product_flavor == 'agent-builder' && 'WSO2 Agent Builder' || 'WSO2 Integrator' }}
+      product_name: ${{ inputs.product_flavor == 'agent-builder' && 'Choreo Agent Builder' || 'Choreo Integrator' }}
       artifact_slug: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
 
   smoke-test-windows:
@@ -406,7 +406,7 @@ jobs:
       windows_artifact_name: Product-Integrator-Windows
       ref: ${{ inputs.ref }}
       allow_failure: ${{ inputs.smoke_tests_required == false }}
-      product_name: ${{ inputs.product_flavor == 'agent-builder' && 'WSO2 Agent Builder' || 'WSO2 Integrator' }}
+      product_name: ${{ inputs.product_flavor == 'agent-builder' && 'Choreo Agent Builder' || 'Choreo Integrator' }}
 
   build-macos:
     if: ${{ inputs.build_macos == true }}
@@ -1927,7 +1927,7 @@ jobs:
         env:
           PUBLISH_TAG: ${{ inputs.publish_tag }}
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
-          PRODUCT_NAME: ${{ inputs.product_flavor == 'agent-builder' && 'WSO2 Agent Builder' || 'WSO2 Integrator' }}
+          PRODUCT_NAME: ${{ inputs.product_flavor == 'agent-builder' && 'Choreo Agent Builder' || 'Choreo Integrator' }}
         run: |
           if [ "${PUBLISH_TAG}" = "nightly" ]; then
             echo "name=${PRODUCT_NAME} Nightly (${INTEGRATOR_VERSION})" >> "$GITHUB_OUTPUT"

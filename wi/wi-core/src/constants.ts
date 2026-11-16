@@ -29,8 +29,8 @@ export const EXTENSION_PUBLISHER = "wso2";
  * WSO2_PRODUCT_NAME runtime env var; these are the fallbacks.
  */
 export const PRODUCT_NAMES: Record<ProductMode, string> = {
-	[ProductMode.INTEGRATOR]: "WSO2 Integrator",
-	[ProductMode.AGENT_BUILDER]: "WSO2 Agent Builder",
+	[ProductMode.INTEGRATOR]: "Choreo Integrator",
+	[ProductMode.AGENT_BUILDER]: "Choreo Agent Builder",
 };
 
 export const EXTENSION_NAME = PRODUCT_NAMES[ProductMode.INTEGRATOR];
@@ -96,3 +96,13 @@ export const SELECTED_PROFILE_VALUES = [
 ] as const;
 
 export type SelectedProfileValue = typeof SELECTED_PROFILE_VALUES[number];
+
+/**
+ * User-visible labels for the profile values. The values themselves are persisted in user
+ * settings (integrator.selectedProfile), so they stay unchanged; show these labels instead.
+ */
+export const PROFILE_DISPLAY_LABELS: Record<SelectedProfileValue, string> = {
+	[DEFAULT_PROFILE]: "Choreo Integrator: Default",
+	[MI_PROFILE]: "Choreo Integrator: MI",
+	[SI_PROFILE]: "Choreo Integrator: SI",
+};

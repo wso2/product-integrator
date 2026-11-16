@@ -20,6 +20,7 @@ import styled from "@emotion/styled";
 import {
     DEFAULT_PROFILE,
     ProductMode,
+    PROFILE_DISPLAY_LABELS,
     SELECTED_PROFILE_CONFIG_SECTION,
     SELECTED_PROFILE_VALUES,
     type SelectedProfileValue,
@@ -48,7 +49,7 @@ import { SetupContent } from "../setup/CompactContent";
 const PROFILE_OPTIONS: OptionProps[] = SELECTED_PROFILE_VALUES.map((profile) => ({
     id: profile,
     value: profile,
-    content: profile,
+    content: PROFILE_DISPLAY_LABELS[profile],
 }));
 
 function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {
@@ -124,7 +125,7 @@ export function SettingsView({ onBack, ballerinaUnavailable }: { onBack?: () => 
     // Agent Builder is BI-only: hide the profile switcher (the shared
     // integrator.selectedProfile setting must never be changed from this mode).
     const isAgentBuilderMode = webviewContext?.productMode === ProductMode.AGENT_BUILDER;
-    const productName = webviewContext?.productName ?? "WSO2 Integrator";
+    const productName = webviewContext?.productName ?? "Choreo Integrator";
     const [selectedProfile, setSelectedProfile] = useState<SelectedProfileValue>(DEFAULT_PROFILE);
     const [isLoading, setIsLoading] = useState(true);
     const [savingRuntime, setSavingRuntime] = useState<SelectedProfileValue | null>(null);

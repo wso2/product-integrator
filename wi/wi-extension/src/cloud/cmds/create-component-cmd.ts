@@ -317,7 +317,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				try {
 					const type = integrationTypeFromScope(createParam.integrationType);
 					if (!type) {
-						throw new Error(`${integrationTypeLabel(createParam.integrationType) || createParam.integrationType} integrations cannot be deployed to WSO2 Cloud yet.`);
+						throw new Error(`${integrationTypeLabel(createParam.integrationType) || createParam.integrationType} integrations cannot be deployed to Choreo Cloud yet.`);
 					}
 					const name = toResourceName(createParam.name);
 					if (!RESOURCE_NAME.test(name)) {
@@ -570,7 +570,7 @@ async function followFirstBuild(created: CreatedComponent, orgHandle: string, pr
 	const controller = new AbortController();
 	const signal = controller.signal;
 	try {
-		await window.withProgress({ location: ProgressLocation.Notification, title: `${label} in WSO2 Cloud`, cancellable: true }, async (progress, token) => {
+		await window.withProgress({ location: ProgressLocation.Notification, title: `${label} in Choreo Cloud`, cancellable: true }, async (progress, token) => {
 			token.onCancellationRequested(() => controller.abort());
 			progress.report({ message: "waiting for the first build to start" });
 			let build = await findFirstBuild(created.id, project.id, signal, FIRST_BUILD_APPEAR_MS);
@@ -596,7 +596,7 @@ async function followFirstBuild(created: CreatedComponent, orgHandle: string, pr
 				return;
 			}
 			if (!deployAfter) {
-				tell(`${label} is built; WSO2 Cloud deploys it automatically.`, "info");
+				tell(`${label} is built; Choreo Cloud deploys it automatically.`, "info");
 				return;
 			}
 			const target = await entryEnvironment(project.id);
@@ -706,7 +706,7 @@ const sourceBindingWarning = (unbound: { label: string; error: NonNullable<Creat
 		return undefined;
 	}
 	const names = unbound.map((item) => item.label).join(", ");
-	const reasons = new Set(unbound.map((item) => (item.error === "github-auth-required" ? "GitHub has to be connected to WSO2 Cloud again" : "WSO2 Cloud could not link the source repository")));
+	const reasons = new Set(unbound.map((item) => (item.error === "github-auth-required" ? "GitHub has to be connected to Choreo Cloud again" : "Choreo Cloud could not link the source repository")));
 	return `Created ${names}, but no build can start: ${[...reasons].join("; ")}. Fix it in the console, then start a build.`;
 };
 

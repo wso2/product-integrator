@@ -69,7 +69,7 @@ function registerEmbeddedWelcomeBootstrapCommand(context: vscode.ExtensionContex
  */
 export async function activate(context: vscode.ExtensionContext): Promise<ExtensionExports> {
 	ext.context = context;
-	ext.log("Activating WSO2 Integrator Extension");
+	ext.log("Activating Choreo Integrator Extension");
 
 	try {
 		// set runtime to context
@@ -97,12 +97,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 		// verifies before the platform client exists. Frozen, so no extension can swap in a gate of its own.
 		const gate = createExtensionGate(cloudAPIs, (key) => ext.clients?.platform.apiKeys.verify(key) ?? false);
 		const exports: ExtensionExports = Object.freeze({ cloudAPIs: gate });
-		ext.log("WSO2 Integrator Extension activated successfully");
+		ext.log("Choreo Integrator Extension activated successfully");
 		return exports;
 	} catch (error) {
-		ext.logError("Failed to activate WSO2 Integrator Extension", error as Error);
+		ext.logError("Failed to activate Choreo Integrator Extension", error as Error);
 		vscode.window.showErrorMessage(
-			`Failed to activate WSO2 Integrator Extension: ${error instanceof Error ? error.message : String(error)}`,
+			`Failed to activate Choreo Integrator Extension: ${error instanceof Error ? error.message : String(error)}`,
 		);
 	}
 }
@@ -111,5 +111,5 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
  * Deactivate the extension
  */
 export function deactivate(): void {
-	ext.log("Deactivating WSO2 Integrator Extension");
+	ext.log("Deactivating Choreo Integrator Extension");
 }

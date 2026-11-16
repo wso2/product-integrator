@@ -312,14 +312,14 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
                     {gitProvider === GitProvider.GITHUB && !loadingGitOrgs && errorFetchingOrgs && (
                         <RepoBanner variant="info">
                             <RepoBannerMessage>
-                                {(errorFetchingOrgs as Error)?.message || "Please authorize WSO2 to access your GitHub repositories."}
+                                {(errorFetchingOrgs as Error)?.message || "Please authorize Choreo to access your GitHub repositories."}
                             </RepoBannerMessage>
                             <RepoBannerActions>
                                 <RepoBannerButton
                                     type="button"
                                     onClick={() => wsClient.triggerGithubAuthFlow(orgId)}
                                 >
-                                    Open WSO2 Cloud console
+                                    Open Choreo Cloud console
                                 </RepoBannerButton>
                             </RepoBannerActions>
                         </RepoBanner>

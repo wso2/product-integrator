@@ -162,9 +162,9 @@ export const createNewProject = async (projectName?: string, isWorkspaceMapping?
 		value: projectName || "",
 		placeHolder: "project-name",
 		prompt: isWorkspaceMapping
-			? "Your BI workspace will be mapped to a WSO2 Cloud project. Project name is auto-picked from workspace name, you can edit if needed.\n"
+			? "Your BI workspace will be mapped to a Choreo Cloud project. Project name is auto-picked from workspace name, you can edit if needed.\n"
 			: "Enter a name for your new project",
-		title: isWorkspaceMapping ? "Create WSO2 Cloud Project for Workspace" : "New Project Name",
+		title: isWorkspaceMapping ? "Create Choreo Cloud Project for Workspace" : "New Project Name",
 		validateInput: (val) => {
 			if (!val) {
 				return "Project name is required";
@@ -212,7 +212,7 @@ export const createNewProject = async (projectName?: string, isWorkspaceMapping?
 export const requireOrg = (): Organization => {
 	const org = ext.authProvider?.org;
 	if (!org) {
-		throw new Error("You are not signed in to WSO2 Cloud. Please sign in and retry.");
+		throw new Error("You are not signed in to Choreo Cloud. Please sign in and retry.");
 	}
 	return org;
 };
@@ -294,7 +294,7 @@ export const requireSession = async (message: string): Promise<PlatformSession |
 	if (current?.session && current.status === "signed-in") {
 		return current.session;
 	}
-	const loginSelection = await window.showInformationMessage("You are not signed in to WSO2 Cloud.", { modal: true, detail: `Please sign in to continue and ${message}` }, "Sign in");
+	const loginSelection = await window.showInformationMessage("You are not signed in to Choreo Cloud.", { modal: true, detail: `Please sign in to continue and ${message}` }, "Sign in");
 	if (loginSelection !== "Sign in") {
 		return null;
 	}
@@ -310,7 +310,7 @@ export const requireSession = async (message: string): Promise<PlatformSession |
 		return null;
 	}
 	const session = after.session;
-	const response = await window.showInformationMessage(`Signed in to WSO2 Cloud as ${session.user.email ?? session.user.displayName}`, { modal: true, detail: `Do you want to continue and ${message}` }, "Continue");
+	const response = await window.showInformationMessage(`Signed in to Choreo Cloud as ${session.user.email ?? session.user.displayName}`, { modal: true, detail: `Do you want to continue and ${message}` }, "Continue");
 	return response === "Continue" ? session : null;
 };
 

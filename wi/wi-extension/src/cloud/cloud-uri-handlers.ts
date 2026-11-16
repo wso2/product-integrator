@@ -53,7 +53,7 @@ export function activateURIHandlers(context: ExtensionContext) {
 			if (uri.path === "/ghapp") {
 				// The GitHub App callback was handled by the CLI; the platform's git integration
 				// has no documented route for it yet, so the person is pointed at the console.
-				window.showInformationMessage("Finish connecting GitHub in the WSO2 Cloud console, then refresh the repository check here.");
+				window.showInformationMessage("Finish connecting GitHub in the Choreo Cloud console, then refresh the repository check here.");
 				return;
 			}
 			if (uri.path === "/open") {
@@ -211,7 +211,7 @@ export const cloneOrOpenDir = async (
 const switchContextAndOpenDir = async (selectedPath: string, project: Project, integrationName?: string | null) => {
 	const org = ext.authProvider?.org;
 	if (!org) {
-		window.showErrorMessage("You are not signed in to WSO2 Cloud. Please sign in and try again.");
+		window.showErrorMessage("You are not signed in to Choreo Cloud. Please sign in and try again.");
 		return;
 	}
 	const gitRoot = await getGitRoot(ext.context, selectedPath);

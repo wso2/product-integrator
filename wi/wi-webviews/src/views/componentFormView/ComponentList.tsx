@@ -101,7 +101,7 @@ export function ComponentList({
 	return (
 		<ComponentListSection>
 			<ComponentListHeader>
-				<ComponentListLabel>{isBatch ? <>Select Integrations to Deploy to {projectLink} in WSO2 Cloud</> : <>Deploy integration to {projectLink} in WSO2 Cloud</>}</ComponentListLabel>
+				<ComponentListLabel>{isBatch ? <>Select Integrations to Deploy to {projectLink} in Choreo Cloud</> : <>Deploy integration to {projectLink} in Choreo Cloud</>}</ComponentListLabel>
 				{isBatch && <SelectionCount>{selectedCount} of {deployableCount} selected</SelectionCount>}
 			</ComponentListHeader>
 

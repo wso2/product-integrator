@@ -349,7 +349,7 @@ export class MainWsManager implements WIVisualizerAPI {
     async getMiFormWsBootstrap(): Promise<MiFormWsBootstrap> {
         const miExtension = extensions.getExtension(EXTENSION_DEPENDENCIES.MI);
         if (!miExtension) {
-            throw new Error("WSO2 Integrator: MI extension is not installed.");
+            throw new Error("Choreo Integrator: MI extension is not installed.");
         }
         if (!miExtension.isActive) {
             await miExtension.activate();

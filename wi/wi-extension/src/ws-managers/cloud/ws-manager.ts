@@ -204,7 +204,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	/** The platform lists no GitHub organizations yet; the form shows this instead of an empty list it cannot act on. */
 	async getAuthorizedGitOrgs(_params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
 		throw new NotSupportedError(
-			"Creating a repository from here is not available on WSO2 Cloud yet. Create the repository on GitHub, push the integration to it, then deploy from it.",
+			"Creating a repository from here is not available on Choreo Cloud yet. Create the repository on GitHub, push the integration to it, then deploy from it.",
 			{ reason: "git_orgs_unavailable" },
 		);
 	}
@@ -214,7 +214,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async getCredentialDetails(_params: GetCredentialDetailsReq): Promise<CredentialItem> {
-		throw new Error("Git credentials are managed in the WSO2 Cloud console.");
+		throw new Error("Git credentials are managed in the Choreo Cloud console.");
 	}
 
 	/**

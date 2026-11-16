@@ -1,10 +1,10 @@
-# **WSO2 Integrator Extension for Visual Studio Code**
+# **Choreo Integrator Extension for Visual Studio Code**
 
-The **WSO2 Integrator** VS Code extension is a complete development environment for modern integration. 
+The **Choreo Integrator** VS Code extension is a complete development environment for modern integration. 
 
 It combines visual low-code development with full pro-code flexibility, AI-assisted tooling, local debugging, and cloud-native deployment in a single developer experience. Design integrations visually while maintaining full access to the underlying source code with real-time synchronization.
 
-Whether you are building API integrations, event-driven systems, automations, file processing pipelines, or AI-powered workflows, WSO2 Integrator helps you connect anything, anywhere.
+Whether you are building API integrations, event-driven systems, automations, file processing pipelines, or AI-powered workflows, Choreo Integrator helps you connect anything, anywhere.
 
 ## **Features**
 
@@ -24,7 +24,7 @@ The extension has strong graphical and text tools to speed up your entire integr
 
 <img src="https://github.com/wso2/ballerina-vscode/blob/main/resources/images/wso2-integrator-debug.gif?raw=true" width="100%" />
 
-* **Integrated Deployment:** Deploy your integration solutions directly to WSO2 Cloud.
+* **Integrated Deployment:** Deploy your integration solutions directly to Choreo Cloud.
 
 <img src="https://github.com/wso2/ballerina-vscode/blob/main/resources/images/wso2-integrator-deploy.gif?raw=true" width="100%" />
 
@@ -34,7 +34,7 @@ The extension has strong graphical and text tools to speed up your entire integr
 
 ## **Prerequisites**
 
-To use all technical features of the WSO2 Integrator, your workstation needs these minimum requirements:
+To use all technical features of the Choreo Integrator, your workstation needs these minimum requirements:
 
 * [Ballerina VS Code Extension](https://marketplace.visualstudio.com/items?itemName=WSO2.ballerina) — For core language support, syntax, and compiler services.
 
@@ -52,6 +52,6 @@ We welcome developer contributions. Please see our [repository documentation](ht
 
 ## **Support & Resources**
 
-* **Product Documentation:** See the full [WSO2 Integration Platform Documentation](https://wso2.com/integration-platform/docs/).
+* **Product Documentation:** See the full [Choreo Integration Platform Documentation](https://wso2.com/integration-platform/docs/).
 
 * **Issue Tracker:** Report bugs, request features, or track development status on the [WSO2 Product Integrator](https://github.com/wso2/product-integrator/issues) 

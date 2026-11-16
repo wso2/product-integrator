@@ -54,7 +54,7 @@ mv "$WSO2_UNZIPPED_PATH"/* "$WSO2_TARGET"
 rm -rf "$WSO2_UNZIPPED_PATH"
 
 # The .app bundle is named after product.json nameLong, which depends on the
-# product flavor ("WSO2 Integrator" / "WSO2 Agent Builder"), so detect it from
+# product flavor ("Choreo Integrator" / "Choreo Agent Builder"), so detect it from
 # the payload instead of hardcoding it.
 APP_BUNDLE=$(cd "$WSO2_TARGET" && ls -d *.app 2>/dev/null | head -1)
 if [ -z "$APP_BUNDLE" ]; then
@@ -67,16 +67,16 @@ print_info "Detected app bundle: $APP_BUNDLE"
 # The pkg identifier must match the app's darwinBundleIdentifier so each
 # flavor keeps its own installer receipts (side-by-side installs).
 case "$APP_NAME" in
-    "WSO2 Agent Builder") BUNDLE_IDENTIFIER="com.wso2.agentbuilder" ;;
-    *)                    BUNDLE_IDENTIFIER="com.wso2.integrator" ;;
+    "Choreo Agent Builder") BUNDLE_IDENTIFIER="com.wso2.agentbuilder" ;;
+    *)                      BUNDLE_IDENTIFIER="com.wso2.integrator" ;;
 esac
 print_info "Package identifier: $BUNDLE_IDENTIFIER"
 
 # Artifact file names carry the flavor slug so the two products' installers
 # never collide on a release page or in the update bucket.
 case "$APP_NAME" in
-    "WSO2 Agent Builder") ARTIFACT_SLUG="wso2-agent-builder" ;;
-    *)                    ARTIFACT_SLUG="wso2-integrator" ;;
+    "Choreo Agent Builder") ARTIFACT_SLUG="wso2-agent-builder" ;;
+    *)                      ARTIFACT_SLUG="wso2-integrator" ;;
 esac
 print_info "Artifact slug: $ARTIFACT_SLUG"
 

@@ -27,10 +27,10 @@ on:
         type: boolean
         default: false
       product_name:
-        description: "Product display name (product.json nameShort/nameLong) — names the Windows exe and the user-data directory. 'WSO2 Integrator' or 'WSO2 Agent Builder'."
+        description: "Product display name (product.json nameShort/nameLong) — names the Windows exe and the user-data directory. 'Choreo Integrator' or 'Choreo Agent Builder'."
         required: false
         type: string
-        default: 'WSO2 Integrator'
+        default: 'Choreo Integrator'
       artifact_slug:
         description: "Artifact/package slug — names the Linux install dir (/usr/share/<slug>). 'wso2-integrator' or 'wso2-agent-builder'. The payload binary inside stays wso2-integrator for both."
         required: false
@@ -214,7 +214,7 @@ jobs:
           # product.nameShort to getUserDataPath(), and getDefaultUserDataPath() joins it onto
           # $XDG_CONFIG_HOME (or ~/.config) on Linux. nameShort is set in ci/build/update-product.sh.
           # Copying only that tree keeps unrelated logs out of the artifact.
-          USER_DATA="${XDG_CONFIG_HOME:-$HOME/.config}/${{ inputs.product_name || 'WSO2 Integrator' }}"
+          USER_DATA="${XDG_CONFIG_HOME:-$HOME/.config}/${{ inputs.product_name || 'Choreo Integrator' }}"
           if [ -d "${USER_DATA}/logs" ]; then
             cp -R "${USER_DATA}/logs" editor-logs/
           else
@@ -296,7 +296,7 @@ jobs:
           $proc = Start-Process msiexec.exe -ArgumentList "/i `"$($msi.FullName)`" /qn /norestart INTEGRATORFOLDER=`"$installDir`"" -Wait -PassThru
           Write-Host "msiexec exit code: $($proc.ExitCode)"
           if ($proc.ExitCode -ne 0) { throw "msiexec failed with exit code $($proc.ExitCode)" }
-          $exeName = '${{ inputs.product_name || 'WSO2 Integrator' }}.exe'
+          $exeName = '${{ inputs.product_name || 'Choreo Integrator' }}.exe'
           $binary = Get-ChildItem $installDir -Recurse -Filter $exeName -Depth 2 |
             Select-Object -First 1
           if (-not $binary) { throw "$exeName not found" }
@@ -374,8 +374,8 @@ jobs:
         shell: pwsh
         run: |
           # Same path as the Linux collector, via getDefaultUserDataPath()'s win32 branch:
-          # $APPDATA joined with product.nameShort ("WSO2 Integrator", set in update-product.sh).
-          $logs = Join-Path $env:APPDATA 'WSO2 Integrator\logs'
+          # $APPDATA joined with product.nameShort (set in update-product.sh).
+          $logs = Join-Path $env:APPDATA '${{ inputs.product_name || 'Choreo Integrator' }}\logs'
           New-Item -ItemType Directory -Path editor-logs -Force | Out-Null
           if (Test-Path $logs) {
             # SilentlyContinue for the same reason the Linux collector uses `set +e`: GitHub runs

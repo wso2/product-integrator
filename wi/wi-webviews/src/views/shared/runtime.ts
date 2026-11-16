@@ -19,6 +19,7 @@
 import {
 	DEFAULT_PROFILE,
 	MI_PROFILE,
+	PROFILE_DISPLAY_LABELS,
 	SELECTED_PROFILE_VALUES,
 	SELECTED_PROFILE_CONFIG_SECTION,
 	SI_PROFILE,
@@ -30,18 +31,18 @@ export type WIRuntime = "WSO2: BI" | "WSO2: MI" | "WSO2: SI";
 export type SampleSupportedRuntime = Exclude<WIRuntime, "WSO2: SI">;
 
 export const RUNTIME_DISPLAY_LABEL: Record<WIRuntime, string> = {
-	"WSO2: BI": DEFAULT_PROFILE,
-	"WSO2: MI": MI_PROFILE,
-	"WSO2: SI": SI_PROFILE,
+	"WSO2: BI": PROFILE_DISPLAY_LABELS[DEFAULT_PROFILE],
+	"WSO2: MI": PROFILE_DISPLAY_LABELS[MI_PROFILE],
+	"WSO2: SI": PROFILE_DISPLAY_LABELS[SI_PROFILE],
 };
 
 export const CREATION_RUNTIME_HELP: Record<WIRuntime, string> = {
 	"WSO2: BI":
 		"Create an integration with package and workspace options.",
 	"WSO2: MI":
-		"Create a WSO2 Integrator: MI project.",
+		"Create a Choreo Integrator: MI project.",
 	"WSO2: SI":
-		"Create a WSO2 Integrator: SI project.",
+		"Create a Choreo Integrator: SI project.",
 };
 
 const PROFILE_RUNTIME_MAP: Record<SelectedProfileValue, WIRuntime> = {

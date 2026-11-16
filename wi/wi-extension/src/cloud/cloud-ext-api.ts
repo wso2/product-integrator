@@ -45,7 +45,7 @@ import { hasDirtyRepo } from "./git/util";
 import { contextStore } from "./stores/context-store";
 
 const NO_PLATFORM_API = (what: string, dependency: string) =>
-	new NotSupportedError(`${what} is not available on WSO2 Cloud yet.`, { reason: dependency });
+	new NotSupportedError(`${what} is not available on Choreo Cloud yet.`, { reason: dependency });
 
 /**
  * The API other extensions (the Ballerina extension) reach through the
@@ -114,7 +114,7 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public linkDirectory = async (fsPath: string, target: { project: string; env?: string }): Promise<void> => {
 		const org = ext.authProvider?.org;
 		if (!org) {
-			throw new Error("Not signed in to WSO2 Cloud.");
+			throw new Error("Not signed in to Choreo Cloud.");
 		}
 		linkContext(fsPath, { org: org.handle, project: target.project, env: target.env });
 		await contextStore.getState().refreshState();

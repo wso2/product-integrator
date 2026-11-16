@@ -36,14 +36,14 @@ VERSION=${1:-"$(read_version "integrator.version")"}
 PRODUCT_FLAVOR=${PRODUCT_FLAVOR:-integrator}
 case "${PRODUCT_FLAVOR}" in
   integrator)
-    PRODUCT_NAME="WSO2 Integrator"
+    PRODUCT_NAME="Choreo Integrator"
     DATA_FOLDER=".wso2-integrator"
     APP_SLUG="wso2-integrator"
     BUNDLE_ID="com.wso2.integrator"
     PACK_INTEGRATION_EXTENSIONS="true"
     ;;
   agent-builder)
-    PRODUCT_NAME="WSO2 Agent Builder"
+    PRODUCT_NAME="Choreo Agent Builder"
     DATA_FOLDER=".wso2-agent-builder"
     APP_SLUG="wso2-agent-builder"
     BUNDLE_ID="com.wso2.agentbuilder"

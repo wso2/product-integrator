@@ -117,8 +117,8 @@ export function SetupContent() {
     // Agent Builder is BI-only, so there is no profile to switch to.
     const isAgentBuilderMode = webviewContext?.productMode === ProductMode.AGENT_BUILDER;
     const requiresBallerinaCaption = isAgentBuilderMode
-        ? `${webviewContext?.productName ?? "WSO2 Agent Builder"} requires the Ballerina distribution. You can set it up now.`
-        : "The WSO2 Integrator: Default Profile requires the Ballerina distribution. You can switch to a different profile above, or set it up now.";
+        ? `${webviewContext?.productName ?? "Choreo Agent Builder"} requires the Ballerina distribution. You can set it up now.`
+        : "The Choreo Integrator: Default Profile requires the Ballerina distribution. You can switch to a different profile above, or set it up now.";
 
     const handleSetup = async () => {
         setIsStarting(true);

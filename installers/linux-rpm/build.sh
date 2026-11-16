@@ -43,12 +43,12 @@ PRODUCT_FLAVOR="${PRODUCT_FLAVOR:-integrator}"
 case "$PRODUCT_FLAVOR" in
     integrator)
         ARTIFACT_SLUG="wso2-integrator"
-        PRODUCT_NAME="WSO2 Integrator"
+        PRODUCT_NAME="Choreo Integrator"
         ICON_ID="com.wso2.integrator"
         ;;
     agent-builder)
         ARTIFACT_SLUG="wso2-agent-builder"
-        PRODUCT_NAME="WSO2 Agent Builder"
+        PRODUCT_NAME="Choreo Agent Builder"
         ICON_ID="com.wso2.agentbuilder"
         ;;
     *)

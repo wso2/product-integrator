@@ -82,7 +82,7 @@ export function RemoteMiProjectForm({ onBack }: { onBack?: () => void }) {
                 const remoteUrl = window.__WI_MI_FORM_REMOTE;
                 if (!remoteUrl) {
                     throw new Error(
-                        "The WSO2 Integrator: MI extension is not available. Please install it to create MI projects.",
+                        "The Choreo Integrator: MI extension is not available. Please install it to create MI projects.",
                     );
                 }
                 const coords = await wsClient.getMiFormWsBootstrap();

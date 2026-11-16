@@ -140,16 +140,16 @@ REM Update version in Package.wxs
 powershell -Command "(Get-Content '.\WixPackage\Package.wxs') -replace '@VERSION@', '%WIX_VERSION%' | Set-Content '.\WixPackage\Package.wxs'"
 
 REM The main executable is named after product.json nameShort, which depends on
-REM the product flavor ("WSO2 Integrator" / "WSO2 Agent Builder"). Detect it
+REM the product flavor ("Choreo Integrator" / "Choreo Agent Builder"). Detect it
 REM from the payload and resolve the @PRODUCT_NAME@ placeholders. Placeholder
 REM sources are backed up and restored via :restore_name on every exit path.
 for /f "delims=" %%p in ('powershell -nologo -noprofile -command "(Get-ChildItem '.\WixPackage\payload\Integrator' -Filter *.exe -File | Select-Object -First 1).BaseName"') do set "PRODUCT_NAME=%%p"
-if not defined PRODUCT_NAME set "PRODUCT_NAME=WSO2 Integrator"
+if not defined PRODUCT_NAME set "PRODUCT_NAME=Choreo Integrator"
 echo Product name: %PRODUCT_NAME%
 
 REM Each flavor needs its own MSI UpgradeCode and install folder, otherwise
 REM installing one flavor upgrades/replaces the other.
-if "%PRODUCT_NAME%"=="WSO2 Agent Builder" (
+if "%PRODUCT_NAME%"=="Choreo Agent Builder" (
     set "UPGRADE_CODE=56138e5c-e9ef-499b-8a21-54e2cfc09ba3"
     set "PRODUCT_DIR=Agent Builder"
     set "MSI_BASE=wso2-agent-builder"
