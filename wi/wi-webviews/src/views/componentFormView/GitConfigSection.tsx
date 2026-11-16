@@ -294,7 +294,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	}
 
 	if (!invalidRepoMsg && configDriftFiles?.length > 0) {
-		invalidRepoMsg = `Cloud deployment requires the metadata in the ${configDriftFiles.join(",")} ${configDriftFiles?.length > 1 ? "files" : "file"} to be committed and pushed to the selected remote repository for proper functionality.`;
+		invalidRepoMsg = `Creating the integration in WSO2 Cloud requires the metadata in the ${configDriftFiles.join(",")} ${configDriftFiles?.length > 1 ? "files" : "file"} to be committed and pushed to the selected remote repository for proper functionality.`;
 		onInvalidRepoRefreshClick = refetchConfigDrift;
 		onInvalidRepoRefreshing = isFetchingConfigDrift;
 		invalidRepoBannerType = "warning";

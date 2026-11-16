@@ -50,7 +50,7 @@ import { isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensi
 /**
  * Source component ids already acted on. Clearing `SOURCE_COMPONENT_ID` from workspace state cannot
  * clear the environment variable the cloud editor injects, so a consumed id would otherwise be
- * re-resolved by every later deploy in the same session.
+ * re-resolved by every later create in the same session.
  */
 const consumedSourceCompIds = new Set<string>();
 
@@ -82,7 +82,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					selectedProject = await createProjectFromLocalMetadata(params.workspaceDir);
 				}
 				if (!selectedProject) {
-					selectedProject = (await selectProjectWithCreateNew(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', to deploy the integration in`)).selectedProject;
+					selectedProject = (await selectProjectWithCreateNew(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', to create the integration in`)).selectedProject;
 				}
 
 				// A directory passed without its integration types offers them all, as a directory picked here does.
@@ -97,11 +97,11 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					} else if (StateMachine.getContext().projectType === ProjectType.MI) {
 						buildPackLang = "microintegrator";
 					} else {
-						throw new Error("Please ensure that you are within a valid Ballerina or MI project to deploy an integration in the cloud");
+						throw new Error("Please ensure that you are within a valid Ballerina or MI project to create an integration in WSO2 Cloud");
 					}
 				}
 				if (ext.isDevantCloudEditor && params?.integrations?.length > 1) {
-					throw new Error("Workspace deployments are not yet supported in the cloud editor. Please select individual integration to deploy.");
+					throw new Error("Creating the integrations of a workspace is not yet supported in the cloud editor. Select a single integration to create.");
 				}
 
 				if (!params?.workspaceDir || integrations.length === 0) {
@@ -212,7 +212,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 				}
 			} catch (err) {
 				ext.logError("Failed to create integration", err as Error);
-				handleCloudError(err, "Failed to deploy the integration");
+				handleCloudError(err, "Failed to create the integration");
 			}
 		}),
 	);
@@ -248,13 +248,13 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	const cloud = ext.clients.platform.cloud;
 	// The platform acts for the signed-in organization; a form opened for another one is not submitted to it.
 	if (ext.authProvider?.org?.handle !== org.handle) {
-		throw new Error(`This form was opened for the organization ${org.name}, which is no longer the one signed in. Open the deployment form again.`);
+		throw new Error(`This form was opened for the organization ${org.name}, which is no longer the one signed in. Open the form again.`);
 	}
 
 	const newGit = await initGit(ext.context);
 	const gitRoot = await newGit?.getRepositoryRoot(workspaceFsPath).catch((): undefined => undefined);
 	if (!gitRoot) {
-		throw new Error(`${workspaceFsPath} is not inside a git repository. Initialize one, push it to GitHub, then deploy from it.`);
+		throw new Error(`${workspaceFsPath} is not inside a git repository. Initialize one, push it to GitHub, then create the integration from it.`);
 	}
 	const dotGit = await newGit?.getRepositoryDotGit(workspaceFsPath);
 	const repo = newGit?.open(gitRoot, dotGit);
@@ -274,7 +274,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				ext.logError(`Failed to resolve the source integration ${workspaceCompId}`, err as Error);
 				return {
 					created: [],
-					failed: createParams.map((item) => ({ name: item.displayName || item.name, error: `Could not read the linked integration: ${(err as Error).message}. Nothing was deployed, please retry.` })),
+					failed: createParams.map((item) => ({ name: item.displayName || item.name, error: `Could not read the linked integration: ${(err as Error).message}. Nothing was created; please retry.` })),
 					total: totalCount,
 				};
 			}
@@ -512,7 +512,6 @@ async function updateCodeServerWithCreatedComp(created: Component, repo: Reposit
 	}
 }
 
-/** What to tell the person instead of plain success when integrations were created without their source bound; undefined when all were bound. */
 /** The integrations whose first build WSO2 Cloud could not start with the create. */
 const firstBuildWarning = (unbuilt: string[]): string | undefined => {
 	if (unbuilt.length === 0) {
@@ -522,6 +521,7 @@ const firstBuildWarning = (unbuilt: string[]): string | undefined => {
 	return `WSO2 Cloud created ${unbuilt.join(", ")} but could not start ${one ? "its" : "their"} first build. Start ${one ? "it" : "them"} from the console.`;
 };
 
+/** What to tell the person instead of plain success when integrations were created without their source bound; undefined when all were bound. */
 const sourceBindingWarning = (unbound: { label: string; error: NonNullable<CreatedComponent["sourceBindingError"]> }[]): string | undefined => {
 	if (unbound.length === 0) {
 		return undefined;

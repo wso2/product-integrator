@@ -87,7 +87,7 @@ export function ComponentFormView() {
 			<PageBackdrop>
 				<PageContainer>
 					<AuthSectionWrap>
-						<div>Your session has expired. Please sign in again to deploy your integration.</div>
+						<div>Your session has expired. Please sign in again to create your integration.</div>
 						<Button appearance="primary" onClick={() => wsClient.runCommand({ command: WICommandIds.SignIn, args: [] })}>
 							Sign In
 						</Button>
