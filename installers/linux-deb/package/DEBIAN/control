@@ -6,7 +6,7 @@ Recommends: libvulkan1
 Priority: optional
 Architecture: amd64
 Maintainer: Choreo Labs <support@choreolabs.com>
-Homepage: https://wso2.com/integration/
+Homepage: https://choreolabs.com/integration/
 Description: @PRODUCT_NAME@ - Low Code Integration
  @PRODUCT_NAME@ is a comprehensive integration development environment
  that brings together Ballerina language runtime, Choreo Integration Control Plane,
