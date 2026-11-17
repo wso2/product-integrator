@@ -300,7 +300,7 @@ function ComponentForm() {
 					<FormBody>
 						{/* Header */}
 						<TitleRow>
-							<Typography variant="h1">Deploy {isBatch ? "Integrations" : "Integration"}</Typography>
+							<Typography variant="h1">Create {isBatch ? "Integrations" : "Integration"} in WSO2 Cloud</Typography>
 						</TitleRow>
 
 						{/* Submit error */}
@@ -363,7 +363,7 @@ function ComponentForm() {
 								onClick={() => submit()}
 								disabled={isDeployDisabled}
 							>
-								{isSubmitting ? "Deploying..." : selectedCount > 1 ? "Deploy All" : "Deploy"}
+								{isSubmitting ? "Creating..." : selectedCount > 1 ? "Create All" : "Create"}
 							</SubmitButton>
 						</FooterRow>
 					</FormBody>
