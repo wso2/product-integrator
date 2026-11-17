@@ -153,7 +153,7 @@
       },
       {
         "view": "wso2-integrator.explorer",
-        "contents": "Welcome to Choreo Integrator.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+        "contents": "Welcome to Choreo Integrator.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://choreolabs.com/integration-platform/docs/)",
         "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
       },
       {
