@@ -31,10 +31,19 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 		openExternal: (url) => env.openExternal(Uri.parse(url)),
 		log: (message) => ext.log(message),
 		outcome: {
-			connected: (installations) => {
+			connected: (installations, missingOwner) => {
 				const accounts = installations.map((item) => item.githubAccount).join(", ");
-				window.showInformationMessage(accounts ? `GitHub is connected to WSO2 Cloud (${accounts}).` : "GitHub is connected to WSO2 Cloud.");
+				const connected = accounts ? `GitHub is connected to WSO2 Cloud (${accounts})` : "GitHub is connected to WSO2 Cloud";
 				BridgeLayer.notifyGitHubConnected();
+				if (!missingOwner) {
+					window.showInformationMessage(`${connected}.`);
+					return;
+				}
+				// The app is on the owner, but this GitHub user can't see it: the browser is likely signed in to another GitHub account.
+				const useAnother = "Use Another GitHub Account";
+				void window
+					.showWarningMessage(`${connected}, but not to ${missingOwner}. If another GitHub account has access to ${missingOwner}, connect with that account.`, useAnother)
+					.then((choice) => (choice === useAnother ? ext.githubApp?.connect(missingOwner, "select-account") : undefined));
 			},
 			requested: () => {
 				window.showInformationMessage("The GitHub organization's owner has to approve the WSO2 Cloud app. Check the repository again once they have.");

@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { type CloudClient, type GitHubInstallation, type GitHubSource, type RepoPathInspection, isCloudError } from "@wso2/wso2-cloud-client";
 
 /**
@@ -89,13 +89,24 @@ export const GITHUB_RETURN_SCHEMES: readonly string[] = ["vscode", "vscode-insid
 export const GITHUB_RETURN_PATH = "/ghapp";
 
 /**
+ * Where connecting GitHub starts: GitHub's authorize page, its install page, or
+ * its authorize page through the account picker, to use another GitHub account.
+ */
+export type GitHubConnectStart = "authorize" | "install" | "select-account";
+
+/** The S256 PKCE challenge of a verifier. */
+export const pkceChallenge = (verifier: string) => createHash("sha256").update(verifier).digest("base64url");
+
+/**
  * The console page that starts GitHub's authorize or install page for the editor
  * and sends GitHub's return to `<scheme>://wso2.wso2-integrator/ghapp`. The
- * console holds the GitHub App's identity and owns its callback URL.
+ * console holds the GitHub App's identity and owns its callback URL. An
+ * authorize start carries the PKCE challenge, so a code GitHub returns is bound
+ * only with this window's verifier.
  */
-export function consoleGitHubStartUrl(consoleUrl: string, scheme: string, nonce: string, start: "authorize" | "install"): string {
+export function consoleGitHubStartUrl(consoleUrl: string, scheme: string, nonce: string, start: GitHubConnectStart, challenge?: string): string {
 	const url = new URL(GITHUB_RETURN_PATH, consoleUrl);
-	url.search = new URLSearchParams({ editor: scheme, nonce, start }).toString();
+	url.search = new URLSearchParams({ editor: scheme, nonce, start, ...(challenge ? { challenge } : {}) }).toString();
 	return url.toString();
 }
 
@@ -120,7 +131,12 @@ export async function installationSettingsUrl(owner: string, installationId: num
 
 /** What the person is told as connecting GitHub ends. */
 export interface GitHubConnectOutcome {
-	connected(installations: GitHubInstallation[]): void;
+	/**
+	 * GitHub is connected; `missingOwner` is the repository's owner when the app
+	 * is still not on it after installing, as when the browser is signed in to
+	 * another GitHub account.
+	 */
+	connected(installations: GitHubInstallation[], missingOwner?: string): void;
 	/** The GitHub organization's owner has to approve the app. */
 	requested(): void;
 	cancelled(): void;
@@ -135,6 +151,7 @@ export interface GitHubAppConnectorDeps {
 	outcome: GitHubConnectOutcome;
 	log(message: string): void;
 	newNonce?: () => string;
+	newVerifier?: () => string;
 }
 
 /**
@@ -143,14 +160,18 @@ export interface GitHubAppConnectorDeps {
  * the app is not on the repository's owner. GitHub returns to the console,
  * which sends the return here; the `code` is accepted only with the nonce this
  * window started the flow with, so a forged return cannot connect someone
- * else's installations.
+ * else's installations. It is bound with the PKCE verifier of the challenge the
+ * flow started with, so an app that claims the editor's URI scheme and takes
+ * the code cannot bind it.
  */
 export class GitHubAppConnector {
-	private pending?: { nonce: string; owner?: string; installTried: boolean };
+	private pending?: { nonce: string; owner?: string; installTried: boolean; verifier?: string };
 	private readonly newNonce: () => string;
+	private readonly newVerifier: () => string;
 
 	constructor(private readonly deps: GitHubAppConnectorDeps) {
 		this.newNonce = deps.newNonce ?? (() => randomBytes(16).toString("hex"));
+		this.newVerifier = deps.newVerifier ?? (() => randomBytes(32).toString("base64url"));
 	}
 
 	/** Whether GitHub's return can come back to this editor; otherwise GitHub is connected in the console. */
@@ -159,14 +180,16 @@ export class GitHubAppConnector {
 	}
 
 	/** Opens GitHub through the console; `owner` is the account the repository needs the app on. */
-	async connect(owner?: string, start: "authorize" | "install" = "authorize", installTried = start === "install"): Promise<void> {
+	async connect(owner?: string, start: GitHubConnectStart = "authorize", installTried = start === "install"): Promise<void> {
 		if (!this.canReturnHere) {
 			await this.deps.openExternal(this.deps.consoleUrl());
 			return;
 		}
 		const nonce = this.newNonce();
-		this.pending = { nonce, owner, installTried };
-		await this.deps.openExternal(consoleGitHubStartUrl(this.deps.consoleUrl(), this.deps.uriScheme, nonce, start));
+		// GitHub's install page takes no challenge; the editor authorizes after it.
+		const verifier = start === "install" ? undefined : this.newVerifier();
+		this.pending = { nonce, owner, installTried, verifier };
+		await this.deps.openExternal(consoleGitHubStartUrl(this.deps.consoleUrl(), this.deps.uriScheme, nonce, start, verifier && pkceChallenge(verifier)));
 	}
 
 	/** Takes GitHub's return, as the console relayed it to `/ghapp`. */
@@ -178,7 +201,8 @@ export class GitHubAppConnector {
 			return;
 		}
 		this.pending = undefined;
-		const code = query.get("code");
+		// A code from the install page was issued without this window's challenge; the editor authorizes again instead.
+		const code = pending.verifier ? query.get("code") : null;
 		const setupAction = query.get("setup_action");
 		if (setupAction === "request") {
 			this.deps.outcome.requested();
@@ -190,16 +214,17 @@ export class GitHubAppConnector {
 				await this.connect(pending.owner, "authorize", true);
 				return;
 			}
+			const reason = query.get("error_description");
 			if (query.get("error") === "access_denied") {
 				this.deps.outcome.cancelled();
 			} else {
-				this.deps.outcome.failed("GitHub did not authorize the WSO2 Cloud app.");
+				this.deps.outcome.failed(reason ? `GitHub did not authorize the WSO2 Cloud app: ${reason}` : "GitHub did not authorize the WSO2 Cloud app.");
 			}
 			return;
 		}
 		let installations: GitHubInstallation[];
 		try {
-			installations = await this.deps.cloud().git.connectGitHubInstallations(code);
+			installations = await this.deps.cloud().git.connectGitHubInstallations(code, pending.verifier);
 		} catch (err) {
 			if (isCloudError(err) && err.code === "conflict" && !pending.installTried) {
 				// The GitHub user has the app on no account yet.
@@ -210,10 +235,11 @@ export class GitHubAppConnector {
 			return;
 		}
 		const owner = pending.owner;
-		if (owner && !pending.installTried && !installations.some((item) => sameAccount(item.githubAccount, owner))) {
-			await this.connect(owner, "install");
+		const missingOwner = owner && !installations.some((item) => sameAccount(item.githubAccount, owner)) ? owner : undefined;
+		if (missingOwner && !pending.installTried) {
+			await this.connect(missingOwner, "install");
 			return;
 		}
-		this.deps.outcome.connected(installations);
+		this.deps.outcome.connected(installations, missingOwner);
 	}
 }
