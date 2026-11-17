@@ -137,6 +137,12 @@ export interface GitHubConnectOutcome {
 	 * another GitHub account.
 	 */
 	connected(installations: GitHubInstallation[], missingOwner?: string): void;
+	/**
+	 * The GitHub user still sees the app on no account after installing it, as
+	 * when the browser is signed in to another GitHub account; `owner` is the
+	 * repository's owner, when there is one.
+	 */
+	noInstallationVisible(owner?: string): void;
 	/** The GitHub organization's owner has to approve the app. */
 	requested(): void;
 	cancelled(): void;
@@ -146,6 +152,8 @@ export interface GitHubConnectOutcome {
 export interface GitHubAppConnectorDeps {
 	cloud(): CloudClient;
 	consoleUrl(): string;
+	/** Who is signed in to WSO2 Cloud, and to which organization; undefined when no one is. */
+	session(): string | undefined;
 	uriScheme: string;
 	openExternal(url: string): PromiseLike<unknown>;
 	outcome: GitHubConnectOutcome;
@@ -165,7 +173,9 @@ export interface GitHubAppConnectorDeps {
  * the code cannot bind it.
  */
 export class GitHubAppConnector {
-	private pending?: { nonce: string; owner?: string; installTried: boolean; verifier?: string };
+	private pending?: { nonce: string; owner?: string; installTried: boolean; verifier?: string; session?: string };
+	/** Counts the flows started; an exchange that finishes after a newer start is dropped. */
+	private started = 0;
 	private readonly newNonce: () => string;
 	private readonly newVerifier: () => string;
 
@@ -185,10 +195,11 @@ export class GitHubAppConnector {
 			await this.deps.openExternal(this.deps.consoleUrl());
 			return;
 		}
+		this.started++;
 		const nonce = this.newNonce();
 		// GitHub's install page takes no challenge; the editor authorizes after it.
 		const verifier = start === "install" ? undefined : this.newVerifier();
-		this.pending = { nonce, owner, installTried, verifier };
+		this.pending = { nonce, owner, installTried, verifier, session: this.deps.session() };
 		await this.deps.openExternal(consoleGitHubStartUrl(this.deps.consoleUrl(), this.deps.uriScheme, nonce, start, verifier && pkceChallenge(verifier)));
 	}
 
@@ -201,6 +212,12 @@ export class GitHubAppConnector {
 			return;
 		}
 		this.pending = undefined;
+		if (pending.session !== this.deps.session()) {
+			// GitHub would be connected to an organization, or for a person, other than the one that started.
+			this.deps.log("A GitHub return arrived after the WSO2 Cloud sign-in changed; it was ignored");
+			return;
+		}
+		const flow = this.started;
 		// A code from the install page was issued without this window's challenge; the editor authorizes again instead.
 		const code = pending.verifier ? query.get("code") : null;
 		const setupAction = query.get("setup_action");
@@ -226,13 +243,23 @@ export class GitHubAppConnector {
 		try {
 			installations = await this.deps.cloud().git.connectGitHubInstallations(code, pending.verifier);
 		} catch (err) {
-			if (isCloudError(err) && err.code === "conflict" && !pending.installTried) {
-				// The GitHub user has the app on no account yet.
-				await this.connect(pending.owner, "install");
+			if (flow !== this.started) {
+				return; // a newer connect owns the outcome
+			}
+			if (isCloudError(err) && err.code === "conflict") {
+				// The GitHub user has the app on no account: install it, once.
+				if (pending.installTried) {
+					this.deps.outcome.noInstallationVisible(pending.owner);
+				} else {
+					await this.connect(pending.owner, "install");
+				}
 				return;
 			}
 			this.deps.outcome.failed(`Could not connect GitHub to WSO2 Cloud: ${err instanceof Error ? err.message : String(err)}`);
 			return;
+		}
+		if (flow !== this.started) {
+			return; // a newer connect owns the outcome
 		}
 		const owner = pending.owner;
 		const missingOwner = owner && !installations.some((item) => sameAccount(item.githubAccount, owner)) ? owner : undefined;

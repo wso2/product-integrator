@@ -95,11 +95,13 @@ describe("GitHubAppConnector", () => {
 	function connector(cloud: CloudClient, uriScheme = "vscode") {
 		const opened: string[] = [];
 		const outcomes: string[] = [];
+		const signedIn = { session: "u1/acme" as string | undefined };
 		let n = 0;
 		let v = 0;
 		const app = new GitHubAppConnector({
 			cloud: () => cloud,
 			consoleUrl: () => "https://console.example/integration/organizations/acme",
+			session: () => signedIn.session,
 			uriScheme,
 			openExternal: async (url) => opened.push(url),
 			log: () => undefined,
@@ -107,12 +109,13 @@ describe("GitHubAppConnector", () => {
 			newVerifier: () => `v${++v}`,
 			outcome: {
 				connected: (items, missingOwner) => outcomes.push(`connected:${items.map((i) => i.githubAccount).join(",")}${missingOwner ? ` but not ${missingOwner}` : ""}`),
+				noInstallationVisible: (owner) => outcomes.push(`none visible${owner ? ` on ${owner}` : ""}`),
 				requested: () => outcomes.push("requested"),
 				cancelled: () => outcomes.push("cancelled"),
 				failed: (message) => outcomes.push(`failed:${message}`),
 			},
 		});
-		return { app, opened, outcomes };
+		return { app, opened, outcomes, signedIn };
 	}
 	const query = (params: Record<string, string>) => new URLSearchParams(params);
 	const start = (url: string) => Object.fromEntries(new URL(url).searchParams);
@@ -184,6 +187,51 @@ describe("GitHubAppConnector", () => {
 		await app.handleReturn(query({ state: "n2", setup_action: "install", installation_id: "7" }));
 		assert.deepEqual(start(opened[2]), { editor: "vscode", nonce: "n3", start: "authorize", challenge: pkceChallenge("v2") });
 		await app.handleReturn(query({ code: "c2", state: "n3" }));
+		assert.deepEqual(outcomes, ["connected:Acme"]);
+	});
+
+	it("offers another GitHub account when the app is still on no account it can see after installing", async () => {
+		const { cloud } = fakeCloud({
+			connect: async () => {
+				throw new ConflictError("no accessible GitHub App installations; install the app first");
+			},
+		});
+		const { app, opened, outcomes } = connector(cloud);
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		await app.handleReturn(query({ state: "n2", setup_action: "install", installation_id: "7" }));
+		await app.handleReturn(query({ code: "c2", state: "n3" }));
+		assert.deepEqual(outcomes, ["none visible on acme"]);
+		assert.equal(opened.length, 3, "the install page is opened once");
+	});
+
+	it("ignores a return that arrives after the WSO2 Cloud sign-in changed", async () => {
+		for (const after of ["u1/other-org", "u2/acme", undefined]) {
+			const { cloud, connected } = fakeCloud();
+			const { app, outcomes, signedIn } = connector(cloud);
+			await app.connect("acme");
+			signedIn.session = after;
+			await app.handleReturn(query({ code: "c0de", state: "n1" }));
+			assert.deepEqual(connected, [], `signed in as ${after}`);
+			assert.deepEqual(outcomes, []);
+		}
+	});
+
+	it("drops an exchange that finishes after a newer connect started", async () => {
+		let finish: (items: unknown[]) => void = () => undefined;
+		let calls = 0;
+		const { cloud, connected } = fakeCloud({
+			connect: () => (calls++ === 0 ? new Promise<unknown[]>((resolve) => (finish = resolve)) : Promise.resolve([acme])),
+		});
+		const { app, opened, outcomes } = connector(cloud);
+		await app.connect("acme");
+		const first = app.handleReturn(query({ code: "c0de", state: "n1" }));
+		await app.connect("acme");
+		finish([{ installationId: 9, githubAccount: "jo" }]);
+		await first;
+		assert.equal(opened.length, 2, "the first exchange starts no install");
+		await app.handleReturn(query({ code: "c2", state: "n2" }));
+		assert.deepEqual(connected, ["c0de with v1", "c2 with v2"]);
 		assert.deepEqual(outcomes, ["connected:Acme"]);
 	});
 

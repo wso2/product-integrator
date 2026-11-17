@@ -22,11 +22,21 @@ import { ext } from "../extensionVariables";
 import { buildConsoleUrl } from "@wso2/wso2-cloud-client";
 import { GitHubAppConnector } from "./github-app";
 
+/** Offers GitHub's account picker, to connect with another GitHub account. */
+function offerAnotherAccount(message: string, owner: string | undefined): void {
+	const useAnother = "Use Another GitHub Account";
+	void window.showWarningMessage(message, useAnother).then((choice) => (choice === useAnother ? ext.githubApp?.connect(owner, "select-account") : undefined));
+}
+
 /** The GitHub connector for this window, telling the person how connecting ended and the deployment form to recheck. */
 export function createGitHubAppConnector(): GitHubAppConnector {
 	return new GitHubAppConnector({
 		cloud: () => ext.clients.platform.cloud,
 		consoleUrl: () => buildConsoleUrl(ext.config.consoleUrl, { orgHandle: ext.authProvider?.org?.handle }),
+		session: () => {
+			const session = ext.authProvider?.session;
+			return session ? `${session.user.userId}/${session.org.handle}` : undefined;
+		},
 		uriScheme: env.uriScheme,
 		openExternal: (url) => env.openExternal(Uri.parse(url)),
 		log: (message) => ext.log(message),
@@ -40,10 +50,11 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 					return;
 				}
 				// The app is on the owner, but this GitHub user can't see it: the browser is likely signed in to another GitHub account.
-				const useAnother = "Use Another GitHub Account";
-				void window
-					.showWarningMessage(`${connected}, but not to ${missingOwner}. If another GitHub account has access to ${missingOwner}, connect with that account.`, useAnother)
-					.then((choice) => (choice === useAnother ? ext.githubApp?.connect(missingOwner, "select-account") : undefined));
+				offerAnotherAccount(`${connected}, but not to ${missingOwner}. If another GitHub account has access to ${missingOwner}, connect with that account.`, missingOwner);
+			},
+			noInstallationVisible: (owner) => {
+				const where = owner ?? "any GitHub account";
+				offerAnotherAccount(`The GitHub account you authorized can't see the WSO2 Cloud app on ${where}. If another GitHub account has access, connect with that account.`, owner);
 			},
 			requested: () => {
 				window.showInformationMessage("The GitHub organization's owner has to approve the WSO2 Cloud app. Check the repository again once they have.");
