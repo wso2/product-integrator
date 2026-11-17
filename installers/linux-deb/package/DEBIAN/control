@@ -5,7 +5,7 @@ Depends: ca-certificates, libasound2 (>= 1.0.17), libatk-bridge2.0-0 (>= 2.5.3),
 Recommends: libvulkan1
 Priority: optional
 Architecture: amd64
-Maintainer: Choreo Labs <support@wso2.com>
+Maintainer: Choreo Labs <support@choreolabs.com>
 Homepage: https://wso2.com/integration/
 Description: @PRODUCT_NAME@ - Low Code Integration
  @PRODUCT_NAME@ is a comprehensive integration development environment
