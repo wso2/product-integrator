@@ -52,6 +52,6 @@ We welcome developer contributions. Please see our [repository documentation](ht
 
 ## **Support & Resources**
 
-* **Product Documentation:** See the full [Choreo Integration Platform Documentation](https://wso2.com/integration-platform/docs/).
+* **Product Documentation:** See the full [Choreo Integration Platform Documentation](https://choreolabs.com/integration-platform/docs/).
 
 * **Issue Tracker:** Report bugs, request features, or track development status on the [WSO2 Product Integrator](https://github.com/wso2/product-integrator/issues) 
