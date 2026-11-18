@@ -363,7 +363,7 @@ async function activateExtensionsBasedOnProjectType(context: MachineContext): Pr
             ext.log('Workspace is open but project type is unknown');
             const expectedProjectMessage = isAgentBuilderMode()
                 ? `We couldn't detect the project type. Please ensure you have a valid ${getProductName()} (Ballerina) project open.`
-                : 'We couldn\'t detect the project type. Please ensure you have a valid WSO2 Integration Project open.';
+                : 'We couldn\'t detect the project type. Please ensure you have a valid Choreo Integration Project open.';
             // Agent Builder ignores the shared profile setting, so a stale MI
             // profile persisted by an Integrator install must not suppress it.
             if (isAgentBuilderMode() || selectedProfile !== MI_PROFILE) {

@@ -327,7 +327,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				try {
 					const type = integrationTypeFromScope(createParam.integrationType);
 					if (!type) {
-						throw new Error(`${integrationTypeLabel(createParam.integrationType) || createParam.integrationType} integrations cannot be created in WSO2 Cloud yet.`);
+						throw new Error(`${integrationTypeLabel(createParam.integrationType) || createParam.integrationType} integrations cannot be created in Choreo Cloud yet.`);
 					}
 					const name = toResourceName(createParam.name);
 					if (!RESOURCE_NAME.test(name)) {
@@ -605,7 +605,7 @@ const sourceBindingWarning = (unbound: { label: string; error: NonNullable<Creat
 		return undefined;
 	}
 	const names = unbound.map((item) => item.label).join(", ");
-	const reasons = new Set(unbound.map((item) => (item.error === "github-auth-required" ? "GitHub has to be connected to WSO2 Cloud again" : "WSO2 Cloud could not link the source repository")));
+	const reasons = new Set(unbound.map((item) => (item.error === "github-auth-required" ? "GitHub has to be connected to Choreo Cloud again" : "Choreo Cloud could not link the source repository")));
 	return `Created ${names}, but no build can start: ${[...reasons].join("; ")}. Fix it in the console, then start a build.`;
 };
 

@@ -42,14 +42,16 @@ VERSION="${6:-1.0.0}"
 PRODUCT_FLAVOR="${PRODUCT_FLAVOR:-integrator}"
 case "$PRODUCT_FLAVOR" in
     integrator)
-        ARTIFACT_SLUG="wso2-integrator"
-        PRODUCT_NAME="WSO2 Integrator"
-        ICON_ID="com.wso2.integrator"
+        ARTIFACT_SLUG="choreo-integrator"
+        PRODUCT_NAME="Choreo Integrator"
+        ICON_ID="com.choreo.integrator"
+        URL_SCHEME="choreo-integrator"   # product.json urlProtocol
         ;;
     agent-builder)
-        ARTIFACT_SLUG="wso2-agent-builder"
-        PRODUCT_NAME="WSO2 Agent Builder"
-        ICON_ID="com.wso2.agentbuilder"
+        ARTIFACT_SLUG="choreo-agent-builder"
+        PRODUCT_NAME="Choreo Agent Builder"
+        ICON_ID="com.choreo.agentbuilder"
+        URL_SCHEME="choreo-agent-builder"   # product.json urlProtocol
         ;;
     *)
         print_error "Unknown PRODUCT_FLAVOR '$PRODUCT_FLAVOR' (expected 'integrator' or 'agent-builder')"
@@ -93,17 +95,17 @@ print_info "Starting DEB package build process..."
 # Clean and recreate package directories
 print_info "Preparing package structure..."
 # Render the committed package template into a fresh staging tree. Flavor
-# placeholders (@SLUG@/@PRODUCT_NAME@/@ICON_ID@) resolve in the staged copy
+# placeholders (@SLUG@/@PRODUCT_NAME@/@ICON_ID@/@URL_SCHEME@) resolve in the staged copy
 # only, so the committed tree stays flavor-neutral and is never edited in place.
 rm -rf "$STAGE_DIR"
 cp -a "$WORK_DIR/package" "$STAGE_DIR"
 # Payloads left behind by older in-place builds must not leak into the package.
-rm -rf "$STAGE_DIR/usr/share/wso2-integrator" "$STAGE_DIR/usr/share/wso2-agent-builder"
+rm -rf "$STAGE_DIR/usr/share/wso2-integrator" "$STAGE_DIR/usr/share/wso2-agent-builder" "$STAGE_DIR/usr/share/choreo-integrator" "$STAGE_DIR/usr/share/choreo-agent-builder"
 print_info "Rendering package metadata for flavor '$PRODUCT_FLAVOR'..."
 find "$STAGE_DIR/usr/share/applications" "$STAGE_DIR/usr/share/appdata" \
      "$STAGE_DIR/usr/share/bash-completion/completions" "$STAGE_DIR/DEBIAN" -type f -print0 |
-    xargs -0 sed -i "s|@SLUG@|$ARTIFACT_SLUG|g; s|@PRODUCT_NAME@|$PRODUCT_NAME|g; s|@ICON_ID@|$ICON_ID|g"
-if [ "$ARTIFACT_SLUG" != "wso2-integrator" ]; then
+    xargs -0 sed -i "s|@SLUG@|$ARTIFACT_SLUG|g; s|@PRODUCT_NAME@|$PRODUCT_NAME|g; s|@ICON_ID@|$ICON_ID|g; s|@URL_SCHEME@|$URL_SCHEME|g"
+if [ "$ARTIFACT_SLUG" != "wso2-integrator" ]; then  # package/ sources are named wso2-integrator.*
     APPS_DIR="$STAGE_DIR/usr/share/applications"
     mv "$APPS_DIR/wso2-integrator.desktop" "$APPS_DIR/$ARTIFACT_SLUG.desktop"
     mv "$APPS_DIR/wso2-integrator-url-handler.desktop" "$APPS_DIR/$ARTIFACT_SLUG-url-handler.desktop"
@@ -111,7 +113,7 @@ if [ "$ARTIFACT_SLUG" != "wso2-integrator" ]; then
     mv "$STAGE_DIR/usr/share/bash-completion/completions/wso2-integrator" "$STAGE_DIR/usr/share/bash-completion/completions/$ARTIFACT_SLUG"
     # No dedicated Agent Builder artwork exists yet — ship the existing art under
     # the flavored names so Icon= and the appdata screenshot resolve.
-    mv "$STAGE_DIR/usr/share/pixmaps/com.wso2.integrator.svg" "$STAGE_DIR/usr/share/pixmaps/$ICON_ID.svg"
+    mv "$STAGE_DIR/usr/share/pixmaps/com.choreo.integrator.svg" "$STAGE_DIR/usr/share/pixmaps/$ICON_ID.svg"
     mv "$STAGE_DIR/usr/share/pixmaps/wso2-integrator-front.png" "$STAGE_DIR/usr/share/pixmaps/$ARTIFACT_SLUG-front.png"
 fi
 rm -rf "$EXTRACTION_TARGET"

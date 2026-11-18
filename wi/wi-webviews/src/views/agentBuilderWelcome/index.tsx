@@ -66,7 +66,7 @@ enum ViewState {
 	OPEN_PROJECT = "open_project",
 }
 
-const DEFAULT_PRODUCT_NAME = "WSO2 Agent Builder";
+const DEFAULT_PRODUCT_NAME = "Choreo Agent Builder";
 
 // The agent welcome has no Configure entry point yet, so the tooltip points at
 // the tree view's "Set Up Ballerina" flow instead of a Configure button.

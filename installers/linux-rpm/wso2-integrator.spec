@@ -10,7 +10,7 @@ AutoReqProv: no
 
 %description
 @PRODUCT_NAME@ is a comprehensive integration development environment
-that brings together Ballerina language runtime, WSO2 Integration Control Plane,
+that brings together Ballerina language runtime, Choreo Integration Control Plane,
 and low-code editor in one unified package.
 
 %global debug_package %{nil}
