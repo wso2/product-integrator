@@ -157,7 +157,7 @@ export function createDirectoryContextCommand(context: ExtensionContext) {
 export const updateContextFile = (gitRoot: string, project: Project, env?: string): string => {
 	const org = ext.authProvider?.org;
 	if (!org) {
-		throw new Error("Not signed in to WSO2 Cloud.");
+		throw new Error("Not signed in to Choreo Cloud.");
 	}
 	return linkContext(gitRoot, { org: org.handle, project: project.id, env });
 };

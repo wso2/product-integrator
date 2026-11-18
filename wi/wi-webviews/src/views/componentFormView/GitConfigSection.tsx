@@ -254,7 +254,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 
 	// WSO2 Cloud builds from GitHub repositories only for now; no credential configured for another provider changes that.
 	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB) {
-		invalidRepoMsg = `Creating integrations from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and create it from there.`;
+		invalidRepoMsg = `Creating integrations from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on Choreo Cloud yet. Push the integration to a GitHub repository and create it from there.`;
 		onInvalidRepoRefreshClick = refetchGitData;
 		blockCreation = true;
 	}
@@ -271,11 +271,11 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	if (!invalidRepoMsg && !isLoadingRepoAccess && gitRemote && !isRepoAuthorizedResp?.isAccessible && gitProvider) {
 		if (gitProvider === GitProvider.GITHUB) {
 			if (isRepoAuthorizedResp?.retrievedRepos) {
-				invalidRepoMsg = <span>WSO2 lacks access to the selected repository.</span>;
+				invalidRepoMsg = <span>Choreo lacks access to the selected repository.</span>;
 				invalidRepoAction = "Grant Access";
 				onInvalidRepoActionClick = () => wsClient.triggerGithubInstallFlow(gitRemote ?? "");
 			} else {
-				invalidRepoMsg = "Please authorize WSO2 to access your GitHub repositories.";
+				invalidRepoMsg = "Please authorize Choreo to access your GitHub repositories.";
 				invalidRepoAction = "Authorize";
 				onInvalidRepoActionClick = () => wsClient.triggerGithubAuthFlow(gitRemote ?? "");
 				invalidRepoBannerType = "info";
@@ -323,7 +323,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	}
 
 	if (!invalidRepoMsg && hasDirtyRepo) {
-		invalidRepoMsg = "WSO2 Cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.";
+		invalidRepoMsg = "Choreo Cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.";
 		onInvalidRepoRefreshClick = refetchHasDirtyRepo;
 		onInvalidRepoRefreshing = isFetchingHasDirtyRepo;
 		invalidRepoBannerType = "neutral";

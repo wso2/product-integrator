@@ -395,8 +395,8 @@ jobs:
       # must read that script from the commit under test, not from the caller's triggering ref.
       ref: ${{ inputs.ref }}
       allow_failure: ${{ inputs.smoke_tests_required == false }}
-      product_name: ${{ inputs.product_flavor == 'agent-builder' && 'WSO2 Agent Builder' || 'WSO2 Integrator' }}
-      artifact_slug: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
+      product_name: ${{ inputs.product_flavor == 'agent-builder' && 'Choreo Agent Builder' || 'Choreo Integrator' }}
+      artifact_slug: ${{ inputs.product_flavor == 'agent-builder' && 'choreo-agent-builder' || 'choreo-integrator' }}
 
   smoke-test-windows:
     if: ${{ inputs.build_windows == true && inputs.build_packed_installers == true && inputs.run_smoke_tests == true }}
@@ -406,7 +406,7 @@ jobs:
       windows_artifact_name: Product-Integrator-Windows
       ref: ${{ inputs.ref }}
       allow_failure: ${{ inputs.smoke_tests_required == false }}
-      product_name: ${{ inputs.product_flavor == 'agent-builder' && 'WSO2 Agent Builder' || 'WSO2 Integrator' }}
+      product_name: ${{ inputs.product_flavor == 'agent-builder' && 'Choreo Agent Builder' || 'Choreo Integrator' }}
 
   build-macos:
     if: ${{ inputs.build_macos == true }}
@@ -414,7 +414,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     needs: [resolve-versions, compile]
     env:
-      ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
+      ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'choreo-agent-builder' || 'choreo-integrator' }}
     defaults:
       run:
         working-directory: lib/vscode
@@ -1038,7 +1038,7 @@ jobs:
     runs-on: windows-2022
     needs: [resolve-versions, compile]
     env:
-      ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
+      ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'choreo-agent-builder' || 'choreo-integrator' }}
     defaults:
       run:
         working-directory: lib/vscode
@@ -1810,7 +1810,7 @@ jobs:
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
           # Core assets carry the flavor slug like every other release asset.
-          ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
+          ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'choreo-agent-builder' || 'choreo-integrator' }}
           PRODUCT_FLAVOR: ${{ inputs.product_flavor }}
           BALLERINA_VERSION: ${{ needs.resolve-versions.outputs.ballerina_version }}
           ICP_VERSION: ${{ needs.resolve-versions.outputs.icp_version }}
@@ -1921,7 +1921,7 @@ jobs:
         env:
           PUBLISH_TAG: ${{ inputs.publish_tag }}
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
-          PRODUCT_NAME: ${{ inputs.product_flavor == 'agent-builder' && 'WSO2 Agent Builder' || 'WSO2 Integrator' }}
+          PRODUCT_NAME: ${{ inputs.product_flavor == 'agent-builder' && 'Choreo Agent Builder' || 'Choreo Integrator' }}
         run: |
           if [ "${PUBLISH_TAG}" = "nightly" ]; then
             echo "name=${PRODUCT_NAME} Nightly (${INTEGRATOR_VERSION})" >> "$GITHUB_OUTPUT"
@@ -1975,7 +1975,7 @@ jobs:
         env:
           BUILD_MACOS: ${{ inputs.build_macos }}
           BUILD_WINDOWS: ${{ inputs.build_windows }}
-          ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
+          ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'choreo-agent-builder' || 'choreo-integrator' }}
           PRODUCT_FLAVOR: ${{ inputs.product_flavor }}
           RELEASE_TARGETS: ${{ steps.release-targets.outputs.targets }}
         run: |
@@ -2258,7 +2258,7 @@ jobs:
             --app-version "${{ needs.resolve-versions.outputs.integrator_version }}" \
             --app-installer-dir app-installers \
             --app-commit "${{ github.sha }}" \
-            --artifact-slug "${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}" \
+            --artifact-slug "${{ inputs.product_flavor == 'agent-builder' && 'choreo-agent-builder' || 'choreo-integrator' }}" \
             --source-flavors "wso2.ballerina=${{ inputs.ballerina_extension_source || 'marketplace' }},wso2.micro-integrator=${{ inputs.mi_extension_source || 'marketplace' }}" \
             "${MIRROR_ARGS[@]}" \
             --out source.json

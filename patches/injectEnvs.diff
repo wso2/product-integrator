@@ -1268,7 +1268,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/product/test/common/runtime
 +	});
 +
 +	test('resolves ${COMPONENT:*} to the override root when one is installed', () => {
-+		const override = '/home/u/.wso2-integrator/components/ballerina-runtime/2201.13.5';
++		const override = '/home/u/.choreo-integrator/components/ballerina-runtime/2201.13.5';
 +		deepStrictEqual(
 +			resolveProductRuntimeEnvironment(product, appRoot, {}, 'darwin', { 'ballerina-runtime': override }),
 +			{

@@ -4,10 +4,10 @@
 	<metadata_license>MIT</metadata_license>
 	<project_license>MIT</project_license>
 	<name>@PRODUCT_NAME@</name>
-	<url type="homepage">https://wso2.com/integration/</url>
-	<summary>@PRODUCT_NAME@ by WSO2.</summary>
+	<url type="homepage">https://choreolabs.com/integration/</url>
+	<summary>@PRODUCT_NAME@ by Choreo Labs.</summary>
 	<description>
-		<p>@PRODUCT_NAME@ is a comprehensive integration solution that enables seamless connectivity and orchestration of services. See https://wso2.com/integration/ for more information.</p>
+		<p>@PRODUCT_NAME@ is a comprehensive integration solution that enables seamless connectivity and orchestration of services. See https://choreolabs.com/integration/ for more information.</p>
 	</description>
 	<screenshots>
 		<screenshot type="default">

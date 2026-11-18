@@ -3,7 +3,7 @@
   xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package Name="@PRODUCT_NAME@"
     Version="@VERSION@"
-    Manufacturer="WSO2"
+    Manufacturer="Choreo Labs"
     UpgradeCode="@UPGRADE_CODE@"
     InstallerVersion="500"
     Compressed="yes"

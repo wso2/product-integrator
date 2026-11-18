@@ -39,9 +39,9 @@ export const CREATION_RUNTIME_HELP: Record<WIRuntime, string> = {
 	"WSO2: BI":
 		"Create an integration with package and workspace options.",
 	"WSO2: MI":
-		"Create a WSO2 Integrator: MI project.",
+		"Create a Choreo Integrator: MI project.",
 	"WSO2: SI":
-		"Create a WSO2 Integrator: SI project.",
+		"Create a Choreo Integrator: SI project.",
 };
 
 const PROFILE_RUNTIME_MAP: Record<SelectedProfileValue, WIRuntime> = {
