@@ -201,7 +201,7 @@
       },
       {
         "command": "wso2.integrator.cloud.integration.create",
-        "title": "Deploy Integration to Cloud",
+        "title": "Create Integration in WSO2 Cloud",
         "category": "WSO2 Integrator",
         "icon": "$(add)"
       },
