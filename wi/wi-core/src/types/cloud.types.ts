@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import type { AuthStatus, Component, ContextStoreState, Project, RepoPathInspection } from "@wso2/wso2-cloud-client";
+import type { AgentMcpConfig, AgentModelConfig, AuthStatus, Component, ContextStoreState, Project, RepoPathInspection } from "@wso2/wso2-cloud-client";
 import type { GetLocalGitDataResp, ICreateNewIntegrationCmdIntegrations } from "@wso2/wso2-platform-core";
 
 export type { Component, ContextStoreState, Project } from "@wso2/wso2-cloud-client";
@@ -74,6 +74,10 @@ export interface WICloudCreateIntegrationParam {
 	branch: string;
 	gitProvider: string;
 	gitCredRef?: string;
+	/** For an AI agent: the LLM providers and MCP servers Agent Manager attaches, and whether it traces the agent. */
+	modelConfig?: AgentModelConfig[];
+	mcpConfig?: AgentMcpConfig[];
+	autoInstrumentation?: boolean;
 }
 
 /**
@@ -235,6 +239,10 @@ export const WICloudDeployCommands = {
 	DeployBuild: "wso2.integrator.cloud.integration.deployBuild",
 	/** The required configurations that deploying an integration's latest build still needs in its project's entry environment. */
 	UnsetConfigurations: "wso2.integrator.cloud.integration.unsetConfigurations",
+	/** The repository check's Authorize action: authorizes the GitHub App and connects its installations. */
+	ConnectGitHub: "wso2.integrator.cloud.integration.connectGitHub",
+	/** The repository check's Grant Access action: installs the GitHub App or gives it the repository. */
+	InstallGitHubApp: "wso2.integrator.cloud.integration.installGitHubApp",
 } as const;
 
 export interface WICloudDeployContextReq {
@@ -272,7 +280,14 @@ export interface WICloudInspectSourceResp {
 export interface WICloudDeployReq {
 	workspaceDir: string;
 	buildPackLang: "ballerina" | "microintegrator";
-	integration: { fsPath: string; displayName: string; integrationType: string };
+	integration: {
+		fsPath: string;
+		displayName: string;
+		integrationType: string;
+		modelConfig?: AgentModelConfig[];
+		mcpConfig?: AgentMcpConfig[];
+		autoInstrumentation?: boolean;
+	};
 	/** An existing project's id, or the display name of a project to create; an empty project of that name, as a failed deploy leaves, is used instead. */
 	project: { id: string } | { newName: string };
 	gitRemote: string;

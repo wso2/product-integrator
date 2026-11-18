@@ -70,6 +70,9 @@ export const workspace = {
 	onDidChangeConfiguration: () => ({ dispose: (): undefined => undefined }),
 };
 
+type WindowStateListener = (state: { focused: boolean }) => void;
+const windowStateListeners = new Set<WindowStateListener>();
+
 export const window = {
 	createOutputChannel: () => ({ appendLine: (): undefined => undefined, show: (): undefined => undefined, dispose: (): undefined => undefined }),
 	showInformationMessage: async (): Promise<undefined> => undefined,
@@ -77,9 +80,23 @@ export const window = {
 	showErrorMessage: async (): Promise<undefined> => undefined,
 	showQuickPick: async (): Promise<undefined> => undefined,
 	showInputBox: async (): Promise<undefined> => undefined,
-	withProgress: async <T>(_options: unknown, task: () => Promise<T>) => task(),
+	withProgress: async <T>(_options: unknown, task: (progress: unknown, token: unknown) => Promise<T>) =>
+		task({ report: (): undefined => undefined }, { onCancellationRequested: () => ({ dispose: (): undefined => undefined }) }),
 	registerUriHandler: () => ({ dispose: (): undefined => undefined }),
+	state: { focused: true },
+	onDidChangeWindowState: (listener: WindowStateListener) => {
+		windowStateListeners.add(listener);
+		return { dispose: () => windowStateListeners.delete(listener) };
+	},
 };
+
+/** Test hook: the editor window losing or getting back its focus. */
+export function fireWindowState(focused: boolean): void {
+	window.state.focused = focused;
+	for (const listener of [...windowStateListeners]) {
+		listener({ focused });
+	}
+}
 
 export const commands = {
 	registerCommand: () => ({ dispose: (): undefined => undefined }),

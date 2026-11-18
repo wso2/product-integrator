@@ -37,11 +37,13 @@ import { ext } from "../../extensionVariables";
 import { isSubpath } from "../../utils/pathUtils";
 import { CloudWsManager } from "../../ws-managers/cloud/ws-manager";
 import { linkContext, localContextEntry, unlinkContext } from "../context-file";
+import { untilGitHubConnectEnds } from "../github-access";
 import { describeCloudError, handleCloudError } from "../platform/error-handler";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 import {
 	assignUniqueNames,
+	deployRemote,
 	deploySourceRoot,
 	integrationNames,
 	isIntegrationNameTaken,
@@ -90,6 +92,25 @@ async function getDeployContext(req: WICloudDeployContextReq): Promise<WICloudDe
 	};
 }
 
+type SourceReq = Pick<WICloudInspectSourceReq, "workspaceDir" | "gitRemote">;
+
+// Authorize or Grant Access for the repository a deploy from `workspaceDir` builds from; resolves once connecting GitHub ends.
+async function connectGitHubFor(req: SourceReq | undefined, install: boolean): Promise<void> {
+	isPlatformReady(ext);
+	await ext.cloudReady;
+	if (!signedIn()) {
+		throw new Error("Sign in to Choreo Cloud to connect GitHub.");
+	}
+	if (!ext.githubApp?.canReturnHere) {
+		void window.showInformationMessage("GitHub is connected in the Choreo Cloud console. Come back here when it is done.");
+	}
+	const ws = new CloudWsManager();
+	const gitData = req?.workspaceDir ? await ws.getLocalGitData(req.workspaceDir) : undefined;
+	const remote = deployRemote(gitData, req?.gitRemote) ?? "";
+	// Access given on GitHub is read live, so Grant Access needs only the editor's focus back, not GitHub's return.
+	await untilGitHubConnectEnds(!install && !!ext.githubApp?.canReturnHere, () => (install ? ws.triggerGithubInstallFlow(remote) : ws.triggerGithubAuthFlow(remote)));
+}
+
 // The same reads the deploy form makes for its repository section, judged by the same rules.
 async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspectSourceResp> {
 	isPlatformReady(ext);
@@ -102,7 +123,7 @@ async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspe
 	const orgId = ext.authProvider?.org?.id?.toString() ?? "";
 	const gitData = (await ws.getLocalGitData(req.workspaceDir)) ?? null;
 	const remotes = gitData?.remotes ?? [];
-	const gitRemote = (req.gitRemote && remotes.includes(req.gitRemote) ? req.gitRemote : gitData?.upstream?.remoteUrl || remotes[0]) || null;
+	const gitRemote = deployRemote(gitData, req.gitRemote);
 	const gitProvider = (gitRemote && parseGitURL(gitRemote)?.[2]) || null;
 	const target = gitRemote && gitProvider ? { repoUrl: gitRemote, orgId, credRef: "" } : undefined;
 	let repoAccessError: string | undefined;
@@ -184,6 +205,9 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 					displayName,
 					name: displayName,
 					integrationType: req.integration.integrationType,
+					modelConfig: req.integration.modelConfig,
+					mcpConfig: req.integration.mcpConfig,
+					autoInstrumentation: req.integration.autoInstrumentation,
 					buildPackLang: req.buildPackLang,
 					repoUrl: req.gitRemote,
 					branch: req.branch,
@@ -273,5 +297,7 @@ export function deployIntegrationCommands(context: ExtensionContext) {
 		commands.registerCommand(WICloudDeployCommands.Deploy, deploy),
 		commands.registerCommand(WICloudDeployCommands.DeployBuild, deployLatestBuild),
 		commands.registerCommand(WICloudDeployCommands.UnsetConfigurations, unsetConfigurationsOf),
+		commands.registerCommand(WICloudDeployCommands.ConnectGitHub, (req?: SourceReq) => connectGitHubFor(req, false)),
+		commands.registerCommand(WICloudDeployCommands.InstallGitHubApp, (req?: SourceReq) => connectGitHubFor(req, true)),
 	);
 }

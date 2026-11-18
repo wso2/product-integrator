@@ -73,7 +73,10 @@ export async function resolveGitHubAccess(cloud: CloudClient, owner: string, rep
 	const branches = await cloud.repos
 		.listBranches(owner, repo)
 		.then((items) => items.map((branch) => branch.name))
-		.catch((): string[] => []);
+		.catch((err: unknown): string[] => {
+			log(`Could not list the branches of ${owner}/${repo}: ${err instanceof Error ? err.message : String(err)}`);
+			return [];
+		});
 	if (branches.length > 0) {
 		return { kind: "public", owner, repo, branches };
 	}
@@ -162,7 +165,7 @@ export function gitHubSourceFor(access: GitHubRepoAccess, branch: string, appPat
 }
 
 /** The URI schemes WSO2 Cloud's console sends GitHub's return to; anything else finishes in the console. */
-export const GITHUB_RETURN_SCHEMES: readonly string[] = ["vscode", "vscode-insiders", "wso2-integrator"];
+export const GITHUB_RETURN_SCHEMES: readonly string[] = ["vscode", "vscode-insiders", "wso2-integrator", "choreo-integrator", "choreo-agent-builder"];
 
 /** The editor's path the console sends GitHub's return to. */
 export const GITHUB_RETURN_PATH = "/ghapp";
@@ -319,7 +322,7 @@ export class GitHubAppConnector {
 		}
 		if (pending.session !== this.deps.session()) {
 			// GitHub would be connected to an organization, or for a person, other than the one that started.
-			this.deps.log("A GitHub return arrived after the WSO2 Cloud sign-in changed; it was ignored");
+			this.deps.log("A GitHub return arrived after the Choreo Cloud sign-in changed; it was ignored");
 			this.deps.outcome.ignored("signed-in-changed");
 			return;
 		}
@@ -341,7 +344,7 @@ export class GitHubAppConnector {
 			if (query.get("error") === "access_denied") {
 				this.deps.outcome.cancelled();
 			} else {
-				this.deps.outcome.failed(reason ? `GitHub did not authorize the WSO2 Cloud app: ${reason}` : "GitHub did not authorize the WSO2 Cloud app.");
+				this.deps.outcome.failed(reason ? `GitHub did not authorize the Choreo Cloud app: ${reason}` : "GitHub did not authorize the Choreo Cloud app.");
 			}
 			return;
 		}
@@ -361,7 +364,7 @@ export class GitHubAppConnector {
 				}
 				return;
 			}
-			this.deps.outcome.failed(`Could not connect GitHub to WSO2 Cloud: ${err instanceof Error ? err.message : String(err)}`);
+			this.deps.outcome.failed(`Could not connect GitHub to Choreo Cloud: ${err instanceof Error ? err.message : String(err)}`);
 			return;
 		}
 		if (flow !== this.started) {

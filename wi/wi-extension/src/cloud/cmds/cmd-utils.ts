@@ -151,6 +151,12 @@ export const toResourceName = (displayName: string): string =>
 
 export const toProjectName = toResourceName;
 
+/** The remote a deploy builds from: the one asked for when the repository has it, else the branch's upstream or the first remote. */
+export function deployRemote(gitData: GetLocalGitDataResp | null | undefined, requested?: string): string | null {
+	const remotes = gitData?.remotes ?? [];
+	return (requested && remotes.includes(requested) ? requested : gitData?.upstream?.remoteUrl || remotes[0]) || null;
+}
+
 export const createNewProject = async (projectName?: string, isWorkspaceMapping?: boolean): Promise<Project> => {
 	const org = requireOrg();
 	const cloud = ext.clients.platform.cloud;
