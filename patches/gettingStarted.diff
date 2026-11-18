@@ -1531,7 +1531,7 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginD
 +		headline.textContent = `Welcome to\n${this.productService.nameLong}`;
 +
 +		const caption = append(leftSection, $('p.login-caption'));
-+		const buildType = this.productService.urlProtocol === 'wso2-agent-builder' ? 'any type of AI agent' : 'any type of integration and AI agent';
++		const buildType = this.productService.urlProtocol === 'choreo-agent-builder' ? 'any type of AI agent' : 'any type of integration and AI agent';
 +		caption.textContent = `Connect AI agents, APIs, data, and events across cloud, on-prem, and hybrid environments. Build ${buildType} with the 100% open source ${this.productService.nameLong}.`;
 +
 +		// Right section with login form

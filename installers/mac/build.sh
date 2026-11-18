@@ -67,8 +67,8 @@ print_info "Detected app bundle: $APP_BUNDLE"
 # The pkg identifier must match the app's darwinBundleIdentifier so each
 # flavor keeps its own installer receipts (side-by-side installs).
 case "$APP_NAME" in
-    "Choreo Agent Builder") BUNDLE_IDENTIFIER="com.wso2.agentbuilder" ;;
-    *)                      BUNDLE_IDENTIFIER="com.wso2.integrator" ;;
+    "Choreo Agent Builder") BUNDLE_IDENTIFIER="com.choreo.agentbuilder" ;;
+    *)                      BUNDLE_IDENTIFIER="com.choreo.integrator" ;;
 esac
 print_info "Package identifier: $BUNDLE_IDENTIFIER"
 
@@ -527,12 +527,12 @@ print_info "Creating Squirrel.Mac update payload: $MAC_ZIP"
 rm -f "$WORK_DIR/$MAC_ZIP"
 # INSTALLER_PROFILE=editor-update (§D8): the Squirrel update payload is EDITOR-ONLY — strip the
 # bundled Ballerina from a copy and re-sign it (the DMG, the first-install artifact, stays full).
-# After Squirrel swaps the app, the seeded Ballerina in ~/.wso2-integrator survives the swap.
+# After Squirrel swaps the app, the seeded Ballerina in the data folder (~/.choreo-integrator) survives the swap.
 # Default (full) keeps the current behaviour for local/dev builds.
 ZIP_SRC="$SIGN_APP"
 if [ "${INSTALLER_PROFILE:-full}" = "editor-update" ]; then
     # W-B: truly editor-only Squirrel payload — drop the entire components tree (Ballerina, ICP,
-    # JRE). All are seeded to ~/.wso2-integrator and survive the whole-.app swap; ICP requires the
+    # JRE). All are seeded to the data folder (~/.choreo-integrator) and survive the whole-.app swap; ICP requires the
     # MI extension to read WSO2_INTEGRATOR_ICP_HOME before this payload is published (go-live gate).
     print_info "editor-update profile: building editor-only Squirrel payload (runtimes relocated)"
     EDITOR_APP="$WORK_DIR/editor_update/$APP_BUNDLE"

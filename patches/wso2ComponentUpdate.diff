@@ -6826,7 +6826,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/test/electron-ma
 +
 +/**
 + * The constructor reconciles and garbage-collects the components home it resolves from
-+ * os.homedir() -- the real ~/.wso2-integrator on a developer machine. So the methods under test run
++ * os.homedir() -- the real data folder (~/.choreo-integrator) on a developer machine. So the methods under test run
 + * on an instance that skips it, seeded with exactly the fields they read.
 + *
 + * Keep the list below in step with those methods: a field one of them starts reading is otherwise

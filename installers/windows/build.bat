@@ -148,23 +148,26 @@ if not defined PRODUCT_NAME set "PRODUCT_NAME=Choreo Integrator"
 echo Product name: %PRODUCT_NAME%
 
 REM Each flavor needs its own MSI UpgradeCode and install folder, otherwise
-REM installing one flavor upgrades/replaces the other.
+REM installing one flavor upgrades/replaces the other. DATA_FOLDER must match
+REM product.json dataFolderName (ci/build/update-product.sh): uninstall removes it.
 if "%PRODUCT_NAME%"=="Choreo Agent Builder" (
     set "UPGRADE_CODE=56138e5c-e9ef-499b-8a21-54e2cfc09ba3"
     set "PRODUCT_DIR=Agent Builder"
     set "MSI_BASE=wso2-agent-builder"
     set "PROGID=WSO2AgentBuilder"
+    set "DATA_FOLDER=.choreo-agent-builder"
 ) else (
     set "UPGRADE_CODE=344b046a-fa6a-4452-be40-2794f59fe7b0"
     set "PRODUCT_DIR=Integrator"
     set "MSI_BASE=wso2-integrator"
     set "PROGID=WSO2Integrator"
+    set "DATA_FOLDER=.choreo-integrator"
 )
 copy /y ".\WixPackage\Package.wxs" ".\WixPackage\Package.wxs.bak" >nul
 copy /y ".\WixPackage\IntegratorComponents.wxs" ".\WixPackage\IntegratorComponents.wxs.bak" >nul
 copy /y ".\WixPackage\Folders.wxs" ".\WixPackage\Folders.wxs.bak" >nul
 copy /y ".\CustomAction1\CustomAction.cs" ".\CustomAction1\CustomAction.cs.bak" >nul
-powershell -Command "foreach ($f in '.\WixPackage\Package.wxs','.\WixPackage\IntegratorComponents.wxs','.\WixPackage\Folders.wxs','.\CustomAction1\CustomAction.cs') { (Get-Content -Raw $f).Replace('@PRODUCT_NAME@', '%PRODUCT_NAME%').Replace('@UPGRADE_CODE@', '%UPGRADE_CODE%').Replace('@PRODUCT_DIR@', '%PRODUCT_DIR%').Replace('@PROGID@', '%PROGID%') | Set-Content $f }"
+powershell -Command "foreach ($f in '.\WixPackage\Package.wxs','.\WixPackage\IntegratorComponents.wxs','.\WixPackage\Folders.wxs','.\CustomAction1\CustomAction.cs') { (Get-Content -Raw $f).Replace('@PRODUCT_NAME@', '%PRODUCT_NAME%').Replace('@UPGRADE_CODE@', '%UPGRADE_CODE%').Replace('@PRODUCT_DIR@', '%PRODUCT_DIR%').Replace('@PROGID@', '%PROGID%').Replace('@DATA_FOLDER@', '%DATA_FOLDER%') | Set-Content $f }"
 
 REM Map build directory to a short drive letter to keep file paths under 260 chars.
 REM wixnative.exe lacks a longPathAware manifest, so it crashes on paths > 260 chars.

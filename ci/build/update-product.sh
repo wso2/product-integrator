@@ -37,16 +37,16 @@ PRODUCT_FLAVOR=${PRODUCT_FLAVOR:-integrator}
 case "${PRODUCT_FLAVOR}" in
   integrator)
     PRODUCT_NAME="Choreo Integrator"
-    DATA_FOLDER=".wso2-integrator"
-    APP_SLUG="wso2-integrator"
-    BUNDLE_ID="com.wso2.integrator"
+    DATA_FOLDER=".choreo-integrator"
+    APP_SLUG="choreo-integrator"
+    BUNDLE_ID="com.choreo.integrator"
     PACK_INTEGRATION_EXTENSIONS="true"
     ;;
   agent-builder)
     PRODUCT_NAME="Choreo Agent Builder"
-    DATA_FOLDER=".wso2-agent-builder"
-    APP_SLUG="wso2-agent-builder"
-    BUNDLE_ID="com.wso2.agentbuilder"
+    DATA_FOLDER=".choreo-agent-builder"
+    APP_SLUG="choreo-agent-builder"
+    BUNDLE_ID="com.choreo.agentbuilder"
     PACK_INTEGRATION_EXTENSIONS="false"
     ;;
   *) echo "Error: unknown PRODUCT_FLAVOR '${PRODUCT_FLAVOR}' (expected 'integrator' or 'agent-builder')" >&2; exit 1 ;;
@@ -199,7 +199,7 @@ cat > lib/vscode/product.json <<EOF
     "tunnelApplicationName": "wso2-integrator-tunnel",
     "win32DirName": "${APP_SLUG}",
     "win32NameVersion": "${APP_SLUG}",
-    "win32AppUserModelId": "wso2.${APP_SLUG}",
+    "win32AppUserModelId": "choreo.${APP_SLUG}",
     "win32ShellNameShort": "w&so2-integrator",
     "darwinBundleIdentifier": "${BUNDLE_ID}",
     "linuxIconName": "${BUNDLE_ID}",
