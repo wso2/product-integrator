@@ -204,7 +204,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	/** The platform lists no GitHub organizations yet; the form shows this instead of an empty list it cannot act on. */
 	async getAuthorizedGitOrgs(_params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
 		throw new NotSupportedError(
-			"Creating a repository from here is not available on WSO2 Cloud yet. Create the repository on GitHub, push the integration to it, then deploy from it.",
+			"Creating a repository from here is not available on WSO2 Cloud yet. Create the repository on GitHub, push the integration to it, then create the integration from it.",
 			{ reason: "git_orgs_unavailable" },
 		);
 	}

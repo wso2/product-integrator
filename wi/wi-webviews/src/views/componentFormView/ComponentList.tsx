@@ -90,7 +90,7 @@ export function ComponentList({
 	onEditStart,
 }: ComponentListProps) {
 	const hasSelected = selectedCount > 0;
-	const deployableCount = integrations.filter((e) => !e.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY)).length;
+	const creatableCount = integrations.filter((e) => !e.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY)).length;
 	const { wsClient } = useVisualizerContext();
 	const { consoleUrl } = useCloudContext();
 
@@ -102,7 +102,7 @@ export function ComponentList({
 		<ComponentListSection>
 			<ComponentListHeader>
 				<ComponentListLabel>{isBatch ? <>Select the integrations to create in {projectLink} in WSO2 Cloud</> : <>Create this integration in {projectLink} in WSO2 Cloud</>}</ComponentListLabel>
-				{isBatch && <SelectionCount>{selectedCount} of {deployableCount} selected</SelectionCount>}
+				{isBatch && <SelectionCount>{selectedCount} of {creatableCount} selected</SelectionCount>}
 			</ComponentListHeader>
 
 			<ComponentListContainer>
