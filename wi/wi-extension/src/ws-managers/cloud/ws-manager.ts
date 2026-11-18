@@ -225,7 +225,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 	private githubApp(): GitHubAppConnector {
 		if (!ext.githubApp) {
-			throw new Error("WSO2 Cloud is not available.");
+			throw new Error("Choreo Cloud is not available.");
 		}
 		return ext.githubApp;
 	}
