@@ -122,7 +122,7 @@ const CLOUD_SERVICES: Readonly<Record<CloudServiceName, CloudService>> = {
 	"agent-manager": {
 		baseUrl: (config) => (config.apiBaseUrl ? `${new URL(config.apiBaseUrl).origin}/agent-manager-service-agent-manager-api` : undefined),
 		prefix: "/api/v1",
-		missing: "This WSO2 Cloud deployment has no API URL to reach Agent Manager at.",
+		missing: "This Choreo Cloud deployment has no API URL to reach Agent Manager at.",
 		sharedGateway: true,
 	},
 };
