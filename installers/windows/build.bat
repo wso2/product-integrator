@@ -40,7 +40,7 @@ if exist ".\WixPackage\payload" rmdir /s /q ".\WixPackage\payload"
 
 REM Clean the WiX intermediate output before each build. The WiX SDK hard-links
 REM obj\...\WSO2-Integrator.msi to bin, and build.bat renames the bin entry to the
-REM final wso2-integrator-<v>[-update].msi (still the same inode). When the second
+REM final choreo-integrator-<v>[-update].msi (still the same inode). When the second
 REM profile (editor-update) rebuilds, WiX overwrites obj\WSO2-Integrator.msi in place
 REM on that shared inode, clobbering the already-renamed full MSI so both profiles end
 REM up byte-identical. Removing obj forces a fresh inode per build; the previously
@@ -153,13 +153,13 @@ REM product.json dataFolderName (ci/build/update-product.sh): uninstall removes 
 if "%PRODUCT_NAME%"=="Choreo Agent Builder" (
     set "UPGRADE_CODE=56138e5c-e9ef-499b-8a21-54e2cfc09ba3"
     set "PRODUCT_DIR=Agent Builder"
-    set "MSI_BASE=wso2-agent-builder"
+    set "MSI_BASE=choreo-agent-builder"
     set "PROGID=WSO2AgentBuilder"
     set "DATA_FOLDER=.choreo-agent-builder"
 ) else (
     set "UPGRADE_CODE=344b046a-fa6a-4452-be40-2794f59fe7b0"
     set "PRODUCT_DIR=Integrator"
-    set "MSI_BASE=wso2-integrator"
+    set "MSI_BASE=choreo-integrator"
     set "PROGID=WSO2Integrator"
     set "DATA_FOLDER=.choreo-integrator"
 )

@@ -51,7 +51,7 @@
 //   node ci/build/generate-update-manifest.mjs \
 //     --sequence 42 [--targets darwin-arm64,win32-x64] \
 //     --app-version 5.0.1.0 [--app-commit SHA] [--app-release-base URL] \
-//     [--artifact-slug wso2-agent-builder] \
+//     [--artifact-slug choreo-agent-builder] \
 //     [--app-applies-to '>=5.0.0'] [--app-rollout 25] [--out source.json] \
 //     [--artifacts-base https://cdn/artifacts --mirror-dir artifacts-mirror] [--no-download] \
 //     [--app-installer-dir app-installers]   app installers read from local files (a build's own
@@ -358,8 +358,8 @@ async function main() {
 	}
 
 	const appVersion = args['app-version'] || versions['integrator.version'];
-	// Flavors share every name template; only the {slug} differs (wso2-integrator vs wso2-agent-builder).
-	const artifactSlug = safeSegment(args['artifact-slug'] || 'wso2-integrator', 'artifact slug');
+	// Flavors share every name template; only the {slug} differs (choreo-integrator vs choreo-agent-builder).
+	const artifactSlug = safeSegment(args['artifact-slug'] || 'choreo-integrator', 'artifact slug');
 
 	// Fetch-only mode: download the URL-sourced components into <dir>/<id>/<file> and write no
 	// document. The release job uses it to publish the JRE and the bundled extensions next to the

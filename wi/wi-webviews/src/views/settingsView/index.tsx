@@ -20,7 +20,6 @@ import styled from "@emotion/styled";
 import {
     DEFAULT_PROFILE,
     ProductMode,
-    PROFILE_DISPLAY_LABELS,
     SELECTED_PROFILE_CONFIG_SECTION,
     SELECTED_PROFILE_VALUES,
     type SelectedProfileValue,
@@ -49,7 +48,7 @@ import { SetupContent } from "../setup/CompactContent";
 const PROFILE_OPTIONS: OptionProps[] = SELECTED_PROFILE_VALUES.map((profile) => ({
     id: profile,
     value: profile,
-    content: PROFILE_DISPLAY_LABELS[profile],
+    content: profile,
 }));
 
 function isSelectedProfileValue(value: unknown): value is SelectedProfileValue {

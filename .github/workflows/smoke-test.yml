@@ -32,10 +32,10 @@ on:
         type: string
         default: 'Choreo Integrator'
       artifact_slug:
-        description: "Artifact/package slug — names the Linux install dir (/usr/share/<slug>). 'wso2-integrator' or 'wso2-agent-builder'. The payload binary inside stays wso2-integrator for both."
+        description: "Artifact/package slug — names the Linux install dir (/usr/share/<slug>). 'choreo-integrator' or 'choreo-agent-builder'. The payload binary inside stays wso2-integrator for both."
         required: false
         type: string
-        default: 'wso2-integrator'
+        default: 'choreo-integrator'
   workflow_dispatch:
     inputs:
       integrator_version:
@@ -97,7 +97,7 @@ jobs:
           with open('release.json') as f:
               release = json.load(f)
           for asset in release['assets']:
-              if re.fullmatch(r'wso2-integrator_.*_amd64\.deb', asset['name']):
+              if re.fullmatch(r'choreo-integrator_.*_amd64\.deb', asset['name']):
                   print(asset['name'])
                   print(asset['browser_download_url'])
                   break
@@ -112,7 +112,7 @@ jobs:
 
       - name: Install DEB and locate binary
         env:
-          ARTIFACT_SLUG: ${{ inputs.artifact_slug || 'wso2-integrator' }}
+          ARTIFACT_SLUG: ${{ inputs.artifact_slug || 'choreo-integrator' }}
         run: |
           sudo apt-get install -y ./artifact/*.deb
           # The install dir is flavored (<slug>); the payload binary inside is
@@ -279,7 +279,7 @@ jobs:
         run: |
           $version = "${{ inputs.integrator_version }}"
           $release = Invoke-RestMethod "https://api.github.com/repos/wso2/product-integrator/releases/tags/v$version"
-          $asset = $release.assets | Where-Object { $_.name -match '^wso2-integrator-.*\.msi$' -and $_.name -notmatch '-update\.msi$' } | Select-Object -First 1
+          $asset = $release.assets | Where-Object { $_.name -match '^choreo-integrator-.*\.msi$' -and $_.name -notmatch '-update\.msi$' } | Select-Object -First 1
           if (-not $asset) { throw 'MSI asset not found' }
           New-Item -ItemType Directory -Path artifact -Force
           Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "artifact/$($asset.name)"

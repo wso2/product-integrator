@@ -41,16 +41,11 @@
         "integrator.selectedProfile": {
           "type": "string",
           "enum": [
-            "WSO2 Integrator: Default",
-            "WSO2 Integrator: MI",
-            "WSO2 Integrator: SI"
-          ],
-          "enumItemLabels": [
             "Choreo Integrator: Default",
             "Choreo Integrator: MI",
             "Choreo Integrator: SI"
           ],
-          "default": "WSO2 Integrator: Default",
+          "default": "Choreo Integrator: Default",
           "description": "Select the active Choreo Integrator profile."
         },
         "integrator.advanced.cloudEnv": {

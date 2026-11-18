@@ -40,8 +40,8 @@ VERSION="${6:-1.0.0}"
 # binary name (applicationName) stays "wso2-integrator" for both flavors.
 PRODUCT_FLAVOR="${PRODUCT_FLAVOR:-integrator}"
 case "$PRODUCT_FLAVOR" in
-    integrator)    ARTIFACT_SLUG="wso2-integrator" ;;
-    agent-builder) ARTIFACT_SLUG="wso2-agent-builder" ;;
+    integrator)    ARTIFACT_SLUG="choreo-integrator" ;;
+    agent-builder) ARTIFACT_SLUG="choreo-agent-builder" ;;
     *)
         print_error "Unknown PRODUCT_FLAVOR '$PRODUCT_FLAVOR' (expected 'integrator' or 'agent-builder')"
         exit 1

@@ -75,8 +75,8 @@ print_info "Package identifier: $BUNDLE_IDENTIFIER"
 # Artifact file names carry the flavor slug so the two products' installers
 # never collide on a release page or in the update bucket.
 case "$APP_NAME" in
-    "Choreo Agent Builder") ARTIFACT_SLUG="wso2-agent-builder" ;;
-    *)                      ARTIFACT_SLUG="wso2-integrator" ;;
+    "Choreo Agent Builder") ARTIFACT_SLUG="choreo-agent-builder" ;;
+    *)                      ARTIFACT_SLUG="choreo-integrator" ;;
 esac
 print_info "Artifact slug: $ARTIFACT_SLUG"
 

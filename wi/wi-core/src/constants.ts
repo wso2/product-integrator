@@ -85,9 +85,9 @@ export const EXTENSION_DEPENDENCIES = {
  */
 export const SELECTED_PROFILE_CONFIG_SECTION = "integrator.selectedProfile";
 
-export const DEFAULT_PROFILE = "WSO2 Integrator: Default";
-export const MI_PROFILE = "WSO2 Integrator: MI";
-export const SI_PROFILE = "WSO2 Integrator: SI";
+export const DEFAULT_PROFILE = "Choreo Integrator: Default";
+export const MI_PROFILE = "Choreo Integrator: MI";
+export const SI_PROFILE = "Choreo Integrator: SI";
 
 export const SELECTED_PROFILE_VALUES = [
 	DEFAULT_PROFILE,
@@ -96,13 +96,3 @@ export const SELECTED_PROFILE_VALUES = [
 ] as const;
 
 export type SelectedProfileValue = typeof SELECTED_PROFILE_VALUES[number];
-
-/**
- * User-visible labels for the profile values. The values themselves are persisted in user
- * settings (integrator.selectedProfile), so they stay unchanged; show these labels instead.
- */
-export const PROFILE_DISPLAY_LABELS: Record<SelectedProfileValue, string> = {
-	[DEFAULT_PROFILE]: "Choreo Integrator: Default",
-	[MI_PROFILE]: "Choreo Integrator: MI",
-	[SI_PROFILE]: "Choreo Integrator: SI",
-};
