@@ -29,13 +29,14 @@ import {
 	sourceReadiness,
 	validateIntegrationDisplayName,
 } from "@wso2/wi-core";
-import { type Project, buildConsoleUrl, buildSucceeded } from "@wso2/wso2-cloud-client";
+import { type Project, buildConsoleUrl, buildSucceeded, parseGitHubRepoUrl } from "@wso2/wso2-cloud-client";
 import { parseGitURL } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, Uri, commands, env, window, workspace } from "vscode";
 import { ext } from "../../extensionVariables";
 import { isSubpath } from "../../utils/pathUtils";
 import { CloudWsManager } from "../../ws-managers/cloud/ws-manager";
 import { linkContext, localContextEntry, unlinkContext } from "../context-file";
+import { gitHubAccessFor, untilGitHubConnectEnds } from "../github-access";
 import { describeCloudError, handleCloudError } from "../platform/error-handler";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
@@ -87,6 +88,20 @@ async function getDeployContext(req: WICloudDeployContextReq): Promise<WICloudDe
 		projects: projects.map((project) => ({ id: project.id, name: project.name })),
 		integrations,
 	};
+}
+
+type SourceReq = Pick<WICloudInspectSourceReq, "workspaceDir" | "gitRemote">;
+
+// Authorize or Grant Access for the repository a deploy from `workspaceDir` builds from; resolves once connecting GitHub ends.
+async function connectGitHubFor(req: SourceReq | undefined, install: boolean): Promise<void> {
+	const ws = new CloudWsManager();
+	const gitData = req?.workspaceDir ? await ws.getLocalGitData(req.workspaceDir) : undefined;
+	const remote = deployRemote(gitData, req?.gitRemote) ?? "";
+	const github = parseGitHubRepoUrl(remote);
+	// GitHub's settings page for an installation never returns to the editor.
+	const settingsPage = install && !!github && (await gitHubAccessFor(github.owner, github.repo)).kind === "not-granted";
+	const returnsHere = !!ext.githubApp?.canReturnHere && !settingsPage;
+	await untilGitHubConnectEnds(returnsHere, () => (install ? ws.triggerGithubInstallFlow(remote) : ws.triggerGithubAuthFlow(remote)));
 }
 
 // The same reads the deploy form makes for its repository section, judged by the same rules.
@@ -264,5 +279,7 @@ export function deployIntegrationCommands(context: ExtensionContext) {
 		commands.registerCommand(WICloudDeployCommands.InspectSource, inspectSource),
 		commands.registerCommand(WICloudDeployCommands.Deploy, deploy),
 		commands.registerCommand(WICloudDeployCommands.DeployBuild, deployLatestBuild),
+		commands.registerCommand(WICloudDeployCommands.ConnectGitHub, (req?: SourceReq) => connectGitHubFor(req, false)),
+		commands.registerCommand(WICloudDeployCommands.InstallGitHubApp, (req?: SourceReq) => connectGitHubFor(req, true)),
 	);
 }

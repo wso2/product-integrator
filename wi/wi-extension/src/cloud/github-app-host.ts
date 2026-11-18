@@ -20,7 +20,7 @@ import { Uri, env, window } from "vscode";
 import { BridgeLayer } from "../BridgeLayer";
 import { ext } from "../extensionVariables";
 import { buildConsoleUrl } from "@wso2/wso2-cloud-client";
-import { SIGN_IN_CHANGED_MESSAGE, signedInScope } from "./github-access";
+import { SIGN_IN_CHANGED_MESSAGE, endingConnect, signedInScope } from "./github-access";
 import { GitHubAppConnector, type IgnoredGitHubReturn, forgetGitHubAccess } from "./github-app";
 
 const IGNORED_RETURN_MESSAGES: Record<IgnoredGitHubReturn, string> = {
@@ -59,7 +59,7 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 			forgetGitHubAccess();
 			BridgeLayer.notifyGitHubConnected();
 		},
-		outcome: {
+		outcome: endingConnect({
 			connected: (installations, missingOwner) => {
 				const accounts = installations.map((item) => item.githubAccount).join(", ");
 				const connected = accounts ? `GitHub is connected to WSO2 Cloud (${accounts})` : "GitHub is connected to WSO2 Cloud";
@@ -84,6 +84,6 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 			failed: (message) => {
 				window.showErrorMessage(message);
 			},
-		},
+		}),
 	});
 }
