@@ -85,6 +85,8 @@ export interface WICloudSubmitComponentsReq {
 	project: Project;
 	workspaceFsPath: string;
 	createParams: WICloudCreateIntegrationParam[];
+	/** The caller shows the progress and the failures it gets back: report progress in the status bar and skip the success and failure messages. */
+	quiet?: boolean;
 }
 
 export interface WICloudSubmitComponentsResp {
@@ -220,3 +222,90 @@ export interface WICloudAPI {
 	// Projects
 	getCloudProjects: (params: GetCloudProjectsReq) => Promise<GetCloudProjectsResp>;
 }
+
+/** Commands another extension's deploy UI drives; WSO2 Integrator runs the same steps as its deploy form. */
+export const WICloudDeployCommands = {
+	/** The project, its integrations' suggested names and the integration types, read without prompting. */
+	GetDeployContext: "wso2.integrator.cloud.integration.getDeployContext",
+	/** The repository checks the deploy form shows as a banner. */
+	InspectSource: "wso2.integrator.cloud.integration.inspectSource",
+	/** Runs the deploy form's submit for one integration. */
+	Deploy: "wso2.integrator.cloud.integration.deploy",
+	/** Deploys an integration's latest successful build to its project's entry environment. */
+	DeployBuild: "wso2.integrator.cloud.integration.deployBuild",
+	/** The required configurations that deploying an integration's latest build still needs in its project's entry environment. */
+	UnsetConfigurations: "wso2.integrator.cloud.integration.unsetConfigurations",
+} as const;
+
+export interface WICloudDeployContextReq {
+	/** A workspace whose context file may name a project that does not exist yet; it is suggested, not created. */
+	workspaceDir?: string;
+	integrations: { fsPath: string; name: string; supportedIntegrationTypes: string[] }[];
+}
+
+export interface WICloudDeployContext {
+	signedIn: boolean;
+	/** The project the workspace is linked to, which the deploy form uses without asking. */
+	linkedProject?: { id: string; name: string };
+	/** The display name of the project the workspace's context file names but WSO2 Cloud does not have yet, to deploy with as `{ newName }`. */
+	suggestedProjectName?: string;
+	projects: { id: string; name: string }[];
+	/** The integrations with names no integration of the linked project already uses. */
+	integrations: { fsPath: string; name: string; supportedIntegrationTypes: string[] }[];
+}
+
+export interface WICloudInspectSourceReq {
+	workspaceDir: string;
+	gitRemote?: string;
+	branch?: string;
+}
+
+export interface WICloudInspectSourceResp {
+	remotes: string[];
+	gitRemote: string | null;
+	gitProvider: string | null;
+	branches: string[];
+	branch: string | null;
+	readiness: import("../source-readiness").SourceReadiness;
+}
+
+export interface WICloudDeployReq {
+	workspaceDir: string;
+	buildPackLang: "ballerina" | "microintegrator";
+	integration: { fsPath: string; displayName: string; integrationType: string };
+	/** An existing project's id, or the display name of a project to create; an empty project of that name, as a failed deploy leaves, is used instead. */
+	project: { id: string } | { newName: string };
+	gitRemote: string;
+	branch: string;
+	/** The caller shows the progress and the failures it gets back: report progress in the status bar and skip the success and failure messages. */
+	quiet?: boolean;
+}
+
+export interface WICloudUnsetConfigurationsResp {
+	environment: string;
+	names: string[];
+}
+
+export interface WICloudDeployBuildReq {
+	integrationId: string;
+	projectId: string;
+	/** The caller follows the rollout itself: no notification and no messages. */
+	quiet?: boolean;
+}
+
+export interface WICloudDeployBuildResp {
+	success: boolean;
+	message?: string;
+}
+
+/** The project a deploy used: the one picked, or the one created for `{ newName }`. */
+export interface WICloudDeployProject {
+	project: { id: string; name: string };
+}
+
+export type WICloudDeployResp =
+	| ({ outcome: "submitted" } & WICloudDeployProject & WICloudSubmitComponentsResp)
+	/** An integration already builds this directory and the person chose not to create another. */
+	| ({ outcome: "linkedExisting" } & WICloudDeployProject)
+	| { outcome: "cancelled" }
+	| { outcome: "failed"; message: string };

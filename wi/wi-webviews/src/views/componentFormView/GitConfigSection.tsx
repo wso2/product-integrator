@@ -16,10 +16,11 @@
  * under the License.
  */
 
-import React, { type FC, type ReactNode, useEffect, useState } from "react";
+import React, { type FC, useEffect, useState } from "react";
 import { Dropdown, ProgressIndicator, Codicon } from "@wso2/ui-toolkit";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { GitProvider, parseGitURL, toSentenceCase } from "@wso2/wso2-platform-core";
+import { SOURCE_READINESS_ACTION_LABELS, type SourceReadinessAction, type SourceReadinessRefresh, sourceReadiness } from "@wso2/wi-core";
 import { buildConsoleUrl } from "@wso2/wso2-cloud-client/contract";
 import {
 	GitConfigGrid,
@@ -75,6 +76,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 
 	const {
 		data: gitData,
+		error: gitDataError,
 		isLoading: isLoadingGitData,
 		refetch: refetchGitData,
 	} = useQuery({
@@ -85,6 +87,8 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		},
 		enabled: !!workspaceFsPath,
 		refetchOnWindowFocus: true,
+		// A local read through the extension, so it must not pause while the network is offline.
+		networkMode: "always",
 	});
 
 	useEffect(() => {
@@ -228,106 +232,40 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 
 	// ── Compute validation / block state ─────────────────────────────────────
 
-	let invalidRepoMsg: ReactNode = "";
-	let blockCreation = false;
-	let invalidRepoAction = "";
-	let invalidRepoBannerType: "error" | "warning" | "info" | "neutral" = "warning";
-	let onInvalidRepoActionClick: (() => void) | undefined;
-	let onInvalidRepoRefreshClick: (() => void) | undefined;
-	let onInvalidRepoRefreshing = false;
-
-	if (!isLoadingGitData) {
-		if (gitData === null) {
-			invalidRepoMsg = "Please initialize the selected directory as a Git repository to proceed.";
-			invalidRepoAction = "Source Control";
-			onInvalidRepoActionClick = openSourceControl;
-			onInvalidRepoRefreshClick = refetchGitData;
-			blockCreation = true;
-		} else if (gitData?.remotes?.length === 0) {
-			invalidRepoMsg = "The selected Git repository has no configured remotes. Please add a remote to proceed.";
-			invalidRepoAction = "Source Control";
-			onInvalidRepoActionClick = openSourceControl;
-			onInvalidRepoRefreshClick = refetchGitData;
-			blockCreation = true;
-		}
-	}
-
-	// WSO2 Cloud builds from GitHub repositories only for now; no credential configured for another provider changes that.
-	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB) {
-		invalidRepoMsg = `Creating integrations from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on Choreo Cloud yet. Push the integration to a GitHub repository and create it from there.`;
-		onInvalidRepoRefreshClick = refetchGitData;
-		blockCreation = true;
-	}
-
-	// A failed check says nothing about access; it is retried rather than answered with Authorize.
-	if (!invalidRepoMsg && !isLoadingRepoAccess && gitRemote && repoAccessError) {
-		invalidRepoMsg = "Couldn't check WSO2 Cloud's access to this repository. Refresh to try again.";
-		onInvalidRepoRefreshClick = refetchRepoAccess;
-		onInvalidRepoRefreshing = isFetchingRepoAccess;
-		invalidRepoBannerType = "warning";
-		blockCreation = true;
-	}
-
-	if (!invalidRepoMsg && !isLoadingRepoAccess && gitRemote && !isRepoAuthorizedResp?.isAccessible && gitProvider) {
-		if (gitProvider === GitProvider.GITHUB) {
-			if (isRepoAuthorizedResp?.retrievedRepos) {
-				invalidRepoMsg = <span>Choreo lacks access to the selected repository.</span>;
-				invalidRepoAction = "Grant Access";
-				onInvalidRepoActionClick = () => wsClient.triggerGithubInstallFlow(gitRemote ?? "");
-			} else {
-				invalidRepoMsg = "Please authorize Choreo to access your GitHub repositories.";
-				invalidRepoAction = "Authorize";
-				onInvalidRepoActionClick = () => wsClient.triggerGithubAuthFlow(gitRemote ?? "");
-				invalidRepoBannerType = "info";
-			}
-		} else {
-			onInvalidRepoActionClick = () => wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" }));
-			if (isRepoAuthorizedResp?.retrievedRepos) {
-				invalidRepoMsg = <span>Selected Credential does not have sufficient permissions to access the repository.</span>;
-				invalidRepoAction = "Manage Credentials";
-			} else {
-				invalidRepoMsg = `Failed to retrieve ${toSentenceCase(gitProvider)} repositories using the selected credential.`;
-				invalidRepoAction = "Manage Credentials";
-			}
-		}
-
-		onInvalidRepoRefreshClick = refetchRepoAccess;
-		onInvalidRepoRefreshing = isFetchingRepoAccess;
-		blockCreation = true;
-	}
-
-	if (isLoadingGitData) {
-		blockCreation = true;
-	}
-
-	if (!blockCreation && gitRemote && !branch) {
-		blockCreation = true;
-	}
-
-	if (!invalidRepoMsg && !!gitRemote && !isLoadingBranches && branches?.length === 0) {
-		invalidRepoMsg = "The selected remote repository has no branches. Please publish your local branch to the remote repository.";
-		invalidRepoAction = "Push Changes";
-		onInvalidRepoActionClick = pushChanges;
-		onInvalidRepoRefreshClick = refetchBranches;
-		onInvalidRepoRefreshing = isFetchingBranches;
-		invalidRepoBannerType = "info";
-		blockCreation = true;
-	}
-
-	if (!invalidRepoMsg && configDriftFiles?.length > 0) {
-		invalidRepoMsg = `WSO2 Cloud reads the metadata in ${configDriftFiles.join(", ")} from the selected remote repository. Commit and push ${configDriftFiles.length > 1 ? "them" : "it"}.`;
-		onInvalidRepoRefreshClick = refetchConfigDrift;
-		onInvalidRepoRefreshing = isFetchingConfigDrift;
-		invalidRepoBannerType = "warning";
-		blockCreation = true;
-	}
-
-	if (!invalidRepoMsg && hasDirtyRepo) {
-		invalidRepoMsg = "Choreo Cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.";
-		onInvalidRepoRefreshClick = refetchHasDirtyRepo;
-		onInvalidRepoRefreshing = isFetchingHasDirtyRepo;
-		invalidRepoBannerType = "neutral";
-	}
+	const readiness = sourceReadiness({
+		gitData: isLoadingGitData ? undefined : gitData,
+		gitDataError: gitDataError?.message,
+		gitRemote,
+		gitProvider,
+		branch,
+		branches: branches ?? [],
+		branchesLoading: isLoadingBranches,
+		repoAccess: isRepoAuthorizedResp,
+		repoAccessError: repoAccessError?.message,
+		repoAccessLoading: isLoadingRepoAccess,
+		configDriftFiles: configDriftFiles ?? [],
+		hasDirtyRepo: !!hasDirtyRepo,
+	});
+	const actionHandlers: Record<SourceReadinessAction, () => void> = {
+		sourceControl: () => openSourceControl(),
+		pushChanges: () => pushChanges(),
+		grantAccess: () => wsClient.triggerGithubInstallFlow(gitRemote ?? ""),
+		authorize: () => wsClient.triggerGithubAuthFlow(gitRemote ?? ""),
+		manageCredentials: () => wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" })),
+	};
+	const refreshers: Record<SourceReadinessRefresh, [() => void, boolean]> = {
+		gitData: [refetchGitData, false],
+		branches: [refetchBranches, isFetchingBranches],
+		repoAccess: [refetchRepoAccess, isFetchingRepoAccess],
+		configDrift: [refetchConfigDrift, isFetchingConfigDrift],
+		dirtyRepo: [refetchHasDirtyRepo, isFetchingHasDirtyRepo],
+	};
+	const invalidRepoMsg = readiness.message;
+	const blockCreation = readiness.blocking;
+	const invalidRepoAction = readiness.action ? SOURCE_READINESS_ACTION_LABELS[readiness.action] : "";
+	const invalidRepoBannerType = readiness.tone;
+	const onInvalidRepoActionClick = readiness.action ? actionHandlers[readiness.action] : undefined;
+	const [onInvalidRepoRefreshClick, onInvalidRepoRefreshing] = readiness.refresh ? refreshers[readiness.refresh] : [undefined, false];
 
 	useEffect(() => {
 		onBlockCreationChange(blockCreation);

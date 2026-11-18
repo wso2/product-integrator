@@ -18,7 +18,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, ProgressIndicator, Typography } from "@wso2/ui-toolkit";
-import { GetGitMetadataResp, type WICloudCreateIntegrationParam, type WICloudFormContext, type WICloudSubmitComponentsReq } from "@wso2/wi-core";
+import { GetGitMetadataResp, type WICloudCreateIntegrationParam, type WICloudFormContext, type WICloudSubmitComponentsReq, validateIntegrationDisplayName } from "@wso2/wi-core";
 import { buildGitURL, DevantScopes, type ICreateNewIntegrationCmdIntegrations, makeURLSafe, resolveIntegrationType, WICommandIds } from "@wso2/wso2-platform-core";
 import { useVisualizerContext } from "../../contexts";
 import { useCloudContext } from "../../providers";
@@ -54,14 +54,7 @@ function initEntryState(entry: ICreateNewIntegrationCmdIntegrations): EntryFormS
 	};
 }
 
-const validateName = (name: string): string | undefined => {
-	const trimmed = name.trim();
-	if (!trimmed) { return "Display name is required."; }
-	if (!/^[a-zA-Z0-9][a-zA-Z0-9 _-]*$/.test(trimmed)) {
-		return "Use letters, numbers, spaces, hyphens or underscores. Must start with a letter or number.";
-	}
-	return undefined;
-};
+const validateName = validateIntegrationDisplayName;
 
 // ── Component ───────────────────────────────────────────────────────────────
 export function ComponentFormView() {
