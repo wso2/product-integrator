@@ -17,206 +17,367 @@
  */
 
 import * as assert from "assert";
-import { ConflictError, ENVIRONMENTS, type GitProxyApi } from "@wso2/wso2-cloud-client";
-import { Uri, env, window } from "vscode";
-import { acceptGitHubCallback, connectGitHub, githubRepoAccess, installGitHubApp } from "../../cloud/github-app";
-import { ext } from "../../extensionVariables";
-import { fireWindowState } from "./mocks/vscode";
+import { type CloudClient, ConflictError, NotFoundError } from "@wso2/wso2-cloud-client";
+import { GITHUB_RETURN_TTL_MS, GitHubAppConnector, consoleGitHubStartUrl, forgetGitHubAccess, gitHubSourceFor, installationSettingsUrl, pkceChallenge, resolveGitHubAccess, sharedGitHubAccess } from "../../cloud/github-app";
 
-type GitHubCalls = Pick<GitProxyApi, "listGitHubInstallations" | "listGitHubRepos" | "listGitHubBranches" | "bindGitHubInstallations">;
+const acme = { installationId: 7, githubAccount: "Acme" };
 
-function platform(git: Partial<GitHubCalls>, publicBranches: string[] = []): void {
-	ext.config = { ...ENVIRONMENTS.dev };
-	ext.clients = {
-		platform: { cloud: { git, repos: { listBranches: async () => publicBranches.map((name) => ({ name })) } } },
-	} as unknown as typeof ext.clients;
+/** A cloud client answering the git integration and the public repository read. */
+function fakeCloud(answers: { installations?: unknown[]; grantedRepos?: string[]; reposError?: Error; appBranches?: string[]; publicBranches?: string[]; connect?: () => Promise<unknown[]> } = {}) {
+	const connected: string[] = [];
+	const calls = { installations: 0 };
+	const cloud = {
+		git: {
+			listGitHubInstallations: async () => {
+				calls.installations++;
+				return answers.installations ?? [];
+			},
+			listGitHubRepos: async () => {
+				if (answers.reposError) {
+					throw answers.reposError;
+				}
+				return (answers.grantedRepos ?? []).map((name) => ({ fullName: `acme/${name}`, name, owner: "acme", private: true, defaultBranch: "main" }));
+			},
+			listGitHubBranches: async () => {
+				if (!answers.appBranches) {
+					throw new Error("repository not in installation");
+				}
+				return answers.appBranches;
+			},
+			connectGitHubInstallations: async (code: string, verifier?: string) => {
+				connected.push(verifier ? `${code} with ${verifier}` : code);
+				return answers.connect ? answers.connect() : [acme];
+			},
+		},
+		repos: { listBranches: async () => (answers.publicBranches ?? []).map((name) => ({ name })) },
+	};
+	return { cloud: cloud as unknown as CloudClient, connected, calls };
 }
 
-const ACME = async () => [{ installationId: 7, githubAccount: "Acme" }];
-const ORDERS = async () => [{ owner: "acme", name: "Orders", private: true, defaultBranch: "main" }];
-const MAIN = async () => ["main"];
-const AUTH_REQUIRED = new ConflictError("github-auth-required", { status: 409, apiError: "github-auth-required" });
-const NO_ACCESS = { retrievedRepos: true, isAccessible: false, branches: [] as string[] };
-const INSTALL_PAGE = "https://github.com/apps/wso2-cloud-git-connect-dev/installations/new";
-
 describe("GitHub repository access", () => {
-	const { config, clients } = ext;
-	const context = (ext as unknown as { _context: typeof ext.context })._context;
-	const { openExternal } = env;
-	const { withProgress } = window;
-	afterEach(() => {
-		Object.assign(ext, { config, clients, context });
-		env.openExternal = openExternal;
-		window.withProgress = withProgress;
+	it("reads a repository through the installation on its owner", async () => {
+		const { cloud } = fakeCloud({ installations: [acme], grantedRepos: ["Orders"] });
+		const access = await resolveGitHubAccess(cloud, "acme", "orders");
+		assert.equal(access.kind, "installation");
+		assert.deepEqual(gitHubSourceFor(access, "main", "svc", "https://github.com/acme/orders"), {
+			installationId: 7,
+			owner: "acme",
+			repo: "orders",
+			branch: "main",
+			appPath: "svc",
+			repositoryUrl: "https://github.com/acme/orders",
+		});
 	});
 
-	it("reads a repository the app covers, with its installation", async () => {
-		platform({ listGitHubInstallations: ACME, listGitHubRepos: ORDERS, listGitHubBranches: MAIN });
-		assert.deepStrictEqual(await githubRepoAccess("acme", "orders"), { retrievedRepos: true, isAccessible: true, installationId: 7, branches: ["main"] });
+	it("tells a repository the app is not given apart from an owner it is not on", async () => {
+		assert.equal((await resolveGitHubAccess(fakeCloud({ installations: [acme] }).cloud, "acme", "secret")).kind, "not-granted");
+		assert.equal((await resolveGitHubAccess(fakeCloud({ installations: [acme] }).cloud, "other", "secret")).kind, "not-connected");
 	});
 
-	it("asks to authorize while nothing is connected, or the app's authorization lapsed even for a public repository", async () => {
-		platform({ listGitHubInstallations: async () => [] });
-		assert.strictEqual((await githubRepoAccess("acme", "orders")).retrievedRepos, false);
-		platform({ listGitHubInstallations: ACME, listGitHubRepos: () => Promise.reject(AUTH_REQUIRED) }, ["main"]);
-		assert.deepStrictEqual(await githubRepoAccess("acme", "orders"), { retrievedRepos: false, isAccessible: false, branches: [] });
+	it("counts a repository as given to the app only when the installation lists it, not because its branches read", async () => {
+		// Branch reads use the person's GitHub authorization, which reads any public repository.
+		const access = await resolveGitHubAccess(fakeCloud({ installations: [acme], appBranches: ["main"], publicBranches: ["main"] }).cloud, "acme", "orders");
+		assert.equal(access.kind, "public");
+		assert.equal(gitHubSourceFor(access, "main", undefined, "https://github.com/acme/orders"), undefined, "no binding is sent for it");
 	});
 
-	it("passes on a failure that is not a lapsed authorization", async () => {
-		const down = new Error("unreachable");
-		platform({ listGitHubInstallations: () => Promise.reject(down) });
-		await assert.rejects(githubRepoAccess("acme", "orders"), (error) => error === down);
-		platform({ listGitHubInstallations: ACME, listGitHubRepos: ORDERS, listGitHubBranches: () => Promise.reject(down) });
-		await assert.rejects(githubRepoAccess("acme", "orders"), (error) => error === down);
+	it("asks to authorize again when WSO2 Cloud's GitHub authorization for the person expired", async () => {
+		const expired = new ConflictError("github-auth-required", { status: 409, apiError: "github-auth-required" });
+		assert.equal((await resolveGitHubAccess(fakeCloud({ installations: [acme], reposError: expired }).cloud, "acme", "secret")).kind, "auth-required");
+		const publicRepo = fakeCloud({ installations: [acme], reposError: expired, publicBranches: ["main"] });
+		assert.equal((await resolveGitHubAccess(publicRepo.cloud, "acme", "orders")).kind, "public", "a public repository reads without it");
 	});
 
-	it("asks to grant access when the app is not on the account", async () => {
-		platform({ listGitHubInstallations: async () => [{ installationId: 8, githubAccount: "other" }] }, ["main"]);
-		assert.deepStrictEqual(await githubRepoAccess("acme", "orders"), NO_ACCESS);
+	it("passes a failure of the installation's repository list on, and counts a gone installation as none", async () => {
+		await assert.rejects(resolveGitHubAccess(fakeCloud({ installations: [acme], reposError: new Error("offline") }).cloud, "acme", "orders"), /offline/);
+		const gone = new NotFoundError("installation not found", { status: 404 });
+		assert.equal((await resolveGitHubAccess(fakeCloud({ installations: [acme], reposError: gone }).cloud, "acme", "orders")).kind, "not-connected");
 	});
 
-	it("asks to grant access for a public repository the installation does not include, though its branches read", async () => {
-		platform({ listGitHubInstallations: ACME, listGitHubRepos: async () => [], listGitHubBranches: MAIN }, ["main"]);
-		assert.deepStrictEqual(await githubRepoAccess("acme", "orders"), NO_ACCESS);
+	it("shares one access answer among a repository's checks for a few seconds", async () => {
+		forgetGitHubAccess();
+		const { cloud, calls } = fakeCloud({ installations: [acme], grantedRepos: ["orders"] });
+		await Promise.all([sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", { now: 1_000 }), sharedGitHubAccess(cloud, "u1/acme", "Acme", "Orders", { now: 2_000 })]);
+		assert.equal(calls.installations, 1);
+		await sharedGitHubAccess(cloud, "u2/other", "acme", "orders", { now: 2_000 });
+		assert.equal(calls.installations, 2, "another sign-in does not share it");
+		await sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", { now: 7_000 });
+		assert.equal(calls.installations, 3, "it is read again after a few seconds");
+		forgetGitHubAccess();
+		await sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", { now: 7_500 });
+		assert.equal(calls.installations, 4, "and at once after it was forgotten");
 	});
 
-	it("carries on from the install page once the editor has its focus back, with nothing more to connect", async () => {
-		const opened: string[] = [];
-		const openExternal = env.openExternal;
-		env.openExternal = async (uri: { toString(): string }) => {
-			opened.push(uri.toString());
-			fireWindowState(false);
-			return true;
+	it("does not share an answer that settled after the sign-in changed", async () => {
+		forgetGitHubAccess();
+		const { cloud, calls } = fakeCloud({ installations: [acme], grantedRepos: ["orders"] });
+		await sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", { now: 1_000, isCurrent: () => false });
+		await sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", { now: 1_500 });
+		assert.equal(calls.installations, 2);
+	});
+
+	it("reads a public repository as public when the git integration fails, and passes the failure on otherwise", async () => {
+		const failing = fakeCloud({ installations: [acme], reposError: new Error("503"), publicBranches: ["main"] });
+		const access = await resolveGitHubAccess(failing.cloud, "acme", "orders");
+		assert.equal(access.kind, "public");
+		assert.deepEqual(access.kind === "public" && access.branches, ["main"], "the branches read are kept for the form");
+		const down = fakeCloud();
+		(down.cloud.git as { listGitHubInstallations: () => Promise<unknown> }).listGitHubInstallations = async () => {
+			throw new Error("timeout");
 		};
-		try {
-			platform({ listGitHubInstallations: ACME });
-			let back = false;
-			const install = installGitHubApp("acme").then(() => {
-				back = true;
-			});
-			await new Promise((resolve) => setImmediate(resolve));
-			assert.strictEqual(back, false);
-			fireWindowState(true);
-			await install;
-			assert.deepStrictEqual(opened, ["https://github.com/apps/wso2-cloud-git-connect-dev/installations/new"]);
-		} finally {
-			env.openExternal = openExternal;
+		await assert.rejects(resolveGitHubAccess(down.cloud, "acme", "secret"), /timeout/, "a private repository is not read as not connected");
+	});
+
+	it("does not share a failed access answer", async () => {
+		forgetGitHubAccess();
+		const failing = fakeCloud({ installations: [acme], reposError: new Error("offline") });
+		await assert.rejects(sharedGitHubAccess(failing.cloud, "u1/acme", "acme", "orders", { now: 1_000 }));
+		await assert.rejects(sharedGitHubAccess(failing.cloud, "u1/acme", "acme", "orders", { now: 1_500 }));
+		assert.equal(failing.calls.installations, 2);
+	});
+
+	it("reads a public repository with no installation and binds no source for it", async () => {
+		const access = await resolveGitHubAccess(fakeCloud({ publicBranches: ["main"] }).cloud, "acme", "orders");
+		assert.equal(access.kind, "public");
+		assert.equal(gitHubSourceFor(access, "main", undefined, "https://github.com/acme/orders"), undefined);
+	});
+
+	it("counts a git integration that cannot answer as no installation", async () => {
+		const { cloud } = fakeCloud({ publicBranches: ["main"] });
+		(cloud.git as { listGitHubInstallations: () => Promise<unknown> }).listGitHubInstallations = async () => {
+			throw new Error("401");
+		};
+		const logged: string[] = [];
+		assert.equal((await resolveGitHubAccess(cloud, "acme", "orders", (m) => logged.push(m))).kind, "public");
+		assert.equal(logged.length, 1);
+	});
+
+	it("opens an installation's settings on the page its account type has", async () => {
+		const answer = (type: string) => (async () => new Response(JSON.stringify({ type }))) as unknown as typeof fetch;
+		assert.equal(await installationSettingsUrl("acme", 7, answer("Organization")), "https://github.com/organizations/acme/settings/installations/7");
+		assert.equal(await installationSettingsUrl("jo", 7, answer("User")), "https://github.com/settings/installations/7");
+		const down = (async () => {
+			throw new Error("offline");
+		}) as unknown as typeof fetch;
+		assert.equal(await installationSettingsUrl("acme", 7, down), "https://github.com/organizations/acme/settings/installations/7");
+	});
+});
+
+describe("GitHubAppConnector", () => {
+	function connector(cloud: CloudClient, uriScheme = "vscode") {
+		const opened: string[] = [];
+		const outcomes: string[] = [];
+		const bound: string[] = [];
+		const browser = { opens: true };
+		const signedIn = { session: "u1/acme" as string | undefined };
+		const clock = { now: 0 };
+		let n = 0;
+		let v = 0;
+		const app = new GitHubAppConnector({
+			cloud: () => cloud,
+			consoleUrl: () => "https://console.example/integration/organizations/acme",
+			session: () => signedIn.session,
+			uriScheme,
+			openExternal: async (url) => {
+				opened.push(url);
+				return browser.opens;
+			},
+			onBound: (items) => bound.push(items.map((i) => i.githubAccount).join(",")),
+			log: () => undefined,
+			newNonce: () => `n${++n}`,
+			newVerifier: () => `v${++v}`,
+			now: () => clock.now,
+			outcome: {
+				connected: (items, missingOwner) => outcomes.push(`connected:${items.map((i) => i.githubAccount).join(",")}${missingOwner ? ` but not ${missingOwner}` : ""}`),
+				noInstallationVisible: (owner) => outcomes.push(`none visible${owner ? ` on ${owner}` : ""}`),
+				requested: () => outcomes.push("requested"),
+				ignored: (reason) => outcomes.push(`ignored:${reason}`),
+				cancelled: () => outcomes.push("cancelled"),
+				failed: (message) => outcomes.push(`failed:${message}`),
+			},
+		});
+		return { app, opened, outcomes, signedIn, clock, bound, browser };
+	}
+	const query = (params: Record<string, string>) => new URLSearchParams(params);
+	const start = (url: string) => Object.fromEntries(new URL(url).searchParams);
+
+	it("starts GitHub on the console's callback page with a PKCE challenge, and connects with the code and its verifier", async () => {
+		const { cloud, connected } = fakeCloud();
+		const { app, opened, outcomes } = connector(cloud);
+		await app.connect("acme");
+		assert.equal(new URL(opened[0]).origin + new URL(opened[0]).pathname, "https://console.example/ghapp");
+		assert.deepEqual(start(opened[0]), { editor: "vscode", nonce: "n1", start: "authorize", challenge: pkceChallenge("v1") });
+
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		assert.deepEqual(connected, ["c0de with v1"]);
+		assert.deepEqual(outcomes, ["connected:Acme"]);
+	});
+
+	it("makes the S256 challenge of a verifier", () => {
+		// RFC 7636, appendix B.
+		assert.equal(pkceChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+	});
+
+	it("ignores a return this window did not start, and a second use of one it did", async () => {
+		const { cloud, connected } = fakeCloud();
+		const { app, outcomes } = connector(cloud);
+		await app.handleReturn(query({ code: "forged", state: "n1" }));
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "forged", state: "other" }));
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		await app.handleReturn(query({ code: "again", state: "n1" }));
+		assert.deepEqual(connected, ["c0de with v1"]);
+		assert.deepEqual(outcomes, ["ignored:not-started", "ignored:not-started", "connected:Acme", "ignored:not-started"], "each ignored return is told");
+	});
+
+	it("says so when the browser does not open, and takes no return for that flow", async () => {
+		const { cloud, connected } = fakeCloud();
+		const { app, outcomes, browser } = connector(cloud);
+		browser.opens = false;
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		assert.deepEqual(connected, []);
+		assert.deepEqual(outcomes, ["failed:Couldn't open the browser for GitHub. Try again.", "ignored:not-started"]);
+	});
+
+	it("tells the host about bound installations before it goes on to the install page", async () => {
+		const { cloud } = fakeCloud({ connect: async () => [{ installationId: 9, githubAccount: "jo" }] });
+		const { app, bound, outcomes } = connector(cloud);
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		assert.deepEqual(bound, ["jo"], "the form rechecks even if the install is abandoned");
+		assert.deepEqual(outcomes, []);
+	});
+
+	it("ignores a return that arrives after its flow expired", async () => {
+		const { cloud, connected } = fakeCloud();
+		const { app, outcomes, clock } = connector(cloud);
+		await app.connect("acme");
+		clock.now = GITHUB_RETURN_TTL_MS + 1;
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		assert.deepEqual(connected, []);
+		assert.deepEqual(outcomes, ["ignored:expired"]);
+	});
+
+	it("goes on to install the app when the repository's owner has none, then authorizes again rather than use the install page's code", async () => {
+		const { cloud, connected } = fakeCloud({ connect: async () => [{ installationId: 9, githubAccount: "jo" }] });
+		const { app, opened, outcomes } = connector(cloud);
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		assert.deepEqual(start(opened[1]), { editor: "vscode", nonce: "n2", start: "install" }, "GitHub's install page takes no challenge");
+		assert.deepEqual(outcomes, []);
+
+		await app.handleReturn(query({ code: "c1", state: "n2", setup_action: "install", installation_id: "7" }));
+		assert.deepEqual(start(opened[2]), { editor: "vscode", nonce: "n3", start: "authorize", challenge: pkceChallenge("v2") });
+		await app.handleReturn(query({ code: "c2", state: "n3" }));
+		assert.deepEqual(connected, ["c0de with v1", "c2 with v2"]);
+		assert.deepEqual(outcomes, ["connected:jo but not acme"], "after the install the owner is not asked for again");
+	});
+
+	it("offers GitHub's account picker for the owner the app is still not on", async () => {
+		const { cloud } = fakeCloud();
+		const { app, opened } = connector(cloud);
+		await app.connect("acme", "select-account");
+		assert.deepEqual(start(opened[0]), { editor: "vscode", nonce: "n1", start: "select-account", challenge: pkceChallenge("v1") });
+	});
+
+	it("installs when the GitHub user has the app nowhere, and authorizes after an install that returned no code", async () => {
+		let calls = 0;
+		const { cloud } = fakeCloud({
+			connect: async () => {
+				if (calls++ === 0) {
+					throw new ConflictError("no accessible GitHub App installations; install the app first");
+				}
+				return [acme];
+			},
+		});
+		const { app, opened, outcomes } = connector(cloud);
+		await app.connect();
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		assert.equal(start(opened[1]).start, "install");
+		await app.handleReturn(query({ state: "n2", setup_action: "install", installation_id: "7" }));
+		assert.deepEqual(start(opened[2]), { editor: "vscode", nonce: "n3", start: "authorize", challenge: pkceChallenge("v2") });
+		await app.handleReturn(query({ code: "c2", state: "n3" }));
+		assert.deepEqual(outcomes, ["connected:Acme"]);
+	});
+
+	it("offers another GitHub account when the app is still on no account it can see after installing", async () => {
+		const { cloud } = fakeCloud({
+			connect: async () => {
+				throw new ConflictError("no accessible GitHub App installations; install the app first");
+			},
+		});
+		const { app, opened, outcomes } = connector(cloud);
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		await app.handleReturn(query({ state: "n2", setup_action: "install", installation_id: "7" }));
+		await app.handleReturn(query({ code: "c2", state: "n3" }));
+		assert.deepEqual(outcomes, ["none visible on acme"]);
+		assert.equal(opened.length, 3, "the install page is opened once");
+	});
+
+	it("ignores a return that arrives after the WSO2 Cloud sign-in changed", async () => {
+		for (const after of ["u1/other-org", "u2/acme", undefined]) {
+			const { cloud, connected } = fakeCloud();
+			const { app, outcomes, signedIn } = connector(cloud);
+			await app.connect("acme");
+			signedIn.session = after;
+			await app.handleReturn(query({ code: "c0de", state: "n1" }));
+			assert.deepEqual(connected, [], `signed in as ${after}`);
+			assert.deepEqual(outcomes, ["ignored:signed-in-changed"]);
 		}
 	});
 
-	it("authorizes after an install that names no owner, and stops waiting when the authorize page is not opened", async () => {
-		const opened: string[] = [];
-		env.openExternal = async (uri: { toString(): string }) => {
-			opened.push(uri.toString());
-			fireWindowState(false);
-			return opened.length === 1;
-		};
-		platform({ listGitHubInstallations: () => Promise.reject(new Error("not read without an owner")) });
-		ext.context = { extension: { id: "wso2.wso2-integrator" } } as unknown as typeof ext.context;
-		const install = installGitHubApp();
-		await new Promise((resolve) => setImmediate(resolve));
-		fireWindowState(true);
-		await install;
-		assert.strictEqual(opened[0], INSTALL_PAGE);
-		assert.ok(opened[1]?.startsWith("https://github.com/login/oauth/authorize?"), opened[1]);
-		assert.strictEqual(opened.length, 2);
+	it("drops an exchange that finishes after a newer connect started", async () => {
+		let finish: (items: unknown[]) => void = () => undefined;
+		let calls = 0;
+		const { cloud, connected } = fakeCloud({
+			connect: () => (calls++ === 0 ? new Promise<unknown[]>((resolve) => (finish = resolve)) : Promise.resolve([acme])),
+		});
+		const { app, opened, outcomes } = connector(cloud);
+		await app.connect("acme");
+		const first = app.handleReturn(query({ code: "c0de", state: "n1" }));
+		await app.connect("acme");
+		finish([{ installationId: 9, githubAccount: "jo" }]);
+		await first;
+		assert.equal(opened.length, 2, "the first exchange starts no install");
+		await app.handleReturn(query({ code: "c2", state: "n2" }));
+		assert.deepEqual(connected, ["c0de with v1", "c2 with v2"]);
+		assert.deepEqual(outcomes, ["connected:Acme"]);
 	});
 
-	it("stops waiting when the install page is not opened", async () => {
-		const opened: string[] = [];
-		env.openExternal = async (uri: { toString(): string }) => {
-			opened.push(uri.toString());
-			return false;
-		};
-		platform({ listGitHubInstallations: () => Promise.reject(new Error("not read after a declined page")) });
-		await installGitHubApp("acme");
-		assert.deepStrictEqual(opened, [INSTALL_PAGE]);
+	it("reports an approval request, a cancel, GitHub's reason for a refusal, and a failed bind", async () => {
+		const failing = fakeCloud({
+			connect: async () => {
+				throw new Error("bad gateway");
+			},
+		});
+		const { app, outcomes } = connector(failing.cloud);
+		await app.connect("acme");
+		await app.handleReturn(query({ state: "n1", setup_action: "request" }));
+		await app.connect("acme");
+		await app.handleReturn(query({ state: "n2", error: "access_denied" }));
+		await app.connect("acme");
+		await app.handleReturn(query({ state: "n3", error: "application_suspended", error_description: "The app is suspended." }));
+		await app.connect("acme");
+		await app.handleReturn(query({ state: "n4", code: "c0de" }));
+		assert.deepEqual(outcomes, [
+			"requested",
+			"cancelled",
+			"failed:GitHub did not authorize the WSO2 Cloud app: The app is suspended.",
+			"failed:Could not connect GitHub to WSO2 Cloud: bad gateway",
+		]);
 	});
 
-	describe("authorization", () => {
-		const settle = () => new Promise((resolve) => setImmediate(resolve));
-		const callback = (query: string) => Uri.parse(`vscode://wso2.wso2-integrator/ghapp?${query}`) as unknown as Parameters<typeof acceptGitHubCallback>[0];
-		let opened: string[];
-		let bound: string[];
-		const state = (index: number) => new URL(opened[index]).searchParams.get("state");
-
-		beforeEach(() => {
-			opened = [];
-			bound = [];
-			env.openExternal = async (uri: { toString(): string }) => {
-				opened.push(uri.toString());
-				return true;
-			};
-			platform({
-				bindGitHubInstallations: async (code: string) => {
-					bound.push(code);
-					return [{ installationId: 7, githubAccount: "Acme" }];
-				},
-			});
-			ext.context = { extension: { id: "wso2.wso2-integrator" } } as unknown as typeof ext.context;
-		});
-
-		it("binds the installations with the code GitHub sends back for the flow's state", async () => {
-			const connect = connectGitHub("acme");
-			await settle();
-			assert.ok(opened[0].startsWith("https://github.com/login/oauth/authorize?"), opened[0]);
-			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(0)}&code=abc`)), true);
-			await connect;
-			assert.deepStrictEqual(bound, ["abc"]);
-			assert.strictEqual(opened.length, 1);
-		});
-
-		it("ignores an answer for another state, and any answer once nothing waits", async () => {
-			assert.strictEqual(acceptGitHubCallback(callback("state=none&code=abc")), false);
-			const connect = connectGitHub("acme");
-			await settle();
-			assert.strictEqual(acceptGitHubCallback(callback("state=other&code=abc")), false);
-			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(0)}&code=abc`)), true);
-			await connect;
-			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(0)}&code=abc`)), false);
-			assert.deepStrictEqual(bound, ["abc"]);
-		});
-
-		it("ends a flow a newer one supersedes, which takes the answer", async () => {
-			const first = connectGitHub("acme");
-			await settle();
-			const second = connectGitHub("acme");
-			await settle();
-			await first;
-			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(0)}&code=old`)), false);
-			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(1)}&code=new`)), true);
-			await second;
-			assert.deepStrictEqual(bound, ["new"]);
-		});
-
-		it("ends a cancelled flow, which then takes no answer", async () => {
-			let cancel = (): void => undefined;
-			window.withProgress = (async <T>(_options: unknown, task: (progress: unknown, token: unknown) => Promise<T>) =>
-				task({ report: (): undefined => undefined }, { onCancellationRequested: (listener: () => void) => (cancel = listener) })) as unknown as typeof withProgress;
-			const connect = connectGitHub("acme");
-			await settle();
-			cancel();
-			await connect;
-			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(0)}&code=abc`)), false);
-			assert.deepStrictEqual(bound, []);
-		});
-
-		it("binds nothing when the person declines, and rejects any other GitHub error", async () => {
-			const denied = connectGitHub("acme");
-			await settle();
-			acceptGitHubCallback(callback(`state=${state(0)}&error=access_denied`));
-			await denied;
-			const failed = connectGitHub("acme");
-			await settle();
-			acceptGitHubCallback(callback(`state=${state(1)}&error=server_error&error_description=down`));
-			await assert.rejects(failed, /down/);
-			assert.deepStrictEqual(bound, []);
-		});
+	it("sends an editor GitHub cannot return to to the console", async () => {
+		const { app, opened } = connector(fakeCloud().cloud, "code-oss");
+		assert.equal(app.canReturnHere, false);
+		await app.connect("acme");
+		assert.deepEqual(opened, ["https://console.example/integration/organizations/acme"]);
 	});
 
-	it("reads public repositories in an environment with no GitHub App", async () => {
-		platform({}, ["main"]);
-		ext.config = { ...ENVIRONMENTS.prod };
-		assert.deepStrictEqual(await githubRepoAccess("acme", "orders"), { retrievedRepos: true, isAccessible: true, branches: ["main"] });
+	it("builds the console start page on the console's origin", () => {
+		assert.equal(consoleGitHubStartUrl("https://console.example/a/b", "wso2-integrator", "abc", "install"), "https://console.example/ghapp?editor=wso2-integrator&nonce=abc&start=install");
+		assert.equal(consoleGitHubStartUrl("https://console.example/a/b", "vscode", "abc", "authorize", "ch"), "https://console.example/ghapp?editor=vscode&nonce=abc&start=authorize&challenge=ch");
 	});
 });

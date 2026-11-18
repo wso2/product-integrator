@@ -29,14 +29,13 @@ import {
 	sourceReadiness,
 	validateIntegrationDisplayName,
 } from "@wso2/wi-core";
-import { type Project, buildConsoleUrl, buildSucceeded, parseGitHubRepoUrl } from "@wso2/wso2-cloud-client";
+import { type Project, buildConsoleUrl, buildSucceeded } from "@wso2/wso2-cloud-client";
 import { parseGitURL } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, Uri, commands, env, window, workspace } from "vscode";
 import { ext } from "../../extensionVariables";
 import { isSubpath } from "../../utils/pathUtils";
 import { CloudWsManager } from "../../ws-managers/cloud/ws-manager";
 import { linkContext, localContextEntry, unlinkContext } from "../context-file";
-import { type GitHubRepoAccess, connectGitHub, githubRepoAccess, installGitHubApp } from "../github-app";
 import { describeCloudError, handleCloudError } from "../platform/error-handler";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
@@ -51,15 +50,8 @@ import {
 	requireSession,
 	resolveDeployProject,
 } from "./cmd-utils";
-import {
-	type Release,
-	confirmAnotherIntegration,
-	deployBuild,
-	hasIntegrationForDirs,
-	localProjectDisplayName,
-	submitCreateComponentHandler,
-	waitForRelease,
-} from "./create-component-cmd";
+import { confirmAnotherIntegration, hasIntegrationForDirs, localProjectDisplayName, submitCreateComponentHandler } from "./create-component-cmd";
+import { type Release, deployBuild, enableBuildAutomation, waitForRelease } from "./deploy-build";
 
 const signedIn = () => ext.authProvider?.state?.status === "signed-in" && !!ext.authProvider.org;
 
@@ -97,17 +89,6 @@ async function getDeployContext(req: WICloudDeployContextReq): Promise<WICloudDe
 	};
 }
 
-const NO_ACCESS: GitHubRepoAccess = { retrievedRepos: false, isAccessible: false, branches: [] };
-
-type SourceReq = Pick<WICloudInspectSourceReq, "workspaceDir" | "gitRemote">;
-
-// The GitHub account of the repository a deploy from `workspaceDir` builds from, as the check reads it.
-async function sourceOwner(req?: SourceReq): Promise<string | undefined> {
-	const gitData = req?.workspaceDir ? await new CloudWsManager().getLocalGitData(req.workspaceDir) : undefined;
-	const remote = deployRemote(gitData, req?.gitRemote);
-	return remote ? parseGitHubRepoUrl(remote)?.owner : undefined;
-}
-
 // The same reads the deploy form makes for its repository section, judged by the same rules.
 async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspectSourceResp> {
 	isPlatformReady(ext);
@@ -117,13 +98,22 @@ async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspe
 		return { remotes: [], gitRemote: null, gitProvider: null, branches: [], branch: null, readiness };
 	}
 	const ws = new CloudWsManager();
+	const orgId = ext.authProvider?.org?.id?.toString() ?? "";
 	const gitData = (await ws.getLocalGitData(req.workspaceDir)) ?? null;
 	const remotes = gitData?.remotes ?? [];
 	const gitRemote = deployRemote(gitData, req.gitRemote);
 	const gitProvider = (gitRemote && parseGitURL(gitRemote)?.[2]) || null;
-	const github = gitRemote && gitProvider ? parseGitHubRepoUrl(gitRemote) : undefined;
-	const repoAccess = gitRemote && gitProvider ? await (github ? githubRepoAccess(github.owner, github.repo) : NO_ACCESS) : undefined;
-	const branches = repoAccess?.branches ?? [];
+	const target = gitRemote && gitProvider ? { repoUrl: gitRemote, orgId, credRef: "" } : undefined;
+	let repoAccessError: string | undefined;
+	const [repoAccess, branches] = target
+		? await Promise.all([
+				ws.isRepoAuthorized(target).catch((err: unknown): undefined => {
+					repoAccessError = err instanceof Error ? err.message : String(err);
+					return undefined;
+				}),
+				ws.getBranches(target).catch((): string[] => []),
+			])
+		: [undefined, [] as string[]];
 	const branch = pickBranch(branches, req.branch, gitData?.upstream?.name);
 	const [configDriftFiles, hasDirtyRepo] = await Promise.all([
 		gitRemote && branch ? ws.getConfigFileDrifts({ type: "", repoDir: req.workspaceDir, branch, repoUrl: gitRemote }) : Promise.resolve([] as string[]),
@@ -137,6 +127,7 @@ async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspe
 		branches,
 		branchesLoading: false,
 		repoAccess,
+		repoAccessError,
 		repoAccessLoading: false,
 		configDriftFiles,
 		hasDirtyRepo,
@@ -210,6 +201,10 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 				},
 			],
 		});
+		// The create leaves deploying to the console; this command follows the first build and deploys it.
+		for (const created of result.created) {
+			await enableBuildAutomation(created, org.handle, project, req.quiet);
+		}
 		return { outcome: "submitted", project: projectRef, ...result };
 	} catch (err) {
 		ext.logError("Failed to deploy integration", err as Error);
@@ -269,7 +264,5 @@ export function deployIntegrationCommands(context: ExtensionContext) {
 		commands.registerCommand(WICloudDeployCommands.InspectSource, inspectSource),
 		commands.registerCommand(WICloudDeployCommands.Deploy, deploy),
 		commands.registerCommand(WICloudDeployCommands.DeployBuild, deployLatestBuild),
-		commands.registerCommand(WICloudDeployCommands.ConnectGitHub, async (req?: SourceReq) => connectGitHub(await sourceOwner(req))),
-		commands.registerCommand(WICloudDeployCommands.InstallGitHubApp, async (req?: SourceReq) => installGitHubApp(await sourceOwner(req))),
 	);
 }

@@ -80,7 +80,7 @@ export function ComponentFormView() {
 			<PageBackdrop>
 				<PageContainer>
 					<AuthSectionWrap>
-						<div>Your session has expired. Please sign in again to deploy your integration.</div>
+						<div>Your session has expired. Please sign in again to continue.</div>
 						<Button appearance="primary" onClick={() => wsClient.runCommand({ command: WICommandIds.SignIn, args: [] })}>
 							Sign In
 						</Button>
@@ -165,7 +165,7 @@ function ComponentForm() {
 		}
 	}, [wsClient]);
 
-	// ── Submit / Deploy ──────────────────────────────────────────────────────
+	// ── Submit / Create ──────────────────────────────────────────────────────
 
 	const { error: submitError, mutate: submit, isPending: isSubmitting } = useMutation({
 		mutationFn: async () => {
@@ -237,7 +237,7 @@ function ComponentForm() {
 				credential = repoInit.credential;
 
 				// todo: temporary workaround
-				// todo: need to add support for workspace deployments in cloud editor
+				// todo: need to add support for creating the integrations of a workspace in the cloud editor
 				formState[0].fsPath = newPath;
 			}
 
@@ -278,9 +278,9 @@ function ComponentForm() {
 		},
 	});
 
-	// ── Compute deploy button disabled state ─────────────────────────────────
+	// ── Compute create button disabled state ─────────────────────────────────
 
-	const isDeployDisabled = isNewCodeServerComp
+	const isCreateDisabled = isNewCodeServerComp
 		? isSubmitting || !hasSelected || !isRepoInitValid
 		: isSubmitting || !hasSelected || blockCreation;
 
@@ -293,7 +293,7 @@ function ComponentForm() {
 					<FormBody>
 						{/* Header */}
 						<TitleRow>
-							<Typography variant="h1">Deploy {isBatch ? "Integrations" : "Integration"}</Typography>
+							<Typography variant="h1">Create {isBatch ? "Integrations" : "Integration"} in WSO2 Cloud</Typography>
 						</TitleRow>
 
 						{/* Submit error */}
@@ -354,9 +354,9 @@ function ComponentForm() {
 							<SubmitButton
 								appearance="primary"
 								onClick={() => submit()}
-								disabled={isDeployDisabled}
+								disabled={isCreateDisabled}
 							>
-								{isSubmitting ? "Deploying..." : selectedCount > 1 ? "Deploy All" : "Deploy"}
+								{isSubmitting ? "Creating..." : selectedCount > 1 ? "Create All" : "Create"}
 							</SubmitButton>
 						</FooterRow>
 					</FormBody>
