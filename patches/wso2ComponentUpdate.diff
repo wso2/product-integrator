@@ -2987,7 +2987,7 @@ Index: product-integrator/lib/vscode/src/vs/platform/wso2Update/node/wso2Compone
 + * tree's root. Everything else the bundle ships is payload, which nothing writes.
 + *
 + * The installers are the source of truth: installers/linux-deb/package/DEBIAN/postinst and
-+ * installers/linux-rpm/wso2-integrator.spec grant write access to exactly these, because ICP keeps
++ * installers/linux-rpm/choreo-integrator.spec grant write access to exactly these, because ICP keeps
 + * its H2 databases, its logs and its console config inside its own directory. Keep the three in
 + * step by hand. A component that starts writing into its tree belongs here too, or a repair will
 + * put the bundled copy back over its data.

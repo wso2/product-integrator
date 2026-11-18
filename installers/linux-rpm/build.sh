@@ -114,16 +114,16 @@ print_info "Rendering package metadata for flavor '$PRODUCT_FLAVOR'..."
 find "$STAGE_DIR/usr/share/applications" "$STAGE_DIR/usr/share/appdata" \
      "$STAGE_DIR/usr/share/bash-completion/completions" -type f -print0 |
     xargs -0 sed -i "s|@SLUG@|$ARTIFACT_SLUG|g; s|@PRODUCT_NAME@|$PRODUCT_NAME|g; s|@ICON_ID@|$ICON_ID|g; s|@URL_SCHEME@|$URL_SCHEME|g"
-if [ "$ARTIFACT_SLUG" != "wso2-integrator" ]; then  # package/ sources are named wso2-integrator.*
+if [ "$ARTIFACT_SLUG" != "choreo-integrator" ]; then  # package/ sources are named choreo-integrator.*
     APPS_DIR="$STAGE_DIR/usr/share/applications"
-    mv "$APPS_DIR/wso2-integrator.desktop" "$APPS_DIR/$ARTIFACT_SLUG.desktop"
-    mv "$APPS_DIR/wso2-integrator-url-handler.desktop" "$APPS_DIR/$ARTIFACT_SLUG-url-handler.desktop"
-    mv "$STAGE_DIR/usr/share/appdata/wso2-integrator.appdata.xml" "$STAGE_DIR/usr/share/appdata/$ARTIFACT_SLUG.appdata.xml"
-    mv "$STAGE_DIR/usr/share/bash-completion/completions/wso2-integrator" "$STAGE_DIR/usr/share/bash-completion/completions/$ARTIFACT_SLUG"
+    mv "$APPS_DIR/choreo-integrator.desktop" "$APPS_DIR/$ARTIFACT_SLUG.desktop"
+    mv "$APPS_DIR/choreo-integrator-url-handler.desktop" "$APPS_DIR/$ARTIFACT_SLUG-url-handler.desktop"
+    mv "$STAGE_DIR/usr/share/appdata/choreo-integrator.appdata.xml" "$STAGE_DIR/usr/share/appdata/$ARTIFACT_SLUG.appdata.xml"
+    mv "$STAGE_DIR/usr/share/bash-completion/completions/choreo-integrator" "$STAGE_DIR/usr/share/bash-completion/completions/$ARTIFACT_SLUG"
     # No dedicated Agent Builder artwork exists yet — ship the existing art under
     # the flavored names so Icon= and the appdata screenshot resolve.
     mv "$STAGE_DIR/usr/share/pixmaps/com.choreo.integrator.svg" "$STAGE_DIR/usr/share/pixmaps/$ICON_ID.svg"
-    mv "$STAGE_DIR/usr/share/pixmaps/wso2-integrator-front.png" "$STAGE_DIR/usr/share/pixmaps/$ARTIFACT_SLUG-front.png"
+    mv "$STAGE_DIR/usr/share/pixmaps/choreo-integrator-front.png" "$STAGE_DIR/usr/share/pixmaps/$ARTIFACT_SLUG-front.png"
 fi
 rm -rf "$EXTRACTION_TARGET"
 mkdir -p "$INTEGRATOR_TARGET"
@@ -188,7 +188,7 @@ else
 fi
 sed -e "s/@VERSION@/$RPM_VERSION/g" -e "s/@RELEASE@/$RPM_RELEASE/g" -e "s/@FULLVERSION@/$VERSION/g" \
     -e "s|@SLUG@|$ARTIFACT_SLUG|g" -e "s|@PRODUCT_NAME@|$PRODUCT_NAME|g" -e "s|@ICON_ID@|$ICON_ID|g" \
-    "$WORK_DIR/wso2-integrator.spec" > "$SPECS_DIR/$ARTIFACT_SLUG.spec"
+    "$WORK_DIR/choreo-integrator.spec" > "$SPECS_DIR/$ARTIFACT_SLUG.spec"
 
 # Build RPM package
 print_info "Building RPM package..."
