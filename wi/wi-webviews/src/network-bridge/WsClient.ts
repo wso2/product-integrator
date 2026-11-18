@@ -130,6 +130,7 @@ export class WsClient {
     private readonly downloadProgressListeners = new Set<(progress: DownloadProgress) => void>();
     // ── Cloud event listeners ─────────────────────────────────
     private readonly signInInitiatedListeners = new Set<() => void>();
+    private readonly githubConnectedListeners = new Set<() => void>();
     private readonly authStateChangedListeners = new Set<(state: AuthState) => void>();
     private readonly contextStateChangedListeners = new Set<(state: ContextStoreState) => void>();
     private readonly cloneProgressListeners = new Set<(stage: CloneProgressStage) => void>();
@@ -312,12 +313,12 @@ export class WsClient {
         return this.request("getConfigFileDrifts", params);
     }
 
-    public triggerGithubAuthFlow(orgId: string): Promise<void> {
-        return this.request("triggerGithubAuthFlow", orgId);
+    public triggerGithubAuthFlow(repoUrl: string): Promise<void> {
+        return this.request("triggerGithubAuthFlow", repoUrl);
     }
 
-    public triggerGithubInstallFlow(orgId: string): Promise<void> {
-        return this.request("triggerGithubInstallFlow", orgId);
+    public triggerGithubInstallFlow(repoUrl: string): Promise<void> {
+        return this.request("triggerGithubInstallFlow", repoUrl);
     }
 
     public getBranches(params: GetBranchesReq): Promise<string[]> {
@@ -359,6 +360,11 @@ export class WsClient {
     public onSignInInitiated(callback: () => void): () => void {
         this.signInInitiatedListeners.add(callback);
         return () => this.signInInitiatedListeners.delete(callback);
+    }
+
+    public onGitHubConnected(callback: () => void): () => void {
+        this.githubConnectedListeners.add(callback);
+        return () => this.githubConnectedListeners.delete(callback);
     }
 
     public onAuthStateChanged(callback: (state: AuthState) => void) {
@@ -434,6 +440,9 @@ export class WsClient {
             // ── Cloud events ──────────────────────────────────────
             case WI_BRIDGE_EVENTS.SIGN_IN_INITIATED:
                 this.signInInitiatedListeners.forEach((listener) => listener());
+                return;
+            case WI_BRIDGE_EVENTS.GITHUB_CONNECTED:
+                this.githubConnectedListeners.forEach((listener) => listener());
                 return;
             case WI_BRIDGE_EVENTS.AUTH_STATE_CHANGED:
                 this.authStateChangedListeners.forEach((listener) => listener(message.state));

@@ -28,9 +28,11 @@ import { WIAuthState } from "./auth/wso2-auth-provider";
 import type { WICloudExtensionAPI } from "./cloud-ext-api";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { activateCmds } from "./cmds";
+import { createGitHubAppConnector } from "./github-app-host";
 import { describeCloudError, handleCloudError } from "./platform/error-handler";
 import { createWIPlatform } from "./platform/platform-client";
 import { type CloudServiceUrls, readCloudServiceUrls } from "./service-urls";
+import { watchContextFiles } from "./context-watcher";
 import { contextStore } from "./stores/context-store";
 import { dataCacheStore } from "./stores/data-cache-store";
 import { locationStore } from "./stores/location-store";
@@ -107,6 +109,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 			}),
 		),
 	);
+	ext.githubApp = createGitHubAppConnector();
 	activateCmds(context);
 	activateURIHandlers(context);
 
@@ -127,6 +130,15 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 				vscode.commands.executeCommand("setContext", "hasSelectedProject", !!state.selected);
 			}),
 		),
+	);
+
+	// 5b. Context files changed outside the commands are read again.
+	context.subscriptions.push(
+		watchContextFiles({
+			createFileSystemWatcher: (glob) => workspace.createFileSystemWatcher(glob),
+			isLoggedIn: () => !!ext.authProvider?.isLoggedIn,
+			refresh: () => void contextStore.getState().refreshState(),
+		}),
 	);
 
 	// 6. Restore the session (secret storage, or the cloud editor's injected token).

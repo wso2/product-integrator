@@ -201,7 +201,7 @@
       },
       {
         "command": "wso2.integrator.cloud.integration.create",
-        "title": "Deploy Integration to Cloud",
+        "title": "Create Integration in Choreo Cloud",
         "category": "Choreo Integrator",
         "icon": "$(add)"
       },

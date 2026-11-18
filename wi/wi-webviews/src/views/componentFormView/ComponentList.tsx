@@ -90,7 +90,7 @@ export function ComponentList({
 	onEditStart,
 }: ComponentListProps) {
 	const hasSelected = selectedCount > 0;
-	const deployableCount = integrations.filter((e) => !e.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY)).length;
+	const creatableCount = integrations.filter((e) => !e.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY)).length;
 	const { wsClient } = useVisualizerContext();
 	const { consoleUrl } = useCloudContext();
 
@@ -101,8 +101,8 @@ export function ComponentList({
 	return (
 		<ComponentListSection>
 			<ComponentListHeader>
-				<ComponentListLabel>{isBatch ? <>Select Integrations to Deploy to {projectLink} in Choreo Cloud</> : <>Deploy integration to {projectLink} in Choreo Cloud</>}</ComponentListLabel>
-				{isBatch && <SelectionCount>{selectedCount} of {deployableCount} selected</SelectionCount>}
+				<ComponentListLabel>{isBatch ? <>Select the integrations to create in {projectLink} in Choreo Cloud</> : <>Create this integration in {projectLink} in Choreo Cloud</>}</ComponentListLabel>
+				{isBatch && <SelectionCount>{selectedCount} of {creatableCount} selected</SelectionCount>}
 			</ComponentListHeader>
 
 			<ComponentListContainer>

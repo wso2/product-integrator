@@ -20,6 +20,7 @@ import { type Component, type Organization, type PlatformSession, type Project, 
 import { type ExtensionName, WICommandIds } from "@wso2/wso2-platform-core";
 import { ProgressLocation, type QuickPickItem, QuickPickItemKind, type WorkspaceFolder, commands, window, workspace } from "vscode";
 import { type ExtensionVariables, ext } from "../../extensionVariables";
+import { CancelledError } from "../platform/error-handler";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { webviewStateStore } from "../stores/webview-state-store";
 
@@ -47,7 +48,7 @@ export const selectIntegration = async (
 		placeholder: `${ext.terminologies?.componentTermCapitalized} Name`,
 	});
 	if (!selected) {
-		throw new Error(`Failed to select ${ext.terminologies?.componentTerm}`);
+		throw new CancelledError();
 	}
 	return selected;
 };
@@ -72,7 +73,7 @@ export const selectProject = async (loadingTitle = "Loading projects...", select
 		placeholder: "Project Name",
 	});
 	if (!selected) {
-		throw new Error("Failed to select project");
+		throw new CancelledError();
 	}
 	return selected;
 };
@@ -132,7 +133,7 @@ export const selectProjectWithCreateNew = async (
 	if (selection?.item) {
 		return { projectList, selectedProject: selection.item };
 	}
-	throw new Error("Failed to select project");
+	throw new CancelledError();
 };
 
 /** A name the platform accepts for a project or an integration, derived from what a person typed. */
@@ -185,7 +186,7 @@ export const createNewProject = async (projectName?: string, isWorkspaceMapping?
 		},
 	});
 	if (!newProjectName) {
-		throw new Error("New project name is required to proceed.");
+		throw new CancelledError();
 	}
 
 	const project = await window.withProgress({ title: `Creating new project ${newProjectName}...`, location: ProgressLocation.Notification }, async () => {

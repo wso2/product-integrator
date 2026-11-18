@@ -28,6 +28,7 @@ import type { ICloneIntegrationCmdParams } from "./cmds/clone-project-cmd";
 import { isPlatformReady, requireSession } from "./cmds/cmd-utils";
 import { linkContext } from "./context-file";
 import { getGitRemotes, getGitRoot } from "./git/util";
+import { GITHUB_RETURN_PATH } from "./github-app";
 import { handleCloudError } from "./platform/error-handler";
 import { contextStore, getContextKey, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "./stores/context-store";
 import { dataCacheStore } from "./stores/data-cache-store";
@@ -50,10 +51,9 @@ export function activateURIHandlers(context: ExtensionContext) {
 				}
 				return;
 			}
-			if (uri.path === "/ghapp") {
-				// The GitHub App callback was handled by the CLI; the platform's git integration
-				// has no documented route for it yet, so the person is pointed at the console.
-				window.showInformationMessage("Finish connecting GitHub in the Choreo Cloud console, then refresh the repository check here.");
+			if (uri.path === GITHUB_RETURN_PATH) {
+				// GitHub's return, relayed by the console's GitHub callback page.
+				void ext.githubApp?.handleReturn(new URLSearchParams(uri.query));
 				return;
 			}
 			if (uri.path === "/open") {

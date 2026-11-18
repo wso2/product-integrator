@@ -79,6 +79,7 @@ export const WI_BRIDGE_EVENTS = {
     CONTEXT_STATE_CHANGED: "wi.event.contextStateChanged",
     CLONE_PROGRESS: "wi.event.cloneProgress",
     SIGN_IN_INITIATED: "wi.event.signInInitiated",
+    GITHUB_CONNECTED: "wi.event.githubConnected",
 } as const;
 
 /** Granular stages emitted by the clone-project command so the webview can show accurate progress. */
@@ -254,6 +255,11 @@ export interface WISignInInitiatedEvent {
     type: typeof WI_BRIDGE_EVENTS.SIGN_IN_INITIATED;
 }
 
+/** GitHub was connected to the organization from the editor; repository checks are stale. */
+export interface WIGitHubConnectedEvent {
+    type: typeof WI_BRIDGE_EVENTS.GITHUB_CONNECTED;
+}
+
 export type WIBridgeRequest = WIWsRequest;
 
 export type WIBridgeResponse =
@@ -263,7 +269,8 @@ export type WIBridgeResponse =
     | WIAuthStateChangedEvent
     | WIContextStateChangedEvent
     | WICloneProgressEvent
-    | WISignInInitiatedEvent;
+    | WISignInInitiatedEvent
+    | WIGitHubConnectedEvent;
 
 export type WITransportMode = "proxy" | "websocket";
 
