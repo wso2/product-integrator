@@ -47,7 +47,7 @@ import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
 import { CancelledError, handleCloudError } from "../platform/error-handler";
 import { contextStore, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
-import { isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensionName, toProjectName, toResourceName } from "./cmd-utils";
+import { assignUniqueNames, isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensionName, toProjectName, toResourceName } from "./cmd-utils";
 
 /**
  * Source component ids already acted on. Clearing `SOURCE_COMPONENT_ID` from workspace state cannot
@@ -92,7 +92,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					} else if (StateMachine.getContext().projectType === ProjectType.MI) {
 						buildPackLang = "microintegrator";
 					} else {
-						throw new Error("Please ensure that you are within a valid Ballerina or MI project to create an integration in WSO2 Cloud");
+						throw new Error("Please ensure that you are within a valid Ballerina or MI project to create an integration in Choreo Cloud");
 					}
 				}
 				if (ext.isDevantCloudEditor && params?.integrations?.length > 1) {
@@ -146,61 +146,13 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					// not a git repository
 				}
 
-				// Is there already an integration for one of the selected directories?
-				let integrationAlreadyExists = false;
-				if (gitRoot) {
-					const remotes = await getGitRemotes(ext.context, gitRoot);
-					for (const integration of existing) {
-						let repository = dataCacheStore.getState().getRepository(orgHandle, selectedProject.id, integration.id);
-						if (!repository) {
-							repository = await cloud.components.repository(integration.id, selectedProject.id).catch((): undefined => undefined);
-							if (repository) {
-								dataCacheStore.getState().setRepository(orgHandle, selectedProject.id, integration.id, repository);
-							}
-						}
-						const parsedRepoUrl = parseGitURL(repositoryUrlOf(repository) ?? "");
-						if (!parsedRepoUrl) {
-							continue;
-						}
-						const [repoOrg, repoName, repoProvider] = parsedRepoUrl;
-						const hasMatchingRemote = remotes.some((remote) => {
-							const parsed = parseGitURL(remote.fetchUrl);
-							return !!parsed && parsed[0] === repoOrg && parsed[1] === repoName && parsed[2] === repoProvider;
-						});
-						if (hasMatchingRemote) {
-							const subPathDir = path.join(gitRoot, repositorySubPathOf(repository));
-							if (integrations.some((item) => isSamePath(subPathDir, item.fsPath))) {
-								integrationAlreadyExists = true;
-								break;
-							}
-						}
-					}
-				}
-				if (integrationAlreadyExists && gitRoot) {
-					const resp = await window.showInformationMessage(
-						`An integration for the selected directory already exists within your project (${selectedProject.name}). Do you want to proceed and create another integration?`,
-						{ modal: true },
-						"Proceed",
-					);
-					if (resp !== "Proceed") {
-						linkContext(gitRoot, { org: orgHandle, project: selectedProject.id });
-						contextStore.getState().refreshState();
-						return;
-					}
+				const integrationAlreadyExists = !!gitRoot && (await hasIntegrationForDirs(orgHandle, selectedProject.id, existing, gitRoot, integrations.map((item) => item.fsPath)));
+				if (integrationAlreadyExists && gitRoot && !(await confirmAnotherIntegration(orgHandle, selectedProject, gitRoot))) {
+					return;
 				}
 
 				const isWithinWorkspace = workspace.workspaceFolders?.some((item) => integrations.every((int) => isSubpath(item.uri?.fsPath, int.fsPath)));
-				const taken = new Set(existing.flatMap((c) => [c.id.toLowerCase(), c.name.toLowerCase(), (c.displayName ?? "").toLowerCase()]));
-				for (const integration of integrations) {
-					const baseName = integration?.name || path.basename(integration.fsPath);
-					let candidate = baseName;
-					let counter = 1;
-					while (taken.has(candidate.toLowerCase())) {
-						candidate = `${baseName}-${counter++}`;
-					}
-					integration.name = candidate;
-					taken.add(candidate.toLowerCase());
-				}
+				assignUniqueNames(existing, integrations);
 
 				if (isWithinWorkspace || workspace.workspaceFile) {
 					if (gitRoot || params?.workspaceDir) {
@@ -226,6 +178,52 @@ export function createNewComponentCommand(context: ExtensionContext) {
 	);
 }
 
+/** Whether an integration in the project already builds one of `dirs` from this repository. */
+export async function hasIntegrationForDirs(orgHandle: string, projectId: string, existing: Component[], gitRoot: string, dirs: string[]): Promise<boolean> {
+	const cloud = ext.clients.platform.cloud;
+	const remotes = await getGitRemotes(ext.context, gitRoot);
+	for (const integration of existing) {
+		let repository = dataCacheStore.getState().getRepository(orgHandle, projectId, integration.id);
+		if (!repository) {
+			repository = await cloud.components.repository(integration.id, projectId).catch((): undefined => undefined);
+			if (repository) {
+				dataCacheStore.getState().setRepository(orgHandle, projectId, integration.id, repository);
+			}
+		}
+		const parsedRepoUrl = parseGitURL(repositoryUrlOf(repository) ?? "");
+		if (!parsedRepoUrl) {
+			continue;
+		}
+		const [repoOrg, repoName, repoProvider] = parsedRepoUrl;
+		const hasMatchingRemote = remotes.some((remote) => {
+			const parsed = parseGitURL(remote.fetchUrl);
+			return !!parsed && parsed[0] === repoOrg && parsed[1] === repoName && parsed[2] === repoProvider;
+		});
+		if (hasMatchingRemote) {
+			const subPathDir = path.join(gitRoot, repositorySubPathOf(repository));
+			if (dirs.some((dir) => isSamePath(subPathDir, dir))) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+/** Asks before a second integration is created for the same directory; declining links the directory to the project instead. */
+export async function confirmAnotherIntegration(orgHandle: string, project: Project, gitRoot: string): Promise<boolean> {
+	const resp = await window.showInformationMessage(
+		`An integration for the selected directory already exists within your project (${project.name}). Do you want to proceed and create another integration?`,
+		{ modal: true },
+		"Proceed",
+	);
+	if (resp !== "Proceed") {
+		linkContext(gitRoot, { org: orgHandle, project: project.id });
+		contextStore.getState().refreshState();
+		return false;
+	}
+	return true;
+}
+
 /** The https clone URL the platform builds from, for whatever remote form git reported. */
 export function normalizeCloneUrl(repoUrl: string): string {
 	const parsed = parseGitURL(repoUrl);
@@ -246,7 +244,7 @@ export function normalizeCloneUrl(repoUrl: string): string {
 	return trimmed.endsWith(".git") ? trimmed : `${trimmed}.git`;
 }
 
-export const submitCreateComponentHandler = async ({ createParams, org, project, workspaceFsPath }: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> => {
+export const submitCreateComponentHandler = async ({ createParams, org, project, workspaceFsPath, quiet }: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> => {
 	const totalCount = createParams.length;
 	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: totalCount };
 	// Created, but the platform could not bind the repository: no build starts until that is fixed.
@@ -316,7 +314,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	await window.withProgress(
 		{
 			title: totalCount === 1 ? `Creating integration '${createParams[0].displayName || createParams[0].name}'... ` : `Creating ${totalCount} integrations... `,
-			location: ProgressLocation.Notification,
+			location: quiet ? ProgressLocation.Window : ProgressLocation.Notification,
 			cancellable: false,
 		},
 		async (progress) => {
@@ -353,6 +351,9 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 						repo: { url: repoUrl, branch: createParam.branch, appPath: repoAppPath },
 						// A private repository is read through the GitHub App installation.
 						githubApp: access ? gitHubSourceFor(access, createParam.branch, repoAppPath, repoUrl) : undefined,
+						modelConfig: createParam.modelConfig,
+						mcpConfig: createParam.mcpConfig,
+						autoInstrumentation: createParam.autoInstrumentation,
 					});
 					// The platform starts the first build; deployments are left to the console: required configurations
 					// and private dependencies are entered there, and the platform has no API that reports them as missing.
@@ -374,7 +375,9 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 					result.failed.push({ name: label, error: errorMessage });
 					ext.logError(`Failed to create ${ext.terminologies?.componentTerm} ${label}:`, error as Error);
 					if (isCloudError(error) && error.code === "plan_limit") {
-						handleCloudError(error, errorMessage);
+						if (!quiet) {
+							handleCloudError(error, errorMessage);
+						}
 						break;
 					}
 				}
@@ -393,22 +396,24 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		const successMessage =
 			result.failed.length === 0
 				? result.created.length === 1
-					? "Created the integration in WSO2 Cloud, and its first build has started. Deploy it from the console."
-					: "Created the integrations in WSO2 Cloud, and their first builds have started. Deploy them from the console."
-				: `Created ${result.created.length} of ${totalCount} integrations in WSO2 Cloud, and their first builds have started. Deploy them from the console.`;
+					? "Created the integration in Choreo Cloud, and its first build has started. Deploy it from the console."
+					: "Created the integrations in Choreo Cloud, and their first builds have started. Deploy them from the console."
+				: `Created ${result.created.length} of ${totalCount} integrations in Choreo Cloud, and their first builds have started. Deploy them from the console.`;
 		const createWarning = [sourceBindingWarning(unbound), firstBuildWarning(unbuilt)].filter(Boolean).join(" ") || undefined;
 		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
 		if (workspace.workspaceFile) {
 			window.showErrorMessage("Please make sure newly created integrations are added to workspace.");
 			// Deployments are done in the console, so the way there is offered here too.
 			showViewInConsoleMessage(createWarning ?? successMessage, org.handle, project, result.created, !!createWarning);
+		} else if (quiet && !createWarning) {
+			ext.log(successMessage);
 		} else if (isWithinWorkspace) {
 			showViewInConsoleMessage(createWarning ?? successMessage, org.handle, project, result.created, !!createWarning);
 		} else {
 			showReloadWorkspaceMessage(createWarning ?? successMessage, workspaceFsPath, !!createWarning);
 		}
 	}
-	if (result.failed.length > 0) {
+	if (result.failed.length > 0 && !quiet) {
 		window.showErrorMessage(`Failed to create the following integrations: ${result.failed.map((item) => item.name).join(", ")}`);
 	}
 	return result;
@@ -481,11 +486,11 @@ function unreadableSource(access: GitHubRepoAccess): string | undefined {
 		case "public":
 			return undefined;
 		case "not-granted":
-			return `The WSO2 Cloud GitHub app is on ${access.owner} but not given ${access.repo}. Give it access, then retry.`;
+			return `The Choreo Cloud GitHub app is on ${access.owner} but not given ${access.repo}. Give it access, then retry.`;
 		case "auth-required":
-			return `WSO2 Cloud needs your GitHub authorization again to read ${access.owner}/${access.repo}. Authorize, then retry.`;
+			return `Choreo Cloud needs your GitHub authorization again to read ${access.owner}/${access.repo}. Authorize, then retry.`;
 		case "not-connected":
-			return `WSO2 Cloud can't read ${access.owner}/${access.repo}: connect GitHub with the WSO2 Cloud app on ${access.owner}, then retry.`;
+			return `Choreo Cloud can't read ${access.owner}/${access.repo}: connect GitHub with the Choreo Cloud app on ${access.owner}, then retry.`;
 	}
 }
 
@@ -594,7 +599,7 @@ const firstBuildWarning = (unbuilt: string[]): string | undefined => {
 		return undefined;
 	}
 	const one = unbuilt.length === 1;
-	return `WSO2 Cloud created ${unbuilt.join(", ")} but could not start ${one ? "its" : "their"} first build. Start ${one ? "it" : "them"} from the console.`;
+	return `Choreo Cloud created ${unbuilt.join(", ")} but could not start ${one ? "its" : "their"} first build. Start ${one ? "it" : "them"} from the console.`;
 };
 
 /** What to tell the person instead of plain success when integrations were created without their source bound; undefined when all were bound. */
@@ -648,8 +653,15 @@ const markCodeServerDeployed = async () => {
 	}
 };
 
+/** The display name of the project a local context entry names: a readable name from Ballerina.toml [workspace].title, else from the handle. */
+export function localProjectDisplayName(workspacePath: string, handle: string): string {
+	const ballerinaTomlPath = path.join(workspacePath, "Ballerina.toml");
+	const title = existsSync(ballerinaTomlPath) ? readFileSync(ballerinaTomlPath, "utf8").match(/^\[workspace\][^[]*title\s*=\s*"([^"]+)"/ms)?.[1] : undefined;
+	return title ?? handle.split("-").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+
 /** If the context file has an entry marked `local: true`, creates the project it names and clears the mark. */
-const createProjectFromLocalMetadata = async (workspacePath: string): Promise<Project | undefined> => {
+export const createProjectFromLocalMetadata = async (workspacePath: string): Promise<Project | undefined> => {
 	try {
 		const localEntry = localContextEntry(workspacePath);
 		if (!localEntry) {
@@ -677,17 +689,7 @@ const createProjectFromLocalMetadata = async (workspacePath: string): Promise<Pr
 			return finish(existing);
 		}
 
-		// A readable name from Ballerina.toml [workspace].title, else from the handle.
-		let displayName: string | undefined;
-		const ballerinaTomlPath = path.join(workspacePath, "Ballerina.toml");
-		if (existsSync(ballerinaTomlPath)) {
-			const titleMatch = readFileSync(ballerinaTomlPath, "utf8").match(/^\[workspace\][^[]*title\s*=\s*"([^"]+)"/ms);
-			displayName = titleMatch?.[1];
-		}
-		displayName ??= localEntry.project
-			.split("-")
-			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-			.join(" ");
+		const displayName = localProjectDisplayName(workspacePath, localEntry.project);
 		const name = toProjectName(localEntry.project);
 		const created = await window.withProgress({ title: `Creating new cloud project ${displayName}...`, location: ProgressLocation.Notification }, () => cloud.projects.create({ name, displayName }));
 		dataCacheStore.getState().setProjects(session.org.handle, [...projects, created]);
