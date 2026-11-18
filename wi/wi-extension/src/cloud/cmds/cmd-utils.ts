@@ -23,6 +23,7 @@ import { type ExtensionName, type GetLocalGitDataResp, WICommandIds } from "@wso
 import { ProgressLocation, type QuickPickItem, QuickPickItemKind, type WorkspaceFolder, commands, window, workspace } from "vscode";
 import { type ExtensionVariables, ext } from "../../extensionVariables";
 import { isSubpath } from "../../utils/pathUtils";
+import { CancelledError } from "../platform/error-handler";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { webviewStateStore } from "../stores/webview-state-store";
 
@@ -50,7 +51,7 @@ export const selectIntegration = async (
 		placeholder: `${ext.terminologies?.componentTermCapitalized} Name`,
 	});
 	if (!selected) {
-		throw new Error(`Failed to select ${ext.terminologies?.componentTerm}`);
+		throw new CancelledError();
 	}
 	return selected;
 };
@@ -75,7 +76,7 @@ export const selectProject = async (loadingTitle = "Loading projects...", select
 		placeholder: "Project Name",
 	});
 	if (!selected) {
-		throw new Error("Failed to select project");
+		throw new CancelledError();
 	}
 	return selected;
 };
@@ -135,7 +136,7 @@ export const selectProjectWithCreateNew = async (
 	if (selection?.item) {
 		return { projectList, selectedProject: selection.item };
 	}
-	throw new Error("Failed to select project");
+	throw new CancelledError();
 };
 
 /** A name the platform accepts for a project or an integration, derived from what a person typed. */
@@ -171,7 +172,7 @@ export const createNewProject = async (projectName?: string, isWorkspaceMapping?
 		validateInput: (val) => validateProjectName(val, projectCache),
 	});
 	if (!newProjectName) {
-		throw new Error("New project name is required to proceed.");
+		throw new CancelledError();
 	}
 	return createProjectNamed(newProjectName);
 };

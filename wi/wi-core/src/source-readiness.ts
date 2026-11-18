@@ -33,6 +33,8 @@ export interface SourceReadinessInput {
 	branches: string[];
 	branchesLoading: boolean;
 	repoAccess?: { isAccessible: boolean; retrievedRepos: boolean };
+	/** Why WSO2 Cloud's access to the repository could not be checked. */
+	repoAccessError?: string;
 	repoAccessLoading: boolean;
 	configDriftFiles: string[];
 	hasDirtyRepo: boolean;
@@ -86,7 +88,7 @@ function providerIssue(gitProvider: string | null): SourceReadiness | undefined 
 		return undefined;
 	}
 	return {
-		message: `Deploying from ${toSentenceCase(gitProvider).replace(/-/g, " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and deploy from it.`,
+		message: `Creating integrations from ${toSentenceCase(gitProvider).replace(/-/g, " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and create it from there.`,
 		refresh: "gitData",
 		tone: "warning",
 		blocking: true,
@@ -95,10 +97,17 @@ function providerIssue(gitProvider: string | null): SourceReadiness | undefined 
 
 function accessIssue(input: SourceReadinessInput): SourceReadiness | undefined {
 	const { gitRemote, gitProvider, repoAccess } = input;
-	if (input.repoAccessLoading || !gitRemote || !gitProvider || repoAccess?.isAccessible) {
+	if (input.repoAccessLoading || !gitRemote || !gitProvider) {
 		return undefined;
 	}
 	const issue = { refresh: "repoAccess" as const, tone: "warning" as const, blocking: true };
+	// A failed check says nothing about access; it is retried rather than answered with Authorize.
+	if (input.repoAccessError) {
+		return { ...issue, message: "Couldn't check WSO2 Cloud's access to this repository. Refresh to try again." };
+	}
+	if (repoAccess?.isAccessible) {
+		return undefined;
+	}
 	if (gitProvider !== GitProvider.GITHUB) {
 		return {
 			...issue,
@@ -131,7 +140,7 @@ function driftIssue(files: string[]): SourceReadiness | undefined {
 		return undefined;
 	}
 	return {
-		message: `Cloud deployment requires the metadata in the ${files.join(",")} ${files.length > 1 ? "files" : "file"} to be committed and pushed to the selected remote repository for proper functionality.`,
+		message: `WSO2 Cloud reads the metadata in ${files.join(", ")} from the selected remote repository. Commit and push ${files.length > 1 ? "them" : "it"}.`,
 		refresh: "configDrift",
 		tone: "warning",
 		blocking: true,
@@ -142,7 +151,7 @@ function dirtyNotice(hasDirtyRepo: boolean): SourceReadiness | undefined {
 	return hasDirtyRepo
 		? {
 				message:
-					"WSO2 cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.",
+					"WSO2 Cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.",
 				refresh: "dirtyRepo",
 				tone: "neutral",
 				blocking: false,

@@ -130,6 +130,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		isFetching: isFetchingRepoAccess,
 		isLoading: isLoadingRepoAccess,
 		data: isRepoAuthorizedResp,
+		error: repoAccessError,
 		refetch: refetchRepoAccess,
 	} = useQuery({
 		queryKey: ["git-repo-access", { repo: gitRemote, orgId, provider: gitProvider, credential }],
@@ -159,6 +160,17 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		enabled: !!gitRemote && !!gitProvider && (gitProvider !== GitProvider.GITHUB ? !!credential : true),
 		refetchOnWindowFocus: true,
 	});
+
+	// GitHub connected from the editor: what WSO2 Cloud can read has changed.
+	useEffect(() => {
+		const unsubscribe = wsClient.onGitHubConnected(() => {
+			void refetchRepoAccess();
+			void refetchBranches();
+		});
+		return () => {
+			unsubscribe();
+		};
+	}, [refetchRepoAccess, refetchBranches]);
 
 	useEffect(() => {
 		if (branches?.length > 0 && (!branch || !branches.includes(branch))) {
@@ -229,6 +241,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		branches: branches ?? [],
 		branchesLoading: isLoadingBranches,
 		repoAccess: isRepoAuthorizedResp,
+		repoAccessError: repoAccessError?.message,
 		repoAccessLoading: isLoadingRepoAccess,
 		configDriftFiles: configDriftFiles ?? [],
 		hasDirtyRepo: !!hasDirtyRepo,
@@ -236,8 +249,8 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	const actionHandlers: Record<SourceReadinessAction, () => void> = {
 		sourceControl: () => openSourceControl(),
 		pushChanges: () => pushChanges(),
-		grantAccess: () => wsClient.triggerGithubInstallFlow(orgId),
-		authorize: () => wsClient.triggerGithubAuthFlow(orgId),
+		grantAccess: () => wsClient.triggerGithubInstallFlow(gitRemote ?? ""),
+		authorize: () => wsClient.triggerGithubAuthFlow(gitRemote ?? ""),
 		manageCredentials: () => wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" })),
 	};
 	const refreshers: Record<SourceReadinessRefresh, [() => void, boolean]> = {

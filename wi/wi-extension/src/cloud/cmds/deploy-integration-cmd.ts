@@ -49,15 +49,8 @@ import {
 	requireSession,
 	resolveDeployProject,
 } from "./cmd-utils";
-import {
-	type Release,
-	confirmAnotherIntegration,
-	deployBuild,
-	hasIntegrationForDirs,
-	localProjectDisplayName,
-	submitCreateComponentHandler,
-	waitForRelease,
-} from "./create-component-cmd";
+import { confirmAnotherIntegration, hasIntegrationForDirs, localProjectDisplayName, submitCreateComponentHandler } from "./create-component-cmd";
+import { type Release, deployBuild, enableBuildAutomation, waitForRelease } from "./deploy-build";
 
 const signedIn = () => ext.authProvider?.state?.status === "signed-in" && !!ext.authProvider.org;
 
@@ -110,8 +103,15 @@ async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspe
 	const gitRemote = (req.gitRemote && remotes.includes(req.gitRemote) ? req.gitRemote : gitData?.upstream?.remoteUrl || remotes[0]) || null;
 	const gitProvider = (gitRemote && parseGitURL(gitRemote)?.[2]) || null;
 	const target = gitRemote && gitProvider ? { repoUrl: gitRemote, orgId, credRef: "" } : undefined;
+	let repoAccessError: string | undefined;
 	const [repoAccess, branches] = target
-		? await Promise.all([ws.isRepoAuthorized(target), ws.getBranches(target).catch((): string[] => [])])
+		? await Promise.all([
+				ws.isRepoAuthorized(target).catch((err: unknown): undefined => {
+					repoAccessError = err instanceof Error ? err.message : String(err);
+					return undefined;
+				}),
+				ws.getBranches(target).catch((): string[] => []),
+			])
 		: [undefined, [] as string[]];
 	const branch = pickBranch(branches, req.branch, gitData?.upstream?.name);
 	const [configDriftFiles, hasDirtyRepo] = await Promise.all([
@@ -126,6 +126,7 @@ async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspe
 		branches,
 		branchesLoading: false,
 		repoAccess,
+		repoAccessError,
 		repoAccessLoading: false,
 		configDriftFiles,
 		hasDirtyRepo,
@@ -196,6 +197,10 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 				},
 			],
 		});
+		// The create leaves deploying to the console; this command follows the first build and deploys it.
+		for (const created of result.created) {
+			await enableBuildAutomation(created, org.handle, project, req.quiet);
+		}
 		return { outcome: "submitted", project: projectRef, ...result };
 	} catch (err) {
 		ext.logError("Failed to deploy integration", err as Error);

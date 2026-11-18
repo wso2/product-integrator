@@ -21,20 +21,15 @@ import * as os from "os";
 import * as path from "path";
 import type { WICloudCreateIntegrationParam, WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import {
-	type Build,
 	type Component,
 	type CreatedComponent,
-	type Environment,
 	type Project,
 	RESOURCE_NAME,
 	buildConsoleUrl,
-	buildInProgress,
-	buildSucceeded,
 	integrationTypeFromScope,
 	integrationTypeLabel,
 	isCloudError,
 	parseGitHubRepoUrl,
-	poll,
 	runtimeForBuildPack,
 } from "@wso2/wso2-cloud-client";
 import { DevantScopes, GitProvider, type ICreateNewIntegrationCmdParams, WICommandIds, parseGitURL } from "@wso2/wso2-platform-core";
@@ -46,8 +41,10 @@ import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 import { linkContext, localContextEntry, readContextEntries, writeContextEntries } from "../context-file";
 import type { Repository } from "../git/git";
 import { initGit } from "../git/main";
+import { gitHubAccessFor } from "../github-access";
+import { type GitHubRepoAccess, gitHubSourceFor, inspectReadablePath } from "../github-app";
 import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
-import { handleCloudError } from "../platform/error-handler";
+import { CancelledError, handleCloudError } from "../platform/error-handler";
 import { contextStore, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { assignUniqueNames, isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensionName, toProjectName, toResourceName } from "./cmd-utils";
@@ -55,7 +52,7 @@ import { assignUniqueNames, isPlatformReady, requireSession, selectProjectWithCr
 /**
  * Source component ids already acted on. Clearing `SOURCE_COMPONENT_ID` from workspace state cannot
  * clear the environment variable the cloud editor injects, so a consumed id would otherwise be
- * re-resolved by every later deploy in the same session.
+ * re-resolved by every later create in the same session.
  */
 const consumedSourceCompIds = new Set<string>();
 
@@ -74,22 +71,15 @@ export function createNewComponentCommand(context: ExtensionContext) {
 		commands.registerCommand(WICommandIds.CreateNewComponent, async (params: ICreateNewIntegrationCmdParams) => {
 			try {
 				isPlatformReady(ext);
-				const session = await requireSession("Deploy Integration");
+				const session = await requireSession("Create Integration");
 				if (!session) {
 					return;
 				}
 				const orgHandle = session.org.handle;
 				const cloud = ext.clients.platform.cloud;
 				await waitForContextStoreToLoad();
-				let selectedProject = contextStore.getState().state.selected?.project;
 
-				if (params?.workspaceDir && !selectedProject) {
-					selectedProject = await createProjectFromLocalMetadata(params.workspaceDir);
-				}
-				if (!selectedProject) {
-					selectedProject = (await selectProjectWithCreateNew(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', to deploy the integration in`)).selectedProject;
-				}
-
+				// Checked and picked before the project, so a failure or a cancel leaves no new, empty project behind.
 				// A directory passed without its integration types offers them all, as a directory picked here does.
 				const integrations = (params?.integrations || []).map((item) =>
 					item.supportedIntegrationTypes?.length ? item : { ...item, supportedIntegrationTypes: allIntegrationTypes },
@@ -102,11 +92,11 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					} else if (StateMachine.getContext().projectType === ProjectType.MI) {
 						buildPackLang = "microintegrator";
 					} else {
-						throw new Error("Please ensure that you are within a valid Ballerina or MI project to deploy an integration in the cloud");
+						throw new Error("Please ensure that you are within a valid Ballerina or MI project to create an integration in WSO2 Cloud");
 					}
 				}
 				if (ext.isDevantCloudEditor && params?.integrations?.length > 1) {
-					throw new Error("Workspace deployments are not yet supported in the cloud editor. Please select individual integration to deploy.");
+					throw new Error("Creating the integrations of a workspace is not yet supported in the cloud editor. Select a single integration to create.");
 				}
 
 				if (!params?.workspaceDir || integrations.length === 0) {
@@ -118,14 +108,27 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					} else {
 						defaultUri = Uri.file(os.homedir());
 					}
-					const supPathUri = await window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: true, title: "Select integration directory", defaultUri });
+					const supPathUri = await window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: !ext.isDevantCloudEditor, title: "Select integration directory", defaultUri });
 					if (!supPathUri || supPathUri.length === 0) {
-						throw new Error("Integration directory selection is required");
+						throw new CancelledError();
 					}
 					for (const item of supPathUri) {
 						integrations.push({ fsPath: item.fsPath, name: path.basename(item.fsPath), supportedIntegrationTypes: allIntegrationTypes });
 					}
 					workspaceDir = workspace.workspaceFolders?.find((folder) => isSubpath(folder.uri.fsPath, supPathUri[0].fsPath))?.uri.fsPath;
+				}
+
+				let selectedProject = contextStore.getState().state.selected?.project;
+
+				if (params?.workspaceDir && !selectedProject) {
+					selectedProject = await createProjectFromLocalMetadata(params.workspaceDir);
+				}
+				if (!selectedProject) {
+					selectedProject = (await selectProjectWithCreateNew(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', to create the integration in`)).selectedProject;
+				}
+				// The pickers wait on the person; a project from another organization is not linked under this one.
+				if (ext.authProvider?.org?.handle !== orgHandle) {
+					throw new Error("The signed-in organization changed while the integration was being created. Run the command again.");
 				}
 
 				const existing = await window.withProgress(
@@ -168,14 +171,13 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					throw new Error("Selected directory is outside of the workspace. Please select a directory within the workspace to create the integration.");
 				}
 			} catch (err) {
-				ext.logError("Failed to deploy integration", err as Error);
-				handleCloudError(err, "Failed to deploy the integration");
+				ext.logError("Failed to create integration", err as Error);
+				handleCloudError(err, "Failed to create the integration", { prefix: true });
 			}
 		}),
 	);
 }
 
-/** The https clone URL the platform builds from, for whatever remote form git reported. */
 /** Whether an integration in the project already builds one of `dirs` from this repository. */
 export async function hasIntegrationForDirs(orgHandle: string, projectId: string, existing: Component[], gitRoot: string, dirs: string[]): Promise<boolean> {
 	const cloud = ext.clients.platform.cloud;
@@ -222,6 +224,7 @@ export async function confirmAnotherIntegration(orgHandle: string, project: Proj
 	return true;
 }
 
+/** The https clone URL the platform builds from, for whatever remote form git reported. */
 export function normalizeCloneUrl(repoUrl: string): string {
 	const parsed = parseGitURL(repoUrl);
 	if (parsed) {
@@ -246,16 +249,18 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	const result: WICloudSubmitComponentsResp = { created: [], failed: [], total: totalCount };
 	// Created, but the platform could not bind the repository: no build starts until that is fixed.
 	const unbound: { label: string; error: NonNullable<CreatedComponent["sourceBindingError"]> }[] = [];
+	// Created, but the platform could not start the first build it starts with the create.
+	const unbuilt: string[] = [];
 	const cloud = ext.clients.platform.cloud;
 	// The platform acts for the signed-in organization; a form opened for another one is not submitted to it.
 	if (ext.authProvider?.org?.handle !== org.handle) {
-		throw new Error(`This form was opened for the organization ${org.name}, which is no longer the one signed in. Open the deployment form again.`);
+		throw new Error(`This form was opened for the organization ${org.name}, which is no longer the one signed in. Open the form again.`);
 	}
 
 	const newGit = await initGit(ext.context);
 	const gitRoot = await newGit?.getRepositoryRoot(workspaceFsPath).catch((): undefined => undefined);
 	if (!gitRoot) {
-		throw new Error(`${workspaceFsPath} is not inside a git repository. Initialize one, push it to GitHub, then deploy from it.`);
+		throw new Error(`${workspaceFsPath} is not inside a git repository. Initialize one, push it to GitHub, then create the integration from it.`);
 	}
 	const dotGit = await newGit?.getRepositoryDotGit(workspaceFsPath);
 	const repo = newGit?.open(gitRoot, dotGit);
@@ -275,7 +280,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				ext.logError(`Failed to resolve the source integration ${workspaceCompId}`, err as Error);
 				return {
 					created: [],
-					failed: createParams.map((item) => ({ name: item.displayName || item.name, error: `Could not read the linked integration: ${(err as Error).message}. Nothing was deployed, please retry.` })),
+					failed: createParams.map((item) => ({ name: item.displayName || item.name, error: `Could not read the linked integration: ${(err as Error).message}. No changes were made; please retry.` })),
 					total: totalCount,
 				};
 			}
@@ -286,10 +291,16 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		}
 		if (component?.componentType === "mcpServer") {
 			// An MCP server created from an existing API has no source; attaching one turns it into a server built from source.
-			const hasRepository = await cloud.components
-				.repository(component.id, project.id)
-				.then(() => true)
-				.catch((error) => !(isCloudError(error) && error.code === "not_found"));
+			// Only a 404 says it has none; another failure stops the submission rather than create a second integration.
+			const hasRepository = await cloud.components.repository(component.id, project.id).then(
+				() => true,
+				(error: unknown) => {
+					if (isCloudError(error) && error.code === "not_found") {
+						return false;
+					}
+					throw error;
+				},
+			);
 			if (!hasRepository) {
 				return await attachSourceToExistingIntegration(workspaceCompId, component, org.handle, project, createParams[0], workspaceFsPath, gitRoot, "Attaching sources to MCP server...");
 			}
@@ -297,7 +308,8 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	}
 
 	await checkSubscription();
-	await checkIfSourcePushedToRemoteRepo(createParams, gitRoot);
+	// The access the check confirmed is the one the create binds; a second lookup could fail and drop the binding.
+	const checkedAccess = await checkIfSourcePushedToRemoteRepo(createParams, gitRoot);
 
 	await window.withProgress(
 		{
@@ -315,29 +327,41 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				try {
 					const type = integrationTypeFromScope(createParam.integrationType);
 					if (!type) {
-						throw new Error(`${integrationTypeLabel(createParam.integrationType) || createParam.integrationType} integrations cannot be deployed to WSO2 Cloud yet.`);
+						throw new Error(`${integrationTypeLabel(createParam.integrationType) || createParam.integrationType} integrations cannot be created in WSO2 Cloud yet.`);
 					}
 					const name = toResourceName(createParam.name);
 					if (!RESOURCE_NAME.test(name)) {
 						throw new Error(`${createParam.name} is not a name the platform accepts.`);
 					}
 					const appPath = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
+					const repoUrl = normalizeCloneUrl(createParam.repoUrl);
+					const repoAppPath = appPath && appPath !== "." ? appPath : undefined;
+					const access = checkedAccess.has(createParam.repoUrl) ? checkedAccess.get(createParam.repoUrl) : await gitHubAccessOf(createParam.repoUrl);
+					// A repository WSO2 Cloud cannot read would give an integration that cannot build.
+					const unreadable = access && unreadableSource(access);
+					if (unreadable) {
+						throw new Error(unreadable);
+					}
 					const created = await cloud.components.create({
 						projectName: project.id,
 						name,
 						displayName: createParam.displayName,
 						type,
 						runtime: runtimeForBuildPack(createParam.buildPackLang),
-						repo: { url: normalizeCloneUrl(createParam.repoUrl), branch: createParam.branch, appPath: appPath && appPath !== "." ? appPath : undefined },
+						repo: { url: repoUrl, branch: createParam.branch, appPath: repoAppPath },
+						// A private repository is read through the GitHub App installation.
+						githubApp: access ? gitHubSourceFor(access, createParam.branch, repoAppPath, repoUrl) : undefined,
 					});
-					// Auto build and auto deploy are the component's own switches, set after the create
-					// (enableBuildAutomation), where the platform's refusal of auto deploy is seen.
-
+					// The platform starts the first build; deployments are left to the console: required configurations
+					// and private dependencies are entered there, and the platform has no API that reports them as missing.
+					logCreated(created);
 					result.created.push(created);
 					if (created.sourceBindingError) {
 						unbound.push({ label, error: created.sourceBindingError });
+					} else if (created.warning) {
+						// The platform starts the first build with the create, and says so here when it could not.
+						unbuilt.push(label);
 					}
-					await enableBuildAutomation(created, org.handle, project, quiet);
 					const cache = dataCacheStore.getState().getIntegrations(org.handle, project.id);
 					dataCacheStore.getState().setIntegrations(org.handle, project.id, [created, ...cache]);
 					if (repo) {
@@ -369,22 +393,21 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		const successMessage =
 			result.failed.length === 0
 				? result.created.length === 1
-					? "Successfully created integration in the cloud"
-					: "Successfully created multiple integrations in the cloud"
-				: `Successfully created ${result.created.length} of ${totalCount} integrations in the cloud`;
-		const bindingWarning = sourceBindingWarning(unbound);
+					? "Created the integration in WSO2 Cloud, and its first build has started. Deploy it from the console."
+					: "Created the integrations in WSO2 Cloud, and their first builds have started. Deploy them from the console."
+				: `Created ${result.created.length} of ${totalCount} integrations in WSO2 Cloud, and their first builds have started. Deploy them from the console.`;
+		const createWarning = [sourceBindingWarning(unbound), firstBuildWarning(unbuilt)].filter(Boolean).join(" ") || undefined;
 		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
 		if (workspace.workspaceFile) {
 			window.showErrorMessage("Please make sure newly created integrations are added to workspace.");
-			if (bindingWarning) {
-				showViewInConsoleMessage(bindingWarning, org.handle, project, result.created, true);
-			}
-		} else if (quiet && !bindingWarning) {
+			// Deployments are done in the console, so the way there is offered here too.
+			showViewInConsoleMessage(createWarning ?? successMessage, org.handle, project, result.created, !!createWarning);
+		} else if (quiet && !createWarning) {
 			ext.log(successMessage);
 		} else if (isWithinWorkspace) {
-			showViewInConsoleMessage(bindingWarning ?? successMessage, org.handle, project, result.created, !!bindingWarning);
+			showViewInConsoleMessage(createWarning ?? successMessage, org.handle, project, result.created, !!createWarning);
 		} else {
-			showReloadWorkspaceMessage(bindingWarning ?? successMessage, workspaceFsPath, !!bindingWarning);
+			showReloadWorkspaceMessage(createWarning ?? successMessage, workspaceFsPath, !!createWarning);
 		}
 	}
 	if (result.failed.length > 0 && !quiet) {
@@ -412,9 +435,17 @@ const checkSubscription = async () => {
 	}
 };
 
-const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegrationParam[], gitRoot: string) => {
+/** How WSO2 Cloud can read a GitHub repository; undefined for any other host. */
+const gitHubAccessOf = async (repoUrl: string): Promise<GitHubRepoAccess | undefined> => {
+	const github = parseGitHubRepoUrl(repoUrl);
+	return github ? gitHubAccessFor(github.owner, github.repo) : undefined;
+};
+
+/** Checks each integration's source is in its remote repository; returns the access each repository was read with. */
+const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegrationParam[], gitRoot: string): Promise<Map<string, GitHubRepoAccess | undefined>> => {
+	const checked = new Map<string, GitHubRepoAccess | undefined>();
 	if (ext.isDevantCloudEditor) {
-		return; // the editor pushed the changes itself
+		return checked; // the editor pushed the changes itself
 	}
 	await window.withProgress({ title: "Verifying source in remote repo", location: ProgressLocation.Notification, cancellable: false }, async (progress) => {
 		for (let i = 0; i < createParams.length; i++) {
@@ -422,12 +453,17 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegr
 			if (createParams.length > 1) {
 				progress.report({ message: `(${i + 1}/${createParams.length}) ${createParam.displayName || createParam.name}`, increment: 100 / createParams.length });
 			}
-			const github = parseGitHubRepoUrl(createParam.repoUrl);
-			if (!github) {
-				continue; // the platform reads public GitHub repositories only
+			const access = checked.has(createParam.repoUrl) ? checked.get(createParam.repoUrl) : await gitHubAccessOf(createParam.repoUrl);
+			checked.set(createParam.repoUrl, access);
+			if (!access) {
+				continue; // the platform reads GitHub repositories only
+			}
+			const unreadable = unreadableSource(access);
+			if (unreadable) {
+				throw new Error(unreadable);
 			}
 			const subPathDir = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
-			const inspection = await ext.clients.platform.cloud.repos.inspect(github.owner, github.repo, createParam.branch, subPathDir === "." ? "" : subPathDir);
+			const inspection = await inspectReadablePath(ext.clients.platform.cloud, access, createParam.branch, subPathDir === "." ? "" : subPathDir);
 			if (subPathDir && subPathDir !== ".") {
 				if (!inspection.isSubPathValid || inspection.isSubPathEmpty) {
 					throw new Error(`The selected directory ${subPathDir} appears to be empty or invalid in the remote repository. Please push your changes and try again.`);
@@ -437,220 +473,29 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegr
 			}
 		}
 	});
+	return checked;
 };
 
-/**
- * The Choreo CLI created every integration with auto build on commit and auto deploy on
- * build switched on, so a deploy from the editor ended in a running integration. The
- * platform keeps those as the component's own switches, set here after the create. It
- * refuses auto deploy for some runtimes (Ballerina: "deploy builds from the Deploy page"),
- * so the first build is followed from here and, when the platform will not deploy it,
- * deployed to the pipeline's entry environment by the extension.
- */
-async function enableBuildAutomation(created: CreatedComponent, orgHandle: string, project: Project, quiet?: boolean): Promise<void> {
-	const cloud = ext.clients.platform.cloud;
+/** Why WSO2 Cloud cannot read a GitHub repository, for an access that neither an installation nor public access gives; undefined when it can. */
+function unreadableSource(access: GitHubRepoAccess): string | undefined {
+	switch (access.kind) {
+		case "installation":
+		case "public":
+			return undefined;
+		case "not-granted":
+			return `The WSO2 Cloud GitHub app is on ${access.owner} but not given ${access.repo}. Give it access, then retry.`;
+		case "auth-required":
+			return `WSO2 Cloud needs your GitHub authorization again to read ${access.owner}/${access.repo}. Authorize, then retry.`;
+		case "not-connected":
+			return `WSO2 Cloud can't read ${access.owner}/${access.repo}: connect GitHub with the WSO2 Cloud app on ${access.owner}, then retry.`;
+	}
+}
+
+/** Logs what the platform said about a new integration; its first build starts with the create. */
+function logCreated(created: CreatedComponent): void {
 	ext.log(
 		`Created ${created.id}${created.warning ? `; warning: ${created.warning}` : ""}${created.sourceBindingError ? `; source binding: ${created.sourceBindingError}` : ""}`,
 	);
-	try {
-		await cloud.components.setAutoBuild(created.id, true, project.id);
-		ext.log(`Turned auto build on for ${created.id}`);
-	} catch (error) {
-		ext.log(`Could not turn auto build on for ${created.id}: ${(error as Error).message}`);
-	}
-	let platformDeploys = false;
-	try {
-		await cloud.components.setAutoDeploy(created.id, true, project.id);
-		platformDeploys = true;
-		ext.log(`Turned auto deploy on for ${created.id}`);
-	} catch (error) {
-		ext.log(`The platform will not auto deploy ${created.id} (${(error as Error).message}); the first build is deployed from here instead`);
-	}
-	if (created.sourceBindingError) {
-		ext.log(`No build can start for ${created.id} until its source binding is fixed (${created.sourceBindingError})`);
-		return;
-	}
-	// Not awaited: the create command returns while the build runs.
-	void followFirstBuild(created, orgHandle, project, !platformDeploys, quiet);
-}
-
-/** How long the platform's own first build is given to show up before one is started here. */
-const FIRST_BUILD_APPEAR_MS = 45_000;
-const BUILD_LIST_INTERVAL_MS = 5_000;
-/**
- * Pauses between build triggers the platform refuses as unavailable. Its 502 means the
- * component's source binding could not be read, which happens for a while after the
- * create, so the pauses grow to about four minutes in all.
- */
-const BUILD_TRIGGER_BACKOFF_MS = [10_000, 20_000, 30_000, 45_000, 60_000, 60_000];
-
-const sleep = (ms: number, signal: AbortSignal) =>
-	new Promise<void>((resolve) => {
-		const timer = setTimeout(done, ms);
-		function done() {
-			clearTimeout(timer);
-			signal.removeEventListener("abort", done);
-			resolve();
-		}
-		signal.addEventListener("abort", done, { once: true });
-	});
-
-/** The newest build of the integration, waiting a while for the platform to start the first. */
-async function findFirstBuild(integrationId: string, projectName: string, signal: AbortSignal, waitMs: number): Promise<Build | undefined> {
-	const cloud = ext.clients.platform.cloud;
-	try {
-		return await poll(
-			async () => {
-				const builds = await cloud.builds.list(integrationId, projectName);
-				return { done: builds.length > 0, value: builds[0] as Build | undefined };
-			},
-			{ timeoutMs: waitMs, intervalMs: BUILD_LIST_INTERVAL_MS, signal, describe: () => `The first build of ${integrationId}` },
-		);
-	} catch (error) {
-		if (isCloudError(error) && error.code === "timeout" && error.details.reason === "wait_timeout") {
-			return undefined;
-		}
-		throw error;
-	}
-}
-
-/** Starts a build, retrying while the platform's git integration is unavailable. */
-async function startFirstBuild(integrationId: string, projectName: string, signal: AbortSignal): Promise<void> {
-	const cloud = ext.clients.platform.cloud;
-	for (let attempt = 1; ; attempt++) {
-		try {
-			await cloud.builds.trigger(integrationId, { projectName });
-			ext.log(`Started the first build of ${integrationId}, since the platform had not`);
-			return;
-		} catch (error) {
-			const pause = BUILD_TRIGGER_BACKOFF_MS[attempt - 1];
-			const retryable = isCloudError(error) && error.code === "unavailable" && pause !== undefined && !signal.aborted;
-			ext.log(
-				`Could not start the first build of ${integrationId} (attempt ${attempt}): ${(error as Error).message}${retryable ? `; retrying in ${pause / 1000} s` : ""}`,
-			);
-			if (!retryable) {
-				throw error;
-			}
-			await sleep(pause, signal);
-			if (signal.aborted) {
-				throw error;
-			}
-		}
-	}
-}
-
-async function entryEnvironment(projectName: string): Promise<Environment> {
-	const cloud = ext.clients.platform.cloud;
-	const { entry } = await cloud.pipelines.ofProject(projectName);
-	if (entry) {
-		return cloud.environments.resolve(entry);
-	}
-	// Without a pipeline entry, the first build goes to the first non-production environment, never to production.
-	const first = (await cloud.environments.list()).find((environment) => !environment.critical);
-	if (!first) {
-		throw new Error("The organization has no non-production environment to deploy the first build to.");
-	}
-	return first;
-}
-
-export interface Release {
-	target: Environment;
-	releaseId?: string;
-}
-
-/** Deploys a built image to the project's entry environment. */
-export async function deployBuild(integrationId: string, buildName: string, projectName: string, report: (message: string) => void): Promise<Release> {
-	const target = await entryEnvironment(projectName);
-	report(`deploying to ${target.name}`);
-	const { releaseId, observed } = await ext.clients.platform.cloud.deployments.deploy(integrationId, {
-		environment: target.id,
-		imageId: buildName,
-		projectName,
-		allowAnyEnvironment: true,
-	});
-	ext.log(
-		`Deploying build ${buildName} of ${integrationId} to ${target.name}${releaseId ? ` as release ${releaseId}` : ""}${
-			observed ? " (the gateway lost the platform's answer; the deployment was found by reading the environment)" : ""
-		}`,
-	);
-	return { target, releaseId: releaseId || undefined };
-}
-
-export async function waitForRelease(integrationId: string, projectName: string, { target, releaseId }: Release, signal: AbortSignal, report: (message: string) => void) {
-	await ext.clients.platform.cloud.deployments.waitForRollout(integrationId, target.id, {
-		releaseId,
-		projectName,
-		signal,
-		onProgress: (current) => report(`deploying to ${target.name}: ${current?.deploymentStatusV2 ?? "starting"}`),
-	});
-}
-
-/**
- * Follows the first build in a progress notification and, when asked, deploys it to the
- * pipeline's entry environment. Every outcome ends in a message with a link to the console.
- */
-async function followFirstBuild(created: CreatedComponent, orgHandle: string, project: Project, deployAfter: boolean, quiet?: boolean): Promise<void> {
-	const cloud = ext.clients.platform.cloud;
-	const label = created.displayName || created.id;
-	const consoleUrl = buildConsoleUrl(ext.config.consoleUrl, { orgHandle, project: project.id, integration: created.id });
-	const tell = (message: string, level: "info" | "warning" | "error") => {
-		if (quiet && level === "info") {
-			ext.log(message);
-			return;
-		}
-		const show = level === "info" ? window.showInformationMessage : level === "warning" ? window.showWarningMessage : window.showErrorMessage;
-		show(message, "View in console").then((resp) => {
-			if (resp === "View in console") {
-				void env.openExternal(Uri.parse(consoleUrl));
-			}
-		});
-	};
-	const controller = new AbortController();
-	const signal = controller.signal;
-	try {
-		const location = quiet ? ProgressLocation.Window : ProgressLocation.Notification;
-		await window.withProgress({ location, title: `${label} in WSO2 Cloud`, cancellable: !quiet }, async (progress, token) => {
-			token.onCancellationRequested(() => controller.abort());
-			progress.report({ message: "waiting for the first build to start" });
-			let build = await findFirstBuild(created.id, project.id, signal, FIRST_BUILD_APPEAR_MS);
-			if (!build) {
-				progress.report({ message: "starting the first build" });
-				await startFirstBuild(created.id, project.id, signal);
-				build = await findFirstBuild(created.id, project.id, signal, FIRST_BUILD_APPEAR_MS);
-				if (!build) {
-					throw new Error("The build was accepted but has not appeared in the build list.");
-				}
-			}
-			const buildName = build.name as string;
-			build = await poll(
-				async () => {
-					const current = await cloud.builds.get(created.id, buildName, project.id);
-					progress.report({ message: `build ${buildName}: ${current.status ?? "running"}` });
-					return { done: !buildInProgress(current.status), value: current };
-				},
-				{ signal, describe: () => `The first build of ${label}` },
-			);
-			if (!buildSucceeded(build)) {
-				tell(`The first build of ${label} finished as ${build.status ?? "unknown"}.`, "error");
-				return;
-			}
-			if (!deployAfter) {
-				tell(`${label} is built; WSO2 Cloud deploys it automatically.`, "info");
-				return;
-			}
-			const report = (message: string) => progress.report({ message });
-			const release = await deployBuild(created.id, buildName, project.id, report);
-			await waitForRelease(created.id, project.id, release, signal, report);
-			tell(`Deployed ${label} to ${release.target.name}.`, "info");
-		});
-	} catch (error) {
-		if (signal.aborted) {
-			ext.log(`Stopped following the first build of ${created.id}`);
-			return;
-		}
-		ext.logError(`The first build of ${created.id} could not be followed to a deployment`, error as Error);
-		tell(`${label}: ${(error as Error).message}`, "warning");
-	}
 }
 
 /** Points an existing integration's build at this repository and starts a build. */
@@ -676,12 +521,32 @@ async function attachSourceToExistingIntegration(
 	try {
 		const cloud = ext.clients.platform.cloud;
 		const appPath = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
+		const repoUrl = normalizeCloneUrl(createParam.repoUrl);
+		const repoAppPath = appPath && appPath !== "." ? appPath : undefined;
+		// Access is settled before anything changes: a source it cannot read must neither replace the old one nor lose its binding.
+		const access = await gitHubAccessOf(createParam.repoUrl);
+		const unreadable = access && unreadableSource(access);
+		if (unreadable) {
+			throw new Error(`${unreadable} Nothing was changed.`);
+		}
 		await window.withProgress({ title, location: ProgressLocation.Notification }, async () => {
 			await cloud.components.updateBuildParameters(
 				integrationId,
-				cloud.components.workflowFor(runtimeForBuildPack(createParam.buildPackLang), { url: normalizeCloneUrl(createParam.repoUrl), branch: createParam.branch, appPath: appPath && appPath !== "." ? appPath : undefined }),
+				cloud.components.workflowFor(runtimeForBuildPack(createParam.buildPackLang), { url: repoUrl, branch: createParam.branch, appPath: repoAppPath }),
 				project.id,
 			);
+			// A private repository is read through the GitHub App installation, bound before the build.
+			const source = access ? gitHubSourceFor(access, createParam.branch, repoAppPath, repoUrl) : undefined;
+			if (source) {
+				await cloud.git.putGitHubSource(project.id, integrationId, source);
+			} else {
+				// A binding to the repository it had would keep it building from there.
+				await cloud.git.deleteGitHubSource(project.id, integrationId).catch((err: unknown) => {
+					if (!(isCloudError(err) && err.code === "not_found")) {
+						throw err;
+					}
+				});
+			}
 			await cloud.builds.trigger(integrationId, { projectName: project.id });
 		});
 		// The cached repository is the one the integration had; the next refresh reads the new one.
@@ -700,8 +565,10 @@ async function attachSourceToExistingIntegration(
 			showReloadWorkspaceMessage(successMessage, workspaceFsPath);
 		}
 	} catch (err) {
+		// A step may have gone through before the failure; the next read takes the repository from the platform.
+		dataCacheStore.getState().setRepository(orgHandle, project.id, integrationId, undefined);
 		ext.logError(`Failed to attach the repository to ${label}`, err as Error);
-		result.failed.push({ name: label, error: `Failed to attach the repository: ${(err as Error).message}` });
+		result.failed.push({ name: label, error: `Failed to attach the repository: ${(err as Error).message}. Nothing was built; attach it again to finish.` });
 	}
 	return result;
 }
@@ -722,6 +589,15 @@ async function updateCodeServerWithCreatedComp(created: Component, repo: Reposit
 		ext.logError("Failed to update the code server after creating the integration", err as Error);
 	}
 }
+
+/** The integrations whose first build WSO2 Cloud could not start with the create. */
+const firstBuildWarning = (unbuilt: string[]): string | undefined => {
+	if (unbuilt.length === 0) {
+		return undefined;
+	}
+	const one = unbuilt.length === 1;
+	return `WSO2 Cloud created ${unbuilt.join(", ")} but could not start ${one ? "its" : "their"} first build. Start ${one ? "it" : "them"} from the console.`;
+};
 
 /** What to tell the person instead of plain success when integrations were created without their source bound; undefined when all were bound. */
 const sourceBindingWarning = (unbound: { label: string; error: NonNullable<CreatedComponent["sourceBindingError"]> }[]): string | undefined => {
@@ -760,7 +636,10 @@ const clearCodeServerLocalStorage = async () => {
 	}
 };
 
-/** Tells the cloud editor the work in this session was deployed; only the editor build registers the command. */
+/**
+ * Tells the cloud editor the session's work is now an integration in WSO2 Cloud, so the console stops showing
+ * the project's draft of it; only the editor build registers the command, whose name is the editor's.
+ */
 const markCodeServerDeployed = async () => {
 	if (ext.isDevantCloudEditor) {
 		try {
