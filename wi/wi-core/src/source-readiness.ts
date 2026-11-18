@@ -25,6 +25,8 @@ export type SourceReadinessTone = "error" | "warning" | "info" | "neutral";
 export interface SourceReadinessInput {
 	/** `null` when the directory is not in a git repository; `undefined` while it loads. */
 	gitData: { remotes?: string[] } | null | undefined;
+	/** Why the git data could not be read. */
+	gitDataError?: string;
 	gitRemote: string | null;
 	gitProvider: string | null;
 	branch: string | null;
@@ -53,7 +55,10 @@ export const SOURCE_READINESS_ACTION_LABELS: Record<SourceReadinessAction, strin
 	manageCredentials: "Manage Credentials",
 };
 
-function gitDataIssue(gitData: SourceReadinessInput["gitData"]): SourceReadiness | undefined {
+function gitDataIssue({ gitData, gitDataError }: SourceReadinessInput): SourceReadiness | undefined {
+	if (gitData === undefined && gitDataError) {
+		return { message: `Couldn't read the Git repository: ${gitDataError}`, refresh: "gitData", tone: "error", blocking: true };
+	}
 	if (gitData === null) {
 		return {
 			message: "Please initialize the selected directory as a Git repository to proceed.",
@@ -148,7 +153,7 @@ function dirtyNotice(hasDirtyRepo: boolean): SourceReadiness | undefined {
 /** What the deploy form shows about the selected repository, and whether it blocks the deploy; the first issue wins. */
 export function sourceReadiness(input: SourceReadinessInput): SourceReadiness {
 	const issue =
-		gitDataIssue(input.gitData) ??
+		gitDataIssue(input) ??
 		providerIssue(input.gitProvider) ??
 		accessIssue(input) ??
 		branchIssue(input) ??

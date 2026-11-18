@@ -76,6 +76,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 
 	const {
 		data: gitData,
+		error: gitDataError,
 		isLoading: isLoadingGitData,
 		refetch: refetchGitData,
 	} = useQuery({
@@ -86,6 +87,8 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		},
 		enabled: !!workspaceFsPath,
 		refetchOnWindowFocus: true,
+		// A local read through the extension, so it must not pause while the network is offline.
+		networkMode: "always",
 	});
 
 	useEffect(() => {
@@ -219,6 +222,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 
 	const readiness = sourceReadiness({
 		gitData: isLoadingGitData ? undefined : gitData,
+		gitDataError: gitDataError?.message,
 		gitRemote,
 		gitProvider,
 		branch,

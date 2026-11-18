@@ -16,10 +16,13 @@
  * under the License.
  */
 
+import * as path from "path";
+import type { WICloudDeployReq } from "@wso2/wi-core";
 import { type Component, type Organization, type PlatformSession, type Project, RESOURCE_NAME } from "@wso2/wso2-cloud-client";
 import { type ExtensionName, type GetLocalGitDataResp, WICommandIds } from "@wso2/wso2-platform-core";
 import { ProgressLocation, type QuickPickItem, QuickPickItemKind, type WorkspaceFolder, commands, window, workspace } from "vscode";
 import { type ExtensionVariables, ext } from "../../extensionVariables";
+import { isSubpath } from "../../utils/pathUtils";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { webviewStateStore } from "../stores/webview-state-store";
 
@@ -221,6 +224,72 @@ export const createProjectNamed = async (newProjectName: string): Promise<Projec
 	dataCacheStore.getState().setProjects(org.handle, [...dataCacheStore.getState().getProjects(org.handle).filter((p) => p.id !== project.id), project]);
 	return project;
 };
+
+/** The project a deploy goes to: an existing one by id, or a new one by name, which a retry finds empty after a failed deploy and reuses. */
+export async function resolveDeployProject(choice: WICloudDeployReq["project"], projects: Project[]): Promise<Project> {
+	if ("id" in choice) {
+		const project = projects.find((item) => item.id === choice.id);
+		if (!project) {
+			throw new Error(`The project ${choice.id} no longer exists in WSO2 Cloud.`);
+		}
+		return project;
+	}
+	const named = projects.find((item) => item.name === choice.newName);
+	if (named && (await ext.clients.platform.cloud.components.list(named.id)).length === 0) {
+		return named;
+	}
+	const error = validateProjectName(choice.newName, projects);
+	if (error) {
+		throw new Error(error);
+	}
+	return createProjectNamed(choice.newName);
+}
+
+/** The git root a deploy builds from, once its directory, remote and branch are the workspace repository's own. */
+export async function deploySourceRoot(req: WICloudDeployReq, gitData: GetLocalGitDataResp | undefined, listBranches: () => Promise<string[]>): Promise<string> {
+	if (!isSubpath(req.workspaceDir, req.integration.fsPath)) {
+		throw new Error("The integration directory is outside the workspace directory.");
+	}
+	if (!gitData?.gitRoot) {
+		throw new Error("The workspace is not in a Git repository. Initialize one, push it to GitHub, then deploy from it.");
+	}
+	if (!gitData.remotes?.includes(req.gitRemote)) {
+		throw new Error(`${req.gitRemote} is not a remote of the workspace repository.`);
+	}
+	const branches = await listBranches().catch((): string[] => []);
+	if (branches.length > 0 && !branches.includes(req.branch)) {
+		throw new Error(`${req.branch} is not a branch of ${req.gitRemote}.`);
+	}
+	return gitData.gitRoot;
+}
+
+/** The names the project's integrations use as ids, names and display names, lower-cased. */
+export const integrationNames = (existing: Component[]): Set<string> =>
+	new Set(existing.flatMap((item) => [item.id, item.name, item.displayName ?? ""].filter(Boolean).map((name) => name.toLowerCase())));
+
+/** A name is taken when it, or the resource name the platform derives from it, is one of `taken`. */
+export const isIntegrationNameTaken = (taken: Set<string>, name: string): boolean => taken.has(name.trim().toLowerCase()) || taken.has(toResourceName(name));
+
+/** Suffixes each name that an existing integration of the project already uses. */
+export function assignUniqueNames(existing: Component[], integrations: { name?: string; fsPath: string }[]): void {
+	const taken = integrationNames(existing);
+	for (const integration of integrations) {
+		const baseName = integration?.name || path.basename(integration.fsPath);
+		let candidate = baseName;
+		let counter = 1;
+		while (isIntegrationNameTaken(taken, candidate)) {
+			candidate = `${baseName}-${counter++}`;
+		}
+		integration.name = candidate;
+		taken.add(candidate.toLowerCase());
+		taken.add(toResourceName(candidate));
+	}
+}
+
+/** The first of `preferred`, then main or master, that the remote has; else its first branch. */
+export function pickBranch(branches: string[], ...preferred: (string | undefined | null)[]): string | null {
+	return [...preferred, "main", "master"].find((branch) => !!branch && branches.includes(branch)) ?? branches[0] ?? null;
+}
 
 /** The organization of the session, which every command works inside. */
 export const requireOrg = (): Organization => {

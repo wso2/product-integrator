@@ -53,7 +53,7 @@ import { githubRepoAccess } from "../github-app";
 import { handleCloudError } from "../platform/error-handler";
 import { contextStore, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
-import { isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensionName, toProjectName, toResourceName } from "./cmd-utils";
+import { assignUniqueNames, isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensionName, toProjectName, toResourceName } from "./cmd-utils";
 
 /**
  * Source component ids already acted on. Clearing `SOURCE_COMPONENT_ID` from workspace state cannot
@@ -225,21 +225,6 @@ export async function confirmAnotherIntegration(orgHandle: string, project: Proj
 	return true;
 }
 
-/** Suffixes each name that an existing integration of the project already uses. */
-export function assignUniqueNames(existing: Component[], integrations: { name?: string; fsPath: string }[]): void {
-	const taken = new Set(existing.flatMap((c) => [c.id.toLowerCase(), c.name.toLowerCase(), (c.displayName ?? "").toLowerCase()]));
-	for (const integration of integrations) {
-		const baseName = integration?.name || path.basename(integration.fsPath);
-		let candidate = baseName;
-		let counter = 1;
-		while (taken.has(candidate.toLowerCase())) {
-			candidate = `${baseName}-${counter++}`;
-		}
-		integration.name = candidate;
-		taken.add(candidate.toLowerCase());
-	}
-}
-
 export function normalizeCloneUrl(repoUrl: string): string {
 	const parsed = parseGitURL(repoUrl);
 	if (parsed) {
@@ -371,7 +356,9 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 					result.failed.push({ name: label, error: errorMessage });
 					ext.logError(`Failed to create ${ext.terminologies?.componentTerm} ${label}:`, error as Error);
 					if (isCloudError(error) && error.code === "plan_limit") {
-						handleCloudError(error, errorMessage);
+						if (!quiet) {
+							handleCloudError(error, errorMessage);
+						}
 						break;
 					}
 				}
@@ -408,7 +395,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 			showReloadWorkspaceMessage(bindingWarning ?? successMessage, workspaceFsPath, !!bindingWarning);
 		}
 	}
-	if (result.failed.length > 0) {
+	if (result.failed.length > 0 && !quiet) {
 		window.showErrorMessage(`Failed to create the following integrations: ${result.failed.map((item) => item.name).join(", ")}`);
 	}
 	return result;
@@ -596,7 +583,7 @@ async function entryEnvironment(projectName: string): Promise<Environment> {
 	return first;
 }
 
-interface Release {
+export interface Release {
 	target: Environment;
 	releaseId?: string;
 }
