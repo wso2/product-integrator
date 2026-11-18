@@ -329,7 +329,7 @@ const ArtworkText = styled.span`
 
 const VideoLinkRow = styled.div`
     display: flex;
-    justify-content: flex-end;
+    justify-content: flex-start;
     margin: -6px 0 -6px;
 `;
 
