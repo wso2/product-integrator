@@ -41,7 +41,8 @@ import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 import { linkContext, localContextEntry, readContextEntries, writeContextEntries } from "../context-file";
 import type { Repository } from "../git/git";
 import { initGit } from "../git/main";
-import { type GitHubRepoAccess, gitHubSourceFor, inspectReadablePath, resolveGitHubAccess } from "../github-app";
+import { gitHubAccessFor } from "../github-access";
+import { type GitHubRepoAccess, gitHubSourceFor, inspectReadablePath } from "../github-app";
 import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
 import { handleCloudError } from "../platform/error-handler";
 import { contextStore, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
@@ -417,7 +418,7 @@ const checkSubscription = async () => {
 /** How WSO2 Cloud can read a GitHub repository; undefined for any other host. */
 const gitHubAccessOf = async (repoUrl: string): Promise<GitHubRepoAccess | undefined> => {
 	const github = parseGitHubRepoUrl(repoUrl);
-	return github ? resolveGitHubAccess(ext.clients.platform.cloud, github.owner, github.repo, ext.log.bind(ext)) : undefined;
+	return github ? gitHubAccessFor(github.owner, github.repo) : undefined;
 };
 
 const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegrationParam[], gitRoot: string) => {
@@ -490,6 +491,13 @@ async function attachSourceToExistingIntegration(
 			const source = access ? gitHubSourceFor(access, createParam.branch, repoAppPath, repoUrl) : undefined;
 			if (source) {
 				await cloud.git.putGitHubSource(project.id, integrationId, source);
+			} else {
+				// A binding to the repository it had would keep it building from there.
+				await cloud.git.deleteGitHubSource(project.id, integrationId).catch((err: unknown) => {
+					if (!(isCloudError(err) && err.code === "not_found")) {
+						throw err;
+					}
+				});
 			}
 			await cloud.builds.trigger(integrationId, { projectName: project.id });
 		});

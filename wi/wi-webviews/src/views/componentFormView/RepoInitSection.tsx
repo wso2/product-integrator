@@ -319,7 +319,7 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
                                     type="button"
                                     onClick={() => wsClient.triggerGithubAuthFlow("")}
                                 >
-                                    Open WSO2 Cloud console
+                                    Connect GitHub
                                 </RepoBannerButton>
                             </RepoBannerActions>
                         </RepoBanner>

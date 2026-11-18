@@ -17,42 +17,92 @@
  */
 
 import { createHash, randomBytes } from "crypto";
-import { type CloudClient, type GitHubInstallation, type GitHubSource, type RepoPathInspection, isCloudError } from "@wso2/wso2-cloud-client";
+import { type CloudClient, type GitHubInstallation, type GitHubSource, type RepoPathInspection, isCloudError, isGitHubAuthRequired } from "@wso2/wso2-cloud-client";
 
 /**
  * How WSO2 Cloud can read a GitHub repository:
  * - `installation`: through the organization's GitHub App installation on the repository's owner;
  * - `public`: it is public, and no installation reads it;
  * - `not-granted`: the app is installed on the owner but not given this repository;
+ * - `auth-required`: the app is installed on the owner, but WSO2 Cloud holds no GitHub
+ *   authorization for the person, or it expired, so it cannot tell; authorizing again does;
  * - `not-connected`: no installation on the owner is connected to the organization.
  */
 export type GitHubRepoAccess =
 	| { kind: "installation"; owner: string; repo: string; installation: GitHubInstallation }
 	| { kind: "public"; owner: string; repo: string }
 	| { kind: "not-granted"; owner: string; repo: string; installation: GitHubInstallation }
+	| { kind: "auth-required"; owner: string; repo: string; installation: GitHubInstallation }
 	| { kind: "not-connected"; owner: string; repo: string };
 
 /** GitHub account names are case-insensitive. */
 export const sameAccount = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
-/** Works out how WSO2 Cloud can read `owner/repo`; a git integration that cannot answer counts as no installation. */
+/**
+ * Works out how WSO2 Cloud can read `owner/repo`. A git integration that cannot
+ * list the installations counts as no installation; other failures of the
+ * installation's repository list are passed on.
+ */
 export async function resolveGitHubAccess(cloud: CloudClient, owner: string, repo: string, log: (message: string) => void = () => undefined): Promise<GitHubRepoAccess> {
 	const installations = await cloud.git.listGitHubInstallations().catch((err: unknown) => {
 		log(`Could not list the GitHub App installations: ${err instanceof Error ? err.message : String(err)}`);
 		return [] as GitHubInstallation[];
 	});
-	const installation = installations.find((item) => sameAccount(item.githubAccount, owner));
+	let installation = installations.find((item) => sameAccount(item.githubAccount, owner));
+	let authRequired = false;
 	if (installation) {
-		const branches = await cloud.git.listGitHubBranches(installation.installationId, owner, repo).catch((): string[] => []);
-		if (branches.length > 0) {
-			return { kind: "installation", owner, repo, installation };
+		// The installation's repository list says whether the app was given the repository; a branch
+		// read cannot, as it uses the person's GitHub authorization, which reads any public repository.
+		try {
+			const repos = await cloud.git.listGitHubRepos(installation.installationId);
+			if (repos.some((item) => sameAccount(item.owner, owner) && sameAccount(item.name, repo))) {
+				return { kind: "installation", owner, repo, installation };
+			}
+		} catch (err) {
+			if (isGitHubAuthRequired(err)) {
+				authRequired = true;
+			} else if (isCloudError(err) && err.code === "not_found") {
+				installation = undefined; // the installation is gone from the organization
+			} else {
+				throw err;
+			}
 		}
 	}
 	const publicBranches = await cloud.repos.listBranches(owner, repo).catch((): unknown[] => []);
 	if (publicBranches.length > 0) {
 		return { kind: "public", owner, repo };
 	}
-	return installation ? { kind: "not-granted", owner, repo, installation } : { kind: "not-connected", owner, repo };
+	if (!installation) {
+		return { kind: "not-connected", owner, repo };
+	}
+	return { kind: authRequired ? "auth-required" : "not-granted", owner, repo, installation };
+}
+
+/** How long an access answer is shared: the form's checks of one repository reuse it, and a change made on GitHub shows on the next check. */
+const ACCESS_TTL_MS = 5_000;
+const accessAnswers = new Map<string, { at: number; access: Promise<GitHubRepoAccess> }>();
+
+/** {@link resolveGitHubAccess}, shared for a few seconds by the checks of one repository for one signed-in organization. */
+export function sharedGitHubAccess(cloud: CloudClient, scope: string, owner: string, repo: string, log: (message: string) => void = () => undefined, now = Date.now()): Promise<GitHubRepoAccess> {
+	const key = `${scope}:${owner}/${repo}`.toLowerCase();
+	const known = accessAnswers.get(key);
+	if (known && now - known.at < ACCESS_TTL_MS) {
+		return known.access;
+	}
+	const access = resolveGitHubAccess(cloud, owner, repo, log);
+	const entry = { at: now, access };
+	accessAnswers.set(key, entry);
+	access.catch(() => {
+		if (accessAnswers.get(key) === entry) {
+			accessAnswers.delete(key); // a failure is not shared
+		}
+	});
+	return access;
+}
+
+/** Drops the shared access answers, as when GitHub was just connected or its access changed. */
+export function forgetGitHubAccess(): void {
+	accessAnswers.clear();
 }
 
 /** The branches WSO2 Cloud can read, through the installation when there is one; empty when it reads none. */
@@ -129,6 +179,12 @@ export async function installationSettingsUrl(owner: string, installationId: num
 		: `https://github.com/settings/installations/${installationId}`;
 }
 
+/** How long a started flow waits for GitHub's return; a later return is ignored. */
+export const GITHUB_RETURN_TTL_MS = 10 * 60_000;
+
+/** Why GitHub's return was ignored: this window did not start it, it came too late, or the WSO2 Cloud sign-in changed. */
+export type IgnoredGitHubReturn = "not-started" | "expired" | "signed-in-changed";
+
 /** What the person is told as connecting GitHub ends. */
 export interface GitHubConnectOutcome {
 	/**
@@ -145,6 +201,8 @@ export interface GitHubConnectOutcome {
 	noInstallationVisible(owner?: string): void;
 	/** The GitHub organization's owner has to approve the app. */
 	requested(): void;
+	/** GitHub's return was not taken, so connecting did not happen here. */
+	ignored(reason: IgnoredGitHubReturn): void;
 	cancelled(): void;
 	failed(message: string): void;
 }
@@ -160,6 +218,7 @@ export interface GitHubAppConnectorDeps {
 	log(message: string): void;
 	newNonce?: () => string;
 	newVerifier?: () => string;
+	now?: () => number;
 }
 
 /**
@@ -173,15 +232,17 @@ export interface GitHubAppConnectorDeps {
  * the code cannot bind it.
  */
 export class GitHubAppConnector {
-	private pending?: { nonce: string; owner?: string; installTried: boolean; verifier?: string; session?: string };
+	private pending?: { nonce: string; owner?: string; installTried: boolean; verifier?: string; session?: string; startedAt: number };
 	/** Counts the flows started; an exchange that finishes after a newer start is dropped. */
 	private started = 0;
 	private readonly newNonce: () => string;
 	private readonly newVerifier: () => string;
+	private readonly now: () => number;
 
 	constructor(private readonly deps: GitHubAppConnectorDeps) {
 		this.newNonce = deps.newNonce ?? (() => randomBytes(16).toString("hex"));
 		this.newVerifier = deps.newVerifier ?? (() => randomBytes(32).toString("base64url"));
+		this.now = deps.now ?? Date.now;
 	}
 
 	/** Whether GitHub's return can come back to this editor; otherwise GitHub is connected in the console. */
@@ -199,7 +260,7 @@ export class GitHubAppConnector {
 		const nonce = this.newNonce();
 		// GitHub's install page takes no challenge; the editor authorizes after it.
 		const verifier = start === "install" ? undefined : this.newVerifier();
-		this.pending = { nonce, owner, installTried, verifier, session: this.deps.session() };
+		this.pending = { nonce, owner, installTried, verifier, session: this.deps.session(), startedAt: this.now() };
 		await this.deps.openExternal(consoleGitHubStartUrl(this.deps.consoleUrl(), this.deps.uriScheme, nonce, start, verifier && pkceChallenge(verifier)));
 	}
 
@@ -208,13 +269,21 @@ export class GitHubAppConnector {
 		const pending = this.pending;
 		const state = query.get("state");
 		if (!pending || !state || state !== pending.nonce) {
+			// With several windows open, GitHub's return can reach one that did not start the flow.
 			this.deps.log("A GitHub return arrived that this window did not start; it was ignored");
+			this.deps.outcome.ignored("not-started");
 			return;
 		}
 		this.pending = undefined;
+		if (this.now() - pending.startedAt > GITHUB_RETURN_TTL_MS) {
+			this.deps.log("A GitHub return arrived after its flow had expired; it was ignored");
+			this.deps.outcome.ignored("expired");
+			return;
+		}
 		if (pending.session !== this.deps.session()) {
 			// GitHub would be connected to an organization, or for a person, other than the one that started.
 			this.deps.log("A GitHub return arrived after the WSO2 Cloud sign-in changed; it was ignored");
+			this.deps.outcome.ignored("signed-in-changed");
 			return;
 		}
 		const flow = this.started;

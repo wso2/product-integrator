@@ -52,7 +52,8 @@ import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-
 import type { IFileStatus } from "../../cloud/git/git";
 import { initGit } from "../../cloud/git/main";
 import { hasDirtyRepo as checkDirtyRepo, getGitHead, getGitRemotes, getGitRoot, relativePath, removeCredentialsFromGitURL } from "../../cloud/git/util";
-import { type GitHubAppConnector, inspectReadablePath, installationSettingsUrl, listReadableBranches, resolveGitHubAccess } from "../../cloud/github-app";
+import { gitHubAccessFor } from "../../cloud/github-access";
+import { type GitHubAppConnector, forgetGitHubAccess, inspectReadablePath, installationSettingsUrl, listReadableBranches } from "../../cloud/github-app";
 import { contextStore } from "../../cloud/stores/context-store";
 import { dataCacheStore } from "../../cloud/stores/data-cache-store";
 import { ext } from "../../extensionVariables";
@@ -182,6 +183,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 	/** Connects GitHub to the organization, with the app on the repository's owner. */
 	async triggerGithubAuthFlow(repoUrl: string): Promise<void> {
+		forgetGitHubAccess();
 		await this.githubApp().connect(parseGitHubRepoUrl(repoUrl ?? "")?.owner, "authorize");
 	}
 
@@ -195,12 +197,14 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			await this.githubApp().connect(undefined, "install");
 			return;
 		}
-		const access = await resolveGitHubAccess(ext.clients.platform.cloud, github.owner, github.repo, ext.log.bind(ext));
+		forgetGitHubAccess();
+		const access = await gitHubAccessFor(github.owner, github.repo);
 		if (access.kind === "not-granted") {
 			await env.openExternal(Uri.parse(await installationSettingsUrl(github.owner, access.installation.installationId)));
 			return;
 		}
-		await this.githubApp().connect(github.owner, "install");
+		// The app is on the owner, but WSO2 Cloud needs the person's GitHub authorization again to tell.
+		await this.githubApp().connect(github.owner, access.kind === "auth-required" ? "authorize" : "install");
 	}
 
 	private githubApp(): GitHubAppConnector {
@@ -217,7 +221,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			return [];
 		}
 		const cloud = ext.clients.platform.cloud;
-		return listReadableBranches(cloud, await resolveGitHubAccess(cloud, github.owner, github.repo, ext.log.bind(ext)));
+		return listReadableBranches(cloud, await gitHubAccessFor(github.owner, github.repo));
 	}
 
 	/** The platform lists no GitHub organizations yet; the form shows this instead of an empty list it cannot act on. */
@@ -248,7 +252,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		}
 		// `retrievedRepos` is set when the app is on the owner: the form then asks for this
 		// repository's access rather than for GitHub to be connected.
-		const access = await resolveGitHubAccess(ext.clients.platform.cloud, github.owner, github.repo, ext.log.bind(ext));
+		const access = await gitHubAccessFor(github.owner, github.repo);
 		return {
 			retrievedRepos: access.kind === "installation" || access.kind === "not-granted",
 			isAccessible: access.kind === "installation" || access.kind === "public",
@@ -257,7 +261,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 	async getGitRepoMetadata(params: GetGitMetadataReq): Promise<GetGitMetadataResp> {
 		const cloud = ext.clients.platform.cloud;
-		const access = await resolveGitHubAccess(cloud, params.gitOrgName, params.gitRepoName, ext.log.bind(ext));
+		const access = await gitHubAccessFor(params.gitOrgName, params.gitRepoName);
 		const inspection = await inspectReadablePath(cloud, access, params.branch || undefined, params.relativePath);
 		return {
 			metadata: {

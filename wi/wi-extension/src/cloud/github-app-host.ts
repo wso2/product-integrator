@@ -20,7 +20,14 @@ import { Uri, env, window } from "vscode";
 import { BridgeLayer } from "../BridgeLayer";
 import { ext } from "../extensionVariables";
 import { buildConsoleUrl } from "@wso2/wso2-cloud-client";
-import { GitHubAppConnector } from "./github-app";
+import { signedInScope } from "./github-access";
+import { GitHubAppConnector, type IgnoredGitHubReturn, forgetGitHubAccess } from "./github-app";
+
+const IGNORED_RETURN_MESSAGES: Record<IgnoredGitHubReturn, string> = {
+	"not-started": "GitHub returned to a window that didn't start connecting it, so nothing was connected here. Finish in the window you started from, or start again.",
+	expired: "Connecting GitHub took more than 10 minutes, so GitHub's return was ignored. Start again.",
+	"signed-in-changed": "Your WSO2 Cloud sign-in changed while GitHub was open, so GitHub's return was ignored. Start again.",
+};
 
 /** Offers GitHub's account picker, to connect with another GitHub account. */
 function offerAnotherAccount(message: string, owner: string | undefined): void {
@@ -33,10 +40,7 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 	return new GitHubAppConnector({
 		cloud: () => ext.clients.platform.cloud,
 		consoleUrl: () => buildConsoleUrl(ext.config.consoleUrl, { orgHandle: ext.authProvider?.org?.handle }),
-		session: () => {
-			const session = ext.authProvider?.session;
-			return session ? `${session.user.userId}/${session.org.handle}` : undefined;
-		},
+		session: signedInScope,
 		uriScheme: env.uriScheme,
 		openExternal: (url) => env.openExternal(Uri.parse(url)),
 		log: (message) => ext.log(message),
@@ -44,6 +48,7 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 			connected: (installations, missingOwner) => {
 				const accounts = installations.map((item) => item.githubAccount).join(", ");
 				const connected = accounts ? `GitHub is connected to WSO2 Cloud (${accounts})` : "GitHub is connected to WSO2 Cloud";
+				forgetGitHubAccess();
 				BridgeLayer.notifyGitHubConnected();
 				if (!missingOwner) {
 					window.showInformationMessage(`${connected}.`);
@@ -58,6 +63,9 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 			},
 			requested: () => {
 				window.showInformationMessage("The GitHub organization's owner has to approve the WSO2 Cloud app. Check the repository again once they have.");
+			},
+			ignored: (reason) => {
+				window.showWarningMessage(IGNORED_RETURN_MESSAGES[reason]);
 			},
 			cancelled: () => ext.log("Connecting GitHub was cancelled on GitHub"),
 			failed: (message) => {
