@@ -322,7 +322,7 @@ export class GitHubAppConnector {
 		}
 		if (pending.session !== this.deps.session()) {
 			// GitHub would be connected to an organization, or for a person, other than the one that started.
-			this.deps.log("A GitHub return arrived after the WSO2 Cloud sign-in changed; it was ignored");
+			this.deps.log("A GitHub return arrived after the Choreo Cloud sign-in changed; it was ignored");
 			this.deps.outcome.ignored("signed-in-changed");
 			return;
 		}
@@ -344,7 +344,7 @@ export class GitHubAppConnector {
 			if (query.get("error") === "access_denied") {
 				this.deps.outcome.cancelled();
 			} else {
-				this.deps.outcome.failed(reason ? `GitHub did not authorize the WSO2 Cloud app: ${reason}` : "GitHub did not authorize the WSO2 Cloud app.");
+				this.deps.outcome.failed(reason ? `GitHub did not authorize the Choreo Cloud app: ${reason}` : "GitHub did not authorize the Choreo Cloud app.");
 			}
 			return;
 		}
@@ -364,7 +364,7 @@ export class GitHubAppConnector {
 				}
 				return;
 			}
-			this.deps.outcome.failed(`Could not connect GitHub to WSO2 Cloud: ${err instanceof Error ? err.message : String(err)}`);
+			this.deps.outcome.failed(`Could not connect GitHub to Choreo Cloud: ${err instanceof Error ? err.message : String(err)}`);
 			return;
 		}
 		if (flow !== this.started) {

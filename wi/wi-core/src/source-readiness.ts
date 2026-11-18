@@ -118,8 +118,8 @@ function accessIssue(input: SourceReadinessInput): SourceReadiness | undefined {
 		};
 	}
 	return repoAccess?.retrievedRepos
-		? { ...issue, message: "The WSO2 Cloud app has no access to this repository on GitHub.", action: "grantAccess" }
-		: { ...issue, message: "Authorize the WSO2 Cloud app on GitHub to deploy from this repository.", action: "authorize", tone: "info" };
+		? { ...issue, message: "The Choreo Cloud app has no access to this repository on GitHub.", action: "grantAccess" }
+		: { ...issue, message: "Authorize the Choreo Cloud app on GitHub to deploy from this repository.", action: "authorize", tone: "info" };
 }
 
 function branchIssue(input: SourceReadinessInput): SourceReadiness | undefined {

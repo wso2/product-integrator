@@ -26,7 +26,7 @@ import { GitHubAppConnector, type IgnoredGitHubReturn, forgetGitHubAccess } from
 const IGNORED_RETURN_MESSAGES: Record<IgnoredGitHubReturn, string> = {
 	"not-started": "GitHub returned to a window that didn't start connecting it, so nothing was connected here. Finish in the window you started from, or start again.",
 	expired: "Connecting GitHub took more than 10 minutes, so GitHub's return was ignored. Start again.",
-	"signed-in-changed": "Your WSO2 Cloud sign-in changed while GitHub was open, so GitHub's return was ignored. Start again.",
+	"signed-in-changed": "Your Choreo Cloud sign-in changed while GitHub was open, so GitHub's return was ignored. Start again.",
 };
 
 /** Offers GitHub's account picker, to connect with another GitHub account, for the organization signed in when it was offered. */
@@ -62,7 +62,7 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 		outcome: endingConnect({
 			connected: (installations, missingOwner) => {
 				const accounts = installations.map((item) => item.githubAccount).join(", ");
-				const connected = accounts ? `GitHub is connected to WSO2 Cloud (${accounts})` : "GitHub is connected to WSO2 Cloud";
+				const connected = accounts ? `GitHub is connected to Choreo Cloud (${accounts})` : "GitHub is connected to Choreo Cloud";
 				if (!missingOwner) {
 					window.showInformationMessage(`${connected}.`);
 					return;
@@ -72,10 +72,10 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 			},
 			noInstallationVisible: (owner) => {
 				const where = owner ?? "any GitHub account";
-				offerAnotherAccount(`The GitHub account you authorized can't see the WSO2 Cloud app on ${where}. If another GitHub account has access, connect with that account.`, owner);
+				offerAnotherAccount(`The GitHub account you authorized can't see the Choreo Cloud app on ${where}. If another GitHub account has access, connect with that account.`, owner);
 			},
 			requested: () => {
-				window.showInformationMessage("The GitHub organization's owner has to approve the WSO2 Cloud app. Check the repository again once they have.");
+				window.showInformationMessage("The GitHub organization's owner has to approve the Choreo Cloud app. Check the repository again once they have.");
 			},
 			ignored: (reason) => {
 				window.showWarningMessage(IGNORED_RETURN_MESSAGES[reason]);

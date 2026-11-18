@@ -364,8 +364,8 @@ describe("GitHubAppConnector", () => {
 		assert.deepEqual(outcomes, [
 			"requested",
 			"cancelled",
-			"failed:GitHub did not authorize the WSO2 Cloud app: The app is suspended.",
-			"failed:Could not connect GitHub to WSO2 Cloud: bad gateway",
+			"failed:GitHub did not authorize the Choreo Cloud app: The app is suspended.",
+			"failed:Could not connect GitHub to Choreo Cloud: bad gateway",
 		]);
 	});
 
