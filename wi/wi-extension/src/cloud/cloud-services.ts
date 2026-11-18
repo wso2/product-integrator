@@ -235,9 +235,9 @@ export async function callCloudService<T>(request: CloudServiceRequest, deps: Cl
 	const root = baseUrl + service.prefix;
 	// The resolved URL, not the text: `..` (or `%2e%2e`) in the path would otherwise climb out of the API root to another API on the host.
 	const below = typeof request.path === "string" && request.path.startsWith("/") && isBelow(root, root + request.path);
-	// The pathname the client sends: `new URL` drops TAB, CR and LF, which would hide a `%2f` from a test of the text.
-	const encodedSeparator = below && service.sharedGateway && /%2f|%5c/i.test(new URL(root + request.path).pathname);
-	if (!below || encodedSeparator) {
+	// The pathname the client sends (`new URL` drops TAB, CR and LF); a shared gateway may decode it again or strip `;` parameters.
+	const unsafe = below && service.sharedGateway && !/^[A-Za-z0-9._~/-]*$/.test(new URL(root + request.path).pathname);
+	if (!below || unsafe) {
 		throw new BadRequestError(`"${String(request.path)}" is not a path in the ${request.service} API.`);
 	}
 	const client = new HttpClient({ baseUrl: root, tokenSource: deps.tokenSource, fetch: deps.fetch });
