@@ -4,8 +4,8 @@ Index: product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
 +++ product-integrator/lib/vscode/src/vs/platform/product/common/product.ts
 @@ -67,10 +67,11 @@ else {
  			applicationName: 'wso2-integrator',
- 			dataFolderName: '.wso2-integrator',
- 			urlProtocol: 'wso2-integrator',
+ 			dataFolderName: '.choreo-integrator',
+ 			urlProtocol: 'choreo-integrator',
 -			reportIssueUrl: 'https://github.com/wso2/product-integrator/issues/new',
 +			reportIssueUrl: 'https://github.com/wso2/product-integrator/issues',
 +			documentationUrl: 'https://wso2.com/integration-platform/docs/',

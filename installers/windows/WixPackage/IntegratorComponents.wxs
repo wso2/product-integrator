@@ -55,7 +55,7 @@
       <util:RemoveFolderEx Id="RemoveIntegratorFolder" Property="INTEGRATORFOLDER" On="uninstall" />
     </Component>
 
-    <!-- Uninstall cleanup of the per-user data folder (%USERPROFILE%\.wso2-integrator): seeded
+    <!-- Uninstall cleanup of the per-user data folder (%USERPROFILE%\@DATA_FOLDER@): seeded
          runtime components, staged updates and installed extensions. Otherwise a broken seed (or
          hundreds of MB of runtimes) outlives every reinstall and the user has to find and delete
          the hidden folder by hand. RemoveFolderEx only acts when its property has a value, so the
@@ -71,7 +71,7 @@
          RemoveExistingProducts, WSO2_KEEP_USERDATA from the user), so they are set this early. -->
     <Property Id="WSO2_KEEP_USERDATA" Secure="yes" />
     <SetProperty Id="WSO2USERDATAFOLDER" Action="SetWso2UserDataFolder"
-      Value="[%USERPROFILE]\.wso2-integrator"
+      Value="[%USERPROFILE]\@DATA_FOLDER@"
       Before="AppSearch"
       Condition="(NOT UPGRADINGPRODUCTCODE) AND (NOT WSO2_KEEP_USERDATA)" />
     <Component Id="CleanupUserDataComponent" Directory="INTEGRATORFOLDER"

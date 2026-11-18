@@ -456,10 +456,10 @@ export const WelcomeView: React.FC = () => {
 						</ConfigureBtn>
 					</TopBtnSection>
 				</TopControlsSection>
-				<Headline>WSO2 Integrator</Headline>
+				<Headline>Choreo Integrator</Headline>
 				<Caption>
                     Build and connect integrations, long-running workflows, MCP servers,
-                    and AI agents with the 100% open source WSO2 Integrator.
+                    and AI agents with the 100% open source Choreo Integrator.
 				</Caption>
 			</TopSection>
 

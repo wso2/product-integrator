@@ -106,7 +106,7 @@ async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspe
 	isPlatformReady(ext);
 	await ext.cloudReady;
 	if (!signedIn()) {
-		const readiness = { message: "Sign in to WSO2 Cloud to check the repository.", tone: "info" as const, blocking: true };
+		const readiness = { message: "Sign in to Choreo Cloud to check the repository.", tone: "info" as const, blocking: true };
 		return { remotes: [], gitRemote: null, gitProvider: null, branches: [], branch: null, readiness };
 	}
 	const ws = new CloudWsManager();
@@ -250,7 +250,7 @@ async function deployLatestBuild({ integrationId, projectId, quiet }: WICloudDep
 async function followRelease(integrationId: string, projectId: string, release: Release): Promise<void> {
 	const controller = new AbortController();
 	try {
-		await window.withProgress({ location: ProgressLocation.Notification, title: `${integrationId} in WSO2 Cloud`, cancellable: true }, (progress, token) => {
+		await window.withProgress({ location: ProgressLocation.Notification, title: `${integrationId} in Choreo Cloud`, cancellable: true }, (progress, token) => {
 			token.onCancellationRequested(() => controller.abort());
 			return waitForRelease(integrationId, projectId, release, controller.signal, (message) => progress.report({ message }));
 		});

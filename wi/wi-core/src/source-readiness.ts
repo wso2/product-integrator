@@ -88,7 +88,7 @@ function providerIssue(gitProvider: string | null): SourceReadiness | undefined 
 		return undefined;
 	}
 	return {
-		message: `Creating integrations from ${toSentenceCase(gitProvider).replace(/-/g, " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and create it from there.`,
+		message: `Creating integrations from ${toSentenceCase(gitProvider).replace(/-/g, " ")} repositories is not supported on Choreo Cloud yet. Push the integration to a GitHub repository and create it from there.`,
 		refresh: "gitData",
 		tone: "warning",
 		blocking: true,
@@ -103,7 +103,7 @@ function accessIssue(input: SourceReadinessInput): SourceReadiness | undefined {
 	const issue = { refresh: "repoAccess" as const, tone: "warning" as const, blocking: true };
 	// A failed check says nothing about access; it is retried rather than answered with Authorize.
 	if (input.repoAccessError) {
-		return { ...issue, message: "Couldn't check WSO2 Cloud's access to this repository. Refresh to try again." };
+		return { ...issue, message: "Couldn't check Choreo Cloud's access to this repository. Refresh to try again." };
 	}
 	if (repoAccess?.isAccessible) {
 		return undefined;
@@ -140,7 +140,7 @@ function driftIssue(files: string[]): SourceReadiness | undefined {
 		return undefined;
 	}
 	return {
-		message: `WSO2 Cloud reads the metadata in ${files.join(", ")} from the selected remote repository. Commit and push ${files.length > 1 ? "them" : "it"}.`,
+		message: `Choreo Cloud reads the metadata in ${files.join(", ")} from the selected remote repository. Commit and push ${files.length > 1 ? "them" : "it"}.`,
 		refresh: "configDrift",
 		tone: "warning",
 		blocking: true,
@@ -151,7 +151,7 @@ function dirtyNotice(hasDirtyRepo: boolean): SourceReadiness | undefined {
 	return hasDirtyRepo
 		? {
 				message:
-					"WSO2 Cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.",
+					"Choreo Cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.",
 				refresh: "dirtyRepo",
 				tone: "neutral",
 				blocking: false,

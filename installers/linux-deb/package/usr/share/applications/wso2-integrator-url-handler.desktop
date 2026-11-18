@@ -8,4 +8,4 @@ Type=Application
 NoDisplay=true
 StartupNotify=true
 Categories=Utility;TextEditor;Development;IDE;
-MimeType=x-scheme-handler/@SLUG@;
+MimeType=x-scheme-handler/@URL_SCHEME@;

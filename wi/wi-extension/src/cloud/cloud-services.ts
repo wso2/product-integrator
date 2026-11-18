@@ -66,7 +66,7 @@ interface TokenExchange {
 
 /** The services whose own token WSO2 Integrator exchanges the WSO2 Cloud token for; no other target is reachable. */
 const TOKEN_EXCHANGES: Readonly<Record<TokenExchangeTarget, TokenExchange>> = {
-	copilot: { missing: "This WSO2 Cloud deployment has no Copilot token exchange." },
+	copilot: { missing: "This Choreo Cloud deployment has no Copilot token exchange." },
 };
 
 /**
@@ -94,7 +94,7 @@ export function allowedExchangeEndpoint(target: TokenExchangeTarget, allowed: re
 		}
 	});
 	if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || !listed) {
-		throw new ForbiddenError(`WSO2 Integrator does not send the WSO2 Cloud token to ${url.origin} for ${target}.`, {
+		throw new ForbiddenError(`Choreo Integrator does not send the Choreo Cloud token to ${url.origin} for ${target}.`, {
 			reason: "token_exchange_endpoint_refused",
 		});
 	}
@@ -116,7 +116,7 @@ const CLOUD_SERVICES: Readonly<Record<CloudServiceName, CloudService>> = {
 	"managed-tokens": {
 		baseUrl: (config) => config.managedTokensBaseUrl,
 		prefix: "/managed-tokens/v1.0/api/v1",
-		missing: "This WSO2 Cloud deployment has no managed-tokens service configured (set WSO2_CLOUD_MANAGED_TOKENS_URL).",
+		missing: "This Choreo Cloud deployment has no managed-tokens service configured (set WSO2_CLOUD_MANAGED_TOKENS_URL).",
 	},
 	// Agent Manager sits behind the same gateway as the WSO2 Cloud API; consumers pass `/orgs/...`.
 	"agent-manager": {
@@ -147,7 +147,7 @@ function entryOf<T>(table: Readonly<Record<string, T>>, name: unknown): T | unde
 export async function exchangeToken(target: TokenExchangeTarget, endpoint: string | undefined, deps: CloudServiceDeps): Promise<ExchangedToken> {
 	const exchange = entryOf(TOKEN_EXCHANGES, target);
 	if (!exchange) {
-		throw new NotSupportedError(`WSO2 Integrator exchanges no token for "${String(target)}".`, { reason: "unknown_token_exchange_target" });
+		throw new NotSupportedError(`Choreo Integrator exchanges no token for "${String(target)}".`, { reason: "unknown_token_exchange_target" });
 	}
 	if (!endpoint) {
 		throw new NotSupportedError(exchange.missing, { reason: `${target}_token_exchange_not_configured` });
@@ -223,14 +223,14 @@ async function post(fetchImpl: FetchLike, url: string, body: unknown, what: stri
 export async function callCloudService<T>(request: CloudServiceRequest, deps: CloudServiceDeps): Promise<T> {
 	const service = entryOf(CLOUD_SERVICES, request?.service);
 	if (!service) {
-		throw new NotSupportedError(`WSO2 Integrator calls no service named "${String(request?.service)}".`, { reason: "unknown_cloud_service" });
+		throw new NotSupportedError(`Choreo Integrator calls no service named "${String(request?.service)}".`, { reason: "unknown_cloud_service" });
 	}
 	const baseUrl = service.baseUrl(deps.config);
 	if (!baseUrl) {
 		throw new NotSupportedError(service.missing, { reason: `${request.service}_not_configured` });
 	}
 	if (!METHODS.has(request.method)) {
-		throw new BadRequestError(`WSO2 Integrator does not send ${String(request.method)} requests to ${request.service}.`);
+		throw new BadRequestError(`Choreo Integrator does not send ${String(request.method)} requests to ${request.service}.`);
 	}
 	const root = baseUrl + service.prefix;
 	// The resolved URL, not the text: `..` (or `%2e%2e`) in the path would otherwise climb out of the API root to another API on the host.

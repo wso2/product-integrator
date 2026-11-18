@@ -42,7 +42,7 @@ describe("sourceReadiness", () => {
 		["refuses a provider other than GitHub", { gitProvider: "bitbucket" }, { refresh: "gitData", tone: "warning", blocking: true }, /Bitbucket repositories is not supported/],
 		["asks to grant access to a repository the app does not cover", { repoAccess: { retrievedRepos: true, isAccessible: false } }, { action: "grantAccess", refresh: "repoAccess", tone: "warning", blocking: true }, /access/],
 		["asks to authorize when nothing is connected", { repoAccess: { retrievedRepos: false, isAccessible: false } }, { action: "authorize", refresh: "repoAccess", tone: "info", blocking: true }, /uthorize/],
-		["asks to retry a failed access check rather than to authorize", { repoAccess: undefined, repoAccessError: "socket hang up" }, { refresh: "repoAccess", tone: "warning", blocking: true }, /^Couldn't check WSO2 Cloud's access/],
+		["asks to retry a failed access check rather than to authorize", { repoAccess: undefined, repoAccessError: "socket hang up" }, { refresh: "repoAccess", tone: "warning", blocking: true }, /^Couldn't check Choreo Cloud's access/],
 		["waits for the access check before asking for either", { repoAccess: undefined, repoAccessLoading: true }, { tone: "warning", blocking: false }],
 		["asks to push when the remote has no branches", { branches: [], branch: null }, { action: "pushChanges", refresh: "branches", tone: "info", blocking: true }, /no branches/],
 		["asks to commit and push changed metadata", { configDriftFiles: ["Config.toml"] }, { refresh: "configDrift", tone: "warning", blocking: true }, /metadata in Config\.toml\b.*Commit and push it\./],
