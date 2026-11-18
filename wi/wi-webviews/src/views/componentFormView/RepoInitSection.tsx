@@ -317,9 +317,9 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
                             <RepoBannerActions>
                                 <RepoBannerButton
                                     type="button"
-                                    onClick={() => wsClient.triggerGithubAuthFlow(orgId)}
+                                    onClick={() => wsClient.triggerGithubAuthFlow("")}
                                 >
-                                    Open WSO2 Cloud console
+                                    Connect GitHub
                                 </RepoBannerButton>
                             </RepoBannerActions>
                         </RepoBanner>
@@ -358,7 +358,7 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
                                     value={org ?? ""}
                                     onChange={(e) => setOrg(e.target.value)}
                                 />
-                                <SmVSCodeLink onClick={() => wsClient.triggerGithubInstallFlow(orgId)}>Add Organization</SmVSCodeLink>
+                                <SmVSCodeLink onClick={() => wsClient.triggerGithubInstallFlow("")}>Add Organization</SmVSCodeLink>
                             </div>
 
                             <div style={{ position: "relative" }}>
@@ -380,13 +380,13 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
                                                 <>
                                                     {creatingRepo ? (
                                                         <>
-                                                            <SmVSCodeLink onClick={() => wsClient.triggerGithubInstallFlow(orgId)}>Connect Newly Created Repository</SmVSCodeLink>
+                                                            <SmVSCodeLink onClick={() => wsClient.triggerGithubInstallFlow("")}>Connect Newly Created Repository</SmVSCodeLink>
                                                             <SmVSCodeLink onClick={() => setCreatingRepo(false)}>Cancel</SmVSCodeLink>
                                                         </>
                                                     ) : (
                                                         <>
                                                             <SmVSCodeLink onClick={handleCreateNewRepo}>Create New Repository</SmVSCodeLink>
-                                                            <SmVSCodeLink onClick={() => wsClient.triggerGithubInstallFlow(orgId)}>Connect More Repositories</SmVSCodeLink>
+                                                            <SmVSCodeLink onClick={() => wsClient.triggerGithubInstallFlow("")}>Connect More Repositories</SmVSCodeLink>
                                                         </>
                                                     )}
                                                 </>

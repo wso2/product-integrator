@@ -126,6 +126,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		isFetching: isFetchingRepoAccess,
 		isLoading: isLoadingRepoAccess,
 		data: isRepoAuthorizedResp,
+		error: repoAccessError,
 		refetch: refetchRepoAccess,
 	} = useQuery({
 		queryKey: ["git-repo-access", { repo: gitRemote, orgId, provider: gitProvider, credential }],
@@ -155,6 +156,17 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		enabled: !!gitRemote && !!gitProvider && (gitProvider !== GitProvider.GITHUB ? !!credential : true),
 		refetchOnWindowFocus: true,
 	});
+
+	// GitHub connected from the editor: what WSO2 Cloud can read has changed.
+	useEffect(() => {
+		const unsubscribe = wsClient.onGitHubConnected(() => {
+			void refetchRepoAccess();
+			void refetchBranches();
+		});
+		return () => {
+			unsubscribe();
+		};
+	}, [refetchRepoAccess, refetchBranches]);
 
 	useEffect(() => {
 		if (branches?.length > 0 && (!branch || !branches.includes(branch))) {
@@ -242,8 +254,17 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 
 	// WSO2 Cloud builds from GitHub repositories only for now; no credential configured for another provider changes that.
 	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB) {
-		invalidRepoMsg = `Deploying from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and deploy from it.`;
+		invalidRepoMsg = `Creating integrations from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and create it from there.`;
 		onInvalidRepoRefreshClick = refetchGitData;
+		blockCreation = true;
+	}
+
+	// A failed check says nothing about access; it is retried rather than answered with Authorize.
+	if (!invalidRepoMsg && !isLoadingRepoAccess && gitRemote && repoAccessError) {
+		invalidRepoMsg = "Couldn't check WSO2 Cloud's access to this repository. Refresh to try again.";
+		onInvalidRepoRefreshClick = refetchRepoAccess;
+		onInvalidRepoRefreshing = isFetchingRepoAccess;
+		invalidRepoBannerType = "warning";
 		blockCreation = true;
 	}
 
@@ -252,11 +273,11 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 			if (isRepoAuthorizedResp?.retrievedRepos) {
 				invalidRepoMsg = <span>WSO2 lacks access to the selected repository.</span>;
 				invalidRepoAction = "Grant Access";
-				onInvalidRepoActionClick = () => wsClient.triggerGithubInstallFlow(orgId);
+				onInvalidRepoActionClick = () => wsClient.triggerGithubInstallFlow(gitRemote ?? "");
 			} else {
 				invalidRepoMsg = "Please authorize WSO2 to access your GitHub repositories.";
 				invalidRepoAction = "Authorize";
-				onInvalidRepoActionClick = () => wsClient.triggerGithubAuthFlow(orgId);
+				onInvalidRepoActionClick = () => wsClient.triggerGithubAuthFlow(gitRemote ?? "");
 				invalidRepoBannerType = "info";
 			}
 		} else {
@@ -294,7 +315,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	}
 
 	if (!invalidRepoMsg && configDriftFiles?.length > 0) {
-		invalidRepoMsg = `Cloud deployment requires the metadata in the ${configDriftFiles.join(",")} ${configDriftFiles?.length > 1 ? "files" : "file"} to be committed and pushed to the selected remote repository for proper functionality.`;
+		invalidRepoMsg = `WSO2 Cloud reads the metadata in ${configDriftFiles.join(", ")} from the selected remote repository. Commit and push ${configDriftFiles.length > 1 ? "them" : "it"}.`;
 		onInvalidRepoRefreshClick = refetchConfigDrift;
 		onInvalidRepoRefreshing = isFetchingConfigDrift;
 		invalidRepoBannerType = "warning";
@@ -302,7 +323,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	}
 
 	if (!invalidRepoMsg && hasDirtyRepo) {
-		invalidRepoMsg = "WSO2 cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.";
+		invalidRepoMsg = "WSO2 Cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.";
 		onInvalidRepoRefreshClick = refetchHasDirtyRepo;
 		onInvalidRepoRefreshing = isFetchingHasDirtyRepo;
 		invalidRepoBannerType = "neutral";

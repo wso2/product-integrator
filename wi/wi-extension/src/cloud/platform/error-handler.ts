@@ -32,13 +32,26 @@ export function describeCloudError(error: unknown, fallback: string): string {
 	return fallback;
 }
 
+/** The person closed a picker or an input; nothing failed, so nothing is shown. */
+export class CancelledError extends Error {
+	constructor(message = "Cancelled") {
+		super(message);
+		this.name = "CancelledError";
+	}
+}
+
 /**
  * Shows a failure to the person, with the action that fits it: sign in again
  * when the session is gone, upgrade when the plan refuses, and the plain
- * message otherwise. Returns the message shown, for logs.
+ * message otherwise. With `prefix`, `fallback` names the action and leads the
+ * message. A cancellation shows nothing. Returns the message, for logs.
  */
-export function handleCloudError(error: unknown, fallback: string): string {
-	const message = describeCloudError(error, fallback);
+export function handleCloudError(error: unknown, fallback: string, options: { prefix?: boolean } = {}): string {
+	if (error instanceof CancelledError) {
+		return error.message;
+	}
+	const detail = describeCloudError(error, "");
+	const message = options.prefix ? (detail ? `${fallback}: ${detail}` : fallback) : detail || fallback;
 	if (isCloudError(error)) {
 		switch (error.code) {
 			case "unauthenticated":
