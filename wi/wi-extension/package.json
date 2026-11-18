@@ -1,8 +1,8 @@
 {
   "name": "wso2-integrator",
-  "displayName": "WSO2 Integrator",
-  "description": "Integration development environment for WSO2 Integrator",
-  "version": "1.1.26081017",
+  "displayName": "Choreo Integrator",
+  "description": "Integration development environment for Choreo Integrator",
+  "version": "1.2.0",
   "publisher": "wso2",
   "icon": "resources/icons/wso2-integrator-logo.png",
   "license": "Apache-2.0",
@@ -31,22 +31,22 @@
     "authentication": [
       {
         "id": "wso2-cloud",
-        "label": "WSO2 Cloud"
+        "label": "Choreo Cloud"
       }
     ],
     "configuration": {
       "type": "object",
-      "title": "WSO2 Integrator",
+      "title": "Choreo Integrator",
       "properties": {
         "integrator.selectedProfile": {
           "type": "string",
           "enum": [
-            "WSO2 Integrator: Default",
-            "WSO2 Integrator: MI",
-            "WSO2 Integrator: SI"
+            "Choreo Integrator: Default",
+            "Choreo Integrator: MI",
+            "Choreo Integrator: SI"
           ],
-          "default": "WSO2 Integrator: Default",
-          "description": "Select the active WSO2 Integrator profile."
+          "default": "Choreo Integrator: Default",
+          "description": "Select the active Choreo Integrator profile."
         },
         "integrator.advanced.cloudEnv": {
           "type": "string",
@@ -56,19 +56,19 @@
             "dev"
           ],
           "default": "prod",
-          "description": "The WSO2 Cloud Environment to use",
+          "description": "The Choreo Cloud Environment to use",
           "scope": "machine"
         },
         "integrator.advanced.cloudClientId": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Overrides the OAuth client id used to sign in to WSO2 Cloud. Leave empty unless the WSO2 Cloud team told you to set it.",
+          "markdownDescription": "Overrides the OAuth client id used to sign in to Choreo Cloud. Leave empty unless the Choreo Cloud team told you to set it.",
           "scope": "machine"
         },
         "integrator.advanced.cloudApiBaseUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Overrides the WSO2 Cloud API base URL. Leave empty unless the WSO2 Cloud team told you to set it.",
+          "markdownDescription": "Overrides the Choreo Cloud API base URL. Leave empty unless the Choreo Cloud team told you to set it.",
           "scope": "machine"
         }
       }
@@ -77,12 +77,12 @@
       "activitybar": [
         {
           "id": "wso2-integrator",
-          "title": "WSO2 Integrator",
+          "title": "Choreo Integrator",
           "icon": "resources/icons/integrator-activity-icon.svg"
         },
         {
           "id": "wso2-agent-builder",
-          "title": "WSO2 Agent Builder",
+          "title": "Choreo Agent Builder",
           "icon": "resources/icons/integrator-activity-icon.svg"
         }
       ]
@@ -92,7 +92,7 @@
         {
           "id": "wso2-integrator.explorer",
           "name": "Integrations",
-          "contextualTitle": "WSO2 Integrator",
+          "contextualTitle": "Choreo Integrator",
           "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi'))"
         }
       ],
@@ -100,7 +100,7 @@
         {
           "id": "wso2-agent-builder.explorer",
           "name": "Agents",
-          "contextualTitle": "WSO2 Agent Builder",
+          "contextualTitle": "Choreo Agent Builder",
           "when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi'))"
         }
       ]
@@ -108,22 +108,22 @@
     "viewsWelcome": [
       {
         "view": "wso2-integrator.explorer",
-        "contents": "$(loadingspin) Loading WSO2 Integrator...",
+        "contents": "$(loadingspin) Loading Choreo Integrator...",
         "when": "WI.productMode != 'agent-builder' && !WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
       },
       {
         "view": "wso2-agent-builder.explorer",
-        "contents": "$(loadingspin) Loading WSO2 Agent Builder...",
+        "contents": "$(loadingspin) Loading Choreo Agent Builder...",
         "when": "WI.productMode == 'agent-builder' && !WI.projectType && BI.status != 'updateNeed' && BI.status != 'noLS'"
       },
       {
         "view": "wso2-integrator.explorer",
-        "contents": "$(rocket) Build integration solutions with WSO2 Integrator.\n\nUse the welcome page to create a new project, explore samples, import external integrations, and manage profile settings.\n\nOpen an integration project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
+        "contents": "$(rocket) Build integration solutions with Choreo Integrator.\n\nUse the welcome page to create a new project, explore samples, import external integrations, and manage profile settings.\n\nOpen an integration project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
         "when": "WI.productMode != 'agent-builder' && WI.projectType == 'none'"
       },
       {
         "view": "wso2-agent-builder.explorer",
-        "contents": "$(rocket) Build AI agents with WSO2 Agent Builder.\n\nUse the welcome page to create a new agent project or explore samples.\n\nOpen an agent project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
+        "contents": "$(rocket) Build AI agents with Choreo Agent Builder.\n\nUse the welcome page to create a new agent project or explore samples.\n\nOpen an agent project folder to see your artifacts in this panel.\n\n[Get Started](command:wso2.integrator.openWelcome)",
         "when": "WI.productMode == 'agent-builder' && WI.projectType == 'none'"
       },
       {
@@ -138,22 +138,22 @@
       },
       {
         "view": "wso2-integrator.explorer",
-        "contents": "Welcome to WSO2 Integrator.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+        "contents": "Welcome to Choreo Integrator.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://choreolabs.com/integration-platform/docs/)",
         "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
       },
       {
         "view": "wso2-agent-builder.explorer",
-        "contents": "Welcome to WSO2 Agent Builder.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+        "contents": "Welcome to Choreo Agent Builder.\n\nYour current Ballerina distribution is not supported. Please update to version 2201.12.3 or above to continue.\n\n[Update Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter updating, restart the editor to apply the changes. [Learn more](https://choreolabs.com/integration-platform/docs/)",
         "when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'updateNeed'"
       },
       {
         "view": "wso2-integrator.explorer",
-        "contents": "Welcome to WSO2 Integrator.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+        "contents": "Welcome to Choreo Integrator.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://choreolabs.com/integration-platform/docs/)",
         "when": "WI.productMode != 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
       },
       {
         "view": "wso2-agent-builder.explorer",
-        "contents": "Welcome to WSO2 Agent Builder.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://wso2.com/integration-platform/docs/)",
+        "contents": "Welcome to Choreo Agent Builder.\n\nA Ballerina distribution is required but was not found on this machine. Please set up Ballerina to get started.\n\n[Set Up Ballerina](command:wso2.integrator.setupBallerinaVisually)\n\nAfter installation, restart the editor to apply the changes. [Learn more](https://choreolabs.com/integration-platform/docs/)",
         "when": "WI.productMode == 'agent-builder' && (!WI.projectType || (WI.projectType != 'si' && WI.projectType != 'mi' && WI.projectType != 'none')) && BI.status == 'noLS'"
       }
     ],
@@ -161,84 +161,84 @@
       {
         "command": "wso2.integrator.openWelcome",
         "title": "Open Welcome Page",
-        "category": "WSO2 Integrator",
+        "category": "Choreo Integrator",
         "icon": "$(home)"
       },
       {
         "command": "wso2-integrator.explorer.refresh",
         "title": "Refresh",
-        "category": "WSO2 Integrator",
+        "category": "Choreo Integrator",
         "icon": "$(refresh)"
       },
       {
         "command": "wso2.integrator.openBIIntegration",
         "title": "Open Default Integration",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "wso2.integrator.openMIIntegration",
         "title": "Open MI Integration",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "wso2.integrator.cloud.auth.signIn",
         "title": "Sign In",
-        "category": "WSO2 Integrator",
+        "category": "Choreo Integrator",
         "icon": "$(sign-in)",
         "enablement": "!isLoggedIn"
       },
       {
         "command": "wso2.integrator.cloud.auth.signOut",
         "title": "Sign Out",
-        "category": "WSO2 Integrator",
+        "category": "Choreo Integrator",
         "icon": "$(sign-out)",
         "enablement": "isLoggedIn"
       },
       {
         "command": "wso2.integrator.cloud.auth.cancelSignIn",
         "title": "Cancel Sign In",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "wso2.integrator.cloud.integration.create",
-        "title": "Create Integration in WSO2 Cloud",
-        "category": "WSO2 Integrator",
+        "title": "Create Integration in Choreo Cloud",
+        "category": "Choreo Integrator",
         "icon": "$(add)"
       },
       {
         "command": "wso2.integrator.cloud.integration.delete",
         "title": "Delete Integration from Cloud",
-        "category": "WSO2 Integrator",
+        "category": "Choreo Integrator",
         "icon": "$(trash)"
       },
       {
         "command": "wso2.integrator.cloud.integration.openInConsole",
         "title": "Open in Cloud Console",
-        "category": "WSO2 Integrator",
+        "category": "Choreo Integrator",
         "icon": "$(link-external)"
       },
       {
         "command": "wso2.integrator.cloud.project.clone",
         "title": "Clone Cloud Project Repository",
-        "category": "WSO2 Integrator",
+        "category": "Choreo Integrator",
         "icon": "$(repo-clone)"
       },
       {
         "command": "wso2.integrator.cloud.project.createContext",
         "title": "Associate Cloud Project",
-        "category": "WSO2 Integrator",
+        "category": "Choreo Integrator",
         "icon": "$(link)"
       },
       {
         "command": "wso2.integrator.cloud.project.manageContext",
         "title": "Manage Cloud Project",
-        "category": "WSO2 Integrator",
+        "category": "Choreo Integrator",
         "icon": "$(settings-gear)"
       },
       {
         "command": "wso2.integrator.cloud.project.refresh",
         "title": "Refresh Workspace",
-        "category": "WSO2 Integrator",
+        "category": "Choreo Integrator",
         "icon": "$(refresh)",
         "enablement": "!isLoadingContextDirs"
       },
@@ -249,37 +249,37 @@
           "light": "resources/icons/preview-command-icon.svg",
           "dark": "resources/icons/preview-command-icon-dark.svg"
         },
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "ballerina.force.update.artifacts",
         "title": "Force Update Artifacts",
         "icon": "$(refresh)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add",
         "title": "Add Integration or Library",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.convert",
         "title": "Convert to Project",
         "icon": "$(package)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.open-project",
         "title": "Open Project",
         "icon": "$(folder-opened)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-to-project",
         "title": "Add to Project",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.overview",
@@ -288,55 +288,55 @@
           "light": "resources/icons/preview-command-icon.svg",
           "dark": "resources/icons/preview-command-icon-dark.svg"
         },
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-connection",
         "title": "Add Connection",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-agent",
         "title": "Add Agent",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-agent-definition",
         "title": "Add Agent Definition",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-agent-tool",
         "title": "Add Agent Tool",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-model-provider",
         "title": "Add Model Provider",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.delete",
         "title": "Delete",
         "icon": "$(trash)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-entry-point",
         "title": "Add Entry Point",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-type",
         "title": "Add Type",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.view-type-diagram",
@@ -345,19 +345,19 @@
           "light": "resources/icons/preview-command-icon.svg",
           "dark": "resources/icons/preview-command-icon-dark.svg"
         },
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-function",
         "title": "Add Function",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-configuration",
         "title": "Add Configuration",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.view-configuration",
@@ -366,25 +366,25 @@
           "light": "resources/icons/preview-command-icon.svg",
           "dark": "resources/icons/preview-command-icon-dark.svg"
         },
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-data-mapper",
         "title": "Add Data Mapper",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-natural-function",
         "title": "Add Natural Function",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-custom-connector",
         "title": "Add Custom Connector",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "wso2.integrator.setupBallerinaVisually",
@@ -394,13 +394,13 @@
         "command": "BI.project-explorer.add-workflow",
         "title": "Add Workflow",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       },
       {
         "command": "BI.project-explorer.add-workflow-activity",
         "title": "Add Workflow Activity",
         "icon": "$(add)",
-        "category": "WSO2 Integrator"
+        "category": "Choreo Integrator"
       }
     ],
     "menus": {

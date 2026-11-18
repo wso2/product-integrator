@@ -913,7 +913,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                     </SignInIconWrapper>
                     <SignInTitle>Sign in to browse cloud projects</SignInTitle>
                     <SignInDescription>
-                        Connect your WSO2 account to clone and open projects directly from the cloud.
+                        Connect your Choreo account to clone and open projects directly from the cloud.
                     </SignInDescription>
                     <SignInButton type="button" onClick={isSigningIn ? handleCancelSignIn : handleSignIn}>
                         {isSigningIn ? (
@@ -1060,7 +1060,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                         />
                     </ChoiceCardIconWrapper>
                     <ChoiceCardTitle>Open Cloud Project</ChoiceCardTitle>
-                    <ChoiceCardDesc>Browse and clone a project from your WSO2 Cloud organization.</ChoiceCardDesc>
+                    <ChoiceCardDesc>Browse and clone a project from your Choreo Cloud organization.</ChoiceCardDesc>
                 </ChoiceCard>
             </ChoiceGrid>
         </LandingWrapper>

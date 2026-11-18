@@ -33,7 +33,7 @@ export function signInCommand(context: ExtensionContext) {
 				if (!ext.authProvider) {
 					throw new Error("The cloud layer is not active yet.");
 				}
-				ext.log("Signing in to WSO2 Cloud");
+				ext.log("Signing in to Choreo Cloud");
 				BridgeLayer.notifySignInInitiated();
 				const session = await window.withProgress(
 					{ title: "Waiting for the sign-in in your browser...", location: ProgressLocation.Notification, cancellable: true },
@@ -42,13 +42,13 @@ export function signInCommand(context: ExtensionContext) {
 						return ext.authProvider!.signIn({ reselectOrganization: params?.reselectOrganization });
 					},
 				);
-				window.showInformationMessage(`Signed in to WSO2 Cloud as ${session.user.email ?? session.user.displayName} (${session.org.name})`);
+				window.showInformationMessage(`Signed in to Choreo Cloud as ${session.user.email ?? session.user.displayName} (${session.org.name})`);
 			} catch (error) {
 				if (isCloudError(error) && error.code === "login_cancelled") {
 					ext.log("Sign-in cancelled");
 					return;
 				}
-				ext.logError("Error while signing in to WSO2 Cloud", error as Error);
+				ext.logError("Error while signing in to Choreo Cloud", error as Error);
 				handleCloudError(error, "Sign in failed. Please check the logs for more details.");
 				// Re-throw so that callers who await executeCommand (e.g. the SSO flow
 				// in the migration wizard) receive the failure immediately.

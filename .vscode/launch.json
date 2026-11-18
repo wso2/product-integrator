@@ -31,7 +31,7 @@
 				"WEB_VIEW_DEV_MODE": "true",
 				"WEB_VIEW_DEV_HOST": "http://localhost:3000",
 				"WSO2_PRODUCT_MODE": "agent-builder",
-				"WSO2_PRODUCT_NAME": "WSO2 Agent Builder"
+				"WSO2_PRODUCT_NAME": "Choreo Agent Builder"
 			},
 			"outFiles": [
 				"${workspaceFolder}/wi/wi-extension/dist/**/*.js"

@@ -124,7 +124,7 @@ export function SettingsView({ onBack, ballerinaUnavailable }: { onBack?: () => 
     // Agent Builder is BI-only: hide the profile switcher (the shared
     // integrator.selectedProfile setting must never be changed from this mode).
     const isAgentBuilderMode = webviewContext?.productMode === ProductMode.AGENT_BUILDER;
-    const productName = webviewContext?.productName ?? "WSO2 Integrator";
+    const productName = webviewContext?.productName ?? "Choreo Integrator";
     const [selectedProfile, setSelectedProfile] = useState<SelectedProfileValue>(DEFAULT_PROFILE);
     const [isLoading, setIsLoading] = useState(true);
     const [savingRuntime, setSavingRuntime] = useState<SelectedProfileValue | null>(null);

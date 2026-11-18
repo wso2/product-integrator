@@ -30,7 +30,7 @@ interface WebviewStateStore {
 }
 
 export const defaultTerminologies: WSO2Terminologies = {
-	cloudName: "WSO2 Integration Platform",
+	cloudName: "Choreo Integration Platform",
 	componentTerm: "integration",
 	componentTermPlural: "integrations",
 	componentTermCapitalized: "Integration",

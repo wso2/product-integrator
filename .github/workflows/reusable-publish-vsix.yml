@@ -38,7 +38,8 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       # The release publishes the WI extension with the other bundled extensions, as
-      # wso2-integrator-<version>-wso2.wso2-integrator-<file>.vsix. A wso2-integrator-*.vsix pattern
+      # <slug>-<version>-wso2.wso2-integrator-<file>.vsix (slug choreo-integrator; wso2-integrator before
+      # the Choreo rebrand). A <slug>-*.vsix pattern
       # would match all six, so the asset is picked by name first and only that one is downloaded.
       # Releases cut before that change carry it as plain wso2-integrator-<wi version>.vsix instead.
       - name: Download WI extension VSIX from release
@@ -50,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           names=$(gh release view "${TAG}" --repo "${REPO}" --json assets --jq '.assets[].name')
-          files=$(grep -E '^wso2-integrator-.+-wso2\.wso2-integrator-.+\.vsix$' <<< "${names}" || true)
+          files=$(grep -E '^(choreo|wso2)-integrator-.+-wso2\.wso2-integrator-.+\.vsix$' <<< "${names}" || true)
           if [ -z "${files}" ]; then
             files=$(grep -E '^wso2-integrator-.+\.vsix$' <<< "${names}" | grep -vF -- '-wso2.' || true)
             [ -z "${files}" ] || echo "${TAG} predates the signed WI asset; using its plain-named vsix."
