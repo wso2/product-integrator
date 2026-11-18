@@ -26,7 +26,7 @@ describe("handleCloudError", () => {
 
 	beforeEach(() => {
 		shown = [];
-		(window as { showErrorMessage: unknown }).showErrorMessage = async (message: string) => {
+		(window as { showErrorMessage: unknown }).showErrorMessage = async (message: string): Promise<undefined> => {
 			shown.push(message);
 			return undefined;
 		};

@@ -124,6 +124,10 @@ export function createNewComponentCommand(context: ExtensionContext) {
 				if (!selectedProject) {
 					selectedProject = (await selectProjectWithCreateNew(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', to create the integration in`)).selectedProject;
 				}
+				// The pickers wait on the person; a project from another organization is not linked under this one.
+				if (ext.authProvider?.org?.handle !== orgHandle) {
+					throw new Error("The signed-in organization changed while the integration was being created. Run the command again.");
+				}
 
 				const existing = await window.withProgress(
 					{ title: `Fetching integrations of cloud project ${selectedProject.name}...`, location: ProgressLocation.Notification },
