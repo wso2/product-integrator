@@ -56,8 +56,8 @@ export function endingConnect(outcome: GitHubConnectOutcome): GitHubConnectOutco
 }
 
 /**
- * Starts connecting GitHub and resolves once it ends in this window or, when GitHub does not return
- * here (its settings page for an installation, or the console), once the window has its focus back.
+ * Starts connecting GitHub and resolves once it ends in this window or, when GitHub cannot return
+ * here, once the window has its focus back.
  * The person can stop waiting.
  */
 export function untilGitHubConnectEnds(returnsHere: boolean, start: () => Promise<void>): Thenable<void> {

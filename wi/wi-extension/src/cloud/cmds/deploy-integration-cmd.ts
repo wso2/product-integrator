@@ -29,14 +29,14 @@ import {
 	sourceReadiness,
 	validateIntegrationDisplayName,
 } from "@wso2/wi-core";
-import { type Project, buildConsoleUrl, buildSucceeded, parseGitHubRepoUrl } from "@wso2/wso2-cloud-client";
+import { type Project, buildConsoleUrl, buildSucceeded } from "@wso2/wso2-cloud-client";
 import { parseGitURL } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, Uri, commands, env, window, workspace } from "vscode";
 import { ext } from "../../extensionVariables";
 import { isSubpath } from "../../utils/pathUtils";
 import { CloudWsManager } from "../../ws-managers/cloud/ws-manager";
 import { linkContext, localContextEntry, unlinkContext } from "../context-file";
-import { gitHubAccessFor, untilGitHubConnectEnds } from "../github-access";
+import { untilGitHubConnectEnds } from "../github-access";
 import { describeCloudError, handleCloudError } from "../platform/error-handler";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
@@ -97,11 +97,7 @@ async function connectGitHubFor(req: SourceReq | undefined, install: boolean): P
 	const ws = new CloudWsManager();
 	const gitData = req?.workspaceDir ? await ws.getLocalGitData(req.workspaceDir) : undefined;
 	const remote = deployRemote(gitData, req?.gitRemote) ?? "";
-	const github = parseGitHubRepoUrl(remote);
-	// GitHub's settings page for an installation never returns to the editor.
-	const settingsPage = install && !!github && (await gitHubAccessFor(github.owner, github.repo)).kind === "not-granted";
-	const returnsHere = !!ext.githubApp?.canReturnHere && !settingsPage;
-	await untilGitHubConnectEnds(returnsHere, () => (install ? ws.triggerGithubInstallFlow(remote) : ws.triggerGithubAuthFlow(remote)));
+	await untilGitHubConnectEnds(!!ext.githubApp?.canReturnHere, () => (install ? ws.triggerGithubInstallFlow(remote) : ws.triggerGithubAuthFlow(remote)));
 }
 
 // The same reads the deploy form makes for its repository section, judged by the same rules.

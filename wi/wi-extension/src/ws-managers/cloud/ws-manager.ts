@@ -188,8 +188,9 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	/**
-	 * Gives the WSO2 Cloud app access to the repository: on GitHub's own page for the
-	 * installation when the owner is connected already, otherwise by installing it there.
+	 * Gives the WSO2 Cloud app access to the repository through GitHub's install page, which
+	 * also changes the repositories of an installation the owner has already; GitHub returns
+	 * from it to this editor. An editor GitHub cannot return to gets the installation's own page.
 	 */
 	async triggerGithubInstallFlow(repoUrl: string): Promise<void> {
 		const github = parseGitHubRepoUrl(repoUrl ?? "");
@@ -211,7 +212,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		if (!stillSignedIn()) {
 			return;
 		}
-		if (access.kind === "not-granted") {
+		if (access.kind === "not-granted" && !this.githubApp().canReturnHere) {
 			const settingsUrl = await installationSettingsUrl(github.owner, access.installation.installationId);
 			if (stillSignedIn()) {
 				await env.openExternal(Uri.parse(settingsUrl));
