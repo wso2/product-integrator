@@ -146,9 +146,50 @@ export interface Release {
 	releaseId?: string;
 }
 
-/** Deploys a built image to the project's entry environment. */
+/**
+ * The required configurables of the integration's build that have no value in `environment`, by name.
+ * The platform does not report them: a deployment without them stays in progress.
+ */
+async function missingConfigurations(integrationId: string, environment: Environment, projectName: string): Promise<string[]> {
+	try {
+		const { jsonSchema, configurations } = await ext.clients.platform.cloud.config.getConfigSchema(integrationId, environment.id, projectName);
+		const set = new Set((configurations ?? []).filter((item) => item.isSet || item.values.some((value) => value.value)).map((item) => item.key));
+		const missing = requiredConfigurables(jsonSchema).filter((key) => !set.has(key));
+		ext.log(`Required configurations of ${integrationId} in ${environment.name}: ${missing.length ? `missing ${missing.join(", ")}` : "all set"}`);
+		return missing;
+	} catch (error) {
+		ext.log(`Could not check the configurations of ${integrationId} in ${environment.name}: ${(error as Error).message}`);
+		return [];
+	}
+}
+
+/** The keys (`org.module.name`) of the configurables a base64 Ballerina config schema marks required, at its `requiredLevel` depth. */
+export function requiredConfigurables(jsonSchema: string): string[] {
+	if (!jsonSchema) {
+		return [];
+	}
+	const schema = JSON.parse(Buffer.from(jsonSchema, "base64").toString("utf8"));
+	const level: number = typeof schema.requiredLevel === "number" ? schema.requiredLevel : 2;
+	const walk = (node: SchemaNode | undefined, path: string[]): string[] =>
+		path.length === level
+			? (node?.required ?? []).map((name) => [...path, name].join("."))
+			: Object.entries(node?.properties ?? {}).flatMap(([name, child]) => walk(child, [...path, name]));
+	return walk(schema, []);
+}
+
+interface SchemaNode {
+	properties?: Record<string, SchemaNode>;
+	required?: string[];
+}
+
+/** Deploys a built image to the project's entry environment, unless required configurations are not set there. */
 export async function deployBuild(integrationId: string, buildName: string, projectName: string, report: (message: string) => void): Promise<Release> {
 	const target = await entryEnvironment(projectName);
+	const missing = await missingConfigurations(integrationId, target, projectName);
+	if (missing.length > 0) {
+		const names = missing.map((key) => key.slice(key.lastIndexOf(".") + 1)).join(", ");
+		throw new Error(`Required configurations are not set in ${target.name}: ${names}. Set them in the console, then deploy.`);
+	}
 	report(`deploying to ${target.name}`);
 	const { releaseId, observed } = await ext.clients.platform.cloud.deployments.deploy(integrationId, {
 		environment: target.id,
