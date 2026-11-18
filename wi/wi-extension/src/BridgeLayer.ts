@@ -136,6 +136,11 @@ export class BridgeLayer {
         });
     }
 
+    /** GitHub is connected for the organization, so every open webview hears it; the deployment form rechecks the repository. */
+    static notifyGitHubConnected(): void {
+        this.channels.forEach((channel) => channel.transport.publish({ type: WI_BRIDGE_EVENTS.GITHUB_CONNECTED }));
+    }
+
     static notifyAuthStateChanged(projectUri: string, state: AuthState): void {
         this.publish(projectUri, {
             type: WI_BRIDGE_EVENTS.AUTH_STATE_CHANGED,
