@@ -201,6 +201,7 @@ describe("WSO2 Cloud service requests", () => {
 		const agentManager = (path: string): CloudServiceRequest => ({ service: "agent-manager", method: "GET", path });
 		await assert.rejects(callCloudService(agentManager("/orgs/acme/..%2f..%2f..%2fother-api/x"), d), codeOf("bad_request"));
 		await assert.rejects(callCloudService(agentManager("/orgs/acme/..%5C..%5Cother-api"), d), codeOf("bad_request"));
+		await assert.rejects(callCloudService(agentManager("/orgs/acme/..%\t2f..%\t2fother-api/x"), d), codeOf("bad_request"));
 		assert.strictEqual(sent.length, 0);
 	});
 

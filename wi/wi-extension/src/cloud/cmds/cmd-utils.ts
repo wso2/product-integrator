@@ -17,7 +17,7 @@
  */
 
 import { type Component, type Organization, type PlatformSession, type Project, RESOURCE_NAME } from "@wso2/wso2-cloud-client";
-import { type ExtensionName, WICommandIds } from "@wso2/wso2-platform-core";
+import { type ExtensionName, type GetLocalGitDataResp, WICommandIds } from "@wso2/wso2-platform-core";
 import { ProgressLocation, type QuickPickItem, QuickPickItemKind, type WorkspaceFolder, commands, window, workspace } from "vscode";
 import { type ExtensionVariables, ext } from "../../extensionVariables";
 import { dataCacheStore } from "../stores/data-cache-store";
@@ -146,6 +146,12 @@ export const toResourceName = (displayName: string): string =>
 		.replace(/-+$/, ""); // the cut can end on a hyphen
 
 export const toProjectName = toResourceName;
+
+/** The remote a deploy builds from: the one asked for when the repository has it, else the branch's upstream or the first remote. */
+export function deployRemote(gitData: GetLocalGitDataResp | null | undefined, requested?: string): string | null {
+	const remotes = gitData?.remotes ?? [];
+	return (requested && remotes.includes(requested) ? requested : gitData?.upstream?.remoteUrl || remotes[0]) || null;
+}
 
 export const createNewProject = async (projectName?: string, isWorkspaceMapping?: boolean): Promise<Project> => {
 	const org = requireOrg();

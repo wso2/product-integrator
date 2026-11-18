@@ -37,8 +37,14 @@ const ORDERS = async () => [{ owner: "acme", name: "Orders", private: true, defa
 const MAIN = async () => ["main"];
 const AUTH_REQUIRED = new ConflictError("github-auth-required", { status: 409, apiError: "github-auth-required" });
 const NO_ACCESS = { retrievedRepos: true, isAccessible: false, branches: [] as string[] };
+const INSTALL_PAGE = "https://github.com/apps/wso2-cloud-git-connect-dev/installations/new";
 
 describe("GitHub repository access", () => {
+	const openExternal = env.openExternal;
+	afterEach(() => {
+		env.openExternal = openExternal;
+	});
+
 	it("reads a repository the app covers, with its installation", async () => {
 		platform({ listGitHubInstallations: ACME, listGitHubRepos: ORDERS, listGitHubBranches: MAIN });
 		assert.deepStrictEqual(await githubRepoAccess("acme", "orders"), { retrievedRepos: true, isAccessible: true, installationId: 7, branches: ["main"] });
@@ -49,6 +55,14 @@ describe("GitHub repository access", () => {
 		assert.strictEqual((await githubRepoAccess("acme", "orders")).retrievedRepos, false);
 		platform({ listGitHubInstallations: ACME, listGitHubRepos: () => Promise.reject(AUTH_REQUIRED) }, ["main"]);
 		assert.deepStrictEqual(await githubRepoAccess("acme", "orders"), { retrievedRepos: false, isAccessible: false, branches: [] });
+	});
+
+	it("passes on a failure that is not a lapsed authorization", async () => {
+		const down = new Error("unreachable");
+		platform({ listGitHubInstallations: () => Promise.reject(down) });
+		await assert.rejects(githubRepoAccess("acme", "orders"), (error) => error === down);
+		platform({ listGitHubInstallations: ACME, listGitHubRepos: ORDERS, listGitHubBranches: () => Promise.reject(down) });
+		await assert.rejects(githubRepoAccess("acme", "orders"), (error) => error === down);
 	});
 
 	it("asks to grant access when the app is not on the account", async () => {
@@ -83,6 +97,35 @@ describe("GitHub repository access", () => {
 		} finally {
 			env.openExternal = openExternal;
 		}
+	});
+
+	it("authorizes after an install that names no owner, and stops waiting when the authorize page is not opened", async () => {
+		const opened: string[] = [];
+		env.openExternal = async (uri: { toString(): string }) => {
+			opened.push(uri.toString());
+			fireWindowState(false);
+			return opened.length === 1;
+		};
+		platform({ listGitHubInstallations: () => Promise.reject(new Error("not read without an owner")) });
+		ext.context = { extension: { id: "wso2.wso2-integrator" } } as unknown as typeof ext.context;
+		const install = installGitHubApp();
+		await new Promise((resolve) => setImmediate(resolve));
+		fireWindowState(true);
+		await install;
+		assert.strictEqual(opened[0], INSTALL_PAGE);
+		assert.ok(opened[1]?.startsWith("https://github.com/login/oauth/authorize?"), opened[1]);
+		assert.strictEqual(opened.length, 2);
+	});
+
+	it("stops waiting when the install page is not opened", async () => {
+		const opened: string[] = [];
+		env.openExternal = async (uri: { toString(): string }) => {
+			opened.push(uri.toString());
+			return false;
+		};
+		platform({ listGitHubInstallations: () => Promise.reject(new Error("not read after a declined page")) });
+		await installGitHubApp("acme");
+		assert.deepStrictEqual(opened, [INSTALL_PAGE]);
 	});
 
 	it("reads public repositories in an environment with no GitHub App", async () => {

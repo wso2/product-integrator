@@ -69,7 +69,10 @@ export async function githubRepoAccess(owner: string, repo: string): Promise<Git
 		const branches = await git.listGitHubBranches(installation.installationId, owner, repo);
 		return { retrievedRepos: true, isAccessible: true, installationId: installation.installationId, branches };
 	} catch (error) {
-		return denied(!isGitHubAuthRequired(error));
+		if (isGitHubAuthRequired(error)) {
+			return denied(false);
+		}
+		throw error;
 	}
 }
 
@@ -99,10 +102,11 @@ export async function installGitHubApp(owner?: string): Promise<void> {
 		await openConsole();
 		return;
 	}
-	await untilBackFrom(`https://github.com/apps/${encodeURIComponent(githubAppSlug)}/installations/new`, "Give WSO2 Cloud Git Connect access to the repository on GitHub");
+	if (!(await untilBackFrom(`https://github.com/apps/${encodeURIComponent(githubAppSlug)}/installations/new`, "Give WSO2 Cloud Git Connect access to the repository on GitHub"))) {
+		return;
+	}
 	// GitHub's own redirect after an install never reaches the editor, so a new installation is connected by an authorization.
-	const installations = owner ? await ext.clients.platform.cloud.git.listGitHubInstallations() : [];
-	if (owner && !installations.some((item) => sameName(item.githubAccount, owner))) {
+	if (!owner || !(await ext.clients.platform.cloud.git.listGitHubInstallations()).some((item) => sameName(item.githubAccount, owner))) {
 		await connectGitHub(owner, false);
 	}
 }
@@ -132,41 +136,52 @@ async function fromGitHub(page: string, query: Record<string, string>, title: st
 			new Promise<URLSearchParams | undefined>((resolve) => {
 				pending?.resolve(undefined);
 				pending = { state, resolve };
-				token.onCancellationRequested(() => {
+				const stop = () => {
 					if (pending?.state === state) {
 						pending = undefined;
 					}
 					resolve(undefined);
+				};
+				token.onCancellationRequested(stop);
+				void env.openExternal(Uri.parse(`${page}?${new URLSearchParams({ ...query, state })}`)).then((opened) => {
+					if (!opened) {
+						stop();
+					}
 				});
-				void env.openExternal(Uri.parse(`${page}?${new URLSearchParams({ ...query, state })}`));
 			}),
 	);
 }
 
-// Opens a GitHub page and resolves once the editor has lost focus to the browser and got it back, or the wait is cancelled.
-function untilBackFrom(page: string, title: string): Thenable<void> {
+// Opens a GitHub page and resolves once the editor has lost focus to the browser and got it back, or the wait is cancelled; false when the page is not opened.
+function untilBackFrom(page: string, title: string): Thenable<boolean> {
 	return window.withProgress(
 		{ location: ProgressLocation.Notification, title, cancellable: true },
 		(_progress, token) =>
-			new Promise<void>((resolve) => {
+			new Promise<boolean>((resolve) => {
 				let left = !window.state.focused;
 				const listener = window.onDidChangeWindowState((state) => {
 					left ||= !state.focused;
 					if (left && state.focused) {
 						listener.dispose();
-						resolve();
+						resolve(true);
 					}
 				});
-				token.onCancellationRequested(() => {
+				const stop = (opened: boolean) => {
 					listener.dispose();
-					resolve();
+					resolve(opened);
+				};
+				token.onCancellationRequested(() => stop(true));
+				void env.openExternal(Uri.parse(page)).then((opened) => {
+					if (!opened) {
+						stop(false);
+					}
 				});
-				void env.openExternal(Uri.parse(page));
 			}),
 	);
 }
 
 async function openConsole(): Promise<void> {
+	void window.showInformationMessage("Connect GitHub in the WSO2 Cloud console, then return here.");
 	await env.openExternal(Uri.parse(buildConsoleUrl(ext.config.consoleUrl, { orgHandle: ext.authProvider?.org?.handle })));
 }
 

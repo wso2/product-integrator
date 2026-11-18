@@ -18,7 +18,7 @@
 
 import * as assert from "assert";
 import { RESOURCE_NAME } from "@wso2/wso2-cloud-client";
-import { toResourceName } from "../../cloud/cmds/cmd-utils";
+import { deployRemote, toResourceName } from "../../cloud/cmds/cmd-utils";
 
 describe("toResourceName", () => {
 	it("derives a name the platform accepts from what a person typed", () => {
@@ -29,5 +29,21 @@ describe("toResourceName", () => {
 		const name = toResourceName(`${"a".repeat(62)} b`);
 		assert.strictEqual(name, "a".repeat(62));
 		assert.ok(RESOURCE_NAME.test(name));
+	});
+});
+
+describe("deployRemote", () => {
+	const ALICE = "https://github.com/alice/orders.git";
+	const ACME = "https://github.com/acme/orders.git";
+	const gitData = { remotes: [ALICE, ACME], upstream: { remoteUrl: ALICE } };
+
+	it("takes the remote the deploy form picked over the branch's upstream", () => {
+		assert.strictEqual(deployRemote(gitData, ACME), ACME);
+	});
+
+	it("falls back to the upstream, then the first remote, when the repository has no such remote", () => {
+		assert.strictEqual(deployRemote(gitData, "https://github.com/eve/orders.git"), ALICE);
+		assert.strictEqual(deployRemote({ remotes: [ACME, ALICE] }), ACME);
+		assert.strictEqual(deployRemote(undefined, ACME), null);
 	});
 });

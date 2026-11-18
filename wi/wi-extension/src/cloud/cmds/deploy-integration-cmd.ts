@@ -41,7 +41,7 @@ import { type GitHubRepoAccess, connectGitHub, githubRepoAccess, installGitHubAp
 import { handleCloudError } from "../platform/error-handler";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
-import { createProjectNamed, isPlatformReady, requireSession, validateProjectName } from "./cmd-utils";
+import { createProjectNamed, deployRemote, isPlatformReady, requireSession, validateProjectName } from "./cmd-utils";
 import {
 	assignUniqueNames,
 	confirmAnotherIntegration,
@@ -94,10 +94,12 @@ function pickBranch(branches: string[], ...preferred: (string | undefined | null
 
 const NO_ACCESS: GitHubRepoAccess = { retrievedRepos: false, isAccessible: false, branches: [] };
 
+type SourceReq = Pick<WICloudInspectSourceReq, "workspaceDir" | "gitRemote">;
+
 // The GitHub account of the repository a deploy from `workspaceDir` builds from, as the check reads it.
-async function sourceOwner(workspaceDir?: string): Promise<string | undefined> {
-	const gitData = workspaceDir ? await new CloudWsManager().getLocalGitData(workspaceDir) : undefined;
-	const remote = gitData?.upstream?.remoteUrl || gitData?.remotes?.[0];
+async function sourceOwner(req?: SourceReq): Promise<string | undefined> {
+	const gitData = req?.workspaceDir ? await new CloudWsManager().getLocalGitData(req.workspaceDir) : undefined;
+	const remote = deployRemote(gitData, req?.gitRemote);
 	return remote ? parseGitHubRepoUrl(remote)?.owner : undefined;
 }
 
@@ -106,7 +108,7 @@ async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspe
 	const ws = new CloudWsManager();
 	const gitData = (await ws.getLocalGitData(req.workspaceDir)) ?? null;
 	const remotes = gitData?.remotes ?? [];
-	const gitRemote = (req.gitRemote && remotes.includes(req.gitRemote) ? req.gitRemote : gitData?.upstream?.remoteUrl || remotes[0]) || null;
+	const gitRemote = deployRemote(gitData, req.gitRemote);
 	const gitProvider = (gitRemote && parseGitURL(gitRemote)?.[2]) || null;
 	const github = gitRemote && gitProvider ? parseGitHubRepoUrl(gitRemote) : undefined;
 	const repoAccess = gitRemote && gitProvider ? await (github ? githubRepoAccess(github.owner, github.repo) : NO_ACCESS) : undefined;
@@ -254,7 +256,7 @@ export function deployIntegrationCommands(context: ExtensionContext) {
 		commands.registerCommand(WICloudDeployCommands.InspectSource, inspectSource),
 		commands.registerCommand(WICloudDeployCommands.Deploy, deploy),
 		commands.registerCommand(WICloudDeployCommands.DeployBuild, deployLatestBuild),
-		commands.registerCommand(WICloudDeployCommands.ConnectGitHub, async (req?: { workspaceDir?: string }) => connectGitHub(await sourceOwner(req?.workspaceDir))),
-		commands.registerCommand(WICloudDeployCommands.InstallGitHubApp, async (req?: { workspaceDir?: string }) => installGitHubApp(await sourceOwner(req?.workspaceDir))),
+		commands.registerCommand(WICloudDeployCommands.ConnectGitHub, async (req?: SourceReq) => connectGitHub(await sourceOwner(req))),
+		commands.registerCommand(WICloudDeployCommands.InstallGitHubApp, async (req?: SourceReq) => installGitHubApp(await sourceOwner(req))),
 	);
 }
