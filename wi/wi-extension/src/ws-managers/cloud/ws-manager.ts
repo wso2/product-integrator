@@ -53,6 +53,7 @@ import type { IFileStatus } from "../../cloud/git/git";
 import { initGit } from "../../cloud/git/main";
 import { connectGitHub, githubRepoAccess, installGitHubApp } from "../../cloud/github-app";
 import { hasDirtyRepo as checkDirtyRepo, getGitHead, getGitRemotes, getGitRoot, relativePath, removeCredentialsFromGitURL } from "../../cloud/git/util";
+import { describeCloudError } from "../../cloud/platform/error-handler";
 import { contextStore } from "../../cloud/stores/context-store";
 import { dataCacheStore } from "../../cloud/stores/data-cache-store";
 import { ext } from "../../extensionVariables";
@@ -72,6 +73,8 @@ export function openCloudFormWebview(context: WICloudFormContext): void {
 	_pendingContext = context;
 	StateMachine.openWebview(ViewType.CREATE_CLOUD_INTEGRATION);
 }
+
+const showGitHubError = (error: unknown): void => void window.showErrorMessage(`Couldn't connect GitHub: ${describeCloudError(error, String(error))}`);
 
 /**
  * What the cloud webviews ask the extension. The method names are the ones
@@ -181,11 +184,11 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async triggerGithubAuthFlow(_orgId: string): Promise<void> {
-		await connectGitHub();
+		await connectGitHub().catch(showGitHubError);
 	}
 
 	async triggerGithubInstallFlow(_orgId: string): Promise<void> {
-		await installGitHubApp();
+		await installGitHubApp().catch(showGitHubError);
 	}
 
 	/** Branches of a GitHub repository the platform can read; empty for anything else. */

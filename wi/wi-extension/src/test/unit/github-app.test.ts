@@ -18,12 +18,12 @@
 
 import * as assert from "assert";
 import { ConflictError, ENVIRONMENTS, type GitProxyApi } from "@wso2/wso2-cloud-client";
-import { env } from "vscode";
-import { githubRepoAccess, installGitHubApp } from "../../cloud/github-app";
+import { Uri, env, window } from "vscode";
+import { acceptGitHubCallback, connectGitHub, githubRepoAccess, installGitHubApp } from "../../cloud/github-app";
 import { ext } from "../../extensionVariables";
 import { fireWindowState } from "./mocks/vscode";
 
-type GitHubCalls = Pick<GitProxyApi, "listGitHubInstallations" | "listGitHubRepos" | "listGitHubBranches">;
+type GitHubCalls = Pick<GitProxyApi, "listGitHubInstallations" | "listGitHubRepos" | "listGitHubBranches" | "bindGitHubInstallations">;
 
 function platform(git: Partial<GitHubCalls>, publicBranches: string[] = []): void {
 	ext.config = { ...ENVIRONMENTS.dev };
@@ -40,9 +40,14 @@ const NO_ACCESS = { retrievedRepos: true, isAccessible: false, branches: [] as s
 const INSTALL_PAGE = "https://github.com/apps/wso2-cloud-git-connect-dev/installations/new";
 
 describe("GitHub repository access", () => {
-	const openExternal = env.openExternal;
+	const { config, clients } = ext;
+	const context = (ext as unknown as { _context: typeof ext.context })._context;
+	const { openExternal } = env;
+	const { withProgress } = window;
 	afterEach(() => {
+		Object.assign(ext, { config, clients, context });
 		env.openExternal = openExternal;
+		window.withProgress = withProgress;
 	});
 
 	it("reads a repository the app covers, with its installation", async () => {
@@ -126,6 +131,87 @@ describe("GitHub repository access", () => {
 		platform({ listGitHubInstallations: () => Promise.reject(new Error("not read after a declined page")) });
 		await installGitHubApp("acme");
 		assert.deepStrictEqual(opened, [INSTALL_PAGE]);
+	});
+
+	describe("authorization", () => {
+		const settle = () => new Promise((resolve) => setImmediate(resolve));
+		const callback = (query: string) => Uri.parse(`vscode://wso2.wso2-integrator/ghapp?${query}`) as unknown as Parameters<typeof acceptGitHubCallback>[0];
+		let opened: string[];
+		let bound: string[];
+		const state = (index: number) => new URL(opened[index]).searchParams.get("state");
+
+		beforeEach(() => {
+			opened = [];
+			bound = [];
+			env.openExternal = async (uri: { toString(): string }) => {
+				opened.push(uri.toString());
+				return true;
+			};
+			platform({
+				bindGitHubInstallations: async (code: string) => {
+					bound.push(code);
+					return [{ installationId: 7, githubAccount: "Acme" }];
+				},
+			});
+			ext.context = { extension: { id: "wso2.wso2-integrator" } } as unknown as typeof ext.context;
+		});
+
+		it("binds the installations with the code GitHub sends back for the flow's state", async () => {
+			const connect = connectGitHub("acme");
+			await settle();
+			assert.ok(opened[0].startsWith("https://github.com/login/oauth/authorize?"), opened[0]);
+			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(0)}&code=abc`)), true);
+			await connect;
+			assert.deepStrictEqual(bound, ["abc"]);
+			assert.strictEqual(opened.length, 1);
+		});
+
+		it("ignores an answer for another state, and any answer once nothing waits", async () => {
+			assert.strictEqual(acceptGitHubCallback(callback("state=none&code=abc")), false);
+			const connect = connectGitHub("acme");
+			await settle();
+			assert.strictEqual(acceptGitHubCallback(callback("state=other&code=abc")), false);
+			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(0)}&code=abc`)), true);
+			await connect;
+			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(0)}&code=abc`)), false);
+			assert.deepStrictEqual(bound, ["abc"]);
+		});
+
+		it("ends a flow a newer one supersedes, which takes the answer", async () => {
+			const first = connectGitHub("acme");
+			await settle();
+			const second = connectGitHub("acme");
+			await settle();
+			await first;
+			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(0)}&code=old`)), false);
+			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(1)}&code=new`)), true);
+			await second;
+			assert.deepStrictEqual(bound, ["new"]);
+		});
+
+		it("ends a cancelled flow, which then takes no answer", async () => {
+			let cancel = (): void => undefined;
+			window.withProgress = (async <T>(_options: unknown, task: (progress: unknown, token: unknown) => Promise<T>) =>
+				task({ report: (): undefined => undefined }, { onCancellationRequested: (listener: () => void) => (cancel = listener) })) as unknown as typeof withProgress;
+			const connect = connectGitHub("acme");
+			await settle();
+			cancel();
+			await connect;
+			assert.strictEqual(acceptGitHubCallback(callback(`state=${state(0)}&code=abc`)), false);
+			assert.deepStrictEqual(bound, []);
+		});
+
+		it("binds nothing when the person declines, and rejects any other GitHub error", async () => {
+			const denied = connectGitHub("acme");
+			await settle();
+			acceptGitHubCallback(callback(`state=${state(0)}&error=access_denied`));
+			await denied;
+			const failed = connectGitHub("acme");
+			await settle();
+			acceptGitHubCallback(callback(`state=${state(1)}&error=server_error&error_description=down`));
+			await assert.rejects(failed, /down/);
+			assert.deepStrictEqual(bound, []);
+		});
 	});
 
 	it("reads public repositories in an environment with no GitHub App", async () => {

@@ -233,11 +233,15 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		configDriftFiles: configDriftFiles ?? [],
 		hasDirtyRepo: !!hasDirtyRepo,
 	});
+	const refetchGitHubAccess = () => {
+		refetchRepoAccess();
+		refetchBranches();
+	};
 	const actionHandlers: Record<SourceReadinessAction, () => void> = {
 		sourceControl: () => openSourceControl(),
 		pushChanges: () => pushChanges(),
-		grantAccess: () => wsClient.triggerGithubInstallFlow(orgId),
-		authorize: () => wsClient.triggerGithubAuthFlow(orgId),
+		grantAccess: () => wsClient.triggerGithubInstallFlow(orgId).finally(refetchGitHubAccess),
+		authorize: () => wsClient.triggerGithubAuthFlow(orgId).finally(refetchGitHubAccess),
 		manageCredentials: () => wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" })),
 	};
 	const refreshers: Record<SourceReadinessRefresh, [() => void, boolean]> = {
