@@ -45,8 +45,9 @@ describe("requiredConfigurables", () => {
 		assert.deepStrictEqual(requiredConfigurables(encode(schema)), ["wso2.orders.apiKey", "wso2.orders.jira"]);
 	});
 
-	it("reads them at the injected requiredLevel", () => {
-		assert.deepStrictEqual(requiredConfigurables(encode({ ...schema, requiredLevel: 3 })), ["wso2.orders.jira.username"]);
+	it("reads them at the requiredLevel WSO2 Cloud injects, not from inside a record configurable", () => {
+		assert.deepStrictEqual(requiredConfigurables(encode({ ...schema, requiredLevel: 3 })), ["wso2.orders.apiKey", "wso2.orders.jira"]);
+		assert.deepStrictEqual(requiredConfigurables(encode({ ...schema, requiredLevel: 4 })), ["wso2.orders.jira.username"]);
 	});
 
 	it("is empty when the build recorded no schema", () => {

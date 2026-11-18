@@ -163,15 +163,18 @@ async function missingConfigurations(integrationId: string, environment: Environ
 	}
 }
 
-/** The keys (`org.module.name`) of the configurables a base64 Ballerina config schema marks required, at its `requiredLevel` depth. */
+/**
+ * The keys (`org.module.name`) of the configurables a base64 Ballerina config schema marks required:
+ * the `required` lists at its `requiredLevel`, counted from 1 at the root, which is a module's level.
+ */
 export function requiredConfigurables(jsonSchema: string): string[] {
 	if (!jsonSchema) {
 		return [];
 	}
 	const schema = JSON.parse(Buffer.from(jsonSchema, "base64").toString("utf8"));
-	const level: number = typeof schema.requiredLevel === "number" ? schema.requiredLevel : 2;
+	const level: number = typeof schema.requiredLevel === "number" ? schema.requiredLevel : 3;
 	const walk = (node: SchemaNode | undefined, path: string[]): string[] =>
-		path.length === level
+		path.length === level - 1
 			? (node?.required ?? []).map((name) => [...path, name].join("."))
 			: Object.entries(node?.properties ?? {}).flatMap(([name, child]) => walk(child, [...path, name]));
 	return walk(schema, []);
