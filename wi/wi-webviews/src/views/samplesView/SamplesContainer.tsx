@@ -45,6 +45,7 @@ interface BrowseItem {
 	imageUrl?: string;
 	connectorIconUrls?: string[];
 	fallbackArtwork?: string;
+	videoLink?: string;
 	searchText: string;
 	priority: number;
 	prebuiltIntegration?: SampleItem;
@@ -326,6 +327,32 @@ const ArtworkText = styled.span`
     color: var(--vscode-descriptionForeground);
 `;
 
+const VideoLinkRow = styled.div`
+    display: flex;
+    justify-content: flex-end;
+    margin: -6px 0 -6px;
+`;
+
+const VideoLink = styled.a`
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--vscode-textLink-foreground);
+    text-decoration: none;
+    cursor: pointer;
+
+    &:hover {
+        color: var(--vscode-textLink-activeForeground);
+        text-decoration: underline;
+    }
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+    }
+`;
+
 const Description = styled.p`
     margin: 0;
     font-size: 12px;
@@ -550,6 +577,19 @@ function compareBrowseItems(left: BrowseItem, right: BrowseItem): number {
 	return left.title.localeCompare(right.title);
 }
 
+function getVideoLink(videoLink?: string): string | undefined {
+	const trimmed = videoLink?.trim();
+	if (!trimmed) {
+		return undefined;
+	}
+	try {
+		const { protocol } = new URL(trimmed);
+		return protocol === "https:" || protocol === "http:" ? trimmed : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 function createPrebuiltItem(
 	prebuiltIntegration: SampleItem,
 ): BrowseItem {
@@ -565,6 +605,7 @@ function createPrebuiltItem(
 		imageUrl: getImageUrl(prebuiltIntegration.thumbnailPath),
 		connectorIconUrls: getPrebuiltConnectorIconUrls(prebuiltIntegration),
 		fallbackArtwork: getPrebuiltArtworkText(prebuiltIntegration),
+		videoLink: getVideoLink(prebuiltIntegration.videoLink),
 		searchText: [
 			prebuiltIntegration.displayName,
 			prebuiltIntegration.description,
@@ -594,6 +635,7 @@ function createSampleItem(
 		imageUrl: getImageUrl(prebuiltIntegration.thumbnailPath),
 		connectorIconUrls: getPrebuiltConnectorIconUrls(prebuiltIntegration),
 		fallbackArtwork: getPrebuiltArtworkText(prebuiltIntegration),
+		videoLink: getVideoLink(prebuiltIntegration.videoLink),
 		searchText: [
 			prebuiltIntegration.displayName,
 			prebuiltIntegration.description,
@@ -917,6 +959,19 @@ export function SamplesContainer(props: SamplesContainerProps) {
 
 									/>
 								</IconFrame>
+								{item.videoLink && (
+									<VideoLinkRow>
+										<VideoLink
+											href={item.videoLink}
+											title={item.videoLink}
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											<Codicon name="play-circle" iconSx={{ fontSize: 14 }} />
+											Watch sample video
+										</VideoLink>
+									</VideoLinkRow>
+								)}
 								<Description>{item.description}</Description>
 								<CardFooter>
 									<DownloadAction>

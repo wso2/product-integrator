@@ -137,6 +137,7 @@ export interface SampleItem {
     imageUrl?: string;
     defaultPackage?: string;
     bidirectional?: boolean;
+    videoLink?: string;
 }
 
 export interface GettingStartedData {
