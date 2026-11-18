@@ -241,7 +241,7 @@ async function followFirstBuild(created: CreatedComponent, orgHandle: string, pr
 	const signal = controller.signal;
 	try {
 		const location = quiet ? ProgressLocation.Window : ProgressLocation.Notification;
-		await window.withProgress({ location, title: `${label} in WSO2 Cloud`, cancellable: !quiet }, async (progress, token) => {
+		await window.withProgress({ location, title: `${label} in Choreo Cloud`, cancellable: !quiet }, async (progress, token) => {
 			token.onCancellationRequested(() => controller.abort());
 			progress.report({ message: "waiting for the first build to start" });
 			let build = await findFirstBuild(created.id, project.id, signal, FIRST_BUILD_APPEAR_MS);
@@ -267,7 +267,7 @@ async function followFirstBuild(created: CreatedComponent, orgHandle: string, pr
 				return;
 			}
 			if (!deployAfter) {
-				tell(`${label} is built; WSO2 Cloud deploys it automatically.`, "info");
+				tell(`${label} is built; Choreo Cloud deploys it automatically.`, "info");
 				return;
 			}
 			const report = (message: string) => progress.report({ message });

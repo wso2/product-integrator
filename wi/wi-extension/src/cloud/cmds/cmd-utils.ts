@@ -225,7 +225,7 @@ export async function resolveDeployProject(choice: WICloudDeployReq["project"], 
 	if ("id" in choice) {
 		const project = projects.find((item) => item.id === choice.id);
 		if (!project) {
-			throw new Error(`The project ${choice.id} no longer exists in WSO2 Cloud.`);
+			throw new Error(`The project ${choice.id} no longer exists in Choreo Cloud.`);
 		}
 		return project;
 	}
