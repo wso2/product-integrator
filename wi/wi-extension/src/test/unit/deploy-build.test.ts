@@ -17,7 +17,7 @@
  */
 
 import * as assert from "assert";
-import { deployBuild, requiredConfigurables } from "../../cloud/cmds/deploy-build";
+import { deployBuild, requiredConfigurables, unsetConfigurations } from "../../cloud/cmds/deploy-build";
 import { ext } from "../../extensionVariables";
 
 const encode = (schema: object) => Buffer.from(JSON.stringify(schema)).toString("base64");
@@ -95,5 +95,11 @@ describe("deployBuild", () => {
 		});
 		assert.strictEqual((await deployBuild("orders", "b1", "default", () => undefined)).target.name, "Development");
 		assert.deepStrictEqual(deployed, ["orders"]);
+	});
+
+	it("names the unset required configurations and their environment without deploying", async () => {
+		platform([{ key: "acme.orders.apiKey", values: [{ value: "k" }] }], { fieldLinks: { "acme.orders.url": "p/c/e" } });
+		assert.deepStrictEqual(await unsetConfigurations("orders", "default"), { environment: "Development", names: ["jira"] });
+		assert.deepStrictEqual(deployed, []);
 	});
 });

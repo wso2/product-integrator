@@ -26,6 +26,7 @@ import {
 	type WICloudDeployResp,
 	type WICloudInspectSourceReq,
 	type WICloudInspectSourceResp,
+	type WICloudUnsetConfigurationsResp,
 	sourceReadiness,
 	validateIntegrationDisplayName,
 } from "@wso2/wi-core";
@@ -53,7 +54,7 @@ import {
 	toValidProjectName,
 } from "./cmd-utils";
 import { confirmAnotherIntegration, hasIntegrationForDirs, localProjectDisplayName, submitCreateComponentHandler } from "./create-component-cmd";
-import { type Release, deployBuild, enableBuildAutomation, waitForRelease } from "./deploy-build";
+import { type Release, deployBuild, enableBuildAutomation, unsetConfigurations, waitForRelease } from "./deploy-build";
 
 const signedIn = () => ext.authProvider?.state?.status === "signed-in" && !!ext.authProvider.org;
 
@@ -261,6 +262,11 @@ async function deployLatestBuild({ integrationId, projectId, quiet }: WICloudDep
 	}
 }
 
+function unsetConfigurationsOf({ integrationId, projectId }: WICloudDeployBuildReq): Promise<WICloudUnsetConfigurationsResp> {
+	isPlatformReady(ext);
+	return unsetConfigurations(integrationId, projectId);
+}
+
 async function followRelease(integrationId: string, projectId: string, release: Release): Promise<void> {
 	const controller = new AbortController();
 	try {
@@ -290,6 +296,7 @@ export function deployIntegrationCommands(context: ExtensionContext) {
 		commands.registerCommand(WICloudDeployCommands.InspectSource, inspectSource),
 		commands.registerCommand(WICloudDeployCommands.Deploy, deploy),
 		commands.registerCommand(WICloudDeployCommands.DeployBuild, deployLatestBuild),
+		commands.registerCommand(WICloudDeployCommands.UnsetConfigurations, unsetConfigurationsOf),
 		commands.registerCommand(WICloudDeployCommands.ConnectGitHub, (req?: SourceReq) => connectGitHubFor(req, false)),
 		commands.registerCommand(WICloudDeployCommands.InstallGitHubApp, (req?: SourceReq) => connectGitHubFor(req, true)),
 	);
