@@ -160,9 +160,7 @@ async function missingConfigurations(integrationId: string, environment: Environ
 		const set = (configurations ?? []).filter((item) => item.isSet || item.values.some((value) => value.value)).map((item) => item.key);
 		// A link fills a configurable from a connection; a record configurable may be stored as one key per field.
 		const filled = [...set, ...Object.keys(links.endpointLinks ?? {}), ...Object.keys(links.fieldLinks ?? {})];
-		const missing = requiredConfigurables(jsonSchema).filter((key) => !filled.some((item) => item === key || item.startsWith(`${key}.`)));
-		ext.log(`Required configurations of ${integrationId} in ${environment.name}: ${missing.length ? `missing ${missing.join(", ")}` : "all set"}`);
-		return missing;
+		return requiredConfigurables(jsonSchema).filter((key) => !filled.some((item) => item === key || item.startsWith(`${key}.`)));
 	} catch (error) {
 		ext.log(`Could not check the configurations of ${integrationId} in ${environment.name}: ${(error as Error).message}`);
 		return [];
@@ -191,13 +189,21 @@ interface SchemaNode {
 	required?: string[];
 }
 
+const configName = (key: string) => key.slice(key.lastIndexOf(".") + 1);
+
+/** The required configurations, by name, that a deploy to the project's entry environment still needs. */
+export async function unsetConfigurations(integrationId: string, projectName: string): Promise<{ environment: string; names: string[] }> {
+	const target = await entryEnvironment(projectName);
+	return { environment: target.name, names: (await missingConfigurations(integrationId, target, projectName)).map(configName) };
+}
+
 /** Deploys a built image to the project's entry environment, unless required configurations are not set there. */
 export async function deployBuild(integrationId: string, buildName: string, projectName: string, report: (message: string) => void): Promise<Release> {
 	const target = await entryEnvironment(projectName);
 	const missing = await missingConfigurations(integrationId, target, projectName);
+	ext.log(`Required configurations of ${integrationId} in ${target.name}: ${missing.length ? `missing ${missing.join(", ")}` : "all set"}`);
 	if (missing.length > 0) {
-		const names = missing.map((key) => key.slice(key.lastIndexOf(".") + 1)).join(", ");
-		throw new Error(`Required configurations are not set in ${target.name}: ${names}. Set them in the console, then deploy.`);
+		throw new Error(`Required configurations are not set in ${target.name}: ${missing.map(configName).join(", ")}. Set them in the console, then deploy.`);
 	}
 	report(`deploying to ${target.name}`);
 	const { releaseId, observed } = await ext.clients.platform.cloud.deployments.deploy(integrationId, {

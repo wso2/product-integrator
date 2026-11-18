@@ -233,6 +233,8 @@ export const WICloudDeployCommands = {
 	Deploy: "wso2.integrator.cloud.integration.deploy",
 	/** Deploys an integration's latest successful build to its project's entry environment. */
 	DeployBuild: "wso2.integrator.cloud.integration.deployBuild",
+	/** The required configurations that deploying an integration's latest build still needs in its project's entry environment. */
+	UnsetConfigurations: "wso2.integrator.cloud.integration.unsetConfigurations",
 } as const;
 
 export interface WICloudDeployContextReq {
@@ -277,6 +279,11 @@ export interface WICloudDeployReq {
 	branch: string;
 	/** The caller shows the progress and the failures it gets back: report progress in the status bar and skip the success and failure messages. */
 	quiet?: boolean;
+}
+
+export interface WICloudUnsetConfigurationsResp {
+	environment: string;
+	names: string[];
 }
 
 export interface WICloudDeployBuildReq {
