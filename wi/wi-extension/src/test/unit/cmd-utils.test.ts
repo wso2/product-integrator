@@ -29,6 +29,7 @@ import {
 	pickBranch,
 	resolveDeployProject,
 	toResourceName,
+	toValidProjectName,
 	validateProjectName,
 } from "../../cloud/cmds/cmd-utils";
 import { ext } from "../../extensionVariables";
@@ -48,6 +49,12 @@ describe("toResourceName", () => {
 describe("resolveDeployProject", () => {
 	const ORDERS = { id: "orders", name: "Orders" } as Project;
 	let created: { name: string; displayName: string }[];
+	const saved = { authProvider: ext.authProvider, context: (ext as unknown as { _context: unknown })._context, clients: ext.clients };
+	after(() => {
+		ext.authProvider = saved.authProvider;
+		(ext as unknown as { _context: unknown })._context = saved.context;
+		ext.clients = saved.clients;
+	});
 
 	function platform(integrations: Record<string, Component[]>): void {
 		created = [];
@@ -69,10 +76,18 @@ describe("resolveDeployProject", () => {
 		} as unknown as typeof ext.clients;
 	}
 
-	it("reuses the empty project a failed deploy of the same name left, so a retry does not fail", async () => {
+	it("reuses the empty project its own failed deploy created, so a retry does not fail", async () => {
 		platform({});
-		assert.strictEqual(await resolveDeployProject({ newName: "Orders" }, [ORDERS]), ORDERS);
-		assert.deepStrictEqual(created, []);
+		const first = await resolveDeployProject({ newName: "Retry" }, [ORDERS]);
+		assert.strictEqual(await resolveDeployProject({ newName: "Retry" }, [ORDERS, first]), first);
+		assert.strictEqual(created.length, 1);
+	});
+
+	it("refuses an empty project of that name it didn't create, and one being deleted", async () => {
+		platform({});
+		await assert.rejects(resolveDeployProject({ newName: "Orders" }, [ORDERS]), /Project name already exists/);
+		const first = await resolveDeployProject({ newName: "Going" }, [ORDERS]);
+		await assert.rejects(resolveDeployProject({ newName: "Going" }, [ORDERS, { ...first, deleting: true }]), /Project name already exists/);
 	});
 
 	it("refuses a new project name an existing project with integrations uses", async () => {
@@ -118,9 +133,13 @@ describe("deploySourceRoot", () => {
 		await assert.rejects(deploySourceRoot(request(), undefined, branches), /not in a Git repository/);
 	});
 
-	it("leaves the branch to the later checks when its list cannot be read", async () => {
-		assert.strictEqual(await deploySourceRoot(request({ branch: "dev" }), gitData, async () => []), root);
-		assert.strictEqual(await deploySourceRoot(request({ branch: "dev" }), gitData, () => Promise.reject(new Error("offline"))), root);
+	it("refuses a branch it cannot read, also when the list is empty or unreadable", async () => {
+		await assert.rejects(deploySourceRoot(request(), gitData, async () => []), /not a branch Choreo Cloud can read/);
+		await assert.rejects(deploySourceRoot(request(), gitData, () => Promise.reject(new Error("offline"))), /Couldn't read the branches.*offline/);
+	});
+
+	it("matches the remote in any URL form git reports", async () => {
+		assert.strictEqual(await deploySourceRoot(request({ gitRemote: "git@github.com:Acme/orders.git" }), gitData, branches), root);
 	});
 });
 
@@ -163,6 +182,18 @@ describe("pickBranch", () => {
 		assert.strictEqual(pickBranch(["dev", "master"]), "master");
 		assert.strictEqual(pickBranch(["dev", "release"], ""), "dev");
 		assert.strictEqual(pickBranch([], "main"), null);
+	});
+});
+
+describe("toValidProjectName", () => {
+	it("keeps the letters, digits, spaces, hyphens and underscores of a title, from its first letter", () => {
+		assert.strictEqual(toValidProjectName("Orders (v2)"), "Orders v2");
+		assert.strictEqual(toValidProjectName(" 12 Orders! "), "Orders");
+		assert.strictEqual(validateProjectName(toValidProjectName(`Orders ${"x".repeat(80)}`) ?? ""), null);
+	});
+
+	it("suggests nothing when too little is left", () => {
+		assert.strictEqual(toValidProjectName("A!"), undefined);
 	});
 });
 
