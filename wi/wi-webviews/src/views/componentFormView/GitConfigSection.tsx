@@ -126,6 +126,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		isFetching: isFetchingRepoAccess,
 		isLoading: isLoadingRepoAccess,
 		data: isRepoAuthorizedResp,
+		error: repoAccessError,
 		refetch: refetchRepoAccess,
 	} = useQuery({
 		queryKey: ["git-repo-access", { repo: gitRemote, orgId, provider: gitProvider, credential }],
@@ -155,6 +156,17 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		enabled: !!gitRemote && !!gitProvider && (gitProvider !== GitProvider.GITHUB ? !!credential : true),
 		refetchOnWindowFocus: true,
 	});
+
+	// GitHub connected from the editor: what WSO2 Cloud can read has changed.
+	useEffect(() => {
+		const unsubscribe = wsClient.onGitHubConnected(() => {
+			void refetchRepoAccess();
+			void refetchBranches();
+		});
+		return () => {
+			unsubscribe();
+		};
+	}, [refetchRepoAccess, refetchBranches]);
 
 	useEffect(() => {
 		if (branches?.length > 0 && (!branch || !branches.includes(branch))) {
@@ -247,16 +259,25 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		blockCreation = true;
 	}
 
+	// A failed check says nothing about access; it is retried rather than answered with Authorize.
+	if (!invalidRepoMsg && !isLoadingRepoAccess && gitRemote && repoAccessError) {
+		invalidRepoMsg = "Couldn't check WSO2 Cloud's access to this repository. Refresh to try again.";
+		onInvalidRepoRefreshClick = refetchRepoAccess;
+		onInvalidRepoRefreshing = isFetchingRepoAccess;
+		invalidRepoBannerType = "warning";
+		blockCreation = true;
+	}
+
 	if (!invalidRepoMsg && !isLoadingRepoAccess && gitRemote && !isRepoAuthorizedResp?.isAccessible && gitProvider) {
 		if (gitProvider === GitProvider.GITHUB) {
 			if (isRepoAuthorizedResp?.retrievedRepos) {
 				invalidRepoMsg = <span>WSO2 lacks access to the selected repository.</span>;
 				invalidRepoAction = "Grant Access";
-				onInvalidRepoActionClick = () => wsClient.triggerGithubInstallFlow(orgId);
+				onInvalidRepoActionClick = () => wsClient.triggerGithubInstallFlow(gitRemote ?? "");
 			} else {
 				invalidRepoMsg = "Please authorize WSO2 to access your GitHub repositories.";
 				invalidRepoAction = "Authorize";
-				onInvalidRepoActionClick = () => wsClient.triggerGithubAuthFlow(orgId);
+				onInvalidRepoActionClick = () => wsClient.triggerGithubAuthFlow(gitRemote ?? "");
 				invalidRepoBannerType = "info";
 			}
 		} else {

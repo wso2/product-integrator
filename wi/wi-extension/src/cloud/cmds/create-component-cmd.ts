@@ -41,6 +41,8 @@ import { openCloudFormWebview } from "../../ws-managers/cloud/ws-manager";
 import { linkContext, localContextEntry, readContextEntries, writeContextEntries } from "../context-file";
 import type { Repository } from "../git/git";
 import { initGit } from "../git/main";
+import { gitHubAccessFor } from "../github-access";
+import { type GitHubRepoAccess, gitHubSourceFor, inspectReadablePath } from "../github-app";
 import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
 import { CancelledError, handleCloudError } from "../platform/error-handler";
 import { contextStore, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
@@ -291,10 +293,16 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		}
 		if (component?.componentType === "mcpServer") {
 			// An MCP server created from an existing API has no source; attaching one turns it into a server built from source.
-			const hasRepository = await cloud.components
-				.repository(component.id, project.id)
-				.then(() => true)
-				.catch((error) => !(isCloudError(error) && error.code === "not_found"));
+			// Only a 404 says it has none; another failure stops the submission rather than create a second integration.
+			const hasRepository = await cloud.components.repository(component.id, project.id).then(
+				() => true,
+				(error: unknown) => {
+					if (isCloudError(error) && error.code === "not_found") {
+						return false;
+					}
+					throw error;
+				},
+			);
 			if (!hasRepository) {
 				return await attachSourceToExistingIntegration(workspaceCompId, component, org.handle, project, createParams[0], workspaceFsPath, gitRoot, "Attaching sources to MCP server...");
 			}
@@ -302,7 +310,8 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	}
 
 	await checkSubscription();
-	await checkIfSourcePushedToRemoteRepo(createParams, gitRoot);
+	// The access the check confirmed is the one the create binds; a second lookup could fail and drop the binding.
+	const checkedAccess = await checkIfSourcePushedToRemoteRepo(createParams, gitRoot);
 
 	await window.withProgress(
 		{
@@ -327,13 +336,23 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 						throw new Error(`${createParam.name} is not a name the platform accepts.`);
 					}
 					const appPath = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
+					const repoUrl = normalizeCloneUrl(createParam.repoUrl);
+					const repoAppPath = appPath && appPath !== "." ? appPath : undefined;
+					const access = checkedAccess.has(createParam.repoUrl) ? checkedAccess.get(createParam.repoUrl) : await gitHubAccessOf(createParam.repoUrl);
+					// A repository WSO2 Cloud cannot read would give an integration that cannot build.
+					const unreadable = access && unreadableSource(access);
+					if (unreadable) {
+						throw new Error(unreadable);
+					}
 					const created = await cloud.components.create({
 						projectName: project.id,
 						name,
 						displayName: createParam.displayName,
 						type,
 						runtime: runtimeForBuildPack(createParam.buildPackLang),
-						repo: { url: normalizeCloneUrl(createParam.repoUrl), branch: createParam.branch, appPath: appPath && appPath !== "." ? appPath : undefined },
+						repo: { url: repoUrl, branch: createParam.branch, appPath: repoAppPath },
+						// A private repository is read through the GitHub App installation.
+						githubApp: access ? gitHubSourceFor(access, createParam.branch, repoAppPath, repoUrl) : undefined,
 					});
 					// The platform starts the first build; deployments are left to the console: required configurations
 					// and private dependencies are entered there, and the platform has no API that reports them as missing.
@@ -414,9 +433,17 @@ const checkSubscription = async () => {
 	}
 };
 
-const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegrationParam[], gitRoot: string) => {
+/** How WSO2 Cloud can read a GitHub repository; undefined for any other host. */
+const gitHubAccessOf = async (repoUrl: string): Promise<GitHubRepoAccess | undefined> => {
+	const github = parseGitHubRepoUrl(repoUrl);
+	return github ? gitHubAccessFor(github.owner, github.repo) : undefined;
+};
+
+/** Checks each integration's source is in its remote repository; returns the access each repository was read with. */
+const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegrationParam[], gitRoot: string): Promise<Map<string, GitHubRepoAccess | undefined>> => {
+	const checked = new Map<string, GitHubRepoAccess | undefined>();
 	if (ext.isDevantCloudEditor) {
-		return; // the editor pushed the changes itself
+		return checked; // the editor pushed the changes itself
 	}
 	await window.withProgress({ title: "Verifying source in remote repo", location: ProgressLocation.Notification, cancellable: false }, async (progress) => {
 		for (let i = 0; i < createParams.length; i++) {
@@ -424,12 +451,17 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegr
 			if (createParams.length > 1) {
 				progress.report({ message: `(${i + 1}/${createParams.length}) ${createParam.displayName || createParam.name}`, increment: 100 / createParams.length });
 			}
-			const github = parseGitHubRepoUrl(createParam.repoUrl);
-			if (!github) {
-				continue; // the platform reads public GitHub repositories only
+			const access = checked.has(createParam.repoUrl) ? checked.get(createParam.repoUrl) : await gitHubAccessOf(createParam.repoUrl);
+			checked.set(createParam.repoUrl, access);
+			if (!access) {
+				continue; // the platform reads GitHub repositories only
+			}
+			const unreadable = unreadableSource(access);
+			if (unreadable) {
+				throw new Error(unreadable);
 			}
 			const subPathDir = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
-			const inspection = await ext.clients.platform.cloud.repos.inspect(github.owner, github.repo, createParam.branch, subPathDir === "." ? "" : subPathDir);
+			const inspection = await inspectReadablePath(ext.clients.platform.cloud, access, createParam.branch, subPathDir === "." ? "" : subPathDir);
 			if (subPathDir && subPathDir !== ".") {
 				if (!inspection.isSubPathValid || inspection.isSubPathEmpty) {
 					throw new Error(`The selected directory ${subPathDir} appears to be empty or invalid in the remote repository. Please push your changes and try again.`);
@@ -439,7 +471,23 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegr
 			}
 		}
 	});
+	return checked;
 };
+
+/** Why WSO2 Cloud cannot read a GitHub repository, for an access that neither an installation nor public access gives; undefined when it can. */
+function unreadableSource(access: GitHubRepoAccess): string | undefined {
+	switch (access.kind) {
+		case "installation":
+		case "public":
+			return undefined;
+		case "not-granted":
+			return `The WSO2 Cloud GitHub app is on ${access.owner} but not given ${access.repo}. Give it access, then retry.`;
+		case "auth-required":
+			return `WSO2 Cloud needs your GitHub authorization again to read ${access.owner}/${access.repo}. Authorize, then retry.`;
+		case "not-connected":
+			return `WSO2 Cloud can't read ${access.owner}/${access.repo}: connect GitHub with the WSO2 Cloud app on ${access.owner}, then retry.`;
+	}
+}
 
 /** Logs what the platform said about a new integration; its first build starts with the create. */
 function logCreated(created: CreatedComponent): void {
@@ -471,12 +519,32 @@ async function attachSourceToExistingIntegration(
 	try {
 		const cloud = ext.clients.platform.cloud;
 		const appPath = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
+		const repoUrl = normalizeCloneUrl(createParam.repoUrl);
+		const repoAppPath = appPath && appPath !== "." ? appPath : undefined;
+		// Access is settled before anything changes: a source it cannot read must neither replace the old one nor lose its binding.
+		const access = await gitHubAccessOf(createParam.repoUrl);
+		const unreadable = access && unreadableSource(access);
+		if (unreadable) {
+			throw new Error(`${unreadable} Nothing was changed.`);
+		}
 		await window.withProgress({ title, location: ProgressLocation.Notification }, async () => {
 			await cloud.components.updateBuildParameters(
 				integrationId,
-				cloud.components.workflowFor(runtimeForBuildPack(createParam.buildPackLang), { url: normalizeCloneUrl(createParam.repoUrl), branch: createParam.branch, appPath: appPath && appPath !== "." ? appPath : undefined }),
+				cloud.components.workflowFor(runtimeForBuildPack(createParam.buildPackLang), { url: repoUrl, branch: createParam.branch, appPath: repoAppPath }),
 				project.id,
 			);
+			// A private repository is read through the GitHub App installation, bound before the build.
+			const source = access ? gitHubSourceFor(access, createParam.branch, repoAppPath, repoUrl) : undefined;
+			if (source) {
+				await cloud.git.putGitHubSource(project.id, integrationId, source);
+			} else {
+				// A binding to the repository it had would keep it building from there.
+				await cloud.git.deleteGitHubSource(project.id, integrationId).catch((err: unknown) => {
+					if (!(isCloudError(err) && err.code === "not_found")) {
+						throw err;
+					}
+				});
+			}
 			await cloud.builds.trigger(integrationId, { projectName: project.id });
 		});
 		// The cached repository is the one the integration had; the next refresh reads the new one.
@@ -495,8 +563,10 @@ async function attachSourceToExistingIntegration(
 			showReloadWorkspaceMessage(successMessage, workspaceFsPath);
 		}
 	} catch (err) {
+		// A step may have gone through before the failure; the next read takes the repository from the platform.
+		dataCacheStore.getState().setRepository(orgHandle, project.id, integrationId, undefined);
 		ext.logError(`Failed to attach the repository to ${label}`, err as Error);
-		result.failed.push({ name: label, error: `Failed to attach the repository: ${(err as Error).message}` });
+		result.failed.push({ name: label, error: `Failed to attach the repository: ${(err as Error).message}. Nothing was built; attach it again to finish.` });
 	}
 	return result;
 }
