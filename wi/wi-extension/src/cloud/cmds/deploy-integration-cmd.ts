@@ -97,7 +97,8 @@ async function connectGitHubFor(req: SourceReq | undefined, install: boolean): P
 	const ws = new CloudWsManager();
 	const gitData = req?.workspaceDir ? await ws.getLocalGitData(req.workspaceDir) : undefined;
 	const remote = deployRemote(gitData, req?.gitRemote) ?? "";
-	await untilGitHubConnectEnds(!!ext.githubApp?.canReturnHere, () => (install ? ws.triggerGithubInstallFlow(remote) : ws.triggerGithubAuthFlow(remote)));
+	// Access given on GitHub is read live, so Grant Access needs only the editor's focus back, not GitHub's return.
+	await untilGitHubConnectEnds(!install && !!ext.githubApp?.canReturnHere, () => (install ? ws.triggerGithubInstallFlow(remote) : ws.triggerGithubAuthFlow(remote)));
 }
 
 // The same reads the deploy form makes for its repository section, judged by the same rules.
