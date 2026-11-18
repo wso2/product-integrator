@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { EventEmitter, ProgressLocation, window } from "vscode";
+import { type Disposable, EventEmitter, ProgressLocation, window } from "vscode";
 import { ext } from "../extensionVariables";
 import { type GitHubConnectOutcome, type GitHubRepoAccess, sharedGitHubAccess } from "./github-app";
 
@@ -49,7 +49,8 @@ export function endingConnect(outcome: GitHubConnectOutcome): GitHubConnectOutco
 		connected: ending(outcome.connected),
 		noInstallationVisible: ending(outcome.noInstallationVisible),
 		requested: ending(outcome.requested),
-		ignored: ending(outcome.ignored),
+		// A return this window didn't start belongs to no wait here.
+		ignored: (reason) => (reason === "not-started" ? outcome.ignored(reason) : ending(outcome.ignored)(reason)),
 		cancelled: ending(outcome.cancelled),
 		failed: ending(outcome.failed),
 	};
@@ -57,31 +58,36 @@ export function endingConnect(outcome: GitHubConnectOutcome): GitHubConnectOutco
 
 /**
  * Starts connecting GitHub and resolves once it ends in this window or, when GitHub cannot return
- * here, once the window has its focus back.
+ * here, once the window has its focus back after the page opened.
  * The person can stop waiting.
  */
 export function untilGitHubConnectEnds(returnsHere: boolean, start: () => Promise<void>): Thenable<void> {
 	return window.withProgress({ location: ProgressLocation.Notification, title: "Waiting for GitHub", cancellable: true }, (_progress, token) => {
 		return new Promise<void>((resolve, reject) => {
-			let left = !window.state.focused;
-			const subscriptions = [
-				token.onCancellationRequested(() => end()),
-				returnsHere
-					? connectEnded.event(() => end())
-					: window.onDidChangeWindowState((state) => {
-							left ||= !state.focused;
-							if (left && state.focused) {
-								end();
-							}
-						}),
-			];
+			let done = false;
+			const subscriptions: Disposable[] = [token.onCancellationRequested(() => end()), connectEnded.event(() => end())];
 			function end(error?: unknown) {
+				done = true;
 				for (const subscription of subscriptions) {
 					subscription.dispose();
 				}
 				error === undefined ? resolve() : reject(error);
 			}
-			start().catch((error: unknown) => end(error ?? new Error("Connecting GitHub failed")));
+			start().then(
+				() => !returnsHere && !done && subscriptions.push(untilFocusBack(() => end())),
+				(error: unknown) => end(error ?? new Error("Connecting GitHub failed")),
+			);
 		});
+	});
+}
+
+/** Calls `back` once the window has lost its focus, as to the browser, and got it back. */
+function untilFocusBack(back: () => void): Disposable {
+	let left = !window.state.focused;
+	return window.onDidChangeWindowState((state) => {
+		left ||= !state.focused;
+		if (left && state.focused) {
+			back();
+		}
 	});
 }

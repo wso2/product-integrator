@@ -51,12 +51,30 @@ describe("untilGitHubConnectEnds", () => {
 		assert.strictEqual(await settled(wait), true);
 	});
 
-	it("waits for the window to get its focus back when GitHub does not return here", async () => {
-		const wait = untilGitHubConnectEnds(false, async () => undefined);
-		endingConnect(quiet).failed("no");
+	it("isn't ended by a GitHub return another window started", async () => {
+		const wait = untilGitHubConnectEnds(true, async () => undefined);
+		endingConnect(quiet).ignored("not-started");
 		assert.strictEqual(await settled(wait), false);
+		endingConnect(quiet).ignored("expired");
+		assert.strictEqual(await settled(wait), true);
+	});
+
+	it("waits for the focus to come back once the page is open when GitHub does not return here", async () => {
+		let open!: () => void;
+		const wait = untilGitHubConnectEnds(false, () => new Promise<void>((resolve) => (open = resolve)));
 		fireWindowState(false);
 		fireWindowState(true);
+		assert.strictEqual(await settled(wait), false);
+		open();
+		fireWindowState(false);
+		assert.strictEqual(await settled(wait), false);
+		fireWindowState(true);
+		assert.strictEqual(await settled(wait), true);
+	});
+
+	it("ends on a failed browser open even when GitHub does not return here", async () => {
+		const wait = untilGitHubConnectEnds(false, async () => undefined);
+		endingConnect(quiet).failed("Couldn't open the browser for GitHub.");
 		assert.strictEqual(await settled(wait), true);
 	});
 

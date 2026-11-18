@@ -95,6 +95,14 @@ type SourceReq = Pick<WICloudInspectSourceReq, "workspaceDir" | "gitRemote">;
 
 // Authorize or Grant Access for the repository a deploy from `workspaceDir` builds from; resolves once connecting GitHub ends.
 async function connectGitHubFor(req: SourceReq | undefined, install: boolean): Promise<void> {
+	isPlatformReady(ext);
+	await ext.cloudReady;
+	if (!signedIn()) {
+		throw new Error("Sign in to Choreo Cloud to connect GitHub.");
+	}
+	if (!ext.githubApp?.canReturnHere) {
+		void window.showInformationMessage("GitHub is connected in the Choreo Cloud console. Come back here when it is done.");
+	}
 	const ws = new CloudWsManager();
 	const gitData = req?.workspaceDir ? await ws.getLocalGitData(req.workspaceDir) : undefined;
 	const remote = deployRemote(gitData, req?.gitRemote) ?? "";

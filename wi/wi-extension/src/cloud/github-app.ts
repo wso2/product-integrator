@@ -73,7 +73,10 @@ export async function resolveGitHubAccess(cloud: CloudClient, owner: string, rep
 	const branches = await cloud.repos
 		.listBranches(owner, repo)
 		.then((items) => items.map((branch) => branch.name))
-		.catch((): string[] => []);
+		.catch((err: unknown): string[] => {
+			log(`Could not list the branches of ${owner}/${repo}: ${err instanceof Error ? err.message : String(err)}`);
+			return [];
+		});
 	if (branches.length > 0) {
 		return { kind: "public", owner, repo, branches };
 	}
@@ -162,7 +165,7 @@ export function gitHubSourceFor(access: GitHubRepoAccess, branch: string, appPat
 }
 
 /** The URI schemes WSO2 Cloud's console sends GitHub's return to; anything else finishes in the console. */
-export const GITHUB_RETURN_SCHEMES: readonly string[] = ["vscode", "vscode-insiders", "wso2-integrator"];
+export const GITHUB_RETURN_SCHEMES: readonly string[] = ["vscode", "vscode-insiders", "wso2-integrator", "choreo-integrator", "choreo-agent-builder"];
 
 /** The editor's path the console sends GitHub's return to. */
 export const GITHUB_RETURN_PATH = "/ghapp";

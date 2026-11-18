@@ -249,8 +249,9 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	const actionHandlers: Record<SourceReadinessAction, () => void> = {
 		sourceControl: () => openSourceControl(),
 		pushChanges: () => pushChanges(),
-		grantAccess: () => wsClient.triggerGithubInstallFlow(gitRemote ?? ""),
-		authorize: () => wsClient.triggerGithubAuthFlow(gitRemote ?? ""),
+		// A failed access lookup shows as the banner's "Couldn't check" state once the access is read again.
+		grantAccess: () => wsClient.triggerGithubInstallFlow(gitRemote ?? "").catch(() => refetchRepoAccess()),
+		authorize: () => wsClient.triggerGithubAuthFlow(gitRemote ?? "").catch(() => refetchRepoAccess()),
 		manageCredentials: () => wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" })),
 	};
 	const refreshers: Record<SourceReadinessRefresh, [() => void, boolean]> = {
