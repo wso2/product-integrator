@@ -234,7 +234,7 @@ export const WICloudDeployCommands = {
 } as const;
 
 export interface WICloudDeployContextReq {
-	/** A workspace whose context file names a project that does not exist yet; it is created, as a deploy does. */
+	/** A workspace whose context file may name a project that does not exist yet; it is suggested, not created. */
 	workspaceDir?: string;
 	integrations: { fsPath: string; name: string; supportedIntegrationTypes: string[] }[];
 }
@@ -243,6 +243,8 @@ export interface WICloudDeployContext {
 	signedIn: boolean;
 	/** The project the workspace is linked to, which the deploy form uses without asking. */
 	linkedProject?: { id: string; name: string };
+	/** The display name of the project the workspace's context file names but WSO2 Cloud does not have yet, to deploy with as `{ newName }`. */
+	suggestedProjectName?: string;
 	projects: { id: string; name: string }[];
 	/** The integrations with names no integration of the linked project already uses. */
 	integrations: { fsPath: string; name: string; supportedIntegrationTypes: string[] }[];

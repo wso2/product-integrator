@@ -784,6 +784,13 @@ const markCodeServerDeployed = async () => {
 	}
 };
 
+/** The display name of the project a local context entry names: a readable name from Ballerina.toml [workspace].title, else from the handle. */
+export function localProjectDisplayName(workspacePath: string, handle: string): string {
+	const ballerinaTomlPath = path.join(workspacePath, "Ballerina.toml");
+	const title = existsSync(ballerinaTomlPath) ? readFileSync(ballerinaTomlPath, "utf8").match(/^\[workspace\][^[]*title\s*=\s*"([^"]+)"/ms)?.[1] : undefined;
+	return title ?? handle.split("-").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+
 /** If the context file has an entry marked `local: true`, creates the project it names and clears the mark. */
 export const createProjectFromLocalMetadata = async (workspacePath: string): Promise<Project | undefined> => {
 	try {
@@ -813,17 +820,7 @@ export const createProjectFromLocalMetadata = async (workspacePath: string): Pro
 			return finish(existing);
 		}
 
-		// A readable name from Ballerina.toml [workspace].title, else from the handle.
-		let displayName: string | undefined;
-		const ballerinaTomlPath = path.join(workspacePath, "Ballerina.toml");
-		if (existsSync(ballerinaTomlPath)) {
-			const titleMatch = readFileSync(ballerinaTomlPath, "utf8").match(/^\[workspace\][^[]*title\s*=\s*"([^"]+)"/ms);
-			displayName = titleMatch?.[1];
-		}
-		displayName ??= localEntry.project
-			.split("-")
-			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-			.join(" ");
+		const displayName = localProjectDisplayName(workspacePath, localEntry.project);
 		const name = toProjectName(localEntry.project);
 		const created = await window.withProgress({ title: `Creating new cloud project ${displayName}...`, location: ProgressLocation.Notification }, () => cloud.projects.create({ name, displayName }));
 		dataCacheStore.getState().setProjects(session.org.handle, [...projects, created]);

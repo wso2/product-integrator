@@ -35,7 +35,7 @@ import { type ExtensionContext, ProgressLocation, Uri, commands, env, window, wo
 import { ext } from "../../extensionVariables";
 import { isSubpath } from "../../utils/pathUtils";
 import { CloudWsManager } from "../../ws-managers/cloud/ws-manager";
-import { linkContext } from "../context-file";
+import { linkContext, localContextEntry, unlinkContext } from "../context-file";
 import { getGitRoot } from "../git/util";
 import { handleCloudError } from "../platform/error-handler";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
@@ -44,9 +44,9 @@ import { createProjectNamed, isPlatformReady, requireSession, validateProjectNam
 import {
 	assignUniqueNames,
 	confirmAnotherIntegration,
-	createProjectFromLocalMetadata,
 	deployBuild,
 	hasIntegrationForDirs,
+	localProjectDisplayName,
 	submitCreateComponentHandler,
 	waitForRelease,
 } from "./create-component-cmd";
@@ -60,7 +60,7 @@ async function listProjects(): Promise<Project[]> {
 	return projects;
 }
 
-// The deploy command's first steps, without its prompts: the linked project (or the one a local context entry names) and unique names.
+// The deploy command's first steps, without its prompts or writes: the linked project (or the one a local context entry names) and unique names.
 async function getDeployContext(req: WICloudDeployContextReq): Promise<WICloudDeployContext> {
 	isPlatformReady(ext);
 	await ext.cloudReady;
@@ -69,8 +69,10 @@ async function getDeployContext(req: WICloudDeployContextReq): Promise<WICloudDe
 		return { signedIn: false, projects: [], integrations };
 	}
 	await waitForContextStoreToLoad();
-	const linked = contextStore.getState().state.selected?.project ?? (req.workspaceDir ? await createProjectFromLocalMetadata(req.workspaceDir) : undefined);
+	const selected = contextStore.getState().state.selected?.project;
+	const local = !selected && req.workspaceDir ? localContextEntry(req.workspaceDir) : undefined;
 	const projects = await listProjects();
+	const linked = selected ?? (local && projects.find((project) => project.id === local.project || project.handler === local.project));
 	if (linked) {
 		const existing = await ext.clients.platform.cloud.components.list(linked.id);
 		dataCacheStore.getState().setIntegrations(ext.authProvider!.org!.handle, linked.id, existing);
@@ -79,6 +81,7 @@ async function getDeployContext(req: WICloudDeployContextReq): Promise<WICloudDe
 	return {
 		signedIn: true,
 		linkedProject: linked && { id: linked.id, name: linked.name },
+		suggestedProjectName: local && !linked && req.workspaceDir ? localProjectDisplayName(req.workspaceDir, local.project) : undefined,
 		projects: projects.map((project) => ({ id: project.id, name: project.name })),
 		integrations,
 	};
@@ -166,6 +169,11 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 			if (!(await confirmAnotherIntegration(org.handle, project, gitRoot))) {
 				return { outcome: "linkedExisting" };
 			}
+		}
+		// The local entry names a project to create; the project this deploy uses replaces it.
+		const local = localContextEntry(req.workspaceDir);
+		if (local) {
+			unlinkContext([req.workspaceDir], local);
 		}
 		if (gitRoot) {
 			linkContext(gitRoot, { org: org.handle, project: project.id });
