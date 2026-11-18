@@ -287,10 +287,16 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		}
 		if (component?.componentType === "mcpServer") {
 			// An MCP server created from an existing API has no source; attaching one turns it into a server built from source.
-			const hasRepository = await cloud.components
-				.repository(component.id, project.id)
-				.then(() => true)
-				.catch((error) => !(isCloudError(error) && error.code === "not_found"));
+			// Only a 404 says it has none; another failure stops the submission rather than create a second integration.
+			const hasRepository = await cloud.components.repository(component.id, project.id).then(
+				() => true,
+				(error: unknown) => {
+					if (isCloudError(error) && error.code === "not_found") {
+						return false;
+					}
+					throw error;
+				},
+			);
 			if (!hasRepository) {
 				return await attachSourceToExistingIntegration(workspaceCompId, component, org.handle, project, createParams[0], workspaceFsPath, gitRoot, "Attaching sources to MCP server...");
 			}
@@ -327,6 +333,11 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 					const repoUrl = normalizeCloneUrl(createParam.repoUrl);
 					const repoAppPath = appPath && appPath !== "." ? appPath : undefined;
 					const access = checkedAccess.has(createParam.repoUrl) ? checkedAccess.get(createParam.repoUrl) : await gitHubAccessOf(createParam.repoUrl);
+					// A repository WSO2 Cloud cannot read would give an integration that cannot build.
+					const unreadable = access && unreadableSource(access);
+					if (unreadable) {
+						throw new Error(unreadable);
+					}
 					const created = await cloud.components.create({
 						projectName: project.id,
 						name,
@@ -439,6 +450,10 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegr
 			if (!access) {
 				continue; // the platform reads GitHub repositories only
 			}
+			const unreadable = unreadableSource(access);
+			if (unreadable) {
+				throw new Error(unreadable);
+			}
 			const subPathDir = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
 			const inspection = await inspectReadablePath(ext.clients.platform.cloud, access, createParam.branch, subPathDir === "." ? "" : subPathDir);
 			if (subPathDir && subPathDir !== ".") {
@@ -542,8 +557,10 @@ async function attachSourceToExistingIntegration(
 			showReloadWorkspaceMessage(successMessage, workspaceFsPath);
 		}
 	} catch (err) {
+		// A step may have gone through before the failure; the next read takes the repository from the platform.
+		dataCacheStore.getState().setRepository(orgHandle, project.id, integrationId, undefined);
 		ext.logError(`Failed to attach the repository to ${label}`, err as Error);
-		result.failed.push({ name: label, error: `Failed to attach the repository: ${(err as Error).message}` });
+		result.failed.push({ name: label, error: `Failed to attach the repository: ${(err as Error).message}. Nothing was built; attach it again to finish.` });
 	}
 	return result;
 }

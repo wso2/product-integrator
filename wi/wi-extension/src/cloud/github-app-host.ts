@@ -20,7 +20,7 @@ import { Uri, env, window } from "vscode";
 import { BridgeLayer } from "../BridgeLayer";
 import { ext } from "../extensionVariables";
 import { buildConsoleUrl } from "@wso2/wso2-cloud-client";
-import { signedInScope } from "./github-access";
+import { SIGN_IN_CHANGED_MESSAGE, signedInScope } from "./github-access";
 import { GitHubAppConnector, type IgnoredGitHubReturn, forgetGitHubAccess } from "./github-app";
 
 const IGNORED_RETURN_MESSAGES: Record<IgnoredGitHubReturn, string> = {
@@ -29,10 +29,20 @@ const IGNORED_RETURN_MESSAGES: Record<IgnoredGitHubReturn, string> = {
 	"signed-in-changed": "Your WSO2 Cloud sign-in changed while GitHub was open, so GitHub's return was ignored. Start again.",
 };
 
-/** Offers GitHub's account picker, to connect with another GitHub account. */
+/** Offers GitHub's account picker, to connect with another GitHub account, for the organization signed in when it was offered. */
 function offerAnotherAccount(message: string, owner: string | undefined): void {
 	const useAnother = "Use Another GitHub Account";
-	void window.showWarningMessage(message, useAnother).then((choice) => (choice === useAnother ? ext.githubApp?.connect(owner, "select-account") : undefined));
+	const scope = signedInScope();
+	void window.showWarningMessage(message, useAnother).then((choice) => {
+		if (choice !== useAnother) {
+			return;
+		}
+		if (signedInScope() !== scope) {
+			window.showWarningMessage(SIGN_IN_CHANGED_MESSAGE);
+			return;
+		}
+		return ext.githubApp?.connect(owner, "select-account");
+	});
 }
 
 /** The GitHub connector for this window, telling the person how connecting ended and the deployment form to recheck. */
@@ -44,12 +54,15 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 		uriScheme: env.uriScheme,
 		openExternal: (url) => env.openExternal(Uri.parse(url)),
 		log: (message) => ext.log(message),
+		// Installations bound before an install leg must reach the form even when that leg is abandoned.
+		onBound: () => {
+			forgetGitHubAccess();
+			BridgeLayer.notifyGitHubConnected();
+		},
 		outcome: {
 			connected: (installations, missingOwner) => {
 				const accounts = installations.map((item) => item.githubAccount).join(", ");
 				const connected = accounts ? `GitHub is connected to WSO2 Cloud (${accounts})` : "GitHub is connected to WSO2 Cloud";
-				forgetGitHubAccess();
-				BridgeLayer.notifyGitHubConnected();
 				if (!missingOwner) {
 					window.showInformationMessage(`${connected}.`);
 					return;

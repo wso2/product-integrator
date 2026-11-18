@@ -52,7 +52,7 @@ import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-
 import type { IFileStatus } from "../../cloud/git/git";
 import { initGit } from "../../cloud/git/main";
 import { hasDirtyRepo as checkDirtyRepo, getGitHead, getGitRemotes, getGitRoot, relativePath, removeCredentialsFromGitURL } from "../../cloud/git/util";
-import { gitHubAccessFor } from "../../cloud/github-access";
+import { SIGN_IN_CHANGED_MESSAGE, gitHubAccessFor, signedInScope } from "../../cloud/github-access";
 import { type GitHubAppConnector, forgetGitHubAccess, inspectReadablePath, installationSettingsUrl, listReadableBranches } from "../../cloud/github-app";
 import { contextStore } from "../../cloud/stores/context-store";
 import { dataCacheStore } from "../../cloud/stores/data-cache-store";
@@ -198,9 +198,24 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 			return;
 		}
 		forgetGitHubAccess();
+		// The flow belongs to the organization signed in when it was asked for.
+		const scope = signedInScope();
+		const stillSignedIn = () => {
+			if (signedInScope() === scope) {
+				return true;
+			}
+			window.showWarningMessage(SIGN_IN_CHANGED_MESSAGE);
+			return false;
+		};
 		const access = await gitHubAccessFor(github.owner, github.repo);
+		if (!stillSignedIn()) {
+			return;
+		}
 		if (access.kind === "not-granted") {
-			await env.openExternal(Uri.parse(await installationSettingsUrl(github.owner, access.installation.installationId)));
+			const settingsUrl = await installationSettingsUrl(github.owner, access.installation.installationId);
+			if (stillSignedIn()) {
+				await env.openExternal(Uri.parse(settingsUrl));
+			}
 			return;
 		}
 		// The app is on the owner, but WSO2 Cloud needs the person's GitHub authorization again to tell.

@@ -126,6 +126,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		isFetching: isFetchingRepoAccess,
 		isLoading: isLoadingRepoAccess,
 		data: isRepoAuthorizedResp,
+		error: repoAccessError,
 		refetch: refetchRepoAccess,
 	} = useQuery({
 		queryKey: ["git-repo-access", { repo: gitRemote, orgId, provider: gitProvider, credential }],
@@ -255,6 +256,15 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB) {
 		invalidRepoMsg = `Creating integrations from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and create it from there.`;
 		onInvalidRepoRefreshClick = refetchGitData;
+		blockCreation = true;
+	}
+
+	// A failed check says nothing about access; it is retried rather than answered with Authorize.
+	if (!invalidRepoMsg && !isLoadingRepoAccess && gitRemote && repoAccessError) {
+		invalidRepoMsg = "Couldn't check WSO2 Cloud's access to this repository. Refresh to try again.";
+		onInvalidRepoRefreshClick = refetchRepoAccess;
+		onInvalidRepoRefreshing = isFetchingRepoAccess;
+		invalidRepoBannerType = "warning";
 		blockCreation = true;
 	}
 

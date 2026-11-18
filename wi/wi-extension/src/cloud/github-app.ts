@@ -30,7 +30,7 @@ import { type CloudClient, type GitHubInstallation, type GitHubSource, type Repo
  */
 export type GitHubRepoAccess =
 	| { kind: "installation"; owner: string; repo: string; installation: GitHubInstallation }
-	| { kind: "public"; owner: string; repo: string }
+	| { kind: "public"; owner: string; repo: string; branches?: string[] }
 	| { kind: "not-granted"; owner: string; repo: string; installation: GitHubInstallation }
 	| { kind: "auth-required"; owner: string; repo: string; installation: GitHubInstallation }
 	| { kind: "not-connected"; owner: string; repo: string };
@@ -39,13 +39,15 @@ export type GitHubRepoAccess =
 export const sameAccount = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 /**
- * Works out how WSO2 Cloud can read `owner/repo`. A git integration that cannot
- * list the installations counts as no installation; other failures of the
- * installation's repository list are passed on.
+ * Works out how WSO2 Cloud can read `owner/repo`. When the git integration
+ * cannot answer, a public repository still reads as public; otherwise its
+ * failure is passed on, rather than read as no installation or no grant.
  */
 export async function resolveGitHubAccess(cloud: CloudClient, owner: string, repo: string, log: (message: string) => void = () => undefined): Promise<GitHubRepoAccess> {
+	let lookupError: unknown;
 	const installations = await cloud.git.listGitHubInstallations().catch((err: unknown) => {
 		log(`Could not list the GitHub App installations: ${err instanceof Error ? err.message : String(err)}`);
+		lookupError = err;
 		return [] as GitHubInstallation[];
 	});
 	let installation = installations.find((item) => sameAccount(item.githubAccount, owner));
@@ -64,13 +66,19 @@ export async function resolveGitHubAccess(cloud: CloudClient, owner: string, rep
 			} else if (isCloudError(err) && err.code === "not_found") {
 				installation = undefined; // the installation is gone from the organization
 			} else {
-				throw err;
+				lookupError = err;
 			}
 		}
 	}
-	const publicBranches = await cloud.repos.listBranches(owner, repo).catch((): unknown[] => []);
-	if (publicBranches.length > 0) {
-		return { kind: "public", owner, repo };
+	const branches = await cloud.repos
+		.listBranches(owner, repo)
+		.then((items) => items.map((branch) => branch.name))
+		.catch((): string[] => []);
+	if (branches.length > 0) {
+		return { kind: "public", owner, repo, branches };
+	}
+	if (lookupError !== undefined) {
+		throw lookupError; // the installation lookup failed, and the repository is not public
 	}
 	if (!installation) {
 		return { kind: "not-connected", owner, repo };
@@ -82,21 +90,42 @@ export async function resolveGitHubAccess(cloud: CloudClient, owner: string, rep
 const ACCESS_TTL_MS = 5_000;
 const accessAnswers = new Map<string, { at: number; access: Promise<GitHubRepoAccess> }>();
 
-/** {@link resolveGitHubAccess}, shared for a few seconds by the checks of one repository for one signed-in organization. */
-export function sharedGitHubAccess(cloud: CloudClient, scope: string, owner: string, repo: string, log: (message: string) => void = () => undefined, now = Date.now()): Promise<GitHubRepoAccess> {
+/**
+ * {@link resolveGitHubAccess}, shared for a few seconds by the checks of one
+ * repository for one signed-in organization. A failure is not shared, nor an
+ * answer that settled after `isCurrent` says the sign-in changed.
+ */
+export function sharedGitHubAccess(
+	cloud: CloudClient,
+	scope: string,
+	owner: string,
+	repo: string,
+	options: { log?: (message: string) => void; now?: number; isCurrent?: () => boolean } = {},
+): Promise<GitHubRepoAccess> {
+	const now = options.now ?? Date.now();
 	const key = `${scope}:${owner}/${repo}`.toLowerCase();
 	const known = accessAnswers.get(key);
 	if (known && now - known.at < ACCESS_TTL_MS) {
 		return known.access;
 	}
-	const access = resolveGitHubAccess(cloud, owner, repo, log);
+	for (const [other, answer] of accessAnswers) {
+		if (now - answer.at >= ACCESS_TTL_MS) {
+			accessAnswers.delete(other); // expired answers are dropped, not only skipped
+		}
+	}
+	const access = resolveGitHubAccess(cloud, owner, repo, options.log);
 	const entry = { at: now, access };
 	accessAnswers.set(key, entry);
-	access.catch(() => {
+	const drop = () => {
 		if (accessAnswers.get(key) === entry) {
-			accessAnswers.delete(key); // a failure is not shared
+			accessAnswers.delete(key);
 		}
-	});
+	};
+	access.then(() => {
+		if (options.isCurrent && !options.isCurrent()) {
+			drop(); // read partly under another sign-in
+		}
+	}, drop);
 	return access;
 }
 
@@ -111,7 +140,7 @@ export async function listReadableBranches(cloud: CloudClient, access: GitHubRep
 		return cloud.git.listGitHubBranches(access.installation.installationId, access.owner, access.repo);
 	}
 	if (access.kind === "public") {
-		return (await cloud.repos.listBranches(access.owner, access.repo)).map((branch) => branch.name);
+		return access.branches ?? (await cloud.repos.listBranches(access.owner, access.repo)).map((branch) => branch.name);
 	}
 	return [];
 }
@@ -219,6 +248,8 @@ export interface GitHubAppConnectorDeps {
 	newNonce?: () => string;
 	newVerifier?: () => string;
 	now?: () => number;
+	/** Installations were just connected to the organization, whatever comes next in the flow. */
+	onBound?: (installations: GitHubInstallation[]) => void;
 }
 
 /**
@@ -261,7 +292,13 @@ export class GitHubAppConnector {
 		// GitHub's install page takes no challenge; the editor authorizes after it.
 		const verifier = start === "install" ? undefined : this.newVerifier();
 		this.pending = { nonce, owner, installTried, verifier, session: this.deps.session(), startedAt: this.now() };
-		await this.deps.openExternal(consoleGitHubStartUrl(this.deps.consoleUrl(), this.deps.uriScheme, nonce, start, verifier && pkceChallenge(verifier)));
+		const opened = await this.deps.openExternal(consoleGitHubStartUrl(this.deps.consoleUrl(), this.deps.uriScheme, nonce, start, verifier && pkceChallenge(verifier)));
+		if (opened === false) {
+			if (this.pending?.nonce === nonce) {
+				this.pending = undefined;
+			}
+			this.deps.outcome.failed("Couldn't open the browser for GitHub. Try again.");
+		}
 	}
 
 	/** Takes GitHub's return, as the console relayed it to `/ghapp`. */
@@ -330,6 +367,7 @@ export class GitHubAppConnector {
 		if (flow !== this.started) {
 			return; // a newer connect owns the outcome
 		}
+		this.deps.onBound?.(installations);
 		const owner = pending.owner;
 		const missingOwner = owner && !installations.some((item) => sameAccount(item.githubAccount, owner)) ? owner : undefined;
 		if (missingOwner && !pending.installTried) {

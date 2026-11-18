@@ -97,22 +97,42 @@ describe("GitHub repository access", () => {
 	it("shares one access answer among a repository's checks for a few seconds", async () => {
 		forgetGitHubAccess();
 		const { cloud, calls } = fakeCloud({ installations: [acme], grantedRepos: ["orders"] });
-		await Promise.all([sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", undefined, 1_000), sharedGitHubAccess(cloud, "u1/acme", "Acme", "Orders", undefined, 2_000)]);
+		await Promise.all([sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", { now: 1_000 }), sharedGitHubAccess(cloud, "u1/acme", "Acme", "Orders", { now: 2_000 })]);
 		assert.equal(calls.installations, 1);
-		await sharedGitHubAccess(cloud, "u2/other", "acme", "orders", undefined, 2_000);
+		await sharedGitHubAccess(cloud, "u2/other", "acme", "orders", { now: 2_000 });
 		assert.equal(calls.installations, 2, "another sign-in does not share it");
-		await sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", undefined, 7_000);
+		await sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", { now: 7_000 });
 		assert.equal(calls.installations, 3, "it is read again after a few seconds");
 		forgetGitHubAccess();
-		await sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", undefined, 7_500);
+		await sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", { now: 7_500 });
 		assert.equal(calls.installations, 4, "and at once after it was forgotten");
+	});
+
+	it("does not share an answer that settled after the sign-in changed", async () => {
+		forgetGitHubAccess();
+		const { cloud, calls } = fakeCloud({ installations: [acme], grantedRepos: ["orders"] });
+		await sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", { now: 1_000, isCurrent: () => false });
+		await sharedGitHubAccess(cloud, "u1/acme", "acme", "orders", { now: 1_500 });
+		assert.equal(calls.installations, 2);
+	});
+
+	it("reads a public repository as public when the git integration fails, and passes the failure on otherwise", async () => {
+		const failing = fakeCloud({ installations: [acme], reposError: new Error("503"), publicBranches: ["main"] });
+		const access = await resolveGitHubAccess(failing.cloud, "acme", "orders");
+		assert.equal(access.kind, "public");
+		assert.deepEqual(access.kind === "public" && access.branches, ["main"], "the branches read are kept for the form");
+		const down = fakeCloud();
+		(down.cloud.git as { listGitHubInstallations: () => Promise<unknown> }).listGitHubInstallations = async () => {
+			throw new Error("timeout");
+		};
+		await assert.rejects(resolveGitHubAccess(down.cloud, "acme", "secret"), /timeout/, "a private repository is not read as not connected");
 	});
 
 	it("does not share a failed access answer", async () => {
 		forgetGitHubAccess();
 		const failing = fakeCloud({ installations: [acme], reposError: new Error("offline") });
-		await assert.rejects(sharedGitHubAccess(failing.cloud, "u1/acme", "acme", "orders", undefined, 1_000));
-		await assert.rejects(sharedGitHubAccess(failing.cloud, "u1/acme", "acme", "orders", undefined, 1_500));
+		await assert.rejects(sharedGitHubAccess(failing.cloud, "u1/acme", "acme", "orders", { now: 1_000 }));
+		await assert.rejects(sharedGitHubAccess(failing.cloud, "u1/acme", "acme", "orders", { now: 1_500 }));
 		assert.equal(failing.calls.installations, 2);
 	});
 
@@ -147,6 +167,8 @@ describe("GitHubAppConnector", () => {
 	function connector(cloud: CloudClient, uriScheme = "vscode") {
 		const opened: string[] = [];
 		const outcomes: string[] = [];
+		const bound: string[] = [];
+		const browser = { opens: true };
 		const signedIn = { session: "u1/acme" as string | undefined };
 		const clock = { now: 0 };
 		let n = 0;
@@ -156,7 +178,11 @@ describe("GitHubAppConnector", () => {
 			consoleUrl: () => "https://console.example/integration/organizations/acme",
 			session: () => signedIn.session,
 			uriScheme,
-			openExternal: async (url) => opened.push(url),
+			openExternal: async (url) => {
+				opened.push(url);
+				return browser.opens;
+			},
+			onBound: (items) => bound.push(items.map((i) => i.githubAccount).join(",")),
 			log: () => undefined,
 			newNonce: () => `n${++n}`,
 			newVerifier: () => `v${++v}`,
@@ -170,7 +196,7 @@ describe("GitHubAppConnector", () => {
 				failed: (message) => outcomes.push(`failed:${message}`),
 			},
 		});
-		return { app, opened, outcomes, signedIn, clock };
+		return { app, opened, outcomes, signedIn, clock, bound, browser };
 	}
 	const query = (params: Record<string, string>) => new URLSearchParams(params);
 	const start = (url: string) => Object.fromEntries(new URL(url).searchParams);
@@ -202,6 +228,25 @@ describe("GitHubAppConnector", () => {
 		await app.handleReturn(query({ code: "again", state: "n1" }));
 		assert.deepEqual(connected, ["c0de with v1"]);
 		assert.deepEqual(outcomes, ["ignored:not-started", "ignored:not-started", "connected:Acme", "ignored:not-started"], "each ignored return is told");
+	});
+
+	it("says so when the browser does not open, and takes no return for that flow", async () => {
+		const { cloud, connected } = fakeCloud();
+		const { app, outcomes, browser } = connector(cloud);
+		browser.opens = false;
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		assert.deepEqual(connected, []);
+		assert.deepEqual(outcomes, ["failed:Couldn't open the browser for GitHub. Try again.", "ignored:not-started"]);
+	});
+
+	it("tells the host about bound installations before it goes on to the install page", async () => {
+		const { cloud } = fakeCloud({ connect: async () => [{ installationId: 9, githubAccount: "jo" }] });
+		const { app, bound, outcomes } = connector(cloud);
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		assert.deepEqual(bound, ["jo"], "the form rechecks even if the install is abandoned");
+		assert.deepEqual(outcomes, []);
 	});
 
 	it("ignores a return that arrives after its flow expired", async () => {

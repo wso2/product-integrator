@@ -19,6 +19,9 @@
 import { ext } from "../extensionVariables";
 import { type GitHubRepoAccess, sharedGitHubAccess } from "./github-app";
 
+/** What the person is told when the WSO2 Cloud sign-in changed before an action about GitHub went on. */
+export const SIGN_IN_CHANGED_MESSAGE = "Your WSO2 Cloud sign-in changed, so connecting GitHub was stopped. Start again from the form.";
+
 /** Who is signed in to WSO2 Cloud, and to which organization; undefined when no one is. */
 export function signedInScope(): string | undefined {
 	const session = ext.authProvider?.session;
@@ -27,5 +30,6 @@ export function signedInScope(): string | undefined {
 
 /** How WSO2 Cloud can read `owner/repo`, shared for a few seconds by the checks of one repository. */
 export function gitHubAccessFor(owner: string, repo: string): Promise<GitHubRepoAccess> {
-	return sharedGitHubAccess(ext.clients.platform.cloud, signedInScope() ?? "", owner, repo, ext.log.bind(ext));
+	const scope = signedInScope();
+	return sharedGitHubAccess(ext.clients.platform.cloud, scope ?? "", owner, repo, { log: ext.log.bind(ext), isCurrent: () => signedInScope() === scope });
 }
