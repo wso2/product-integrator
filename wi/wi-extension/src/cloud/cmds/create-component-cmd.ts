@@ -298,7 +298,8 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 	}
 
 	await checkSubscription();
-	await checkIfSourcePushedToRemoteRepo(createParams, gitRoot);
+	// The access the check confirmed is the one the create binds; a second lookup could fail and drop the binding.
+	const checkedAccess = await checkIfSourcePushedToRemoteRepo(createParams, gitRoot);
 
 	await window.withProgress(
 		{
@@ -325,7 +326,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 					const appPath = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
 					const repoUrl = normalizeCloneUrl(createParam.repoUrl);
 					const repoAppPath = appPath && appPath !== "." ? appPath : undefined;
-					const access = await gitHubAccessOf(createParam.repoUrl);
+					const access = checkedAccess.has(createParam.repoUrl) ? checkedAccess.get(createParam.repoUrl) : await gitHubAccessOf(createParam.repoUrl);
 					const created = await cloud.components.create({
 						projectName: project.id,
 						name,
@@ -421,9 +422,11 @@ const gitHubAccessOf = async (repoUrl: string): Promise<GitHubRepoAccess | undef
 	return github ? gitHubAccessFor(github.owner, github.repo) : undefined;
 };
 
-const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegrationParam[], gitRoot: string) => {
+/** Checks each integration's source is in its remote repository; returns the access each repository was read with. */
+const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegrationParam[], gitRoot: string): Promise<Map<string, GitHubRepoAccess | undefined>> => {
+	const checked = new Map<string, GitHubRepoAccess | undefined>();
 	if (ext.isDevantCloudEditor) {
-		return; // the editor pushed the changes itself
+		return checked; // the editor pushed the changes itself
 	}
 	await window.withProgress({ title: "Verifying source in remote repo", location: ProgressLocation.Notification, cancellable: false }, async (progress) => {
 		for (let i = 0; i < createParams.length; i++) {
@@ -431,7 +434,8 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegr
 			if (createParams.length > 1) {
 				progress.report({ message: `(${i + 1}/${createParams.length}) ${createParam.displayName || createParam.name}`, increment: 100 / createParams.length });
 			}
-			const access = await gitHubAccessOf(createParam.repoUrl);
+			const access = checked.has(createParam.repoUrl) ? checked.get(createParam.repoUrl) : await gitHubAccessOf(createParam.repoUrl);
+			checked.set(createParam.repoUrl, access);
 			if (!access) {
 				continue; // the platform reads GitHub repositories only
 			}
@@ -446,7 +450,23 @@ const checkIfSourcePushedToRemoteRepo = async (createParams: WICloudCreateIntegr
 			}
 		}
 	});
+	return checked;
 };
+
+/** Why WSO2 Cloud cannot read a GitHub repository, for an access that neither an installation nor public access gives; undefined when it can. */
+function unreadableSource(access: GitHubRepoAccess): string | undefined {
+	switch (access.kind) {
+		case "installation":
+		case "public":
+			return undefined;
+		case "not-granted":
+			return `The WSO2 Cloud GitHub app is on ${access.owner} but not given ${access.repo}. Give it access, then retry.`;
+		case "auth-required":
+			return `WSO2 Cloud needs your GitHub authorization again to read ${access.owner}/${access.repo}. Authorize, then retry.`;
+		case "not-connected":
+			return `WSO2 Cloud can't read ${access.owner}/${access.repo}: connect GitHub with the WSO2 Cloud app on ${access.owner}, then retry.`;
+	}
+}
 
 /** Logs what the platform said about a new integration; its first build starts with the create. */
 function logCreated(created: CreatedComponent): void {
@@ -480,6 +500,12 @@ async function attachSourceToExistingIntegration(
 		const appPath = relativePath(gitRoot, createParam.componentDir).replace(/\\/g, "/");
 		const repoUrl = normalizeCloneUrl(createParam.repoUrl);
 		const repoAppPath = appPath && appPath !== "." ? appPath : undefined;
+		// Access is settled before anything changes: a source it cannot read must neither replace the old one nor lose its binding.
+		const access = await gitHubAccessOf(createParam.repoUrl);
+		const unreadable = access && unreadableSource(access);
+		if (unreadable) {
+			throw new Error(`${unreadable} Nothing was changed.`);
+		}
 		await window.withProgress({ title, location: ProgressLocation.Notification }, async () => {
 			await cloud.components.updateBuildParameters(
 				integrationId,
@@ -487,7 +513,6 @@ async function attachSourceToExistingIntegration(
 				project.id,
 			);
 			// A private repository is read through the GitHub App installation, bound before the build.
-			const access = await gitHubAccessOf(createParam.repoUrl);
 			const source = access ? gitHubSourceFor(access, createParam.branch, repoAppPath, repoUrl) : undefined;
 			if (source) {
 				await cloud.git.putGitHubSource(project.id, integrationId, source);
