@@ -220,10 +220,10 @@ export const createProjectNamed = async (newProjectName: string): Promise<Projec
 	return project;
 };
 
-/** The project a deploy goes to: an existing one by id, or a new one by name, which a retry finds empty after a failed deploy and reuses. */
 /** The project id a deploy created, by organization and name, so a retry after a failed deploy reuses that project only. */
 const projectsCreatedForDeploy = new Map<string, string>();
 
+/** The project a deploy goes to: an existing one by id, or a new one by name, which a retry finds empty after a failed deploy and reuses. */
 export async function resolveDeployProject(choice: WICloudDeployReq["project"], projects: Project[]): Promise<Project> {
 	if ("id" in choice) {
 		const project = projects.find((item) => item.id === choice.id);
