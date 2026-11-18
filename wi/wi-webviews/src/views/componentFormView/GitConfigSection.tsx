@@ -294,7 +294,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	}
 
 	if (!invalidRepoMsg && configDriftFiles?.length > 0) {
-		invalidRepoMsg = `Creating the integration in WSO2 Cloud requires the metadata in the ${configDriftFiles.join(",")} ${configDriftFiles?.length > 1 ? "files" : "file"} to be committed and pushed to the selected remote repository for proper functionality.`;
+		invalidRepoMsg = `WSO2 Cloud reads the metadata in ${configDriftFiles.join(", ")} from the selected remote repository. Commit and push ${configDriftFiles.length > 1 ? "them" : "it"}.`;
 		onInvalidRepoRefreshClick = refetchConfigDrift;
 		onInvalidRepoRefreshing = isFetchingConfigDrift;
 		invalidRepoBannerType = "warning";
@@ -302,7 +302,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	}
 
 	if (!invalidRepoMsg && hasDirtyRepo) {
-		invalidRepoMsg = "WSO2 cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.";
+		invalidRepoMsg = "WSO2 Cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.";
 		onInvalidRepoRefreshClick = refetchHasDirtyRepo;
 		onInvalidRepoRefreshing = isFetchingHasDirtyRepo;
 		invalidRepoBannerType = "neutral";

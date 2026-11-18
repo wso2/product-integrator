@@ -60,7 +60,7 @@ export interface WICloudFormContext {
 	integrations: ICreateNewIntegrationCmdIntegrations[];
 }
 
-/** One integration the deploy form asks the platform to create. */
+/** One integration the create form asks the platform to create. */
 export interface WICloudCreateIntegrationParam {
 	/** The directory of the integration on disk. */
 	componentDir: string;

@@ -42,7 +42,7 @@ import { linkContext, localContextEntry, readContextEntries, writeContextEntries
 import type { Repository } from "../git/git";
 import { initGit } from "../git/main";
 import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
-import { handleCloudError } from "../platform/error-handler";
+import { CancelledError, handleCloudError } from "../platform/error-handler";
 import { contextStore, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensionName, toProjectName, toResourceName } from "./cmd-utils";
@@ -76,15 +76,8 @@ export function createNewComponentCommand(context: ExtensionContext) {
 				const orgHandle = session.org.handle;
 				const cloud = ext.clients.platform.cloud;
 				await waitForContextStoreToLoad();
-				let selectedProject = contextStore.getState().state.selected?.project;
 
-				if (params?.workspaceDir && !selectedProject) {
-					selectedProject = await createProjectFromLocalMetadata(params.workspaceDir);
-				}
-				if (!selectedProject) {
-					selectedProject = (await selectProjectWithCreateNew(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', to create the integration in`)).selectedProject;
-				}
-
+				// Checked and picked before the project, so a failure or a cancel leaves no new, empty project behind.
 				// A directory passed without its integration types offers them all, as a directory picked here does.
 				const integrations = (params?.integrations || []).map((item) =>
 					item.supportedIntegrationTypes?.length ? item : { ...item, supportedIntegrationTypes: allIntegrationTypes },
@@ -113,14 +106,23 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					} else {
 						defaultUri = Uri.file(os.homedir());
 					}
-					const supPathUri = await window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: true, title: "Select integration directory", defaultUri });
+					const supPathUri = await window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: !ext.isDevantCloudEditor, title: "Select integration directory", defaultUri });
 					if (!supPathUri || supPathUri.length === 0) {
-						throw new Error("Integration directory selection is required");
+						throw new CancelledError();
 					}
 					for (const item of supPathUri) {
 						integrations.push({ fsPath: item.fsPath, name: path.basename(item.fsPath), supportedIntegrationTypes: allIntegrationTypes });
 					}
 					workspaceDir = workspace.workspaceFolders?.find((folder) => isSubpath(folder.uri.fsPath, supPathUri[0].fsPath))?.uri.fsPath;
+				}
+
+				let selectedProject = contextStore.getState().state.selected?.project;
+
+				if (params?.workspaceDir && !selectedProject) {
+					selectedProject = await createProjectFromLocalMetadata(params.workspaceDir);
+				}
+				if (!selectedProject) {
+					selectedProject = (await selectProjectWithCreateNew(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', to create the integration in`)).selectedProject;
 				}
 
 				const existing = await window.withProgress(
@@ -212,7 +214,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 				}
 			} catch (err) {
 				ext.logError("Failed to create integration", err as Error);
-				handleCloudError(err, "Failed to create the integration");
+				handleCloudError(err, "Failed to create the integration", { prefix: true });
 			}
 		}),
 	);
@@ -274,7 +276,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				ext.logError(`Failed to resolve the source integration ${workspaceCompId}`, err as Error);
 				return {
 					created: [],
-					failed: createParams.map((item) => ({ name: item.displayName || item.name, error: `Could not read the linked integration: ${(err as Error).message}. Nothing was created; please retry.` })),
+					failed: createParams.map((item) => ({ name: item.displayName || item.name, error: `Could not read the linked integration: ${(err as Error).message}. No changes were made; please retry.` })),
 					total: totalCount,
 				};
 			}
@@ -329,8 +331,8 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 						runtime: runtimeForBuildPack(createParam.buildPackLang),
 						repo: { url: normalizeCloneUrl(createParam.repoUrl), branch: createParam.branch, appPath: appPath && appPath !== "." ? appPath : undefined },
 					});
-					// Builds and deployments are left to the console: required configurations and private
-					// dependencies are entered there, and the platform has no API that reports them as missing.
+					// The platform starts the first build; deployments are left to the console: required configurations
+					// and private dependencies are entered there, and the platform has no API that reports them as missing.
 					logCreated(created);
 					result.created.push(created);
 					if (created.sourceBindingError) {
@@ -368,14 +370,14 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		const successMessage =
 			result.failed.length === 0
 				? result.created.length === 1
-					? "Created the integration in WSO2 Cloud. Build and deploy it from the console."
-					: "Created the integrations in WSO2 Cloud. Build and deploy them from the console."
-				: `Created ${result.created.length} of ${totalCount} integrations in WSO2 Cloud. Build and deploy them from the console.`;
+					? "Created the integration in WSO2 Cloud, and its first build has started. Deploy it from the console."
+					: "Created the integrations in WSO2 Cloud, and their first builds have started. Deploy them from the console."
+				: `Created ${result.created.length} of ${totalCount} integrations in WSO2 Cloud, and their first builds have started. Deploy them from the console.`;
 		const createWarning = [sourceBindingWarning(unbound), firstBuildWarning(unbuilt)].filter(Boolean).join(" ") || undefined;
 		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
 		if (workspace.workspaceFile) {
 			window.showErrorMessage("Please make sure newly created integrations are added to workspace.");
-			// Builds and deployments are done in the console, so the way there is offered here too.
+			// Deployments are done in the console, so the way there is offered here too.
 			showViewInConsoleMessage(createWarning ?? successMessage, org.handle, project, result.created, !!createWarning);
 		} else if (isWithinWorkspace) {
 			showViewInConsoleMessage(createWarning ?? successMessage, org.handle, project, result.created, !!createWarning);
