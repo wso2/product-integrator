@@ -50,6 +50,7 @@ import {
 	pickBranch,
 	requireSession,
 	resolveDeployProject,
+	toValidProjectName,
 } from "./cmd-utils";
 import { confirmAnotherIntegration, hasIntegrationForDirs, localProjectDisplayName, submitCreateComponentHandler } from "./create-component-cmd";
 import { type Release, deployBuild, enableBuildAutomation, waitForRelease } from "./deploy-build";
@@ -84,7 +85,7 @@ async function getDeployContext(req: WICloudDeployContextReq): Promise<WICloudDe
 	return {
 		signedIn: true,
 		linkedProject: linked && { id: linked.id, name: linked.name },
-		suggestedProjectName: local && !linked && req.workspaceDir ? localProjectDisplayName(req.workspaceDir, local.project) : undefined,
+		suggestedProjectName: local && !linked && req.workspaceDir ? toValidProjectName(localProjectDisplayName(req.workspaceDir, local.project)) : undefined,
 		projects: projects.map((project) => ({ id: project.id, name: project.name })),
 		integrations,
 	};
@@ -148,8 +149,7 @@ async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspe
 }
 
 function requireWithinWorkspace(fsPath: string): void {
-	const inWorkspace = workspace.workspaceFolders?.some((folder) => isSubpath(folder.uri?.fsPath, fsPath));
-	if (!inWorkspace && !workspace.workspaceFile) {
+	if (!workspace.workspaceFolders?.some((folder) => isSubpath(folder.uri?.fsPath, fsPath))) {
 		throw new Error("Selected directory is outside of the workspace. Please select a directory within the workspace to create the integration.");
 	}
 }
@@ -167,7 +167,7 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 		if (nameError) {
 			throw new Error(nameError);
 		}
-		requireWithinWorkspace(req.integration.fsPath);
+		requireWithinWorkspace(req.workspaceDir);
 		const ws = new CloudWsManager();
 		// Checked before a new project is created, so a request that cannot deploy leaves none behind.
 		const gitRoot = await deploySourceRoot(req, await ws.getLocalGitData(req.workspaceDir), () => ws.getBranches({ repoUrl: req.gitRemote }));
@@ -185,13 +185,6 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 		if (isIntegrationNameTaken(integrationNames(existing), displayName)) {
 			throw new Error(`The project ${project.name} already has an integration named ${displayName}.`);
 		}
-		// The local entry names a project to create; the project this deploy uses replaces it.
-		const local = localContextEntry(req.workspaceDir);
-		if (local) {
-			unlinkContext([req.workspaceDir], local);
-		}
-		linkContext(gitRoot, { org: org.handle, project: project.id });
-		contextStore.getState().refreshState();
 		const result = await submitCreateComponentHandler({
 			org: { id: org.id, uuid: org.uuid, handle: org.handle, name: org.name },
 			project,
@@ -213,6 +206,9 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 				},
 			],
 		});
+		if (result.created.length > 0) {
+			replaceLocalEntry(req.workspaceDir, gitRoot, { org: org.handle, project: project.id });
+		}
 		// The create leaves deploying to the console; this command follows the first build and deploys it.
 		for (const created of result.created) {
 			await enableBuildAutomation(created, org.handle, project, req.quiet);
@@ -221,6 +217,16 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 	} catch (err) {
 		ext.logError("Failed to deploy integration", err as Error);
 		return { outcome: "failed", message: failureMessage(err, "Failed to deploy the integration", req.quiet) };
+	}
+}
+
+// The local entry names a project to create; once a create succeeds, the project the deploy used replaces it.
+function replaceLocalEntry(workspaceDir: string, gitRoot: string, entry: { org: string; project: string }): void {
+	const local = localContextEntry(workspaceDir);
+	if (local) {
+		unlinkContext([workspaceDir], local);
+		linkContext(gitRoot, entry);
+		contextStore.getState().refreshState();
 	}
 }
 

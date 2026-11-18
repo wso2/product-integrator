@@ -18,7 +18,7 @@
 
 import * as path from "path";
 import type { WICloudDeployReq } from "@wso2/wi-core";
-import { type Component, type Organization, type PlatformSession, type Project, RESOURCE_NAME } from "@wso2/wso2-cloud-client";
+import { type Component, type Organization, type PlatformSession, type Project, RESOURCE_NAME, parseGitHubRepoUrl } from "@wso2/wso2-cloud-client";
 import { type ExtensionName, type GetLocalGitDataResp, WICommandIds } from "@wso2/wso2-platform-core";
 import { ProgressLocation, type QuickPickItem, QuickPickItemKind, type WorkspaceFolder, commands, window, workspace } from "vscode";
 import { type ExtensionVariables, ext } from "../../extensionVariables";
@@ -227,6 +227,9 @@ export const createProjectNamed = async (newProjectName: string): Promise<Projec
 };
 
 /** The project a deploy goes to: an existing one by id, or a new one by name, which a retry finds empty after a failed deploy and reuses. */
+/** The project id a deploy created, by organization and name, so a retry after a failed deploy reuses that project only. */
+const projectsCreatedForDeploy = new Map<string, string>();
+
 export async function resolveDeployProject(choice: WICloudDeployReq["project"], projects: Project[]): Promise<Project> {
 	if ("id" in choice) {
 		const project = projects.find((item) => item.id === choice.id);
@@ -235,15 +238,18 @@ export async function resolveDeployProject(choice: WICloudDeployReq["project"], 
 		}
 		return project;
 	}
-	const named = projects.find((item) => item.name === choice.newName);
-	if (named && (await ext.clients.platform.cloud.components.list(named.id)).length === 0) {
-		return named;
+	const key = `${requireOrg().handle}/${choice.newName}`;
+	const earlier = projects.find((item) => item.id === projectsCreatedForDeploy.get(key) && !item.deleting);
+	if (earlier && (await ext.clients.platform.cloud.components.list(earlier.id)).length === 0) {
+		return earlier;
 	}
 	const error = validateProjectName(choice.newName, projects);
 	if (error) {
 		throw new Error(error);
 	}
-	return createProjectNamed(choice.newName);
+	const project = await createProjectNamed(choice.newName);
+	projectsCreatedForDeploy.set(key, project.id);
+	return project;
 }
 
 /** The git root a deploy builds from, once its directory, remote and branch are the workspace repository's own. */
@@ -254,14 +260,28 @@ export async function deploySourceRoot(req: WICloudDeployReq, gitData: GetLocalG
 	if (!gitData?.gitRoot) {
 		throw new Error("The workspace is not in a Git repository. Initialize one, push it to GitHub, then deploy from it.");
 	}
-	if (!gitData.remotes?.includes(req.gitRemote)) {
+	if (!gitData.remotes?.some((remote) => sameRepository(remote, req.gitRemote))) {
 		throw new Error(`${req.gitRemote} is not a remote of the workspace repository.`);
 	}
-	const branches = await listBranches().catch((): string[] => []);
-	if (branches.length > 0 && !branches.includes(req.branch)) {
-		throw new Error(`${req.branch} is not a branch of ${req.gitRemote}.`);
+	const branches = await listBranches().catch((err: unknown) => {
+		throw new Error(`Couldn't read the branches of ${req.gitRemote}: ${err instanceof Error ? err.message : String(err)}`);
+	});
+	if (!branches.includes(req.branch)) {
+		throw new Error(`${req.branch} is not a branch Choreo Cloud can read in ${req.gitRemote}.`);
 	}
 	return gitData.gitRoot;
+}
+
+/** Whether two remote URLs, in any form git reports, name the same GitHub repository; GitHub names are case-insensitive. */
+function sameRepository(a: string, b: string): boolean {
+	const [x, y] = [parseGitHubRepoUrl(a), parseGitHubRepoUrl(b)];
+	return x && y ? `${x.owner}/${x.repo}`.toLowerCase() === `${y.owner}/${y.repo}`.toLowerCase() : a === b;
+}
+
+/** A project name `validateProjectName` accepts, made from a title such as a Ballerina.toml's; undefined when none can be. */
+export function toValidProjectName(title: string): string | undefined {
+	const name = title.replace(/[^A-Za-z\d\s_-]+/g, " ").replace(/^[^A-Za-z]+/, "").replace(/\s+/g, " ").slice(0, 60).trim();
+	return name.length >= 3 ? name : undefined;
 }
 
 /** The names the project's integrations use as ids, names and display names, lower-cased. */

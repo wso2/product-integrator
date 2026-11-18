@@ -152,9 +152,15 @@ export interface Release {
  */
 async function missingConfigurations(integrationId: string, environment: Environment, projectName: string): Promise<string[]> {
 	try {
-		const { jsonSchema, configurations } = await ext.clients.platform.cloud.config.getConfigSchema(integrationId, environment.id, projectName);
-		const set = new Set((configurations ?? []).filter((item) => item.isSet || item.values.some((value) => value.value)).map((item) => item.key));
-		const missing = requiredConfigurables(jsonSchema).filter((key) => !set.has(key));
+		const config = ext.clients.platform.cloud.config;
+		const [{ jsonSchema, configurations }, links] = await Promise.all([
+			config.getConfigSchema(integrationId, environment.id, projectName),
+			config.listLinks(integrationId, projectName),
+		]);
+		const set = (configurations ?? []).filter((item) => item.isSet || item.values.some((value) => value.value)).map((item) => item.key);
+		// A link fills a configurable from a connection; a record configurable may be stored as one key per field.
+		const filled = [...set, ...Object.keys(links.endpointLinks ?? {}), ...Object.keys(links.fieldLinks ?? {})];
+		const missing = requiredConfigurables(jsonSchema).filter((key) => !filled.some((item) => item === key || item.startsWith(`${key}.`)));
 		ext.log(`Required configurations of ${integrationId} in ${environment.name}: ${missing.length ? `missing ${missing.join(", ")}` : "all set"}`);
 		return missing;
 	} catch (error) {
