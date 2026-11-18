@@ -36,13 +36,21 @@ import { ext } from "../../extensionVariables";
 import { isSubpath } from "../../utils/pathUtils";
 import { CloudWsManager } from "../../ws-managers/cloud/ws-manager";
 import { linkContext, localContextEntry, unlinkContext } from "../context-file";
-import { getGitRoot } from "../git/util";
-import { handleCloudError } from "../platform/error-handler";
+import { describeCloudError, handleCloudError } from "../platform/error-handler";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
-import { createProjectNamed, isPlatformReady, requireSession, validateProjectName } from "./cmd-utils";
 import {
 	assignUniqueNames,
+	deploySourceRoot,
+	integrationNames,
+	isIntegrationNameTaken,
+	isPlatformReady,
+	pickBranch,
+	requireSession,
+	resolveDeployProject,
+} from "./cmd-utils";
+import {
+	type Release,
 	confirmAnotherIntegration,
 	deployBuild,
 	hasIntegrationForDirs,
@@ -87,12 +95,14 @@ async function getDeployContext(req: WICloudDeployContextReq): Promise<WICloudDe
 	};
 }
 
-function pickBranch(branches: string[], ...preferred: (string | undefined | null)[]): string | null {
-	return [...preferred, "main", "master"].find((branch) => !!branch && branches.includes(branch)) ?? branches[0] ?? null;
-}
-
 // The same reads the deploy form makes for its repository section, judged by the same rules.
 async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspectSourceResp> {
+	isPlatformReady(ext);
+	await ext.cloudReady;
+	if (!signedIn()) {
+		const readiness = { message: "Sign in to WSO2 Cloud to check the repository.", tone: "info" as const, blocking: true };
+		return { remotes: [], gitRemote: null, gitProvider: null, branches: [], branch: null, readiness };
+	}
 	const ws = new CloudWsManager();
 	const orgId = ext.authProvider?.org?.id?.toString() ?? "";
 	const gitData = (await ws.getLocalGitData(req.workspaceDir)) ?? null;
@@ -123,22 +133,6 @@ async function inspectSource(req: WICloudInspectSourceReq): Promise<WICloudInspe
 	return { remotes, gitRemote, gitProvider, branches, branch, readiness };
 }
 
-async function resolveProject(choice: WICloudDeployReq["project"]): Promise<Project> {
-	const projects = await listProjects();
-	if ("id" in choice) {
-		const project = projects.find((item) => item.id === choice.id);
-		if (!project) {
-			throw new Error(`The project ${choice.id} no longer exists in WSO2 Cloud.`);
-		}
-		return project;
-	}
-	const error = validateProjectName(choice.newName, projects);
-	if (error) {
-		throw new Error(error);
-	}
-	return createProjectNamed(choice.newName);
-}
-
 function requireWithinWorkspace(fsPath: string): void {
 	const inWorkspace = workspace.workspaceFolders?.some((folder) => isSubpath(folder.uri?.fsPath, fsPath));
 	if (!inWorkspace && !workspace.workspaceFile) {
@@ -154,31 +148,36 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 		if (!session) {
 			return { outcome: "cancelled" };
 		}
-		const nameError = validateIntegrationDisplayName(req.integration.displayName);
+		const displayName = req.integration.displayName.trim();
+		const nameError = validateIntegrationDisplayName(displayName);
 		if (nameError) {
 			throw new Error(nameError);
 		}
 		requireWithinWorkspace(req.integration.fsPath);
+		const ws = new CloudWsManager();
+		// Checked before a new project is created, so a request that cannot deploy leaves none behind.
+		const gitRoot = await deploySourceRoot(req, await ws.getLocalGitData(req.workspaceDir), () => ws.getBranches({ repoUrl: req.gitRemote }));
 		await waitForContextStoreToLoad();
 		const org = session.org;
-		const project = await resolveProject(req.project);
+		const project = await resolveDeployProject(req.project, await listProjects());
+		const projectRef = { id: project.id, name: project.name };
 		const existing = await ext.clients.platform.cloud.components.list(project.id);
 		dataCacheStore.getState().setIntegrations(org.handle, project.id, existing);
-		const gitRoot = await getGitRoot(ext.context, req.workspaceDir).catch((): undefined => undefined);
-		if (gitRoot && (await hasIntegrationForDirs(org.handle, project.id, existing, gitRoot, [req.integration.fsPath]))) {
+		if (await hasIntegrationForDirs(org.handle, project.id, existing, gitRoot, [req.integration.fsPath])) {
 			if (!(await confirmAnotherIntegration(org.handle, project, gitRoot))) {
-				return { outcome: "linkedExisting" };
+				return { outcome: "linkedExisting", project: projectRef };
 			}
+		}
+		if (isIntegrationNameTaken(integrationNames(existing), displayName)) {
+			throw new Error(`The project ${project.name} already has an integration named ${displayName}.`);
 		}
 		// The local entry names a project to create; the project this deploy uses replaces it.
 		const local = localContextEntry(req.workspaceDir);
 		if (local) {
 			unlinkContext([req.workspaceDir], local);
 		}
-		if (gitRoot) {
-			linkContext(gitRoot, { org: org.handle, project: project.id });
-			contextStore.getState().refreshState();
-		}
+		linkContext(gitRoot, { org: org.handle, project: project.id });
+		contextStore.getState().refreshState();
 		const result = await submitCreateComponentHandler({
 			org: { id: org.id, uuid: org.uuid, handle: org.handle, name: org.name },
 			project,
@@ -187,8 +186,8 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 			createParams: [
 				{
 					componentDir: req.integration.fsPath,
-					displayName: req.integration.displayName,
-					name: req.integration.displayName,
+					displayName,
+					name: displayName,
 					integrationType: req.integration.integrationType,
 					buildPackLang: req.buildPackLang,
 					repoUrl: req.gitRemote,
@@ -197,15 +196,18 @@ async function deploy(req: WICloudDeployReq): Promise<WICloudDeployResp> {
 				},
 			],
 		});
-		return { outcome: "submitted", ...result };
+		return { outcome: "submitted", project: projectRef, ...result };
 	} catch (err) {
 		ext.logError("Failed to deploy integration", err as Error);
-		return { outcome: "failed", message: handleCloudError(err, "Failed to deploy the integration") };
+		return { outcome: "failed", message: failureMessage(err, "Failed to deploy the integration", req.quiet) };
 	}
 }
 
-// Returns once the platform accepts the deploy; the rollout is followed in a notification.
-async function deployLatestBuild({ integrationId, projectId }: WICloudDeployBuildReq): Promise<WICloudDeployBuildResp> {
+// A quiet caller shows the returned message itself, so it is not also shown here.
+const failureMessage = (err: unknown, fallback: string, quiet?: boolean) => (quiet ? describeCloudError(err, fallback) : handleCloudError(err, fallback));
+
+// Returns once the platform accepts the deploy; unless the caller is quiet, the rollout is followed in a notification.
+async function deployLatestBuild({ integrationId, projectId, quiet }: WICloudDeployBuildReq): Promise<WICloudDeployBuildResp> {
 	try {
 		isPlatformReady(ext);
 		const builds = await ext.clients.platform.cloud.builds.list(integrationId, projectId);
@@ -214,26 +216,36 @@ async function deployLatestBuild({ integrationId, projectId }: WICloudDeployBuil
 			throw new Error("The integration has no successful build to deploy.");
 		}
 		const release = await deployBuild(integrationId, buildName, projectId, () => undefined);
-		void window
-			.withProgress({ location: ProgressLocation.Notification, title: `${integrationId} in WSO2 Cloud` }, (progress) =>
-				waitForRelease(integrationId, projectId, release, new AbortController().signal, (message) => progress.report({ message })),
-			)
-			.then(
-				() => window.showInformationMessage(`Deployed ${integrationId} to ${release.target.name}.`),
-				(err) => {
-					ext.logError(`The deployment of ${integrationId} did not roll out`, err as Error);
-					const url = buildConsoleUrl(ext.config.consoleUrl, { orgHandle: ext.authProvider?.org?.handle, project: projectId, integration: integrationId });
-					window.showErrorMessage(`${integrationId}: ${(err as Error).message}`, "View in Console").then((choice) => {
-						if (choice) {
-							void env.openExternal(Uri.parse(url));
-						}
-					});
-				},
-			);
+		if (!quiet) {
+			void followRelease(integrationId, projectId, release);
+		}
 		return { success: true };
 	} catch (err) {
 		ext.logError("Failed to deploy the build", err as Error);
-		return { success: false, message: handleCloudError(err, "Failed to deploy the build") };
+		return { success: false, message: failureMessage(err, "Failed to deploy the build", quiet) };
+	}
+}
+
+async function followRelease(integrationId: string, projectId: string, release: Release): Promise<void> {
+	const controller = new AbortController();
+	try {
+		await window.withProgress({ location: ProgressLocation.Notification, title: `${integrationId} in WSO2 Cloud`, cancellable: true }, (progress, token) => {
+			token.onCancellationRequested(() => controller.abort());
+			return waitForRelease(integrationId, projectId, release, controller.signal, (message) => progress.report({ message }));
+		});
+		window.showInformationMessage(`Deployed ${integrationId} to ${release.target.name}.`);
+	} catch (err) {
+		if (controller.signal.aborted) {
+			ext.log(`Stopped following the deployment of ${integrationId}`);
+			return;
+		}
+		ext.logError(`The deployment of ${integrationId} did not roll out`, err as Error);
+		const url = buildConsoleUrl(ext.config.consoleUrl, { orgHandle: ext.authProvider?.org?.handle, project: projectId, integration: integrationId });
+		window.showErrorMessage(`${integrationId}: ${(err as Error).message}`, "View in Console").then((choice) => {
+			if (choice) {
+				void env.openExternal(Uri.parse(url));
+			}
+		});
 	}
 }
 

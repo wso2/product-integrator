@@ -85,7 +85,7 @@ export interface WICloudSubmitComponentsReq {
 	project: Project;
 	workspaceFsPath: string;
 	createParams: WICloudCreateIntegrationParam[];
-	/** The caller shows the progress itself: report it in the status bar and skip the success messages. */
+	/** The caller shows the progress and the failures it gets back: report progress in the status bar and skip the success and failure messages. */
 	quiet?: boolean;
 }
 
@@ -269,17 +269,19 @@ export interface WICloudDeployReq {
 	workspaceDir: string;
 	buildPackLang: "ballerina" | "microintegrator";
 	integration: { fsPath: string; displayName: string; integrationType: string };
-	/** An existing project's id, or the display name of a project to create. */
+	/** An existing project's id, or the display name of a project to create; an empty project of that name, as a failed deploy leaves, is used instead. */
 	project: { id: string } | { newName: string };
 	gitRemote: string;
 	branch: string;
-	/** The caller shows the progress itself: report it in the status bar and skip the success messages. */
+	/** The caller shows the progress and the failures it gets back: report progress in the status bar and skip the success and failure messages. */
 	quiet?: boolean;
 }
 
 export interface WICloudDeployBuildReq {
 	integrationId: string;
 	projectId: string;
+	/** The caller follows the rollout itself: no notification and no messages. */
+	quiet?: boolean;
 }
 
 export interface WICloudDeployBuildResp {
@@ -287,9 +289,14 @@ export interface WICloudDeployBuildResp {
 	message?: string;
 }
 
+/** The project a deploy used: the one picked, or the one created for `{ newName }`. */
+export interface WICloudDeployProject {
+	project: { id: string; name: string };
+}
+
 export type WICloudDeployResp =
-	| ({ outcome: "submitted" } & WICloudSubmitComponentsResp)
+	| ({ outcome: "submitted" } & WICloudDeployProject & WICloudSubmitComponentsResp)
 	/** An integration already builds this directory and the person chose not to create another. */
-	| { outcome: "linkedExisting" }
+	| ({ outcome: "linkedExisting" } & WICloudDeployProject)
 	| { outcome: "cancelled" }
 	| { outcome: "failed"; message: string };
