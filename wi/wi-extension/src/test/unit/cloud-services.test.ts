@@ -152,6 +152,12 @@ describe("Copilot token exchange", () => {
 describe("WSO2 Cloud service requests", () => {
 	const managed = (request: Partial<CloudServiceRequest>): CloudServiceRequest => ({ service: "managed-tokens", method: "GET", path: "/managed-connections", ...request });
 
+	it("answers a service the contract names but this build does not call as not supported, sending nothing", async () => {
+		const { deps: d, sent } = deps([]);
+		await assert.rejects(callCloudService({ service: "agent-manager", method: "GET", path: "/orgs" }, d), codeOf("not_supported"));
+		assert.strictEqual(sent.length, 0);
+	});
+
 	it("calls the service below its API root with WI's token", async () => {
 		const { deps: d, sent } = deps([json(200, { items: [] })]);
 		const answer = await callCloudService(managed({ method: "POST", path: "/managed-connections?org=acme", body: { name: "db" } }), d);

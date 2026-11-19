@@ -108,8 +108,11 @@ interface CloudService {
 	missing: string;
 }
 
-/** The services a consumer may call through WSO2 Integrator; no other host gets the WSO2 Cloud token. */
-const CLOUD_SERVICES: Readonly<Record<CloudServiceName, CloudService>> = {
+/**
+ * The services a consumer may call through WSO2 Integrator; no other host gets the WSO2 Cloud token. A service the
+ * contract names but this table has no entry for is answered as not supported.
+ */
+const CLOUD_SERVICES: Readonly<Partial<Record<CloudServiceName, CloudService>>> = {
 	// Consumers pass `/managed-connections/...`: the version prefix is this table's, not theirs.
 	"managed-tokens": {
 		baseUrl: (config) => config.managedTokensBaseUrl,
