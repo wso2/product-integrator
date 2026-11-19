@@ -38,7 +38,7 @@ export function isAgentBuilderMode(): boolean {
 }
 
 /**
- * User-visible product name ("WSO2 Integrator" / "WSO2 Agent Builder").
+ * User-visible product name ("Choreo Integrator" / "Choreo Agent Builder").
  * The built product may override it via the WSO2_PRODUCT_NAME env var.
  */
 export function getProductName(): string {

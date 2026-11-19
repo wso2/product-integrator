@@ -62,7 +62,7 @@ on:
         default: 'github'
         type: string
       product_flavor:
-        description: "Product flavor to build: 'integrator' (WSO2 Integrator) or 'agent-builder' (WSO2 Agent Builder)"
+        description: "Product flavor to build: 'integrator' (Choreo Integrator) or 'agent-builder' (Choreo Agent Builder)"
         required: false
         default: 'integrator'
         type: string

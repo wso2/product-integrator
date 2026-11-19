@@ -148,26 +148,37 @@ if not defined PRODUCT_NAME set "PRODUCT_NAME=Choreo Integrator"
 echo Product name: %PRODUCT_NAME%
 
 REM Each flavor needs its own MSI UpgradeCode and install folder, otherwise
-REM installing one flavor upgrades/replaces the other. DATA_FOLDER must match
+REM installing one flavor upgrades/replaces the other; and its own component GUIDs and
+REM registry key, otherwise the two side-by-side products share components
+REM (see IntegratorComponents.wxs). DATA_FOLDER must match
 REM product.json dataFolderName (ci/build/update-product.sh): uninstall removes it.
 if "%PRODUCT_NAME%"=="Choreo Agent Builder" (
     set "UPGRADE_CODE=56138e5c-e9ef-499b-8a21-54e2cfc09ba3"
     set "PRODUCT_DIR=Agent Builder"
     set "MSI_BASE=choreo-agent-builder"
-    set "PROGID=WSO2AgentBuilder"
+    set "PROGID=ChoreoAgentBuilder"
     set "DATA_FOLDER=.choreo-agent-builder"
+    set "REG_KEY=Software\Choreo\Agent Builder"
+    set "GUID_SHORTCUT={b1232deb-8cc5-4c27-bfe0-17fa416da20b}"
+    set "GUID_CLEANUP={59fdfdb5-5a42-4b3f-ad71-f65120f6a605}"
+    set "GUID_USERDATA={8710a75d-568a-44f3-9f86-c57b16ffd5a3}"
 ) else (
     set "UPGRADE_CODE=344b046a-fa6a-4452-be40-2794f59fe7b0"
     set "PRODUCT_DIR=Integrator"
     set "MSI_BASE=choreo-integrator"
     set "PROGID=WSO2Integrator"
     set "DATA_FOLDER=.choreo-integrator"
+    REM Integrator keeps the component GUIDs and registry key of the released WSO2 Integrator MSIs.
+    set "REG_KEY=Software\WSO2\Integrator"
+    set "GUID_SHORTCUT={4ab08ec1-a630-40d2-bf90-db740135b414}"
+    set "GUID_CLEANUP={e5f2a1b3-9c4d-4e8f-b6a2-7d3c1e0f8a45}"
+    set "GUID_USERDATA={ac721b5d-a559-43a0-a89a-c355d0c18409}"
 )
 copy /y ".\WixPackage\Package.wxs" ".\WixPackage\Package.wxs.bak" >nul
 copy /y ".\WixPackage\IntegratorComponents.wxs" ".\WixPackage\IntegratorComponents.wxs.bak" >nul
 copy /y ".\WixPackage\Folders.wxs" ".\WixPackage\Folders.wxs.bak" >nul
 copy /y ".\CustomAction1\CustomAction.cs" ".\CustomAction1\CustomAction.cs.bak" >nul
-powershell -Command "foreach ($f in '.\WixPackage\Package.wxs','.\WixPackage\IntegratorComponents.wxs','.\WixPackage\Folders.wxs','.\CustomAction1\CustomAction.cs') { (Get-Content -Raw $f).Replace('@PRODUCT_NAME@', '%PRODUCT_NAME%').Replace('@UPGRADE_CODE@', '%UPGRADE_CODE%').Replace('@PRODUCT_DIR@', '%PRODUCT_DIR%').Replace('@PROGID@', '%PROGID%').Replace('@DATA_FOLDER@', '%DATA_FOLDER%') | Set-Content $f }"
+powershell -Command "foreach ($f in '.\WixPackage\Package.wxs','.\WixPackage\IntegratorComponents.wxs','.\WixPackage\Folders.wxs','.\CustomAction1\CustomAction.cs') { (Get-Content -Raw $f).Replace('@PRODUCT_NAME@', '%PRODUCT_NAME%').Replace('@UPGRADE_CODE@', '%UPGRADE_CODE%').Replace('@PRODUCT_DIR@', '%PRODUCT_DIR%').Replace('@PROGID@', '%PROGID%').Replace('@DATA_FOLDER@', '%DATA_FOLDER%').Replace('@REG_KEY@', '%REG_KEY%').Replace('@GUID_SHORTCUT@', '%GUID_SHORTCUT%').Replace('@GUID_CLEANUP@', '%GUID_CLEANUP%').Replace('@GUID_USERDATA@', '%GUID_USERDATA%') | Set-Content $f }"
 
 REM Map build directory to a short drive letter to keep file paths under 260 chars.
 REM wixnative.exe lacks a longPathAware manifest, so it crashes on paths > 260 chars.
