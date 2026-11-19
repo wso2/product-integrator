@@ -52,18 +52,16 @@
           "type": "string",
           "enum": [
             "prod",
-            "prod-eu",
             "stage",
             "dev"
           ],
           "enumDescriptions": [
-            "Production, United States region",
-            "Production, Europe region",
+            "Production. Select the region (United States or Europe) when signing in.",
             "Staging",
             "Development"
           ],
           "default": "prod",
-          "description": "The WSO2 Cloud Environment to use. In production, the region can also be chosen when signing in, or with the Switch WSO2 Cloud Region command.",
+          "description": "The WSO2 Cloud environment to use.",
           "scope": "machine"
         },
         "integrator.advanced.cloudClientId": {

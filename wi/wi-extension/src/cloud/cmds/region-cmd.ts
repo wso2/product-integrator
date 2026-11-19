@@ -26,17 +26,22 @@ import { isPlatformReady } from "./cmd-utils";
 /** The context key that says whether there is another region to switch to; the switch command is enabled by it. */
 export const MULTI_REGION_CONTEXT = "wso2.integrator.cloud.multiRegion";
 
-/** How the person is shown where they work: `WSO2 Cloud (Europe)`, or `WSO2 Cloud` where there is no region to choose. */
+/** The region's name as the person is shown it: `Europe`. */
+function regionLabel(environment: CloudEnvironment): string {
+	return environment.region?.label ?? environment.name;
+}
+
+/** Where the person works, for messages: `WSO2 Cloud (Europe region)`, or `WSO2 Cloud` where there is no region to select. */
 export function cloudPlaceName(environment: CloudEnvironment = ext.clients.platform.environment): string {
-	return ext.clients.platform.regions.length > 1 && environment.region ? `WSO2 Cloud (${environment.region.label})` : "WSO2 Cloud";
+	return ext.clients.platform.regions.length > 1 && environment.region ? `WSO2 Cloud (${regionLabel(environment)} region)` : "WSO2 Cloud";
 }
 
 /**
- * Asks which of production's regions to work in, the one in use offered
- * first. The region in use, without asking, where there is no choice;
- * undefined when the person closed the list.
+ * Asks the person to select one of production's regions, the current one
+ * listed first. The current region, without asking, where there is no
+ * choice; undefined when the person closed the list.
  */
-export async function pickRegion(placeHolder: string): Promise<CloudEnvName | undefined> {
+export async function pickRegion(options: { title: string; placeHolder: string }): Promise<CloudEnvName | undefined> {
 	const platform = ext.clients.platform;
 	const current = platform.environment.name;
 	if (platform.regions.length < 2) {
@@ -46,21 +51,12 @@ export async function pickRegion(placeHolder: string): Promise<CloudEnvName | un
 	const picked = await window.showQuickPick(
 		ordered.map((region): QuickPickItem & { name: CloudEnvName } => ({
 			name: region.name,
-			label: region.region?.label ?? region.name,
-			description: region.name === current ? "in use" : undefined,
-			detail: hostOf(region.consoleUrl),
+			label: regionLabel(region),
+			description: region.name === current ? "Current region" : undefined,
 		})),
-		{ placeHolder, ignoreFocusOut: true },
+		{ title: options.title, placeHolder: options.placeHolder, ignoreFocusOut: true },
 	);
 	return picked?.name;
-}
-
-function hostOf(url: string): string | undefined {
-	try {
-		return new URL(url).host;
-	} catch {
-		return undefined;
-	}
 }
 
 /** Moves to another of production's regions; the person is signed in there if they were before, and offered to sign in otherwise. */
@@ -71,20 +67,21 @@ export function switchRegionCommand(context: ExtensionContext) {
 				isPlatformReady(ext);
 				const platform = ext.clients.platform;
 				if (platform.regions.length < 2) {
-					window.showInformationMessage("This editor works with one WSO2 Cloud region only.");
+					window.showInformationMessage("This WSO2 Cloud environment has only one region.");
 					return;
 				}
-				const chosen = await pickRegion("Choose the WSO2 Cloud region to work in");
+				const chosen = await pickRegion({ title: "Switch WSO2 Cloud Region", placeHolder: "Select the region to create and deploy your integrations in" });
 				if (!chosen || chosen === platform.environment.name) {
 					return;
 				}
 				await platform.switchEnvironment(chosen);
 				await ext.authProvider?.initAuth();
+				const region = regionLabel(platform.environment);
 				if (ext.authProvider?.isLoggedIn) {
-					window.showInformationMessage(`Switched to ${cloudPlaceName()}.`);
+					window.showInformationMessage(`Switched to the ${region} region of WSO2 Cloud.`);
 					return;
 				}
-				const action = await window.showInformationMessage(`Switched to ${cloudPlaceName()}. Sign in to work with it.`, "Sign In");
+				const action = await window.showInformationMessage(`Switched to the ${region} region of WSO2 Cloud. Sign in to continue.`, "Sign In");
 				if (action === "Sign In") {
 					await commands.executeCommand(WICommandIds.SignIn, { region: chosen });
 				}
