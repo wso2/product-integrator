@@ -90,7 +90,7 @@ export const createDirectory = (basePath: string, dirName: string): { dirName: s
 };
 
 export const getDefaultCreationPath = (): string => {
-    const dirName = isAgentBuilderMode() ? "ChoreoAgentBuilder" : "WSO2Integrator";
+    const dirName = isAgentBuilderMode() ? "ChoreoAgentBuilder" : "ChoreoIntegrator";
     const defaultPath = path.join(os.homedir(), dirName);
     if (!existsSync(defaultPath)) {
         mkdirSync(defaultPath, { recursive: true });
