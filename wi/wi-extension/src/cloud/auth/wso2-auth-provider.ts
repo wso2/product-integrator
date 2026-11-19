@@ -58,7 +58,8 @@ export class WIAuthState implements Disposable {
 		);
 		this._disposables.push(
 			new Disposable(
-				deps.platform.sessions.onDidChange((event) => {
+				// The session of the region in use, across switches between production's regions.
+				deps.platform.onDidChangeSession((event) => {
 					if (event.reason === "expired" || event.reason === "signed-out") {
 						this.resetState(event.reason === "expired" ? "expired" : "signed-out");
 					}

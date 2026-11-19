@@ -52,11 +52,18 @@
           "type": "string",
           "enum": [
             "prod",
+            "prod-eu",
             "stage",
             "dev"
           ],
+          "enumDescriptions": [
+            "Production, United States region",
+            "Production, Europe region",
+            "Staging",
+            "Development"
+          ],
           "default": "prod",
-          "description": "The WSO2 Cloud Environment to use",
+          "description": "The WSO2 Cloud Environment to use. In production, the region can also be chosen when signing in, or with the Switch WSO2 Cloud Region command.",
           "scope": "machine"
         },
         "integrator.advanced.cloudClientId": {
@@ -160,6 +167,13 @@
         "command": "wso2.integrator.cloud.auth.cancelSignIn",
         "title": "Cancel Sign In",
         "category": "WSO2 Integrator"
+      },
+      {
+        "command": "wso2.integrator.cloud.auth.switchRegion",
+        "title": "Switch WSO2 Cloud Region",
+        "category": "WSO2 Integrator",
+        "icon": "$(globe)",
+        "enablement": "wso2.integrator.cloud.multiRegion"
       },
       {
         "command": "wso2.integrator.cloud.integration.create",
@@ -355,6 +369,10 @@
     ],
     "menus": {
       "commandPalette": [
+        {
+          "command": "wso2.integrator.cloud.auth.switchRegion",
+          "when": "wso2.integrator.cloud.multiRegion"
+        },
         {
           "command": "ballerina.showVisualizer",
           "when": "false"

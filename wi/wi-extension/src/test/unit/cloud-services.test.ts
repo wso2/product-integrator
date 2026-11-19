@@ -18,7 +18,7 @@
 
 import * as assert from "assert";
 import { type CloudError, type CloudServiceRequest, type PlatformEnvConfig, type TokenExchangeTarget, type TokenSource, isCloudError } from "@wso2/wso2-cloud-client";
-import { type CloudServiceDeps, callCloudService, exchangeEndpointsOf, exchangeToken } from "../../cloud/cloud-services";
+import { type CloudServiceDeps, callCloudService, exchangeEndpointsFor, exchangeEndpointsOf, exchangeToken } from "../../cloud/cloud-services";
 
 interface Sent {
 	url: string;
@@ -88,6 +88,13 @@ describe("Copilot token exchange", () => {
 		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, deps([json(503, {})]).deps), codeOf("unavailable", 503));
 		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, deps([json(401, {}), json(401, {})]).deps), codeOf("unauthenticated", 401));
 		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, deps([json(200, { token_type: "Bearer" })]).deps), codeOf("server"));
+	});
+
+	it("allows only the environment's own Copilot backend, none when the build names none for it", async () => {
+		assert.deepStrictEqual(exchangeEndpointsFor("prod-eu"), { copilot: [] });
+		const { deps: d, sent } = deps([json(200, { access_token: "copilot-token" })], { name: "prod-eu" });
+		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, { ...d, exchangeEndpoints: undefined }), codeOf("forbidden"));
+		assert.strictEqual(sent.length, 0, "the WSO2 Cloud token is not sent");
 	});
 
 	it("does not follow a redirect", async () => {
