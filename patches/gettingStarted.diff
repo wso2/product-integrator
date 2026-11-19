@@ -413,7 +413,7 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Editor
 +				position: absolute;
 +				inset: 0;
 +				overflow: hidden;
-+				background: var(--vscode-editor-background);
++				z-index: 1;
 +			}
 +
 +			${CHOREO_LOADER_CSS}
@@ -425,7 +425,7 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Editor
 +				transform: translate(-50%, -58px);
 +				color: #FFFFFF;
 +				pointer-events: none;
-+				z-index: 1;
++				z-index: 0;
 +				opacity: 1;
 +				transition: opacity 180ms ease, display 180ms allow-discrete;
 +			}
@@ -448,7 +448,7 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Editor
 +				letter-spacing: 0.02em;
 +				opacity: 0.82;
 +				pointer-events: none;
-+				z-index: 1;
++				z-index: 0;
 +				white-space: nowrap;
 +				transition: opacity 180ms ease;
 +			}
