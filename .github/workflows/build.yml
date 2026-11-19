@@ -1940,7 +1940,7 @@ jobs:
         shell: bash
         env:
           INTEGRATOR_VERSION: ${{ needs.resolve-versions.outputs.integrator_version }}
-          ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'wso2-agent-builder' || 'wso2-integrator' }}
+          ARTIFACT_SLUG: ${{ inputs.product_flavor == 'agent-builder' && 'choreo-agent-builder' || 'choreo-integrator' }}
         run: |
           set -euo pipefail
           CONFIG=ci/build/update-manifest.config.json
