@@ -2,7 +2,7 @@
 	<Fragment>
 		<StandardDirectory Id="LocalAppDataFolder">
 			<Directory Id="LocalProgramsDir" Name="Programs">
-				<Directory Id="INSTALLFOLDER" Name="WSO2">
+				<Directory Id="INSTALLFOLDER" Name="Choreo">
 					<Directory Id="INTEGRATORFOLDER" Name="@PRODUCT_DIR@" />
 				</Directory>
 			</Directory>

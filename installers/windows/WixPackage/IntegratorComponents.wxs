@@ -7,9 +7,14 @@
       </Files>
     </ComponentGroup>
 
-    <Component Id="IntegratorShortcutComponent" Bitness="always64" Directory="INTEGRATORFOLDER" Guid="{4ab08ec1-a630-40d2-bf90-db740135b414}">
+    <!-- Component GUIDs and the registry key (@GUID_*@, @REG_KEY@) are per flavor, substituted by
+         build.bat. Windows Installer reference-counts components by GUID: if Agent Builder reused
+         Integrator's, installing both would make these components shared, and uninstalling either
+         product would leave the other's shortcut, registry values and cleanup in place. Integrator
+         keeps the GUIDs and key its released MSIs use, so its upgrades are unaffected. -->
+    <Component Id="IntegratorShortcutComponent" Bitness="always64" Directory="INTEGRATORFOLDER" Guid="@GUID_SHORTCUT@">
       <!-- HKCU registry KeyPath satisfies ICE38 for per-user installs -->
-      <RegistryValue Root="HKCU" Key="Software\WSO2\Integrator" Name="ShortcutInstalled"
+      <RegistryValue Root="HKCU" Key="@REG_KEY@" Name="ShortcutInstalled"
         Type="integer" Value="1" KeyPath="yes" />
 
       <File Id="IntegratorExe"
@@ -19,7 +24,7 @@
            .json/.yaml here - the app must not become the default handler for them (#2708). The
            ProgId is non-advertised, so for this per-user package MSI writes it under
            HKCU\Software\Classes and it is removed again on uninstall. The ProgId is flavored
-           (@PROGID@: WSO2Integrator / WSO2AgentBuilder, substituted by build.bat) so the two
+           (@PROGID@: WSO2Integrator / ChoreoAgentBuilder, substituted by build.bat) so the two
            side-by-side products register their own and uninstalling one leaves the other's. -->
       <ProgId Id="@PROGID@.bal" Description="Ballerina Source File" Icon="IntegratorExe" IconIndex="0">
         <Extension Id="bal" ContentType="text/x-ballerina">
@@ -49,8 +54,8 @@
     </Component>
     <!-- Per-user install cleanup: removes all subdirectories under INTEGRATORFOLDER on uninstall (required by ICE64) -->
     <Component Id="CleanupFoldersComponent" Directory="INTEGRATORFOLDER"
-      Guid="{e5f2a1b3-9c4d-4e8f-b6a2-7d3c1e0f8a45}">
-      <RegistryValue Root="HKCU" Key="Software\WSO2\Integrator" Name="Installed"
+      Guid="@GUID_CLEANUP@">
+      <RegistryValue Root="HKCU" Key="@REG_KEY@" Name="Installed"
         Type="integer" Value="1" KeyPath="yes" />
       <util:RemoveFolderEx Id="RemoveIntegratorFolder" Property="INTEGRATORFOLDER" On="uninstall" />
     </Component>
@@ -75,8 +80,8 @@
       Before="AppSearch"
       Condition="(NOT UPGRADINGPRODUCTCODE) AND (NOT WSO2_KEEP_USERDATA)" />
     <Component Id="CleanupUserDataComponent" Directory="INTEGRATORFOLDER"
-      Guid="{ac721b5d-a559-43a0-a89a-c355d0c18409}">
-      <RegistryValue Root="HKCU" Key="Software\WSO2\Integrator" Name="CleanupUserData"
+      Guid="@GUID_USERDATA@">
+      <RegistryValue Root="HKCU" Key="@REG_KEY@" Name="CleanupUserData"
         Type="integer" Value="1" KeyPath="yes" />
       <util:RemoveFolderEx Id="RemoveWso2UserDataFolder" Property="WSO2USERDATAFOLDER" On="uninstall" />
     </Component>

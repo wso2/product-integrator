@@ -3,7 +3,7 @@ Version:        @VERSION@
 Release:        @RELEASE@
 Summary:        @PRODUCT_NAME@ - Low Code Integration
 License:        MIT
-URL:            https://wso2.com/integration/
+URL:            https://choreolabs.com/integration/
 Source0:        %{name}-@FULLVERSION@.tar.gz
 
 AutoReqProv: no

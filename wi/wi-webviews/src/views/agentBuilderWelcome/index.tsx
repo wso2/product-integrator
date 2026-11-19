@@ -54,7 +54,7 @@ import {
 } from "../shared/welcomeLayout";
 
 /**
- * Welcome page shown when the product runs as WSO2 Agent Builder
+ * Welcome page shown when the product runs as Choreo Agent Builder
  * (ViewType.AGENT_BUILDER_WELCOME). BI/Ballerina-only: no runtime/profile
  * switching, no MI/SI flows.
  */

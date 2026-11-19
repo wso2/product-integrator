@@ -25,7 +25,7 @@ export interface WebviewContext {
     pathSeparator?: string;
     /** Product flavor of the hosting build. Absent means ProductMode.INTEGRATOR. */
     productMode?: ProductMode;
-    /** Display name of the hosting product, e.g. "WSO2 Agent Builder". */
+    /** Display name of the hosting product, e.g. "Choreo Agent Builder". */
     productName?: string;
     env?: {
         [key: string]: string | undefined;

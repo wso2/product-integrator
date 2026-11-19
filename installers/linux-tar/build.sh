@@ -89,7 +89,7 @@ mkdir -p "$INTEGRATOR_TARGET"
 mkdir -p "$EXTRACTION_TARGET"
 
 # Extract integrator archive
-print_info "Extracting WSO2 Integrator..."
+print_info "Extracting the editor..."
 tar -xzf "$INTEGRATOR_TAR_GZ" -C "$INTEGRATOR_TARGET" --strip-components=1
 
 # Extract the packaged ballerina-runtime (ci/build/package-ballerina-runtime.sh)
