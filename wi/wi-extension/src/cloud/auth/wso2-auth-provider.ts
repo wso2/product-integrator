@@ -251,10 +251,12 @@ export class WIAuthState implements Disposable {
 			return;
 		}
 		try {
+			// The region's own: after a switch meanwhile, the organization read is not saved into the other region's session.
+			const sessions = this.deps.platform.sessions;
 			const org = await this.deps.platform.cloud.orgs.current();
-			if (org && this._state.session === session) {
+			if (org && this._state.session === session && this.deps.platform.sessions === sessions) {
 				const filled: PlatformSession = { ...session, org: { ...session.org, uuid: org.uuid, numericId: org.numericId } };
-				await this.deps.platform.sessions.update((stored) => ({ ...stored, org: filled.org }));
+				await sessions.update((stored) => ({ ...stored, org: filled.org }));
 				if (this._state.session !== session) {
 					return; // signed out, or another session came, while it was saved
 				}
