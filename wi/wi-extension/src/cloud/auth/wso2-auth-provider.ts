@@ -107,14 +107,15 @@ export class WIAuthState implements Disposable {
 	}
 
 	private async initAuthOnce(): Promise<void> {
-		// A sign-in or sign-out while the session is read makes what was read stale: nothing of it
-		// is published, and the session is read again.
-		const sessions = this.deps.platform.sessions;
-		let generation: number;
+		// A sign-in, sign-out or region switch while the session is read makes what was read stale: nothing
+		// of it is published, and the session of the region then in use is read again.
+		let isCurrent: () => boolean;
 		do {
-			generation = sessions.sessionGeneration;
-			await this.restore(() => generation === sessions.sessionGeneration);
-		} while (generation !== sessions.sessionGeneration);
+			const sessions = this.deps.platform.sessions;
+			const generation = sessions.sessionGeneration;
+			isCurrent = () => this.deps.platform.sessions === sessions && sessions.sessionGeneration === generation;
+			await this.restore(isCurrent);
+		} while (!isCurrent());
 	}
 
 	private async restore(isCurrent: () => boolean): Promise<void> {
