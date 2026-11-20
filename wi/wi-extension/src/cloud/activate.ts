@@ -26,6 +26,7 @@ import { getProductName } from "../productMode";
 import { getExtVersion } from "../utils/commonUtils";
 import { WIAuthState } from "./auth/wso2-auth-provider";
 import type { WICloudExtensionAPI } from "./cloud-ext-api";
+import { cloneOpenedIntegration } from "./clone-on-open";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { activateCmds } from "./cmds";
 import { createGitHubAppConnector } from "./github-app-host";
@@ -147,6 +148,11 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	} finally {
 		restored();
 	}
+
+	// 6b. A cloud editor opened for an existing integration has none of its source yet.
+	// Not awaited: the fetch needs the network and ends by reopening the window, and
+	// everything below is what the rest of the extension waits on.
+	void cloneOpenedIntegration();
 
 	// 7. Mark the exported cloud APIs as active
 	cloudAPIs.setActive(true);
