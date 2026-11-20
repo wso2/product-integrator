@@ -718,6 +718,8 @@ export const WelcomeView: React.FC = () => {
     // null = check not yet done; false = available; true = unavailable
     const [isBallerinaUnavailable, setIsBallerinaUnavailable] = useState<boolean | null>(null);
 	const avatarRef = useRef<HTMLButtonElement>(null);
+	// A picture that could not be loaded (offline, or an expired link) gives way to the initial.
+	const [failedPictureUrl, setFailedPictureUrl] = useState<string>();
     const signingInTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const biStatusCheckDone = useRef(false);
 
@@ -965,10 +967,11 @@ export const WelcomeView: React.FC = () => {
 								title={authState.userInfo.displayName}
 								onClick={() => setPopoverOpen(true)}
 							>
-								{authState.userInfo.userProfilePictureUrl ? (
+								{authState.userInfo.userProfilePictureUrl && authState.userInfo.userProfilePictureUrl !== failedPictureUrl ? (
 									<UserAvatarImg
 										src={authState.userInfo.userProfilePictureUrl}
 										alt={authState.userInfo.displayName}
+										onError={() => setFailedPictureUrl(authState.userInfo.userProfilePictureUrl)}
 									/>
 								) : (
 									<UserInitial>

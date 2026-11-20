@@ -22,6 +22,7 @@ import { PROMPT_LOGIN_SCOPE, WSO2_CLOUD_AUTH_PROVIDER_ID, scopeForEnv } from "@w
 import { Disposable, EventEmitter, authentication, window } from "vscode";
 import type { WIPlatform } from "../platform/platform-client";
 import { contextStore } from "../stores/context-store";
+import { profilePictureOf } from "./profile-picture";
 
 /** The id other extensions pass to `vscode.authentication.getSession`. */
 export const WSO2_AUTH_PROVIDER_ID = WSO2_CLOUD_AUTH_PROVIDER_ID;
@@ -296,7 +297,7 @@ export class WIAuthState implements Disposable {
 }
 
 export function toPlatformSession(stored: StoredSession): PlatformSession {
-	return sessionFromClaims(stored.env, stored.account.id, stored.claims.email, stored.claims.name ?? stored.account.label, stored.claims.picture, stored.org, undefined, stored.tokens.expiresAt, stored.obtainedVia);
+	return sessionFromClaims(stored.env, stored.account.id, stored.claims.email, stored.claims.name ?? stored.account.label, profilePictureOf(stored), stored.org, undefined, stored.tokens.expiresAt, stored.obtainedVia);
 }
 
 function sessionFromClaims(
