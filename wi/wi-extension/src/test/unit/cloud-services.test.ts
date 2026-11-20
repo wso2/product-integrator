@@ -18,7 +18,7 @@
 
 import * as assert from "assert";
 import { type CloudError, type CloudServiceRequest, type PlatformEnvConfig, type TokenExchangeTarget, type TokenSource, isCloudError } from "@wso2/wso2-cloud-client";
-import { type CloudServiceDeps, callCloudService, exchangeEndpointsOf, exchangeToken } from "../../cloud/cloud-services";
+import { type CloudServiceDeps, callCloudService, exchangeEndpointsFor, exchangeEndpointsOf, exchangeToken } from "../../cloud/cloud-services";
 
 interface Sent {
 	url: string;
@@ -90,6 +90,35 @@ describe("Copilot token exchange", () => {
 		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, deps([json(200, { token_type: "Bearer" })]).deps), codeOf("server"));
 	});
 
+	it("says the exchange is not configured when the build names no backend for the environment", async () => {
+		assert.deepStrictEqual(exchangeEndpointsFor("prod-eu"), { copilot: [] });
+		const { deps: d, sent } = deps([json(200, { access_token: "copilot-token" })], { name: "prod-eu" });
+		await assert.rejects(
+			exchangeToken("copilot", COPILOT_EXCHANGE, { ...d, exchangeEndpoints: undefined }),
+			(error: unknown) => isCloudError(error) && error.code === "not_supported" && error.details.reason === "copilot_token_exchange_not_configured",
+		);
+		assert.strictEqual(sent.length, 0, "the WSO2 Cloud token is not sent");
+	});
+
+	it("selects each region's own Copilot backend and refuses the other region's", async () => {
+		const roots = { prod: "https://us.example.com/copilot", "prod-eu": "https://eu.example.com/copilot/" };
+		const us = "https://us.example.com/copilot/auth-api/v1.0/auth/token-exchange";
+		const eu = "https://eu.example.com/copilot/auth-api/v1.0/auth/token-exchange";
+		assert.deepStrictEqual(exchangeEndpointsFor("prod", roots), { copilot: [us] });
+		assert.deepStrictEqual(exchangeEndpointsFor("prod-eu", roots), { copilot: [eu] });
+		for (const [name, own, other] of [
+			["prod", us, eu],
+			["prod-eu", eu, us],
+		] as const) {
+			const { deps: d, sent } = deps([json(200, { access_token: "copilot-token" })], { name });
+			const selected = { ...d, exchangeEndpoints: exchangeEndpointsFor(name, roots) };
+			await assert.rejects(exchangeToken("copilot", other, selected), codeOf("forbidden"));
+			assert.strictEqual(sent.length, 0, "the WSO2 Cloud token is not sent to the other region");
+			assert.deepStrictEqual(await exchangeToken("copilot", own, selected), { accessToken: "copilot-token", expiresAt: undefined });
+			assert.strictEqual(sent[0].url, own);
+		}
+	});
+
 	it("does not follow a redirect", async () => {
 		const redirect = () => new Response(null, { status: 302, headers: { location: "https://elsewhere.example.com" } });
 		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, deps([redirect]).deps), codeOf("server", 302));
@@ -127,9 +156,9 @@ describe("Copilot token exchange", () => {
 		}
 	});
 
-	it("allows no endpoint at all when the build lists none", async () => {
+	it("allows no endpoint at all when the build lists none, and says it is not configured", async () => {
 		const built = deps([]);
-		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, { ...built.deps, exchangeEndpoints: { copilot: [] } }), codeOf("forbidden"));
+		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, { ...built.deps, exchangeEndpoints: { copilot: [] } }), codeOf("not_supported"));
 		assert.strictEqual(built.sent.length, 0);
 	});
 

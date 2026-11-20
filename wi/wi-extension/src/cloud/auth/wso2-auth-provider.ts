@@ -58,7 +58,8 @@ export class WIAuthState implements Disposable {
 		);
 		this._disposables.push(
 			new Disposable(
-				deps.platform.sessions.onDidChange((event) => {
+				// The session of the region in use, across switches between production's regions.
+				deps.platform.onDidChangeSession((event) => {
 					if (event.reason === "expired" || event.reason === "signed-out") {
 						this.resetState(event.reason === "expired" ? "expired" : "signed-out");
 					}
@@ -106,14 +107,15 @@ export class WIAuthState implements Disposable {
 	}
 
 	private async initAuthOnce(): Promise<void> {
-		// A sign-in or sign-out while the session is read makes what was read stale: nothing of it
-		// is published, and the session is read again.
-		const sessions = this.deps.platform.sessions;
-		let generation: number;
+		// A sign-in, sign-out or region switch while the session is read makes what was read stale: nothing
+		// of it is published, and the session of the region then in use is read again.
+		let isCurrent: () => boolean;
 		do {
-			generation = sessions.sessionGeneration;
-			await this.restore(() => generation === sessions.sessionGeneration);
-		} while (generation !== sessions.sessionGeneration);
+			const sessions = this.deps.platform.sessions;
+			const generation = sessions.sessionGeneration;
+			isCurrent = () => this.deps.platform.sessions === sessions && sessions.sessionGeneration === generation;
+			await this.restore(isCurrent);
+		} while (!isCurrent());
 	}
 
 	private async restore(isCurrent: () => boolean): Promise<void> {
@@ -249,10 +251,12 @@ export class WIAuthState implements Disposable {
 			return;
 		}
 		try {
+			// The region's own: after a switch meanwhile, the organization read is not saved into the other region's session.
+			const sessions = this.deps.platform.sessions;
 			const org = await this.deps.platform.cloud.orgs.current();
-			if (org && this._state.session === session) {
+			if (org && this._state.session === session && this.deps.platform.sessions === sessions) {
 				const filled: PlatformSession = { ...session, org: { ...session.org, uuid: org.uuid, numericId: org.numericId } };
-				await this.deps.platform.sessions.update((stored) => ({ ...stored, org: filled.org }));
+				await sessions.update((stored) => ({ ...stored, org: filled.org }));
 				if (this._state.session !== session) {
 					return; // signed out, or another session came, while it was saved
 				}

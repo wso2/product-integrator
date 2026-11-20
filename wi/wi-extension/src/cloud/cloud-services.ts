@@ -18,6 +18,7 @@
 
 import {
 	BadRequestError,
+	type CloudEnvName,
 	type CloudServiceName,
 	type CloudServiceRequest,
 	DEFAULT_TIMEOUT_MS,
@@ -48,11 +49,12 @@ export interface CloudServiceDeps {
 }
 
 /**
- * The Copilot backends of this build (`COPILOT_ROOT_URL`, `COPILOT_STAGE_ROOT_URL`, `COPILOT_DEV_ROOT_URL`), put in by
- * the bundler from the build's environment: never read at run time, so nothing installed can add to them.
+ * Each environment's Copilot backend in this build (`COPILOT_ROOT_URL`, `COPILOT_EU_ROOT_URL`,
+ * `COPILOT_STAGE_ROOT_URL`, `COPILOT_DEV_ROOT_URL`), put in by the bundler from the build's environment: never read
+ * at run time, so nothing installed can add to them.
  */
-declare const __WI_COPILOT_ROOT_URLS__: readonly string[] | undefined;
-const COPILOT_ROOT_URLS: readonly string[] = typeof __WI_COPILOT_ROOT_URLS__ !== "undefined" ? __WI_COPILOT_ROOT_URLS__ : [];
+declare const __WI_COPILOT_ROOT_URLS__: Partial<Record<CloudEnvName, string>> | undefined;
+const COPILOT_ROOT_URLS: Partial<Record<CloudEnvName, string>> = typeof __WI_COPILOT_ROOT_URLS__ !== "undefined" ? __WI_COPILOT_ROOT_URLS__ : {};
 
 /** The exchange URLs under `roots`: the exact endpoints the WSO2 Cloud token may be sent to. */
 export function exchangeEndpointsOf(roots: readonly string[], path: string): string[] {
@@ -70,12 +72,17 @@ const TOKEN_EXCHANGES: Readonly<Record<TokenExchangeTarget, TokenExchange>> = {
 };
 
 /**
- * Where each target's exchange may be: exact URLs, never a host or a domain, since a shared gateway serves other
- * tenants' APIs on the same host under other paths.
+ * Where each target's exchange may be for `env`'s token: exact URLs, never a host or a domain, since a shared gateway
+ * serves other tenants' APIs on the same host under other paths, and only the environment's own backend, so a token
+ * of one region or deployment never goes to another's. `copilotRoots` are the build's unless a test hands in others.
  */
-const EXCHANGE_ENDPOINTS: Readonly<Record<TokenExchangeTarget, readonly string[]>> = {
-	copilot: exchangeEndpointsOf(COPILOT_ROOT_URLS, "/auth-api/v1.0/auth/token-exchange"),
-};
+export function exchangeEndpointsFor(
+	env: CloudEnvName,
+	copilotRoots: Partial<Record<CloudEnvName, string>> = COPILOT_ROOT_URLS,
+): Readonly<Record<TokenExchangeTarget, readonly string[]>> {
+	const copilot = entryOf(copilotRoots, env);
+	return { copilot: exchangeEndpointsOf(copilot ? [copilot] : [], "/auth-api/v1.0/auth/token-exchange") };
+}
 
 /** `endpoint` as a URL when it is exactly one of `allowed`, over https; otherwise a `ForbiddenError`. */
 export function allowedExchangeEndpoint(target: TokenExchangeTarget, allowed: readonly string[], endpoint: string): URL {
@@ -146,8 +153,13 @@ export async function exchangeToken(target: TokenExchangeTarget, endpoint: strin
 	if (!endpoint) {
 		throw new NotSupportedError(exchange.missing, { reason: `${target}_token_exchange_not_configured` });
 	}
+	const allowed = (deps.exchangeEndpoints ?? exchangeEndpointsFor(deps.config.name))[target] ?? [];
+	if (allowed.length === 0) {
+		// This build names no backend for the environment: not configured, rather than a refused endpoint.
+		throw new NotSupportedError(exchange.missing, { reason: `${target}_token_exchange_not_configured` });
+	}
 	// Checked before the token is read: an endpoint off the list never sees it.
-	const url = allowedExchangeEndpoint(target, (deps.exchangeEndpoints ?? EXCHANGE_ENDPOINTS)[target] ?? [], endpoint);
+	const url = allowedExchangeEndpoint(target, allowed, endpoint);
 	const what = `The ${target} token exchange`;
 	const path = url.pathname;
 	for (let forceRefresh = false; ; forceRefresh = true) {
