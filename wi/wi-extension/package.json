@@ -63,12 +63,6 @@
           "default": "prod",
           "description": "The WSO2 Cloud environment to use.",
           "scope": "machine"
-        },
-        "integrator.advanced.cloudClientId": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Overrides the OAuth client id used to sign in to WSO2 Cloud. Leave empty unless the WSO2 Cloud team told you to set it.",
-          "scope": "machine"
         }
       }
     },

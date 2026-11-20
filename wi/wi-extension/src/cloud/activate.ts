@@ -17,7 +17,7 @@
  */
 
 import type { CloudEnvironment, Logger } from "@wso2/wso2-cloud-client";
-import { CLOUD_CLIENT_ID_SETTING, CLOUD_ENV_SETTING, readCloudEnvName } from "@wso2/wso2-cloud-client/vscode";
+import { CLOUD_ENV_SETTING, readCloudEnvName } from "@wso2/wso2-cloud-client/vscode";
 import * as vscode from "vscode";
 import type { ConfigurationChangeEvent } from "vscode";
 import { commands, window, workspace } from "vscode";
@@ -167,9 +167,8 @@ function applyEnvironment(environment: CloudEnvironment): void {
 
 function registerPreInitHandlers(): vscode.Disposable {
 	return workspace.onDidChangeConfiguration(async ({ affectsConfiguration }: ConfigurationChangeEvent) => {
-		if (affectsConfiguration(CLOUD_ENV_SETTING) || affectsConfiguration(CLOUD_CLIENT_ID_SETTING)) {
-			// The session was issued for the configuration before: kept, its token would go to another
-			// deployment or be refreshed for another client. Ended now, not only on "Restart Now", since the
+		if (affectsConfiguration(CLOUD_ENV_SETTING)) {
+			// The session was issued for the deployment before: kept, its token would go to another one. Ended now, not only on "Restart Now", since the
 			// editor may be restarted some other way.
 			await ext.authProvider?.logout(true);
 			const selection = await window.showInformationMessage(

@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Removed
 
-- Settings `integrator.advanced.cloudRpcPath`, `integrator.advanced.cloudRpcArchitecture`, `integrator.advanced.skipKeyring` and `integrator.advanced.cloudDirectConnection`: there is no CLI to point at. `integrator.advanced.cloudEnv` stays; `integrator.advanced.cloudClientId` is a new, machine-scoped override for the WSO2 Cloud team.
+- Settings `integrator.advanced.cloudRpcPath`, `integrator.advanced.cloudRpcArchitecture`, `integrator.advanced.skipKeyring` and `integrator.advanced.cloudDirectConnection`: there is no CLI to point at. `integrator.advanced.cloudEnv` stays.
 - Environment variables `CHOREO_ENV`, `CLOUD_REGION`, `SKIP_KEYRING`, `CHOREO_DIRECT` and `CLOUD_STS_TOKEN`; the cloud editor hands in `WSO2_CLOUD_TOKEN` or `WSO2_CLOUD_TOKEN_FILE`.
 - Deploying from Bitbucket or GitLab, and deploying from the cloud editor without a repository: WSO2 Cloud builds from GitHub repositories only for now.
 
