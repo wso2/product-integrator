@@ -59,16 +59,6 @@ const config = {
 	},
 	plugins: [
         new webpack.DefinePlugin(envKeys),
-		// Each released WSO2 Cloud environment's Copilot backend, which the Copilot token exchange may send that
-		// environment's token to: from .env (CI copies .env.example, which names the production regions') or the build's
-		// environment, which wins; put into the bundle, and never read at run time. Dev's is read at run time instead.
-		new webpack.DefinePlugin({
-			__WI_COPILOT_ROOT_URLS__: JSON.stringify({
-				prod: process.env.COPILOT_ROOT_URL || undefined,
-				"prod-eu": process.env.COPILOT_EU_ROOT_URL || undefined,
-				stage: process.env.COPILOT_STAGE_ROOT_URL || undefined,
-			}),
-		}),
 		new webpack.IgnorePlugin({ resourceRegExp: /^@aws-sdk\/client-s3$/ }),
 		new CopyPlugin({
 				patterns: [{ from: "src/cloud/git/*.sh", to: "[name][ext]" }],

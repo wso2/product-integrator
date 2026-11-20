@@ -18,7 +18,6 @@
 
 import {
 	BadRequestError,
-	type CloudEnvName,
 	type CloudServiceName,
 	type CloudServiceRequest,
 	DEFAULT_TIMEOUT_MS,
@@ -48,28 +47,6 @@ export interface CloudServiceDeps {
 	exchangeEndpoints?: Readonly<Record<TokenExchangeTarget, readonly string[]>>;
 }
 
-/**
- * Each released environment's Copilot backend in this build (`COPILOT_ROOT_URL`, `COPILOT_EU_ROOT_URL`,
- * `COPILOT_STAGE_ROOT_URL`), put in by the bundler from `.env.example` and the build's environment, and never read at
- * run time.
- */
-declare const __WI_COPILOT_ROOT_URLS__: Partial<Record<CloudEnvName, string>> | undefined;
-const COPILOT_ROOT_URLS: Partial<Record<CloudEnvName, string>> = typeof __WI_COPILOT_ROOT_URLS__ !== "undefined" ? __WI_COPILOT_ROOT_URLS__ : {};
-
-/**
- * Dev's Copilot backend, read at run time as dev's platform URLs are (`WSO2_CLOUD_API_URL` and the rest): dev's hosts
- * are not in the repository or the release. The Ballerina extension reads the same variable, so one setting serves both.
- * It adds nothing that the platform overrides do not already allow: whoever sets the editor's environment can point
- * the WSO2 Cloud token at any API host.
- */
-export const COPILOT_DEV_ROOT_URL_VAR = "COPILOT_DEV_ROOT_URL";
-
-/** The Copilot backends of this build, with dev's from `env`. */
-export function copilotRootsOf(env: NodeJS.ProcessEnv): Partial<Record<CloudEnvName, string>> {
-	const dev = env[COPILOT_DEV_ROOT_URL_VAR]?.trim();
-	return dev ? { ...COPILOT_ROOT_URLS, dev } : COPILOT_ROOT_URLS;
-}
-
 /** The exchange URLs under `roots`: the exact endpoints the WSO2 Cloud token may be sent to. */
 export function exchangeEndpointsOf(roots: readonly string[], path: string): string[] {
 	return roots.filter((root) => !!root).map((root) => `${root.replace(/\/+$/, "")}${path}`);
@@ -88,14 +65,11 @@ const TOKEN_EXCHANGES: Readonly<Record<TokenExchangeTarget, TokenExchange>> = {
 /**
  * Where each target's exchange may be for `env`'s token: exact URLs, never a host or a domain, since a shared gateway
  * serves other tenants' APIs on the same host under other paths, and only the environment's own backend, so a token
- * of one region or deployment never goes to another's. `copilotRoots` are this build's ({@link copilotRootsOf}) unless
- * a test hands in others.
+ * of one region or deployment never goes to another's. Copilot's is the environment's `copilotUrl`: built into the
+ * package for production, and set for dev, like its other hosts, by `WSO2_CLOUD_COPILOT_URL`.
  */
-export function exchangeEndpointsFor(
-	env: CloudEnvName,
-	copilotRoots: Partial<Record<CloudEnvName, string>> = copilotRootsOf(process.env),
-): Readonly<Record<TokenExchangeTarget, readonly string[]>> {
-	const copilot = entryOf(copilotRoots, env);
+export function exchangeEndpointsFor(environment: Pick<PlatformEnvConfig, "copilotUrl">): Readonly<Record<TokenExchangeTarget, readonly string[]>> {
+	const copilot = environment.copilotUrl;
 	return { copilot: exchangeEndpointsOf(copilot ? [copilot] : [], "/auth-api/v1.0/auth/token-exchange") };
 }
 
@@ -168,7 +142,7 @@ export async function exchangeToken(target: TokenExchangeTarget, endpoint: strin
 	if (!endpoint) {
 		throw new NotSupportedError(exchange.missing, { reason: `${target}_token_exchange_not_configured` });
 	}
-	const allowed = (deps.exchangeEndpoints ?? exchangeEndpointsFor(deps.config.name))[target] ?? [];
+	const allowed = (deps.exchangeEndpoints ?? exchangeEndpointsFor(deps.config))[target] ?? [];
 	if (allowed.length === 0) {
 		// This build names no backend for the environment: not configured, rather than a refused endpoint.
 		throw new NotSupportedError(exchange.missing, { reason: `${target}_token_exchange_not_configured` });
