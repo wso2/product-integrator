@@ -49,12 +49,26 @@ export interface CloudServiceDeps {
 }
 
 /**
- * Each environment's Copilot backend in this build (`COPILOT_ROOT_URL`, `COPILOT_EU_ROOT_URL`,
- * `COPILOT_STAGE_ROOT_URL`, `COPILOT_DEV_ROOT_URL`), put in by the bundler from `.env.example` and the build's environment: never read
- * at run time, so nothing installed can add to them.
+ * Each released environment's Copilot backend in this build (`COPILOT_ROOT_URL`, `COPILOT_EU_ROOT_URL`,
+ * `COPILOT_STAGE_ROOT_URL`), put in by the bundler from `.env.example` and the build's environment, and never read at
+ * run time.
  */
 declare const __WI_COPILOT_ROOT_URLS__: Partial<Record<CloudEnvName, string>> | undefined;
 const COPILOT_ROOT_URLS: Partial<Record<CloudEnvName, string>> = typeof __WI_COPILOT_ROOT_URLS__ !== "undefined" ? __WI_COPILOT_ROOT_URLS__ : {};
+
+/**
+ * Dev's Copilot backend, read at run time as dev's platform URLs are (`WSO2_CLOUD_API_URL` and the rest): dev's hosts
+ * are not in the repository or the release. The Ballerina extension reads the same variable, so one setting serves both.
+ * It adds nothing that the platform overrides do not already allow: whoever sets the editor's environment can point
+ * the WSO2 Cloud token at any API host.
+ */
+export const COPILOT_DEV_ROOT_URL_VAR = "COPILOT_DEV_ROOT_URL";
+
+/** The Copilot backends of this build, with dev's from `env`. */
+export function copilotRootsOf(env: NodeJS.ProcessEnv): Partial<Record<CloudEnvName, string>> {
+	const dev = env[COPILOT_DEV_ROOT_URL_VAR]?.trim();
+	return dev ? { ...COPILOT_ROOT_URLS, dev } : COPILOT_ROOT_URLS;
+}
 
 /** The exchange URLs under `roots`: the exact endpoints the WSO2 Cloud token may be sent to. */
 export function exchangeEndpointsOf(roots: readonly string[], path: string): string[] {
@@ -74,11 +88,12 @@ const TOKEN_EXCHANGES: Readonly<Record<TokenExchangeTarget, TokenExchange>> = {
 /**
  * Where each target's exchange may be for `env`'s token: exact URLs, never a host or a domain, since a shared gateway
  * serves other tenants' APIs on the same host under other paths, and only the environment's own backend, so a token
- * of one region or deployment never goes to another's. `copilotRoots` are the build's unless a test hands in others.
+ * of one region or deployment never goes to another's. `copilotRoots` are this build's ({@link copilotRootsOf}) unless
+ * a test hands in others.
  */
 export function exchangeEndpointsFor(
 	env: CloudEnvName,
-	copilotRoots: Partial<Record<CloudEnvName, string>> = COPILOT_ROOT_URLS,
+	copilotRoots: Partial<Record<CloudEnvName, string>> = copilotRootsOf(process.env),
 ): Readonly<Record<TokenExchangeTarget, readonly string[]>> {
 	const copilot = entryOf(copilotRoots, env);
 	return { copilot: exchangeEndpointsOf(copilot ? [copilot] : [], "/auth-api/v1.0/auth/token-exchange") };

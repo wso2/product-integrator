@@ -18,7 +18,7 @@
 
 import * as assert from "assert";
 import { type CloudError, type CloudServiceRequest, type PlatformEnvConfig, type TokenExchangeTarget, type TokenSource, isCloudError } from "@wso2/wso2-cloud-client";
-import { type CloudServiceDeps, callCloudService, exchangeEndpointsFor, exchangeEndpointsOf, exchangeToken } from "../../cloud/cloud-services";
+import { type CloudServiceDeps, callCloudService, copilotRootsOf, exchangeEndpointsFor, exchangeEndpointsOf, exchangeToken } from "../../cloud/cloud-services";
 
 interface Sent {
 	url: string;
@@ -98,6 +98,19 @@ describe("Copilot token exchange", () => {
 			(error: unknown) => isCloudError(error) && error.code === "not_supported" && error.details.reason === "copilot_token_exchange_not_configured",
 		);
 		assert.strictEqual(sent.length, 0, "the WSO2 Cloud token is not sent");
+	});
+
+	it("takes dev's Copilot backend from the editor's environment, and no other environment's", () => {
+		const dev = "https://dev.example.com/copilot";
+		assert.strictEqual(copilotRootsOf({ COPILOT_DEV_ROOT_URL: ` ${dev} ` }).dev, dev);
+		assert.strictEqual(copilotRootsOf({}).dev, undefined);
+		assert.deepStrictEqual(exchangeEndpointsFor("dev", copilotRootsOf({ COPILOT_DEV_ROOT_URL: dev })), {
+			copilot: [`${dev}/auth-api/v1.0/auth/token-exchange`],
+		});
+		// Production's are the build's: a variable naming another backend does not reach them.
+		const roots = copilotRootsOf({ COPILOT_ROOT_URL: "https://elsewhere.example.com/copilot", COPILOT_EU_ROOT_URL: "https://elsewhere.example.com/eu" });
+		assert.deepStrictEqual(exchangeEndpointsFor("prod", roots), { copilot: [] });
+		assert.deepStrictEqual(exchangeEndpointsFor("prod-eu", roots), { copilot: [] });
 	});
 
 	it("selects each region's own Copilot backend and refuses the other region's", async () => {

@@ -153,9 +153,6 @@ jobs:
       # monorepo. lib/vscode is not a rush project, so no patches are needed here.
       - name: Build WI extension
         if: ${{ inputs.rebuild_wi_extension }}
-        env:
-          # Dev's Copilot backend, built into the bundle; the production regions' are in wi-extension/.env.example.
-          COPILOT_DEV_ROOT_URL: ${{ secrets.COPILOT_DEV_ROOT_URL }}
         run: node common/scripts/install-run-rush.js build --to wso2-integrator --verbose
 
       - name: Verify the extension VSIX was produced
