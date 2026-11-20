@@ -39,7 +39,7 @@ export function signInCommand(context: ExtensionContext) {
 				if (!params?.reselectOrganization) {
 					const platform = ext.clients.platform;
 					const named = platform.regions.find((region) => region.name === params?.region)?.name;
-					const region = named ?? (await pickRegion({ title: "Sign In to WSO2 Cloud", placeHolder: "Select the region where you want to create and deploy your integrations" }));
+					const region = named ?? (await pickRegion({ title: "Sign In to Choreo Cloud", placeHolder: "Select the region where you want to create and deploy your integrations" }));
 					if (!region) {
 						ext.log("Sign-in cancelled");
 						return;

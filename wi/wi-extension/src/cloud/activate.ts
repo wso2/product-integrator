@@ -99,7 +99,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	context.subscriptions.push(
 		platform.onDidChangeEnvironment((environment) => {
 			applyEnvironment(environment);
-			ext.log(`WSO2 Cloud environment: ${environment.name} (${environment.apiBaseUrl})`);
+			ext.log(`Choreo Cloud environment: ${environment.name} (${environment.apiBaseUrl})`);
 		}),
 	);
 
