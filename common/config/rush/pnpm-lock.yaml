@@ -6,8 +6,13 @@ settings:
 
 overrides:
   tar-fs: 3.1.1
+  axios@<1.20.0: 1.20.0
+  file-type@<21.3.2: 21.3.2
+  js-yaml@>=4 <4.3.2: 4.3.2
+  lodash@<4.18.1: 4.18.1
+  yaml@>=2 <2.8.3: 2.8.3
 
-pnpmfileChecksum: sha256-XTeZQwJtKk4dimqf7175GhJCXrnq3Yh7+kwb86Bwcdo=
+pnpmfileChecksum: sha256-E1T7OJ3DLTjpDqf4RdJzK9VDtAxgm4gDEQCLYdHD8nI=
 
 importers:
 
@@ -50,10 +55,10 @@ importers:
         version: 6.7.4
       '@projectstorm/react-canvas-core':
         specifier: 6.7.4
-        version: 6.7.4(lodash@4.17.23)(react@18.2.0)
+        version: 6.7.4(lodash@4.18.1)(react@18.2.0)
       '@projectstorm/react-diagrams':
         specifier: 6.7.4
-        version: 6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.17.23)(react@18.2.0)(resize-observer-polyfill@1.5.1)
+        version: 6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.18.1)(react@18.2.0)(resize-observer-polyfill@1.5.1)
       '@projectstorm/react-diagrams-core':
         specifier: 7.0.3
         version: 7.0.3(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)
@@ -70,8 +75,8 @@ importers:
         specifier: 2.5.1
         version: 2.5.1
       lodash:
-        specifier: 4.17.23
-        version: 4.17.23
+        specifier: 4.18.1
+        version: 4.18.1
       monaco-editor:
         specifier: 0.52.2
         version: 0.52.2
@@ -96,7 +101,7 @@ importers:
         version: 8.6.14(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(storybook@8.6.14(prettier@3.6.2))(typescript@5.8.3)
       '@storybook/react-vite':
         specifier: 8.6.14
-        version: 8.6.14(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(rollup@4.59.0)(storybook@8.6.14(prettier@3.6.2))(typescript@5.8.3)(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.0))
+        version: 8.6.14(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(rollup@4.59.0)(storybook@8.6.14(prettier@3.6.2))(typescript@5.8.3)(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.3))
       '@types/lodash':
         specifier: 4.17.16
         version: 4.17.16
@@ -150,7 +155,7 @@ importers:
         version: 5.8.3
       vite:
         specifier: 6.0.14
-        version: 6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.0)
+        version: 6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.3)
 
   ../../external/wso2-vscode-extensions/workspaces/common-libs/vscode-webview-bridge:
     dependencies:
@@ -233,8 +238,8 @@ importers:
         specifier: workspace:*
         version: link:../../external/wso2-vscode-extensions/workspaces/wso2-platform/wso2-platform-core
       axios:
-        specifier: 1.13.2
-        version: 1.13.2
+        specifier: 1.20.0
+        version: 1.20.0
       byline:
         specifier: 5.0.0
         version: 5.0.0
@@ -242,11 +247,11 @@ importers:
         specifier: 17.2.3
         version: 17.2.3
       file-type:
-        specifier: ^18.2.1
-        version: 18.7.0
+        specifier: 21.3.2
+        version: 21.3.2
       js-yaml:
-        specifier: 4.1.1
-        version: 4.1.1
+        specifier: 4.3.2
+        version: 4.3.2
       jschardet:
         specifier: ^3.1.4
         version: 3.1.4
@@ -269,8 +274,8 @@ importers:
         specifier: 4.38.3
         version: 4.38.3
       yaml:
-        specifier: 2.8.0
-        version: 2.8.0
+        specifier: 2.8.3
+        version: 2.8.3
       zustand:
         specifier: 5.0.5
         version: 5.0.5(@types/react@18.2.0)(react@18.2.0)
@@ -387,8 +392,8 @@ importers:
         specifier: 2.5.1
         version: 2.5.1
       lodash:
-        specifier: 4.17.23
-        version: 4.17.23
+        specifier: 4.18.1
+        version: 4.18.1
       react:
         specifier: 18.2.0
         version: 18.2.0
@@ -1134,6 +1139,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@borewit/text-codec@0.2.3':
+    resolution: {integrity: sha512-49CycTz1aAZmvFcwkeFyhud1HUmRIB5Tabf7ALV+VA4Iu85MTfz2cUwzPagMFAdVBvrWdkCxG67I30tUwwpKsw==}
+
   '@discoveryjs/json-ext@0.6.3':
     resolution: {integrity: sha512-4B4OijXeVNOPZlYA2oEwWOTkzyltLao+xbotHQeqN++Rv27Y6s818+n2Qkp8q+Fxhn0t/5lA5X1Mxktud8eayQ==}
     engines: {node: '>=14.17.0'}
@@ -1763,7 +1771,7 @@ packages:
   '@projectstorm/react-canvas-core@6.7.4':
     resolution: {integrity: sha512-sY32kT//gQe5aw6RHkmKrbzBq9iWyfwyvvfRTplGPE1ll3zOBVCjbf3tdfw6vATCden+WR0TmirtBo2j3exiBg==}
     peerDependencies:
-      lodash: 4.*
+      lodash: 4.18.1
       react: 16.* || 17.*
 
   '@projectstorm/react-canvas-core@7.0.3':
@@ -1772,7 +1780,7 @@ packages:
   '@projectstorm/react-diagrams-core@6.7.4':
     resolution: {integrity: sha512-AeqH1u58Ugk8mif/GgLEUeOMmTPaWDpl1isA1OJHCPGMbvAytRfv5mrGMvG2E+pYDB29BQ4Yo2z9/TbAy6/nvA==}
     peerDependencies:
-      lodash: 4.*
+      lodash: 4.18.1
       react: 18.*
       resize-observer-polyfill: ^1.5.1
 
@@ -1784,14 +1792,14 @@ packages:
     peerDependencies:
       '@emotion/react': ^11.*
       '@emotion/styled': ^11.*
-      lodash: 4.*
+      lodash: 4.18.1
       react: 18.*
 
   '@projectstorm/react-diagrams-routing@6.7.4':
     resolution: {integrity: sha512-mB8YaRkNF6gdTlYvL0Cxc6m6XLwh7wvmjIsiEO6kW3j1uSvH7R7Gbl/iDYOdc0zUMqH9+pD+M064tWC4oAXa9A==}
     peerDependencies:
       dagre: ^0.8.5
-      lodash: 4.*
+      lodash: 4.18.1
       pathfinding: ^0.4.18
       paths-js: ^0.4.11
       react: 18.*
@@ -2181,6 +2189,10 @@ packages:
 
   '@textlint/types@14.8.4':
     resolution: {integrity: sha512-9nyY8vVXlr8hHKxa6+37omJhXWCwovMQcgMteuldYd4dOxGm14AK2nXdkgtKEUQnzLGaXy46xwLCfhQy7V7/YA==}
+
+  '@tokenizer/inflate@0.4.1':
+    resolution: {integrity: sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA==}
+    engines: {node: '>=18'}
 
   '@tokenizer/token@0.3.0':
     resolution: {integrity: sha512-OvjF+z51L3ov0OyAU0duzsYuvO01PH7x4t6DJx+guahgTnBHkhJdG7soQeTSFLWN3efnHyibZ4Z8l2EuWwJN3A==}
@@ -2602,10 +2614,6 @@ packages:
   abbrev@1.1.1:
     resolution: {integrity: sha512-nne9/IiQ/hzIhY6pdDnbBtz7DjPTKrY00P/zvPSm5pOFkl6xuGrGnXn/VtTNNfNtAfZ9/1RtehkszU9qcTii0Q==}
 
-  abort-controller@3.0.0:
-    resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
-    engines: {node: '>=6.5'}
-
   accepts@1.3.8:
     resolution: {integrity: sha512-PYAthTa2m2VKxuvSD3DPC/Gy+U+sOA1LAuT8mkmRuvw+NACSaeXEQ+NHcVF7rONl6qcaxV3Uuemwawk+7+SJLw==}
     engines: {node: '>= 0.6'}
@@ -2787,8 +2795,8 @@ packages:
   aws4@1.13.2:
     resolution: {integrity: sha512-lHe62zvbTB5eEABUVi/AwVh0ZKY9rMMDhmm+eeyuuUQbQ3+J+fONVQOZyj+DdrvD4BY33uYniyRJ4UJIaSKAfw==}
 
-  axios@1.13.2:
-    resolution: {integrity: sha512-VPk9ebNqPcy5lRGuSlKx752IlDatOjT9paPlm8A7yOuW2Fbvp4X3JznJtT4f0GzGLLiWE9W8onz51SqLYwzGaA==}
+  axios@1.20.0:
+    resolution: {integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==}
 
   azure-devops-node-api@12.5.0:
     resolution: {integrity: sha512-R5eFskGvOm3U/GzeAuxRkUsAl0hrAwGgWn6zAd2KrZmrEhWZVqLew4OOupbQlXUuojUzpGtq62SmdhJ06N88og==}
@@ -2868,9 +2876,6 @@ packages:
 
   bare-url@2.3.2:
     resolution: {integrity: sha512-ZMq4gd9ngV5aTMa5p9+UfY0b3skwhHELaDkhEHetMdX0LRkW9kzaym4oo/Eh+Ghm0CCDuMTsRIGM/ytUc1ZYmw==}
-
-  base64-js@1.5.1:
-    resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
 
   baseline-browser-mapping@2.10.0:
     resolution: {integrity: sha512-lIyg0szRfYbiy67j9KN8IyeD7q7hcmqnJ1ddWmNt19ItGpNN64mnllmxUNFIOdOm6by97jlL6wfpTTJrmnjWAA==}
@@ -2954,9 +2959,6 @@ packages:
 
   buffer-from@1.1.2:
     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
-
-  buffer@6.0.3:
-    resolution: {integrity: sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA==}
 
   bufferstreams@1.1.3:
     resolution: {integrity: sha512-HaJnVuslRF4g2kSDeyl++AaVizoitCpL9PglzCYwy0uHHyvWerfvEb8jWmYbF1z4kiVFolGomnxSGl+GUQp2jg==}
@@ -3662,10 +3664,6 @@ packages:
     resolution: {integrity: sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==}
     engines: {node: '>= 0.6'}
 
-  event-target-shim@5.0.1:
-    resolution: {integrity: sha512-i/2XbnSz/uxRCU6+NdVJgKWDTM427+MqYbkQzD321DuCQJUqOuJKIA0IM2+W2xtYHdKOmZ4dR6fExsd4SXL+WQ==}
-    engines: {node: '>=6'}
-
   eventemitter3@4.0.7:
     resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
 
@@ -3753,9 +3751,9 @@ packages:
   file-js@0.3.0:
     resolution: {integrity: sha512-nZlX1pxpV6Mt8BghM3Z150bpsCT1zqil97UryusstZLSs9caYAe0Wph2UKPC3awfM2Dq4ri1Sv99KuK4EIImlA==}
 
-  file-type@18.7.0:
-    resolution: {integrity: sha512-ihHtXRzXEziMrQ56VSgU7wkxh55iNchFkosu7Y9/S+tXHdKyrGjVK0ujbqNnsxzea+78MaLhN6PGmfYSAv1ACw==}
-    engines: {node: '>=14.16'}
+  file-type@21.3.2:
+    resolution: {integrity: sha512-DLkUvGwep3poOV2wpzbHCOnSKGk1LzyXTv+aHFgN2VFl96wnp8YA9YjO2qPzg5PuL8q/SW9Pdi6WTkYOIh995w==}
+    engines: {node: '>=20'}
 
   file-uri-to-path@1.0.0:
     resolution: {integrity: sha512-0Zt+s3L7Vf1biwWZ29aARiVYLx7iMGnEUl9x33fbB/j3jR81u/O2LbqK+Bm1CDSNDKVtJ/YjwY7TUd5SkeLQLw==}
@@ -3826,6 +3824,15 @@ packages:
       debug:
         optional: true
 
+  follow-redirects@1.16.3:
+    resolution: {integrity: sha512-toOSoqN6d51Wjf1aOFJYcoVv1aND9rj/CwjLU0Vz40oDuSpWDayCeKe4JpL5NL0WdFvoOOCI3BRo69HahjbR1A==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
+
   for-each@0.3.5:
     resolution: {integrity: sha512-dKx12eRCVIzqCxFGplyFKJMPvLEWgmNtUrpTiJIR5u97zEhRG8ySrtboPHZXx7daLxQVrl643cTzbab2tkQjxg==}
     engines: {node: '>= 0.4'}
@@ -3843,6 +3850,10 @@ packages:
 
   form-data@4.0.5:
     resolution: {integrity: sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==}
+    engines: {node: '>= 6'}
+
+  form-data@4.0.6:
+    resolution: {integrity: sha512-vKatAh4SlVfgbv+YtmhiRjhEMJsYpsG1Y2rMQtR+SVSbytsSD1YGzDIcrAJmdFec88u/+VoGmxnl+80gL1tRCQ==}
     engines: {node: '>= 6'}
 
   forwarded@0.2.0:
@@ -4066,6 +4077,10 @@ packages:
 
   hasown@2.0.2:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
+    engines: {node: '>= 0.4'}
+
+  hasown@2.0.4:
+    resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
 
   hast-util-to-jsx-runtime@2.3.6:
@@ -4501,8 +4516,8 @@ packages:
     resolution: {integrity: sha512-PMSmkqxr106Xa156c2M265Z+FTrPl+oxd/rgOQy2tijQeK5TxQ43psO1ZCwhVOSdnn+RzkzlRz/eY4BgJBYVpg==}
     hasBin: true
 
-  js-yaml@4.1.1:
-    resolution: {integrity: sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA==}
+  js-yaml@4.3.2:
+    resolution: {integrity: sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==}
     hasBin: true
 
   jsbn@0.1.1:
@@ -4675,8 +4690,8 @@ packages:
   lodash.truncate@4.4.2:
     resolution: {integrity: sha512-jttmRe7bRse52OsWIMDLaXxWqRAmtIUccAQ3garviCqJjafXOfNMO0yMfNpdD6zbGaTU0P5Nz7e7gAT6cKmJRw==}
 
-  lodash@4.17.23:
-    resolution: {integrity: sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w==}
+  lodash@4.18.1:
+    resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
 
   log-symbols@4.1.0:
     resolution: {integrity: sha512-8XPvpAA8uyhfteu8pIvQxpJZ7SYYdpUivZpGy6sFsBuKRY/7rQGavedeB8aK+Zkyq6upMFVL/9AW6vOYzfRyLg==}
@@ -5344,10 +5359,6 @@ packages:
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
 
-  peek-readable@5.4.2:
-    resolution: {integrity: sha512-peBp3qZyuS6cNIJ2akRNG1uo1WJ1d0wTxg/fxMdZ0BqCVhx242bSFHM9eNqflfJVS9SsgkzgT/1UgnsurBOTMg==}
-    engines: {node: '>=14.16'}
-
   pend@1.2.0:
     resolution: {integrity: sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg==}
 
@@ -5504,8 +5515,9 @@ packages:
     resolution: {integrity: sha512-llQsMLSUDUPT44jdrU/O37qlnifitDP+ZwrmmZcoSKyLKvtZxpyV0n2/bD/N4tBAAZ/gJEdZU7KMraoK1+XYAg==}
     engines: {node: '>= 0.10'}
 
-  proxy-from-env@1.1.0:
-    resolution: {integrity: sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==}
+  proxy-from-env@2.1.0:
+    resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
+    engines: {node: '>=10'}
 
   psl@1.15.0:
     resolution: {integrity: sha512-JZd3gMVBAVQkSs6HdNZo9Sdo0LNcQeMNP3CozBJb3JYC/QUYZTnKxP+f8oWRX4rHP5EurWxqAHTSwUCjlNKa1w==}
@@ -5647,14 +5659,6 @@ packages:
   readable-stream@3.6.2:
     resolution: {integrity: sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA==}
     engines: {node: '>= 6'}
-
-  readable-stream@4.7.0:
-    resolution: {integrity: sha512-oIGGmcpTLwPga8Bn6/Z75SVaH1z5dUut2ibSyAMVhmUggWpmDn2dapB0n7f8nwaSiRtepAsfJyfXIO5DCVAODg==}
-    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
-
-  readable-web-to-node-stream@3.0.4:
-    resolution: {integrity: sha512-9nX56alTf5bwXQ3ZDipHJhusu9NTQJ/CVPtb/XHAJCXihZeitfJvIRS4GqQ/mfIoOE3IelHMrpayVrosdHBuLw==}
-    engines: {node: '>=8'}
 
   readdirp@3.6.0:
     resolution: {integrity: sha512-hOS089on8RduqdbhvQ5Z37A0ESjsqz6qnRcffsMU3495FuTdqSm+7bhJ29JvIOsBDEEnan5DPu9t3To9VRlMzA==}
@@ -6167,9 +6171,9 @@ packages:
     resolution: {integrity: sha512-k55yxKHwaXnpYGsOzg4Vl8+tDrWylxDEpknGjhTiZB8dFRU5rTo9CAzeycivxV3s+zlTKwrs6WxMxR95n26kwg==}
     engines: {node: '>=0.10.0'}
 
-  strtok3@7.1.1:
-    resolution: {integrity: sha512-mKX8HA/cdBqMKUr0MMZAFssCkIGoZeSCMXgnt79yKxNFguMLVFgRe6wB+fsL0NmoHDbeyZXczy7vEPSoo3rkzg==}
-    engines: {node: '>=16'}
+  strtok3@10.8.0:
+    resolution: {integrity: sha512-e6bW3fD6V01DPmcbLfNtn0cjsiHvTKS/hivgbzqYMfHb/nLes4QQ0H5QBxlkPQayF4xv08AvlSgptGwN86Eemw==}
+    engines: {node: '>=18'}
 
   structured-source@4.0.0:
     resolution: {integrity: sha512-qGzRFNJDjFieQkl/sVOI2dUjHKRyL9dAJi2gCPGJLbJHBIkyOHxjuocpIEfbLioX+qSJpvbYdT49/YCdMznKxA==}
@@ -6340,8 +6344,8 @@ packages:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
 
-  token-types@5.0.1:
-    resolution: {integrity: sha512-Y2fmSnZjQdDb9W4w4r1tswlMHylzWIeOKpx0aZH9BgGtACHhrk3OkT52AzwcuqTRBZtvvnTjDBh8eynMulu8Vg==}
+  token-types@6.2.0:
+    resolution: {integrity: sha512-s9euYHM//T3loJtbNUYdbAzsMlvKBeRS+XCLFy+UGosMQH19Hwjap5k19i4PPAEJJBsVIpMpVTxl4fIqCuNfUg==}
     engines: {node: '>=14.16'}
 
   toposort@2.0.2:
@@ -6494,6 +6498,10 @@ packages:
     resolution: {integrity: sha512-v3Xu+yuwBXisp6QYTcH4UbH+xYJXqnq2m/LtQVWKWzYc1iehYnLixoQDN9FH6/j9/oybfd6W9Ghwkl8+UMKTKQ==}
     engines: {node: '>=0.8.0'}
     hasBin: true
+
+  uint8array-extras@1.6.0:
+    resolution: {integrity: sha512-8iAasVS4wUx0gPLjH8Xtz2PeDzTSiy8QiLGu2DT3X5GU+egFEQhpnbtkehbAwjvDcxIERmCYcysiODFmE3Ud0Q==}
+    engines: {node: '>=18'}
 
   unbox-primitive@1.1.0:
     resolution: {integrity: sha512-nWJ91DjeOkej/TA8pXQ3myruKpKEYgqvpw9lz4OPHj/NWFNluYrjbz9j01CJ8yKQd2g4jFoOkINCTW2I5LEEyw==}
@@ -6660,7 +6668,7 @@ packages:
       sugarss: '*'
       terser: ^5.16.0
       tsx: ^4.8.1
-      yaml: ^2.4.2
+      yaml: 2.8.3
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -6903,8 +6911,8 @@ packages:
     resolution: {integrity: sha512-r3vXyErRCYJ7wg28yvBY5VSoAF8ZvlcW9/BwUzEtUsjvX/DKs24dIkuwjtuprwJJHsbyUbLApepYTR1BN4uHrg==}
     engines: {node: '>= 6'}
 
-  yaml@2.8.0:
-    resolution: {integrity: sha512-4lLa/EcQCB0cJkyts+FpIRx5G/llPxfP6VQU5KByHEhLxY3IJCH0f0Hy1MHI8sClTvsIb8qwRJ6R/ZdlDJ/leQ==}
+  yaml@2.8.3:
+    resolution: {integrity: sha512-AvbaCLOO2Otw/lW5bmh9d/WEdcDFdQp2Z2ZUH3pX9U2ihyUY0nvLv7J6TrWowklRGPYbB/IuIMfYgxaCPg5Bpg==}
     engines: {node: '>= 14.6'}
     hasBin: true
 
@@ -7853,6 +7861,8 @@ snapshots:
   '@biomejs/cli-win32-x64@1.9.4':
     optional: true
 
+  '@borewit/text-codec@0.2.3': {}
+
   '@discoveryjs/json-ext@0.6.3': {}
 
   '@emotion/babel-plugin@11.13.5':
@@ -8151,7 +8161,7 @@ snapshots:
       globals: 14.0.0
       ignore: 5.3.2
       import-fresh: 3.3.1
-      js-yaml: 4.1.1
+      js-yaml: 4.3.2
       minimatch: 3.1.2
       strip-json-comments: 3.1.1
     transitivePeerDependencies:
@@ -8206,12 +8216,12 @@ snapshots:
       wrap-ansi: 8.1.0
       wrap-ansi-cjs: wrap-ansi@7.0.0
 
-  '@joshwooding/vite-plugin-react-docgen-typescript@0.5.0(typescript@5.8.3)(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.0))':
+  '@joshwooding/vite-plugin-react-docgen-typescript@0.5.0(typescript@5.8.3)(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.3))':
     dependencies:
       glob: 10.5.0
       magic-string: 0.27.0
       react-docgen-typescript: 2.4.0(typescript@5.8.3)
-      vite: 6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.0)
+      vite: 6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.3)
     optionalDependencies:
       typescript: 5.8.3
 
@@ -8360,12 +8370,12 @@ snapshots:
 
   '@projectstorm/geometry@7.0.3':
     dependencies:
-      lodash: 4.17.23
+      lodash: 4.18.1
 
-  '@projectstorm/react-canvas-core@6.7.4(lodash@4.17.23)(react@18.2.0)':
+  '@projectstorm/react-canvas-core@6.7.4(lodash@4.18.1)(react@18.2.0)':
     dependencies:
       '@projectstorm/geometry': 6.7.4
-      lodash: 4.17.23
+      lodash: 4.18.1
       react: 18.2.0
 
   '@projectstorm/react-canvas-core@7.0.3(@types/react@18.2.0)':
@@ -8373,17 +8383,17 @@ snapshots:
       '@emotion/react': 11.14.0(@types/react@18.2.0)(react@18.2.0)
       '@emotion/styled': 11.14.1(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0)
       '@projectstorm/geometry': 7.0.3
-      lodash: 4.17.23
+      lodash: 4.18.1
       react: 18.2.0
     transitivePeerDependencies:
       - '@types/react'
       - supports-color
 
-  '@projectstorm/react-diagrams-core@6.7.4(lodash@4.17.23)(react@18.2.0)(resize-observer-polyfill@1.5.1)':
+  '@projectstorm/react-diagrams-core@6.7.4(lodash@4.18.1)(react@18.2.0)(resize-observer-polyfill@1.5.1)':
     dependencies:
       '@projectstorm/geometry': 6.7.4
-      '@projectstorm/react-canvas-core': 6.7.4(lodash@4.17.23)(react@18.2.0)
-      lodash: 4.17.23
+      '@projectstorm/react-canvas-core': 6.7.4(lodash@4.18.1)(react@18.2.0)
+      lodash: 4.18.1
       react: 18.2.0
       resize-observer-polyfill: 1.5.1
 
@@ -8392,7 +8402,7 @@ snapshots:
       '@emotion/styled': 11.14.1(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0)
       '@projectstorm/geometry': 7.0.3
       '@projectstorm/react-canvas-core': 7.0.3(@types/react@18.2.0)
-      lodash: 4.17.23
+      lodash: 4.18.1
       react: 18.2.0
       resize-observer-polyfill: 1.5.1
     transitivePeerDependencies:
@@ -8400,33 +8410,33 @@ snapshots:
       - '@types/react'
       - supports-color
 
-  '@projectstorm/react-diagrams-defaults@6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.17.23)(react@18.2.0)(resize-observer-polyfill@1.5.1)':
+  '@projectstorm/react-diagrams-defaults@6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.18.1)(react@18.2.0)(resize-observer-polyfill@1.5.1)':
     dependencies:
       '@emotion/react': 11.14.0(@types/react@18.2.0)(react@18.2.0)
       '@emotion/styled': 11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0)
-      '@projectstorm/react-diagrams-core': 6.7.4(lodash@4.17.23)(react@18.2.0)(resize-observer-polyfill@1.5.1)
-      lodash: 4.17.23
+      '@projectstorm/react-diagrams-core': 6.7.4(lodash@4.18.1)(react@18.2.0)(resize-observer-polyfill@1.5.1)
+      lodash: 4.18.1
       react: 18.2.0
     transitivePeerDependencies:
       - resize-observer-polyfill
 
-  '@projectstorm/react-diagrams-routing@6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.17.23)(react@18.2.0)(resize-observer-polyfill@1.5.1)':
+  '@projectstorm/react-diagrams-routing@6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.18.1)(react@18.2.0)(resize-observer-polyfill@1.5.1)':
     dependencies:
       '@projectstorm/geometry': 6.7.4
-      '@projectstorm/react-diagrams-core': 6.7.4(lodash@4.17.23)(react@18.2.0)(resize-observer-polyfill@1.5.1)
-      '@projectstorm/react-diagrams-defaults': 6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.17.23)(react@18.2.0)(resize-observer-polyfill@1.5.1)
-      lodash: 4.17.23
+      '@projectstorm/react-diagrams-core': 6.7.4(lodash@4.18.1)(react@18.2.0)(resize-observer-polyfill@1.5.1)
+      '@projectstorm/react-diagrams-defaults': 6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.18.1)(react@18.2.0)(resize-observer-polyfill@1.5.1)
+      lodash: 4.18.1
       react: 18.2.0
     transitivePeerDependencies:
       - '@emotion/react'
       - '@emotion/styled'
       - resize-observer-polyfill
 
-  '@projectstorm/react-diagrams@6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.17.23)(react@18.2.0)(resize-observer-polyfill@1.5.1)':
+  '@projectstorm/react-diagrams@6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.18.1)(react@18.2.0)(resize-observer-polyfill@1.5.1)':
     dependencies:
-      '@projectstorm/react-diagrams-core': 6.7.4(lodash@4.17.23)(react@18.2.0)(resize-observer-polyfill@1.5.1)
-      '@projectstorm/react-diagrams-defaults': 6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.17.23)(react@18.2.0)(resize-observer-polyfill@1.5.1)
-      '@projectstorm/react-diagrams-routing': 6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.17.23)(react@18.2.0)(resize-observer-polyfill@1.5.1)
+      '@projectstorm/react-diagrams-core': 6.7.4(lodash@4.18.1)(react@18.2.0)(resize-observer-polyfill@1.5.1)
+      '@projectstorm/react-diagrams-defaults': 6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.18.1)(react@18.2.0)(resize-observer-polyfill@1.5.1)
+      '@projectstorm/react-diagrams-routing': 6.7.4(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@18.2.0)(react@18.2.0))(@types/react@18.2.0)(react@18.2.0))(lodash@4.18.1)(react@18.2.0)(resize-observer-polyfill@1.5.1)
     transitivePeerDependencies:
       - '@emotion/react'
       - '@emotion/styled'
@@ -8685,13 +8695,13 @@ snapshots:
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
 
-  '@storybook/builder-vite@8.6.14(storybook@8.6.14(prettier@3.6.2))(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.0))':
+  '@storybook/builder-vite@8.6.14(storybook@8.6.14(prettier@3.6.2))(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.3))':
     dependencies:
       '@storybook/csf-plugin': 8.6.14(storybook@8.6.14(prettier@3.6.2))
       browser-assert: 1.2.1
       storybook: 8.6.14(prettier@3.6.2)
       ts-dedent: 2.2.0
-      vite: 6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.0)
+      vite: 6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.3)
 
   '@storybook/cli@8.6.14(@babel/preset-env@7.29.0(@babel/core@7.28.5))(prettier@3.6.2)':
     dependencies:
@@ -8775,7 +8785,7 @@ snapshots:
 
   '@storybook/csf@0.0.1':
     dependencies:
-      lodash: 4.17.23
+      lodash: 4.18.1
 
   '@storybook/global@5.0.0': {}
 
@@ -8798,11 +8808,11 @@ snapshots:
       react-dom: 18.2.0(react@18.2.0)
       storybook: 8.6.14(prettier@3.6.2)
 
-  '@storybook/react-vite@8.6.14(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(rollup@4.59.0)(storybook@8.6.14(prettier@3.6.2))(typescript@5.8.3)(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.0))':
+  '@storybook/react-vite@8.6.14(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(rollup@4.59.0)(storybook@8.6.14(prettier@3.6.2))(typescript@5.8.3)(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.3))':
     dependencies:
-      '@joshwooding/vite-plugin-react-docgen-typescript': 0.5.0(typescript@5.8.3)(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.0))
+      '@joshwooding/vite-plugin-react-docgen-typescript': 0.5.0(typescript@5.8.3)(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.3))
       '@rollup/pluginutils': 5.3.0(rollup@4.59.0)
-      '@storybook/builder-vite': 8.6.14(storybook@8.6.14(prettier@3.6.2))(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.0))
+      '@storybook/builder-vite': 8.6.14(storybook@8.6.14(prettier@3.6.2))(vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.3))
       '@storybook/react': 8.6.14(react-dom@18.2.0(react@18.2.0))(react@18.2.0)(storybook@8.6.14(prettier@3.6.2))(typescript@5.8.3)
       find-up: 5.0.0
       magic-string: 0.30.21
@@ -8812,7 +8822,7 @@ snapshots:
       resolve: 1.22.11
       storybook: 8.6.14(prettier@3.6.2)
       tsconfig-paths: 4.2.0
-      vite: 6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.0)
+      vite: 6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.3)
     transitivePeerDependencies:
       - rollup
       - supports-color
@@ -8873,7 +8883,7 @@ snapshots:
       chalk: 4.1.2
       debug: 4.4.3(supports-color@8.1.1)
       js-yaml: 3.14.2
-      lodash: 4.17.23
+      lodash: 4.18.1
       pluralize: 2.0.0
       string-width: 4.2.3
       strip-ansi: 6.0.1
@@ -8889,6 +8899,13 @@ snapshots:
   '@textlint/types@14.8.4':
     dependencies:
       '@textlint/ast-node-types': 14.8.4
+
+  '@tokenizer/inflate@0.4.1':
+    dependencies:
+      debug: 4.4.3(supports-color@8.1.1)
+      token-types: 6.2.0
+    transitivePeerDependencies:
+      - supports-color
 
   '@tokenizer/token@0.3.0': {}
 
@@ -9445,10 +9462,6 @@ snapshots:
 
   abbrev@1.1.1: {}
 
-  abort-controller@3.0.0:
-    dependencies:
-      event-target-shim: 5.0.1
-
   accepts@1.3.8:
     dependencies:
       mime-types: 2.1.35
@@ -9640,13 +9653,15 @@ snapshots:
 
   aws4@1.13.2: {}
 
-  axios@1.13.2:
+  axios@1.20.0:
     dependencies:
-      follow-redirects: 1.15.11
-      form-data: 4.0.5
-      proxy-from-env: 1.1.0
+      follow-redirects: 1.16.3
+      form-data: 4.0.6
+      https-proxy-agent: 5.0.1
+      proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
+      - supports-color
 
   azure-devops-node-api@12.5.0:
     dependencies:
@@ -9731,8 +9746,6 @@ snapshots:
     dependencies:
       bare-path: 3.0.0
     optional: true
-
-  base64-js@1.5.1: {}
 
   baseline-browser-mapping@2.10.0: {}
 
@@ -9822,11 +9835,6 @@ snapshots:
   buffer-equal-constant-time@1.0.1: {}
 
   buffer-from@1.1.2: {}
-
-  buffer@6.0.3:
-    dependencies:
-      base64-js: 1.5.1
-      ieee754: 1.2.1
 
   bufferstreams@1.1.3:
     dependencies:
@@ -10457,7 +10465,7 @@ snapshots:
       es-errors: 1.3.0
       get-intrinsic: 1.3.0
       has-tostringtag: 1.0.2
-      hasown: 2.0.2
+      hasown: 2.0.4
 
   es-shim-unscopables@1.1.0:
     dependencies:
@@ -10664,8 +10672,6 @@ snapshots:
 
   etag@1.8.1: {}
 
-  event-target-shim@5.0.1: {}
-
   eventemitter3@4.0.7: {}
 
   events-universal@1.0.1:
@@ -10777,11 +10783,14 @@ snapshots:
       minimatch: 3.1.2
       proper-lockfile: 1.2.0
 
-  file-type@18.7.0:
+  file-type@21.3.2:
     dependencies:
-      readable-web-to-node-stream: 3.0.4
-      strtok3: 7.1.1
-      token-types: 5.0.1
+      '@tokenizer/inflate': 0.4.1
+      strtok3: 10.8.0
+      token-types: 6.2.0
+      uint8array-extras: 1.6.0
+    transitivePeerDependencies:
+      - supports-color
 
   file-uri-to-path@1.0.0: {}
 
@@ -10789,7 +10798,7 @@ snapshots:
     dependencies:
       bluebird: 3.7.2
       file-js: 0.3.0
-      lodash: 4.17.23
+      lodash: 4.18.1
       minimatch: 5.1.6
       moment: 2.30.1
       unit-compare: 1.0.1
@@ -10857,6 +10866,8 @@ snapshots:
 
   follow-redirects@1.15.11: {}
 
+  follow-redirects@1.16.3: {}
+
   for-each@0.3.5:
     dependencies:
       is-callable: 1.2.7
@@ -10880,6 +10891,14 @@ snapshots:
       combined-stream: 1.0.8
       es-set-tostringtag: 2.1.0
       hasown: 2.0.2
+      mime-types: 2.1.35
+
+  form-data@4.0.6:
+    dependencies:
+      asynckit: 0.4.0
+      combined-stream: 1.0.8
+      es-set-tostringtag: 2.1.0
+      hasown: 2.0.4
       mime-types: 2.1.35
 
   forwarded@0.2.0: {}
@@ -11146,6 +11165,10 @@ snapshots:
   has-unicode@2.0.1: {}
 
   hasown@2.0.2:
+    dependencies:
+      function-bind: 1.1.2
+
+  hasown@2.0.4:
     dependencies:
       function-bind: 1.1.2
 
@@ -11609,7 +11632,7 @@ snapshots:
       argparse: 1.0.10
       esprima: 4.0.1
 
-  js-yaml@4.1.1:
+  js-yaml@4.3.2:
     dependencies:
       argparse: 2.0.1
 
@@ -11802,7 +11825,7 @@ snapshots:
 
   lodash.truncate@4.4.2: {}
 
-  lodash@4.17.23: {}
+  lodash@4.18.1: {}
 
   log-symbols@4.1.0:
     dependencies:
@@ -12369,7 +12392,7 @@ snapshots:
       find-up: 5.0.0
       glob: 10.5.0
       he: 1.2.0
-      js-yaml: 4.1.1
+      js-yaml: 4.3.2
       log-symbols: 4.1.0
       minimatch: 5.1.6
       ms: 2.1.3
@@ -12745,8 +12768,6 @@ snapshots:
 
   pathe@2.0.3: {}
 
-  peek-readable@5.4.2: {}
-
   pend@1.2.0: {}
 
   performance-now@2.1.0: {}
@@ -12900,7 +12921,7 @@ snapshots:
       forwarded: 0.2.0
       ipaddr.js: 1.9.1
 
-  proxy-from-env@1.1.0: {}
+  proxy-from-env@2.1.0: {}
 
   psl@1.15.0:
     dependencies:
@@ -12946,7 +12967,7 @@ snapshots:
   rc-config-loader@4.1.3:
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
-      js-yaml: 4.1.1
+      js-yaml: 4.3.2
       json5: 2.2.3
       require-from-string: 2.0.2
     transitivePeerDependencies:
@@ -13090,18 +13111,6 @@ snapshots:
       inherits: 2.0.4
       string_decoder: 1.3.0
       util-deprecate: 1.0.2
-
-  readable-stream@4.7.0:
-    dependencies:
-      abort-controller: 3.0.0
-      buffer: 6.0.3
-      events: 3.3.0
-      process: 0.11.10
-      string_decoder: 1.3.0
-
-  readable-web-to-node-stream@3.0.4:
-    dependencies:
-      readable-stream: 4.7.0
 
   readdirp@3.6.0:
     dependencies:
@@ -13761,10 +13770,9 @@ snapshots:
     dependencies:
       escape-string-regexp: 1.0.5
 
-  strtok3@7.1.1:
+  strtok3@10.8.0:
     dependencies:
       '@tokenizer/token': 0.3.0
-      peek-readable: 5.4.2
 
   structured-source@4.0.0:
     dependencies:
@@ -13813,7 +13821,7 @@ snapshots:
     dependencies:
       argparse: 1.0.10
       cubic2quad: 1.2.1
-      lodash: 4.17.23
+      lodash: 4.18.1
       microbuffer: 1.0.0
       svgpath: 2.6.0
       xmldom: 0.1.31
@@ -13823,7 +13831,7 @@ snapshots:
       '@xmldom/xmldom': 0.7.13
       argparse: 2.0.1
       cubic2quad: 1.2.1
-      lodash: 4.17.23
+      lodash: 4.18.1
       microbuffer: 1.0.0
       svgpath: 2.6.0
 
@@ -13964,8 +13972,9 @@ snapshots:
 
   toidentifier@1.0.1: {}
 
-  token-types@5.0.1:
+  token-types@6.2.0:
     dependencies:
+      '@borewit/text-codec': 0.2.3
       '@tokenizer/token': 0.3.0
       ieee754: 1.2.1
 
@@ -14128,6 +14137,8 @@ snapshots:
   uglify-js@3.19.3:
     optional: true
 
+  uint8array-extras@1.6.0: {}
+
   unbox-primitive@1.1.0:
     dependencies:
       call-bound: 1.0.4
@@ -14283,7 +14294,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.0):
+  vite@6.0.14(@types/node@22.15.21)(terser@5.44.1)(yaml@2.8.3):
     dependencies:
       esbuild: 0.24.2
       postcss: 8.5.6
@@ -14292,7 +14303,7 @@ snapshots:
       '@types/node': 22.15.21
       fsevents: 2.3.3
       terser: 5.44.1
-      yaml: 2.8.0
+      yaml: 2.8.3
 
   vscode-jsonrpc@8.2.1: {}
 
@@ -14594,7 +14605,7 @@ snapshots:
 
   yaml@1.10.2: {}
 
-  yaml@2.8.0: {}
+  yaml@2.8.3: {}
 
   yargs-parser@20.2.9: {}
 

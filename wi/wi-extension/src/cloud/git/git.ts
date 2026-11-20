@@ -25,7 +25,8 @@ import { StringDecoder } from "string_decoder";
 import { fileURLToPath } from "url";
 import * as iconv from "@vscode/iconv-lite-umd";
 import byline from "byline";
-import * as filetype from "file-type";
+// file-type >= 21 exposes its root entry only to ESM `import`; `./core` resolves from this CommonJS bundle.
+import * as filetype from "file-type/core";
 import {
 	CancellationError,
 	type CancellationToken,
