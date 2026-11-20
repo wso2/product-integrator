@@ -27,6 +27,7 @@ import { manageProjectContextCommand } from "./manage-dir-context-cmd";
 import { openCompSrcCommand } from "./open-comp-src-cmd";
 import { openInConsoleCommand } from "./open-in-console-cmd";
 import { refreshContextCommand } from "./refresh-directory-context-cmd";
+import { switchRegionCommand } from "./region-cmd";
 import { signInCommand } from "./sign-in-cmd";
 import { signOutCommand } from "./sign-out-cmd";
 
@@ -41,6 +42,7 @@ export function activateCmds(context: ExtensionContext) {
 	deleteComponentCommand(context);
 	signInCommand(context);
 	signOutCommand(context);
+	switchRegionCommand(context);
 	openInConsoleCommand(context);
 	cloneRepoCommand(context);
 	manageProjectContextCommand(context);

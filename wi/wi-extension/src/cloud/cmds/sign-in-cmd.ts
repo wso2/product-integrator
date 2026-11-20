@@ -16,24 +16,46 @@
  * under the License.
  */
 
-import { isCloudError } from "@wso2/wso2-cloud-client";
+import { type CloudEnvName, isCloudError } from "@wso2/wso2-cloud-client";
 import { type ICmdParamsBase, WICommandIds } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, ProgressLocation, commands, window } from "vscode";
 import { BridgeLayer } from "../../BridgeLayer";
 import { ext } from "../../extensionVariables";
 import { handleCloudError } from "../platform/error-handler";
 import { isPlatformReady, setExtensionName } from "./cmd-utils";
+import { cloudPlaceName, pickRegion } from "./region-cmd";
 
 export function signInCommand(context: ExtensionContext) {
 	context.subscriptions.push(
-		commands.registerCommand(WICommandIds.SignIn, async (params: ICmdParamsBase & { reselectOrganization?: boolean }) => {
+		// `region` signs in to that production region without asking; otherwise the person is asked where there is a choice.
+		commands.registerCommand(WICommandIds.SignIn, async (params: ICmdParamsBase & { reselectOrganization?: boolean; region?: CloudEnvName }) => {
 			setExtensionName(params?.extName);
 			try {
 				isPlatformReady(ext);
 				if (!ext.authProvider) {
 					throw new Error("The cloud layer is not active yet.");
 				}
-				ext.log("Signing in to Choreo Cloud");
+				// Choosing an organization again stays in the region the session is in.
+				if (!params?.reselectOrganization) {
+					const platform = ext.clients.platform;
+					const named = platform.regions.find((region) => region.name === params?.region)?.name;
+					const region = named ?? (await pickRegion({ title: "Sign In to Choreo Cloud", placeHolder: "Select the region where you want to create and deploy your integrations" }));
+					if (!region) {
+						ext.log("Sign-in cancelled");
+						return;
+					}
+					if (region !== platform.environment.name) {
+						await platform.switchEnvironment(region);
+						// The region may hold a session from before: that is the sign-in asked for.
+						await ext.authProvider.initAuth();
+						if (ext.authProvider.isLoggedIn && ext.authProvider.session) {
+							const kept = ext.authProvider.session;
+							window.showInformationMessage(`Signed in to ${cloudPlaceName()} as ${kept.user.email ?? kept.user.displayName} (${kept.org.name})`);
+							return;
+						}
+					}
+				}
+				ext.log(`Signing in to ${cloudPlaceName()}`);
 				BridgeLayer.notifySignInInitiated();
 				const session = await window.withProgress(
 					{ title: "Waiting for the sign-in in your browser...", location: ProgressLocation.Notification, cancellable: true },
@@ -42,7 +64,7 @@ export function signInCommand(context: ExtensionContext) {
 						return ext.authProvider!.signIn({ reselectOrganization: params?.reselectOrganization });
 					},
 				);
-				window.showInformationMessage(`Signed in to Choreo Cloud as ${session.user.email ?? session.user.displayName} (${session.org.name})`);
+				window.showInformationMessage(`Signed in to ${cloudPlaceName()} as ${session.user.email ?? session.user.displayName} (${session.org.name})`);
 			} catch (error) {
 				if (isCloudError(error) && error.code === "login_cancelled") {
 					ext.log("Sign-in cancelled");

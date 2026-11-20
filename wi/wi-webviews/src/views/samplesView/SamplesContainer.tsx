@@ -269,7 +269,7 @@ const CategoryLabel = styled.span`
 `;
 
 const IconFrame = styled.div`
-    height: 88px;
+    height: 160px;
     width: 100%;
     border-radius: 10px;
     border: 1px solid color-mix(in srgb, var(--wso2-brand-accent) 28%, transparent);
@@ -281,8 +281,8 @@ const IconFrame = styled.div`
 `;
 
 const CategoryImage = styled.img`
-    max-height: 64px;
-    max-width: 70%;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
 `;
 

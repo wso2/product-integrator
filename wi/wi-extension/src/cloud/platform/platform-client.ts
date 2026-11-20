@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import type { CloudClient, CloudEnvironment, Logger, PlatformEnvConfig, UnauthenticatedError } from "@wso2/wso2-cloud-client";
+import type { CloudClient, Logger, PlatformEnvConfig, UnauthenticatedError } from "@wso2/wso2-cloud-client";
 import { type PlatformClients, createPlatformClients, readCloudEnvironment } from "@wso2/wso2-cloud-client/vscode";
 import type { ExtensionContext } from "vscode";
 import { getProductName } from "../../productMode";
@@ -38,13 +38,18 @@ export interface WIPlatformOptions {
 	onUnauthenticated: (error: UnauthenticatedError) => void;
 }
 
+/**
+ * The environment comes from the settings, and production can be switched
+ * between its regions while the editor runs; the members of what this
+ * returns answer for the region in use. Throws when the configured
+ * environment cannot be used, which leaves the cloud features off.
+ */
 export function createWIPlatform(options: WIPlatformOptions): WIPlatform {
-	const environment: CloudEnvironment = readCloudEnvironment();
+	readCloudEnvironment();
 	return createPlatformClients({
 		extensionId: WI_EXTENSION_ID,
 		productName: getProductName(),
 		context: options.context,
-		environment,
 		userAgent: `wso2-integrator-vscode/${options.extensionVersion}`,
 		logger: options.logger,
 		onUnauthenticated: options.onUnauthenticated,
