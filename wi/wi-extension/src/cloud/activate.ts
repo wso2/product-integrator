@@ -36,7 +36,6 @@ import { watchContextFiles } from "./context-watcher";
 import { contextStore } from "./stores/context-store";
 import { dataCacheStore } from "./stores/data-cache-store";
 import { locationStore } from "./stores/location-store";
-import { webviewStateStore } from "./stores/webview-state-store";
 
 /**
  * Boot the cloud functionality: environment → stores → platform client and the
@@ -159,12 +158,11 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	cloudAPIs.setActive(true);
 }
 
-/** Points what the extension reads per environment at `environment`: the caches' keys, the hosts it hands out, the webviews. */
+/** Points what the extension reads per environment at `environment`: the caches' keys and the hosts it hands out. The webviews refetch the console URL when the auth state changes, which a switch does. */
 function applyEnvironment(environment: CloudEnvironment): void {
 	const services: CloudServiceUrls = readCloudServiceUrls(environment.name);
 	ext.cloudEnv = environment.name;
 	ext.config = { ...environment, ...services };
-	webviewStateStore.setState(({ state }) => ({ state: { ...state, choreoEnv: environment.name } }));
 }
 
 function registerPreInitHandlers(): vscode.Disposable {

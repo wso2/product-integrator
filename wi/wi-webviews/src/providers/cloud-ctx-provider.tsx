@@ -95,6 +95,8 @@ export const CloudContextProvider: FC<Props> = ({ children }) => {
     useEffect(() => {
         wsClient.onAuthStateChanged((state) => {
             queryClient.setQueryData(["cloud_auth_state"], state);
+            // A switch between production's regions changes the session, and the console is the region's own.
+            queryClient.invalidateQueries({ queryKey: ["console_url"] });
         });
         wsClient.onContextStateChanged((state) => {
             queryClient.setQueryData(["cloud_context_state"], state);
