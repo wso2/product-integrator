@@ -105,6 +105,8 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose }: UserAccountPop
     const { authState } = useCloudContext();
     const queryClient = useQueryClient();
     const [isSigningOut, setIsSigningOut] = React.useState(false);
+    // A picture that could not be loaded (offline, or an expired link) gives way to the initial.
+    const [failedPictureUrl, setFailedPictureUrl] = React.useState<string>();
 
     const handleSignOut = async () => {
         setIsSigningOut(true);
@@ -139,8 +141,12 @@ export function UserAccountPopover({ isOpen, anchorEl, onClose }: UserAccountPop
             <PopoverContent>
                 <UserHeader>
                     <AvatarCircle>
-                        {authState?.userInfo?.userProfilePictureUrl ? (
-                            <AvatarImg src={authState.userInfo.userProfilePictureUrl} alt={authState.userInfo.displayName} />
+                        {authState?.userInfo?.userProfilePictureUrl && authState.userInfo.userProfilePictureUrl !== failedPictureUrl ? (
+                            <AvatarImg
+                                src={authState.userInfo.userProfilePictureUrl}
+                                alt={authState.userInfo.displayName}
+                                onError={() => setFailedPictureUrl(authState?.userInfo?.userProfilePictureUrl)}
+                            />
                         ) : (
                             <AvatarInitial>{authState?.userInfo?.displayName?.charAt(0)}</AvatarInitial>
                         )}
