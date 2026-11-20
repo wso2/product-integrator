@@ -18,6 +18,13 @@
 
 /** The slice of the `vscode` API the unit-tested modules touch at load time. */
 
+export class Disposable {
+	constructor(private readonly callOnDispose: () => unknown) {}
+	dispose(): void {
+		this.callOnDispose();
+	}
+}
+
 export class EventEmitter<T> {
 	private listeners: Array<(value: T) => void> = [];
 	public event = (listener: (value: T) => void) => {
