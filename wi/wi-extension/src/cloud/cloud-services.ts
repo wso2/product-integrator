@@ -50,7 +50,7 @@ export interface CloudServiceDeps {
 
 /**
  * Each environment's Copilot backend in this build (`COPILOT_ROOT_URL`, `COPILOT_EU_ROOT_URL`,
- * `COPILOT_STAGE_ROOT_URL`, `COPILOT_DEV_ROOT_URL`), put in by the bundler from the build's environment: never read
+ * `COPILOT_STAGE_ROOT_URL`, `COPILOT_DEV_ROOT_URL`), put in by the bundler from `.env.example` and the build's environment: never read
  * at run time, so nothing installed can add to them.
  */
 declare const __WI_COPILOT_ROOT_URLS__: Partial<Record<CloudEnvName, string>> | undefined;
