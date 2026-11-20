@@ -153,8 +153,13 @@ export async function exchangeToken(target: TokenExchangeTarget, endpoint: strin
 	if (!endpoint) {
 		throw new NotSupportedError(exchange.missing, { reason: `${target}_token_exchange_not_configured` });
 	}
+	const allowed = (deps.exchangeEndpoints ?? exchangeEndpointsFor(deps.config.name))[target] ?? [];
+	if (allowed.length === 0) {
+		// This build names no backend for the environment: not configured, rather than a refused endpoint.
+		throw new NotSupportedError(exchange.missing, { reason: `${target}_token_exchange_not_configured` });
+	}
 	// Checked before the token is read: an endpoint off the list never sees it.
-	const url = allowedExchangeEndpoint(target, (deps.exchangeEndpoints ?? exchangeEndpointsFor(deps.config.name))[target] ?? [], endpoint);
+	const url = allowedExchangeEndpoint(target, allowed, endpoint);
 	const what = `The ${target} token exchange`;
 	const path = url.pathname;
 	for (let forceRefresh = false; ; forceRefresh = true) {

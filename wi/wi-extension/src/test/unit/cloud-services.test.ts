@@ -90,10 +90,13 @@ describe("Copilot token exchange", () => {
 		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, deps([json(200, { token_type: "Bearer" })]).deps), codeOf("server"));
 	});
 
-	it("allows only the environment's own Copilot backend, none when the build names none for it", async () => {
+	it("says the exchange is not configured when the build names no backend for the environment", async () => {
 		assert.deepStrictEqual(exchangeEndpointsFor("prod-eu"), { copilot: [] });
 		const { deps: d, sent } = deps([json(200, { access_token: "copilot-token" })], { name: "prod-eu" });
-		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, { ...d, exchangeEndpoints: undefined }), codeOf("forbidden"));
+		await assert.rejects(
+			exchangeToken("copilot", COPILOT_EXCHANGE, { ...d, exchangeEndpoints: undefined }),
+			(error: unknown) => isCloudError(error) && error.code === "not_supported" && error.details.reason === "copilot_token_exchange_not_configured",
+		);
 		assert.strictEqual(sent.length, 0, "the WSO2 Cloud token is not sent");
 	});
 
@@ -153,9 +156,9 @@ describe("Copilot token exchange", () => {
 		}
 	});
 
-	it("allows no endpoint at all when the build lists none", async () => {
+	it("allows no endpoint at all when the build lists none, and says it is not configured", async () => {
 		const built = deps([]);
-		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, { ...built.deps, exchangeEndpoints: { copilot: [] } }), codeOf("forbidden"));
+		await assert.rejects(exchangeToken("copilot", COPILOT_EXCHANGE, { ...built.deps, exchangeEndpoints: { copilot: [] } }), codeOf("not_supported"));
 		assert.strictEqual(built.sent.length, 0);
 	});
 
