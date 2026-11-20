@@ -95,8 +95,11 @@ export const CloudContextProvider: FC<Props> = ({ children }) => {
     useEffect(() => {
         wsClient.onAuthStateChanged((state) => {
             queryClient.setQueryData(["cloud_auth_state"], state);
-            // A switch between production's regions changes the session, and the console is the region's own.
-            queryClient.invalidateQueries({ queryKey: ["console_url"] });
+            // A switch between production's regions changes the session, and the console is the region's own. A read
+            // still pending is the other region's: it is cancelled, or the refetch would join it and keep its answer.
+            void queryClient
+                .cancelQueries({ queryKey: ["console_url"] })
+                .then(() => queryClient.invalidateQueries({ queryKey: ["console_url"] }));
         });
         wsClient.onContextStateChanged((state) => {
             queryClient.setQueryData(["cloud_context_state"], state);
