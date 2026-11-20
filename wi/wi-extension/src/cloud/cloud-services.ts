@@ -74,10 +74,13 @@ const TOKEN_EXCHANGES: Readonly<Record<TokenExchangeTarget, TokenExchange>> = {
 /**
  * Where each target's exchange may be for `env`'s token: exact URLs, never a host or a domain, since a shared gateway
  * serves other tenants' APIs on the same host under other paths, and only the environment's own backend, so a token
- * of one region or deployment never goes to another's.
+ * of one region or deployment never goes to another's. `copilotRoots` are the build's unless a test hands in others.
  */
-export function exchangeEndpointsFor(env: CloudEnvName): Readonly<Record<TokenExchangeTarget, readonly string[]>> {
-	const copilot = entryOf(COPILOT_ROOT_URLS, env);
+export function exchangeEndpointsFor(
+	env: CloudEnvName,
+	copilotRoots: Partial<Record<CloudEnvName, string>> = COPILOT_ROOT_URLS,
+): Readonly<Record<TokenExchangeTarget, readonly string[]>> {
+	const copilot = entryOf(copilotRoots, env);
 	return { copilot: exchangeEndpointsOf(copilot ? [copilot] : [], "/auth-api/v1.0/auth/token-exchange") };
 }
 
