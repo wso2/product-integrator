@@ -69,12 +69,6 @@
           "default": "",
           "markdownDescription": "Overrides the OAuth client id used to sign in to WSO2 Cloud. Leave empty unless the WSO2 Cloud team told you to set it.",
           "scope": "machine"
-        },
-        "integrator.advanced.cloudApiBaseUrl": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Overrides the WSO2 Cloud API base URL. Leave empty unless the WSO2 Cloud team told you to set it.",
-          "scope": "machine"
         }
       }
     },
