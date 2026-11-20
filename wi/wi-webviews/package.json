@@ -37,7 +37,7 @@
     "@ts-morph/common": "0.28.1",
     "react-markdown": "10.1.0",
     "remark-gfm": "4.0.1",
-    "lodash": "4.17.23"
+    "lodash": "4.18.1"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
