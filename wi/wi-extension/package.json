@@ -63,18 +63,6 @@
           "default": "prod",
           "description": "The Choreo Cloud environment to use.",
           "scope": "machine"
-        },
-        "integrator.advanced.cloudClientId": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Overrides the OAuth client id used to sign in to Choreo Cloud. Leave empty unless the Choreo Cloud team told you to set it.",
-          "scope": "machine"
-        },
-        "integrator.advanced.cloudApiBaseUrl": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Overrides the Choreo Cloud API base URL. Leave empty unless the Choreo Cloud team told you to set it.",
-          "scope": "machine"
         }
       }
     },
@@ -718,10 +706,10 @@
     "zustand": "5.0.5",
     "byline": "5.0.0",
     "which": "5.0.0",
-    "js-yaml": "4.1.1",
-    "yaml": "2.8.0",
+    "js-yaml": "4.3.2",
+    "yaml": "2.8.3",
     "@vscode/iconv-lite-umd": "^0.7.0",
-    "file-type": "^18.2.1",
+    "file-type": "21.3.2",
     "jschardet": "^3.1.4",
     "@wso2/webview-giga-bridge": "workspace:*",
     "xstate": "4.38.3",
@@ -729,7 +717,7 @@
     "@wso2/ui-toolkit": "workspace:*",
     "unzipper": "0.12.3",
     "@types/unzipper": "0.10.11",
-    "axios": "1.13.2",
+    "axios": "1.20.0",
     "dotenv": "17.2.3"
   }
 }
