@@ -28,7 +28,7 @@ if [ ! -f "${UPSTREAM_ZIP}" ]; then
   # Pre-release tags carry a suffix the asset names drop (v2201.13.6-alpha2 -> ballerina-2201.13.6.zip).
   URL="https://github.com/ballerina-platform/ballerina-distribution/releases/download/v${BALLERINA_VERSION}/ballerina-${BALLERINA_VERSION%%-*}.zip"
   echo "Downloading ${URL}"
-  curl -fsSL --retry 3 -o "${UPSTREAM_ZIP}.part" "${URL}"
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "${UPSTREAM_ZIP}.part" "${URL}"
   mv "${UPSTREAM_ZIP}.part" "${UPSTREAM_ZIP}"
 fi
 
