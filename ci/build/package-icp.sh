@@ -26,7 +26,7 @@ UPSTREAM_ZIP="${UPSTREAM_ZIP:-${WORK}/upstream.zip}"
 if [ ! -f "${UPSTREAM_ZIP}" ]; then
   URL="https://github.com/wso2/integration-control-plane/releases/download/v${ICP_VERSION}/wso2-integration-control-plane-${ICP_VERSION}.zip"
   echo "Downloading ${URL}"
-  curl -fsSL --retry 3 -o "${UPSTREAM_ZIP}.part" "${URL}"
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "${UPSTREAM_ZIP}.part" "${URL}"
   mv "${UPSTREAM_ZIP}.part" "${UPSTREAM_ZIP}"
 fi
 

@@ -21,6 +21,27 @@ print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
+# `codesign --timestamp` asks Apple's timestamp server about every file it signs, and that server is
+# now and then unreachable from the hosted runners ("The timestamp service is not available."),
+# which failed a whole macOS build on 2026-10-18 after the DMG was made. Retry only that kind of
+# failure; anything else (a bad identity, a file codesign refuses) still fails at once.
+codesign_retry() {
+    local out rc attempt
+    for attempt in 1 2 3 4 5; do
+        out=$(codesign "$@" 2>&1) && rc=0 || rc=$?
+        [ -n "$out" ] && printf '%s\n' "$out"
+        [ "$rc" -eq 0 ] && return 0
+        if ! printf '%s' "$out" | grep -qiE 'timestamp service|network|connection|timed out'; then
+            return "$rc"
+        fi
+        if [ "$attempt" -lt 5 ]; then
+            print_warning "codesign could not reach Apple's timestamp service (attempt $attempt/5); retrying in $((attempt * 10))s"
+            sleep $((attempt * 10))
+        fi
+    done
+    return "$rc"
+}
+
 WORK_DIR=$(pwd)
 
 # Usage: ./build.sh <ballerina_zip> <ballerina_version> <wso2_zip> <icp_zip> <jre_zip> <version> <arch>
@@ -186,7 +207,7 @@ sign_app_bundle() {
                         [ -f "$entry" ] || continue
                         file -b "$entry" | grep -q "Mach-O" || continue
                         raise_old_deployment_target "$entry"
-                        codesign "${LIB_OPTS[@]}" "$entry"
+                        codesign_retry "${LIB_OPTS[@]}" "$entry"
                         zip -q "$jar_abs" "$entry"
                         # Read the entry back OUT of the archive and verify it. Nothing else
                         # covers the write-back: `codesign --verify` on the app never looks
@@ -252,10 +273,10 @@ sign_app_bundle() {
                         # user shells, so that is not theoretical.
                         case "$f" in
                             "$app"/Contents/components/*|"$app"/Contents/Resources/app/bin/*)
-                                codesign "${SIGN_OPTS[@]}" "$f" ;;
-                            *)  codesign "${LIB_OPTS[@]}" "$f" ;;
+                                codesign_retry "${SIGN_OPTS[@]}" "$f" ;;
+                            *)  codesign_retry "${LIB_OPTS[@]}" "$f" ;;
                         esac ;;
-                    *)  codesign "${LIB_OPTS[@]}" "$f" ;;
+                    *)  codesign_retry "${LIB_OPTS[@]}" "$f" ;;
                 esac
               done
 
@@ -263,11 +284,11 @@ sign_app_bundle() {
         find "$app" -type d \( -name "*.framework" -o -name "*.app" \) | awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2- \
             | while IFS= read -r bundle; do
                 [ "$bundle" = "$app" ] && continue
-                codesign "${SIGN_OPTS[@]}" "$bundle"
+                codesign_retry "${SIGN_OPTS[@]}" "$bundle"
               done
 
         # 4) The top-level app last, then verify the seal.
-        codesign "${SIGN_OPTS[@]}" "$app"
+        codesign_retry "${SIGN_OPTS[@]}" "$app"
         codesign --verify --deep --strict --verbose=2 "$app"
         print_info "App signed and verified: $app"
     else
@@ -423,7 +444,7 @@ fi
 # already signed); recommended for notarization and a cleaner Gatekeeper experience.
 if [ -n "${MAC_SIGNING_IDENTITY:-}" ]; then
     print_info "Signing DMG with: $MAC_SIGNING_IDENTITY"
-    codesign --force --timestamp --sign "$MAC_SIGNING_IDENTITY" "$WORK_DIR/$DMG_NAME"
+    codesign_retry --force --timestamp --sign "$MAC_SIGNING_IDENTITY" "$WORK_DIR/$DMG_NAME"
 fi
 
 # -------------------------------------------------------------------
