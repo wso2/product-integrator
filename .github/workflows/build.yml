@@ -146,7 +146,7 @@ jobs:
 
       - name: Download the caller's versions
         if: ${{ inputs.versions_artifact != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: ${{ inputs.versions_artifact }}
           path: .
@@ -263,7 +263,7 @@ jobs:
           persist-credentials: false
 
       - name: Download stamped versions
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: build-versions
           path: .
@@ -483,7 +483,7 @@ jobs:
             extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-
 
       - name: Download compilation artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: compilation
           path: lib/vscode
@@ -492,7 +492,7 @@ jobs:
         run: tar -xzf compilation.tar.gz
 
       - name: Download WI extension VSIX
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: wi-extension-vsix
           path: wi/wi-extension
@@ -532,7 +532,7 @@ jobs:
       # Deliberately after the cache steps: a timestamped version in
       # hashFiles('ci/build/component-versions.properties') would bust the extensions cache every run.
       - name: Download stamped versions
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: build-versions
           path: .
@@ -583,7 +583,18 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm ci
+          # `npm ci` runs postinstall (build/npm/postinstall.ts), which npm-installs each bundled
+          # extension; one dropped registry connection fails it (ETIMEDOUT on macos-15-intel,
+          # 2026-10-28). Retry a few times, as the Windows build does.
+          for _try in 1 2 3; do
+            if npm ci; then exit 0; fi
+            if [ "$_try" -lt 3 ]; then
+              echo "npm ci failed (attempt $_try/3); retrying in 20s..."
+              sleep 20
+            fi
+          done
+          echo "::error::npm ci failed after 3 attempts" >&2
+          exit 1
 
       - name: Mixin distro modules
         run: |
@@ -774,14 +785,14 @@ jobs:
 
       - name: Download Ballerina runtime
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: ballerina-runtime
           path: ballerina-runtime
 
       - name: Download ICP
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: icp
           path: icp-package
@@ -805,7 +816,7 @@ jobs:
           JRE_URL="https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-${JRE_PLATFORM}-${JRE_VERSION}.zip"
           INTEGRATOR_VERSION="${{ needs.resolve-versions.outputs.integrator_version }}"
           cd ./installers/mac
-          wget -O jre.zip "$JRE_URL"
+          curl -fSL --retry 5 --retry-all-errors --retry-delay 10 -o jre.zip "$JRE_URL"
           # editor-update profile: full DMG (first install) + EDITOR-ONLY Squirrel zip (§D8).
           INSTALLER_PROFILE=editor-update ./build.sh "$BALLERINA_ZIP" $BALLERINA_VERSION VSCode-darwin-${{ matrix.arch }}.zip "$ICP_ZIP" jre.zip $INTEGRATOR_VERSION ${{ matrix.arch }}
           cd ${ROOT_DIR}
@@ -845,29 +856,71 @@ jobs:
             exit 1
           fi
           echo "Notarizing $DMG"
-          # `notarytool submit --wait` exits 0 even when Apple returns Invalid, so without this
-          # check the run failed one line later at `stapler` with "Could not find base64 encoded
-          # ticket ... Error 65" and no hint of the cause. Read the verdict, and on anything but
-          # Accepted print Apple's per-file findings, which is the only thing that says WHY.
-          SUBMIT_JSON=$(xcrun notarytool submit "$DMG" \
-            --apple-id "$NOTARY_APPLE_ID" \
-            --password "$NOTARY_APP_PASSWORD" \
-            --team-id "$NOTARY_TEAM_ID" \
-            --wait --output-format json)
-          echo "$SUBMIT_JSON"
-          # Tab-separated, because a status can contain a space: `--wait` reports "In Progress"
-          # on timeout, and splitting on spaces would leave "Progress <uuid>" in the id, sending
-          # `notarytool log` an id it cannot use -- which `|| true` would then hide.
-          IFS=$'\t' read -r NOTARY_STATUS NOTARY_ID <<<"$(printf '%s' "$SUBMIT_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("status",""), d.get("id",""), sep="\t")')"
-          if [ "$NOTARY_STATUS" != "Accepted" ]; then
-            echo "::error::notarization returned ${NOTARY_STATUS:-no status} for $DMG" >&2
-            if [ -n "$NOTARY_ID" ]; then
-              echo "----- Apple's notarization log -----"
-              xcrun notarytool log "$NOTARY_ID" \
-                --apple-id "$NOTARY_APPLE_ID" \
-                --password "$NOTARY_APP_PASSWORD" \
-                --team-id "$NOTARY_TEAM_ID" || true
+          notary() {
+            xcrun notarytool "$@" \
+              --apple-id "$NOTARY_APPLE_ID" \
+              --password "$NOTARY_APP_PASSWORD" \
+              --team-id "$NOTARY_TEAM_ID"
+          }
+          # One field of notarytool's JSON on stdin, or "" when it is not JSON.
+          json_field() {
+            python3 -c 'import json,sys
+          try: print(json.load(sys.stdin).get(sys.argv[1], ""))
+          except Exception: print("")' "$1"
+          }
+          # Upload once, then poll that one submission. `submit --wait` did both in one call, so a
+          # connection the hosted macos-15-intel runners drop during the wait (-1009 "The Internet
+          # connection appears to be offline", on 2026-10-12 and twice in a row on 2026-11-20) failed
+          # the step, and the rerun built and uploaded the DMG all over again. Each poll is now its
+          # own request: a dropped one is retried, and the submission Apple is processing is kept.
+          NOTARY_ID=""
+          for _try in 1 2 3; do
+            if SUBMIT_JSON=$(notary submit "$DMG" --output-format json); then
+              echo "$SUBMIT_JSON"
+              NOTARY_ID=$(printf '%s' "$SUBMIT_JSON" | json_field id)
+              [ -n "$NOTARY_ID" ] && break
             fi
+            if [ "$_try" -lt 3 ]; then
+              echo "notarytool submit attempt $_try failed; retrying in $((_try * 30))s..."
+              sleep $((_try * 30))
+            fi
+          done
+          if [ -z "$NOTARY_ID" ]; then
+            echo "::error::could not submit $DMG for notarization after 3 attempts" >&2
+            exit 1
+          fi
+          echo "Submitted as $NOTARY_ID; waiting for Apple's verdict"
+          # Polls every 30s for up to an hour, and gives up after 20 failed polls in a row (10
+          # minutes without reaching Apple). A status other than "In Progress" is the verdict.
+          NOTARY_STATUS=""
+          _failed_polls=0
+          _deadline=$((SECONDS + 3600))
+          while [ "$SECONDS" -lt "$_deadline" ]; do
+            _status=""
+            if INFO_JSON=$(notary info "$NOTARY_ID" --output-format json); then
+              _status=$(printf '%s' "$INFO_JSON" | json_field status)
+            fi
+            if [ -n "$_status" ]; then
+              _failed_polls=0
+              NOTARY_STATUS="$_status"
+              [ "$NOTARY_STATUS" != "In Progress" ] && break
+            else
+              _failed_polls=$((_failed_polls + 1))
+              echo "Polling submission $NOTARY_ID failed ($_failed_polls in a row); retrying in 30s..."
+              if [ "$_failed_polls" -ge 20 ]; then
+                echo "::error::could not reach the notary service for 10 minutes while waiting on $NOTARY_ID" >&2
+                exit 1
+              fi
+            fi
+            sleep 30
+          done
+          # A verdict other than Accepted (or no verdict within the hour) fails here with Apple's
+          # per-file findings, which are the only thing that says WHY; without this check the run
+          # failed later at `stapler` with "Could not find base64 encoded ticket ... Error 65".
+          if [ "$NOTARY_STATUS" != "Accepted" ]; then
+            echo "::error::notarization returned ${NOTARY_STATUS:-no status} for $DMG (submission $NOTARY_ID)" >&2
+            echo "----- Apple's notarization log -----"
+            notary log "$NOTARY_ID" || true
             exit 1
           fi
           xcrun stapler staple "$DMG"
@@ -1055,7 +1108,7 @@ jobs:
             extensions-shared-${{ inputs.ballerina_extension_source }}-${{ needs.resolve-versions.outputs.ballerina_extension_version }}-${{ inputs.mi_extension_source }}-${{ needs.resolve-versions.outputs.mi_extension_version }}-
 
       - name: Download compilation artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: compilation
           path: lib/vscode
@@ -1065,7 +1118,7 @@ jobs:
         run: tar -xzf compilation.tar.gz
 
       - name: Download WI extension VSIX
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: wi-extension-vsix
           path: wi/wi-extension
@@ -1119,7 +1172,7 @@ jobs:
       # Deliberately after the cache steps: a timestamped version in
       # hashFiles('ci/build/component-versions.properties') would bust the extensions cache every run.
       - name: Download stamped versions
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: build-versions
           path: .
@@ -1143,7 +1196,14 @@ jobs:
         shell: pwsh
         run: |
           # Download and install Rust
-          Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"
+          for ($i = 1; $i -le 5; $i++) {
+            try { Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"; break }
+            catch {
+              if ($i -eq 5) { throw "rustup-init download failed after 5 attempts: $_" }
+              Write-Host "rustup-init download failed (attempt $i/5): $_; retrying in $($i * 10)s..."
+              Start-Sleep -Seconds ($i * 10)
+            }
+          }
           ./rustup-init.exe -y --default-toolchain stable
           # Add Rust to PATH for this session
           $env:PATH += ";$env:USERPROFILE\.cargo\bin"
@@ -1355,14 +1415,14 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -Value 1
       - name: Download Ballerina runtime
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: ballerina-runtime
           path: ballerina-runtime
 
       - name: Download ICP
         if: ${{ inputs.build_packed_installers == true }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: icp
           path: icp-package
@@ -1382,7 +1442,15 @@ jobs:
           $JRE_URL = "https://github.com/ballerina-platform/ballerina-custom-jre/releases/download/${JRE_VERSION}/ballerina-jre-win-64-${JRE_VERSION}.zip"
           $INTEGRATOR_VERSION = "${{ needs.resolve-versions.outputs.integrator_version }}"
           cd .\installers\windows
-          Invoke-WebRequest -Uri $JRE_URL -OutFile "jre.zip"
+          # Retried: one failed request from github.com otherwise fails the whole build.
+          for ($i = 1; $i -le 5; $i++) {
+            try { Invoke-WebRequest -Uri $JRE_URL -OutFile "jre.zip"; break }
+            catch {
+              if ($i -eq 5) { throw "JRE download failed after 5 attempts: $_" }
+              Write-Host "JRE download failed (attempt $i/5): $_; retrying in $($i * 10)s..."
+              Start-Sleep -Seconds ($i * 10)
+            }
+          }
           # Full first-install MSI (editor + Ballerina + ICP + JRE) -> wso2-integrator-<v>.msi
           $env:INSTALLER_PROFILE = "full"
           .\build.bat $BALLERINA_ZIP $BALLERINA_VERSION .\VSCode-win32-x64.zip $ICP_ZIP .\jre.zip $INTEGRATOR_VERSION
@@ -1468,7 +1536,7 @@ jobs:
     if: always() && (needs.compile.result == 'success') && (needs.smoke-test.result == 'success' || needs.smoke-test.result == 'skipped') && (needs.smoke-test-windows.result == 'success' || needs.smoke-test-windows.result == 'skipped') && (inputs.build_packed_installers == false) && (inputs.publish_tag == '')
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: all-artifacts
 
@@ -1553,77 +1621,77 @@ jobs:
           node-version: 24.22.1
 
       - name: Download Linux DEB artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: Product-Integrator-DEB
           path: release-files/
         continue-on-error: true
 
       - name: Download Signatures and Hashes (DEB)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: Signatures-and-Hashes-DEB
           path: release-files/
         continue-on-error: true
 
       - name: Download Linux RPM artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: Product-Integrator-RPM
           path: release-files/
         continue-on-error: true
 
       - name: Download Signatures and Hashes (RPM)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: Signatures-and-Hashes-RPM
           path: release-files/
         continue-on-error: true
 
       - name: Download Linux TAR artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: Product-Integrator-TAR
           path: release-files/
         continue-on-error: true
 
       - name: Download macOS DMG artifacts (arm64)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: Product-Integrator-Darwin-DMG-arm64
           path: release-files/
         continue-on-error: true
 
       - name: Download macOS DMG artifacts (x64)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: Product-Integrator-Darwin-DMG-x64
           path: release-files/
         continue-on-error: true
 
       - name: Download Signatures and Hashes (MAC arm64)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: Signatures-and-Hashes-MAC-arm64
           path: release-files/
         continue-on-error: true
 
       - name: Download Signatures and Hashes (MAC x64)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: Signatures-and-Hashes-MAC-x64
           path: release-files/
         continue-on-error: true
 
       - name: Download Windows MSI artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: Product-Integrator-Windows
           path: release-files/
         continue-on-error: true
 
       - name: Download Signatures and Hashes (MSI)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: Signatures-and-Hashes-MSI
           path: release-files/
@@ -1633,7 +1701,7 @@ jobs:
       # distributed (there is no Marketplace / Open VSX publish), and publish-vsix takes it to the
       # marketplaces from here. Staged and signed below with the extensions it is bundled with.
       - name: Download WI extension VSIX
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: wi-extension-vsix
           path: wi-extension/
@@ -1643,34 +1711,34 @@ jobs:
       # extensions + CLI, no Ballerina/ICP/JRE), and the versions they were built with, so
       # downstream builds wrap these exact binaries instead of rebuilding them.
       - name: Download Linux core
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: core-linux-x64
           path: core/
 
       - name: Download macOS core (arm64)
         if: ${{ inputs.build_macos == true }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: core-darwin-arm64
           path: core/
 
       - name: Download macOS core (x64)
         if: ${{ inputs.build_macos == true }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: core-darwin-x64
           path: core/
 
       - name: Download Windows core
         if: ${{ inputs.build_windows == true }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: core-win32-x64
           path: core/
 
       - name: Download stamped versions
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: build-versions
           path: core/versions/
@@ -1680,13 +1748,13 @@ jobs:
       # serves. Published next to the cores for the same reason: a downstream build (the support
       # distribution) must ship these exact bytes and fetch nothing from anywhere but this release.
       - name: Download Ballerina runtime package
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: ballerina-runtime
           path: runtimes/
 
       - name: Download ICP package
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: icp
           path: runtimes/
@@ -1697,7 +1765,7 @@ jobs:
       # would otherwise send the generator back to a rolling tag that may have moved on.
       - name: Download the bundled GitHub-release extensions
         if: ${{ (inputs.ballerina_extension_source == 'github' && needs.resolve-versions.outputs.ballerina_extension_version != '') || (inputs.mi_extension_source == 'github' && needs.resolve-versions.outputs.mi_extension_version != '') }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: bundled-github-extensions
           path: bundled-extensions/
@@ -2028,20 +2096,20 @@ jobs:
       # The WI extension is built in-repo (no public download URL); its VSIX is mirrored to the
       # update bucket from this artifact (config `sourceFile`).
       - name: Download WI extension VSIX
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: wi-extension-vsix
           path: wi/wi-extension
 
       # The same ballerina-runtime and icp zips the installers bundled (config `sourceFile`).
       - name: Download Ballerina runtime
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: ballerina-runtime
           path: out
 
       - name: Download ICP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           name: icp
           path: out
@@ -2055,7 +2123,7 @@ jobs:
       # fails on a missing installer for a target that IS published (--app-installer-dir with no
       # --app-release-base to fall back to).
       - name: Download the app installers
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: ./.github/actions/download-artifact
         with:
           pattern: '{Product-Integrator-Windows-Update,Product-Integrator-Darwin-DMG-*}'
           path: app-installers/
