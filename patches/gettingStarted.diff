@@ -219,7 +219,7 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Consta
 ===================================================================
 --- /dev/null
 +++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Constants.ts
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,26 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -244,6 +244,7 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2Consta
 +// WSO2 Platform Extension constants
 +export const WSO2_PLATFORM_PROVIDER_ID = 'wso2-cloud'; // Authentication provider ID (registered by the wi-extension)
 +export const WSO2_PLATFORM_LOGOUT_COMMAND_ID = 'wso2.integrator.cloud.auth.signOut';
++export const WSO2_PLATFORM_SIGN_IN_COMMAND = 'wso2.integrator.cloud.auth.signIn';
 +export const WSO2_PLATFORM_CANCEL_SIGN_IN_COMMAND = 'wso2.integrator.cloud.auth.cancelSignIn';
 Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2EditorGroupWatermark.ts
 ===================================================================
@@ -1457,7 +1458,7 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginD
 ===================================================================
 --- /dev/null
 +++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
-@@ -0,0 +1,565 @@
+@@ -0,0 +1,566 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -1612,7 +1613,7 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginD
 +		}, 1000);
 +
 +		// Trigger sign-in immediately without waiting
-+		signInWSO2(this.authenticationService, this.commandService).then(async () => {
++		signInWSO2(this.commandService).then(async () => {
 +			if (cancelled) {
 +				return;
 +			}
@@ -1628,7 +1629,8 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginD
 +				// Close dialog and resolve
 +				this.close(true);
 +			} else {
-+				throw new Error('Login verification failed');
++				// The sign-in command returns without a session when the region pick or the browser sign-in is cancelled
++				cancelHandler();
 +			}
 +		}).catch((error: Error) => {
 +			if (cancelled) {
@@ -2084,7 +2086,7 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthUt
 ===================================================================
 --- /dev/null
 +++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthUtils.ts
-@@ -0,0 +1,80 @@
+@@ -0,0 +1,60 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -2092,7 +2094,7 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthUt
 +
 +import { IAuthenticationService } from '../../../services/authentication/common/authentication.js';
 +import { ICommandService } from '../../../../platform/commands/common/commands.js';
-+import { WSO2_PLATFORM_CANCEL_SIGN_IN_COMMAND, WSO2_PLATFORM_PROVIDER_ID } from './wso2Constants.js';
++import { WSO2_PLATFORM_CANCEL_SIGN_IN_COMMAND, WSO2_PLATFORM_PROVIDER_ID, WSO2_PLATFORM_SIGN_IN_COMMAND } from './wso2Constants.js';
 +
 +export interface WSO2LoginStatus {
 +	isLoggedIn: boolean;
@@ -2135,35 +2137,15 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2AuthUt
 +}
 +
 +/**
-+ * Sign in using the WSO2 Platform authentication provider
++ * Sign in through the wi-extension's sign-in command, which asks for the region
 + *
-+ * @param authenticationService - The authentication service to create a session
-+ * @param commandService - The command service to execute cancellation command
-+ * @param scopes - Optional scopes to request (defaults to [])
-+ * @returns Promise<void>
++ * @param commandService - The command service to run the sign-in commands
++ * @returns Promise<void> - Rejects when the sign-in fails; resolves when it completes or is cancelled
 + */
-+export async function signInWSO2(
-+	authenticationService: IAuthenticationService,
-+	commandService: ICommandService,
-+	scopes: string[] = []
-+): Promise<void> {
-+	try {
-+		// Cancel any ongoing sign-in first
-+		await commandService.executeCommand(WSO2_PLATFORM_CANCEL_SIGN_IN_COMMAND);
-+
-+		// Create a new session with the WSO2 Platform provider
-+		await authenticationService.createSession(
-+			WSO2_PLATFORM_PROVIDER_ID,
-+			scopes,
-+			{
-+				createIfNone: true,
-+				forceNewSession: true
-+			}
-+		);
-+	} catch (error) {
-+		console.error('WSO2 sign-in failed:', error);
-+		throw error;
-+	}
++export async function signInWSO2(commandService: ICommandService): Promise<void> {
++	// Cancel any ongoing sign-in first
++	await commandService.executeCommand(WSO2_PLATFORM_CANCEL_SIGN_IN_COMMAND);
++	await commandService.executeCommand(WSO2_PLATFORM_SIGN_IN_COMMAND);
 +}
 Index: agent-builder/lib/vscode/src/vs/workbench/contrib/welcomeGettingStarted/browser/startupPage.ts
 ===================================================================
