@@ -192,6 +192,21 @@ jobs:
             echo "::error::AGENT_BUILDER_RELEASE_TOKEN cannot read ${RELEASE_REPO}." >&2
             exit 1
           }
+          # Reading is not enough: on 2026-11-19 a token that could read ${RELEASE_REPO} but not
+          # write to it failed four publish attempts, each after the full build. Create a draft
+          # release and delete it again, which takes the same permission as publishing. A draft
+          # makes no tag, notifies no one and is visible only to people with write access.
+          PROBE_ID=$(GH_TOKEN="${AGENT_BUILDER_RELEASE_TOKEN}" gh api -X POST "repos/${RELEASE_REPO}/releases" \
+              -f tag_name="release-token-check-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+              -f name="Release token check (deleted right away)" -F draft=true --jq .id) || {
+            echo "::error::AGENT_BUILDER_RELEASE_TOKEN cannot create releases in ${RELEASE_REPO}. It needs Contents: read and write there." >&2
+            exit 1
+          }
+          GH_TOKEN="${AGENT_BUILDER_RELEASE_TOKEN}" gh api -X DELETE "repos/${RELEASE_REPO}/releases/${PROBE_ID}" || {
+            echo "::error::could not delete the draft release ${PROBE_ID} this check made in ${RELEASE_REPO}; delete it there by hand." >&2
+            exit 1
+          }
+          echo "AGENT_BUILDER_RELEASE_TOKEN can create releases in ${RELEASE_REPO}."
 
       # A release version is published exactly once. The branch check alone is not enough: deleting
       # the branch (or the release) and re-running would republish under a tag that already shipped,
@@ -206,6 +221,7 @@ jobs:
           # Full ref: a bare pattern suffix-matches, so '5.1.0' would hit 'staging/5.1.0'.
           if git ls-remote --exit-code --heads origin "refs/heads/${RELEASE_BRANCH}" >/dev/null 2>&1; then
             echo "Error: branch '${RELEASE_BRANCH}' already exists. Pick a new version." >&2
+            echo "To retry a release that failed part-way, re-run its failed jobs instead of dispatching it again." >&2
             exit 1
           fi
           RELEASE_GH_TOKEN="${GH_TOKEN}"
