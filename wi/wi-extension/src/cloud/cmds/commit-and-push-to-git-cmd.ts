@@ -84,34 +84,10 @@ export function commitAndPushToGitCommand(context: ExtensionContext) {
 					return;
 				}
 
-				let matchingRemote = remotes.find((item) => {
-					if (item.pushUrl) {
-						try {
-							return !!new URL(item.pushUrl).password;
-						} catch {
-							return false; // an SSH remote (git@host:owner/repo.git) carries no password
-						}
-					}
-					return false;
-				});
-				// Earlier versions could leave the cloud editor's remote behind, credentials and all; it goes after this push too.
-				let addedRemote: string | undefined = remotes.some((item) => item.name === CLOUD_EDITOR_REMOTE) ? CLOUD_EDITOR_REMOTE : undefined;
+				// Earlier versions pushed through a remote of their own that carried credentials in its
+				// URL. One left behind still holds them, so it goes once this push is done with.
+				const staleRemote = remotes.some((item) => item.name === CLOUD_EDITOR_REMOTE) ? CLOUD_EDITOR_REMOTE : undefined;
 				try {
-					const httpsRemote = httpUrlOf(remotes[0]?.fetchUrl);
-					if (!matchingRemote && httpsRemote && ext.isDevantCloudEditor) {
-						// The cloud editor has no credential helper; ask, push through a remote that carries
-						// the credentials, and take that remote away again below so nothing stays in .git/config.
-						// An SSH remote needs none of this: it is pushed to as it is.
-						const urlObj = httpsRemote;
-						await enrichGitUsernamePassword(urlObj);
-						await window.withProgress({ title: "Setting new remote...", location: ProgressLocation.Notification }, async () => {
-							addedRemote = CLOUD_EDITOR_REMOTE;
-							await repo.addRemote(CLOUD_EDITOR_REMOTE, urlObj.href);
-							const refreshed = await repo.getRemotes();
-							matchingRemote = refreshed.find((item) => item.name === CLOUD_EDITOR_REMOTE);
-						});
-					}
-
 					await window.withProgress({ title: "Adding changes to be committed...", location: ProgressLocation.Notification }, async () => {
 						await repo.add(["."]);
 					});
@@ -127,21 +103,21 @@ export function commitAndPushToGitCommand(context: ExtensionContext) {
 					}
 
 					const headRef = await window.withProgress({ title: "Fetching remote repo metadata...", location: ProgressLocation.Notification }, async () => {
-						await repo.fetch({ silent: true, remote: matchingRemote?.name });
+						await repo.fetch({ silent: true });
 						await repo.commit(commitMessage);
 						await delay(500);
 						return repo.getHEADRef();
 					});
 
 					if (headRef?.ahead && (headRef?.behind === 0 || headRef?.behind === undefined)) {
-						await window.withProgress({ title: "Pushing changes to remote repository...", location: ProgressLocation.Notification }, () => repo.push(matchingRemote?.name));
+						await window.withProgress({ title: "Pushing changes to remote repository...", location: ProgressLocation.Notification }, () => repo.push());
 						window.showInformationMessage("Your changes have been successfully pushed to cloud");
 					} else {
 						await commands.executeCommand("git.sync");
 					}
 				} finally {
-					if (addedRemote) {
-						await repo.removeRemote(addedRemote).catch((error: unknown) => ext.logError("Could not remove the temporary remote", error as Error));
+					if (staleRemote) {
+						await repo.removeRemote(staleRemote).catch((error: unknown) => ext.logError("Could not remove the temporary remote", error as Error));
 					}
 				}
 			} catch (err) {
@@ -153,50 +129,9 @@ export function commitAndPushToGitCommand(context: ExtensionContext) {
 }
 
 /**
- * Fills a clone URL's credentials in, asking the person. The platform's git
- * integration mints no push tokens for the editor (its `/build-secret` route
- * is refused by design), so there is nothing to ask the platform for.
+ * The remote earlier versions of the cloud editor pushed through, carrying
+ * credentials in its URL. Nothing adds it any more — git authenticates through
+ * the extension's askpass helper — but a repository cloned by one of those
+ * versions still has it, so it is named here to be taken away.
  */
-/** The remote the cloud editor pushes through; it carries credentials and lives for one push. */
 const CLOUD_EDITOR_REMOTE = "cloud-editor-remote";
-
-export const enrichGitUsernamePassword = async (urlObj: URL) => {
-	if (!urlObj.username) {
-		const username = await window.showInputBox({
-			title: "Git Username",
-			ignoreFocusOut: true,
-			placeHolder: "username",
-			validateInput: (val) => (val ? null : "Git username is required"),
-		});
-		if (!username) {
-			throw new Error("Git username is required");
-		}
-		urlObj.username = username;
-	}
-	if (!urlObj.password) {
-		const password = await window.showInputBox({
-			title: "Git Password or Token",
-			ignoreFocusOut: true,
-			placeHolder: "password",
-			password: true,
-			validateInput: (val) => (val ? null : "Git password is required"),
-		});
-		if (!password) {
-			throw new Error("Git password is required");
-		}
-		urlObj.password = password;
-	}
-};
-
-/** `url` as a URL when it is an http(s) one; an SSH remote (git@host:owner/repo.git) and anything else answer undefined. */
-function httpUrlOf(url: string | undefined): URL | undefined {
-	if (!url) {
-		return undefined;
-	}
-	try {
-		const parsed = new URL(url);
-		return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed : undefined;
-	} catch {
-		return undefined;
-	}
-}
