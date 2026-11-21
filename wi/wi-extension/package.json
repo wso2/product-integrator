@@ -55,8 +55,13 @@
             "stage",
             "dev"
           ],
+          "enumDescriptions": [
+            "Production. Select the region (United States or Europe) when signing in.",
+            "Staging",
+            "Development"
+          ],
           "default": "prod",
-          "description": "The Choreo Cloud Environment to use",
+          "description": "The Choreo Cloud environment to use.",
           "scope": "machine"
         },
         "integrator.advanced.cloudClientId": {
@@ -198,6 +203,13 @@
         "command": "wso2.integrator.cloud.auth.cancelSignIn",
         "title": "Cancel Sign In",
         "category": "Choreo Integrator"
+      },
+      {
+        "command": "wso2.integrator.cloud.auth.switchRegion",
+        "title": "Switch Choreo Cloud Region",
+        "category": "WSO2 Integrator",
+        "icon": "$(globe)",
+        "enablement": "wso2.integrator.cloud.multiRegion"
       },
       {
         "command": "wso2.integrator.cloud.integration.create",
@@ -405,6 +417,10 @@
     ],
     "menus": {
       "commandPalette": [
+        {
+          "command": "wso2.integrator.cloud.auth.switchRegion",
+          "when": "wso2.integrator.cloud.multiRegion"
+        },
         {
           "command": "ballerina.showVisualizer",
           "when": "false"

@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import type { Logger } from "@wso2/wso2-cloud-client";
+import type { CloudEnvironment, Logger } from "@wso2/wso2-cloud-client";
 import { CLOUD_API_URL_SETTING, CLOUD_CLIENT_ID_SETTING, CLOUD_ENV_SETTING, readCloudEnvName } from "@wso2/wso2-cloud-client/vscode";
 import * as vscode from "vscode";
 import type { ConfigurationChangeEvent } from "vscode";
@@ -29,6 +29,7 @@ import type { WICloudExtensionAPI } from "./cloud-ext-api";
 import { cloneOpenedIntegration } from "./clone-on-open";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { activateCmds } from "./cmds";
+import { MULTI_REGION_CONTEXT } from "./cmds/region-cmd";
 import { createGitHubAppConnector } from "./github-app-host";
 import { describeCloudError, handleCloudError } from "./platform/error-handler";
 import { createWIPlatform } from "./platform/platform-client";
@@ -64,11 +65,10 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 
 	// 1. The platform client, sessions and authentication provider, from the environment setting.
 	let platform: ReturnType<typeof createWIPlatform>;
-	let services: CloudServiceUrls;
 	try {
 		// Before the clients: a managed-tokens URL that is not https leaves the cloud features off, as an
 		// API URL that is not does, rather than the token being sent there.
-		services = readCloudServiceUrls(readCloudEnvName());
+		readCloudServiceUrls(readCloudEnvName());
 		platform = createWIPlatform({
 			context,
 			logger,
@@ -93,9 +93,16 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		return;
 	}
 	ext.clients = { platform };
-	ext.cloudEnv = platform.environment.name;
-	ext.config = { ...platform.environment, ...services };
+	applyEnvironment(platform.environment);
+	vscode.commands.executeCommand("setContext", MULTI_REGION_CONTEXT, platform.regions.length > 1);
 	context.subscriptions.push(platform);
+	// Production's regions are switched between while the editor runs; what is read per environment follows.
+	context.subscriptions.push(
+		platform.onDidChangeEnvironment((environment) => {
+			applyEnvironment(environment);
+			ext.log(`Choreo Cloud environment: ${environment.name} (${environment.apiBaseUrl})`);
+		}),
+	);
 
 	// 2. The sign-in state the commands, stores and webviews read, and the commands and URI
 	// handlers, before anything is awaited: activate() does not wait for this function, and a
@@ -156,6 +163,13 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 
 	// 7. Mark the exported cloud APIs as active
 	cloudAPIs.setActive(true);
+}
+
+/** Points what the extension reads per environment at `environment`: the caches' keys and the hosts it hands out. The webviews refetch the console URL when the auth state changes, which a switch does. */
+function applyEnvironment(environment: CloudEnvironment): void {
+	const services: CloudServiceUrls = readCloudServiceUrls(environment.name);
+	ext.cloudEnv = environment.name;
+	ext.config = { ...environment, ...services };
 }
 
 function registerPreInitHandlers(): vscode.Disposable {
