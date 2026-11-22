@@ -22,6 +22,7 @@ import type { Credentials, CredentialsProvider } from "./api/git";
 import type { IIPCHandler, IIPCServer } from "./ipc/ipcServer";
 import type { ITerminalEnvironmentProvider } from "./terminal";
 import { EmptyDisposable, type IDisposable, toDisposable } from "./util";
+import { ext } from "../../extensionVariables";
 
 export class Askpass implements IIPCHandler, ITerminalEnvironmentProvider {
 	private env: { [key: string]: string };
@@ -83,17 +84,26 @@ export class Askpass implements IIPCHandler, ITerminalEnvironmentProvider {
 			return cached.password;
 		}
 
-		if (!password) {
-			for (const credentialsProvider of this.credentialsProviders) {
-				try {
-					const credentials = await credentialsProvider.getCredentials(uri);
+		// Both halves of a credential come from the provider, not only the
+		// username. Nothing here configures a git credential helper, so git asks
+		// again for every connection it opens, and it carries the username it
+		// already has in the URL -- so that round asks for a password alone.
+		// Answering only username requests leaves it with the one-shot cache
+		// already spent, falling through to a prompt the person cannot answer:
+		// GitHub stopped accepting passwords over HTTPS in 2021.
+		for (const credentialsProvider of this.credentialsProviders) {
+			try {
+				const credentials = await credentialsProvider.getCredentials(uri);
 
-					if (credentials) {
-						this.cache.set(authority, credentials);
-						setTimeout(() => this.cache.delete(authority), 60_000);
-						return credentials.username;
-					}
-				} catch {}
+				if (credentials) {
+					this.cache.set(authority, credentials);
+					setTimeout(() => this.cache.delete(authority), 60_000);
+					return password ? credentials.password : credentials.username;
+				}
+			} catch (error) {
+				// A provider that cannot answer must not be silent: otherwise the
+				// prompt below is the only evidence that authentication was skipped.
+				ext.logError(`Could not get git credentials for ${authority}`, error as Error);
 			}
 		}
 
