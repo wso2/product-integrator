@@ -23,9 +23,25 @@ import { getSession } from "./session";
 
 const EmptyDisposable: Disposable = { dispose() {} };
 
+// The hosts this session's token belongs to. The match has to be the whole
+// hostname: a substring test also accepts github.com.attacker.example and
+// notgithub.com, and answering either of those hands an unrelated host the
+// access token.
+const GITHUB_HOSTS = new Set(["github.com", "gist.github.com"]);
+
+// Uri.authority carries optional userinfo and port, as in user@github.com:443,
+// so both are stripped before the hostname is compared.
+export function isGitHubAuthority(authority: string): boolean {
+	const hostname = authority
+		.replace(/^.*@/, "")
+		.replace(/:\d+$/, "")
+		.toLowerCase();
+	return GITHUB_HOSTS.has(hostname);
+}
+
 class GitHubCredentialProvider implements CredentialsProvider {
 	async getCredentials(host: Uri): Promise<Credentials | undefined> {
-		if (!/github\.com/i.test(host.authority)) {
+		if (!isGitHubAuthority(host.authority)) {
 			return;
 		}
 
