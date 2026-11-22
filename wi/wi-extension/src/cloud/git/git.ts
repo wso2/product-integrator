@@ -433,6 +433,12 @@ export interface ICloneOptions {
 	readonly progress: Progress<{ increment: number }>;
 	readonly recursive?: boolean;
 	readonly ref?: string;
+	/**
+	 * Directories to check out, instead of the whole repository. Blobs outside
+	 * them are left on the server and fetched on demand, so a clone made this way
+	 * must keep a credential for the repository reachable afterwards.
+	 */
+	readonly sparsePaths?: readonly string[];
 }
 
 export class Git {
@@ -547,12 +553,21 @@ export class Git {
 			if (options.ref) {
 				command.push("--branch", options.ref);
 			}
+			if (options.sparsePaths?.length) {
+				command.push("--filter=blob:none", "--sparse");
+			}
 			await this.exec(options.parentPath, command, {
 				cancellationToken,
 				env: { GIT_HTTP_USER_AGENT: this.userAgent },
 				onSpawn,
 				log: true,
 			});
+			if (options.sparsePaths?.length) {
+				// --sparse leaves only the root's own files checked out; the directories
+				// asked for are added here, in cone mode so each one comes whole.
+				const repositoryPath = options.skipCreateSubPath ? options.parentPath : folderPath;
+				await this.exec(repositoryPath, ["sparse-checkout", "set", "--cone", ...options.sparsePaths], { cancellationToken, log: true });
+			}
 		} catch (err: any) {
 			if (err.stderr) {
 				err.stderr = err.stderr.replace(/^Cloning.+$/m, "").trim();

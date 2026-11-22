@@ -89,6 +89,56 @@ export async function resolveGitHubAccess(cloud: CloudClient, owner: string, rep
 	return { kind: authRequired ? "auth-required" : "not-granted", owner, repo, installation };
 }
 
+/** A GitHub account connected to the organization, and the repositories the WSO2 Cloud app was given on it. */
+export interface ConnectedGitHubAccount {
+	orgName: string;
+	orgHandler: string;
+	repositories: { name: string }[];
+}
+
+/** What the form says, beside its button for connecting, when no GitHub account is connected or WSO2 Cloud cannot read one. */
+export const CONNECT_GITHUB_MESSAGE = "Connect GitHub to Choreo Cloud to choose a repository.";
+export const AUTHORIZE_GITHUB_MESSAGE = "Choreo Cloud's access to your GitHub account has expired. Connect GitHub again to choose a repository.";
+
+/**
+ * The GitHub accounts connected to the organization, each with the repositories the app was given: what a new
+ * integration's repository is chosen from. Fails, with what to do about it, when none is connected or when the
+ * person's GitHub authorization is needed to read them. An installation gone from GitHub is left out.
+ */
+export async function listConnectedGitHubAccounts(cloud: CloudClient): Promise<ConnectedGitHubAccount[]> {
+	const installations = await cloud.git.listGitHubInstallations();
+	// Asked for together: the repository list waits for the slowest account, not for all of them in turn.
+	const listed = await Promise.all(
+		installations.map(async (installation): Promise<ConnectedGitHubAccount | undefined> => {
+			try {
+				const repos = await cloud.git.listGitHubRepos(installation.installationId);
+				return {
+					orgName: installation.githubAccount,
+					// The account's login, which the repository's address is built from; a display name would go in `orgName` only.
+					orgHandler: installation.githubAccount,
+					repositories: repos
+						.filter((repo) => sameAccount(repo.owner, installation.githubAccount))
+						.map((repo) => ({ name: repo.name }))
+						.sort((a, b) => a.name.localeCompare(b.name)),
+				};
+			} catch (err) {
+				if (isGitHubAuthRequired(err)) {
+					throw new Error(AUTHORIZE_GITHUB_MESSAGE);
+				}
+				if (isCloudError(err) && err.code === "not_found") {
+					return undefined; // the installation is gone from GitHub
+				}
+				throw err;
+			}
+		}),
+	);
+	const accounts = listed.filter((account): account is ConnectedGitHubAccount => account !== undefined);
+	if (accounts.length === 0) {
+		throw new Error(CONNECT_GITHUB_MESSAGE);
+	}
+	return accounts;
+}
+
 /** How long an access answer is shared: the form's checks of one repository reuse it, and a change made on GitHub shows on the next check. */
 const ACCESS_TTL_MS = 5_000;
 const accessAnswers = new Map<string, { at: number; access: Promise<GitHubRepoAccess> }>();
@@ -164,8 +214,23 @@ export function gitHubSourceFor(access: GitHubRepoAccess, branch: string, appPat
 	return { installationId: access.installation.installationId, owner: access.owner, repo: access.repo, branch, appPath, repositoryUrl };
 }
 
-/** The URI schemes WSO2 Cloud's console sends GitHub's return to; anything else finishes in the console. */
+/** The URI schemes WSO2 Cloud's console sends GitHub's return to. */
 export const GITHUB_RETURN_SCHEMES: readonly string[] = ["vscode", "vscode-insiders", "wso2-integrator", "choreo-integrator", "choreo-agent-builder"];
+
+/**
+ * What a browser editor (WSO2 Cloud's cloud editor) names itself by to the console, in place of a URI scheme: it is
+ * a page at an https address of its own, which it sends along with the project (and component) the platform runs it
+ * for. The console sends GitHub's return there only when the platform confirms that address is the cloud editor of
+ * the person signed in to the console.
+ */
+export const GITHUB_WEB_EDITOR = "web";
+
+/** A browser editor as the console confirms it: its address, and what the platform runs it for. */
+export interface WebEditor {
+	returnTo: string;
+	project: string;
+	component?: string;
+}
 
 /** The editor's path the console sends GitHub's return to. */
 export const GITHUB_RETURN_PATH = "/ghapp";
@@ -181,14 +246,20 @@ export const pkceChallenge = (verifier: string) => createHash("sha256").update(v
 
 /**
  * The console page that starts GitHub's authorize or install page for the editor
- * and sends GitHub's return to `<scheme>://wso2.wso2-integrator/ghapp`. The
- * console holds the GitHub App's identity and owns its callback URL. An
- * authorize start carries the PKCE challenge, so a code GitHub returns is bound
- * only with this window's verifier.
+ * and sends GitHub's return to `<scheme>://wso2.wso2-integrator/ghapp`, or, for a
+ * browser editor, to its own address. The console holds the GitHub
+ * App's identity and owns its callback URL. An authorize start carries the PKCE
+ * challenge, so a code GitHub returns is bound only with this window's verifier.
  */
-export function consoleGitHubStartUrl(consoleUrl: string, scheme: string, nonce: string, start: GitHubConnectStart, challenge?: string): string {
+export function consoleGitHubStartUrl(consoleUrl: string, scheme: string, nonce: string, start: GitHubConnectStart, challenge?: string, web?: WebEditor): string {
 	const url = new URL(GITHUB_RETURN_PATH, consoleUrl);
-	url.search = new URLSearchParams({ editor: scheme, nonce, start, ...(challenge ? { challenge } : {}) }).toString();
+	url.search = new URLSearchParams({
+		editor: web ? GITHUB_WEB_EDITOR : scheme,
+		...(web ? { return: web.returnTo, project: web.project, ...(web.component ? { component: web.component } : {}) } : {}),
+		nonce,
+		start,
+		...(challenge ? { challenge } : {}),
+	}).toString();
 	return url.toString();
 }
 
@@ -245,6 +316,8 @@ export interface GitHubAppConnectorDeps {
 	/** Who is signed in to WSO2 Cloud, and to which organization; undefined when no one is. */
 	session(): string | undefined;
 	uriScheme: string;
+	/** In a browser editor: its address for `/ghapp` as the browser reaches it, and what the platform runs it for. Absent elsewhere. */
+	webEditor?: () => PromiseLike<WebEditor>;
 	openExternal(url: string): PromiseLike<unknown>;
 	outcome: GitHubConnectOutcome;
 	log(message: string): void;
@@ -281,7 +354,7 @@ export class GitHubAppConnector {
 
 	/** Whether GitHub's return can come back to this editor; otherwise GitHub is connected in the console. */
 	get canReturnHere(): boolean {
-		return GITHUB_RETURN_SCHEMES.includes(this.deps.uriScheme);
+		return GITHUB_RETURN_SCHEMES.includes(this.deps.uriScheme) || !!this.deps.webEditor;
 	}
 
 	/** Opens GitHub through the console; `owner` is the account the repository needs the app on. */
@@ -291,11 +364,36 @@ export class GitHubAppConnector {
 			return;
 		}
 		this.started++;
+		const flow = this.started;
+		// A newer connect takes the flow over from here: a return for the one before must not be bound
+		// while this one is still working out the editor's address.
+		this.pending = undefined;
+		// A browser editor has no scheme the console knows: it names the address the browser reaches it at.
+		let web: WebEditor | undefined;
+		if (!GITHUB_RETURN_SCHEMES.includes(this.deps.uriScheme) && this.deps.webEditor) {
+			try {
+				web = await this.deps.webEditor();
+			} catch (err) {
+				if (flow !== this.started) {
+					return; // a newer connect owns the flow
+				}
+				// GitHub has nowhere to return to here, as in an editor that cannot be returned to at all: it is
+				// connected in the console instead, which is where this went before a browser editor could be returned to.
+				this.deps.log(`Couldn't work out this editor's address for GitHub to return to (${err instanceof Error ? err.message : String(err)}); opening the console instead`);
+				await this.deps.openExternal(this.deps.consoleUrl());
+				return;
+			}
+			if (flow !== this.started) {
+				return; // a newer connect owns the flow
+			}
+		}
 		const nonce = this.newNonce();
 		// GitHub's install page takes no challenge; the editor authorizes after it.
 		const verifier = start === "install" ? undefined : this.newVerifier();
 		this.pending = { nonce, owner, installTried, verifier, session: this.deps.session(), startedAt: this.now() };
-		const opened = await this.deps.openExternal(consoleGitHubStartUrl(this.deps.consoleUrl(), this.deps.uriScheme, nonce, start, verifier && pkceChallenge(verifier)));
+		const opened = await this.deps.openExternal(
+			consoleGitHubStartUrl(this.deps.consoleUrl(), this.deps.uriScheme, nonce, start, verifier && pkceChallenge(verifier), web),
+		);
 		if (opened === false) {
 			if (this.pending?.nonce === nonce) {
 				this.pending = undefined;
