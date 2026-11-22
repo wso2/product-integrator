@@ -47,7 +47,6 @@ import {
 import { NotSupportedError, parseGitHubRepoUrl } from "@wso2/wso2-cloud-client";
 import { WICommandIds, buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ProgressLocation, Uri, commands, env, window } from "vscode";
-import { enrichGitUsernamePassword } from "../../cloud/cmds/commit-and-push-to-git-cmd";
 import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-cmd";
 import type { IFileStatus } from "../../cloud/git/git";
 import { initGit } from "../../cloud/git/main";
@@ -294,79 +293,41 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		if (!newGit) {
 			throw new Error("failed to retrieve Git details");
 		}
-		const _repoUrl = buildGitURL(params.repo.orgHandler, params.repo.repo, params.repo.provider, true, params.repo.serverUrl);
-		if (!_repoUrl || !_repoUrl.startsWith("https://")) {
+		const repoUrl = buildGitURL(params.repo.orgHandler, params.repo.repo, params.repo.provider, true, params.repo.serverUrl);
+		if (!repoUrl || !repoUrl.startsWith("https://")) {
 			throw new Error("failed to parse git details");
 		}
-		const urlObj = new URL(_repoUrl);
-		await enrichGitUsernamePassword(urlObj);
-		const repoUrl = urlObj.href;
-		// The clone needs the credentials in its URL; wherever it lands, the repository keeps the plain URL.
-		const removeCredentials = async (repoPath: string) => {
-			try {
-				const cloned = newGit.open(await newGit.getRepositoryRoot(repoPath), await newGit.getRepositoryDotGit(repoPath));
-				await cloned.exec(["remote", "set-url", "origin", _repoUrl]);
-				// A relative submodule URL was resolved against the credentialed origin; resolving it again
-				// against the plain one rewrites the superproject's and each submodule's copy of it.
-				await cloned.exec(["submodule", "sync", "--recursive"]);
-			} catch (error) {
-				ext.logError("Could not remove the credentials from the cloned repository", error as Error);
-				window.showWarningMessage(
-					`The Git credentials used to clone ${params.repo.orgHandler}/${params.repo.repo} could not be removed from ${repoPath}. Remove them from the remote URLs in its .git/config files.`,
-				);
-			}
-		};
-
-		const parentPath = join(params.cwd, "..");
-		const existingDirs = new Set(fs.existsSync(parentPath) ? readdirSync(parentPath) : []);
-		let clonedPath: string;
-		try {
-			clonedPath = await window.withProgress(
-				{ title: `Cloning repository ${params.repo.orgHandler}/${params.repo.repo}`, location: ProgressLocation.Notification },
-				async (progress, cancellationToken) =>
-					newGit.clone(
-						repoUrl,
-						{
-							recursive: true,
-							ref: params.repo.branch,
-							parentPath,
-							progress: { report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }) },
-						},
-						cancellationToken,
-					),
-			);
-		} catch (error) {
-			// A clone that fails after checking out (a submodule, say) leaves the checkout, and the credentials in it, behind.
-			const folderName = path.basename(new URL(_repoUrl).pathname).replace(/\.git$/, "");
-			const newDirs = fs.existsSync(parentPath) ? readdirSync(parentPath).filter((name) => !existingDirs.has(name)) : [];
-			for (const dir of newDirs) {
-				if ((dir === folderName || dir.startsWith(`${folderName}-`)) && fs.existsSync(join(parentPath, dir, ".git"))) {
-					await removeCredentials(join(parentPath, dir));
-				}
-			}
-			throw error;
-		}
+		// Nothing is put in the URL: git authenticates the clone and the push below through the
+		// extension's askpass helper, so the repository is left holding no credential of anyone's.
+		const clonedPath = await window.withProgress(
+			{ title: `Cloning repository ${params.repo.orgHandler}/${params.repo.repo}`, location: ProgressLocation.Notification },
+			async (progress, cancellationToken) =>
+				newGit.clone(
+					repoUrl,
+					{
+						recursive: true,
+						ref: params.repo.branch,
+						parentPath: join(params.cwd, ".."),
+						progress: { report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }) },
+					},
+					cancellationToken,
+				),
+		);
 
 		const newPath = join(clonedPath, params.subpath);
-		try {
-			const cwdFiles = readdirSync(params.cwd);
-			fs.mkdirSync(newPath, { recursive: true });
-			for (const file of cwdFiles) {
-				fs.cpSync(join(params.cwd, file), join(newPath, file), { recursive: true });
-			}
-
-			const repo = newGit.open(await newGit.getRepositoryRoot(newPath), await newGit.getRepositoryDotGit(newPath));
-			await window.withProgress({ title: "Pushing the changes to your remote repository...", location: ProgressLocation.Notification }, async () => {
-				await repo.add(["."]);
-				await repo.commit("Add integration source");
-				const headRef = await repo.getHEADRef();
-				await repo.push(headRef?.upstream?.remote || "origin", headRef?.name || params.repo.branch);
-			});
-		} finally {
-			// The clone and the push needed the credentials; from the moment the clone exists, whatever
-			// happens after it, the repository keeps the plain URL.
-			await removeCredentials(clonedPath);
+		const cwdFiles = readdirSync(params.cwd);
+		fs.mkdirSync(newPath, { recursive: true });
+		for (const file of cwdFiles) {
+			fs.cpSync(join(params.cwd, file), join(newPath, file), { recursive: true });
 		}
+
+		const repo = newGit.open(await newGit.getRepositoryRoot(newPath), await newGit.getRepositoryDotGit(newPath));
+		await window.withProgress({ title: "Pushing the changes to your remote repository...", location: ProgressLocation.Notification }, async () => {
+			await repo.add(["."]);
+			await repo.commit("Add integration source");
+			const headRef = await repo.getHEADRef();
+			await repo.push(headRef?.upstream?.remote || "origin", headRef?.name || params.repo.branch);
+		});
 		return newPath;
 	}
 
