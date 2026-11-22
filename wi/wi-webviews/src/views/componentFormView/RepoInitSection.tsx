@@ -59,11 +59,10 @@ interface RepoInitSectionProps {
 }
 
 
-const GIT_PROVIDER_ITEMS = [
-    { value: GitProvider.GITHUB, content: "GitHub" },
-    { value: GitProvider.BITBUCKET, content: "Bitbucket" },
-    { value: GitProvider.GITLAB_SERVER, content: "GitLab" },
-];
+// GitHub only for now: WSO2 Cloud connects a repository from here through its GitHub App, and has no
+// credential for Bitbucket or GitLab to list repositories with, clone, or push. The rest of this
+// section still handles them, for when it does.
+const GIT_PROVIDER_ITEMS = [{ value: GitProvider.GITHUB, content: "GitHub" }];
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -93,6 +92,7 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
         data: gitOrgsData,
         isLoading: loadingGitOrgs,
         error: errorFetchingOrgs,
+        refetch: refetchGitOrgs,
     } = useQuery({
         queryKey: ["repo-init-git-orgs", { gitProvider, credential, orgId }],
         queryFn: () =>
@@ -104,6 +104,16 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
         enabled: gitProvider === GitProvider.GITHUB || !!credential,
         refetchOnWindowFocus: true,
     });
+
+    // GitHub connected from the editor: the accounts and repositories WSO2 Cloud can read have changed.
+    useEffect(() => {
+        const unsubscribe = wsClient.onGitHubConnected(() => {
+            void refetchGitOrgs();
+        });
+        return () => {
+            unsubscribe();
+        };
+    }, [wsClient, refetchGitOrgs]);
 
     const gitOrgs = gitOrgsData?.gitOrgs ?? [];
     const matchingOrgItem = gitOrgs.find(

@@ -45,14 +45,14 @@ import {
 	type WICloudSubmitComponentsResp,
 } from "@wso2/wi-core";
 import { NotSupportedError, parseGitHubRepoUrl } from "@wso2/wso2-cloud-client";
-import { WICommandIds, buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
+import { GitProvider, WICommandIds, buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ProgressLocation, Uri, commands, env, window } from "vscode";
 import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-cmd";
 import type { IFileStatus } from "../../cloud/git/git";
 import { initGit } from "../../cloud/git/main";
 import { hasDirtyRepo as checkDirtyRepo, getGitHead, getGitRemotes, getGitRoot, relativePath, removeCredentialsFromGitURL } from "../../cloud/git/util";
 import { SIGN_IN_CHANGED_MESSAGE, gitHubAccessFor, signedInScope } from "../../cloud/github-access";
-import { type GitHubAppConnector, forgetGitHubAccess, inspectReadablePath, installationSettingsUrl, listReadableBranches } from "../../cloud/github-app";
+import { type GitHubAppConnector, forgetGitHubAccess, inspectReadablePath, installationSettingsUrl, listConnectedGitHubAccounts, listReadableBranches } from "../../cloud/github-app";
 import { contextStore } from "../../cloud/stores/context-store";
 import { dataCacheStore } from "../../cloud/stores/data-cache-store";
 import { ext } from "../../extensionVariables";
@@ -238,12 +238,17 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		return listReadableBranches(cloud, await gitHubAccessFor(github.owner, github.repo));
 	}
 
-	/** The platform lists no GitHub organizations yet; the form shows this instead of an empty list it cannot act on. */
-	async getAuthorizedGitOrgs(_params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
-		throw new NotSupportedError(
-			"Creating a repository from here is not available on WSO2 Cloud yet. Create the repository on GitHub, push the integration to it, then create the integration from it.",
-			{ reason: "git_orgs_unavailable" },
-		);
+	/**
+	 * The GitHub accounts connected to the organization and the repositories the WSO2 Cloud app was given on each:
+	 * what a new integration's repository is chosen from. The platform connects no other provider from here.
+	 */
+	async getAuthorizedGitOrgs(params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
+		if (params?.provider && params.provider !== GitProvider.GITHUB) {
+			throw new NotSupportedError("WSO2 Cloud connects GitHub repositories from here. For another provider, create the integration in the WSO2 Cloud console.", {
+				reason: "git_orgs_unavailable",
+			});
+		}
+		return { gitOrgs: await listConnectedGitHubAccounts(ext.clients.platform.cloud) };
 	}
 
 	async getCredentials(_params: GetCredentialsReq): Promise<CredentialItem[]> {

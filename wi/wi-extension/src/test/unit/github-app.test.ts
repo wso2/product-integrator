@@ -18,7 +18,7 @@
 
 import * as assert from "assert";
 import { type CloudClient, ConflictError, NotFoundError } from "@wso2/wso2-cloud-client";
-import { GITHUB_RETURN_TTL_MS, GitHubAppConnector, consoleGitHubStartUrl, forgetGitHubAccess, gitHubSourceFor, installationSettingsUrl, pkceChallenge, resolveGitHubAccess, sharedGitHubAccess } from "../../cloud/github-app";
+import { AUTHORIZE_GITHUB_MESSAGE, CONNECT_GITHUB_MESSAGE, GITHUB_RETURN_TTL_MS, type WebEditor, GitHubAppConnector, listConnectedGitHubAccounts, consoleGitHubStartUrl, forgetGitHubAccess, gitHubSourceFor, installationSettingsUrl, pkceChallenge, resolveGitHubAccess, sharedGitHubAccess } from "../../cloud/github-app";
 
 const acme = { installationId: 7, githubAccount: "Acme" };
 
@@ -163,8 +163,33 @@ describe("GitHub repository access", () => {
 	});
 });
 
+describe("The GitHub accounts a new integration's repository is chosen from", () => {
+	it("lists each connected account with the repositories the app was given on it", async () => {
+		const { cloud } = fakeCloud({ installations: [acme], grantedRepos: ["orders", "billing"] });
+		assert.deepEqual(await listConnectedGitHubAccounts(cloud), [{ orgName: "Acme", orgHandler: "Acme", repositories: [{ name: "billing" }, { name: "orders" }] }]);
+	});
+
+	it("lists an account the app was given no repository on, so one can be given", async () => {
+		const { cloud } = fakeCloud({ installations: [acme] });
+		assert.deepEqual(await listConnectedGitHubAccounts(cloud), [{ orgName: "Acme", orgHandler: "Acme", repositories: [] }]);
+	});
+
+	it("asks for GitHub to be connected when no account is, or the only one is gone from GitHub", async () => {
+		await assert.rejects(listConnectedGitHubAccounts(fakeCloud().cloud), { message: CONNECT_GITHUB_MESSAGE });
+		const gone = fakeCloud({ installations: [acme], reposError: new NotFoundError("gone") });
+		await assert.rejects(listConnectedGitHubAccounts(gone.cloud), { message: CONNECT_GITHUB_MESSAGE });
+	});
+
+	it("asks for GitHub to be connected again when the person's authorization is needed, and passes other failures on", async () => {
+		const expired = fakeCloud({ installations: [acme], reposError: new ConflictError("github-auth-required", { status: 409, apiError: "github-auth-required" }) });
+		await assert.rejects(listConnectedGitHubAccounts(expired.cloud), { message: AUTHORIZE_GITHUB_MESSAGE });
+		const down = fakeCloud({ installations: [acme], reposError: new Error("the git integration is down") });
+		await assert.rejects(listConnectedGitHubAccounts(down.cloud), { message: "the git integration is down" });
+	});
+});
+
 describe("GitHubAppConnector", () => {
-	function connector(cloud: CloudClient, uriScheme = "vscode") {
+	function connector(cloud: CloudClient, uriScheme = "vscode", webEditor?: () => Promise<WebEditor>) {
 		const opened: string[] = [];
 		const outcomes: string[] = [];
 		const bound: string[] = [];
@@ -178,6 +203,7 @@ describe("GitHubAppConnector", () => {
 			consoleUrl: () => "https://console.example/integration/organizations/acme",
 			session: () => signedIn.session,
 			uriScheme,
+			webEditor,
 			openExternal: async (url) => {
 				opened.push(url);
 				return browser.opens;
@@ -374,6 +400,60 @@ describe("GitHubAppConnector", () => {
 		assert.equal(app.canReturnHere, false);
 		await app.connect("acme");
 		assert.deepEqual(opened, ["https://console.example/integration/organizations/acme"]);
+	});
+
+	describe("in a browser editor", () => {
+		const EDITOR = "https://editor-1.dp.example.io/callback?vscode-reqid=3&vscode-scheme=code-oss&vscode-authority=wso2.wso2-integrator&vscode-path=%2Fghapp";
+
+		it("starts at the console like any editor, naming its own address, and binds the code the console sends back", async () => {
+			const { cloud, connected: binds } = fakeCloud();
+			const { app, opened, outcomes } = connector(cloud, "code-oss", async () => ({ returnTo: EDITOR, project: "orders", component: "orders-api" }));
+			assert.equal(app.canReturnHere, true);
+			await app.connect("Acme");
+			const url = new URL(opened[0]);
+			assert.equal(`${url.origin}${url.pathname}`, "https://console.example/ghapp");
+			assert.deepEqual(Object.fromEntries(url.searchParams), { editor: "web", return: EDITOR, project: "orders", component: "orders-api", nonce: "n1", start: "authorize", challenge: pkceChallenge("v1") });
+
+			await app.handleReturn(new URLSearchParams({ code: "c1", state: "n1" }));
+			assert.deepEqual(binds, ["c1 with v1"]);
+			assert.deepEqual(outcomes, ["connected:Acme"]);
+		});
+
+		it("uses its URI scheme where the console knows it, whatever address it has", async () => {
+			const { app, opened } = connector(fakeCloud().cloud, "vscode", async () => ({ returnTo: EDITOR, project: "orders" }));
+			await app.connect("Acme");
+			assert.ok(opened[0].startsWith("https://console.example/ghapp?editor=vscode&nonce=n1"), opened[0]);
+		});
+
+		it("ignores a return for the connect before, while a newer one is still working out the editor's address", async () => {
+			const { cloud, connected: binds } = fakeCloud();
+			let release: (editor: WebEditor) => void = () => undefined;
+			let calls = 0;
+			const { app, outcomes } = connector(cloud, "code-oss", () => {
+				calls++;
+				return calls === 1 ? Promise.resolve({ returnTo: EDITOR, project: "orders" }) : new Promise<WebEditor>((resolve) => (release = resolve));
+			});
+			await app.connect("Acme");
+			const second = app.connect("Globex");
+			await app.handleReturn(new URLSearchParams({ code: "c1", state: "n1" }));
+			assert.deepEqual(binds, []);
+			assert.deepEqual(outcomes, ["ignored:not-started"]);
+			release({ returnTo: EDITOR, project: "orders" });
+			await second;
+		});
+
+		it("opens the console, as an editor GitHub cannot return to, when the editor's address cannot be worked out", async () => {
+			const { cloud, connected: binds } = fakeCloud();
+			const { app, opened, outcomes } = connector(cloud, "code-oss", async () => {
+				throw new Error("no address");
+			});
+			await app.connect("Acme");
+			assert.deepEqual(opened, ["https://console.example/integration/organizations/acme"]);
+			assert.deepEqual(outcomes, []);
+			// Nothing was started here, so nothing GitHub sends back is bound.
+			await app.handleReturn(new URLSearchParams({ code: "c1", state: "n1" }));
+			assert.deepEqual(binds, []);
+		});
 	});
 
 	it("builds the console start page on the console's origin", () => {
