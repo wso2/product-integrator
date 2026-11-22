@@ -17,14 +17,15 @@
  */
 
 import * as assert from "assert";
-import { isGitHubAuthority } from "../../cloud/git/github/credentialProvider";
+import type { Uri } from "vscode";
+import { isGitHubHost } from "../../cloud/git/github/credentialProvider";
 
-// The session's access token is handed to whichever host this accepts, so a
-// host that merely contains "github.com" must not be one of them.
-describe("isGitHubAuthority", () => {
-	it("accepts GitHub's own hosts, with userinfo and port", () => {
+const at = (scheme: string, authority: string) => ({ scheme, authority }) as unknown as Uri;
+
+describe("isGitHubHost", () => {
+	it("accepts GitHub's own hosts over https, with userinfo and port", () => {
 		for (const authority of ["github.com", "GitHub.com", "gist.github.com", "github.com:443", "1234567@github.com", "1234567@github.com:443"]) {
-			assert.strictEqual(isGitHubAuthority(authority), true, authority);
+			assert.strictEqual(isGitHubHost(at("https", authority)), true, authority);
 		}
 	});
 
@@ -36,9 +37,16 @@ describe("isGitHubAuthority", () => {
 			"attacker@github.com.evil.example",
 			"raw.githubusercontent.com",
 			"gitlab.com",
+			"github.com.",
 			"",
 		]) {
-			assert.strictEqual(isGitHubAuthority(authority), false, authority);
+			assert.strictEqual(isGitHubHost(at("https", authority)), false, authority);
+		}
+	});
+
+	it("rejects GitHub itself over anything but https", () => {
+		for (const scheme of ["http", "git", "ssh", "ftp"]) {
+			assert.strictEqual(isGitHubHost(at(scheme, "github.com")), false, scheme);
 		}
 	});
 });

@@ -84,13 +84,9 @@ export class Askpass implements IIPCHandler, ITerminalEnvironmentProvider {
 			return cached.password;
 		}
 
-		// Both halves of a credential come from the provider, not only the
-		// username. Nothing here configures a git credential helper, so git asks
-		// again for every connection it opens, and it carries the username it
-		// already has in the URL -- so that round asks for a password alone.
-		// Answering only username requests leaves it with the one-shot cache
-		// already spent, falling through to a prompt the person cannot answer:
-		// GitHub stopped accepting passwords over HTTPS in 2021.
+		// No credential helper is configured, so git asks again for each
+		// connection, carrying the username in the URL: that round asks for a
+		// password alone, with the one-shot cache above already spent.
 		for (const credentialsProvider of this.credentialsProviders) {
 			try {
 				const credentials = await credentialsProvider.getCredentials(uri);
@@ -101,8 +97,6 @@ export class Askpass implements IIPCHandler, ITerminalEnvironmentProvider {
 					return password ? credentials.password : credentials.username;
 				}
 			} catch (error) {
-				// A provider that cannot answer must not be silent: otherwise the
-				// prompt below is the only evidence that authentication was skipped.
 				ext.logError(`Could not get git credentials for ${authority}`, error as Error);
 			}
 		}
