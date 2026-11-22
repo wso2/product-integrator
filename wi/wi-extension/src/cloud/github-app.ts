@@ -357,6 +357,9 @@ export class GitHubAppConnector {
 		}
 		this.started++;
 		const flow = this.started;
+		// A newer connect takes the flow over from here: a return for the one before must not be bound
+		// while this one is still working out the editor's address.
+		this.pending = undefined;
 		// A browser editor has no scheme the console knows: it names the address the browser reaches it at.
 		let web: WebEditor | undefined;
 		if (!GITHUB_RETURN_SCHEMES.includes(this.deps.uriScheme) && this.deps.webEditor) {

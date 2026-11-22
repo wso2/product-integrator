@@ -425,6 +425,23 @@ describe("GitHubAppConnector", () => {
 			assert.ok(opened[0].startsWith("https://console.example/ghapp?editor=vscode&nonce=n1"), opened[0]);
 		});
 
+		it("ignores a return for the connect before, while a newer one is still working out the editor's address", async () => {
+			const { cloud, connected: binds } = fakeCloud();
+			let release: (editor: WebEditor) => void = () => undefined;
+			let calls = 0;
+			const { app, outcomes } = connector(cloud, "code-oss", () => {
+				calls++;
+				return calls === 1 ? Promise.resolve({ returnTo: EDITOR, project: "orders" }) : new Promise<WebEditor>((resolve) => (release = resolve));
+			});
+			await app.connect("Acme");
+			const second = app.connect("Globex");
+			await app.handleReturn(new URLSearchParams({ code: "c1", state: "n1" }));
+			assert.deepEqual(binds, []);
+			assert.deepEqual(outcomes, ["ignored:not-started"]);
+			release({ returnTo: EDITOR, project: "orders" });
+			await second;
+		});
+
 		it("says so when the editor's address cannot be worked out", async () => {
 			const { app, opened, outcomes } = connector(fakeCloud().cloud, "code-oss", async () => {
 				throw new Error("no address");
