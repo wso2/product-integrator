@@ -104,27 +104,32 @@ export const AUTHORIZE_GITHUB_MESSAGE = "WSO2 Cloud's access to your GitHub acco
  */
 export async function listConnectedGitHubAccounts(cloud: CloudClient): Promise<ConnectedGitHubAccount[]> {
 	const installations = await cloud.git.listGitHubInstallations();
-	const accounts: ConnectedGitHubAccount[] = [];
-	for (const installation of installations) {
-		try {
-			const repos = await cloud.git.listGitHubRepos(installation.installationId);
-			accounts.push({
-				orgName: installation.githubAccount,
-				orgHandler: installation.githubAccount,
-				repositories: repos
-					.filter((repo) => sameAccount(repo.owner, installation.githubAccount))
-					.map((repo) => ({ name: repo.name }))
-					.sort((a, b) => a.name.localeCompare(b.name)),
-			});
-		} catch (err) {
-			if (isGitHubAuthRequired(err)) {
-				throw new Error(AUTHORIZE_GITHUB_MESSAGE);
-			}
-			if (!(isCloudError(err) && err.code === "not_found")) {
+	// Asked for together: the repository list waits for the slowest account, not for all of them in turn.
+	const listed = await Promise.all(
+		installations.map(async (installation): Promise<ConnectedGitHubAccount | undefined> => {
+			try {
+				const repos = await cloud.git.listGitHubRepos(installation.installationId);
+				return {
+					orgName: installation.githubAccount,
+					// The account's login, which the repository's address is built from; a display name would go in `orgName` only.
+					orgHandler: installation.githubAccount,
+					repositories: repos
+						.filter((repo) => sameAccount(repo.owner, installation.githubAccount))
+						.map((repo) => ({ name: repo.name }))
+						.sort((a, b) => a.name.localeCompare(b.name)),
+				};
+			} catch (err) {
+				if (isGitHubAuthRequired(err)) {
+					throw new Error(AUTHORIZE_GITHUB_MESSAGE);
+				}
+				if (isCloudError(err) && err.code === "not_found") {
+					return undefined; // the installation is gone from GitHub
+				}
 				throw err;
 			}
-		}
-	}
+		}),
+	);
+	const accounts = listed.filter((account): account is ConnectedGitHubAccount => account !== undefined);
 	if (accounts.length === 0) {
 		throw new Error(CONNECT_GITHUB_MESSAGE);
 	}
@@ -366,7 +371,13 @@ export class GitHubAppConnector {
 			try {
 				web = await this.deps.webEditor();
 			} catch (err) {
-				this.deps.outcome.failed(`Couldn't work out this editor's address for GitHub to return to: ${err instanceof Error ? err.message : String(err)}`);
+				if (flow !== this.started) {
+					return; // a newer connect owns the flow
+				}
+				// GitHub has nowhere to return to here, as in an editor that cannot be returned to at all: it is
+				// connected in the console instead, which is where this went before a browser editor could be returned to.
+				this.deps.log(`Couldn't work out this editor's address for GitHub to return to (${err instanceof Error ? err.message : String(err)}); opening the console instead`);
+				await this.deps.openExternal(this.deps.consoleUrl());
 				return;
 			}
 			if (flow !== this.started) {

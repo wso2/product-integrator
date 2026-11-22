@@ -442,13 +442,17 @@ describe("GitHubAppConnector", () => {
 			await second;
 		});
 
-		it("says so when the editor's address cannot be worked out", async () => {
-			const { app, opened, outcomes } = connector(fakeCloud().cloud, "code-oss", async () => {
+		it("opens the console, as an editor GitHub cannot return to, when the editor's address cannot be worked out", async () => {
+			const { cloud, connected: binds } = fakeCloud();
+			const { app, opened, outcomes } = connector(cloud, "code-oss", async () => {
 				throw new Error("no address");
 			});
 			await app.connect("Acme");
-			assert.deepEqual(opened, []);
-			assert.deepEqual(outcomes, ["failed:Couldn't work out this editor's address for GitHub to return to: no address"]);
+			assert.deepEqual(opened, ["https://console.example/integration/organizations/acme"]);
+			assert.deepEqual(outcomes, []);
+			// Nothing was started here, so nothing GitHub sends back is bound.
+			await app.handleReturn(new URLSearchParams({ code: "c1", state: "n1" }));
+			assert.deepEqual(binds, []);
 		});
 	});
 
