@@ -93,6 +93,7 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
         data: gitOrgsData,
         isLoading: loadingGitOrgs,
         error: errorFetchingOrgs,
+        refetch: refetchGitOrgs,
     } = useQuery({
         queryKey: ["repo-init-git-orgs", { gitProvider, credential, orgId }],
         queryFn: () =>
@@ -104,6 +105,16 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
         enabled: gitProvider === GitProvider.GITHUB || !!credential,
         refetchOnWindowFocus: true,
     });
+
+    // GitHub connected from the editor: the accounts and repositories WSO2 Cloud can read have changed.
+    useEffect(() => {
+        const unsubscribe = wsClient.onGitHubConnected(() => {
+            void refetchGitOrgs();
+        });
+        return () => {
+            unsubscribe();
+        };
+    }, [wsClient, refetchGitOrgs]);
 
     const gitOrgs = gitOrgsData?.gitOrgs ?? [];
     const matchingOrgItem = gitOrgs.find(
