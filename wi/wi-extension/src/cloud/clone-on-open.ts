@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { existsSync } from "fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from "fs";
 import * as path from "path";
 import { ProgressLocation, Uri, commands, window, workspace } from "vscode";
 import { ext } from "../extensionVariables";
@@ -83,6 +83,17 @@ async function cloneIntoEditor(integrationId: string, projectId: string, workspa
 	if (!git) {
 		throw new Error("Git is not available in this editor");
 	}
+	const parentPath = path.join(workspacePath, "..");
+	// Reopening the editor's link starts on the scaffold folder again, which is
+	// not a git repository, so the check above does not see the clone made last
+	// time. Cloning from here would make a second copy -- Git.clone counts up to
+	// <repo>-1 -- and leave the person's unpushed work in the first one.
+	const alreadyCloned = await cloneBesideWorkspace(git, parentPath, repositoryUrl);
+	if (alreadyCloned) {
+		ext.log(`Opening the clone already in this editor at ${alreadyCloned}`);
+		await openIntegration(alreadyCloned, repositorySubPathOf(repository), repository, workspacePath);
+		return;
+	}
 	// Only the integration's own directory is checked out: one repository may hold
 	// many integrations, and the editor was opened for exactly one of them.
 	const subPath = repositorySubPathOf(repository);
@@ -92,7 +103,7 @@ async function cloneIntoEditor(integrationId: string, projectId: string, workspa
 			git.clone(
 				repositoryUrl,
 				{
-					parentPath: path.join(workspacePath, ".."),
+					parentPath,
 					ref: repository?.branch || undefined,
 					sparsePaths: subPath ? [subPath] : undefined,
 					progress: { report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }) },
@@ -102,13 +113,27 @@ async function cloneIntoEditor(integrationId: string, projectId: string, workspa
 	);
 
 	await nameTheCommitter(git, clonedPath);
+	await openIntegration(clonedPath, subPath, repository, workspacePath);
+}
 
-	// The repository root stays above it, which is where the integration's own
-	// directory is matched from and what the push acts on.
+/**
+ * Opens the integration's own directory inside `clonedPath`, carrying over the
+ * workspace settings the image put in the scaffold.
+ *
+ * The repository root stays above it, which is where the integration's own
+ * directory is matched from and what the push acts on.
+ */
+async function openIntegration(
+	clonedPath: string,
+	subPath: string | undefined,
+	repository: { organizationApp?: string; nameApp?: string; branch?: string } | undefined,
+	scaffoldPath: string,
+): Promise<void> {
 	const openPath = subPath ? path.join(clonedPath, subPath) : clonedPath;
 	if (!existsSync(openPath)) {
 		throw new Error(`${subPath} is not in ${repository?.organizationApp}/${repository?.nameApp} on ${repository?.branch}`);
 	}
+	carryEditorSettings(scaffoldPath, openPath, clonedPath);
 	// Which integration this editor is for is carried by the environment, which outlives
 	// the reopen; workspace state does not, since the folder opened here is another one.
 	await commands.executeCommand("vscode.openFolder", Uri.file(openPath), { forceNewWindow: false });
@@ -132,6 +157,89 @@ async function nameTheCommitter(git: NonNullable<Awaited<ReturnType<typeof initG
 		// Only the first commit is affected, and git says plainly what to set.
 		ext.logError("Could not set the committer on the cloned repository", error as Error);
 	}
+}
+
+/** The workspace files the image puts in the scaffold and keeps out of git. */
+const EDITOR_LOCAL_FILES = [path.join(".vscode", "settings.json"), path.join(".vscode", "launch.json")];
+
+/**
+ * Copies the editor's own workspace settings from the scaffold into the clone.
+ *
+ * `setup.sh` writes these into the project it scaffolds (`ballerina.isBI`,
+ * `ballerina.enableRunFast`) and hides them from `git status`. A clone arrives
+ * with neither, so the integration can open outside the integrator view. A file
+ * the repository carries itself is left alone.
+ */
+function carryEditorSettings(scaffoldPath: string, openPath: string, repositoryRoot: string): void {
+	for (const relativePath of EDITOR_LOCAL_FILES) {
+		const from = path.join(scaffoldPath, relativePath);
+		const to = path.join(openPath, relativePath);
+		if (!existsSync(from) || existsSync(to)) {
+			continue;
+		}
+		try {
+			mkdirSync(path.dirname(to), { recursive: true });
+			copyFileSync(from, to);
+			excludeFromGit(repositoryRoot, path.relative(repositoryRoot, to));
+		} catch (error) {
+			// The integration still opens; only the editor's own defaults are missing.
+			ext.logError(`Could not carry ${relativePath} into the clone`, error as Error);
+		}
+	}
+}
+
+/** Keeps a path out of `git status` without touching a tracked .gitignore. */
+function excludeFromGit(repositoryRoot: string, relativePath: string): void {
+	const excludeFile = path.join(repositoryRoot, ".git", "info", "exclude");
+	const entry = relativePath.split(path.sep).join("/");
+	if (existsSync(excludeFile) && readFileSync(excludeFile, "utf8").split(/\r?\n/).includes(entry)) {
+		return;
+	}
+	mkdirSync(path.dirname(excludeFile), { recursive: true });
+	appendFileSync(excludeFile, `\n${entry}\n`);
+}
+
+/**
+ * The clone of `repositoryUrl` already sitting beside the workspace, if there is
+ * one. Only a directory that is its own repository root counts, so a directory
+ * inside an existing clone is never mistaken for one.
+ */
+async function cloneBesideWorkspace(
+	git: NonNullable<Awaited<ReturnType<typeof initGit>>>,
+	parentPath: string,
+	repositoryUrl: string,
+): Promise<string | undefined> {
+	let entries: string[];
+	try {
+		entries = readdirSync(parentPath, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => path.join(parentPath, entry.name));
+	} catch {
+		return undefined;
+	}
+	for (const candidate of entries) {
+		try {
+			const root = await git.getRepositoryRoot(candidate);
+			if (path.resolve(root) !== path.resolve(candidate)) {
+				continue;
+			}
+			if (remotesPointAt(await git.getRemotes(root), repositoryUrl)) {
+				return root;
+			}
+		} catch {
+			// Not a repository, or git cannot read it; neither is the clone.
+		}
+	}
+	return undefined;
+}
+
+/** Whether any remote of a repository is `repositoryUrl`, ignoring how it is spelled. */
+function remotesPointAt(remotes: string, repositoryUrl: string): boolean {
+	const normalise = (value: string) => value.trim().toLowerCase().replace(/\.git$/, "").replace(/\/+$/, "");
+	const wanted = normalise(repositoryUrl);
+	return remotes
+		.split(/\s+/)
+		.some((token) => token.includes("/") && normalise(token.replace(/^https?:\/\/[^@/]*@/, "https://")) === wanted);
 }
 
 /** Whether `directoryPath` is inside a git repository; `getGitRoot` throws when it is not. */
