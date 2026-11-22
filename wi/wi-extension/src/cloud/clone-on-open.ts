@@ -223,7 +223,7 @@ async function cloneBesideWorkspace(
 			if (path.resolve(root) !== path.resolve(candidate)) {
 				continue;
 			}
-			if (remotesPointAt(await git.getRemotes(root), repositoryUrl)) {
+			if (remotesPointAt(await remoteUrlsOf(git, root), repositoryUrl)) {
 				return root;
 			}
 		} catch {
@@ -233,13 +233,38 @@ async function cloneBesideWorkspace(
 	return undefined;
 }
 
-/** Whether any remote of a repository is `repositoryUrl`, ignoring how it is spelled. */
-function remotesPointAt(remotes: string, repositoryUrl: string): boolean {
-	const normalise = (value: string) => value.trim().toLowerCase().replace(/\.git$/, "").replace(/\/+$/, "");
+/**
+ * The remote URLs configured in the repository at `root`.
+ *
+ * Read from the config rather than through Git.getRemotes, which despite its
+ * name runs `rev-parse --show-toplevel` and answers with the repository's own
+ * directory.
+ */
+async function remoteUrlsOf(git: NonNullable<Awaited<ReturnType<typeof initGit>>>, root: string): Promise<string[]> {
+	try {
+		const repo = git.open(root, await git.getRepositoryDotGit(root));
+		// Exits non-zero when the repository has no remote at all, which throws here.
+		const { stdout } = await repo.exec(["config", "--get-regexp", "^remote\\..*\\.url"]);
+		return stdout
+			.split(/\r?\n/)
+			.map((line) => line.trim().split(/\s+/).slice(1).join(" "))
+			.filter((url) => url.length > 0);
+	} catch {
+		return [];
+	}
+}
+
+/** Whether any of `remotes` is `repositoryUrl`, ignoring how it is spelled. */
+function remotesPointAt(remotes: string[], repositoryUrl: string): boolean {
+	const normalise = (value: string) =>
+		value
+			.trim()
+			.toLowerCase()
+			.replace(/^https?:\/\/[^@/]*@/, "https://")
+			.replace(/\.git$/, "")
+			.replace(/\/+$/, "");
 	const wanted = normalise(repositoryUrl);
-	return remotes
-		.split(/\s+/)
-		.some((token) => token.includes("/") && normalise(token.replace(/^https?:\/\/[^@/]*@/, "https://")) === wanted);
+	return remotes.some((remote) => normalise(remote) === wanted);
 }
 
 /** Whether `directoryPath` is inside a git repository; `getGitRoot` throws when it is not. */

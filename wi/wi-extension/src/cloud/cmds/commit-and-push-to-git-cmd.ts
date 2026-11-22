@@ -103,7 +103,10 @@ export function commitAndPushToGitCommand(context: ExtensionContext) {
 					}
 
 					const headRef = await window.withProgress({ title: "Fetching remote repo metadata...", location: ProgressLocation.Notification }, async () => {
-						await repo.fetch({ silent: true });
+						// Not silent: silent sets VSCODE_GIT_FETCH_SILENT, which askpass-main refuses
+						// to answer, so a private repository fails here now that the remote no
+						// longer carries a credential. This fetch is one the person asked for.
+						await repo.fetch();
 						await repo.commit(commitMessage);
 						await delay(500);
 						return repo.getHEADRef();
