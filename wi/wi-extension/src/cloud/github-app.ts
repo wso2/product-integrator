@@ -96,14 +96,17 @@ export interface ConnectedGitHubAccount {
 /** What the form says, beside its button for connecting, when no GitHub account is connected or WSO2 Cloud cannot read one. */
 export const CONNECT_GITHUB_MESSAGE = "Connect GitHub to WSO2 Cloud to choose a repository.";
 export const AUTHORIZE_GITHUB_MESSAGE = "WSO2 Cloud's access to your GitHub account has expired. Connect GitHub again to choose a repository.";
+export const UNREAD_GITHUB_MESSAGE = "WSO2 Cloud could not read your GitHub repositories. Connect GitHub again, then retry.";
 
 /**
  * The GitHub accounts connected to the organization, each with the repositories the app was given: what a new
- * integration's repository is chosen from. Fails, with what to do about it, when none is connected or when the
- * person's GitHub authorization is needed to read them. An installation gone from GitHub is left out.
+ * integration's repository is chosen from. An account whose repositories cannot be read is left out: the
+ * organization's installations include ones this person's GitHub account cannot see. Fails, with what to do about
+ * it, when none is connected, when GitHub has to be authorized again, or when no account could be read.
  */
-export async function listConnectedGitHubAccounts(cloud: CloudClient): Promise<ConnectedGitHubAccount[]> {
+export async function listConnectedGitHubAccounts(cloud: CloudClient, log: (message: string) => void = () => undefined): Promise<ConnectedGitHubAccount[]> {
 	const installations = await cloud.git.listGitHubInstallations();
+	let unread: unknown;
 	// Asked for together: the repository list waits for the slowest account, not for all of them in turn.
 	const listed = await Promise.all(
 		installations.map(async (installation): Promise<ConnectedGitHubAccount | undefined> => {
@@ -122,15 +125,19 @@ export async function listConnectedGitHubAccounts(cloud: CloudClient): Promise<C
 				if (isGitHubAuthRequired(err)) {
 					throw new Error(AUTHORIZE_GITHUB_MESSAGE);
 				}
-				if (isCloudError(err) && err.code === "not_found") {
-					return undefined; // the installation is gone from GitHub
+				if (!(isCloudError(err) && err.code === "not_found")) {
+					unread ??= err;
+					log(`Could not read the repositories of ${installation.githubAccount}: ${err instanceof Error ? err.message : String(err)}`);
 				}
-				throw err;
+				return undefined;
 			}
 		}),
 	);
 	const accounts = listed.filter((account): account is ConnectedGitHubAccount => account !== undefined);
 	if (accounts.length === 0) {
+		if (unread !== undefined) {
+			throw new Error(`${UNREAD_GITHUB_MESSAGE} (${unread instanceof Error ? unread.message : String(unread)})`);
+		}
 		throw new Error(CONNECT_GITHUB_MESSAGE);
 	}
 	return accounts;

@@ -18,7 +18,7 @@
 
 import * as assert from "assert";
 import { type CloudClient, ConflictError, NotFoundError } from "@wso2/wso2-cloud-client";
-import { AUTHORIZE_GITHUB_MESSAGE, CONNECT_GITHUB_MESSAGE, GITHUB_RETURN_TTL_MS, type WebEditor, GitHubAppConnector, listConnectedGitHubAccounts, consoleGitHubStartUrl, forgetGitHubAccess, gitHubSourceFor, installationSettingsUrl, pkceChallenge, resolveGitHubAccess, sharedGitHubAccess } from "../../cloud/github-app";
+import { AUTHORIZE_GITHUB_MESSAGE, CONNECT_GITHUB_MESSAGE, UNREAD_GITHUB_MESSAGE, GITHUB_RETURN_TTL_MS, type WebEditor, GitHubAppConnector, listConnectedGitHubAccounts, consoleGitHubStartUrl, forgetGitHubAccess, gitHubSourceFor, installationSettingsUrl, pkceChallenge, resolveGitHubAccess, sharedGitHubAccess } from "../../cloud/github-app";
 
 const acme = { installationId: 7, githubAccount: "Acme" };
 
@@ -180,11 +180,25 @@ describe("The GitHub accounts a new integration's repository is chosen from", ()
 		await assert.rejects(listConnectedGitHubAccounts(gone.cloud), { message: CONNECT_GITHUB_MESSAGE });
 	});
 
-	it("asks for GitHub to be connected again when the person's authorization is needed, and passes other failures on", async () => {
+	it("asks for GitHub to be connected again when the person's authorization is needed, or no account could be read", async () => {
 		const expired = fakeCloud({ installations: [acme], reposError: new ConflictError("github-auth-required", { status: 409, apiError: "github-auth-required" }) });
 		await assert.rejects(listConnectedGitHubAccounts(expired.cloud), { message: AUTHORIZE_GITHUB_MESSAGE });
-		const down = fakeCloud({ installations: [acme], reposError: new Error("the git integration is down") });
-		await assert.rejects(listConnectedGitHubAccounts(down.cloud), { message: "the git integration is down" });
+		const down = fakeCloud({ installations: [acme], reposError: new Error("upstream error") });
+		await assert.rejects(listConnectedGitHubAccounts(down.cloud), { message: `${UNREAD_GITHUB_MESSAGE} (upstream error)` });
+	});
+
+	it("leaves out an account whose repositories cannot be read, and lists the rest", async () => {
+		const { cloud } = fakeCloud({ installations: [acme, { installationId: 8, githubAccount: "Globex" }], grantedRepos: ["orders"] });
+		const listRepos = cloud.git.listGitHubRepos.bind(cloud.git);
+		(cloud.git as { listGitHubRepos: (id: number) => Promise<unknown> }).listGitHubRepos = async (id) => {
+			if (id === 8) {
+				throw new Error("upstream error");
+			}
+			return listRepos(id);
+		};
+		const logged: string[] = [];
+		assert.deepEqual(await listConnectedGitHubAccounts(cloud, (message) => logged.push(message)), [{ orgName: "Acme", orgHandler: "Acme", repositories: [{ name: "orders" }] }]);
+		assert.deepEqual(logged, ["Could not read the repositories of Globex: upstream error"]);
 	});
 });
 
