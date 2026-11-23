@@ -23,9 +23,25 @@ import { getSession } from "./session";
 
 const EmptyDisposable: Disposable = { dispose() {} };
 
+const GITHUB_HOSTS = new Set(["github.com", "gist.github.com"]);
+
+// git hands the token to whatever answers, so anything but an exact GitHub
+// host over https would put the session's token somewhere it does not belong.
+// Uri.authority carries userinfo and port, as in user@github.com:443.
+export function isGitHubHost(host: Uri): boolean {
+	if (host.scheme !== "https") {
+		return false;
+	}
+	const hostname = host.authority
+		.replace(/^.*@/, "")
+		.replace(/:\d+$/, "")
+		.toLowerCase();
+	return GITHUB_HOSTS.has(hostname);
+}
+
 class GitHubCredentialProvider implements CredentialsProvider {
 	async getCredentials(host: Uri): Promise<Credentials | undefined> {
-		if (!/github\.com/i.test(host.authority)) {
+		if (!isGitHubHost(host)) {
 			return;
 		}
 

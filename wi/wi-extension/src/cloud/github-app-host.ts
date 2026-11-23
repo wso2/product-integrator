@@ -21,7 +21,7 @@ import { BridgeLayer } from "../BridgeLayer";
 import { ext } from "../extensionVariables";
 import { buildConsoleUrl } from "@wso2/wso2-cloud-client";
 import { SIGN_IN_CHANGED_MESSAGE, endingConnect, signedInScope } from "./github-access";
-import { GitHubAppConnector, type IgnoredGitHubReturn, forgetGitHubAccess } from "./github-app";
+import { GITHUB_RETURN_PATH, GitHubAppConnector, type IgnoredGitHubReturn, type WebEditor, forgetGitHubAccess } from "./github-app";
 
 const IGNORED_RETURN_MESSAGES: Record<IgnoredGitHubReturn, string> = {
 	"not-started": "GitHub returned to a window that didn't start connecting it, so nothing was connected here. Finish in the window you started from, or start again.",
@@ -45,6 +45,19 @@ function offerAnotherAccount(message: string, owner: string | undefined): void {
 	});
 }
 
+/**
+ * This cloud editor as the console confirms it before sending GitHub's return: the address the browser reaches it
+ * at, and the project and component the platform started it for, which is how the platform finds the person's editor.
+ */
+async function cloudEditor(): Promise<WebEditor> {
+	const project = process.env.CLOUD_INITIAL_PROJECT_ID?.trim();
+	if (!project) {
+		throw new Error("the editor was started without its project");
+	}
+	const returnTo = (await env.asExternalUri(Uri.parse(`${env.uriScheme}://${ext.context.extension.id}${GITHUB_RETURN_PATH}`))).toString(true);
+	return { returnTo, project, component: process.env.SOURCE_COMPONENT_ID?.trim() || undefined };
+}
+
 /** The GitHub connector for this window, telling the person how connecting ended and the deployment form to recheck. */
 export function createGitHubAppConnector(): GitHubAppConnector {
 	return new GitHubAppConnector({
@@ -52,7 +65,11 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 		consoleUrl: () => buildConsoleUrl(ext.config.consoleUrl, { orgHandle: ext.authProvider?.org?.handle }),
 		session: signedInScope,
 		uriScheme: env.uriScheme,
-		openExternal: (url) => env.openExternal(Uri.parse(url)),
+		webEditor: ext.isDevantCloudEditor ? cloudEditor : undefined,
+		// The link goes as the string it is. A Uri is written out again when it is opened, with the escapes of its
+		// query undone: the editor's own address, itself a link with a query, would arrive at the console as several
+		// parameters of the console's. VS Code keeps a string as written.
+		openExternal: (url) => env.openExternal(url as unknown as Uri),
 		log: (message) => ext.log(message),
 		// Installations bound before an install leg must reach the form even when that leg is abandoned.
 		onBound: () => {
