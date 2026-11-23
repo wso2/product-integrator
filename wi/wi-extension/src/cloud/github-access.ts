@@ -82,7 +82,7 @@ export function untilGitHubConnectEnds(returnsHere: boolean, start: () => Promis
 }
 
 /** Calls `back` once the window has lost its focus, as to the browser, and got it back. */
-function untilFocusBack(back: () => void): Disposable {
+export function untilFocusBack(back: () => void): Disposable {
 	let left = !window.state.focused;
 	return window.onDidChangeWindowState((state) => {
 		left ||= !state.focused;

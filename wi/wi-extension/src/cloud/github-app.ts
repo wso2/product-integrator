@@ -326,6 +326,8 @@ export interface GitHubAppConnectorDeps {
 	now?: () => number;
 	/** Installations were just connected to the organization, whatever comes next in the flow. */
 	onBound?: (installations: GitHubInstallation[]) => void;
+	/** Calls `back` once the editor has lost its focus, as to the browser, and got it back. */
+	onFocusBack?: (back: () => void) => { dispose(): void };
 }
 
 /**
@@ -342,6 +344,7 @@ export class GitHubAppConnector {
 	private pending?: { nonce: string; owner?: string; installTried: boolean; verifier?: string; session?: string; startedAt: number };
 	/** Counts the flows started; an exchange that finishes after a newer start is dropped. */
 	private started = 0;
+	private focusWatch?: { dispose(): void };
 	private readonly newNonce: () => string;
 	private readonly newVerifier: () => string;
 	private readonly now: () => number;
@@ -365,6 +368,8 @@ export class GitHubAppConnector {
 		}
 		this.started++;
 		const flow = this.started;
+		this.focusWatch?.dispose();
+		this.focusWatch = undefined;
 		// A newer connect takes the flow over from here: a return for the one before must not be bound
 		// while this one is still working out the editor's address.
 		this.pending = undefined;
@@ -399,7 +404,19 @@ export class GitHubAppConnector {
 				this.pending = undefined;
 			}
 			this.deps.outcome.failed("Couldn't open the browser for GitHub. Try again.");
+		} else if (start === "install") {
+			this.authorizeOnFocusBack(nonce, owner);
 		}
+	}
+
+	// GitHub leaves its install page for the editor only through the app's Setup URL; without one, the person coming
+	// back to the editor ends the install as that return would.
+	private authorizeOnFocusBack(nonce: string, owner?: string): void {
+		this.focusWatch = this.deps.onFocusBack?.(() => {
+			if (this.pending?.nonce === nonce) {
+				void this.connect(owner, "authorize", true);
+			}
+		});
 	}
 
 	/** Takes GitHub's return, as the console relayed it to `/ghapp`. */

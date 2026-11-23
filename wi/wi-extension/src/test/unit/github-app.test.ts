@@ -196,6 +196,7 @@ describe("GitHubAppConnector", () => {
 		const browser = { opens: true };
 		const signedIn = { session: "u1/acme" as string | undefined };
 		const clock = { now: 0 };
+		const focus: { back?: () => void } = {};
 		let n = 0;
 		let v = 0;
 		const app = new GitHubAppConnector({
@@ -213,6 +214,10 @@ describe("GitHubAppConnector", () => {
 			newNonce: () => `n${++n}`,
 			newVerifier: () => `v${++v}`,
 			now: () => clock.now,
+			onFocusBack: (back) => {
+				focus.back = back;
+				return { dispose: () => focus.back === back && (focus.back = undefined) };
+			},
 			outcome: {
 				connected: (items, missingOwner) => outcomes.push(`connected:${items.map((i) => i.githubAccount).join(",")}${missingOwner ? ` but not ${missingOwner}` : ""}`),
 				noInstallationVisible: (owner) => outcomes.push(`none visible${owner ? ` on ${owner}` : ""}`),
@@ -222,7 +227,7 @@ describe("GitHubAppConnector", () => {
 				failed: (message) => outcomes.push(`failed:${message}`),
 			},
 		});
-		return { app, opened, outcomes, signedIn, clock, bound, browser };
+		return { app, opened, outcomes, signedIn, clock, bound, browser, focus };
 	}
 	const query = (params: Record<string, string>) => new URLSearchParams(params);
 	const start = (url: string) => Object.fromEntries(new URL(url).searchParams);
@@ -298,6 +303,35 @@ describe("GitHubAppConnector", () => {
 		await app.handleReturn(query({ code: "c2", state: "n3" }));
 		assert.deepEqual(connected, ["c0de with v1", "c2 with v2"]);
 		assert.deepEqual(outcomes, ["connected:jo but not acme"], "after the install the owner is not asked for again");
+	});
+
+	it("authorizes again when the editor is back in focus after an install page that didn't return", async () => {
+		const { cloud, connected } = fakeCloud({ connect: async () => [{ installationId: 9, githubAccount: "jo" }] });
+		const { app, opened, outcomes, focus } = connector(cloud);
+		await app.connect("acme");
+		assert.equal(focus.back, undefined, "GitHub's authorize page returns on its own");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		assert.equal(start(opened[1]).start, "install");
+
+		focus.back?.();
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.deepEqual(start(opened[2]), { editor: "vscode", nonce: "n3", start: "authorize", challenge: pkceChallenge("v2") });
+		await app.handleReturn(query({ code: "c2", state: "n3" }));
+		assert.deepEqual(connected, ["c0de with v1", "c2 with v2"]);
+		assert.deepEqual(outcomes, ["connected:jo but not acme"]);
+	});
+
+	it("leaves an install page that returned to its return, whatever the focus does after", async () => {
+		const { cloud } = fakeCloud({ connect: async () => [{ installationId: 9, githubAccount: "jo" }] });
+		const { app, opened, focus } = connector(cloud);
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		await app.handleReturn(query({ state: "n2", setup_action: "install", installation_id: "7" }));
+		assert.equal(start(opened[2]).start, "authorize");
+
+		focus.back?.();
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(opened.length, 3, "the return already authorized again");
 	});
 
 	it("offers GitHub's account picker for the owner the app is still not on", async () => {

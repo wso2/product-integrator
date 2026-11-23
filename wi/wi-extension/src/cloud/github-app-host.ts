@@ -20,7 +20,7 @@ import { Uri, env, window } from "vscode";
 import { BridgeLayer } from "../BridgeLayer";
 import { ext } from "../extensionVariables";
 import { buildConsoleUrl } from "@wso2/wso2-cloud-client";
-import { SIGN_IN_CHANGED_MESSAGE, endingConnect, signedInScope } from "./github-access";
+import { SIGN_IN_CHANGED_MESSAGE, endingConnect, signedInScope, untilFocusBack } from "./github-access";
 import { GITHUB_RETURN_PATH, GitHubAppConnector, type IgnoredGitHubReturn, type WebEditor, forgetGitHubAccess } from "./github-app";
 
 const IGNORED_RETURN_MESSAGES: Record<IgnoredGitHubReturn, string> = {
@@ -71,6 +71,7 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 		// parameters of the console's. VS Code keeps a string as written.
 		openExternal: (url) => env.openExternal(url as unknown as Uri),
 		log: (message) => ext.log(message),
+		onFocusBack: untilFocusBack,
 		// Installations bound before an install leg must reach the form even when that leg is abandoned.
 		onBound: () => {
 			forgetGitHubAccess();
