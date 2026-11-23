@@ -334,6 +334,39 @@ describe("GitHubAppConnector", () => {
 		assert.equal(opened.length, 3, "the return already authorized again");
 	});
 
+	it("drops the install page's late return when the editor is already authorizing again", async () => {
+		const { cloud, connected } = fakeCloud({ connect: async () => [{ installationId: 9, githubAccount: "jo" }] });
+		const { app, opened, outcomes, focus } = connector(cloud);
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		focus.back?.();
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(start(opened[2]).start, "authorize");
+
+		await app.handleReturn(query({ state: "n2", setup_action: "install", installation_id: "7" }));
+		assert.equal(opened.length, 3, "the authorize under way binds the installation");
+		assert.deepEqual(outcomes, [], "the return is not reported as one this window didn't start");
+		await app.handleReturn(query({ code: "c2", state: "n3" }));
+		assert.deepEqual(connected, ["c0de with v1", "c2 with v2"]);
+		assert.deepEqual(outcomes, ["connected:jo but not acme"]);
+	});
+
+	it("authorizes once more when the install page returns after the editor's own authorize ended", async () => {
+		const { cloud, connected } = fakeCloud({ connect: async () => [{ installationId: 9, githubAccount: "jo" }] });
+		const { app, opened, outcomes, focus } = connector(cloud);
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		focus.back?.();
+		await new Promise((resolve) => setImmediate(resolve));
+		await app.handleReturn(query({ code: "c2", state: "n3" }));
+
+		await app.handleReturn(query({ state: "n2", setup_action: "install", installation_id: "7" }));
+		assert.deepEqual(start(opened[3]), { editor: "vscode", nonce: "n4", start: "authorize", challenge: pkceChallenge("v3") });
+		await app.handleReturn(query({ code: "c3", state: "n4" }));
+		assert.deepEqual(connected, ["c0de with v1", "c2 with v2", "c3 with v3"]);
+		assert.deepEqual(outcomes, ["connected:jo but not acme", "connected:jo but not acme"]);
+	});
+
 	it("offers GitHub's account picker for the owner the app is still not on", async () => {
 		const { cloud } = fakeCloud();
 		const { app, opened } = connector(cloud);

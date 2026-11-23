@@ -345,6 +345,8 @@ export class GitHubAppConnector {
 	/** Counts the flows started; an exchange that finishes after a newer start is dropped. */
 	private started = 0;
 	private focusWatch?: { dispose(): void };
+	/** The install step that being back in the editor ended, should GitHub's own return for it still come. */
+	private replacedInstall?: { nonce: string; owner?: string };
 	private readonly newNonce: () => string;
 	private readonly newVerifier: () => string;
 	private readonly now: () => number;
@@ -414,13 +416,38 @@ export class GitHubAppConnector {
 	private authorizeOnFocusBack(nonce: string, owner?: string): void {
 		this.focusWatch = this.deps.onFocusBack?.(() => {
 			if (this.pending?.nonce === nonce) {
+				this.replacedInstall = { nonce, owner };
 				void this.connect(owner, "authorize", true);
 			}
 		});
 	}
 
+	/** The install step that `state` started, when being back in the editor already ended it. */
+	private takeReplacedInstall(state: string | null): { owner?: string } | undefined {
+		const replaced = this.replacedInstall;
+		if (!state || state !== replaced?.nonce) {
+			return undefined;
+		}
+		this.replacedInstall = undefined;
+		return replaced;
+	}
+
+	// An authorize still under way binds the installation; one that has ended ran before the install did, so the
+	// editor authorizes once more.
+	private async lateInstallReturn(owner?: string): Promise<void> {
+		if (this.pending) {
+			this.deps.log("GitHub's install page returned while the editor was already authorizing again");
+			return;
+		}
+		await this.connect(owner, "authorize", true);
+	}
+
 	/** Takes GitHub's return, as the console relayed it to `/ghapp`. */
 	async handleReturn(query: URLSearchParams): Promise<void> {
+		const replaced = this.takeReplacedInstall(query.get("state"));
+		if (replaced) {
+			return this.lateInstallReturn(replaced.owner);
+		}
 		const pending = this.pending;
 		const state = query.get("state");
 		if (!pending || !state || state !== pending.nonce) {
