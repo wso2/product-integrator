@@ -116,6 +116,7 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
     }, [wsClient, refetchGitOrgs]);
 
     const gitOrgs = gitOrgsData?.gitOrgs ?? [];
+    const unreadOrgs: string[] = gitOrgsData?.unreadOrgs ?? [];
     const matchingOrgItem = gitOrgs.find(
         (item: { orgName: string }) => item.orgName === org
     );
@@ -369,6 +370,11 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
                                     onChange={(e) => setOrg(e.target.value)}
                                 />
                                 <SmVSCodeLink onClick={() => wsClient.triggerGithubInstallFlow("")}>Add Organization</SmVSCodeLink>
+                                {unreadOrgs.length > 0 && (
+                                    <div style={{ fontSize: 12, color: "var(--vscode-descriptionForeground)", marginTop: 4 }}>
+                                        Not listed, because your GitHub account could not read them: {unreadOrgs.join(", ")}.
+                                    </div>
+                                )}
                             </div>
 
                             <div style={{ position: "relative" }}>
