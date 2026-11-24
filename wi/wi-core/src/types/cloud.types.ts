@@ -139,6 +139,8 @@ export interface GitOrganization {
 
 export interface GetAuthorizedGitOrgsResp {
 	gitOrgs: GitOrganization[];
+	/** Connected organizations left out of `gitOrgs` because their repositories could not be read. */
+	unreadOrgs?: string[];
 }
 
 export interface GetCredentialsReq {

@@ -248,7 +248,8 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 				reason: "git_orgs_unavailable",
 			});
 		}
-		return { gitOrgs: await listConnectedGitHubAccounts(ext.clients.platform.cloud) };
+		const { accounts, unread } = await listConnectedGitHubAccounts(ext.clients.platform.cloud, (message) => ext.log(message));
+		return { gitOrgs: accounts, unreadOrgs: unread };
 	}
 
 	async getCredentials(_params: GetCredentialsReq): Promise<CredentialItem[]> {
