@@ -645,6 +645,7 @@ jobs:
             rm -rf .build/builtInExtensions/wso2.wso2-integrator
             npm run download-builtin-extensions
           fi
+          node ../../ci/build/brand-builtin-extensions.js
 
       - name: Build client (macOS ${{ matrix.arch }})
         env:
@@ -1360,6 +1361,7 @@ jobs:
             rm -rf .build/builtInExtensions/wso2.wso2-integrator
             npm run download-builtin-extensions
           fi
+          node ../../ci/build/brand-builtin-extensions.js
 
       - name: Download exlporer Dll
         shell: pwsh

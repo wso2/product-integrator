@@ -630,6 +630,7 @@ jobs:
             done
             npm run download-builtin-extensions
           fi
+          node ../../ci/build/brand-builtin-extensions.js
 
       - name: Compile (with cache optimization)
         env:

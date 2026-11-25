@@ -195,7 +195,7 @@
       {
         "command": "wso2.integrator.cloud.auth.switchRegion",
         "title": "Switch Choreo Cloud Region",
-        "category": "WSO2 Integrator",
+        "category": "Choreo Integrator",
         "icon": "$(globe)",
         "enablement": "wso2.integrator.cloud.multiRegion"
       },
