@@ -18,7 +18,7 @@
 
 import type { CloudEnvName, CloudEnvironment } from "@wso2/wso2-cloud-client";
 import { WICommandIds } from "@wso2/wso2-platform-core";
-import { type ExtensionContext, type QuickPickItem, commands, window } from "vscode";
+import { type CancellationToken, type ExtensionContext, type QuickPickItem, commands, window } from "vscode";
 import { ext } from "../../extensionVariables";
 import { handleCloudError } from "../platform/error-handler";
 import { isPlatformReady } from "./cmd-utils";
@@ -39,9 +39,9 @@ export function cloudPlaceName(environment: CloudEnvironment = ext.clients.platf
 /**
  * Asks the person to select one of production's regions, the current one
  * listed first. The current region, without asking, where there is no
- * choice; undefined when the person closed the list.
+ * choice; undefined when the person closed the list or `token` closed it.
  */
-export async function pickRegion(options: { title: string; placeHolder: string }): Promise<CloudEnvName | undefined> {
+export async function pickRegion(options: { title: string; placeHolder: string }, token?: CancellationToken): Promise<CloudEnvName | undefined> {
 	const platform = ext.clients.platform;
 	const current = platform.environment.name;
 	if (platform.regions.length < 2) {
@@ -55,6 +55,7 @@ export async function pickRegion(options: { title: string; placeHolder: string }
 			description: region.name === current ? "Current region" : undefined,
 		})),
 		{ title: options.title, placeHolder: options.placeHolder, ignoreFocusOut: true },
+		token,
 	);
 	return picked?.name;
 }
