@@ -4,8 +4,8 @@ name: Daily Build
 #
 #   1. resets the `builds/nightly` branch to `main`, or to a `staging/<version>` branch if exactly
 #      one exists on the remote
-#   2. pins each tracked dependency to its newest nightly build, or its newest release when the
-#      upstream repo publishes none
+#   2. pins each tracked dependency to its newest nightly build, or its highest release when the
+#      upstream repo publishes none (manual runs may keep the versions hardcoded on the source ref)
 #   3. stamps the timestamped product and extension versions and commits, so
 #      `git diff <source> builds/nightly` is exactly the pin and the build is reproducible from that
 #      commit
@@ -54,6 +54,14 @@ on:
         required: true
         type: boolean
         default: true
+      component_versions:
+        description: 'Component versions: hardcoded = as in ci/build/component-versions.properties; highest = newest nightly or highest upstream release. Scheduled runs always use highest.'
+        required: true
+        default: 'hardcoded'
+        type: choice
+        options:
+          - hardcoded
+          - highest
       runner:
         description: 'Select runner type. The scheduled nightly always uses the default; this only applies to manual dispatches.'
         required: true
@@ -86,6 +94,7 @@ jobs:
       SOURCE_REF: ${{ github.event_name == 'schedule' && 'main' || inputs.source_ref }}
       BUILD_BRANCH: ${{ github.event_name == 'schedule' && 'builds/nightly' || inputs.build_branch }}
       PUBLISH_TAG: ${{ github.event_name == 'schedule' && 'nightly' || inputs.publish_tag }}
+      COMPONENT_VERSIONS: ${{ github.event_name == 'schedule' && 'highest' || inputs.component_versions }}
     outputs:
       integrator_version: ${{ steps.stamp.outputs.integrator_version }}
       wi_extension_version: ${{ steps.stamp.outputs.wi_extension_version }}
@@ -138,6 +147,11 @@ jobs:
           git check-ref-format --branch "${SOURCE_REF}" >/dev/null
           git check-ref-format --branch "${BUILD_BRANCH}" >/dev/null
           git check-ref-format "refs/tags/${PUBLISH_TAG}" >/dev/null
+          case "${COMPONENT_VERSIONS}" in
+            hardcoded|highest) ;;
+            *) echo "Error: component_versions must be hardcoded or highest, got '${COMPONENT_VERSIONS}'." >&2
+               exit 1 ;;
+          esac
 
           # build_branch is force-pushed verbatim, so a typo here would overwrite whatever branch
           # was named.
@@ -156,7 +170,7 @@ jobs:
           echo "source_ref=${SOURCE_REF}" >> "$GITHUB_OUTPUT"
           echo "build_branch=${BUILD_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "publish_tag=${PUBLISH_TAG}" >> "$GITHUB_OUTPUT"
-          echo "Route: ${SOURCE_REF} -> ${BUILD_BRANCH} -> ${PUBLISH_TAG}"
+          echo "Route: ${SOURCE_REF} -> ${BUILD_BRANCH} -> ${PUBLISH_TAG} (component versions: ${COMPONENT_VERSIONS})"
 
       # Unlike the checkouts in build.yml and compile.yml, this one deliberately does NOT set
       # `persist-credentials: false`: this job pushes the pinned-build branch below, which needs the
@@ -196,9 +210,16 @@ jobs:
           echo "${BUILD_BRANCH} now points at $(git rev-parse --short HEAD) (${SOURCE_REF})."
 
       - name: Pin dependency versions
+        if: env.COMPONENT_VERSIONS == 'highest'
         run: |
           chmod +x ./ci/build/resolve-nightly-versions.sh
           ./ci/build/resolve-nightly-versions.sh
+
+      - name: Keep hardcoded dependency versions
+        if: env.COMPONENT_VERSIONS == 'hardcoded'
+        run: |
+          echo "Using component versions as committed on ${SOURCE_REF}:"
+          cat ci/build/component-versions.properties
 
       - name: Stamp product and extension versions
         id: stamp

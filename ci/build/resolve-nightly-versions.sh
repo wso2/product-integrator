@@ -59,7 +59,7 @@ unset_property() {
 }
 
 # List releases from `repo` that carry an asset matching `asset_regex`, with a nightly-tagged one
-# first and then every other release most-recently-updated first. Each line is
+# first and then every other release highest-version first. Each line is
 # "<nightly|latest>\t<tag>\t<asset-name>".
 #
 # Filtering on the asset matters: a release without the file we need is useless to us, and it is
@@ -75,9 +75,8 @@ unset_property() {
 # intended — the nightly is itself a pre-release — but it is a wider blast radius than the staging
 # case that motivated it, so it is stated rather than implied.
 #
-# Sorted on the matched asset's `updated_at`, not on the API's default order: releases come back
-# ordered by `created_at`, a release object has no `updated_at` of its own, and the asset timestamp
-# is what actually moves when a rolling release republishes its file.
+# The rolling nightly is picked by the matched asset's `updated_at` (what moves when it republishes).
+# Tagged releases are ordered by version: upload time let a 3.0.x patch outrank a 4.0.x one.
 release_candidates() {
   local repo="$1" asset_regex="$2" candidates
   # The regex is embedded in a jq string literal, where a lone backslash is an invalid escape.
@@ -98,7 +97,13 @@ release_candidates() {
       (map(select(.nightly == false))[] | \"latest\t\(.tag)\t\(.name)\")
   ")
 
-  candidates=$(printf '%s\n' "${candidates}" | sed '/^[[:space:]]*$/d')
+  # `-` -> `~` so sort -V ranks a pre-release below its GA (1.0~rc1 < 1.0).
+  candidates=$(
+    printf '%s\n' "${candidates}" | grep '^nightly' || true
+    printf '%s\n' "${candidates}" | { grep '^latest' || true; } \
+      | awk -F'\t' '{ k = $2; sub(/^[vV]/, "", k); gsub(/-/, "~", k); print k "\t" $0 }' \
+      | sort -t$'\t' -k1,1 -V -r | cut -f2-
+  )
   [ -n "${candidates}" ] || return 1
   printf '%s\n' "${candidates}"
 }
