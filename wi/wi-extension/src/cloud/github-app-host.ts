@@ -29,6 +29,10 @@ const IGNORED_RETURN_MESSAGES: Record<IgnoredGitHubReturn, string> = {
 	"signed-in-changed": "Your Choreo Cloud sign-in changed while GitHub was open, so GitHub's return was ignored. Start again.",
 };
 
+// GitHub never said how its install page ended, so the organization's owner may still have the app to approve.
+const PENDING_APPROVAL_ADVICE =
+	"If the GitHub organization's owner has to approve the app, check the repository again once they have; otherwise connect with another GitHub account.";
+
 /** Offers GitHub's account picker, to connect with another GitHub account, for the organization signed in when it was offered. */
 function offerAnotherAccount(message: string, owner: string | undefined): void {
 	const useAnother = "Use Another GitHub Account";
@@ -78,7 +82,7 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 			BridgeLayer.notifyGitHubConnected();
 		},
 		outcome: endingConnect({
-			connected: (installations, missingOwner) => {
+			connected: (installations, missingOwner, unanswered) => {
 				const accounts = installations.map((item) => item.githubAccount).join(", ");
 				const connected = accounts ? `GitHub is connected to Choreo Cloud (${accounts})` : "GitHub is connected to Choreo Cloud";
 				if (!missingOwner) {
@@ -86,11 +90,13 @@ export function createGitHubAppConnector(): GitHubAppConnector {
 					return;
 				}
 				// The app is on the owner, but this GitHub user can't see it: the browser is likely signed in to another GitHub account.
-				offerAnotherAccount(`${connected}, but not to ${missingOwner}. If another GitHub account has access to ${missingOwner}, connect with that account.`, missingOwner);
+				const advice = unanswered ? PENDING_APPROVAL_ADVICE : `If another GitHub account has access to ${missingOwner}, connect with that account.`;
+				offerAnotherAccount(`${connected}, but not to ${missingOwner}. ${advice}`, missingOwner);
 			},
-			noInstallationVisible: (owner) => {
+			noInstallationVisible: (owner, unanswered) => {
 				const where = owner ?? "any GitHub account";
-				offerAnotherAccount(`The GitHub account you authorized can't see the Choreo Cloud app on ${where}. If another GitHub account has access, connect with that account.`, owner);
+				const advice = unanswered ? PENDING_APPROVAL_ADVICE : "If another GitHub account has access, connect with that account.";
+				offerAnotherAccount(`The GitHub account you authorized can't see the Choreo Cloud app on ${where}. ${advice}`, owner);
 			},
 			requested: () => {
 				window.showInformationMessage("The GitHub organization's owner has to approve the Choreo Cloud app. Check the repository again once they have.");

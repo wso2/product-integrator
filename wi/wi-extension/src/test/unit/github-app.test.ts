@@ -219,8 +219,9 @@ describe("GitHubAppConnector", () => {
 				return { dispose: () => focus.back === back && (focus.back = undefined) };
 			},
 			outcome: {
-				connected: (items, missingOwner) => outcomes.push(`connected:${items.map((i) => i.githubAccount).join(",")}${missingOwner ? ` but not ${missingOwner}` : ""}`),
-				noInstallationVisible: (owner) => outcomes.push(`none visible${owner ? ` on ${owner}` : ""}`),
+				connected: (items, missingOwner, unanswered) =>
+					outcomes.push(`connected:${items.map((i) => i.githubAccount).join(",")}${missingOwner ? ` but not ${missingOwner}` : ""}${unanswered ? " (unanswered)" : ""}`),
+				noInstallationVisible: (owner, unanswered) => outcomes.push(`none visible${owner ? ` on ${owner}` : ""}${unanswered ? " (unanswered)" : ""}`),
 				requested: () => outcomes.push("requested"),
 				ignored: (reason) => outcomes.push(`ignored:${reason}`),
 				cancelled: () => outcomes.push("cancelled"),
@@ -318,7 +319,7 @@ describe("GitHubAppConnector", () => {
 		assert.deepEqual(start(opened[2]), { editor: "vscode", nonce: "n3", start: "authorize", challenge: pkceChallenge("v2") });
 		await app.handleReturn(query({ code: "c2", state: "n3" }));
 		assert.deepEqual(connected, ["c0de with v1", "c2 with v2"]);
-		assert.deepEqual(outcomes, ["connected:jo but not acme"]);
+		assert.deepEqual(outcomes, ["connected:jo but not acme (unanswered)"], "GitHub never said whether the install page ended in an approval request");
 	});
 
 	it("leaves an install page that returned to its return, whatever the focus does after", async () => {
@@ -364,7 +365,101 @@ describe("GitHubAppConnector", () => {
 		assert.deepEqual(start(opened[3]), { editor: "vscode", nonce: "n4", start: "authorize", challenge: pkceChallenge("v3") });
 		await app.handleReturn(query({ code: "c3", state: "n4" }));
 		assert.deepEqual(connected, ["c0de with v1", "c2 with v2", "c3 with v3"]);
-		assert.deepEqual(outcomes, ["connected:jo but not acme", "connected:jo but not acme"]);
+		assert.deepEqual(outcomes, ["connected:jo but not acme (unanswered)", "connected:jo but not acme"]);
+	});
+
+	it("does not authorize when the editor is back after the sign-in changed or the flow expired", async () => {
+		for (const change of ["sign-in", "clock"] as const) {
+			const { cloud, connected } = fakeCloud({ connect: async () => [{ installationId: 9, githubAccount: "jo" }] });
+			const { app, opened, outcomes, focus, signedIn, clock } = connector(cloud);
+			await app.connect("acme");
+			await app.handleReturn(query({ code: "c0de", state: "n1" }));
+			if (change === "sign-in") {
+				signedIn.session = "u1/other-org";
+			} else {
+				clock.now = GITHUB_RETURN_TTL_MS + 1;
+			}
+			focus.back?.();
+			await new Promise((resolve) => setImmediate(resolve));
+			assert.equal(opened.length, 2, `no authorize page after the ${change} change`);
+			assert.deepEqual(connected, ["c0de with v1"]);
+			assert.deepEqual(outcomes, [change === "sign-in" ? "ignored:signed-in-changed" : "ignored:expired"]);
+		}
+	});
+
+	it("ignores the install page's return once its flow expired, after the editor's own authorize ended", async () => {
+		const { cloud, connected } = fakeCloud({ connect: async () => [{ installationId: 9, githubAccount: "jo" }] });
+		const { app, opened, outcomes, focus, clock } = connector(cloud);
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		focus.back?.();
+		await new Promise((resolve) => setImmediate(resolve));
+		await app.handleReturn(query({ code: "c2", state: "n3" }));
+
+		clock.now = 60 * 60 * 1000;
+		await app.handleReturn(query({ state: "n2", setup_action: "install", installation_id: "7" }));
+		assert.equal(opened.length, 3, "no browser page opens on its own");
+		assert.deepEqual(connected, ["c0de with v1", "c2 with v2"]);
+		assert.deepEqual(outcomes, ["connected:jo but not acme (unanswered)", "ignored:expired"]);
+	});
+
+	it("ignores the install page's return after the sign-in changed, while the editor's own authorize is under way", async () => {
+		const { cloud } = fakeCloud({ connect: async () => [{ installationId: 9, githubAccount: "jo" }] });
+		const { app, opened, outcomes, focus, signedIn } = connector(cloud);
+		await app.connect("acme");
+		await app.handleReturn(query({ code: "c0de", state: "n1" }));
+		focus.back?.();
+		await new Promise((resolve) => setImmediate(resolve));
+		signedIn.session = "u1/other-org";
+		await app.handleReturn(query({ state: "n2", setup_action: "install", installation_id: "7" }));
+		await app.handleReturn(query({ code: "c2", state: "n3" }));
+		assert.equal(opened.length, 3);
+		assert.deepEqual(outcomes, ["ignored:signed-in-changed", "ignored:signed-in-changed"]);
+	});
+
+	it("reports the owner's approval request that the install page returns after the editor authorized on its own, in either order", async () => {
+		const noneVisible = () =>
+			fakeCloud({
+				connect: async () => {
+					throw new ConflictError("no accessible GitHub App installations; install the app first");
+				},
+			});
+		const requestFirst = noneVisible();
+		const first = connector(requestFirst.cloud);
+		await first.app.connect("acme");
+		await first.app.handleReturn(query({ code: "c0de", state: "n1" }));
+		first.focus.back?.();
+		await new Promise((resolve) => setImmediate(resolve));
+		await first.app.handleReturn(query({ state: "n2", setup_action: "request" }));
+		await first.app.handleReturn(query({ code: "c2", state: "n3" }));
+		assert.deepEqual(first.outcomes, ["requested"], "the authorize that follows asks for no other GitHub account");
+
+		const authorizeFirst = noneVisible();
+		const second = connector(authorizeFirst.cloud);
+		await second.app.connect("acme");
+		await second.app.handleReturn(query({ code: "c0de", state: "n1" }));
+		second.focus.back?.();
+		await new Promise((resolve) => setImmediate(resolve));
+		await second.app.handleReturn(query({ code: "c2", state: "n3" }));
+		await second.app.handleReturn(query({ state: "n2", setup_action: "request" }));
+		assert.deepEqual(second.outcomes, ["none visible on acme (unanswered)", "requested"]);
+	});
+
+	it("reports the approval request that arrives while the editor's own authorize is binding", async () => {
+		let bind: (items: unknown[]) => void = () => undefined;
+		const { cloud } = fakeCloud({ connect: () => new Promise((resolve) => (bind = resolve)) });
+		const { app, outcomes, focus } = connector(cloud);
+		await app.connect("acme");
+		const first = app.handleReturn(query({ code: "c0de", state: "n1" }));
+		bind([]);
+		await first;
+		focus.back?.();
+		await new Promise((resolve) => setImmediate(resolve));
+		const binding = app.handleReturn(query({ code: "c2", state: "n3" }));
+		await app.handleReturn(query({ state: "n2", setup_action: "request" }));
+		bind([{ installationId: 9, githubAccount: "jo" }]);
+		await binding;
+		assert.deepEqual(outcomes, ["requested", "connected:jo"]);
 	});
 
 	it("offers GitHub's account picker for the owner the app is still not on", async () => {
