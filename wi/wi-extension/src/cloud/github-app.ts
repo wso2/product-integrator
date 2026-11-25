@@ -293,15 +293,16 @@ export interface GitHubConnectOutcome {
 	/**
 	 * GitHub is connected; `missingOwner` is the repository's owner when the app
 	 * is still not on it after installing, as when the browser is signed in to
-	 * another GitHub account.
+	 * another GitHub account. `unanswered` when GitHub never said how the install
+	 * page ended, so the owner's approval may be pending.
 	 */
-	connected(installations: GitHubInstallation[], missingOwner?: string): void;
+	connected(installations: GitHubInstallation[], missingOwner?: string, unanswered?: boolean): void;
 	/**
 	 * The GitHub user still sees the app on no account after installing it, as
 	 * when the browser is signed in to another GitHub account; `owner` is the
-	 * repository's owner, when there is one.
+	 * repository's owner, when there is one. `unanswered` as for `connected`.
 	 */
-	noInstallationVisible(owner?: string): void;
+	noInstallationVisible(owner?: string, unanswered?: boolean): void;
 	/** The GitHub organization's owner has to approve the app. */
 	requested(): void;
 	/** GitHub's return was not taken, so connecting did not happen here. */
@@ -326,7 +327,11 @@ export interface GitHubAppConnectorDeps {
 	now?: () => number;
 	/** Installations were just connected to the organization, whatever comes next in the flow. */
 	onBound?: (installations: GitHubInstallation[]) => void;
+	/** Calls `back` once the editor has lost its focus, as to the browser, and got it back. */
+	onFocusBack?: (back: () => void) => { dispose(): void };
 }
+
+type GitHubFlow = { nonce: string; owner?: string; installTried: boolean; verifier?: string; session?: string; startedAt: number };
 
 /**
  * Connects GitHub to the organization from the editor, as the console's own
@@ -339,9 +344,15 @@ export interface GitHubAppConnectorDeps {
  * the code cannot bind it.
  */
 export class GitHubAppConnector {
-	private pending?: { nonce: string; owner?: string; installTried: boolean; verifier?: string; session?: string; startedAt: number };
+	private pending?: GitHubFlow;
 	/** Counts the flows started; an exchange that finishes after a newer start is dropped. */
 	private started = 0;
+	private focusWatch?: { dispose(): void };
+	/**
+	 * The install step that being back in the editor ended, until GitHub's own return for it comes; `requested` once
+	 * that return said the organization's owner has to approve the app.
+	 */
+	private replacedInstall?: GitHubFlow & { requested?: boolean };
 	private readonly newNonce: () => string;
 	private readonly newVerifier: () => string;
 	private readonly now: () => number;
@@ -358,13 +369,16 @@ export class GitHubAppConnector {
 	}
 
 	/** Opens GitHub through the console; `owner` is the account the repository needs the app on. */
-	async connect(owner?: string, start: GitHubConnectStart = "authorize", installTried = start === "install"): Promise<void> {
+	async connect(owner?: string, start: GitHubConnectStart = "authorize", installTried = start === "install", replacing?: GitHubFlow): Promise<void> {
 		if (!this.canReturnHere) {
 			await this.deps.openExternal(this.deps.consoleUrl());
 			return;
 		}
 		this.started++;
 		const flow = this.started;
+		this.focusWatch?.dispose();
+		this.focusWatch = undefined;
+		this.replacedInstall = replacing;
 		// A newer connect takes the flow over from here: a return for the one before must not be bound
 		// while this one is still working out the editor's address.
 		this.pending = undefined;
@@ -399,13 +413,86 @@ export class GitHubAppConnector {
 				this.pending = undefined;
 			}
 			this.deps.outcome.failed("Couldn't open the browser for GitHub. Try again.");
+		} else if (start === "install") {
+			this.authorizeOnFocusBack(nonce);
 		}
+	}
+
+	// GitHub leaves its install page for the editor only through the app's Setup URL; without one, the person coming
+	// back to the editor ends the install as that return would.
+	private authorizeOnFocusBack(nonce: string): void {
+		this.focusWatch = this.deps.onFocusBack?.(() => {
+			const install = this.pending;
+			if (install?.nonce !== nonce) {
+				return;
+			}
+			if (!this.stillValid(install)) {
+				this.pending = undefined;
+				return;
+			}
+			void this.connect(install.owner, "authorize", true, install);
+		});
+	}
+
+	/** The install step that `state` started, when being back in the editor already ended it. */
+	private replacedInstallFor(state: string | null): GitHubFlow | undefined {
+		return state && state === this.replacedInstall?.nonce ? this.replacedInstall : undefined;
+	}
+
+	/** Whether `flow` may still connect GitHub: not expired, and for the person and organization signed in when it started. */
+	private stillValid(flow: GitHubFlow): boolean {
+		if (this.now() - flow.startedAt > GITHUB_RETURN_TTL_MS) {
+			this.deps.log("GitHub answered after its flow had expired; the answer was ignored");
+			this.deps.outcome.ignored("expired");
+			return false;
+		}
+		if (flow.session !== this.deps.session()) {
+			// GitHub would be connected to an organization, or for a person, other than the one that started.
+			this.deps.log("GitHub answered after the Choreo Cloud sign-in changed; the answer was ignored");
+			this.deps.outcome.ignored("signed-in-changed");
+			return false;
+		}
+		return true;
+	}
+
+	// The editor's own authorize, whether under way or ended, binds the installation; after an approval request it
+	// stops short of asking for another GitHub account. One that has ended ran before the install did, so the editor
+	// authorizes once more.
+	private async lateInstallReturn(install: GitHubFlow, setupAction: string | null): Promise<void> {
+		this.replacedInstall = undefined;
+		if (!this.stillValid(install)) {
+			return;
+		}
+		if (setupAction === "request") {
+			this.replacedInstall = { ...install, requested: true };
+			this.deps.outcome.requested();
+			return;
+		}
+		if (this.pending) {
+			this.deps.log("GitHub's install page returned while the editor was already authorizing again");
+			return;
+		}
+		await this.connect(install.owner, "authorize", true);
+	}
+
+	/** Connected, naming the owner the app is still not on unless GitHub already said its approval is pending. */
+	private reportConnected(installations: GitHubInstallation[], missingOwner?: string): void {
+		const install = this.replacedInstall;
+		if (install?.requested) {
+			this.deps.outcome.connected(installations);
+			return;
+		}
+		this.deps.outcome.connected(installations, missingOwner, !!missingOwner && !!install);
 	}
 
 	/** Takes GitHub's return, as the console relayed it to `/ghapp`. */
 	async handleReturn(query: URLSearchParams): Promise<void> {
-		const pending = this.pending;
 		const state = query.get("state");
+		const replaced = this.replacedInstallFor(state);
+		if (replaced) {
+			return this.lateInstallReturn(replaced, query.get("setup_action"));
+		}
+		const pending = this.pending;
 		if (!pending || !state || state !== pending.nonce) {
 			// With several windows open, GitHub's return can reach one that did not start the flow.
 			this.deps.log("A GitHub return arrived that this window did not start; it was ignored");
@@ -413,15 +500,7 @@ export class GitHubAppConnector {
 			return;
 		}
 		this.pending = undefined;
-		if (this.now() - pending.startedAt > GITHUB_RETURN_TTL_MS) {
-			this.deps.log("A GitHub return arrived after its flow had expired; it was ignored");
-			this.deps.outcome.ignored("expired");
-			return;
-		}
-		if (pending.session !== this.deps.session()) {
-			// GitHub would be connected to an organization, or for a person, other than the one that started.
-			this.deps.log("A GitHub return arrived after the Choreo Cloud sign-in changed; it was ignored");
-			this.deps.outcome.ignored("signed-in-changed");
+		if (!this.stillValid(pending)) {
 			return;
 		}
 		const flow = this.started;
@@ -456,7 +535,7 @@ export class GitHubAppConnector {
 			if (isCloudError(err) && err.code === "conflict") {
 				// The GitHub user has the app on no account: install it, once.
 				if (pending.installTried) {
-					this.deps.outcome.noInstallationVisible(pending.owner);
+					this.reportNoneVisible(pending.owner);
 				} else {
 					await this.connect(pending.owner, "install");
 				}
@@ -475,6 +554,14 @@ export class GitHubAppConnector {
 			await this.connect(missingOwner, "install");
 			return;
 		}
-		this.deps.outcome.connected(installations, missingOwner);
+		this.reportConnected(installations, missingOwner);
+	}
+
+	/** No installation visible after installing, unless GitHub already said the owner's approval is pending. */
+	private reportNoneVisible(owner?: string): void {
+		const install = this.replacedInstall;
+		if (!install?.requested) {
+			this.deps.outcome.noInstallationVisible(owner, !!install);
+		}
 	}
 }
