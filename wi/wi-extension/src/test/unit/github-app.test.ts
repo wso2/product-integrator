@@ -443,6 +443,12 @@ describe("GitHubAppConnector", () => {
 			assert.deepEqual(outcomes, ["connected:Acme"]);
 		});
 
+		it("names itself to the console when the platform gave it a name", async () => {
+			const { app, opened } = connector(fakeCloud().cloud, "code-oss", async () => ({ returnTo: EDITOR, project: "orders", name: "editor-7f3a9c" }));
+			await app.connect("Acme");
+			assert.equal(new URL(opened[0]).searchParams.get("name"), "editor-7f3a9c");
+		});
+
 		it("uses its URI scheme where the console knows it, whatever address it has", async () => {
 			const { app, opened } = connector(fakeCloud().cloud, "vscode", async () => ({ returnTo: EDITOR, project: "orders" }));
 			await app.connect("Acme");
