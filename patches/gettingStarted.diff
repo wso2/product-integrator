@@ -1458,7 +1458,7 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginD
 ===================================================================
 --- /dev/null
 +++ agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginDialog.ts
-@@ -0,0 +1,566 @@
+@@ -0,0 +1,567 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Copyright (c) Microsoft Corporation. All rights reserved.
 + *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -1713,7 +1713,8 @@ Index: agent-builder/lib/vscode/src/vs/workbench/browser/parts/editor/wso2LoginD
 +					radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--wso2-brand-accent) 8%, transparent) 0%, transparent 36%),
 +					color-mix(in srgb, var(--vscode-editor-background) 90%, transparent);
 +				backdrop-filter: blur(12px);
-+				z-index: 10000;
++				/* Below the quick input (2550), so the sign-in's region pick shows above the dialog. */
++				z-index: 2549;
 +				display: flex;
 +				align-items: center;
 +				justify-content: center;
