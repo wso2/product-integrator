@@ -20,6 +20,7 @@ import { Uri, env, window } from "vscode";
 import { BridgeLayer } from "../BridgeLayer";
 import { ext } from "../extensionVariables";
 import { buildConsoleUrl } from "@wso2/wso2-cloud-client";
+import { readCloudEditorComponent } from "@wso2/wso2-cloud-client/vscode";
 import { SIGN_IN_CHANGED_MESSAGE, endingConnect, signedInScope } from "./github-access";
 import { GITHUB_RETURN_PATH, GitHubAppConnector, type IgnoredGitHubReturn, type WebEditor, forgetGitHubAccess } from "./github-app";
 
@@ -47,7 +48,7 @@ function offerAnotherAccount(message: string, owner: string | undefined): void {
 
 /**
  * This cloud editor as the console confirms it before sending GitHub's return: the address the browser reaches it
- * at, and the project and component the platform started it for, which is how the platform finds the person's editor.
+ * at, and the project and component the platform started it for, and its own name, which is how the platform finds it.
  */
 async function cloudEditor(): Promise<WebEditor> {
 	const project = process.env.CLOUD_INITIAL_PROJECT_ID?.trim();
@@ -55,7 +56,7 @@ async function cloudEditor(): Promise<WebEditor> {
 		throw new Error("the editor was started without its project");
 	}
 	const returnTo = (await env.asExternalUri(Uri.parse(`${env.uriScheme}://${ext.context.extension.id}${GITHUB_RETURN_PATH}`))).toString(true);
-	return { returnTo, project, component: process.env.SOURCE_COMPONENT_ID?.trim() || undefined };
+	return { returnTo, project, component: process.env.SOURCE_COMPONENT_ID?.trim() || undefined, name: readCloudEditorComponent() };
 }
 
 /** The GitHub connector for this window, telling the person how connecting ended and the deployment form to recheck. */

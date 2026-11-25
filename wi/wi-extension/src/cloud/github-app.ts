@@ -243,6 +243,8 @@ export interface WebEditor {
 	returnTo: string;
 	project: string;
 	component?: string;
+	/** The editor's own component name, where the platform gives it one: the console then asks about this editor only. */
+	name?: string;
 }
 
 /** The editor's path the console sends GitHub's return to. */
@@ -269,7 +271,7 @@ export function consoleGitHubStartUrl(consoleUrl: string, scheme: string, nonce:
 	const url = new URL(GITHUB_RETURN_PATH, consoleUrl);
 	url.search = new URLSearchParams({
 		editor: web ? GITHUB_WEB_EDITOR : scheme,
-		...(web ? { return: web.returnTo, project: web.project, ...(web.component ? { component: web.component } : {}) } : {}),
+		...(web ? { return: web.returnTo, project: web.project, ...(web.component ? { component: web.component } : {}), ...(web.name ? { name: web.name } : {}) } : {}),
 		nonce,
 		start,
 		...(challenge ? { challenge } : {}),
