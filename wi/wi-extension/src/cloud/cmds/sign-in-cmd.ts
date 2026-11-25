@@ -18,7 +18,7 @@
 
 import { type CloudEnvName, isCloudError } from "@wso2/wso2-cloud-client";
 import { type ICmdParamsBase, WICommandIds } from "@wso2/wso2-platform-core";
-import { type ExtensionContext, ProgressLocation, commands, window } from "vscode";
+import { CancellationTokenSource, type ExtensionContext, ProgressLocation, commands, window } from "vscode";
 import { BridgeLayer } from "../../BridgeLayer";
 import { ext } from "../../extensionVariables";
 import { handleCloudError } from "../platform/error-handler";
@@ -26,10 +26,14 @@ import { isPlatformReady, setExtensionName } from "./cmd-utils";
 import { cloudPlaceName, pickRegion } from "./region-cmd";
 
 export function signInCommand(context: ExtensionContext) {
+	// Cancel Sign In also ends a sign-in that is still asking for the region.
+	let signingIn: CancellationTokenSource | undefined;
 	context.subscriptions.push(
 		// `region` signs in to that production region without asking; otherwise the person is asked where there is a choice.
 		commands.registerCommand(WICommandIds.SignIn, async (params: ICmdParamsBase & { reselectOrganization?: boolean; region?: CloudEnvName }) => {
 			setExtensionName(params?.extName);
+			const cancel = new CancellationTokenSource();
+			signingIn = cancel;
 			try {
 				isPlatformReady(ext);
 				if (!ext.authProvider) {
@@ -39,7 +43,7 @@ export function signInCommand(context: ExtensionContext) {
 				if (!params?.reselectOrganization) {
 					const platform = ext.clients.platform;
 					const named = platform.regions.find((region) => region.name === params?.region)?.name;
-					const region = named ?? (await pickRegion({ title: "Sign In to Choreo Cloud", placeHolder: "Select the region where you want to create and deploy your integrations" }));
+					const region = named ?? (await pickRegion({ title: "Sign In to Choreo Cloud", placeHolder: "Select the region where you want to create and deploy your integrations" }, cancel.token));
 					if (!region) {
 						ext.log("Sign-in cancelled");
 						return;
@@ -54,6 +58,10 @@ export function signInCommand(context: ExtensionContext) {
 							return;
 						}
 					}
+				}
+				if (cancel.token.isCancellationRequested) {
+					ext.log("Sign-in cancelled");
+					return;
 				}
 				ext.log(`Signing in to ${cloudPlaceName()}`);
 				BridgeLayer.notifySignInInitiated();
@@ -78,6 +86,7 @@ export function signInCommand(context: ExtensionContext) {
 			}
 		}),
 		commands.registerCommand(WICommandIds.CancelSignIn, () => {
+			signingIn?.cancel();
 			ext.authProvider?.cancelPendingSignIn();
 		}),
 	);
