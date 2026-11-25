@@ -249,7 +249,8 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 				reason: "git_orgs_unavailable",
 			});
 		}
-		return { gitOrgs: await listConnectedGitHubAccounts(ext.clients.platform.cloud) };
+		const { accounts, unread } = await listConnectedGitHubAccounts(ext.clients.platform.cloud, (message) => ext.log(message));
+		return { gitOrgs: accounts, unreadOrgs: unread };
 	}
 
 	async getCredentials(_params: GetCredentialsReq): Promise<CredentialItem[]> {
@@ -312,7 +313,8 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 					repoUrl,
 					{
 						recursive: true,
-						ref: params.repo.branch,
+						// A repository with no commits has no branch to ask for.
+						ref: params.repo.isBareRepo ? undefined : params.repo.branch,
 						parentPath: join(params.cwd, ".."),
 						progress: { report: ({ increment, ...rest }: { increment: number }) => progress.report({ increment, ...rest }) },
 					},
@@ -329,6 +331,15 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 		const repo = newGit.open(await newGit.getRepositoryRoot(newPath), await newGit.getRepositoryDotGit(newPath));
 		await window.withProgress({ title: "Pushing the changes to your remote repository...", location: ProgressLocation.Notification }, async () => {
+			if (params.repo.isBareRepo) {
+				// The first commit creates the branch: named here, as git's own default differs between installs.
+				const branch = params.repo.branch || "main";
+				await repo.exec(["symbolic-ref", "HEAD", `refs/heads/${branch}`]);
+				await repo.add(["."]);
+				await repo.commit("Add integration source");
+				await repo.push("origin", branch, true);
+				return;
+			}
 			await repo.add(["."]);
 			await repo.commit("Add integration source");
 			const headRef = await repo.getHEADRef();

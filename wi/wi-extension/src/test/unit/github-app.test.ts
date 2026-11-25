@@ -18,12 +18,12 @@
 
 import * as assert from "assert";
 import { type CloudClient, ConflictError, NotFoundError } from "@wso2/wso2-cloud-client";
-import { AUTHORIZE_GITHUB_MESSAGE, CONNECT_GITHUB_MESSAGE, GITHUB_RETURN_TTL_MS, type WebEditor, GitHubAppConnector, listConnectedGitHubAccounts, consoleGitHubStartUrl, forgetGitHubAccess, gitHubSourceFor, installationSettingsUrl, pkceChallenge, resolveGitHubAccess, sharedGitHubAccess } from "../../cloud/github-app";
+import { AUTHORIZE_GITHUB_MESSAGE, CONNECT_GITHUB_MESSAGE, UNREAD_GITHUB_MESSAGE, GITHUB_RETURN_TTL_MS, type WebEditor, GitHubAppConnector, listConnectedGitHubAccounts, consoleGitHubStartUrl, forgetGitHubAccess, gitHubSourceFor, installationSettingsUrl, pkceChallenge, resolveGitHubAccess, sharedGitHubAccess } from "../../cloud/github-app";
 
 const acme = { installationId: 7, githubAccount: "Acme" };
 
 /** A cloud client answering the git integration and the public repository read. */
-function fakeCloud(answers: { installations?: unknown[]; grantedRepos?: string[]; reposError?: Error; appBranches?: string[]; publicBranches?: string[]; connect?: () => Promise<unknown[]> } = {}) {
+function fakeCloud(answers: { installations?: unknown[]; grantedRepos?: string[]; reposError?: Error; reposErrorFor?: Record<number, Error>; appBranches?: string[]; publicBranches?: string[]; connect?: () => Promise<unknown[]> } = {}) {
 	const connected: string[] = [];
 	const calls = { installations: 0 };
 	const cloud = {
@@ -32,9 +32,10 @@ function fakeCloud(answers: { installations?: unknown[]; grantedRepos?: string[]
 				calls.installations++;
 				return answers.installations ?? [];
 			},
-			listGitHubRepos: async () => {
-				if (answers.reposError) {
-					throw answers.reposError;
+			listGitHubRepos: async (installationId: number) => {
+				const failure = answers.reposErrorFor?.[installationId] ?? answers.reposError;
+				if (failure) {
+					throw failure;
 				}
 				return (answers.grantedRepos ?? []).map((name) => ({ fullName: `acme/${name}`, name, owner: "acme", private: true, defaultBranch: "main" }));
 			},
@@ -164,14 +165,17 @@ describe("GitHub repository access", () => {
 });
 
 describe("The GitHub accounts a new integration's repository is chosen from", () => {
+	const globex = { installationId: 8, githubAccount: "Globex" };
+	const authRequired = new ConflictError("github-auth-required", { status: 409, apiError: "github-auth-required" });
+
 	it("lists each connected account with the repositories the app was given on it", async () => {
 		const { cloud } = fakeCloud({ installations: [acme], grantedRepos: ["orders", "billing"] });
-		assert.deepEqual(await listConnectedGitHubAccounts(cloud), [{ orgName: "Acme", orgHandler: "Acme", repositories: [{ name: "billing" }, { name: "orders" }] }]);
+		assert.deepEqual(await listConnectedGitHubAccounts(cloud), { accounts: [{ orgName: "Acme", orgHandler: "Acme", repositories: [{ name: "billing" }, { name: "orders" }] }], unread: [] });
 	});
 
 	it("lists an account the app was given no repository on, so one can be given", async () => {
 		const { cloud } = fakeCloud({ installations: [acme] });
-		assert.deepEqual(await listConnectedGitHubAccounts(cloud), [{ orgName: "Acme", orgHandler: "Acme", repositories: [] }]);
+		assert.deepEqual(await listConnectedGitHubAccounts(cloud), { accounts: [{ orgName: "Acme", orgHandler: "Acme", repositories: [] }], unread: [] });
 	});
 
 	it("asks for GitHub to be connected when no account is, or the only one is gone from GitHub", async () => {
@@ -180,11 +184,31 @@ describe("The GitHub accounts a new integration's repository is chosen from", ()
 		await assert.rejects(listConnectedGitHubAccounts(gone.cloud), { message: CONNECT_GITHUB_MESSAGE });
 	});
 
-	it("asks for GitHub to be connected again when the person's authorization is needed, and passes other failures on", async () => {
-		const expired = fakeCloud({ installations: [acme], reposError: new ConflictError("github-auth-required", { status: 409, apiError: "github-auth-required" }) });
+	it("asks for GitHub to be connected again when no account could be read", async () => {
+		const expired = fakeCloud({ installations: [acme], reposError: authRequired });
 		await assert.rejects(listConnectedGitHubAccounts(expired.cloud), { message: AUTHORIZE_GITHUB_MESSAGE });
-		const down = fakeCloud({ installations: [acme], reposError: new Error("the git integration is down") });
-		await assert.rejects(listConnectedGitHubAccounts(down.cloud), { message: "the git integration is down" });
+		const down = fakeCloud({ installations: [acme], reposError: new Error("upstream error") });
+		await assert.rejects(listConnectedGitHubAccounts(down.cloud), { message: UNREAD_GITHUB_MESSAGE });
+		const mixed = fakeCloud({ installations: [acme, globex], reposErrorFor: { 7: new Error("upstream error"), 8: authRequired } });
+		await assert.rejects(listConnectedGitHubAccounts(mixed.cloud), { message: AUTHORIZE_GITHUB_MESSAGE });
+	});
+
+	it("lists the accounts that can be read and names the ones that cannot", async () => {
+		const logged: string[] = [];
+		const failed = fakeCloud({ installations: [acme, globex], grantedRepos: ["orders"], reposErrorFor: { 8: new Error("upstream error") } });
+		assert.deepEqual(await listConnectedGitHubAccounts(failed.cloud, (message) => logged.push(message)), {
+			accounts: [{ orgName: "Acme", orgHandler: "Acme", repositories: [{ name: "orders" }] }],
+			unread: ["Globex"],
+		});
+		assert.deepEqual(logged, ["Could not read the repositories of Globex: upstream error"]);
+
+		const needsAuth = fakeCloud({ installations: [acme, globex], grantedRepos: ["orders"], reposErrorFor: { 8: authRequired } });
+		assert.deepEqual((await listConnectedGitHubAccounts(needsAuth.cloud)).unread, ["Globex"]);
+	});
+
+	it("does not name an account gone from GitHub", async () => {
+		const { cloud } = fakeCloud({ installations: [acme, globex], grantedRepos: ["orders"], reposErrorFor: { 8: new NotFoundError("gone") } });
+		assert.deepEqual((await listConnectedGitHubAccounts(cloud)).unread, []);
 	});
 });
 
@@ -417,6 +441,12 @@ describe("GitHubAppConnector", () => {
 			await app.handleReturn(new URLSearchParams({ code: "c1", state: "n1" }));
 			assert.deepEqual(binds, ["c1 with v1"]);
 			assert.deepEqual(outcomes, ["connected:Acme"]);
+		});
+
+		it("names itself to the console when the platform gave it a name", async () => {
+			const { app, opened } = connector(fakeCloud().cloud, "code-oss", async () => ({ returnTo: EDITOR, project: "orders", name: "editor-7f3a9c" }));
+			await app.connect("Acme");
+			assert.equal(new URL(opened[0]).searchParams.get("name"), "editor-7f3a9c");
 		});
 
 		it("uses its URI scheme where the console knows it, whatever address it has", async () => {

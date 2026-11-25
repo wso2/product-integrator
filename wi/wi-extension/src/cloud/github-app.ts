@@ -99,14 +99,24 @@ export interface ConnectedGitHubAccount {
 /** What the form says, beside its button for connecting, when no GitHub account is connected or WSO2 Cloud cannot read one. */
 export const CONNECT_GITHUB_MESSAGE = "Connect GitHub to Choreo Cloud to choose a repository.";
 export const AUTHORIZE_GITHUB_MESSAGE = "Choreo Cloud's access to your GitHub account has expired. Connect GitHub again to choose a repository.";
+export const UNREAD_GITHUB_MESSAGE = "Choreo Cloud could not read your GitHub repositories. Connect GitHub again, then retry.";
+
+/** The accounts a repository can be chosen from, and the connected ones left out because their repositories could not be read. */
+export interface ConnectedGitHubAccounts {
+	accounts: ConnectedGitHubAccount[];
+	unread: string[];
+}
 
 /**
  * The GitHub accounts connected to the organization, each with the repositories the app was given: what a new
- * integration's repository is chosen from. Fails, with what to do about it, when none is connected or when the
- * person's GitHub authorization is needed to read them. An installation gone from GitHub is left out.
+ * integration's repository is chosen from. An account whose repositories cannot be read is named in `unread`: the
+ * organization's installations include ones this person's GitHub account cannot see. Fails, with what to do about
+ * it, when none is connected or none could be read.
  */
-export async function listConnectedGitHubAccounts(cloud: CloudClient): Promise<ConnectedGitHubAccount[]> {
+export async function listConnectedGitHubAccounts(cloud: CloudClient, log: (message: string) => void = () => undefined): Promise<ConnectedGitHubAccounts> {
 	const installations = await cloud.git.listGitHubInstallations();
+	const unread: string[] = [];
+	let authRequired = false;
 	// Asked for together: the repository list waits for the slowest account, not for all of them in turn.
 	const listed = await Promise.all(
 		installations.map(async (installation): Promise<ConnectedGitHubAccount | undefined> => {
@@ -122,21 +132,24 @@ export async function listConnectedGitHubAccounts(cloud: CloudClient): Promise<C
 						.sort((a, b) => a.name.localeCompare(b.name)),
 				};
 			} catch (err) {
-				if (isGitHubAuthRequired(err)) {
-					throw new Error(AUTHORIZE_GITHUB_MESSAGE);
-				}
 				if (isCloudError(err) && err.code === "not_found") {
 					return undefined; // the installation is gone from GitHub
 				}
-				throw err;
+				authRequired ||= isGitHubAuthRequired(err);
+				unread.push(installation.githubAccount);
+				log(`Could not read the repositories of ${installation.githubAccount}: ${err instanceof Error ? err.message : String(err)}`);
+				return undefined;
 			}
 		}),
 	);
 	const accounts = listed.filter((account): account is ConnectedGitHubAccount => account !== undefined);
 	if (accounts.length === 0) {
-		throw new Error(CONNECT_GITHUB_MESSAGE);
+		if (unread.length === 0) {
+			throw new Error(CONNECT_GITHUB_MESSAGE);
+		}
+		throw new Error(authRequired ? AUTHORIZE_GITHUB_MESSAGE : UNREAD_GITHUB_MESSAGE);
 	}
-	return accounts;
+	return { accounts, unread: unread.sort((a, b) => a.localeCompare(b)) };
 }
 
 /** How long an access answer is shared: the form's checks of one repository reuse it, and a change made on GitHub shows on the next check. */
@@ -230,6 +243,8 @@ export interface WebEditor {
 	returnTo: string;
 	project: string;
 	component?: string;
+	/** The editor's own component name, where the platform gives it one: the console then asks about this editor only. */
+	name?: string;
 }
 
 /** The editor's path the console sends GitHub's return to. */
@@ -252,10 +267,11 @@ export const pkceChallenge = (verifier: string) => createHash("sha256").update(v
  * challenge, so a code GitHub returns is bound only with this window's verifier.
  */
 export function consoleGitHubStartUrl(consoleUrl: string, scheme: string, nonce: string, start: GitHubConnectStart, challenge?: string, web?: WebEditor): string {
+	// On the console's host root, whatever path `consoleUrl` has: the page belongs to the console all products share.
 	const url = new URL(GITHUB_RETURN_PATH, consoleUrl);
 	url.search = new URLSearchParams({
 		editor: web ? GITHUB_WEB_EDITOR : scheme,
-		...(web ? { return: web.returnTo, project: web.project, ...(web.component ? { component: web.component } : {}) } : {}),
+		...(web ? { return: web.returnTo, project: web.project, ...(web.component ? { component: web.component } : {}), ...(web.name ? { name: web.name } : {}) } : {}),
 		nonce,
 		start,
 		...(challenge ? { challenge } : {}),
