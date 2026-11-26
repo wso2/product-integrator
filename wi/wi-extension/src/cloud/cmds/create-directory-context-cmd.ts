@@ -93,17 +93,17 @@ export function createDirectoryContextCommand(context: ExtensionContext) {
 					if (remotes.length === 0) {
 						throw new Error("The Selected directory does not have any Git remotes");
 					}
-					const cloud = ext.clients.platform.cloud;
+					const backend = ext.backend;
 					const integrations = await window.withProgress(
 						{ title: `Fetching ${ext.terminologies?.componentTermPlural} of project ${selectedProject.name}...`, location: ProgressLocation.Notification },
-						() => cloud.components.list(selectedProject.id),
+						() => backend.integrations.list(selectedProject.id),
 					);
 					dataCacheStore.getState().setIntegrations(session.org.handle, selectedProject.id, integrations);
 
 					if (integrations.length > 0) {
 						// Check whether the directory's remotes match any of the project's repositories.
 						const repositories = await Promise.all(
-							integrations.map((integration) => cloud.components.repository(integration.id, selectedProject.id).catch((): undefined => undefined)),
+							integrations.map((integration) => backend.integrations.repository(integration.id, selectedProject.id).catch((): undefined => undefined)),
 						);
 						const hasMatchingRemote = repositories.some((repository) => {
 							const parsedRepoUrl = parseGitURL(repositoryUrlOf(repository) ?? "");

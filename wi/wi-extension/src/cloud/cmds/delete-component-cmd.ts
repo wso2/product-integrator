@@ -63,7 +63,7 @@ export function deleteComponentCommand(context: ExtensionContext) {
 					return;
 				}
 				await window.withProgress({ title: `Deleting ${ext.terminologies?.componentTerm} ${integration.displayName || integration.name}...`, location: ProgressLocation.Notification }, async () => {
-					await ext.clients.platform.cloud.components.delete(integration.id, selectedProject.id);
+					await ext.backend.integrations.delete(integration.id, selectedProject.id);
 					const cache = dataCacheStore.getState().getIntegrations(session.org.handle, selectedProject.id);
 					dataCacheStore.getState().setIntegrations(
 						session.org.handle,

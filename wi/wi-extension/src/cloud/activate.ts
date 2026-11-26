@@ -24,6 +24,7 @@ import { commands, window, workspace } from "vscode";
 import { ext } from "../extensionVariables";
 import { getExtVersion } from "../utils/commonUtils";
 import { WIAuthState } from "./auth/wso2-auth-provider";
+import { choreoCloudBackend } from "./backend/choreo-cloud";
 import type { WICloudExtensionAPI } from "./cloud-ext-api";
 import { cloneOpenedIntegration } from "./clone-on-open";
 import { activateURIHandlers } from "./cloud-uri-handlers";
@@ -92,6 +93,11 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		return;
 	}
 	ext.clients = { platform };
+	ext.backend = choreoCloudBackend({
+		cloud: () => platform.cloud,
+		consoleUrl: () => ext.config.consoleUrl,
+		orgHandle: () => ext.authProvider?.org?.handle,
+	});
 	applyEnvironment(platform.environment);
 	vscode.commands.executeCommand("setContext", MULTI_REGION_CONTEXT, platform.regions.length > 1);
 	context.subscriptions.push(platform);

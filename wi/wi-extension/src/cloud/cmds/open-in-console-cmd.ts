@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { type Component, type OpenInConsoleParams, type Project, buildConsoleUrl } from "@wso2/wso2-cloud-client";
+import type { Component, OpenInConsoleParams, Project } from "@wso2/wso2-cloud-client";
 import { type ICmdParamsBase, type ICreateNewIntegrationCmdParams, WICommandIds } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, type QuickPickItem, QuickPickItemKind, Uri, commands, env, window } from "vscode";
 import { ext } from "../../extensionVariables";
@@ -47,8 +47,8 @@ export function openInConsoleCommand(context: ExtensionContext) {
 				const selected = contextStore.getState().state.selected;
 				const selectedProject = params?.project ?? selected?.project ?? (await selectProject(`Loading projects from '${session.org.name}'`, `Select project from '${session.org.name}'`));
 				const openIntegration = (integration: Component) =>
-					env.openExternal(Uri.parse(buildConsoleUrl(ext.config.consoleUrl, { orgHandle, project: selectedProject.id, integration: integration.id })));
-				const openProject = () => env.openExternal(Uri.parse(buildConsoleUrl(ext.config.consoleUrl, { orgHandle, project: selectedProject.id })));
+					env.openExternal(Uri.parse(ext.backend.links.console({ orgHandle, project: selectedProject.id, integration: integration.id })));
+				const openProject = () => env.openExternal(Uri.parse(ext.backend.links.console({ orgHandle, project: selectedProject.id })));
 
 				if (params?.component) {
 					openIntegration(params.component);
@@ -93,7 +93,7 @@ export function openInConsoleCommand(context: ExtensionContext) {
 				const choice = await quickPickWithLoader<Pick["item"]>({
 					cacheQuickPicks: toPicks(dataCacheStore.getState().getIntegrations(orgHandle, selectedProject.id)),
 					loadQuickPicks: async () => {
-						const integrations = await ext.clients.platform.cloud.components.list(selectedProject.id);
+						const integrations = await ext.backend.integrations.list(selectedProject.id);
 						dataCacheStore.getState().setIntegrations(orgHandle, selectedProject.id, integrations);
 						return toPicks(integrations);
 					},

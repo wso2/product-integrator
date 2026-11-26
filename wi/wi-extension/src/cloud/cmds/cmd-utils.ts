@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { type Component, type Organization, type PlatformSession, type Project, RESOURCE_NAME } from "@wso2/wso2-cloud-client";
+import type { Component, Organization, PlatformSession, Project } from "@wso2/wso2-cloud-client";
 import { type ExtensionName, WICommandIds } from "@wso2/wso2-platform-core";
 import { ProgressLocation, type QuickPickItem, QuickPickItemKind, type WorkspaceFolder, commands, window, workspace } from "vscode";
 import { type ExtensionVariables, ext } from "../../extensionVariables";
@@ -36,7 +36,7 @@ export const selectIntegration = async (
 			.getIntegrations(orgHandle, project.id)
 			.map((item) => ({ label: item.displayName || item.name, detail: item.id, item })),
 		loadQuickPicks: async () => {
-			const integrations = await ext.clients.platform.cloud.components.list(project.id);
+			const integrations = await ext.backend.integrations.list(project.id);
 			dataCacheStore.getState().setIntegrations(orgHandle, project.id, integrations);
 			if (integrations.length === 0) {
 				throw new Error(`You do not have any existing ${ext.terminologies?.componentTermPlural} in your project. Please retry after creating one.`);
@@ -61,7 +61,7 @@ export const selectProject = async (loadingTitle = "Loading projects...", select
 			.getProjects(orgHandle)
 			.map((item) => ({ label: item.name, detail: `Name: ${item.id}`, item })),
 		loadQuickPicks: async () => {
-			const projects = await ext.clients.platform.cloud.projects.list();
+			const projects = await ext.backend.projects.list();
 			dataCacheStore.getState().setProjects(orgHandle, projects);
 			if (projects.length === 0) {
 				throw new Error("You do not have any existing projects. Please try creating one.");
@@ -103,7 +103,7 @@ export const selectProjectWithCreateNew = async (
 	quickPick.show();
 
 	let listError: unknown;
-	ext.clients.platform.cloud.projects
+	ext.backend.projects
 		.list()
 		.then((projects) => {
 			dataCacheStore.getState().setProjects(org.handle, projects);
@@ -150,10 +150,9 @@ export const toProjectName = toResourceName;
 
 export const createNewProject = async (projectName?: string, isWorkspaceMapping?: boolean): Promise<Project> => {
 	const org = requireOrg();
-	const cloud = ext.clients.platform.cloud;
 	let projectCache = dataCacheStore.getState().getProjects(org.handle);
 	try {
-		projectCache = await cloud.projects.list();
+		projectCache = await ext.backend.projects.list();
 		dataCacheStore.getState().setProjects(org.handle, projectCache);
 	} catch {
 		// Fall back to the cache.
@@ -163,14 +162,14 @@ export const createNewProject = async (projectName?: string, isWorkspaceMapping?
 		value: projectName || "",
 		placeHolder: "project-name",
 		prompt: isWorkspaceMapping
-			? "Your BI workspace will be mapped to a WSO2 Cloud project. Project name is auto-picked from workspace name, you can edit if needed.\n"
+			? `Your BI workspace will be mapped to a ${ext.backend.label} project. Project name is auto-picked from workspace name, you can edit if needed.\n`
 			: "Enter a name for your new project",
-		title: isWorkspaceMapping ? "Create WSO2 Cloud Project for Workspace" : "New Project Name",
+		title: isWorkspaceMapping ? `Create ${ext.backend.label} Project for Workspace` : "New Project Name",
 		validateInput: (val) => {
 			if (!val) {
 				return "Project name is required";
 			}
-			if (projectCache?.some((item) => item.name === val || item.id === toProjectName(val))) {
+			if (projectCache?.some((item) => item.name === val || item.handler === toProjectName(val))) {
 				return "Project name already exists";
 			}
 			if (val.length > 60 || val.length < 3) {
@@ -189,21 +188,9 @@ export const createNewProject = async (projectName?: string, isWorkspaceMapping?
 		throw new CancelledError();
 	}
 
-	const project = await window.withProgress({ title: `Creating new project ${newProjectName}...`, location: ProgressLocation.Notification }, async () => {
-		let name = toProjectName(newProjectName);
-		try {
-			const availability = await cloud.projects.checkHandler(name);
-			if (!availability.handlerUnique && availability.alternateHandlerCandidate) {
-				name = availability.alternateHandlerCandidate;
-			}
-		} catch {
-			// The check is advisory; the create answers 409 when the name is taken.
-		}
-		if (!RESOURCE_NAME.test(name)) {
-			throw new Error(`${name} is not a name the platform accepts.`);
-		}
-		return cloud.projects.create({ name, displayName: newProjectName });
-	});
+	const project = await window.withProgress({ title: `Creating new project ${newProjectName}...`, location: ProgressLocation.Notification }, () =>
+		ext.backend.projects.create(newProjectName),
+	);
 
 	dataCacheStore.getState().setProjects(org.handle, [...dataCacheStore.getState().getProjects(org.handle).filter((p) => p.id !== project.id), project]);
 	return project;
@@ -213,7 +200,7 @@ export const createNewProject = async (projectName?: string, isWorkspaceMapping?
 export const requireOrg = (): Organization => {
 	const org = ext.authProvider?.org;
 	if (!org) {
-		throw new Error("You are not signed in to WSO2 Cloud. Please sign in and retry.");
+		throw new Error(`You are not signed in to ${ext.backend.label}. Please sign in and retry.`);
 	}
 	return org;
 };
@@ -295,7 +282,7 @@ export const requireSession = async (message: string): Promise<PlatformSession |
 	if (current?.session && current.status === "signed-in") {
 		return current.session;
 	}
-	const loginSelection = await window.showInformationMessage("You are not signed in to WSO2 Cloud.", { modal: true, detail: `Please sign in to continue and ${message}` }, "Sign in");
+	const loginSelection = await window.showInformationMessage(`You are not signed in to ${ext.backend.label}.`, { modal: true, detail: `Please sign in to continue and ${message}` }, "Sign in");
 	if (loginSelection !== "Sign in") {
 		return null;
 	}
@@ -311,7 +298,7 @@ export const requireSession = async (message: string): Promise<PlatformSession |
 		return null;
 	}
 	const session = after.session;
-	const response = await window.showInformationMessage(`Signed in to WSO2 Cloud as ${session.user.email ?? session.user.displayName}`, { modal: true, detail: `Do you want to continue and ${message}` }, "Continue");
+	const response = await window.showInformationMessage(`Signed in to ${ext.backend.label} as ${session.user.email ?? session.user.displayName}`, { modal: true, detail: `Do you want to continue and ${message}` }, "Continue");
 	return response === "Continue" ? session : null;
 };
 
@@ -323,7 +310,7 @@ export const setExtensionName = (extName?: ExtensionName) => {
 
 /** Refuses a command that runs before the cloud layer finished activating. */
 export const isPlatformReady = (ext: ExtensionVariables) => {
-	if (!ext.clients?.platform) {
+	if (!ext.backend) {
 		throw new Error(`${webviewStateStore.getState().state.extensionName} extension still hasn't been initialized...`);
 	}
 };

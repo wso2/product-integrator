@@ -20,6 +20,7 @@ import { type CloudEnvName, ENVIRONMENTS, type PlatformEnvConfig, hasInjectedTok
 import type { WSO2Terminologies } from "@wso2/wso2-platform-core";
 import * as vscode from "vscode";
 import type { WIAuthState } from "./cloud/auth/wso2-auth-provider";
+import type { CloudBackend } from "./cloud/backend/port";
 import type { GitHubAppConnector } from "./cloud/github-app";
 import type { WIPlatform } from "./cloud/platform/platform-client";
 import { defaultTerminologies, webviewStateStore } from "./cloud/stores/webview-state-store";
@@ -40,6 +41,8 @@ export class ExtensionVariables {
 
 	/** The platform client, sessions and provider — set during activation. */
 	public clients!: { platform: WIPlatform };
+	/** The platform the cloud features work against — set during activation. */
+	public backend!: CloudBackend;
 
 	/** Connects GitHub to the organization from the editor — set during activation. */
 	public githubApp?: GitHubAppConnector;

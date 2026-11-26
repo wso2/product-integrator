@@ -63,7 +63,7 @@ export function openCompSrcCommand(context: ExtensionContext) {
 					selectedProject = dataCacheStore.getState().getProjects(session.org.handle).find(match);
 					if (!selectedProject) {
 						const projects = await window.withProgress({ title: `Fetching projects of organization ${session.org.name}...`, location: ProgressLocation.Notification }, () =>
-							ext.clients.platform.cloud.projects.list(),
+							ext.backend.projects.list(),
 						);
 						dataCacheStore.getState().setProjects(session.org.handle, projects);
 						selectedProject = projects.find(match);

@@ -66,7 +66,7 @@ export async function cloneOpenedIntegration(): Promise<void> {
 }
 
 async function cloneIntoEditor(integrationId: string, projectId: string, workspacePath: string): Promise<void> {
-	const repository = await ext.clients.platform.cloud.components.repository(integrationId, projectId);
+	const repository = await ext.backend.integrations.repository(integrationId, projectId);
 	const repositoryUrl = repositoryUrlOf(repository);
 	if (!repositoryUrl) {
 		ext.log(`The integration ${integrationId} has no repository to clone.`);
