@@ -76,7 +76,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					return;
 				}
 				const orgHandle = session.org.handle;
-				const cloud = ext.clients.platform.cloud;
+				const backend = ext.backend;
 				await waitForContextStoreToLoad();
 
 				// Checked and picked before the project, so a failure or a cancel leaves no new, empty project behind.
@@ -133,7 +133,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 
 				const existing = await window.withProgress(
 					{ title: `Fetching integrations of cloud project ${selectedProject.name}...`, location: ProgressLocation.Notification },
-					() => cloud.components.list(selectedProject!.id),
+					() => backend.integrations.list(selectedProject!.id),
 				);
 				dataCacheStore.getState().setIntegrations(orgHandle, selectedProject.id, existing);
 
@@ -153,7 +153,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					for (const integration of existing) {
 						let repository = dataCacheStore.getState().getRepository(orgHandle, selectedProject.id, integration.id);
 						if (!repository) {
-							repository = await cloud.components.repository(integration.id, selectedProject.id).catch((): undefined => undefined);
+							repository = await backend.integrations.repository(integration.id, selectedProject.id).catch((): undefined => undefined);
 							if (repository) {
 								dataCacheStore.getState().setRepository(orgHandle, selectedProject.id, integration.id, repository);
 							}

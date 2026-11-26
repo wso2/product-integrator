@@ -101,7 +101,7 @@ export const openClonedDir = async (params: OpenClonedDirRequest & { orgHandle?:
 		let project = cached.find((item) => item.id === params.projectName || item.handler === params.projectName);
 		if (!project) {
 			const projects = await window.withProgress({ title: `Fetching projects of organization ${session.org.name}...`, location: ProgressLocation.Notification }, () =>
-				ext.clients.platform.cloud.projects.list(),
+				ext.backend.projects.list(),
 			);
 			dataCacheStore.getState().setProjects(session.org.handle, projects);
 			project = projects.find((item) => item.id === params.projectName || item.handler === params.projectName);
@@ -129,7 +129,7 @@ export const cloneOrOpenDir = async (
 	if (!orgHandle) {
 		return;
 	}
-	const cloud = ext.clients.platform.cloud;
+	const backend = ext.backend;
 	const projectLocations = locationStore.getState().getLocations(project.id, orgHandle);
 
 	if (integrationName) {
@@ -137,7 +137,7 @@ export const cloneOrOpenDir = async (
 		let integration: Component | undefined = cache.find((item) => item.id === integrationName || item.name === integrationName);
 		if (!integration) {
 			integration = await window.withProgress({ title: `Fetching ${ext.terminologies?.componentTerm} details...`, location: ProgressLocation.Notification }, () =>
-				cloud.components.find(integrationName, project.id),
+				backend.integrations.find(integrationName, project.id),
 			);
 		}
 		if (!integration) {
@@ -147,7 +147,7 @@ export const cloneOrOpenDir = async (
 		let repository = dataCacheStore.getState().getRepository(orgHandle, project.id, integration.id);
 		if (!repository) {
 			try {
-				repository = await cloud.components.repository(integration.id, project.id);
+				repository = await backend.integrations.repository(integration.id, project.id);
 				dataCacheStore.getState().setRepository(orgHandle, project.id, integration.id, repository);
 			} catch (error) {
 				ext.logError(`Failed to read the repository of ${integration.id}`, error as Error);

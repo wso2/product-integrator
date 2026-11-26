@@ -16,6 +16,7 @@
  * under the License.
  */
 
+import type { WICloudAPI, WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import type { Component, ComponentRepository, ConsoleLink, Project } from "@wso2/wso2-cloud-client";
 
 /** The projects of the organization signed in to. */
@@ -39,6 +40,24 @@ export interface CloudLinks {
 	console(link?: ConsoleLink): string;
 }
 
+/** What the create form asks about the repository an integration is built from, and how access to it is given. */
+export type CloudSourceControl = Pick<
+	WICloudAPI,
+	| "triggerGithubAuthFlow"
+	| "triggerGithubInstallFlow"
+	| "getBranches"
+	| "getAuthorizedGitOrgs"
+	| "getCredentials"
+	| "getCredentialDetails"
+	| "isRepoAuthorized"
+	| "getGitRepoMetadata"
+>;
+
+export interface CloudCreation {
+	/** Creates the integrations the form was submitted with, or gives an existing one this source. */
+	submit(request: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp>;
+}
+
 /** What the editor's cloud features need of the platform in use. */
 export interface CloudBackend {
 	/** The platform's name in the package's platform switch. */
@@ -48,4 +67,8 @@ export interface CloudBackend {
 	readonly projects: CloudProjects;
 	readonly integrations: CloudIntegrations;
 	readonly links: CloudLinks;
+	readonly sourceControl: CloudSourceControl;
+	readonly creation: CloudCreation;
+	/** Moves to another of the person's organizations. */
+	changeOrganization(orgId: string): Promise<void>;
 }

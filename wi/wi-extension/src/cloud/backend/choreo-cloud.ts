@@ -19,7 +19,7 @@
 import { RESOURCE_NAME, buildConsoleUrl } from "@wso2/wso2-cloud-client";
 import type { CloudClient } from "@wso2/wso2-cloud-client";
 import { toProjectName } from "../cmds/cmd-utils";
-import type { CloudBackend } from "./port";
+import type { CloudBackend, CloudCreation, CloudSourceControl } from "./port";
 
 /** Choreo Cloud's name in the platform switch. */
 export const CHOREO_CLOUD_PLATFORM = "choreo-cloud";
@@ -34,6 +34,10 @@ export interface ChoreoCloudBackendDeps {
 	consoleUrl(): string;
 	/** The organization signed in to. */
 	orgHandle(): string | undefined;
+	sourceControl: CloudSourceControl;
+	submit: CloudCreation["submit"];
+	/** Signs in again to pick the organization: a session is for one organization. */
+	reselectOrganization(): Promise<void>;
 }
 
 /** Choreo Cloud behind the port: each call is the API client's own. */
@@ -69,5 +73,8 @@ export function choreoCloudBackend(deps: ChoreoCloudBackendDeps): CloudBackend {
 		links: {
 			console: (link) => buildConsoleUrl(deps.consoleUrl(), { orgHandle: deps.orgHandle(), ...link }),
 		},
+		sourceControl: deps.sourceControl,
+		creation: { submit: deps.submit },
+		changeOrganization: () => deps.reselectOrganization(),
 	};
 }

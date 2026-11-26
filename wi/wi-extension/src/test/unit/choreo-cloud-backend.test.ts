@@ -18,11 +18,19 @@
 
 import * as assert from "assert";
 import type { CloudClient } from "@wso2/wso2-cloud-client";
-import { CHOREO_CLOUD_LABEL, CHOREO_CLOUD_PLATFORM, choreoCloudBackend } from "../../cloud/backend/choreo-cloud";
+import { CHOREO_CLOUD_LABEL, CHOREO_CLOUD_PLATFORM, type ChoreoCloudBackendDeps, choreoCloudBackend } from "../../cloud/backend/choreo-cloud";
 
-function backendWith(projects: Partial<CloudClient["projects"]>, components: Partial<CloudClient["components"]> = {}) {
+function backendWith(projects: Partial<CloudClient["projects"]>, components: Partial<CloudClient["components"]> = {}, deps: Partial<ChoreoCloudBackendDeps> = {}) {
 	const cloud = { projects, components } as unknown as CloudClient;
-	return choreoCloudBackend({ cloud: () => cloud, consoleUrl: () => "https://console.example.invalid", orgHandle: () => "acme" });
+	return choreoCloudBackend({
+		cloud: () => cloud,
+		consoleUrl: () => "https://console.example.invalid",
+		orgHandle: () => "acme",
+		sourceControl: {} as ChoreoCloudBackendDeps["sourceControl"],
+		submit: async () => ({ created: [], failed: [], total: 0 }),
+		reselectOrganization: async () => undefined,
+		...deps,
+	});
 }
 
 describe("Choreo Cloud backend", () => {
@@ -83,5 +91,25 @@ describe("Choreo Cloud backend", () => {
 			backend.links.console({ project: "p1", integration: "i1" }),
 			"https://console.example.invalid/integration/organizations/acme/projects/p1/components/i1/overview",
 		);
+	});
+
+	it("submits through today's create flow, and picks another organization by signing in again", async () => {
+		const events: string[] = [];
+		const backend = backendWith(
+			{},
+			{},
+			{
+				submit: async (request) => {
+					events.push(`submit ${request.project.id}`);
+					return { created: [], failed: [], total: 1 };
+				},
+				reselectOrganization: async () => {
+					events.push("sign in");
+				},
+			},
+		);
+		await backend.creation.submit({ project: { id: "p1" } } as never);
+		await backend.changeOrganization("42");
+		assert.deepStrictEqual(events, ["submit p1", "sign in"]);
 	});
 });
