@@ -3,7 +3,7 @@
 _Authors_: @NipunaRanasinghe \
 _Reviewers_: @keizer619, @anupama-pathirage, @samithkavishke \
 _Created_: 2026/08/10 \
-_Updated_: 2026/08/12
+_Updated_: 2026/11/03
 
 This document describes the four GitHub Actions pipeline types used across all WSO2 Integrator repos:
 
@@ -26,7 +26,7 @@ graph LR
     CD -->|yes| B["Language server<br>+ extension build"]:::stage
     B --> FT["Unit, component<br>& contract tests"]:::stage
     B -.->|on language server changes<br>or LS test label| LT["Language server tests"]:::stage
-    B -.->|on UI test label or<br>patch branch target| ET["E2E(UI) tests"]:::stage
+    B -.->|on UI test label| ET["E2E(UI) tests"]:::stage
     FT --> SC["Dependency scan"]:::stage
     LT --> SC
     ET --> SC
@@ -40,7 +40,9 @@ The heavier suites are selective rather than unconditional, and each has its own
 
 - **Unit, component, and contract tests** run with every build.
 - **Language server tests** run when language server paths changed, or when the pull request carries the `Checks/Run LS Tests` label.
-- **UI end-to-end tests** run when the pull request carries the `Checks/Run Ballerina UI Tests` label, or when it targets a patch branch.
+- **UI end-to-end tests** run when the pull request carries the repo's UI test label, such as `Checks/Run Ballerina UI Tests`. In `mi-vscode`, they also run on pull requests that target `stable/mi`.
+
+Test levels, and which suites block a merge, are defined in [Testing Strategy](testing-strategy.md).
 
 **Product distribution repo** compiles the WSO2 Integrator extension, without building installers.
 
