@@ -45,6 +45,7 @@ export function choreoCloudBackend(deps: ChoreoCloudBackendDeps): CloudBackend {
 	return {
 		platform: CHOREO_CLOUD_PLATFORM,
 		label: CHOREO_CLOUD_LABEL,
+		cacheNamespace: "",
 		projects: {
 			list: () => deps.cloud().projects.list(),
 			create: async (displayName) => {

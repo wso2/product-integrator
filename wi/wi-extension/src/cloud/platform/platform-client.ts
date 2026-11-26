@@ -17,7 +17,7 @@
  */
 
 import type { CloudClient, Logger, PlatformEnvConfig, UnauthenticatedError } from "@wso2/wso2-cloud-client";
-import { type PlatformClients, createPlatformClients, readCloudEnvironment } from "@wso2/wso2-cloud-client/vscode";
+import { type PlatformBackend, type PlatformClients, createPlatformClients, readCloudEnvironment } from "@wso2/wso2-cloud-client/vscode";
 import type { ExtensionContext } from "vscode";
 
 /** `publisher.name` of this extension; the sign-in URI's authority. */
@@ -35,6 +35,10 @@ export interface WIPlatformOptions {
 	logger: Logger;
 	extensionVersion: string;
 	onUnauthenticated: (error: UnauthenticatedError) => void;
+	/** Platforms offered beside Choreo Cloud. */
+	backends?: readonly PlatformBackend[];
+	/** The platform to start on; the one last switched to when absent. */
+	initialPlatform?: string;
 }
 
 /**
@@ -51,5 +55,7 @@ export function createWIPlatform(options: WIPlatformOptions): WIPlatform {
 		userAgent: `wso2-integrator-vscode/${options.extensionVersion}`,
 		logger: options.logger,
 		onUnauthenticated: options.onUnauthenticated,
+		backends: options.backends,
+		initialPlatform: options.initialPlatform,
 	});
 }

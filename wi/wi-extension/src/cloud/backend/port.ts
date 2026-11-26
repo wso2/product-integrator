@@ -64,6 +64,8 @@ export interface CloudBackend {
 	readonly platform: string;
 	/** The platform as messages and pages name it. */
 	readonly label: string;
+	/** Put in front of the caches' keys, so platforms with the same organization handles keep apart; "" for Choreo Cloud. */
+	readonly cacheNamespace: string;
 	readonly projects: CloudProjects;
 	readonly integrations: CloudIntegrations;
 	readonly links: CloudLinks;
