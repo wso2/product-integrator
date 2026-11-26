@@ -47,6 +47,8 @@ export function choreoCloudBackend(deps: ChoreoCloudBackendDeps): CloudBackend {
 		platform: CHOREO_CLOUD_PLATFORM,
 		label: CHOREO_CLOUD_LABEL,
 		cacheNamespace: "",
+		// The GitHub App reads GitHub repositories; other providers are not yet connected from here.
+		gitProviders: ["github"],
 		projects: {
 			list: () => deps.cloud().projects.list(),
 			create: async (displayName) => {

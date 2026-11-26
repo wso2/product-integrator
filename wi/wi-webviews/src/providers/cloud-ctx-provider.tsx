@@ -17,7 +17,8 @@
  */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AuthState, ContextStoreState } from "@wso2/wi-core";
+import type { AuthState, CloudPlatformInfo, ContextStoreState } from "@wso2/wi-core";
+import type { ConsoleLink } from "@wso2/wso2-cloud-client/contract";
 import React, { type FC, type ReactNode, useContext, useEffect } from "react";
 import { useVisualizerContext } from "../contexts";
 
@@ -48,7 +49,11 @@ interface ICloudContext {
     authStateLoading: boolean;
     contextStateLoading: boolean;
     consoleUrl?: string;
+    /** The platform in use; WSO2 Cloud until the extension has said. */
+    platform: CloudPlatformInfo;
 }
+
+const DEFAULT_PLATFORM: CloudPlatformInfo = { name: "choreo-cloud", label: "WSO2 Cloud", gitProviders: ["github"] };
 
 const defaultCloudContext: ICloudContext = {
     authState: undefined,
@@ -56,6 +61,7 @@ const defaultCloudContext: ICloudContext = {
     authStateLoading: true,
     contextStateLoading: true,
     consoleUrl: "",
+    platform: DEFAULT_PLATFORM,
 };
 
 const CloudContext = React.createContext<ICloudContext>(defaultCloudContext);
@@ -92,6 +98,11 @@ export const CloudContextProvider: FC<Props> = ({ children }) => {
         queryFn: () => wsClient.getConsoleUrl(),
     });
 
+    const { data: platform } = useQuery({
+        queryKey: ["cloud_platform"],
+        queryFn: () => wsClient.getPlatformInfo(),
+    });
+
     useEffect(() => {
         wsClient.onAuthStateChanged((state) => {
             queryClient.setQueryData(["cloud_auth_state"], state);
@@ -100,6 +111,10 @@ export const CloudContextProvider: FC<Props> = ({ children }) => {
             void queryClient
                 .cancelQueries({ queryKey: ["console_url"] })
                 .then(() => queryClient.invalidateQueries({ queryKey: ["console_url"] }));
+            // A platform switch changes the session too.
+            void queryClient
+                .cancelQueries({ queryKey: ["cloud_platform"] })
+                .then(() => queryClient.invalidateQueries({ queryKey: ["cloud_platform"] }));
         });
         wsClient.onContextStateChanged((state) => {
             queryClient.setQueryData(["cloud_context_state"], state);
@@ -107,8 +122,12 @@ export const CloudContextProvider: FC<Props> = ({ children }) => {
     }, []);
 
     return (
-        <CloudContext.Provider value={{ authState, contextState, authStateLoading, contextStateLoading, consoleUrl }}>
+        <CloudContext.Provider value={{ authState, contextState, authStateLoading, contextStateLoading, consoleUrl, platform: platform ?? DEFAULT_PLATFORM }}>
             {children}
         </CloudContext.Provider>
     );
 };
+
+/** Opens a page of the platform's console; the extension builds the link for the platform in use. */
+export const openConsole = (wsClient: { getConsoleLink: (link: ConsoleLink) => Promise<string>; openExternal: (url: string) => unknown }, link: ConsoleLink) =>
+    wsClient.getConsoleLink(link).then((url) => wsClient.openExternal(url));

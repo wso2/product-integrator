@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import type { AuthStatus, Component, ContextStoreState, Project, RepoPathInspection } from "@wso2/wso2-cloud-client";
+import type { AuthStatus, Component, ConsoleLink, ContextStoreState, Project, RepoPathInspection } from "@wso2/wso2-cloud-client";
 import type { GetLocalGitDataResp, ICreateNewIntegrationCmdIntegrations } from "@wso2/wso2-platform-core";
 
 export type { Component, ContextStoreState, Project } from "@wso2/wso2-cloud-client";
@@ -96,6 +96,14 @@ export interface WICloudSubmitComponentsResp {
 	}>;
 	/** Total integrations attempted */
 	total: number;
+}
+
+/** The platform the cloud features work against, as the views name it and what it builds from. */
+export interface CloudPlatformInfo {
+	name: string;
+	label: string;
+	/** The git providers an integration can be created from, as `GitProvider` names them. */
+	gitProviders: string[];
 }
 
 export interface GetCloudProjectsReq {
@@ -219,6 +227,9 @@ export interface WICloudAPI {
 	cloneRepositoryIntoCompDir: (params: CloneRepositoryIntoCompDirReq) => Promise<string>;
 	// Config
 	getConsoleUrl: () => Promise<string>;
+	getPlatformInfo: () => Promise<CloudPlatformInfo>;
+	/** A page of the platform's console; the organization's home when `link` names nothing. */
+	getConsoleLink: (link: ConsoleLink) => Promise<string>;
 	// Projects
 	getCloudProjects: (params: GetCloudProjectsReq) => Promise<GetCloudProjectsResp>;
 }

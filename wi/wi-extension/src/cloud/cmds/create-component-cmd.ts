@@ -48,6 +48,7 @@ import { CancelledError, handleCloudError } from "../platform/error-handler";
 import { contextStore, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
 import { isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensionName, toProjectName, toResourceName } from "./cmd-utils";
+import { showReloadWorkspaceMessage, showViewInConsoleMessage } from "./create-messages";
 
 /**
  * Source component ids already acted on. Clearing `SOURCE_COMPONENT_ID` from workspace state cannot
@@ -605,23 +606,6 @@ const sourceBindingWarning = (unbound: { label: string; error: NonNullable<Creat
 	const names = unbound.map((item) => item.label).join(", ");
 	const reasons = new Set(unbound.map((item) => (item.error === "github-auth-required" ? "GitHub has to be connected to WSO2 Cloud again" : "WSO2 Cloud could not link the source repository")));
 	return `Created ${names}, but no build can start: ${[...reasons].join("; ")}. Fix it in the console, then start a build.`;
-};
-
-const showReloadWorkspaceMessage = (message: string, workspaceFsPath: string, warn = false) => {
-	(warn ? window.showWarningMessage : window.showInformationMessage)(`${message} Reload workspace to continue`, { modal: true }, "Continue").then(async (resp) => {
-		if (resp === "Continue") {
-			commands.executeCommand("vscode.openFolder", Uri.file(workspaceFsPath), { forceNewWindow: false });
-		}
-	});
-};
-
-const showViewInConsoleMessage = (message: string, orgHandle: string, project: Project, created: Component[], warn = false) => {
-	(warn ? window.showWarningMessage : window.showInformationMessage)(message, "View in console").then(async (resp) => {
-		if (resp === "View in console") {
-			const url = buildConsoleUrl(ext.config.consoleUrl, { orgHandle, project: project.id, integration: created.length === 1 ? created[0].id : undefined });
-			void env.openExternal(Uri.parse(url));
-		}
-	});
 };
 
 const clearCodeServerLocalStorage = async () => {

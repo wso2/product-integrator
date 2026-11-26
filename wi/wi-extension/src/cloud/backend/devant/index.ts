@@ -19,8 +19,12 @@
 import { NotFoundError, NotSupportedError, type Organization } from "@wso2/wso2-cloud-client";
 import type { DevantClient } from "@wso2/wso2-cloud-client/devant/vscode";
 import type { ComponentKind, Project as DevantProject } from "@wso2/wso2-platform-core";
+import { window } from "vscode";
+import { ext } from "../../../extensionVariables";
 import type { CloudBackend } from "../port";
 import { legacyContextFiles } from "./context-file";
+import { submitDevantIntegrations } from "./create";
+import { authorizeGitHub, completeGitHubCallback, installGitHubApp, isDevantGitHubCallback } from "./github";
 import { toComponent, toProject, toRepository } from "./mapping";
 
 /** Devant's name in the platform switch, as the cloud client registers it. */
@@ -96,6 +100,7 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 		platform: DEVANT_PLATFORM,
 		label: DEVANT_LABEL,
 		cacheNamespace: `${DEVANT_PLATFORM}:`,
+		gitProviders: ["github", "bitbucket", "gitlab-server"],
 		projects: {
 			list: async () => (await listProjects()).map(toProject),
 			create: async (displayName) => {
@@ -162,9 +167,26 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 		contextFiles: legacyContextFiles,
 		sourceControl: devantSourceControl(client, org),
 		creation: {
-			submit: async () => {
-				throw new NotSupportedError("Creating integrations on Devant is not available in this build yet.", { reason: "not_implemented" });
-			},
+			submit: (request) =>
+				submitDevantIntegrations(
+					{
+						client,
+						org,
+						project,
+						remember: (projectHandle, created) => components.set(projectHandle, [created, ...(components.get(projectHandle) ?? [])]),
+					},
+					request,
+				),
+		},
+		handleUri: (uri) => {
+			if (!isDevantGitHubCallback(uri)) {
+				return false;
+			}
+			completeGitHubCallback(client(), uri.query).catch((error) => {
+				ext.logError("Could not connect GitHub to Devant", error as Error);
+				void window.showErrorMessage(`Could not connect GitHub to Devant: ${error instanceof Error ? error.message : String(error)}`);
+			});
+			return true;
 		},
 		changeOrganization: async (orgId) => {
 			const target = (await client().organizations()).find((item) => item.id === orgId || item.handle === orgId || item.uuid === orgId);
@@ -180,12 +202,9 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 
 /** The create form's repository questions, answered by Devant's own API as the 5.1 editor did. */
 function devantSourceControl(client: () => DevantClient, org: () => Organization): CloudBackend["sourceControl"] {
-	const notYet = async () => {
-		throw new NotSupportedError("Connecting a Git provider to Devant is not available in this build yet.", { reason: "not_implemented" });
-	};
 	return {
-		triggerGithubAuthFlow: notYet,
-		triggerGithubInstallFlow: notYet,
+		triggerGithubAuthFlow: () => authorizeGitHub(client(), org()),
+		triggerGithubInstallFlow: () => installGitHubApp(client(), org()),
 		getBranches: (params) => client().api.getRepoBranches({ ...params, orgId: params.orgId || org().id, credRef: params.credRef ?? "" }),
 		getAuthorizedGitOrgs: (params) => client().api.getAuthorizedGitOrgs({ ...params, orgId: params.orgId || org().id, credRef: params.credential ?? "" }),
 		getCredentials: (params) => client().api.getCredentials({ ...params, orgId: params.orgId || org().id, orgUuid: params.orgUuid || org().uuid || "" }),

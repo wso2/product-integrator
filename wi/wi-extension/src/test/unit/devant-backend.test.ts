@@ -25,6 +25,8 @@ import * as yaml from "js-yaml";
 import { devantCloudBackend } from "../../cloud/backend/devant";
 import { legacyContextFiles, parseLegacyContext } from "../../cloud/backend/devant/context-file";
 import { KNOWN_DEVANT_USER_KEY, WORKSPACE_PLATFORM_KEY, isDevantOffered, startingPlatform, workspacePlatform } from "../../cloud/backend/devant/detection";
+import { toCreateRequest } from "../../cloud/backend/devant/create";
+import { isDevantGitHubCallback } from "../../cloud/backend/devant/github";
 import { toComponent, toRepository } from "../../cloud/backend/devant/mapping";
 
 class Memento {
@@ -182,5 +184,38 @@ describe("Devant backend", () => {
 		const bare = { ...(COMPONENT as object), spec: { type: "service", subType: "", source: {}, build: {} } } as never;
 		assert.strictEqual(toRepository(bare), undefined);
 		assert.strictEqual(toComponent(bare, "shop").projectId, "shop");
+	});
+});
+
+describe("Devant create", () => {
+	const param = {
+		componentDir: "/work/shop/orders",
+		displayName: "Order Events",
+		name: "order-events",
+		integrationType: "event-integration",
+		buildPackLang: "ballerina" as const,
+		repoUrl: "https://bitbucket.org/acme/shop",
+		branch: "main",
+		gitProvider: "bitbucket",
+		gitCredRef: "cred-1",
+	};
+	const org = { id: "101", uuid: "uuid-acme", handle: "acme", name: "Acme" };
+	const project = { id: "uuid-shop", handler: "shop", name: "Shop" } as never;
+
+	it("asks Devant for the type of the scope the form picked, with the project's id and handle", () => {
+		const request = toCreateRequest({ ...param, integrationType: "file-integration" }, org, project);
+		assert.strictEqual(request.projectId, "uuid-shop");
+		assert.strictEqual(request.projectHandle, "shop");
+		assert.strictEqual(request.orgUUID, "uuid-acme");
+		assert.strictEqual(request.name, "order-events");
+		assert.strictEqual(request.gitCredRef, "cred-1");
+		assert.strictEqual(request.originCloud, "devant");
+		assert.ok(request.type, "a known scope maps to a type");
+	});
+
+	it("takes only its own GitHub callbacks", () => {
+		assert.ok(isDevantGitHubCallback({ path: "/ghapp", query: "platform=devant&code=x&orgId=101" }));
+		assert.ok(!isDevantGitHubCallback({ path: "/ghapp", query: "code=x" }));
+		assert.ok(!isDevantGitHubCallback({ path: "/signin", query: "platform=devant" }));
 	});
 });
