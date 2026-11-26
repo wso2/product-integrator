@@ -26,7 +26,6 @@ import { ext } from "../extensionVariables";
 import { isSamePath, openDirectory } from "../utils/pathUtils";
 import type { ICloneIntegrationCmdParams } from "./cmds/clone-project-cmd";
 import { isPlatformReady, requireSession } from "./cmds/cmd-utils";
-import { linkContext } from "./context-file";
 import { getGitRemotes, getGitRoot } from "./git/util";
 import { GITHUB_RETURN_PATH } from "./github-app";
 import { handleCloudError } from "./platform/error-handler";
@@ -219,7 +218,7 @@ const switchContextAndOpenDir = async (selectedPath: string, project: Project, i
 		window.showErrorMessage(`Failed to find Git root of ${selectedPath}`);
 		return;
 	}
-	const contextFilePath = linkContext(gitRoot, { org: org.handle, project: project.id });
+	const contextFilePath = ext.backend.contextFiles.link(gitRoot, { org: org.handle, project: project.id });
 
 	const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSamePath(item.uri?.fsPath, selectedPath));
 	if (isWithinWorkspace) {

@@ -23,6 +23,7 @@ import { BridgeLayer } from "../../BridgeLayer";
 import { ext } from "../../extensionVariables";
 import { handleCloudError } from "../platform/error-handler";
 import { isPlatformReady, setExtensionName } from "./cmd-utils";
+import { pickPlatform, switchPlatform } from "./platform-cmd";
 import { cloudPlaceName, pickRegion } from "./region-cmd";
 
 export function signInCommand(context: ExtensionContext) {
@@ -38,8 +39,24 @@ export function signInCommand(context: ExtensionContext) {
 				// Choosing an organization again stays in the region the session is in.
 				if (!params?.reselectOrganization) {
 					const platform = ext.clients.platform;
+					// Someone offered Devant says which platform first; a region named is Choreo Cloud's.
+					if (!params?.region) {
+						const chosen = await pickPlatform({ title: "Sign In", placeHolder: "Select the platform your projects are on" });
+						if (!chosen) {
+							ext.log("Sign-in cancelled");
+							return;
+						}
+						if (chosen !== platform.platform) {
+							await switchPlatform(chosen);
+							if (ext.authProvider.isLoggedIn && ext.authProvider.session) {
+								const kept = ext.authProvider.session;
+								window.showInformationMessage(`Signed in to ${cloudPlaceName()} as ${kept.user.email ?? kept.user.displayName} (${kept.org.name})`);
+								return;
+							}
+						}
+					}
 					const named = platform.regions.find((region) => region.name === params?.region)?.name;
-					const region = named ?? (await pickRegion({ title: "Sign In to WSO2 Cloud", placeHolder: "Select the region where you want to create and deploy your integrations" }));
+					const region = named ?? (await pickRegion({ title: `Sign In to ${ext.backend.label}`, placeHolder: "Select the region where you want to create and deploy your integrations" }));
 					if (!region) {
 						ext.log("Sign-in cancelled");
 						return;
@@ -70,7 +87,7 @@ export function signInCommand(context: ExtensionContext) {
 					ext.log("Sign-in cancelled");
 					return;
 				}
-				ext.logError("Error while signing in to WSO2 Cloud", error as Error);
+				ext.logError(`Error while signing in to ${ext.backend.label}`, error as Error);
 				handleCloudError(error, "Sign in failed. Please check the logs for more details.");
 				// Re-throw so that callers who await executeCommand (e.g. the SSO flow
 				// in the migration wizard) receive the failure immediately.

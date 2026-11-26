@@ -183,7 +183,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 						"Proceed",
 					);
 					if (resp !== "Proceed") {
-						linkContext(gitRoot, { org: orgHandle, project: selectedProject.id });
+						ext.backend.contextFiles.link(gitRoot, { org: orgHandle, project: selectedProject.id });
 						contextStore.getState().refreshState();
 						return;
 					}
@@ -204,7 +204,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 
 				if (isWithinWorkspace || workspace.workspaceFile) {
 					if (gitRoot || params?.workspaceDir) {
-						linkContext((gitRoot || params?.workspaceDir)!, { org: orgHandle, project: selectedProject.id });
+						ext.backend.contextFiles.link((gitRoot || params?.workspaceDir)!, { org: orgHandle, project: selectedProject.id });
 						contextStore.getState().refreshState();
 					}
 					openCloudFormWebview({

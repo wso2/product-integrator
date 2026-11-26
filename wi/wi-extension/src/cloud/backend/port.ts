@@ -17,7 +17,7 @@
  */
 
 import type { WICloudAPI, WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
-import type { Component, ComponentRepository, ConsoleLink, Project } from "@wso2/wso2-cloud-client";
+import type { Component, ComponentRepository, ConsoleLink, ContextEntry, Project } from "@wso2/wso2-cloud-client";
 
 /** The projects of the organization signed in to. */
 export interface CloudProjects {
@@ -38,6 +38,17 @@ export interface CloudIntegrations {
 export interface CloudLinks {
 	/** A page of the platform's console; the organization's home when `link` names nothing. */
 	console(link?: ConsoleLink): string;
+}
+
+/** Which projects a repository belongs to, in the context file the platform's editors read. */
+export interface CloudContextFiles {
+	/** The repository's context file, when it has one. */
+	find(gitRoot: string): string | undefined;
+	read(filePath: string): ContextEntry[];
+	/** Adds or updates the project's entry and answers the file written. */
+	link(gitRoot: string, entry: ContextEntry): string;
+	/** Removes the project's entry from each of the repositories named. */
+	unlink(gitRoots: string[], entry: Pick<ContextEntry, "org" | "project">): void;
 }
 
 /** What the create form asks about the repository an integration is built from, and how access to it is given. */
@@ -69,6 +80,7 @@ export interface CloudBackend {
 	readonly projects: CloudProjects;
 	readonly integrations: CloudIntegrations;
 	readonly links: CloudLinks;
+	readonly contextFiles: CloudContextFiles;
 	readonly sourceControl: CloudSourceControl;
 	readonly creation: CloudCreation;
 	/** Moves to another of the person's organizations. */

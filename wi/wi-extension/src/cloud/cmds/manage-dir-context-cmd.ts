@@ -21,7 +21,6 @@ import { type IManageDirContextCmdParams, WICommandIds } from "@wso2/wso2-platfo
 import { type ExtensionContext, type QuickPickItem, QuickPickItemKind, commands, window } from "vscode";
 import { ext } from "../../extensionVariables";
 import { handleCloudError } from "../platform/error-handler";
-import { unlinkContext } from "../context-file";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { isPlatformReady, requireSession, setExtensionName } from "./cmd-utils";
 import type { IOpenInConsoleParams } from "./open-in-console-cmd";
@@ -81,7 +80,7 @@ export function manageProjectContextCommand(context: ExtensionContext) {
 					contextStore.getState().changeContext(selection.item);
 				} else if (selection?.label === "Unlink workspace" && selected) {
 					await waitForContextStoreToLoad();
-					unlinkContext(
+					ext.backend.contextFiles.unlink(
 						selected.contextDirs.map((item) => item.projectRootFsPath),
 						{ org: selected.orgHandle, project: selected.projectName },
 					);

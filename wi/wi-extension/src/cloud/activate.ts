@@ -17,7 +17,9 @@
  */
 
 import type { CloudEnvironment, Logger } from "@wso2/wso2-cloud-client";
-import { CLOUD_ENV_SETTING, readCloudEnvName } from "@wso2/wso2-cloud-client/vscode";
+import { devantBackend } from "@wso2/wso2-cloud-client/devant/vscode";
+import type { DevantClient } from "@wso2/wso2-cloud-client/devant/vscode";
+import { CLOUD_ENV_SETTING, CLOUD_PLATFORM_STATE_KEY, readCloudEnvName } from "@wso2/wso2-cloud-client/vscode";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import * as vscode from "vscode";
 import type { ConfigurationChangeEvent } from "vscode";
@@ -27,12 +29,15 @@ import { getExtVersion } from "../utils/commonUtils";
 import { WIAuthState } from "./auth/wso2-auth-provider";
 import { CHOREO_CLOUD_PLATFORM, choreoCloudBackend } from "./backend/choreo-cloud";
 import { ChoreoCloudSourceControl } from "./backend/choreo-cloud-source-control";
+import { DEVANT_PLATFORM, devantCloudBackend } from "./backend/devant";
+import { ENABLE_DEVANT_SETTING, type PlatformSigns, isDevantOffered, startingPlatform } from "./backend/devant/detection";
 import { CloudBackends } from "./backend/registry";
 import type { WICloudExtensionAPI } from "./cloud-ext-api";
 import { cloneOpenedIntegration } from "./clone-on-open";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { activateCmds } from "./cmds";
 import { submitCreateComponentHandler } from "./cmds/create-component-cmd";
+import { PLATFORMS_OFFERED_CONTEXT } from "./cmds/platform-cmd";
 import { MULTI_REGION_CONTEXT } from "./cmds/region-cmd";
 import { createGitHubAppConnector } from "./github-app-host";
 import { describeCloudError, handleCloudError } from "./platform/error-handler";
@@ -73,7 +78,17 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		// Before the clients: a managed-tokens URL that is not https leaves the cloud features off, as an
 		// API URL that is not does, rather than the token being sent there.
 		readCloudServiceUrls(readCloudEnvName());
+		// Devant is offered only to someone seen using it, or who turned it on; nobody else is asked about it.
+		const signs: PlatformSigns = {
+			globalState: context.globalState,
+			workspaceState: context.workspaceState,
+			workspaceRoots: (workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+			devantEnabled: workspace.getConfiguration().get<boolean>(ENABLE_DEVANT_SETTING) === true,
+		};
+		const devant = isDevantOffered(signs) ? devantBackend({ deployment: readCloudEnvName() }) : undefined;
 		platform = createWIPlatform({
+			backends: devant ? [devant] : undefined,
+			initialPlatform: devant ? startingPlatform(signs, context.globalState.get<string>(CLOUD_PLATFORM_STATE_KEY)) : undefined,
 			context,
 			logger,
 			extensionVersion: getExtVersion(context),
@@ -113,12 +128,21 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 						},
 					}),
 			],
+			[
+				DEVANT_PLATFORM,
+				() =>
+					devantCloudBackend({
+						client: () => platform.backendClient<DevantClient>(DEVANT_PLATFORM),
+						org: () => ext.authProvider?.org,
+					}),
+			],
 		]),
 	);
 	ext.backend = backends.for(platform);
 	vscode.commands.executeCommand("setContext", CLOUD_PLATFORM_CONTEXT, ext.backend.platform);
 	applyEnvironment(platform.environment);
 	vscode.commands.executeCommand("setContext", MULTI_REGION_CONTEXT, platform.regions.length > 1);
+	vscode.commands.executeCommand("setContext", PLATFORMS_OFFERED_CONTEXT, platform.platforms.length > 1);
 	context.subscriptions.push(platform);
 	// Production's regions are switched between while the editor runs; what is read per environment follows.
 	context.subscriptions.push(
@@ -213,6 +237,12 @@ function applyEnvironment(environment: CloudEnvironment): void {
 
 function registerPreInitHandlers(): vscode.Disposable {
 	return workspace.onDidChangeConfiguration(async ({ affectsConfiguration }: ConfigurationChangeEvent) => {
+		if (affectsConfiguration(ENABLE_DEVANT_SETTING)) {
+			const selection = await window.showInformationMessage("Reload the window to change which platforms are offered.", "Reload Window");
+			if (selection === "Reload Window") {
+				commands.executeCommand("workbench.action.reloadWindow");
+			}
+		}
 		if (affectsConfiguration(CLOUD_ENV_SETTING)) {
 			// The session was issued for the deployment before: kept, its token would go to another one. Ended now, not only on "Restart Now", since the
 			// editor may be restarted some other way.

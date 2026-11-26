@@ -23,7 +23,6 @@ import { type ICreateDirCtxCmdParams, WICommandIds, parseGitURL } from "@wso2/ws
 import { type ExtensionContext, ProgressLocation, Uri, commands, window, workspace } from "vscode";
 import { ext } from "../../extensionVariables";
 import { convertFsPathToUriPath, isSubpath, openDirectory } from "../../utils";
-import { linkContext } from "../context-file";
 import { initGit } from "../git/main";
 import { getGitRemotes, getGitRoot } from "../git/util";
 import { handleCloudError } from "../platform/error-handler";
@@ -129,7 +128,7 @@ export function createDirectoryContextCommand(context: ExtensionContext) {
 					}
 				}
 
-				const contextFilePath = linkContext(gitRoot, { org: session.org.handle, project: selectedProject.id });
+				const contextFilePath = ext.backend.contextFiles.link(gitRoot, { org: session.org.handle, project: selectedProject.id });
 				const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, gitRoot!));
 
 				if (isWithinWorkspace || params?.fsPath) {
@@ -159,5 +158,5 @@ export const updateContextFile = (gitRoot: string, project: Project, env?: strin
 	if (!org) {
 		throw new Error("Not signed in to WSO2 Cloud.");
 	}
-	return linkContext(gitRoot, { org: org.handle, project: project.id, env });
+	return ext.backend.contextFiles.link(gitRoot, { org: org.handle, project: project.id, env });
 };
