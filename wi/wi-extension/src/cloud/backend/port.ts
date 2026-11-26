@@ -87,6 +87,10 @@ export interface CloudBackend {
 	readonly creation: CloudCreation;
 	/** Moves to another of the person's organizations. */
 	changeOrganization(orgId: string): Promise<void>;
+	/** Asks which of the person's organizations to work in, where that needs no new sign-in; answers whether one was picked. */
+	pickOrganization?(): Promise<boolean>;
+	/** Other APIs the platform exports beside the current one, by name, for consumers written against them. */
+	readonly platformApis?: Readonly<Record<string, object>>;
 	/** Takes a URI handed to the editor that is this platform's own; answers whether it did. */
 	handleUri?(uri: { path: string; query: string }): boolean;
 }

@@ -18,7 +18,8 @@
 
 import { NotFoundError, NotSupportedError, type Organization } from "@wso2/wso2-cloud-client";
 import type { DevantClient } from "@wso2/wso2-cloud-client/devant/vscode";
-import type { ComponentKind, Project as DevantProject } from "@wso2/wso2-platform-core";
+import type { ComponentKind, Project as DevantProject, IWso2PlatformExtensionAPI } from "@wso2/wso2-platform-core";
+import type { DevantExtensionApiDeps } from "./extension-api";
 import { window } from "vscode";
 import { ext } from "../../../extensionVariables";
 import type { CloudBackend } from "../port";
@@ -36,6 +37,8 @@ export interface DevantBackendDeps {
 	client(): DevantClient | undefined;
 	/** The organization signed in to. */
 	org(): Organization | undefined;
+	/** Builds the API WSO2 Integrator 5.1 exported, over this backend's client and what it listed last. */
+	extensionApi?(deps: DevantExtensionApiDeps): IWso2PlatformExtensionAPI;
 }
 
 /**
@@ -96,7 +99,20 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 		return found;
 	};
 
+	let legacyApi: IWso2PlatformExtensionAPI | undefined;
+
 	return {
+		get platformApis() {
+			if (!deps.extensionApi) {
+				return undefined;
+			}
+			legacyApi ??= deps.extensionApi({
+				client,
+				projectOf: (handle) => projects.get(handle),
+				componentOf: (projectHandle, name) => components.get(projectHandle)?.find((item) => item.metadata.name === name),
+			});
+			return { devant: legacyApi };
+		},
 		platform: DEVANT_PLATFORM,
 		label: DEVANT_LABEL,
 		cacheNamespace: `${DEVANT_PLATFORM}:`,
@@ -186,6 +202,21 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 				ext.logError("Could not connect GitHub to Devant", error as Error);
 				void window.showErrorMessage(`Could not connect GitHub to Devant: ${error instanceof Error ? error.message : String(error)}`);
 			});
+			return true;
+		},
+		pickOrganization: async () => {
+			const current = deps.org();
+			const organizations = await client().organizations();
+			const picked = await window.showQuickPick(
+				organizations.map((item) => ({ label: item.name, description: item.handle === current?.handle ? "Current" : item.handle, handle: item.handle })),
+				{ title: "Switch Organization", placeHolder: "Select the Devant organization to work in", ignoreFocusOut: true },
+			);
+			if (!picked || picked.handle === current?.handle) {
+				return false;
+			}
+			projects.clear();
+			components.clear();
+			await client().selectOrganization(picked.handle);
 			return true;
 		},
 		changeOrganization: async (orgId) => {

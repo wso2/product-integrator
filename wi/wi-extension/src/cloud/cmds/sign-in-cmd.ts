@@ -36,6 +36,17 @@ export function signInCommand(context: ExtensionContext) {
 				if (!ext.authProvider) {
 					throw new Error("The cloud layer is not active yet.");
 				}
+				// A platform that switches organization without the browser does so here.
+				if (params?.reselectOrganization && ext.backend.pickOrganization) {
+					if (await ext.backend.pickOrganization()) {
+						await ext.authProvider.initAuth();
+						const session = ext.authProvider.session;
+						if (session) {
+							window.showInformationMessage(`Switched to the organization ${session.org.name}.`);
+						}
+					}
+					return;
+				}
 				// Choosing an organization again stays in the region the session is in.
 				if (!params?.reselectOrganization) {
 					const platform = ext.clients.platform;

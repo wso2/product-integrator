@@ -50,6 +50,11 @@ import { contextStore } from "./stores/context-store";
  */
 export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public readonly apiVersion = PLATFORM_EXTENSION_API_VERSION;
+
+	/** The platform's other APIs: on Devant, the one WSO2 Integrator 5.1 exported. */
+	public get platformApis(): Readonly<Record<string, object>> | undefined {
+		return ext.backend?.platformApis;
+	}
 	private active = false;
 
 	public setActive(active: boolean) {
