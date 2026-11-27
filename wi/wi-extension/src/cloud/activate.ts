@@ -29,17 +29,17 @@ import { getExtVersion } from "../utils/commonUtils";
 import { WIAuthState } from "./auth/wso2-auth-provider";
 import { CHOREO_CLOUD_PLATFORM, choreoCloudBackend } from "./backend/choreo-cloud";
 import { ChoreoCloudSourceControl } from "./backend/choreo-cloud-source-control";
-import { DEVANT_PLATFORM, devantCloudBackend } from "./backend/devant";
-import { ENABLE_DEVANT_SETTING, type PlatformSigns, isDevantOffered, startingPlatform } from "./backend/devant/detection";
-import { askToSignInAgain, followWorkspaceOrganization } from "./backend/devant/continuity";
+import { DEVANT_PLATFORM, DEVANT_PLATFORM_HINT, devantCloudBackend } from "./backend/devant";
+import { ENABLE_DEVANT_SETTING, type PlatformSigns, isDevantOffered, startingPlatform, startsOnDevantWhenSignedOut } from "./backend/devant/detection";
+import { askToSignInAgain, devantNamedCommands, followWorkspaceOrganization } from "./backend/devant/continuity";
 import { devantExtensionApi } from "./backend/devant/extension-api";
 import { CloudBackends } from "./backend/registry";
 import type { WICloudExtensionAPI } from "./cloud-ext-api";
 import { cloneOpenedIntegration } from "./clone-on-open";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { activateCmds } from "./cmds";
-import { submitCreateComponentHandler } from "./cmds/create-component-cmd";
-import { PLATFORMS_OFFERED_CONTEXT } from "./cmds/platform-cmd";
+import { createProjectFromLocalMetadata, submitCreateComponentHandler } from "./cmds/create-component-cmd";
+import { CLOUD_PLATFORM_CONTEXT, PLATFORMS_OFFERED_CONTEXT, platformHints } from "./cmds/platform-cmd";
 import { MULTI_REGION_CONTEXT } from "./cmds/region-cmd";
 import { createGitHubAppConnector } from "./github-app-host";
 import { describeCloudError, handleCloudError } from "./platform/error-handler";
@@ -76,6 +76,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 
 	// 1. The platform client, sessions and authentication provider, from the environment setting.
 	let platform: ReturnType<typeof createWIPlatform>;
+	let devantWhenSignedOut = false;
 	try {
 		// Before the clients: a managed-tokens URL that is not https leaves the cloud features off, as an
 		// API URL that is not does, rather than the token being sent there.
@@ -88,9 +89,10 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 			devantEnabled: workspace.getConfiguration().get<boolean>(ENABLE_DEVANT_SETTING) === true,
 		};
 		const devant = isDevantOffered(signs) ? devantBackend({ deployment: readCloudEnvName() }) : undefined;
+		devantWhenSignedOut = !!devant && startsOnDevantWhenSignedOut(signs, context.globalState.get<string>(CLOUD_PLATFORM_STATE_KEY));
 		platform = createWIPlatform({
 			backends: devant ? [devant] : undefined,
-			initialPlatform: devant ? startingPlatform(signs, context.globalState.get<string>(CLOUD_PLATFORM_STATE_KEY)) : undefined,
+			initialPlatform: devant ? startingPlatform(signs) : undefined,
 			context,
 			logger,
 			extensionVersion: getExtVersion(context),
@@ -125,6 +127,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 						orgHandle: () => ext.authProvider?.org?.handle,
 						sourceControl: new ChoreoCloudSourceControl(),
 						submit: submitCreateComponentHandler,
+						projectForLocalEntry: createProjectFromLocalMetadata,
 						reselectOrganization: async () => {
 							await vscode.commands.executeCommand(WICommandIds.SignIn, { reselectOrganization: true });
 						},
@@ -141,10 +144,15 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 			],
 		]),
 	);
-	ext.backend = backends.for(platform);
-	vscode.commands.executeCommand("setContext", CLOUD_PLATFORM_CONTEXT, ext.backend.platform);
+	platformHints.set(DEVANT_PLATFORM, DEVANT_PLATFORM_HINT);
+	// The backend, and the context keys menus read, of the platform in use.
+	const usePlatform = () => {
+		ext.backend = backends.for(platform);
+		vscode.commands.executeCommand("setContext", CLOUD_PLATFORM_CONTEXT, ext.backend.platform);
+		vscode.commands.executeCommand("setContext", MULTI_REGION_CONTEXT, platform.regions.length > 1);
+	};
+	usePlatform();
 	applyEnvironment(platform.environment);
-	vscode.commands.executeCommand("setContext", MULTI_REGION_CONTEXT, platform.regions.length > 1);
 	vscode.commands.executeCommand("setContext", PLATFORMS_OFFERED_CONTEXT, platform.platforms.length > 1);
 	context.subscriptions.push(platform);
 	// Production's regions are switched between while the editor runs; what is read per environment follows.
@@ -171,9 +179,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	// Platforms are switched between live too: fired before the environment it brings, then the session.
 	context.subscriptions.push(
 		platform.onDidChangePlatform(() => {
-			ext.backend = backends.for(platform);
-			vscode.commands.executeCommand("setContext", CLOUD_PLATFORM_CONTEXT, ext.backend.platform);
-			vscode.commands.executeCommand("setContext", MULTI_REGION_CONTEXT, platform.regions.length > 1);
+			usePlatform();
 			contextStore.getState().resetState();
 			ext.log(`Cloud platform: ${ext.backend.label}`);
 		}),
@@ -194,6 +200,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	);
 	ext.githubApp = createGitHubAppConnector();
 	activateCmds(context);
+	context.subscriptions.push(devantNamedCommands());
 	activateURIHandlers(context);
 
 	// 3. Log versions
@@ -227,6 +234,16 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	// 6. Restore the session (secret storage, or the cloud editor's injected token).
 	try {
 		await authProvider.initAuth();
+		// Someone seen using Devant, with nothing else to say where they work, starts there unless Choreo Cloud has a
+		// session of theirs, which then is where they start from now on. A session that expired is still theirs.
+		if (devantWhenSignedOut && platform.platform !== DEVANT_PLATFORM && platform.platforms.length > 1) {
+			if (authProvider.isLoggedIn) {
+				await context.globalState.update(CLOUD_PLATFORM_STATE_KEY, platform.platform);
+			} else if (authProvider.state.status === "signed-out") {
+				await platform.switchPlatform(DEVANT_PLATFORM);
+				await authProvider.initAuth();
+			}
+		}
 	} finally {
 		restored();
 	}
@@ -242,9 +259,6 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	// 7. Mark the exported cloud APIs as active
 	cloudAPIs.setActive(true);
 }
-
-/** The context key menus read the platform in use from. */
-export const CLOUD_PLATFORM_CONTEXT = "wso2-integrator.cloud.platform";
 
 /** Points what the extension reads per environment at `environment`: the caches' keys and the hosts it hands out. The webviews refetch the console URL when the auth state changes, which a switch does. */
 function applyEnvironment(environment: CloudEnvironment): void {

@@ -16,5 +16,8 @@
  * under the License.
  */
 
+/** Devant's name in the platform switch, as the cloud client registers it. */
+export const DEVANT_PLATFORM = "devant";
+
 /** Devant as its users have always seen it named in the editor, beside Choreo Cloud. */
 export const DEVANT_LABEL = "WSO2 Cloud";

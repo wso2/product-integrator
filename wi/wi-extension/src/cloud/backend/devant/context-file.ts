@@ -18,7 +18,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, unlinkSync, writeFileSync } from "fs";
 import * as path from "path";
-import type { ContextEntry } from "@wso2/wso2-cloud-client";
+import { type ContextEntry, readContextDocument } from "@wso2/wso2-cloud-client";
 import * as yaml from "js-yaml";
 import type { CloudContextFiles } from "../port";
 
@@ -26,10 +26,11 @@ import type { CloudContextFiles } from "../port";
 const CONTEXT_DIRS = [".wso2", ".choreo"];
 const CONTEXT_FILE = "context.yaml";
 
-/** One project in the 5.1 file: the organization's and the project's handles. */
+/** One project in the 5.1 file: the organization's and the project's handles, marked `local` until the project exists. */
 interface LegacyContextItem {
 	org: string;
 	project: string;
+	local?: boolean;
 }
 
 /** The 5.1 file of the repository, `.wso2` first. */
@@ -42,12 +43,16 @@ export function parseLegacyContext(data: unknown): ContextEntry[] {
 	const items = Array.isArray(data) ? data : data && typeof data === "object" ? [data] : [];
 	return items
 		.filter((item): item is LegacyContextItem => !!item && typeof item.org === "string" && typeof item.project === "string" && !!item.org && !!item.project)
-		.map((item) => ({ org: item.org, project: item.project }));
+		.map((item) => (item.local === true ? { org: item.org, project: item.project, local: true } : { org: item.org, project: item.project }));
 }
 
-/** Whether `data` is a 5.1 file rather than the versioned document Choreo Cloud's editors write. */
+/**
+ * Whether `data` is a 5.1 file that links a project, rather than the versioned document Choreo Cloud's editors write.
+ * A list of `local` entries alone is what a new workspace gets on either platform, and says nothing.
+ */
 export function isLegacyContext(data: unknown): boolean {
-	return parseLegacyContext(data).length > 0 && (Array.isArray(data) || !("version" in (data as object)));
+	const isList = Array.isArray(data) || (!!data && typeof data === "object" && !("version" in data));
+	return isList && parseLegacyContext(data).some((entry) => !entry.local);
 }
 
 function readLegacyContextFile(filePath: string): ContextEntry[] {
@@ -71,20 +76,37 @@ function writeLegacyContextFile(gitRoot: string, entries: ContextEntry[]): strin
 		return target;
 	}
 	mkdirSync(path.dirname(target), { recursive: true });
-	const items: LegacyContextItem[] = entries.map((entry) => ({ org: entry.org, project: entry.project }));
+	const items: LegacyContextItem[] = entries.map((entry) => ({ org: entry.org, project: entry.project, ...(entry.local ? { local: true } : {}) }));
 	writeFileSync(target, yaml.dump(items));
 	return target;
 }
 
+/** The entry of a new workspace's file marked `local`, in the 5.1 list or in the document the Ballerina extension writes now. */
+export function localContextEntry(gitRoot: string): ContextEntry | undefined {
+	const file = findLegacyContextFile(gitRoot);
+	if (!file) {
+		return undefined;
+	}
+	try {
+		const data = yaml.load(readFileSync(file, "utf8"));
+		return [...parseLegacyContext(data), ...readContextDocument(data)].find((entry) => entry.local);
+	} catch {
+		return undefined;
+	}
+}
+
 /** The 5.1 format, which Devant's editors and teammates still on 5.1 read and write. */
 export const legacyContextFiles: CloudContextFiles = {
+	pattern: `**/{${CONTEXT_DIRS.join(",")}}/${CONTEXT_FILE}`,
 	find: findLegacyContextFile,
 	read: readLegacyContextFile,
 	link: (gitRoot, entry) => {
 		const file = findLegacyContextFile(gitRoot);
 		const entries = file ? readLegacyContextFile(file) : [];
-		const others = entries.filter((item) => !(item.org === entry.org && item.project === entry.project));
-		return writeLegacyContextFile(gitRoot, [...others, { org: entry.org, project: entry.project }]);
+		const linked: ContextEntry = { org: entry.org, project: entry.project };
+		// In its place when it is there, so a file shared with teammates changes no more than it must.
+		const index = entries.findIndex((item) => item.org === entry.org && item.project === entry.project);
+		return writeLegacyContextFile(gitRoot, index < 0 ? [...entries, linked] : entries.map((item, i) => (i === index ? linked : item)));
 	},
 	unlink: (gitRoots, entry) => {
 		for (const gitRoot of gitRoots) {

@@ -67,7 +67,7 @@
         "integrator.advanced.enableDevant": {
           "type": "boolean",
           "default": false,
-          "description": "Offer Devant beside WSO2 Cloud, for projects still on Devant. Someone who used Devant with an earlier version is offered it without this.",
+          "description": "Offer WSO2 Cloud (Devant), the platform before Choreo Cloud, for projects still on it. Someone who used it with an earlier version is offered it without this setting.",
           "scope": "machine"
         }
       }
@@ -173,6 +173,11 @@
         "category": "WSO2 Integrator",
         "icon": "$(arrow-swap)",
         "enablement": "wso2.integrator.cloud.platformsOffered"
+      },
+      {
+        "command": "wso2.integrator.devant.integration.create",
+        "title": "Create Integration in WSO2 Cloud",
+        "category": "WSO2 Integrator"
       },
       {
         "command": "wso2.integrator.cloud.integration.create",
@@ -375,6 +380,14 @@
         {
           "command": "wso2.integrator.cloud.auth.switchPlatform",
           "when": "wso2.integrator.cloud.platformsOffered"
+        },
+        {
+          "command": "wso2.integrator.cloud.integration.create",
+          "when": "wso2.integrator.cloud.platform != devant"
+        },
+        {
+          "command": "wso2.integrator.devant.integration.create",
+          "when": "wso2.integrator.cloud.platform == devant"
         },
         {
           "command": "ballerina.showVisualizer",

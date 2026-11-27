@@ -220,7 +220,7 @@ export class WIAuthState implements Disposable {
 			this.deps.logError("Error while signing out", error as Error);
 		}
 		if (!silent) {
-			window.showInformationMessage(`Signed out of ${ext.backend?.label}.`);
+			window.showInformationMessage(`Signed out of ${ext.backend.label}.`);
 		}
 	}
 

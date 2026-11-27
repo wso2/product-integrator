@@ -16,14 +16,15 @@
  * under the License.
  */
 
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
+import * as path from "path";
 import * as yaml from "js-yaml";
+import { readContextDocument } from "@wso2/wso2-cloud-client";
+import { WORKSPACE_PLATFORM_KEY } from "../workspace-platform";
 import { findLegacyContextFile, isLegacyContext } from "./context-file";
 
 /** Kept once someone is seen to have used Devant, so the signs that told need not stay. */
 export const KNOWN_DEVANT_USER_KEY = "wso2-integrator.devant.known";
-/** The platform switched to in this workspace, which wins over every other sign. */
-export const WORKSPACE_PLATFORM_KEY = "wso2-integrator.cloud.platform";
 /** The setting that offers Devant to someone the editor has not seen use it. */
 export const ENABLE_DEVANT_SETTING = "integrator.advanced.enableDevant";
 
@@ -44,15 +45,38 @@ export interface PlatformSigns {
 	devantEnabled: boolean;
 }
 
-/** The platform a workspace's context file belongs to: Devant for the 5.1 list, Choreo Cloud for the versioned document. */
+/** `root` and, inside a repository, the folders above it up to the repository's own. */
+function upToRepository(root: string): string[] {
+	const dirs = [root];
+	for (let dir = root; !existsSync(path.join(dir, ".git")); ) {
+		const parent = path.dirname(dir);
+		if (parent === dir) {
+			return [root];
+		}
+		dirs.push(parent);
+		dir = parent;
+	}
+	return dirs;
+}
+
+/**
+ * The platform a workspace's context file belongs to: Devant for the 5.1 list, Choreo Cloud for the versioned
+ * document. A file that links no project yet says nothing.
+ */
 export function workspacePlatform(roots: readonly string[]): "devant" | "choreo-cloud" | undefined {
-	for (const root of roots) {
-		const file = findLegacyContextFile(root);
+	for (const dir of roots.flatMap(upToRepository)) {
+		const file = findLegacyContextFile(dir);
 		if (!file) {
 			continue;
 		}
 		try {
-			return isLegacyContext(yaml.load(readFileSync(file, "utf8"))) ? "devant" : "choreo-cloud";
+			const data = yaml.load(readFileSync(file, "utf8"));
+			if (isLegacyContext(data)) {
+				return "devant";
+			}
+			if (readContextDocument(data).some((entry) => !entry.local)) {
+				return "choreo-cloud";
+			}
 		} catch {
 			// An unreadable file says nothing.
 		}
@@ -79,23 +103,19 @@ export function isDevantOffered(signs: PlatformSigns): boolean {
 
 /**
  * The platform to start on, when nothing fixes it: the one switched to in this workspace, else the one the workspace's
- * context file belongs to, else undefined, which leaves it to the one last used and then to Choreo Cloud. Someone seen
- * using Devant who has used no platform with this build yet starts on Devant.
+ * context file belongs to, else undefined, which leaves it to the one last used and then to Choreo Cloud.
  */
-export function startingPlatform(signs: PlatformSigns, lastUsed: string | undefined): string | undefined {
+export function startingPlatform(signs: PlatformSigns): string | undefined {
 	if (!isDevantOffered(signs)) {
 		return undefined;
 	}
-	const switched = signs.workspaceState.get<string>(WORKSPACE_PLATFORM_KEY);
-	if (switched) {
-		return switched;
-	}
-	const linked = workspacePlatform(signs.workspaceRoots);
-	if (linked) {
-		return linked;
-	}
-	if (lastUsed) {
-		return undefined;
-	}
-	return isKnownDevantUser(signs) ? "devant" : undefined;
+	return signs.workspaceState.get<string>(WORKSPACE_PLATFORM_KEY) ?? workspacePlatform(signs.workspaceRoots);
+}
+
+/**
+ * Whether someone who starts signed out of Choreo Cloud belongs on Devant: seen using it, with nothing else to say
+ * where they work, neither the workspace nor a platform used with this version.
+ */
+export function startsOnDevantWhenSignedOut(signs: PlatformSigns, lastUsed: string | undefined): boolean {
+	return !lastUsed && startingPlatform(signs) === undefined && isKnownDevantUser(signs);
 }

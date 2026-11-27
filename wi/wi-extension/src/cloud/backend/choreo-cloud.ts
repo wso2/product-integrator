@@ -16,13 +16,13 @@
  * under the License.
  */
 
-import { RESOURCE_NAME, buildConsoleUrl } from "@wso2/wso2-cloud-client";
+import { CONTEXT_FILE_DIR, CONTEXT_FILE_NAME, RESOURCE_NAME, buildConsoleUrl } from "@wso2/wso2-cloud-client";
 import type { CloudClient } from "@wso2/wso2-cloud-client";
 import { toProjectName } from "../cmds/cmd-utils";
 import { findContextFile, linkContext, readContextFile, unlinkContext } from "../context-file";
 import type { CloudBackend, CloudCreation, CloudSourceControl } from "./port";
 
-/** Choreo Cloud's name in the platform switch. */
+/** Choreo Cloud's name in the platform switch, as the cloud client's editor entry point names it. */
 export const CHOREO_CLOUD_PLATFORM = "choreo-cloud";
 
 /** The product name messages and pages use for Choreo Cloud. */
@@ -37,6 +37,7 @@ export interface ChoreoCloudBackendDeps {
 	orgHandle(): string | undefined;
 	sourceControl: CloudSourceControl;
 	submit: CloudCreation["submit"];
+	projectForLocalEntry: CloudBackend["projects"]["forLocalEntry"];
 	/** Signs in again to pick the organization: a session is for one organization. */
 	reselectOrganization(): Promise<void>;
 }
@@ -67,6 +68,7 @@ export function choreoCloudBackend(deps: ChoreoCloudBackendDeps): CloudBackend {
 				}
 				return cloud.projects.create({ name, displayName });
 			},
+			forLocalEntry: deps.projectForLocalEntry,
 		},
 		integrations: {
 			list: (projectId) => deps.cloud().components.list(projectId),
@@ -77,7 +79,7 @@ export function choreoCloudBackend(deps: ChoreoCloudBackendDeps): CloudBackend {
 		links: {
 			console: (link) => buildConsoleUrl(deps.consoleUrl(), { orgHandle: deps.orgHandle(), ...link }),
 		},
-		contextFiles: { find: findContextFile, read: readContextFile, link: linkContext, unlink: unlinkContext },
+		contextFiles: { pattern: `**/${CONTEXT_FILE_DIR}/${CONTEXT_FILE_NAME}`, find: findContextFile, read: readContextFile, link: linkContext, unlink: unlinkContext },
 		sourceControl: deps.sourceControl,
 		creation: { submit: deps.submit },
 		changeOrganization: () => deps.reselectOrganization(),

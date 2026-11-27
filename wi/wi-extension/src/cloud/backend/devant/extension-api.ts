@@ -37,6 +37,7 @@ import { openClonedDir } from "../../cloud-uri-handlers";
 import { createConnectionConfig, deleteLocalConnectionConfig } from "../../cloud-utils";
 import { hasDirtyRepo } from "../../git/util";
 import { contextStore } from "../../stores/context-store";
+import { DEVANT_LABEL, DEVANT_PLATFORM } from "./label";
 
 export interface DevantExtensionApiDeps {
 	client(): DevantClient;
@@ -54,28 +55,73 @@ function legacyOrganization(org: DevantOrganization): Organization {
 }
 
 /**
- * The API WSO2 Integrator 5.1 exported to the Ballerina extension, on Devant, built from this editor's stores and
- * Devant's client. Its one call that handed out the platform token is refused: Devant's token stays in this editor.
+ * The API of WSO2 Integrator 5.1 that the Ballerina extension's Devant screens are written against, over this editor's
+ * stores and Devant's client. `getStsToken` is refused: Devant's token stays in this editor.
  */
 export function devantExtensionApi(deps: DevantExtensionApiDeps): IWso2PlatformExtensionAPI {
 	let session: DevantStoredSession | undefined;
+	const loaded = new Set<() => void>();
 	// The person's details are read when the sign-in state changes, so the reads below can answer at once.
 	const refresh = () => {
-		deps
-			.client()
+		// Nothing to read while another platform is in use.
+		const client = ext.backend?.platform === DEVANT_PLATFORM ? deps.client() : undefined;
+		if (!client) {
+			session = undefined;
+			return;
+		}
+		client
 			.session()
 			.then((current) => {
 				session = current;
+				for (const notify of [...loaded]) {
+					notify();
+				}
 			})
 			.catch((): undefined => undefined);
 	};
-	refresh();
 	ext.authProvider?.subscribe(refresh);
+	/** Calls `notify` on each change of the sign-in state, and again once the person's details are read. */
+	const onAuthChange = (notify: () => void): (() => void) => {
+		loaded.add(notify);
+		const stop = ext.authProvider?.subscribe(notify);
+		return () => {
+			loaded.delete(notify);
+			stop?.();
+		};
+	};
+
+	/** The organization signed in to, which is known before the person's other organizations are read. */
+	const currentOrganization = (): Organization | undefined => {
+		const org = ext.authProvider?.org;
+		return org && legacyOrganization({ id: org.id, uuid: org.uuid ?? "", handle: org.handle, name: org.name });
+	};
+	const organizationOf = (handle: string): Organization | undefined => {
+		const org = session?.devant.organizations.find((candidate) => candidate.handle === handle);
+		const current = currentOrganization();
+		return org ? legacyOrganization(org) : current?.handle === handle ? current : undefined;
+	};
 
 	const authState = (): AuthState => {
-		const details = ext.authProvider?.isLoggedIn ? session?.devant : undefined;
+		const signedIn = ext.authProvider?.isLoggedIn ? ext.authProvider.session : undefined;
+		const region = ext.backend?.platform === DEVANT_PLATFORM ? deps.client().region : "US";
+		if (!signedIn) {
+			return { userInfo: null, region };
+		}
+		const details = session?.devant;
 		if (!details) {
-			return { userInfo: null, region: deps.client().region };
+			const current = currentOrganization();
+			return {
+				region,
+				userInfo: {
+					displayName: signedIn.user.displayName ?? "",
+					userEmail: signedIn.user.email ?? "",
+					userProfilePictureUrl: signedIn.user.pictureUrl ?? "",
+					idpId: signedIn.user.userId,
+					userId: signedIn.user.userId,
+					userCreatedAt: new Date(0),
+					organizations: current ? [current] : [],
+				},
+			};
 		}
 		return {
 			region: details.region,
@@ -92,11 +138,10 @@ export function devantExtensionApi(deps: DevantExtensionApiDeps): IWso2PlatformE
 	};
 
 	const legacyItem = (item: { orgHandle: string; projectName: string; contextDirs: ContextItemEnriched["contextDirs"] }): ContextItemEnriched => {
-		const org = session?.devant.organizations.find((candidate) => candidate.handle === item.orgHandle);
 		return {
 			orgHandle: item.orgHandle,
 			projectHandle: item.projectName,
-			org: org && legacyOrganization(org),
+			org: organizationOf(item.orgHandle),
 			project: deps.projectOf(item.projectName),
 			contextDirs: item.contextDirs,
 		};
@@ -148,7 +193,7 @@ export function devantExtensionApi(deps: DevantExtensionApiDeps): IWso2PlatformE
 				integrationDisplayType: params.integrationDisplayType,
 			}),
 		getStsToken: async () => {
-			throw new NotSupportedError("Devant's token stays in WSO2 Integrator; use exchangeToken or request on the current API.", {
+			throw new NotSupportedError(`${DEVANT_LABEL}'s token stays in WSO2 Integrator; use exchangeToken or request on the current API.`, {
 				reason: "token_not_exported",
 			});
 		},
@@ -193,10 +238,19 @@ export function devantExtensionApi(deps: DevantExtensionApiDeps): IWso2PlatformE
 		resolveConnectionSecrets: (params) => api().resolveConnectionSecrets(params),
 		updateProject: (params) => api().updateProject(params),
 		getProjects: (orgId) => api().getProjects(orgId),
-		subscribeAuthState: (callback) => ext.authProvider?.subscribe(() => callback(authState())) ?? (() => undefined),
+		subscribeAuthState: (callback) => onAuthChange(() => callback(authState())),
 		subscribeIsLoggedIn: (callback) => ext.authProvider?.subscribe(() => callback(!!ext.authProvider?.isLoggedIn)) ?? (() => undefined),
 		subscribeDirComponents: (fsPath, callback) => contextStore.subscribe(() => callback(componentsOfDir(fsPath))),
-		subscribeContextState: (callback) => contextStore.subscribe(() => callback(selectedItem())),
+		subscribeContextState: (callback) => {
+			const stopStore = contextStore.subscribe(() => callback(selectedItem()));
+			// The selected item names its organization in full once the person's details are read.
+			const notify = () => callback(selectedItem());
+			loaded.add(notify);
+			return () => {
+				loaded.delete(notify);
+				stopStore();
+			};
+		},
 	};
 }
 

@@ -49,7 +49,7 @@ interface ICloudContext {
     authStateLoading: boolean;
     contextStateLoading: boolean;
     consoleUrl?: string;
-    /** The platform in use; WSO2 Cloud until the extension has said. */
+    /** The platform in use; Choreo Cloud until the extension has said. */
     platform: CloudPlatformInfo;
 }
 
