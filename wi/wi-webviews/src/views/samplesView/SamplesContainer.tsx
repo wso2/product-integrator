@@ -30,7 +30,7 @@ import { useVisualizerContext } from "../../contexts/WsContext";
 import type { SampleSupportedRuntime } from "../shared/runtime";
 
 const ALL_CATEGORY_VALUE = "__all__";
-const AGENT_BUILDER_COMPONENT_TYPE = "ai-agent";
+const AGENT_BUILDER_COMPONENT_TYPES = new Set(["ai-agent", "mcp-server"]);
 
 type BrowseItemType = "sample" | "prebuilt";
 type CategoryOption = { key: string; content: string; value: string };
@@ -726,7 +726,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
 	const [isLoading, setIsLoading] = useState<boolean>(true);
 	const isAgentBuilderMode = webviewContext?.productMode === ProductMode.AGENT_BUILDER;
 	const includesPrebuiltIntegrations = props.projectType === "WSO2: BI";
-	// Agent Builder only lists ai-agent samples, so the type/category will be hidden.
+	// Agent Builder lists AI agent and MCP server samples together, so the type/category will be hidden.
 	const showsTypeFilter = includesPrebuiltIntegrations && !isAgentBuilderMode;
 	const showsCategoryFilter = !isAgentBuilderMode;
 
@@ -789,10 +789,8 @@ export function SamplesContainer(props: SamplesContainerProps) {
 		}
 
 		const scopedItems = isAgentBuilderMode
-			? items.filter(
-					(item) =>
-						item.componentType.trim().toLowerCase() ===
-						AGENT_BUILDER_COMPONENT_TYPE,
+			? items.filter((item) =>
+					AGENT_BUILDER_COMPONENT_TYPES.has(item.componentType.trim().toLowerCase()),
 				)
 			: items;
 
@@ -845,7 +843,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
 		}
 
 		if (isAgentBuilderMode) {
-			return "No AI agent samples are available at the moment.";
+			return "No AI agent or MCP server samples are available at the moment.";
 		}
 
 		return showsTypeFilter
