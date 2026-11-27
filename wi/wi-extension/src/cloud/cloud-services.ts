@@ -59,7 +59,7 @@ interface TokenExchange {
 
 /** The services whose own token WSO2 Integrator exchanges the WSO2 Cloud token for; no other target is reachable. */
 const TOKEN_EXCHANGES: Readonly<Record<TokenExchangeTarget, TokenExchange>> = {
-	copilot: { missing: "This WSO2 Cloud deployment has no Copilot token exchange." },
+	copilot: { missing: "This Choreo Cloud deployment has no Copilot token exchange." },
 };
 
 /**
@@ -90,7 +90,7 @@ export function allowedExchangeEndpoint(target: TokenExchangeTarget, allowed: re
 		}
 	});
 	if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || !listed) {
-		throw new ForbiddenError(`WSO2 Integrator does not send the WSO2 Cloud token to ${url.origin} for ${target}.`, {
+		throw new ForbiddenError(`WSO2 Integrator does not send the Choreo Cloud token to ${url.origin} for ${target}.`, {
 			reason: "token_exchange_endpoint_refused",
 		});
 	}
@@ -113,7 +113,7 @@ const CLOUD_SERVICES: Readonly<Partial<Record<CloudServiceName, CloudService>>> 
 	"managed-tokens": {
 		baseUrl: (config) => config.managedTokensBaseUrl,
 		prefix: "/managed-tokens/v1.0/api/v1",
-		missing: "This WSO2 Cloud deployment has no managed-tokens service configured (set WSO2_CLOUD_MANAGED_TOKENS_URL).",
+		missing: "This Choreo Cloud deployment has no managed-tokens service configured (set WSO2_CLOUD_MANAGED_TOKENS_URL).",
 	},
 };
 

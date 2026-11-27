@@ -82,7 +82,7 @@ describe("GitHub repository access", () => {
 		assert.equal(gitHubSourceFor(access, "main", undefined, "https://github.com/acme/orders"), undefined, "no binding is sent for it");
 	});
 
-	it("asks to authorize again when WSO2 Cloud's GitHub authorization for the person expired", async () => {
+	it("asks to authorize again when Choreo Cloud's GitHub authorization for the person expired", async () => {
 		const expired = new ConflictError("github-auth-required", { status: 409, apiError: "github-auth-required" });
 		assert.equal((await resolveGitHubAccess(fakeCloud({ installations: [acme], reposError: expired }).cloud, "acme", "secret")).kind, "auth-required");
 		const publicRepo = fakeCloud({ installations: [acme], reposError: expired, publicBranches: ["main"] });
@@ -366,7 +366,7 @@ describe("GitHubAppConnector", () => {
 		assert.equal(opened.length, 3, "the install page is opened once");
 	});
 
-	it("ignores a return that arrives after the WSO2 Cloud sign-in changed", async () => {
+	it("ignores a return that arrives after the Choreo Cloud sign-in changed", async () => {
 		for (const after of ["u1/other-org", "u2/acme", undefined]) {
 			const { cloud, connected } = fakeCloud();
 			const { app, outcomes, signedIn } = connector(cloud);
@@ -414,8 +414,8 @@ describe("GitHubAppConnector", () => {
 		assert.deepEqual(outcomes, [
 			"requested",
 			"cancelled",
-			"failed:GitHub did not authorize the WSO2 Cloud app: The app is suspended.",
-			"failed:Could not connect GitHub to WSO2 Cloud: bad gateway",
+			"failed:GitHub did not authorize the Choreo Cloud app: The app is suspended.",
+			"failed:Could not connect GitHub to Choreo Cloud: bad gateway",
 		]);
 	});
 

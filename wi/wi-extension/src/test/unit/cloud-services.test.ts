@@ -60,7 +60,7 @@ const codeOf = (code: string, status?: number) => (error: unknown) =>
 	isCloudError(error) && error.code === code && (status === undefined || error.details.status === status);
 
 describe("Copilot token exchange", () => {
-	it("posts the WSO2 Cloud token to the endpoint given and hands back only Copilot's token", async () => {
+	it("posts the Choreo Cloud token to the endpoint given and hands back only Copilot's token", async () => {
 		const { deps: d, sent } = deps([json(201, { access_token: "copilot-token", expires_in: 3600 })]);
 		const before = Date.now();
 		const token = await exchangeToken("copilot", COPILOT_EXCHANGE, d);
@@ -97,7 +97,7 @@ describe("Copilot token exchange", () => {
 			exchangeToken("copilot", COPILOT_EXCHANGE, { ...d, exchangeEndpoints: undefined }),
 			(error: unknown) => isCloudError(error) && error.code === "not_supported" && error.details.reason === "copilot_token_exchange_not_configured",
 		);
-		assert.strictEqual(sent.length, 0, "the WSO2 Cloud token is not sent");
+		assert.strictEqual(sent.length, 0, "the Choreo Cloud token is not sent");
 	});
 
 	it("allows only the Copilot backend of the environment in use, and refuses another region's", async () => {
@@ -111,7 +111,7 @@ describe("Copilot token exchange", () => {
 			const { deps: d, sent } = deps([json(200, { access_token: "copilot-token" })], { name, copilotUrl });
 			const selected: CloudServiceDeps = { ...d, exchangeEndpoints: undefined };
 			await assert.rejects(exchangeToken("copilot", other, selected), codeOf("forbidden"));
-			assert.strictEqual(sent.length, 0, "the WSO2 Cloud token is not sent to the other region");
+			assert.strictEqual(sent.length, 0, "the Choreo Cloud token is not sent to the other region");
 			assert.deepStrictEqual(await exchangeToken("copilot", own, selected), { accessToken: "copilot-token", expiresAt: undefined });
 			assert.strictEqual(sent[0].url, own);
 		}
@@ -176,7 +176,7 @@ describe("Copilot token exchange", () => {
 	});
 });
 
-describe("WSO2 Cloud service requests", () => {
+describe("Choreo Cloud service requests", () => {
 	const managed = (request: Partial<CloudServiceRequest>): CloudServiceRequest => ({ service: "managed-tokens", method: "GET", path: "/managed-connections", ...request });
 
 	it("answers a service the contract names but this build does not call as not supported, sending nothing", async () => {

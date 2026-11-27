@@ -223,7 +223,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 	private githubApp(): GitHubAppConnector {
 		if (!ext.githubApp) {
-			throw new Error("WSO2 Cloud is not available.");
+			throw new Error("Choreo Cloud is not available.");
 		}
 		return ext.githubApp;
 	}
@@ -244,7 +244,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	 */
 	async getAuthorizedGitOrgs(params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
 		if (params?.provider && params.provider !== GitProvider.GITHUB) {
-			throw new NotSupportedError("WSO2 Cloud connects GitHub repositories from here. For another provider, create the integration in the WSO2 Cloud console.", {
+			throw new NotSupportedError("Choreo Cloud connects GitHub repositories from here. For another provider, create the integration in the Choreo Cloud console.", {
 				reason: "git_orgs_unavailable",
 			});
 		}
@@ -257,7 +257,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async getCredentialDetails(_params: GetCredentialDetailsReq): Promise<CredentialItem> {
-		throw new Error("Git credentials are managed in the WSO2 Cloud console.");
+		throw new Error("Git credentials are managed in the Choreo Cloud console.");
 	}
 
 	/**
