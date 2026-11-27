@@ -96,18 +96,18 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 				// An editor started with a token cannot sign in again, and signing it out would only
 				// restore the same token and fail again: it is reported, not ended, and offers no sign-in.
 				if (platform.injected) {
-					void window.showErrorMessage(describeCloudError(error, "WSO2 Cloud rejected this editor's token."));
+					void window.showErrorMessage(describeCloudError(error, "Choreo Cloud rejected this editor's token."));
 					return;
 				}
 				void ext.authProvider?.logout(true);
-				handleCloudError(error, "WSO2 Cloud rejected the session. Please sign in again.");
+				handleCloudError(error, "Choreo Cloud rejected the session. Please sign in again.");
 			},
 		});
 	} catch (error) {
 		// An environment that cannot be used (a dev deployment with no hosts set) leaves the cloud
 		// features off rather than failing the extension.
-		ext.logError("WSO2 Cloud is not available", error as Error);
-		vscode.window.showErrorMessage(`WSO2 Cloud features are off: ${error instanceof Error ? error.message : String(error)}`);
+		ext.logError("Choreo Cloud is not available", error as Error);
+		vscode.window.showErrorMessage(`Choreo Cloud features are off: ${error instanceof Error ? error.message : String(error)}`);
 		restored();
 		return;
 	}
@@ -148,7 +148,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	context.subscriptions.push(
 		platform.onDidChangeEnvironment((environment) => {
 			applyEnvironment(environment);
-			ext.log(`WSO2 Cloud environment: ${environment.name} (${environment.apiBaseUrl})`);
+			ext.log(`Choreo Cloud environment: ${environment.name} (${environment.apiBaseUrl})`);
 		}),
 	);
 	// Platforms are switched between live too: fired before the environment it brings, then the session.
@@ -181,7 +181,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 
 	// 3. Log versions
 	ext.log(`Extension version: ${getExtVersion(context)}`);
-	ext.log(`WSO2 Cloud environment: ${platform.environment.name} (${platform.environment.apiBaseUrl})`);
+	ext.log(`Choreo Cloud environment: ${platform.environment.name} (${platform.environment.apiBaseUrl})`);
 
 	// 4. Rehydrate persistent stores.
 	await contextStore.persist.rehydrate();

@@ -34,6 +34,7 @@ import { Uri, env, window } from "vscode";
 import { ext } from "../../extensionVariables";
 import { SIGN_IN_CHANGED_MESSAGE, gitHubAccessFor, signedInScope } from "../github-access";
 import { type GitHubAppConnector, forgetGitHubAccess, inspectReadablePath, installationSettingsUrl, listConnectedGitHubAccounts, listReadableBranches } from "../github-app";
+import { CHOREO_CLOUD_LABEL } from "./choreo-cloud";
 import type { CloudSourceControl } from "./port";
 
 /** Choreo Cloud reads GitHub repositories through its GitHub App; other providers are connected in the console. */
@@ -81,7 +82,7 @@ export class ChoreoCloudSourceControl implements CloudSourceControl {
 
 	private githubApp(): GitHubAppConnector {
 		if (!ext.githubApp) {
-			throw new Error("WSO2 Cloud is not available.");
+			throw new Error(`${CHOREO_CLOUD_LABEL} is not available.`);
 		}
 		return ext.githubApp;
 	}
@@ -102,7 +103,7 @@ export class ChoreoCloudSourceControl implements CloudSourceControl {
 	 */
 	async getAuthorizedGitOrgs(params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
 		if (params?.provider && params.provider !== GitProvider.GITHUB) {
-			throw new NotSupportedError("WSO2 Cloud connects GitHub repositories from here. For another provider, create the integration in the WSO2 Cloud console.", {
+			throw new NotSupportedError(`${CHOREO_CLOUD_LABEL} connects GitHub repositories from here. For another provider, create the integration in the ${CHOREO_CLOUD_LABEL} console.`, {
 				reason: "git_orgs_unavailable",
 			});
 		}
@@ -115,7 +116,7 @@ export class ChoreoCloudSourceControl implements CloudSourceControl {
 	}
 
 	async getCredentialDetails(_params: GetCredentialDetailsReq): Promise<CredentialItem> {
-		throw new Error("Git credentials are managed in the WSO2 Cloud console.");
+		throw new Error(`Git credentials are managed in the ${CHOREO_CLOUD_LABEL} console.`);
 	}
 
 	/**
