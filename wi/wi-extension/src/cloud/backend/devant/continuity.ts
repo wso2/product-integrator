@@ -20,6 +20,7 @@ import { type Disposable, type ExtensionContext, commands, window } from "vscode
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { ext } from "../../../extensionVariables";
 import { contextStore } from "../../stores/context-store";
+import { OrganizationFollower } from "./follow-organization";
 import { DEVANT_LABEL, DEVANT_PLATFORM } from "./label";
 
 /** The create command under Devant's own name, which the command palette lists while Devant is in use. */
@@ -47,36 +48,18 @@ export function askToSignInAgain(context: ExtensionContext): void {
 		});
 }
 
-/**
- * Moves the session, without the browser, to the organization the workspace is linked to when it is linked to no
- * project of the current one. Decided once for a sign-in, on the first read of the workspace with it: an organization
- * moved to afterwards, by hand or by a link, stays.
- */
+/** Moves the session, without the browser, to the organization the workspace is linked to, as {@link OrganizationFollower} decides. */
 export function followWorkspaceOrganization(): Disposable {
-	let decided = false;
-	// The state there is when this starts counts as a read that finished.
-	let wasLoading = true;
-	const check = ({ state }: ReturnType<typeof contextStore.getState>) => {
-		const session = ext.authProvider?.session;
-		if (!session) {
-			decided = false;
-			wasLoading = true;
+	const follower = new OrganizationFollower();
+	const check = () => {
+		const { state } = contextStore.getState();
+		const target = ext.backend?.pickOrganization
+			? follower.next(ext.authProvider?.session?.org.handle, { loading: state.loading, items: Object.values(state.items) })
+			: undefined;
+		if (!target) {
 			return;
 		}
-		const finishedRead = wasLoading && !state.loading;
-		wasLoading = state.loading;
-		const backend = ext.backend;
-		const items = Object.values(state.items);
-		if (decided || !finishedRead || !backend?.pickOrganization || items.length === 0) {
-			return;
-		}
-		decided = true;
-		const handles = [...new Set(items.map((item) => item.orgHandle))];
-		if (items.some((item) => !item.foreignOrg) || handles.length !== 1) {
-			return;
-		}
-		const [target] = handles;
-		backend
+		ext.backend
 			.changeOrganization(target)
 			.then(() => ext.authProvider?.initAuth())
 			.then(() => {
@@ -84,7 +67,13 @@ export function followWorkspaceOrganization(): Disposable {
 			})
 			.catch((error) => ext.log(`Not following the workspace's organization ${target}: ${error instanceof Error ? error.message : String(error)}`));
 	};
-	const unsubscribe = contextStore.subscribe(check);
-	check(contextStore.getState());
-	return { dispose: unsubscribe };
+	// The session is watched too, so a move made before the workspace is read is seen.
+	const stopStore = contextStore.subscribe(check);
+	const stopAuth = ext.authProvider?.subscribe(check);
+	return {
+		dispose: () => {
+			stopStore();
+			stopAuth?.();
+		},
+	};
 }
