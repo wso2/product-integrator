@@ -49,7 +49,7 @@ interface LocationStore {
 const initialState: LocationStoreState = { projectLocations: {} };
 
 /** The same handle on another deployment (prod, stage) is another organization, as in the data cache. */
-export const projectLocationKey = (orgHandle: string, projectName: string) => `${ext.cloudEnv}-${orgHandle}-${projectName}`;
+export const projectLocationKey = (orgHandle: string, projectName: string) => `${ext.backend?.cacheNamespace ?? ""}${ext.cloudEnv}-${orgHandle}-${projectName}`;
 
 /** Where on this machine each cloud project has been opened, so a link from the console can find it again. */
 export const locationStore = createStore(

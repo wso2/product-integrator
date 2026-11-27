@@ -108,5 +108,5 @@ export const dataCacheStore = createStore(
 	),
 );
 
-/** One cache per organization and deployment: the same handle on dev and prod are different organizations. */
-export const getRootKey = (orgHandle: string) => `${ext.cloudEnv}-${orgHandle}`;
+/** One cache per platform, organization and deployment: the same handle on dev and prod are different organizations. */
+export const getRootKey = (orgHandle: string) => `${ext.backend?.cacheNamespace ?? ""}${ext.cloudEnv}-${orgHandle}`;

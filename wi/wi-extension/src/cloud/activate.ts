@@ -25,8 +25,9 @@ import { commands, window, workspace } from "vscode";
 import { ext } from "../extensionVariables";
 import { getExtVersion } from "../utils/commonUtils";
 import { WIAuthState } from "./auth/wso2-auth-provider";
-import { choreoCloudBackend } from "./backend/choreo-cloud";
+import { CHOREO_CLOUD_PLATFORM, choreoCloudBackend } from "./backend/choreo-cloud";
 import { ChoreoCloudSourceControl } from "./backend/choreo-cloud-source-control";
+import { CloudBackends } from "./backend/registry";
 import type { WICloudExtensionAPI } from "./cloud-ext-api";
 import { cloneOpenedIntegration } from "./clone-on-open";
 import { activateURIHandlers } from "./cloud-uri-handlers";
@@ -96,16 +97,26 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		return;
 	}
 	ext.clients = { platform };
-	ext.backend = choreoCloudBackend({
-		cloud: () => platform.cloud,
-		consoleUrl: () => ext.config.consoleUrl,
-		orgHandle: () => ext.authProvider?.org?.handle,
-		sourceControl: new ChoreoCloudSourceControl(),
-		submit: submitCreateComponentHandler,
-		reselectOrganization: async () => {
-			await vscode.commands.executeCommand(WICommandIds.SignIn, { reselectOrganization: true });
-		},
-	});
+	const backends = new CloudBackends(
+		new Map([
+			[
+				CHOREO_CLOUD_PLATFORM,
+				() =>
+					choreoCloudBackend({
+						cloud: () => platform.cloud,
+						consoleUrl: () => ext.config.consoleUrl,
+						orgHandle: () => ext.authProvider?.org?.handle,
+						sourceControl: new ChoreoCloudSourceControl(),
+						submit: submitCreateComponentHandler,
+						reselectOrganization: async () => {
+							await vscode.commands.executeCommand(WICommandIds.SignIn, { reselectOrganization: true });
+						},
+					}),
+			],
+		]),
+	);
+	ext.backend = backends.for(platform);
+	vscode.commands.executeCommand("setContext", CLOUD_PLATFORM_CONTEXT, ext.backend.platform);
 	applyEnvironment(platform.environment);
 	vscode.commands.executeCommand("setContext", MULTI_REGION_CONTEXT, platform.regions.length > 1);
 	context.subscriptions.push(platform);
@@ -114,6 +125,16 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		platform.onDidChangeEnvironment((environment) => {
 			applyEnvironment(environment);
 			ext.log(`Choreo Cloud environment: ${environment.name} (${environment.apiBaseUrl})`);
+		}),
+	);
+	// Platforms are switched between live too: fired before the environment it brings, then the session.
+	context.subscriptions.push(
+		platform.onDidChangePlatform(() => {
+			ext.backend = backends.for(platform);
+			vscode.commands.executeCommand("setContext", CLOUD_PLATFORM_CONTEXT, ext.backend.platform);
+			vscode.commands.executeCommand("setContext", MULTI_REGION_CONTEXT, platform.regions.length > 1);
+			contextStore.getState().resetState();
+			ext.log(`Cloud platform: ${ext.backend.label}`);
 		}),
 	);
 
@@ -178,11 +199,16 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	cloudAPIs.setActive(true);
 }
 
+/** The context key menus read the platform in use from. */
+export const CLOUD_PLATFORM_CONTEXT = "wso2-integrator.cloud.platform";
+
 /** Points what the extension reads per environment at `environment`: the caches' keys and the hosts it hands out. The webviews refetch the console URL when the auth state changes, which a switch does. */
 function applyEnvironment(environment: CloudEnvironment): void {
 	const services: CloudServiceUrls = readCloudServiceUrls(environment.name);
 	ext.cloudEnv = environment.name;
-	ext.config = { ...environment, ...services };
+	// Named only for another platform than Choreo Cloud, which a consumer that knows of no other assumes.
+	const platform = ext.backend.platform === CHOREO_CLOUD_PLATFORM ? undefined : ext.backend.platform;
+	ext.config = { ...environment, ...services, ...(platform ? { platform } : {}) };
 }
 
 function registerPreInitHandlers(): vscode.Disposable {
