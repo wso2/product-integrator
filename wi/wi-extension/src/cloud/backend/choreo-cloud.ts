@@ -19,6 +19,7 @@
 import { RESOURCE_NAME, buildConsoleUrl } from "@wso2/wso2-cloud-client";
 import type { CloudClient } from "@wso2/wso2-cloud-client";
 import { toProjectName } from "../cmds/cmd-utils";
+import { findContextFile, linkContext, readContextFile, unlinkContext } from "../context-file";
 import type { CloudBackend, CloudCreation, CloudSourceControl } from "./port";
 
 /** Choreo Cloud's name in the platform switch. */
@@ -74,6 +75,7 @@ export function choreoCloudBackend(deps: ChoreoCloudBackendDeps): CloudBackend {
 		links: {
 			console: (link) => buildConsoleUrl(deps.consoleUrl(), { orgHandle: deps.orgHandle(), ...link }),
 		},
+		contextFiles: { find: findContextFile, read: readContextFile, link: linkContext, unlink: unlinkContext },
 		sourceControl: deps.sourceControl,
 		creation: { submit: deps.submit },
 		changeOrganization: () => deps.reselectOrganization(),

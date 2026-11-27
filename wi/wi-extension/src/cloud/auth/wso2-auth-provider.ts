@@ -18,7 +18,7 @@
 
 import type { CloudOrganization, AuthState as WICloudAuthState } from "@wso2/wi-core";
 import { type AuthState, type Organization, type PlatformSession, type StoredSession, isCloudError } from "@wso2/wso2-cloud-client";
-import { PROMPT_LOGIN_SCOPE, WSO2_CLOUD_AUTH_PROVIDER_ID, scopeForEnv } from "@wso2/wso2-cloud-client/vscode";
+import { CHOREO_CLOUD_PLATFORM, PROMPT_LOGIN_SCOPE, WSO2_CLOUD_AUTH_PROVIDER_ID, scopeForEnv, scopeForPlatform } from "@wso2/wso2-cloud-client/vscode";
 import { Disposable, EventEmitter, authentication, window } from "vscode";
 import type { WIPlatform } from "../platform/platform-client";
 import { contextStore } from "../stores/context-store";
@@ -180,6 +180,10 @@ export class WIAuthState implements Disposable {
 		this._stateChangeEmitter.fire({ state: this._state });
 		try {
 			const scopes = [scopeForEnv(this.deps.platform.environment.name)];
+			// Another platform's provider answers only a request that names it.
+			if (this.deps.platform.platform !== CHOREO_CLOUD_PLATFORM) {
+				scopes.push(scopeForPlatform(this.deps.platform.platform));
+			}
 			if (options.reselectOrganization) {
 				scopes.push(PROMPT_LOGIN_SCOPE);
 			}

@@ -36,7 +36,6 @@ import { createStore } from "zustand";
 import { persist } from "zustand/middleware";
 import { ext } from "../../extensionVariables";
 import { isSamePath, isSubpath } from "../../utils";
-import { findContextFile, readContextFile } from "../context-file";
 import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
 import { dataCacheStore } from "./data-cache-store";
 import { locationStore } from "./location-store";
@@ -146,7 +145,7 @@ const getAllContexts = async (previousItems: { [key: string]: ContextItemEnriche
 	const sessionOrg = ext.authProvider?.org?.handle;
 
 	const addEntries = (contextFilePath: string, dirPath?: string, workspaceName?: string) => {
-		for (const entry of readContextFile(contextFilePath)) {
+		for (const entry of ext.backend.contextFiles.read(contextFilePath)) {
 			const key = contextKey(entry);
 			const workspaceDir = dirPath ?? path.dirname(path.dirname(contextFilePath));
 			const projectRootFsPath = path.dirname(path.dirname(contextFilePath));
@@ -182,7 +181,7 @@ const getAllContexts = async (previousItems: { [key: string]: ContextItemEnriche
 		if (!contextFiles.some((contextFile) => isSubpath(workspaceFolder.uri.fsPath, contextFile))) {
 			try {
 				const gitRoot = await getGitRoot(ext.context, workspaceFolder.uri.fsPath);
-				const contextPath = gitRoot ? findContextFile(gitRoot) : undefined;
+				const contextPath = gitRoot ? ext.backend.contextFiles.find(gitRoot) : undefined;
 				if (contextPath) {
 					addEntries(contextPath, workspaceFolder.uri.fsPath, workspaceFolder.name);
 				}

@@ -63,6 +63,12 @@
           "default": "prod",
           "description": "The Choreo Cloud environment to use.",
           "scope": "machine"
+        },
+        "integrator.advanced.enableDevant": {
+          "type": "boolean",
+          "default": false,
+          "description": "Offer Devant beside WSO2 Cloud, for projects still on Devant. Someone who used Devant with an earlier version is offered it without this.",
+          "scope": "machine"
         }
       }
     },
@@ -160,6 +166,13 @@
         "category": "WSO2 Integrator",
         "icon": "$(globe)",
         "enablement": "wso2.integrator.cloud.multiRegion"
+      },
+      {
+        "command": "wso2.integrator.cloud.auth.switchPlatform",
+        "title": "Switch Platform",
+        "category": "WSO2 Integrator",
+        "icon": "$(arrow-swap)",
+        "enablement": "wso2.integrator.cloud.platformsOffered"
       },
       {
         "command": "wso2.integrator.cloud.integration.create",
@@ -358,6 +371,10 @@
         {
           "command": "wso2.integrator.cloud.auth.switchRegion",
           "when": "wso2.integrator.cloud.multiRegion"
+        },
+        {
+          "command": "wso2.integrator.cloud.auth.switchPlatform",
+          "when": "wso2.integrator.cloud.platformsOffered"
         },
         {
           "command": "ballerina.showVisualizer",

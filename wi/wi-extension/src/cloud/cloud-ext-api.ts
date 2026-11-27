@@ -39,7 +39,6 @@ import { openClonedDir } from "./cloud-uri-handlers";
 import { type CloudServiceDeps, callCloudService, exchangeToken } from "./cloud-services";
 import { createConnectionConfig, deleteLocalConnectionConfig } from "./cloud-utils";
 import { cloudConnections } from "./connections";
-import { linkContext } from "./context-file";
 import { hasDirtyRepo } from "./git/util";
 import { contextStore } from "./stores/context-store";
 
@@ -112,7 +111,7 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 		if (!org) {
 			throw new Error("Not signed in to Choreo Cloud.");
 		}
-		linkContext(fsPath, { org: org.handle, project: target.project, env: target.env });
+		ext.backend.contextFiles.link(fsPath, { org: org.handle, project: target.project, env: target.env });
 		await contextStore.getState().refreshState();
 	};
 	public openClonedDir = (request: OpenClonedDirRequest): Promise<void> => openClonedDir(request);

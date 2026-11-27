@@ -31,9 +31,10 @@ function regionLabel(environment: CloudEnvironment): string {
 	return environment.region?.label ?? environment.name;
 }
 
-/** Where the person works, for messages: `WSO2 Cloud (Europe region)`, or `WSO2 Cloud` where there is no region to select. */
+/** Where the person works, for messages: `WSO2 Cloud (Europe region)`, or the platform alone where there is no region to select. */
 export function cloudPlaceName(environment: CloudEnvironment = ext.clients.platform.environment): string {
-	return ext.clients.platform.regions.length > 1 && environment.region ? `Choreo Cloud (${regionLabel(environment)} region)` : "Choreo Cloud";
+	const label = ext.backend.label;
+	return ext.clients.platform.regions.length > 1 && environment.region ? `${label} (${regionLabel(environment)} region)` : label;
 }
 
 /**
