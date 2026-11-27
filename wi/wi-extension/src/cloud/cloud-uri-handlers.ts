@@ -210,7 +210,7 @@ export const cloneOrOpenDir = async (
 const switchContextAndOpenDir = async (selectedPath: string, project: Project, integrationName?: string | null) => {
 	const org = ext.authProvider?.org;
 	if (!org) {
-		window.showErrorMessage("You are not signed in to WSO2 Cloud. Please sign in and try again.");
+		window.showErrorMessage("You are not signed in to Choreo Cloud. Please sign in and try again.");
 		return;
 	}
 	const gitRoot = await getGitRoot(ext.context, selectedPath);

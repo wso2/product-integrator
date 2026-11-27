@@ -254,14 +254,14 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 
 	// WSO2 Cloud builds from GitHub repositories only for now; no credential configured for another provider changes that.
 	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB) {
-		invalidRepoMsg = `Creating integrations from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on WSO2 Cloud yet. Push the integration to a GitHub repository and create it from there.`;
+		invalidRepoMsg = `Creating integrations from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on Choreo Cloud yet. Push the integration to a GitHub repository and create it from there.`;
 		onInvalidRepoRefreshClick = refetchGitData;
 		blockCreation = true;
 	}
 
 	// A failed check says nothing about access; it is retried rather than answered with Authorize.
 	if (!invalidRepoMsg && !isLoadingRepoAccess && gitRemote && repoAccessError) {
-		invalidRepoMsg = "Couldn't check WSO2 Cloud's access to this repository. Refresh to try again.";
+		invalidRepoMsg = "Couldn't check Choreo Cloud's access to this repository. Refresh to try again.";
 		onInvalidRepoRefreshClick = refetchRepoAccess;
 		onInvalidRepoRefreshing = isFetchingRepoAccess;
 		invalidRepoBannerType = "warning";
@@ -315,7 +315,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	}
 
 	if (!invalidRepoMsg && configDriftFiles?.length > 0) {
-		invalidRepoMsg = `WSO2 Cloud reads the metadata in ${configDriftFiles.join(", ")} from the selected remote repository. Commit and push ${configDriftFiles.length > 1 ? "them" : "it"}.`;
+		invalidRepoMsg = `Choreo Cloud reads the metadata in ${configDriftFiles.join(", ")} from the selected remote repository. Commit and push ${configDriftFiles.length > 1 ? "them" : "it"}.`;
 		onInvalidRepoRefreshClick = refetchConfigDrift;
 		onInvalidRepoRefreshing = isFetchingConfigDrift;
 		invalidRepoBannerType = "warning";
@@ -323,7 +323,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	}
 
 	if (!invalidRepoMsg && hasDirtyRepo) {
-		invalidRepoMsg = "WSO2 Cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.";
+		invalidRepoMsg = "Choreo Cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.";
 		onInvalidRepoRefreshClick = refetchHasDirtyRepo;
 		onInvalidRepoRefreshing = isFetchingHasDirtyRepo;
 		invalidRepoBannerType = "neutral";

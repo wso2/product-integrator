@@ -109,7 +109,7 @@ export class WICloudExtensionAPI implements IWso2PlatformExtensionAPI {
 	public linkDirectory = async (fsPath: string, target: { project: string; env?: string }): Promise<void> => {
 		const org = ext.authProvider?.org;
 		if (!org) {
-			throw new Error("Not signed in to WSO2 Cloud.");
+			throw new Error("Not signed in to Choreo Cloud.");
 		}
 		ext.backend.contextFiles.link(fsPath, { org: org.handle, project: target.project, env: target.env });
 		await contextStore.getState().refreshState();

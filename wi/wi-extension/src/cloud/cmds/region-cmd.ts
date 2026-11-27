@@ -68,10 +68,10 @@ export function switchRegionCommand(context: ExtensionContext) {
 				isPlatformReady(ext);
 				const platform = ext.clients.platform;
 				if (platform.regions.length < 2) {
-					window.showInformationMessage("This WSO2 Cloud environment has only one region.");
+					window.showInformationMessage("This Choreo Cloud environment has only one region.");
 					return;
 				}
-				const chosen = await pickRegion({ title: "Switch WSO2 Cloud Region", placeHolder: "Select the region to create and deploy your integrations in" });
+				const chosen = await pickRegion({ title: "Switch Choreo Cloud Region", placeHolder: "Select the region to create and deploy your integrations in" });
 				if (!chosen || chosen === platform.environment.name) {
 					return;
 				}
@@ -79,16 +79,16 @@ export function switchRegionCommand(context: ExtensionContext) {
 				await ext.authProvider?.initAuth();
 				const region = regionLabel(platform.environment);
 				if (ext.authProvider?.isLoggedIn) {
-					window.showInformationMessage(`Switched to the ${region} region of WSO2 Cloud.`);
+					window.showInformationMessage(`Switched to the ${region} region of Choreo Cloud.`);
 					return;
 				}
-				const action = await window.showInformationMessage(`Switched to the ${region} region of WSO2 Cloud. Sign in to continue.`, "Sign In");
+				const action = await window.showInformationMessage(`Switched to the ${region} region of Choreo Cloud. Sign in to continue.`, "Sign In");
 				if (action === "Sign In") {
 					await commands.executeCommand(WICommandIds.SignIn, { region: chosen });
 				}
 			} catch (error) {
-				ext.logError("Could not switch the WSO2 Cloud region", error as Error);
-				handleCloudError(error, "Could not switch the WSO2 Cloud region.");
+				ext.logError("Could not switch the Choreo Cloud region", error as Error);
+				handleCloudError(error, "Could not switch the Choreo Cloud region.");
 			}
 		}),
 	);
