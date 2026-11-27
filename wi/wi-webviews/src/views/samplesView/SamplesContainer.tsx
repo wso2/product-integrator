@@ -32,10 +32,6 @@ import type { SampleSupportedRuntime } from "../shared/runtime";
 const ALL_CATEGORY_VALUE = "__all__";
 const AGENT_BUILDER_COMPONENT_TYPES = new Set(["ai-agent", "mcp-server"]);
 
-function isAgentBuilderComponentType(componentType?: string): boolean {
-	return AGENT_BUILDER_COMPONENT_TYPES.has((componentType ?? "").trim().toLowerCase());
-}
-
 type BrowseItemType = "sample" | "prebuilt";
 type CategoryOption = { key: string; content: string; value: string };
 
@@ -730,9 +726,9 @@ export function SamplesContainer(props: SamplesContainerProps) {
 	const [isLoading, setIsLoading] = useState<boolean>(true);
 	const isAgentBuilderMode = webviewContext?.productMode === ProductMode.AGENT_BUILDER;
 	const includesPrebuiltIntegrations = props.projectType === "WSO2: BI";
-	// Agent Builder lists only AI agent and MCP server samples and no pre-built integrations, so
-	// it hides the sample/pre-built type filter. The category filter stays.
+	// Agent Builder lists AI agent and MCP server samples together, so the type/category will be hidden.
 	const showsTypeFilter = includesPrebuiltIntegrations && !isAgentBuilderMode;
+	const showsCategoryFilter = !isAgentBuilderMode;
 
 	useEffect(() => {
 		let cancelled = false;
@@ -793,24 +789,22 @@ export function SamplesContainer(props: SamplesContainerProps) {
 		}
 
 		const scopedItems = isAgentBuilderMode
-			? items.filter((item) => isAgentBuilderComponentType(item.componentType))
+			? items.filter((item) =>
+					AGENT_BUILDER_COMPONENT_TYPES.has(item.componentType.trim().toLowerCase()),
+				)
 			: items;
 
 		return scopedItems.sort(compareBrowseItems);
 	}, [prebuiltIntegrations, samples, includesPrebuiltIntegrations, isAgentBuilderMode]);
 
 	const categoryItems = useMemo(() => {
-		// In Agent Builder, offer only the categories of the samples it lists.
-		const scopedSamples = isAgentBuilderMode
-			? samples.filter((sample) => isAgentBuilderComponentType(sample.componentType))
-			: samples;
 		return createCategoryOptions(
-			isAgentBuilderMode ? [] : categories,
-			scopedSamples,
+			categories,
+			samples,
 			prebuiltIntegrations,
-			includesPrebuiltIntegrations && !isAgentBuilderMode,
+			includesPrebuiltIntegrations,
 		);
-	}, [categories, samples, prebuiltIntegrations, includesPrebuiltIntegrations, isAgentBuilderMode]);
+	}, [categories, samples, prebuiltIntegrations, includesPrebuiltIntegrations]);
 
 	const filteredItems = useMemo(() => {
 		return allItems.filter((item) =>
@@ -820,7 +814,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
 
 	const hasActiveFilters =
 		searchText.trim().length > 0 ||
-		selectedCategory !== ALL_CATEGORY_VALUE ||
+		(showsCategoryFilter && selectedCategory !== ALL_CATEGORY_VALUE) ||
 		(showsTypeFilter && selectedType !== "all");
 
 	function resetFilters() {
@@ -898,21 +892,23 @@ export function SamplesContainer(props: SamplesContainerProps) {
 							</TypeFilters>
 						</FilterGroup>
 					)}
-					<FilterGroup>
-						<FilterTitle>Category</FilterTitle>
-						<CategoryFilterWrap>
-							<Dropdown
-								id="sample-category-filter"
-								items={categoryItems}
-								onValueChange={(value: string) =>
-									setSelectedCategory(value || ALL_CATEGORY_VALUE)
-								}
-								value={selectedCategory}
-								sx={{ width: "100%" }}
-								dropdownContainerSx={categoryDropdownContainerSx}
-							/>
-						</CategoryFilterWrap>
-					</FilterGroup>
+					{showsCategoryFilter && (
+						<FilterGroup>
+							<FilterTitle>Category</FilterTitle>
+							<CategoryFilterWrap>
+								<Dropdown
+									id="sample-category-filter"
+									items={categoryItems}
+									onValueChange={(value: string) =>
+										setSelectedCategory(value || ALL_CATEGORY_VALUE)
+									}
+									value={selectedCategory}
+									sx={{ width: "100%" }}
+									dropdownContainerSx={categoryDropdownContainerSx}
+								/>
+							</CategoryFilterWrap>
+						</FilterGroup>
+					)}
 					<ClearFiltersButton
 						type="button"
 						onClick={resetFilters}
