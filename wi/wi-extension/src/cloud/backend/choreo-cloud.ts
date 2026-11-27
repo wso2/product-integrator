@@ -25,7 +25,7 @@ import type { CloudBackend, CloudCreation, CloudSourceControl } from "./port";
 export const CHOREO_CLOUD_PLATFORM = "choreo-cloud";
 
 /** The product name messages and pages use for Choreo Cloud. */
-export const CHOREO_CLOUD_LABEL = "WSO2 Cloud";
+export const CHOREO_CLOUD_LABEL = "Choreo Cloud";
 
 export interface ChoreoCloudBackendDeps {
 	/** The API client of the region in use; read on every call, since the region can change. */
