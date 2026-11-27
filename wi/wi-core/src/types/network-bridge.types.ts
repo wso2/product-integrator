@@ -68,7 +68,9 @@ import type {
     WICloudSubmitComponentsResp,
     GetCloudProjectsReq,
     GetCloudProjectsResp,
+    CloudPlatformInfo,
 } from "./cloud.types";
+import type { ConsoleLink } from "@wso2/wso2-cloud-client";
 
 export const WI_BRIDGE_EVENTS = {
     WS_RESPONSE: "wi.ws.response",
@@ -139,6 +141,8 @@ export interface WIWsMethodParamsMap {
     getGitRepoMetadata: GetGitMetadataReq;
     cloneRepositoryIntoCompDir: CloneRepositoryIntoCompDirReq;
     getConsoleUrl: void;
+    getPlatformInfo: void;
+    getConsoleLink: ConsoleLink;
     getCloudProjects: GetCloudProjectsReq;
 }
 
@@ -196,6 +200,8 @@ export interface WIWsMethodResultMap {
     getGitRepoMetadata: GetGitMetadataResp;
     cloneRepositoryIntoCompDir: string;
     getConsoleUrl: string;
+    getPlatformInfo: CloudPlatformInfo;
+    getConsoleLink: string;
     getCloudProjects: GetCloudProjectsResp;
 }
 

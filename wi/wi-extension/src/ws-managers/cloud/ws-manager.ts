@@ -39,11 +39,13 @@ import {
 	type IsRepoAuthorizedReq,
 	type IsRepoAuthorizedResp,
 	ViewType,
+	type CloudPlatformInfo,
 	type WICloudAPI,
 	type WICloudFormContext,
 	type WICloudSubmitComponentsReq,
 	type WICloudSubmitComponentsResp,
 } from "@wso2/wi-core";
+import type { ConsoleLink } from "@wso2/wso2-cloud-client";
 import { buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
 import { ProgressLocation, commands, window } from "vscode";
 import type { IFileStatus } from "../../cloud/git/git";
@@ -262,6 +264,15 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 
 	async getConsoleUrl(): Promise<string> {
 		return ext.config.consoleUrl;
+	}
+
+	async getPlatformInfo(): Promise<CloudPlatformInfo> {
+		const { platform, label, gitProviders } = ext.backend;
+		return { name: platform, label, gitProviders: [...gitProviders] };
+	}
+
+	async getConsoleLink(link: ConsoleLink): Promise<string> {
+		return ext.backend.links.console(link);
 	}
 
 	async getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {

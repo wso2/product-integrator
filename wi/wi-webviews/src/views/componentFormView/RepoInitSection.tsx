@@ -16,11 +16,11 @@
  * under the License.
  */
 
-import { buildConsoleUrl } from "@wso2/wso2-cloud-client/contract";
 import React, { type FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dropdown, ProgressIndicator, TextField } from "@wso2/ui-toolkit";
 import { buildGitURL, GitProvider } from "@wso2/wso2-platform-core";
+import { openConsole } from "../../providers";
 import {
     GitConfigGrid,
     GitConfigLabel,
@@ -53,7 +53,6 @@ interface RepoInitSectionProps {
     orgId: string;
     orgUuid: string;
     orgHandle: string;
-    consoleUrl: string;
     onValidityChange: (isValid: boolean) => void;
     onRepoInitDataChange: (data: RepoInitData) => void;
 }
@@ -71,7 +70,6 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
     orgId,
     orgUuid,
     orgHandle,
-    consoleUrl,
     onValidityChange,
     onRepoInitDataChange,
 }) => {
@@ -291,7 +289,7 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
     }, [wsClient, gitProvider, org, serverUrl]);
 
     const handleClickCreateCreds = () => {
-        wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" }));
+        openConsole(wsClient, { orgHandle, section: "settings/credentials" });
     }
 
     const handleBranchChange = useCallback(

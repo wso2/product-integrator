@@ -58,6 +58,7 @@ import type {
     WICloudSubmitComponentsReq,
     GetCloudProjectsReq,
 } from "@wso2/wi-core";
+import type { ConsoleLink } from "@wso2/wso2-cloud-client";
 import { MainWsManager } from "./ws-managers/main/ws-manager";
 import { CloudWsManager } from "./ws-managers/cloud/ws-manager";
 import { ballerinaContext } from "./bi/ballerinaContext";
@@ -335,6 +336,8 @@ export class BridgeLayer {
             cloudManager.cloneRepositoryIntoCompDir(request.params as CloneRepositoryIntoCompDirReq)
         );
         registerRoute("getConsoleUrl", async () => cloudManager.getConsoleUrl());
+        registerRoute("getPlatformInfo", async () => cloudManager.getPlatformInfo());
+        registerRoute("getConsoleLink", async (request) => cloudManager.getConsoleLink(request.params as ConsoleLink));
         registerRoute("getCloudProjects", async (request) =>
             cloudManager.getCloudProjects(request.params as GetCloudProjectsReq)
         );

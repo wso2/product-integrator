@@ -20,7 +20,7 @@ import React, { type FC, type ReactNode, useEffect, useState } from "react";
 import { Dropdown, ProgressIndicator, Codicon } from "@wso2/ui-toolkit";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { GitProvider, parseGitURL, toSentenceCase } from "@wso2/wso2-platform-core";
-import { buildConsoleUrl } from "@wso2/wso2-cloud-client/contract";
+import { openConsole, useCloudContext } from "../../providers";
 import {
 	GitConfigGrid,
 	GitConfigLabel,
@@ -49,7 +49,6 @@ interface GitConfigSectionProps {
 	orgId: string;
 	orgUuid: string;
 	orgHandle: string;
-	consoleUrl: string;
 	onBlockCreationChange: (blocked: boolean) => void;
 	onGitConfigDataChange: (data: GitConfigData) => void;
 }
@@ -62,10 +61,10 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	orgId,
 	orgUuid,
 	orgHandle,
-	consoleUrl,
 	onBlockCreationChange,
 	onGitConfigDataChange,
 }) => {
+	const { platform } = useCloudContext();
 	const [gitRemote, setGitRemote] = useState<string | null>(null);
 	const [gitProvider, setGitProvider] = useState<string | null>(null);
 	const [branch, setBranch] = useState<string | null>(null);
@@ -252,16 +251,16 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 		}
 	}
 
-	// WSO2 Cloud builds from GitHub repositories only for now; no credential configured for another provider changes that.
-	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB) {
-		invalidRepoMsg = `Creating integrations from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on Choreo Cloud yet. Push the integration to a GitHub repository and create it from there.`;
+	// The platform builds from the providers it names; no credential configured for another provider changes that.
+	if (!invalidRepoMsg && gitProvider && !platform.gitProviders.includes(gitProvider)) {
+		invalidRepoMsg = `Creating integrations from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on ${platform.label} yet. Push the integration to a GitHub repository and create it from there.`;
 		onInvalidRepoRefreshClick = refetchGitData;
 		blockCreation = true;
 	}
 
 	// A failed check says nothing about access; it is retried rather than answered with Authorize.
 	if (!invalidRepoMsg && !isLoadingRepoAccess && gitRemote && repoAccessError) {
-		invalidRepoMsg = "Couldn't check Choreo Cloud's access to this repository. Refresh to try again.";
+		invalidRepoMsg = `Couldn't check ${platform.label}'s access to this repository. Refresh to try again.`;
 		onInvalidRepoRefreshClick = refetchRepoAccess;
 		onInvalidRepoRefreshing = isFetchingRepoAccess;
 		invalidRepoBannerType = "warning";
@@ -281,7 +280,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 				invalidRepoBannerType = "info";
 			}
 		} else {
-			onInvalidRepoActionClick = () => wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle, section: "settings/credentials" }));
+			onInvalidRepoActionClick = () => openConsole(wsClient, { orgHandle, section: "settings/credentials" });
 			if (isRepoAuthorizedResp?.retrievedRepos) {
 				invalidRepoMsg = <span>Selected Credential does not have sufficient permissions to access the repository.</span>;
 				invalidRepoAction = "Manage Credentials";
@@ -315,7 +314,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	}
 
 	if (!invalidRepoMsg && configDriftFiles?.length > 0) {
-		invalidRepoMsg = `Choreo Cloud reads the metadata in ${configDriftFiles.join(", ")} from the selected remote repository. Commit and push ${configDriftFiles.length > 1 ? "them" : "it"}.`;
+		invalidRepoMsg = `${platform.label} reads the metadata in ${configDriftFiles.join(", ")} from the selected remote repository. Commit and push ${configDriftFiles.length > 1 ? "them" : "it"}.`;
 		onInvalidRepoRefreshClick = refetchConfigDrift;
 		onInvalidRepoRefreshing = isFetchingConfigDrift;
 		invalidRepoBannerType = "warning";
@@ -323,7 +322,7 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	}
 
 	if (!invalidRepoMsg && hasDirtyRepo) {
-		invalidRepoMsg = "Choreo Cloud builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.";
+		invalidRepoMsg = `${platform.label} builds your integrations from the source code in the selected remote repository. Please commit and push your local changes to the remote Git repository.`;
 		onInvalidRepoRefreshClick = refetchHasDirtyRepo;
 		onInvalidRepoRefreshing = isFetchingHasDirtyRepo;
 		invalidRepoBannerType = "neutral";

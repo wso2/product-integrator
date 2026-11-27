@@ -50,6 +50,9 @@ export function activateURIHandlers(context: ExtensionContext) {
 				}
 				return;
 			}
+			if (ext.backend?.handleUri?.(uri)) {
+				return;
+			}
 			if (uri.path === GITHUB_RETURN_PATH) {
 				// GitHub's return, relayed by the console's GitHub callback page.
 				void ext.githubApp?.handleReturn(new URLSearchParams(uri.query));

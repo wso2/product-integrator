@@ -101,7 +101,7 @@ export function ComponentFormView() {
 }
 function ComponentForm() {
 	const { wsClient } = useVisualizerContext();
-	const { consoleUrl } = useCloudContext();
+	const { platform } = useCloudContext();
 	const [params, setParams] = useState<WICloudFormContext | null>(null);
 
 	const [formState, setFormState] = useState<EntryFormState[]>(() =>
@@ -300,7 +300,7 @@ function ComponentForm() {
 					<FormBody>
 						{/* Header */}
 						<TitleRow>
-							<Typography variant="h1">Create {isBatch ? "Integrations" : "Integration"} in Choreo Cloud</Typography>
+							<Typography variant="h1">Create {isBatch ? "Integrations" : "Integration"} in {platform.label}</Typography>
 						</TitleRow>
 
 						{/* Submit error */}
@@ -338,7 +338,6 @@ function ComponentForm() {
 								orgId={params?.org?.id?.toString()}
 								orgUuid={params?.org?.uuid}
 								orgHandle={params?.org?.handle}
-								consoleUrl={consoleUrl}
 								onBlockCreationChange={setBlockCreation}
 								onGitConfigDataChange={(data) => { gitConfigDataRef.current = data; }}
 							/>
@@ -350,7 +349,6 @@ function ComponentForm() {
 								orgId={params?.org?.id?.toString()}
 								orgUuid={params?.org?.uuid}
 								orgHandle={params?.org?.handle}
-								consoleUrl={consoleUrl}
 								onValidityChange={setIsRepoInitValid}
 								onRepoInitDataChange={(data) => { repoInitDataRef.current = data; }}
 							/>

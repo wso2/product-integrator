@@ -78,7 +78,9 @@ import type {
     WICloudSubmitComponentsResp,
     GetCloudProjectsReq,
     GetCloudProjectsResp,
+    CloudPlatformInfo,
 } from "@wso2/wi-core";
+import type { ConsoleLink } from "@wso2/wso2-cloud-client/contract";
 import { ConnectionStatus, createWebviewTransportAdapter } from "@wso2/webview-giga-bridge/webview";
 
 declare global {
@@ -351,6 +353,14 @@ export class WsClient {
 
     public getConsoleUrl(): Promise<string> {
         return this.request("getConsoleUrl");
+    }
+
+    public getPlatformInfo(): Promise<CloudPlatformInfo> {
+        return this.request("getPlatformInfo");
+    }
+
+    public getConsoleLink(link: ConsoleLink): Promise<string> {
+        return this.request("getConsoleLink", link);
     }
 
     public getCloudProjects(params: GetCloudProjectsReq): Promise<GetCloudProjectsResp> {

@@ -593,7 +593,7 @@ interface OpenProjectViewProps {
 
 export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
     const { wsClient } = useVisualizerContext();
-    const { authState, authStateLoading } = useCloudContext();
+    const { authState, authStateLoading, platform } = useCloudContext();
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -1060,7 +1060,7 @@ export const OpenProjectView: React.FC<OpenProjectViewProps> = ({ onBack }) => {
                         />
                     </ChoiceCardIconWrapper>
                     <ChoiceCardTitle>Open Cloud Project</ChoiceCardTitle>
-                    <ChoiceCardDesc>Browse and clone a project from your Choreo Cloud organization.</ChoiceCardDesc>
+                    <ChoiceCardDesc>Browse and clone a project from your {platform.label} organization.</ChoiceCardDesc>
                 </ChoiceCard>
             </ChoiceGrid>
         </LandingWrapper>

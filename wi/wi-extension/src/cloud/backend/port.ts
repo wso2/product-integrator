@@ -77,6 +77,8 @@ export interface CloudBackend {
 	readonly label: string;
 	/** Put in front of the caches' keys, so platforms with the same organization handles keep apart; "" for Choreo Cloud. */
 	readonly cacheNamespace: string;
+	/** The git providers an integration can be created from, as `GitProvider` names them. */
+	readonly gitProviders: readonly string[];
 	readonly projects: CloudProjects;
 	readonly integrations: CloudIntegrations;
 	readonly links: CloudLinks;
@@ -85,4 +87,6 @@ export interface CloudBackend {
 	readonly creation: CloudCreation;
 	/** Moves to another of the person's organizations. */
 	changeOrganization(orgId: string): Promise<void>;
+	/** Takes a URI handed to the editor that is this platform's own; answers whether it did. */
+	handleUri?(uri: { path: string; query: string }): boolean;
 }

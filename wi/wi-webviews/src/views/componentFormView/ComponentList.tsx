@@ -16,7 +16,6 @@
  * under the License.
  */
 
-import { buildConsoleUrl } from "@wso2/wso2-cloud-client/contract";
 import React from "react";
 import { CheckBox } from "@wso2/ui-toolkit";
 import type { Project } from "@wso2/wso2-cloud-client";
@@ -40,7 +39,7 @@ import {
 	VSCodeLinkForeground,
 	WarningBanner,
 } from "./styles";
-import { useCloudContext } from "../../providers";
+import { openConsole, useCloudContext } from "../../providers";
 import { useVisualizerContext } from "../../contexts";
 interface Organization {
     id?: number | string;
@@ -92,16 +91,16 @@ export function ComponentList({
 	const hasSelected = selectedCount > 0;
 	const creatableCount = integrations.filter((e) => !e.supportedIntegrationTypes?.includes(DevantScopes.LIBRARY)).length;
 	const { wsClient } = useVisualizerContext();
-	const { consoleUrl } = useCloudContext();
+	const { platform } = useCloudContext();
 
 	const projectLink = <VSCodeLinkForeground title="View project in console" onClick={() => {
-		wsClient.openExternal(buildConsoleUrl(consoleUrl, { orgHandle: org?.handle, project: project?.id }))
+		openConsole(wsClient, { orgHandle: org?.handle, project: project?.id })
 	}}>{project?.name}</VSCodeLinkForeground>
 
 	return (
 		<ComponentListSection>
 			<ComponentListHeader>
-				<ComponentListLabel>{isBatch ? <>Select the integrations to create in {projectLink} in Choreo Cloud</> : <>Create this integration in {projectLink} in Choreo Cloud</>}</ComponentListLabel>
+				<ComponentListLabel>{isBatch ? <>Select the integrations to create in {projectLink} in {platform.label}</> : <>Create this integration in {projectLink} in {platform.label}</>}</ComponentListLabel>
 				{isBatch && <SelectionCount>{selectedCount} of {creatableCount} selected</SelectionCount>}
 			</ComponentListHeader>
 
