@@ -300,7 +300,7 @@ function ComponentForm() {
 					<FormBody>
 						{/* Header */}
 						<TitleRow>
-							<Typography variant="h1">Create {isBatch ? "Integrations" : "Integration"} in WSO2 Cloud</Typography>
+							<Typography variant="h1">Create {isBatch ? "Integrations" : "Integration"} in Choreo Cloud</Typography>
 						</TitleRow>
 
 						{/* Submit error */}

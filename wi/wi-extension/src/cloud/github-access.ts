@@ -20,7 +20,7 @@ import { ext } from "../extensionVariables";
 import { type GitHubRepoAccess, sharedGitHubAccess } from "./github-app";
 
 /** What the person is told when the WSO2 Cloud sign-in changed before an action about GitHub went on. */
-export const SIGN_IN_CHANGED_MESSAGE = "Your WSO2 Cloud sign-in changed, so connecting GitHub was stopped. Start again from the form.";
+export const SIGN_IN_CHANGED_MESSAGE = "Your Choreo Cloud sign-in changed, so connecting GitHub was stopped. Start again from the form.";
 
 /** Who is signed in to WSO2 Cloud, and to which organization; undefined when no one is. */
 export function signedInScope(): string | undefined {

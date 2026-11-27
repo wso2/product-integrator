@@ -31,7 +31,7 @@
     "authentication": [
       {
         "id": "wso2-cloud",
-        "label": "WSO2 Cloud"
+        "label": "Choreo Cloud"
       }
     ],
     "configuration": {
@@ -61,7 +61,7 @@
             "Development"
           ],
           "default": "prod",
-          "description": "The WSO2 Cloud environment to use.",
+          "description": "The Choreo Cloud environment to use.",
           "scope": "machine"
         }
       }
@@ -156,14 +156,14 @@
       },
       {
         "command": "wso2.integrator.cloud.auth.switchRegion",
-        "title": "Switch WSO2 Cloud Region",
+        "title": "Switch Choreo Cloud Region",
         "category": "WSO2 Integrator",
         "icon": "$(globe)",
         "enablement": "wso2.integrator.cloud.multiRegion"
       },
       {
         "command": "wso2.integrator.cloud.integration.create",
-        "title": "Create Integration in WSO2 Cloud",
+        "title": "Create Integration in Choreo Cloud",
         "category": "WSO2 Integrator",
         "icon": "$(add)"
       },
