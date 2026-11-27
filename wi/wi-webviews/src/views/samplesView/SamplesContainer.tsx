@@ -30,7 +30,11 @@ import { useVisualizerContext } from "../../contexts/WsContext";
 import type { SampleSupportedRuntime } from "../shared/runtime";
 
 const ALL_CATEGORY_VALUE = "__all__";
-const AGENT_BUILDER_COMPONENT_TYPE = "ai-agent";
+const AGENT_BUILDER_COMPONENT_TYPES = new Set(["ai-agent", "mcp-server"]);
+
+function isAgentBuilderComponentType(componentType?: string): boolean {
+	return AGENT_BUILDER_COMPONENT_TYPES.has((componentType ?? "").trim().toLowerCase());
+}
 
 type BrowseItemType = "sample" | "prebuilt";
 type CategoryOption = { key: string; content: string; value: string };
@@ -726,9 +730,9 @@ export function SamplesContainer(props: SamplesContainerProps) {
 	const [isLoading, setIsLoading] = useState<boolean>(true);
 	const isAgentBuilderMode = webviewContext?.productMode === ProductMode.AGENT_BUILDER;
 	const includesPrebuiltIntegrations = props.projectType === "WSO2: BI";
-	// Agent Builder only lists ai-agent samples, so the type/category will be hidden.
+	// Agent Builder lists only AI agent and MCP server samples and no pre-built integrations, so
+	// it hides the sample/pre-built type filter. The category filter stays.
 	const showsTypeFilter = includesPrebuiltIntegrations && !isAgentBuilderMode;
-	const showsCategoryFilter = !isAgentBuilderMode;
 
 	useEffect(() => {
 		let cancelled = false;
@@ -789,24 +793,24 @@ export function SamplesContainer(props: SamplesContainerProps) {
 		}
 
 		const scopedItems = isAgentBuilderMode
-			? items.filter(
-					(item) =>
-						item.componentType.trim().toLowerCase() ===
-						AGENT_BUILDER_COMPONENT_TYPE,
-				)
+			? items.filter((item) => isAgentBuilderComponentType(item.componentType))
 			: items;
 
 		return scopedItems.sort(compareBrowseItems);
 	}, [prebuiltIntegrations, samples, includesPrebuiltIntegrations, isAgentBuilderMode]);
 
 	const categoryItems = useMemo(() => {
+		// In Agent Builder, offer only the categories of the samples it lists.
+		const scopedSamples = isAgentBuilderMode
+			? samples.filter((sample) => isAgentBuilderComponentType(sample.componentType))
+			: samples;
 		return createCategoryOptions(
-			categories,
-			samples,
+			isAgentBuilderMode ? [] : categories,
+			scopedSamples,
 			prebuiltIntegrations,
-			includesPrebuiltIntegrations,
+			includesPrebuiltIntegrations && !isAgentBuilderMode,
 		);
-	}, [categories, samples, prebuiltIntegrations, includesPrebuiltIntegrations]);
+	}, [categories, samples, prebuiltIntegrations, includesPrebuiltIntegrations, isAgentBuilderMode]);
 
 	const filteredItems = useMemo(() => {
 		return allItems.filter((item) =>
@@ -816,7 +820,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
 
 	const hasActiveFilters =
 		searchText.trim().length > 0 ||
-		(showsCategoryFilter && selectedCategory !== ALL_CATEGORY_VALUE) ||
+		selectedCategory !== ALL_CATEGORY_VALUE ||
 		(showsTypeFilter && selectedType !== "all");
 
 	function resetFilters() {
@@ -845,7 +849,7 @@ export function SamplesContainer(props: SamplesContainerProps) {
 		}
 
 		if (isAgentBuilderMode) {
-			return "No AI agent samples are available at the moment.";
+			return "No AI agent or MCP server samples are available at the moment.";
 		}
 
 		return showsTypeFilter
@@ -894,23 +898,21 @@ export function SamplesContainer(props: SamplesContainerProps) {
 							</TypeFilters>
 						</FilterGroup>
 					)}
-					{showsCategoryFilter && (
-						<FilterGroup>
-							<FilterTitle>Category</FilterTitle>
-							<CategoryFilterWrap>
-								<Dropdown
-									id="sample-category-filter"
-									items={categoryItems}
-									onValueChange={(value: string) =>
-										setSelectedCategory(value || ALL_CATEGORY_VALUE)
-									}
-									value={selectedCategory}
-									sx={{ width: "100%" }}
-									dropdownContainerSx={categoryDropdownContainerSx}
-								/>
-							</CategoryFilterWrap>
-						</FilterGroup>
-					)}
+					<FilterGroup>
+						<FilterTitle>Category</FilterTitle>
+						<CategoryFilterWrap>
+							<Dropdown
+								id="sample-category-filter"
+								items={categoryItems}
+								onValueChange={(value: string) =>
+									setSelectedCategory(value || ALL_CATEGORY_VALUE)
+								}
+								value={selectedCategory}
+								sx={{ width: "100%" }}
+								dropdownContainerSx={categoryDropdownContainerSx}
+							/>
+						</CategoryFilterWrap>
+					</FilterGroup>
 					<ClearFiltersButton
 						type="button"
 						onClick={resetFilters}
