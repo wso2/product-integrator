@@ -149,7 +149,7 @@ export class WIAuthState implements Disposable {
 						}
 						return;
 					}
-					this.deps.logError("Could not refresh the WSO2 Cloud session; keeping it", error as Error);
+					this.deps.logError("Could not refresh the Choreo Cloud session; keeping it", error as Error);
 				}
 			}
 			// A refresh replaced the stored session; its expiry and claims are the ones to publish.
@@ -207,7 +207,7 @@ export class WIAuthState implements Disposable {
 
 	/** Ends the session, telling the identity provider to revoke it. */
 	public async logout(silent = true): Promise<void> {
-		this.deps.log("Signing out from WSO2 Cloud");
+		this.deps.log("Signing out from Choreo Cloud");
 		this.resetState("signed-out");
 		try {
 			await this.deps.platform.sessions.signOut({ revoke: true });
@@ -215,7 +215,7 @@ export class WIAuthState implements Disposable {
 			this.deps.logError("Error while signing out", error as Error);
 		}
 		if (!silent) {
-			window.showInformationMessage("Signed out of WSO2 Cloud.");
+			window.showInformationMessage("Signed out of Choreo Cloud.");
 		}
 	}
 
