@@ -142,7 +142,8 @@ export function devantExtensionApi(deps: DevantExtensionApiDeps): IWso2PlatformE
 			orgHandle: item.orgHandle,
 			projectHandle: item.projectName,
 			org: organizationOf(item.orgHandle),
-			project: deps.projectOf(item.projectName),
+			// The projects listed are the signed-in organization's; another's of the same handle is not this one.
+			project: item.orgHandle === ext.authProvider?.org?.handle ? deps.projectOf(item.projectName) : undefined,
 			contextDirs: item.contextDirs,
 		};
 	};

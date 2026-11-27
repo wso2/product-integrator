@@ -129,6 +129,12 @@ describe("Devant context files", () => {
 		writeFileSync(path.join(root, ".wso2", "context.yaml"), yaml.dump({ version: 2, contexts: [{ org: "acme", project: "shop", local: true }] }));
 		assert.deepStrictEqual(localContextEntry(root), { org: "acme", project: "shop", local: true });
 	});
+
+	it("leaves a document that links other projects to Choreo Cloud", () => {
+		mkdirSync(path.join(root, ".wso2"));
+		writeFileSync(path.join(root, ".wso2", "context.yaml"), yaml.dump({ version: 2, contexts: [{ org: "acme", project: "billing" }, { org: "acme", project: "shop", local: true }] }));
+		assert.strictEqual(localContextEntry(root), undefined);
+	});
 });
 
 describe("Devant at start-up", () => {

@@ -47,26 +47,35 @@ export function askToSignInAgain(context: ExtensionContext): void {
 		});
 }
 
-/** Moves the session, without the browser, to the organization the workspace is linked to when it is linked to no project of the current one. */
+/**
+ * Moves the session, without the browser, to the organization the workspace is linked to when it is linked to no
+ * project of the current one. Decided once for a sign-in, on the first read of the workspace with it: an organization
+ * moved to afterwards, by hand or by a link, stays.
+ */
 export function followWorkspaceOrganization(): Disposable {
-	const tried = new Set<string>();
-	const unsubscribe = contextStore.subscribe(({ state }) => {
-		const backend = ext.backend;
+	let decided = false;
+	// The state there is when this starts counts as a read that finished.
+	let wasLoading = true;
+	const check = ({ state }: ReturnType<typeof contextStore.getState>) => {
 		const session = ext.authProvider?.session;
-		if (!backend?.pickOrganization || !session || state.loading) {
+		if (!session) {
+			decided = false;
+			wasLoading = true;
 			return;
 		}
+		const finishedRead = wasLoading && !state.loading;
+		wasLoading = state.loading;
+		const backend = ext.backend;
 		const items = Object.values(state.items);
-		if (items.length === 0 || items.some((item) => !item.foreignOrg)) {
+		if (decided || !finishedRead || !backend?.pickOrganization || items.length === 0) {
 			return;
 		}
+		decided = true;
 		const handles = [...new Set(items.map((item) => item.orgHandle))];
-		const target = handles.length === 1 ? handles[0] : undefined;
-		// Once a window for an organization: someone who then moves away from it stays where they went.
-		if (!target || tried.has(target)) {
+		if (items.some((item) => !item.foreignOrg) || handles.length !== 1) {
 			return;
 		}
-		tried.add(target);
+		const [target] = handles;
 		backend
 			.changeOrganization(target)
 			.then(() => ext.authProvider?.initAuth())
@@ -74,6 +83,8 @@ export function followWorkspaceOrganization(): Disposable {
 				void window.showInformationMessage(`Switched to the organization ${ext.authProvider?.org?.name ?? target}, which this workspace is linked to.`);
 			})
 			.catch((error) => ext.log(`Not following the workspace's organization ${target}: ${error instanceof Error ? error.message : String(error)}`));
-	});
+	};
+	const unsubscribe = contextStore.subscribe(check);
+	check(contextStore.getState());
 	return { dispose: unsubscribe };
 }

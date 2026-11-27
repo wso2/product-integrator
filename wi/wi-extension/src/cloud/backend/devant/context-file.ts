@@ -81,7 +81,10 @@ function writeLegacyContextFile(gitRoot: string, entries: ContextEntry[]): strin
 	return target;
 }
 
-/** The entry of a new workspace's file marked `local`, in the 5.1 list or in the document the Ballerina extension writes now. */
+/**
+ * The entry of a new workspace's file marked `local`: in the 5.1 list, or alone in the document the Ballerina
+ * extension writes now. A document that links other projects is Choreo Cloud's, and is left as it is.
+ */
 export function localContextEntry(gitRoot: string): ContextEntry | undefined {
 	const file = findLegacyContextFile(gitRoot);
 	if (!file) {
@@ -89,7 +92,8 @@ export function localContextEntry(gitRoot: string): ContextEntry | undefined {
 	}
 	try {
 		const data = yaml.load(readFileSync(file, "utf8"));
-		return [...parseLegacyContext(data), ...readContextDocument(data)].find((entry) => entry.local);
+		const document = readContextDocument(data);
+		return parseLegacyContext(data).find((entry) => entry.local) ?? (document.length === 1 && document[0].local ? document[0] : undefined);
 	} catch {
 		return undefined;
 	}
