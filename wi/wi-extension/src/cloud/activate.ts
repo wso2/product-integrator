@@ -27,10 +27,11 @@ import { commands, window, workspace } from "vscode";
 import { ext } from "../extensionVariables";
 import { getExtVersion } from "../utils/commonUtils";
 import { WIAuthState } from "./auth/wso2-auth-provider";
-import { CHOREO_CLOUD_LABEL, CHOREO_CLOUD_PLATFORM, choreoCloudBackend } from "./backend/choreo-cloud";
+import { CHOREO_CLOUD_PLATFORM, choreoCloudBackend } from "./backend/choreo-cloud";
 import { ChoreoCloudSourceControl } from "./backend/choreo-cloud-source-control";
 import { DEVANT_PLATFORM, devantCloudBackend } from "./backend/devant";
 import { ENABLE_DEVANT_SETTING, type PlatformSigns, isDevantOffered, startingPlatform } from "./backend/devant/detection";
+import { askToSignInAgain, followWorkspaceOrganization } from "./backend/devant/continuity";
 import { devantExtensionApi } from "./backend/devant/extension-api";
 import { CloudBackends } from "./backend/registry";
 import type { WICloudExtensionAPI } from "./cloud-ext-api";
@@ -38,7 +39,7 @@ import { cloneOpenedIntegration } from "./clone-on-open";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { activateCmds } from "./cmds";
 import { submitCreateComponentHandler } from "./cmds/create-component-cmd";
-import { PLATFORMS_OFFERED_CONTEXT, SWITCH_PLATFORM_COMMAND } from "./cmds/platform-cmd";
+import { PLATFORMS_OFFERED_CONTEXT } from "./cmds/platform-cmd";
 import { MULTI_REGION_CONTEXT } from "./cmds/region-cmd";
 import { createGitHubAppConnector } from "./github-app-host";
 import { describeCloudError, handleCloudError } from "./platform/error-handler";
@@ -101,7 +102,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 					return;
 				}
 				void ext.authProvider?.logout(true);
-				handleCloudError(error, "WSO2 Cloud rejected the session. Please sign in again.");
+				handleCloudError(error, `${ext.backend.label} rejected the session. Please sign in again.`);
 			},
 		});
 	} catch (error) {
@@ -153,7 +154,7 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 			ext.log(`WSO2 Cloud environment: ${environment.name} (${environment.apiBaseUrl})`);
 		}),
 	);
-	// An extension that knows only WSO2 Cloud is refused the session of another platform; once a window, say why.
+	// An extension that knows only Choreo Cloud is refused the session of another platform; once a window, say why.
 	let toldOfUnaware = false;
 	context.subscriptions.push(
 		platform.auth.onDidRefuseUnawareRequest(() => {
@@ -162,16 +163,9 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 			}
 			toldOfUnaware = true;
 			const label = ext.backend.label;
-			void window
-				.showWarningMessage(
-					`An extension asked for your sign-in but does not support ${label} yet, such as an earlier version of the Ballerina extension. Update it to use ${label} there, or switch to ${CHOREO_CLOUD_LABEL}.`,
-					`Switch to ${CHOREO_CLOUD_LABEL}`,
-				)
-				.then((choice) => {
-					if (choice) {
-						void vscode.commands.executeCommand(SWITCH_PLATFORM_COMMAND, CHOREO_CLOUD_PLATFORM);
-					}
-				});
+			void window.showWarningMessage(
+				`An extension asked for your sign-in but does not support ${label} yet, such as an earlier version of the Ballerina extension. Update it to use ${label} there.`,
+			);
 		}),
 	);
 	// Platforms are switched between live too: fired before the environment it brings, then the session.
@@ -236,6 +230,9 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 	} finally {
 		restored();
 	}
+	// 6a. Devant users: told once to sign in again after the upgrade, and kept in the workspace's organization.
+	askToSignInAgain(context);
+	context.subscriptions.push(followWorkspaceOrganization());
 
 	// 6b. A cloud editor opened for an existing integration has none of its source yet.
 	// Not awaited: the fetch needs the network and ends by reopening the window, and

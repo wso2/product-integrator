@@ -46,7 +46,7 @@ export async function pickPlatform(options: { title: string; placeHolder: string
 		ordered.map((item): QuickPickItem & { name: string } => ({
 			name: item.name,
 			label: platformLabel(item.name),
-			description: item.name === platform.platform ? "Current" : item.name === DEVANT_PLATFORM ? "For projects still on Devant" : undefined,
+			description: item.name === platform.platform ? "Current" : item.name === DEVANT_PLATFORM ? "Your existing projects" : undefined,
 		})),
 		{ ...options, ignoreFocusOut: true },
 	);

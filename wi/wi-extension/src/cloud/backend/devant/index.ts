@@ -16,6 +16,7 @@
  * under the License.
  */
 
+import { DEVANT_LABEL } from "./label";
 import { NotFoundError, NotSupportedError, type Organization } from "@wso2/wso2-cloud-client";
 import type { DevantClient } from "@wso2/wso2-cloud-client/devant/vscode";
 import type { ComponentKind, Project as DevantProject, IWso2PlatformExtensionAPI } from "@wso2/wso2-platform-core";
@@ -25,12 +26,12 @@ import { ext } from "../../../extensionVariables";
 import type { CloudBackend } from "../port";
 import { legacyContextFiles } from "./context-file";
 import { submitDevantIntegrations } from "./create";
-import { authorizeGitHub, completeGitHubCallback, installGitHubApp, isDevantGitHubCallback } from "./github";
+import { GITHUB_CALLBACK_PATH, authorizeGitHub, completeGitHubCallback, installGitHubApp } from "./github";
 import { toComponent, toProject, toRepository } from "./mapping";
 
 /** Devant's name in the platform switch, as the cloud client registers it. */
 export const DEVANT_PLATFORM = "devant";
-export const DEVANT_LABEL = "Devant";
+export { DEVANT_LABEL };
 
 export interface DevantBackendDeps {
 	/** The Devant client of the clients in use; undefined while another platform is. */
@@ -59,7 +60,7 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 	const org = (): Organization => {
 		const current = deps.org();
 		if (!current) {
-			throw new NotSupportedError("Sign in to Devant first.", { reason: "not_signed_in" });
+			throw new NotSupportedError(`Sign in to ${DEVANT_LABEL} first.`, { reason: "not_signed_in" });
 		}
 		return current;
 	};
@@ -74,7 +75,7 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 	const project = async (handle: string): Promise<DevantProject> => {
 		const found = projects.get(handle) ?? (await listProjects()).find((item) => item.handler === handle || item.id === handle);
 		if (!found) {
-			throw new NotFoundError(`Devant has no project ${handle} in this organization.`);
+			throw new NotFoundError(`${DEVANT_LABEL} has no project ${handle} in this organization.`);
 		}
 		return found;
 	};
@@ -94,7 +95,7 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 		const matches = (item: ComponentKind) => item.metadata.name === ref || item.metadata.handler === ref || item.metadata.id === ref;
 		const found = components.get(projectHandle)?.find(matches) ?? (await listComponents(projectHandle)).find(matches);
 		if (!found) {
-			throw new NotFoundError(`Devant has no integration ${ref} in the project ${projectHandle}.`);
+			throw new NotFoundError(`${DEVANT_LABEL} has no integration ${ref} in the project ${projectHandle}.`);
 		}
 		return found;
 	};
@@ -117,6 +118,7 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 		label: DEVANT_LABEL,
 		cacheNamespace: `${DEVANT_PLATFORM}:`,
 		gitProviders: ["github", "bitbucket", "gitlab-server"],
+		deploysOnCreate: true,
 		projects: {
 			list: async () => (await listProjects()).map(toProject),
 			create: async (displayName) => {
@@ -174,7 +176,7 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 				}
 				const projectUrl = `${orgUrl}/projects/${encodeURIComponent(link.project)}`;
 				if (!link.integration) {
-					return projectUrl;
+					return `${projectUrl}/home`;
 				}
 				const handler = components.get(link.project)?.find((item) => item.metadata.name === link.integration)?.metadata.handler ?? link.integration;
 				return `${projectUrl}/components/${encodeURIComponent(handler)}/${encodeURIComponent(link.page ?? "overview")}`;
@@ -195,12 +197,13 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 				),
 		},
 		handleUri: (uri) => {
-			if (!isDevantGitHubCallback(uri)) {
+			// While Devant is in use every GitHub return is its own; the marker may not survive the console's relay.
+			if (uri.path !== GITHUB_CALLBACK_PATH) {
 				return false;
 			}
 			completeGitHubCallback(client(), uri.query).catch((error) => {
 				ext.logError("Could not connect GitHub to Devant", error as Error);
-				void window.showErrorMessage(`Could not connect GitHub to Devant: ${error instanceof Error ? error.message : String(error)}`);
+				void window.showErrorMessage(`Could not connect GitHub to ${DEVANT_LABEL}: ${error instanceof Error ? error.message : String(error)}`);
 			});
 			return true;
 		},
@@ -209,7 +212,7 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 			const organizations = await client().organizations();
 			const picked = await window.showQuickPick(
 				organizations.map((item) => ({ label: item.name, description: item.handle === current?.handle ? "Current" : item.handle, handle: item.handle })),
-				{ title: "Switch Organization", placeHolder: "Select the Devant organization to work in", ignoreFocusOut: true },
+				{ title: "Switch Organization", placeHolder: "Select the organization to work in", ignoreFocusOut: true },
 			);
 			if (!picked || picked.handle === current?.handle) {
 				return false;
@@ -222,7 +225,7 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 		changeOrganization: async (orgId) => {
 			const target = (await client().organizations()).find((item) => item.id === orgId || item.handle === orgId || item.uuid === orgId);
 			if (!target) {
-				throw new NotFoundError(`You do not belong to a Devant organization ${orgId}.`);
+				throw new NotFoundError(`You do not belong to an organization ${orgId}.`);
 			}
 			projects.clear();
 			components.clear();

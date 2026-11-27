@@ -93,7 +93,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					} else if (StateMachine.getContext().projectType === ProjectType.MI) {
 						buildPackLang = "microintegrator";
 					} else {
-						throw new Error("Please ensure that you are within a valid Ballerina or MI project to create an integration in WSO2 Cloud");
+						throw new Error(`Please ensure that you are within a valid Ballerina or MI project to create an integration in ${ext.backend.label}`);
 					}
 				}
 				if (ext.isDevantCloudEditor && params?.integrations?.length > 1) {

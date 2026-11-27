@@ -79,6 +79,8 @@ export interface CloudBackend {
 	readonly cacheNamespace: string;
 	/** The git providers an integration can be created from, as `GitProvider` names them. */
 	readonly gitProviders: readonly string[];
+	/** Whether creating an integration also deploys it. */
+	readonly deploysOnCreate?: boolean;
 	readonly projects: CloudProjects;
 	readonly integrations: CloudIntegrations;
 	readonly links: CloudLinks;

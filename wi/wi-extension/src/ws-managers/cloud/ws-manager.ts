@@ -267,8 +267,8 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async getPlatformInfo(): Promise<CloudPlatformInfo> {
-		const { platform, label, gitProviders } = ext.backend;
-		return { name: platform, label, gitProviders: [...gitProviders] };
+		const { platform, label, gitProviders, deploysOnCreate } = ext.backend;
+		return { name: platform, label, gitProviders: [...gitProviders], deploysOnCreate };
 	}
 
 	async getConsoleLink(link: ConsoleLink): Promise<string> {

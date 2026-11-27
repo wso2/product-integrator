@@ -104,6 +104,8 @@ export interface CloudPlatformInfo {
 	label: string;
 	/** The git providers an integration can be created from, as `GitProvider` names them. */
 	gitProviders: string[];
+	/** Whether creating an integration also deploys it, as on Devant; the views then say deploy. */
+	deploysOnCreate?: boolean;
 }
 
 export interface GetCloudProjectsReq {

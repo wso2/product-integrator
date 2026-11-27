@@ -20,7 +20,7 @@ import React, { type FC, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useQuery } from "@tanstack/react-query";
 import { Dropdown, ProgressIndicator, TextField } from "@wso2/ui-toolkit";
 import { buildGitURL, GitProvider } from "@wso2/wso2-platform-core";
-import { openConsole } from "../../providers";
+import { openConsole, useCloudContext } from "../../providers";
 import {
     GitConfigGrid,
     GitConfigLabel,
@@ -58,10 +58,12 @@ interface RepoInitSectionProps {
 }
 
 
-// GitHub only for now: WSO2 Cloud connects a repository from here through its GitHub App, and has no
-// credential for Bitbucket or GitLab to list repositories with, clone, or push. The rest of this
-// section still handles them, for when it does.
-const GIT_PROVIDER_ITEMS = [{ value: GitProvider.GITHUB, content: "GitHub" }];
+// Offered as far as the platform builds from them: Choreo Cloud connects GitHub through its GitHub App only.
+const GIT_PROVIDER_ITEMS = [
+    { value: GitProvider.GITHUB, content: "GitHub" },
+    { value: GitProvider.BITBUCKET, content: "Bitbucket" },
+    { value: GitProvider.GITLAB_SERVER, content: "GitLab" },
+];
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -73,6 +75,7 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
     onValidityChange,
     onRepoInitDataChange,
 }) => {
+    const { platform } = useCloudContext();
     // ── Local state ────────────────────────────────────────────────────────────
     const [gitProvider, setGitProvider] = useState<string>(GitProvider.GITHUB);
     const [org, setOrg] = useState<string>("");
@@ -312,7 +315,7 @@ export const RepoInitSection: FC<RepoInitSectionProps> = ({
                         label="Git Provider"
                         id="repo-init-git-provider"
                         required
-                        items={GIT_PROVIDER_ITEMS}
+                        items={GIT_PROVIDER_ITEMS.filter((item) => platform.gitProviders.includes(item.value))}
                         value={gitProvider ?? ""}
                         onChange={handleProviderChange}
                     />

@@ -26,7 +26,6 @@ import { devantCloudBackend } from "../../cloud/backend/devant";
 import { legacyContextFiles, parseLegacyContext } from "../../cloud/backend/devant/context-file";
 import { KNOWN_DEVANT_USER_KEY, WORKSPACE_PLATFORM_KEY, isDevantOffered, startingPlatform, workspacePlatform } from "../../cloud/backend/devant/detection";
 import { toCreateRequest } from "../../cloud/backend/devant/create";
-import { isDevantGitHubCallback } from "../../cloud/backend/devant/github";
 import { toComponent, toRepository } from "../../cloud/backend/devant/mapping";
 
 class Memento {
@@ -213,9 +212,9 @@ describe("Devant create", () => {
 		assert.ok(request.type, "a known scope maps to a type");
 	});
 
-	it("takes only its own GitHub callbacks", () => {
-		assert.ok(isDevantGitHubCallback({ path: "/ghapp", query: "platform=devant&code=x&orgId=101" }));
-		assert.ok(!isDevantGitHubCallback({ path: "/ghapp", query: "code=x" }));
-		assert.ok(!isDevantGitHubCallback({ path: "/signin", query: "platform=devant" }));
+	it("leaves URIs other than GitHub's return to the shared handlers", () => {
+		const backend = devantCloudBackend({ client: () => ({}) as never, org: () => undefined });
+		assert.strictEqual(backend.handleUri?.({ path: "/open", query: "org=acme" }), false);
+		assert.strictEqual(backend.handleUri?.({ path: "/signin", query: "platform=devant" }), false);
 	});
 });

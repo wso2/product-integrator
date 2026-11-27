@@ -300,7 +300,9 @@ function ComponentForm() {
 					<FormBody>
 						{/* Header */}
 						<TitleRow>
-							<Typography variant="h1">Create {isBatch ? "Integrations" : "Integration"} in {platform.label}</Typography>
+							<Typography variant="h1">
+								{platform.deploysOnCreate ? <>Deploy {isBatch ? "Integrations" : "Integration"}</> : <>Create {isBatch ? "Integrations" : "Integration"} in {platform.label}</>}
+							</Typography>
 						</TitleRow>
 
 						{/* Submit error */}
@@ -361,7 +363,9 @@ function ComponentForm() {
 								onClick={() => submit()}
 								disabled={isCreateDisabled}
 							>
-								{isSubmitting ? "Creating..." : selectedCount > 1 ? "Create All" : "Create"}
+								{platform.deploysOnCreate
+									? isSubmitting ? "Deploying..." : selectedCount > 1 ? "Deploy All" : "Deploy"
+									: isSubmitting ? "Creating..." : selectedCount > 1 ? "Create All" : "Create"}
 							</SubmitButton>
 						</FooterRow>
 					</FormBody>

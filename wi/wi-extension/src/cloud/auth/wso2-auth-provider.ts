@@ -16,6 +16,7 @@
  * under the License.
  */
 
+import { ext } from "../../extensionVariables";
 import type { CloudOrganization, AuthState as WICloudAuthState } from "@wso2/wi-core";
 import { type AuthState, type Organization, type PlatformSession, type StoredSession, isCloudError } from "@wso2/wso2-cloud-client";
 import { CHOREO_CLOUD_PLATFORM, PROMPT_LOGIN_SCOPE, WSO2_CLOUD_AUTH_PROVIDER_ID, scopeForEnv, scopeForPlatform } from "@wso2/wso2-cloud-client/vscode";
@@ -219,7 +220,7 @@ export class WIAuthState implements Disposable {
 			this.deps.logError("Error while signing out", error as Error);
 		}
 		if (!silent) {
-			window.showInformationMessage("Signed out of WSO2 Cloud.");
+			window.showInformationMessage(`Signed out of ${ext.backend?.label}.`);
 		}
 	}
 

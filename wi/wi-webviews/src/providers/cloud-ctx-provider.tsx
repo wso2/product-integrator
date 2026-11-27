@@ -53,7 +53,7 @@ interface ICloudContext {
     platform: CloudPlatformInfo;
 }
 
-const DEFAULT_PLATFORM: CloudPlatformInfo = { name: "choreo-cloud", label: "WSO2 Cloud", gitProviders: ["github"] };
+const DEFAULT_PLATFORM: CloudPlatformInfo = { name: "choreo-cloud", label: "Choreo Cloud", gitProviders: ["github"] };
 
 const defaultCloudContext: ICloudContext = {
     authState: undefined,

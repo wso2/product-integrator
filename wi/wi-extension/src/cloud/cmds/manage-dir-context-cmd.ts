@@ -66,7 +66,7 @@ export function manageProjectContextCommand(context: ExtensionContext) {
 				}
 				quickPickOptions.push(
 					{ kind: QuickPickItemKind.Separator, label: "Account" },
-					{ label: "Switch Organization", description: `Signed in to ${session.org.name}`, detail: "Sign in again and choose another organization" },
+					{ label: "Switch Organization", description: `Signed in to ${session.org.name}`, detail: ext.backend.pickOrganization ? "Choose another of your organizations" : "Sign in again and choose another organization" },
 					{ label: "Sign Out", description: `Signed in as ${session.user.email ?? session.user.displayName}`, detail: "Sign Out of your account" },
 				);
 
