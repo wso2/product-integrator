@@ -329,7 +329,7 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 				try {
 					const type = integrationTypeFromScope(createParam.integrationType);
 					if (!type) {
-						throw new Error(`${integrationTypeLabel(createParam.integrationType) || createParam.integrationType} integrations cannot be created in WSO2 Cloud yet.`);
+						throw new Error(`${integrationTypeLabel(createParam.integrationType) || createParam.integrationType} integrations cannot be created in Choreo Cloud yet.`);
 					}
 					const name = toResourceName(createParam.name);
 					if (!RESOURCE_NAME.test(name)) {
@@ -393,9 +393,9 @@ export const submitCreateComponentHandler = async ({ createParams, org, project,
 		const successMessage =
 			result.failed.length === 0
 				? result.created.length === 1
-					? "Created the integration in WSO2 Cloud, and its first build has started. Deploy it from the console."
-					: "Created the integrations in WSO2 Cloud, and their first builds have started. Deploy them from the console."
-				: `Created ${result.created.length} of ${totalCount} integrations in WSO2 Cloud, and their first builds have started. Deploy them from the console.`;
+					? "Created the integration in Choreo Cloud, and its first build has started. Deploy it from the console."
+					: "Created the integrations in Choreo Cloud, and their first builds have started. Deploy them from the console."
+				: `Created ${result.created.length} of ${totalCount} integrations in Choreo Cloud, and their first builds have started. Deploy them from the console.`;
 		const createWarning = [sourceBindingWarning(unbound), firstBuildWarning(unbuilt)].filter(Boolean).join(" ") || undefined;
 		const isWithinWorkspace = workspace.workspaceFolders?.some((item) => isSubpath(item.uri?.fsPath, workspaceFsPath));
 		if (workspace.workspaceFile) {
@@ -481,11 +481,11 @@ function unreadableSource(access: GitHubRepoAccess): string | undefined {
 		case "public":
 			return undefined;
 		case "not-granted":
-			return `The WSO2 Cloud GitHub app is on ${access.owner} but not given ${access.repo}. Give it access, then retry.`;
+			return `The Choreo Cloud GitHub app is on ${access.owner} but not given ${access.repo}. Give it access, then retry.`;
 		case "auth-required":
-			return `WSO2 Cloud needs your GitHub authorization again to read ${access.owner}/${access.repo}. Authorize, then retry.`;
+			return `Choreo Cloud needs your GitHub authorization again to read ${access.owner}/${access.repo}. Authorize, then retry.`;
 		case "not-connected":
-			return `WSO2 Cloud can't read ${access.owner}/${access.repo}: connect GitHub with the WSO2 Cloud app on ${access.owner}, then retry.`;
+			return `Choreo Cloud can't read ${access.owner}/${access.repo}: connect GitHub with the Choreo Cloud app on ${access.owner}, then retry.`;
 	}
 }
 
@@ -594,7 +594,7 @@ const firstBuildWarning = (unbuilt: string[]): string | undefined => {
 		return undefined;
 	}
 	const one = unbuilt.length === 1;
-	return `WSO2 Cloud created ${unbuilt.join(", ")} but could not start ${one ? "its" : "their"} first build. Start ${one ? "it" : "them"} from the console.`;
+	return `Choreo Cloud created ${unbuilt.join(", ")} but could not start ${one ? "its" : "their"} first build. Start ${one ? "it" : "them"} from the console.`;
 };
 
 /** What to tell the person instead of plain success when integrations were created without their source bound; undefined when all were bound. */
@@ -603,7 +603,7 @@ const sourceBindingWarning = (unbound: { label: string; error: NonNullable<Creat
 		return undefined;
 	}
 	const names = unbound.map((item) => item.label).join(", ");
-	const reasons = new Set(unbound.map((item) => (item.error === "github-auth-required" ? "GitHub has to be connected to WSO2 Cloud again" : "WSO2 Cloud could not link the source repository")));
+	const reasons = new Set(unbound.map((item) => (item.error === "github-auth-required" ? "GitHub has to be connected to Choreo Cloud again" : "Choreo Cloud could not link the source repository")));
 	return `Created ${names}, but no build can start: ${[...reasons].join("; ")}. Fix it in the console, then start a build.`;
 };
 

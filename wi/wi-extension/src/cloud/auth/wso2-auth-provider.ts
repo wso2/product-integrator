@@ -150,7 +150,7 @@ export class WIAuthState implements Disposable {
 						}
 						return;
 					}
-					this.deps.logError("Could not refresh the WSO2 Cloud session; keeping it", error as Error);
+					this.deps.logError(`Could not refresh the ${ext.backend.label} session; keeping it`, error as Error);
 				}
 			}
 			// A refresh replaced the stored session; its expiry and claims are the ones to publish.
@@ -212,7 +212,7 @@ export class WIAuthState implements Disposable {
 
 	/** Ends the session, telling the identity provider to revoke it. */
 	public async logout(silent = true): Promise<void> {
-		this.deps.log("Signing out from WSO2 Cloud");
+		this.deps.log(`Signing out from ${ext.backend.label}`);
 		this.resetState("signed-out");
 		try {
 			await this.deps.platform.sessions.signOut({ revoke: true });

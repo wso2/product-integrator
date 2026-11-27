@@ -27,7 +27,7 @@ export function signOutCommand(context: ExtensionContext) {
 			try {
 				isPlatformReady(ext);
 				if (ext.clients.platform.injected) {
-					window.showInformationMessage("This editor was started with a WSO2 Cloud token and cannot sign out.");
+					window.showInformationMessage("This editor was started with a Choreo Cloud token and cannot sign out.");
 					return;
 				}
 				await ext.authProvider?.logout(false);
