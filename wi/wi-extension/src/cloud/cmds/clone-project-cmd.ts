@@ -72,7 +72,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 					return;
 				}
 				const orgHandle = session.org.handle;
-				const cloud = ext.clients.platform.cloud;
+				const backend = ext.backend;
 				const selectedProject =
 					params?.project ?? (await selectProject(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', that needs to be cloned`));
 
@@ -96,7 +96,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 				} else {
 					integrations = await window.withProgress(
 						{ title: `Fetching ${ext.terminologies?.componentTermPlural} of project ${selectedProject.name}...`, location: ProgressLocation.Notification },
-						() => cloud.components.list(selectedProject.id),
+						() => backend.integrations.list(selectedProject.id),
 					);
 					dataCacheStore.getState().setIntegrations(orgHandle, selectedProject.id, integrations);
 				}
@@ -111,7 +111,7 @@ export function cloneRepoCommand(context: ExtensionContext) {
 					repository ??= dataCacheStore.getState().getRepository(orgHandle, selectedProject.id, integration.id);
 					if (!repository) {
 						try {
-							repository = await cloud.components.repository(integration.id, selectedProject.id);
+							repository = await backend.integrations.repository(integration.id, selectedProject.id);
 							dataCacheStore.getState().setRepository(orgHandle, selectedProject.id, integration.id, repository);
 						} catch (error) {
 							// An integration without a repository has nothing to clone; any other failure is reported, not taken for that.

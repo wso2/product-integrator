@@ -32,7 +32,7 @@ export function signOutCommand(context: ExtensionContext) {
 				}
 				await ext.authProvider?.logout(false);
 			} catch (error: any) {
-				ext.logError("Error while signing out of Choreo Cloud", error as Error);
+				ext.logError(`Error while signing out of ${ext.backend.label}`, error as Error);
 				if (error instanceof Error) {
 					window.showErrorMessage(error.message);
 				}

@@ -18,16 +18,20 @@
 
 import type { CloudEnvironment, Logger } from "@wso2/wso2-cloud-client";
 import { CLOUD_ENV_SETTING, readCloudEnvName } from "@wso2/wso2-cloud-client/vscode";
+import { WICommandIds } from "@wso2/wso2-platform-core";
 import * as vscode from "vscode";
 import type { ConfigurationChangeEvent } from "vscode";
 import { commands, window, workspace } from "vscode";
 import { ext } from "../extensionVariables";
 import { getExtVersion } from "../utils/commonUtils";
 import { WIAuthState } from "./auth/wso2-auth-provider";
+import { choreoCloudBackend } from "./backend/choreo-cloud";
+import { ChoreoCloudSourceControl } from "./backend/choreo-cloud-source-control";
 import type { WICloudExtensionAPI } from "./cloud-ext-api";
 import { cloneOpenedIntegration } from "./clone-on-open";
 import { activateURIHandlers } from "./cloud-uri-handlers";
 import { activateCmds } from "./cmds";
+import { submitCreateComponentHandler } from "./cmds/create-component-cmd";
 import { MULTI_REGION_CONTEXT } from "./cmds/region-cmd";
 import { createGitHubAppConnector } from "./github-app-host";
 import { describeCloudError, handleCloudError } from "./platform/error-handler";
@@ -92,6 +96,16 @@ export async function activateCloudFunctionality(context: vscode.ExtensionContex
 		return;
 	}
 	ext.clients = { platform };
+	ext.backend = choreoCloudBackend({
+		cloud: () => platform.cloud,
+		consoleUrl: () => ext.config.consoleUrl,
+		orgHandle: () => ext.authProvider?.org?.handle,
+		sourceControl: new ChoreoCloudSourceControl(),
+		submit: submitCreateComponentHandler,
+		reselectOrganization: async () => {
+			await vscode.commands.executeCommand(WICommandIds.SignIn, { reselectOrganization: true });
+		},
+	});
 	applyEnvironment(platform.environment);
 	vscode.commands.executeCommand("setContext", MULTI_REGION_CONTEXT, platform.regions.length > 1);
 	context.subscriptions.push(platform);

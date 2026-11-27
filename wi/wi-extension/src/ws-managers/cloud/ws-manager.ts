@@ -44,15 +44,11 @@ import {
 	type WICloudSubmitComponentsReq,
 	type WICloudSubmitComponentsResp,
 } from "@wso2/wi-core";
-import { NotSupportedError, parseGitHubRepoUrl } from "@wso2/wso2-cloud-client";
-import { GitProvider, WICommandIds, buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
-import { ProgressLocation, Uri, commands, env, window } from "vscode";
-import { submitCreateComponentHandler } from "../../cloud/cmds/create-component-cmd";
+import { buildGitURL, parseGitURL } from "@wso2/wso2-platform-core";
+import { ProgressLocation, commands, window } from "vscode";
 import type { IFileStatus } from "../../cloud/git/git";
 import { initGit } from "../../cloud/git/main";
 import { hasDirtyRepo as checkDirtyRepo, getGitHead, getGitRemotes, getGitRoot, relativePath, removeCredentialsFromGitURL } from "../../cloud/git/util";
-import { SIGN_IN_CHANGED_MESSAGE, gitHubAccessFor, signedInScope } from "../../cloud/github-access";
-import { type GitHubAppConnector, forgetGitHubAccess, inspectReadablePath, installationSettingsUrl, listConnectedGitHubAccounts, listReadableBranches } from "../../cloud/github-app";
 import { contextStore } from "../../cloud/stores/context-store";
 import { dataCacheStore } from "../../cloud/stores/data-cache-store";
 import { ext } from "../../extensionVariables";
@@ -87,7 +83,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 	}
 
 	async submitComponents(req: WICloudSubmitComponentsReq): Promise<WICloudSubmitComponentsResp> {
-		return submitCreateComponentHandler(req);
+		return ext.backend.creation.submit(req);
 	}
 
 	async closeCloudFormWebview(): Promise<void> {
@@ -103,9 +99,8 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		return contextStore.getState().state;
 	}
 
-	/** An organization is fixed at sign-in; changing it means signing in again. */
-	async changeOrgContext(_orgId: string): Promise<void> {
-		await commands.executeCommand(WICommandIds.SignIn, { reselectOrganization: true });
+	async changeOrgContext(orgId: string): Promise<void> {
+		await ext.backend.changeOrganization(orgId);
 	}
 
 	async getLocalGitData(dirPath: string): Promise<GetLocalGitDataResp | undefined> {
@@ -180,118 +175,36 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		}
 	}
 
-	/** Connects GitHub to the organization, with the app on the repository's owner. */
-	async triggerGithubAuthFlow(repoUrl: string): Promise<void> {
-		forgetGitHubAccess();
-		await this.githubApp().connect(parseGitHubRepoUrl(repoUrl ?? "")?.owner, "authorize");
+	triggerGithubAuthFlow(repoUrl: string): Promise<void> {
+		return ext.backend.sourceControl.triggerGithubAuthFlow(repoUrl);
 	}
 
-	/**
-	 * Gives the WSO2 Cloud app access to the repository: on GitHub's own page for the
-	 * installation when the owner is connected already, otherwise by installing it there.
-	 */
-	async triggerGithubInstallFlow(repoUrl: string): Promise<void> {
-		const github = parseGitHubRepoUrl(repoUrl ?? "");
-		if (!github) {
-			await this.githubApp().connect(undefined, "install");
-			return;
-		}
-		forgetGitHubAccess();
-		// The flow belongs to the organization signed in when it was asked for.
-		const scope = signedInScope();
-		const stillSignedIn = () => {
-			if (signedInScope() === scope) {
-				return true;
-			}
-			window.showWarningMessage(SIGN_IN_CHANGED_MESSAGE);
-			return false;
-		};
-		const access = await gitHubAccessFor(github.owner, github.repo);
-		if (!stillSignedIn()) {
-			return;
-		}
-		if (access.kind === "not-granted") {
-			const settingsUrl = await installationSettingsUrl(github.owner, access.installation.installationId);
-			if (stillSignedIn()) {
-				await env.openExternal(Uri.parse(settingsUrl));
-			}
-			return;
-		}
-		// The app is on the owner, but WSO2 Cloud needs the person's GitHub authorization again to tell.
-		await this.githubApp().connect(github.owner, access.kind === "auth-required" ? "authorize" : "install");
+	triggerGithubInstallFlow(repoUrl: string): Promise<void> {
+		return ext.backend.sourceControl.triggerGithubInstallFlow(repoUrl);
 	}
 
-	private githubApp(): GitHubAppConnector {
-		if (!ext.githubApp) {
-			throw new Error("Choreo Cloud is not available.");
-		}
-		return ext.githubApp;
+	getBranches(params: GetBranchesReq): Promise<string[]> {
+		return ext.backend.sourceControl.getBranches(params);
 	}
 
-	/** Branches of a GitHub repository WSO2 Cloud can read, through the GitHub App or because it is public; empty otherwise. */
-	async getBranches(params: GetBranchesReq): Promise<string[]> {
-		const github = parseGitHubRepoUrl(params.repoUrl ?? "");
-		if (!github) {
-			return [];
-		}
-		const cloud = ext.clients.platform.cloud;
-		return listReadableBranches(cloud, await gitHubAccessFor(github.owner, github.repo));
+	getAuthorizedGitOrgs(params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
+		return ext.backend.sourceControl.getAuthorizedGitOrgs(params);
 	}
 
-	/**
-	 * The GitHub accounts connected to the organization and the repositories the WSO2 Cloud app was given on each:
-	 * what a new integration's repository is chosen from. The platform connects no other provider from here.
-	 */
-	async getAuthorizedGitOrgs(params: GetAuthorizedGitOrgsReq): Promise<GetAuthorizedGitOrgsResp> {
-		if (params?.provider && params.provider !== GitProvider.GITHUB) {
-			throw new NotSupportedError("Choreo Cloud connects GitHub repositories from here. For another provider, create the integration in the Choreo Cloud console.", {
-				reason: "git_orgs_unavailable",
-			});
-		}
-		const { accounts, unread } = await listConnectedGitHubAccounts(ext.clients.platform.cloud, (message) => ext.log(message));
-		return { gitOrgs: accounts, unreadOrgs: unread };
+	getCredentials(params: GetCredentialsReq): Promise<CredentialItem[]> {
+		return ext.backend.sourceControl.getCredentials(params);
 	}
 
-	async getCredentials(_params: GetCredentialsReq): Promise<CredentialItem[]> {
-		return [];
+	getCredentialDetails(params: GetCredentialDetailsReq): Promise<CredentialItem> {
+		return ext.backend.sourceControl.getCredentialDetails(params);
 	}
 
-	async getCredentialDetails(_params: GetCredentialDetailsReq): Promise<CredentialItem> {
-		throw new Error("Git credentials are managed in the Choreo Cloud console.");
+	isRepoAuthorized(params: IsRepoAuthorizedReq): Promise<IsRepoAuthorizedResp> {
+		return ext.backend.sourceControl.isRepoAuthorized(params);
 	}
 
-	/**
-	 * Whether the platform can read the repository. Until the git
-	 * integration's routes are documented, a public GitHub repository with
-	 * branches the platform can list counts as accessible.
-	 */
-	async isRepoAuthorized(params: IsRepoAuthorizedReq): Promise<IsRepoAuthorizedResp> {
-		const github = parseGitHubRepoUrl(params.repoUrl ?? "");
-		if (!github) {
-			return { retrievedRepos: false, isAccessible: false };
-		}
-		// `retrievedRepos` is set when the app is on the owner: the form then asks for this
-		// repository's access rather than for GitHub to be connected.
-		const access = await gitHubAccessFor(github.owner, github.repo);
-		return {
-			retrievedRepos: access.kind === "installation" || access.kind === "not-granted",
-			isAccessible: access.kind === "installation" || access.kind === "public",
-		};
-	}
-
-	async getGitRepoMetadata(params: GetGitMetadataReq): Promise<GetGitMetadataResp> {
-		const cloud = ext.clients.platform.cloud;
-		const access = await gitHubAccessFor(params.gitOrgName, params.gitRepoName);
-		const inspection = await inspectReadablePath(cloud, access, params.branch || undefined, params.relativePath);
-		return {
-			metadata: {
-				...inspection,
-				isValidRepo: !inspection.isBareRepo,
-				hasBallerinaTomlInPath: inspection.hasBallerinaToml,
-				hasPomXmlInPath: inspection.hasPomXml,
-				hasDockerfileInPath: inspection.hasDockerfile,
-			},
-		};
+	getGitRepoMetadata(params: GetGitMetadataReq): Promise<GetGitMetadataResp> {
+		return ext.backend.sourceControl.getGitRepoMetadata(params);
 	}
 
 	async cloneRepositoryIntoCompDir(params: CloneRepositoryIntoCompDirReq): Promise<string> {
@@ -357,7 +270,7 @@ export class CloudWsManager implements Omit<WICloudAPI, "onAuthStateChanged" | "
 		if (!orgHandle || orgHandle !== params.orgHandle) {
 			throw new Error(`Not signed in to the organization ${params.orgHandle}.`);
 		}
-		const projects = await ext.clients.platform.cloud.projects.list();
+		const projects = await ext.backend.projects.list();
 		if (ext.authProvider?.org?.handle === orgHandle) {
 			dataCacheStore.getState().setProjects(orgHandle, projects);
 		}

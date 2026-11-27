@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { buildConsoleUrl, isCloudError } from "@wso2/wso2-cloud-client";
+import { isCloudError } from "@wso2/wso2-cloud-client";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { Uri, commands, env, window } from "vscode";
 import { ext } from "../../extensionVariables";
@@ -66,7 +66,7 @@ export function handleCloudError(error: unknown, fallback: string, options: { pr
 				window.showErrorMessage(message, "Upgrade").then((choice) => {
 					if (choice === "Upgrade") {
 						const org = ext.authProvider?.state.session?.org;
-						env.openExternal(Uri.parse(buildConsoleUrl(ext.config.consoleUrl, { orgHandle: org?.handle })));
+						env.openExternal(Uri.parse(ext.backend.links.console({ orgHandle: org?.handle })));
 					}
 				});
 				return message;

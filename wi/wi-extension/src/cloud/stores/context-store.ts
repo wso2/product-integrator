@@ -200,7 +200,7 @@ const getSelected = async (items: { [key: string]: ContextItemEnriched }, prevSe
 	if (ext.isDevantCloudEditor && orgHandle && process.env.CLOUD_INITIAL_PROJECT_ID) {
 		let projectsCache = dataCacheStore.getState().getProjects(orgHandle);
 		if (projectsCache.length === 0) {
-			projectsCache = await ext.clients.platform.cloud.projects.list();
+			projectsCache = await ext.backend.projects.list();
 			dataCacheStore.getState().setProjects(orgHandle, projectsCache);
 		}
 		const wanted = process.env.CLOUD_INITIAL_PROJECT_ID;
@@ -252,7 +252,7 @@ const getEnrichedContexts = async (items: { [key: string]: ContextItemEnriched }
 	}
 	let projects: Project[] = [];
 	try {
-		projects = await ext.clients.platform.cloud.projects.list();
+		projects = await ext.backend.projects.list();
 		dataCacheStore.getState().setProjects(orgHandle, projects);
 	} catch (err) {
 		ext.logError("Failed to list the organization's projects", err as Error);
@@ -280,8 +280,8 @@ const getIntegrationsFromPlatform = async (selected?: ContextItemEnriched): Prom
 	if (!selected?.project || selected.foreignOrg) {
 		return getIntegrationsFromCache(selected);
 	}
-	const cloud = ext.clients.platform.cloud;
-	const integrations = await cloud.components.list(selected.projectName);
+	const backend = ext.backend;
+	const integrations = await backend.integrations.list(selected.projectName);
 	dataCacheStore.getState().setIntegrations(selected.orgHandle, selected.projectName, integrations);
 	// The listing carries no repository; each is read once and cached.
 	const repositories = new Map<string, ComponentRepository | undefined>();
@@ -293,7 +293,7 @@ const getIntegrationsFromPlatform = async (selected?: ContextItemEnriched): Prom
 				return;
 			}
 			try {
-				const repository = await cloud.components.repository(integration.id, selected.projectName);
+				const repository = await backend.integrations.repository(integration.id, selected.projectName);
 				dataCacheStore.getState().setRepository(selected.orgHandle, selected.projectName, integration.id, repository);
 				repositories.set(integration.id, repository);
 			} catch (error) {
