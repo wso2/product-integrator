@@ -24,6 +24,11 @@ export interface CloudProjects {
 	list(): Promise<Project[]>;
 	/** Creates a project for the name the person typed, picking a free resource name for it. */
 	create(displayName: string): Promise<Project>;
+	/**
+	 * The project the context file of `workspaceDir` names before it exists (`local: true`): found or created, and the
+	 * mark cleared. Undefined when the file names none.
+	 */
+	forLocalEntry(workspaceDir: string): Promise<Project | undefined>;
 }
 
 /** The integrations of a project, addressed by the ids the platform hands out. */
@@ -42,6 +47,8 @@ export interface CloudLinks {
 
 /** Which projects a repository belongs to, in the context file the platform's editors read. */
 export interface CloudContextFiles {
+	/** The glob that finds the platform's context files in a workspace. */
+	readonly pattern: string;
 	/** The repository's context file, when it has one. */
 	find(gitRoot: string): string | undefined;
 	read(filePath: string): ContextEntry[];
@@ -79,14 +86,20 @@ export interface CloudBackend {
 	readonly cacheNamespace: string;
 	/** The git providers an integration can be created from, as `GitProvider` names them. */
 	readonly gitProviders: readonly string[];
+	/** Whether creating an integration also deploys it. */
+	readonly deploysOnCreate?: boolean;
 	readonly projects: CloudProjects;
 	readonly integrations: CloudIntegrations;
 	readonly links: CloudLinks;
 	readonly contextFiles: CloudContextFiles;
 	readonly sourceControl: CloudSourceControl;
 	readonly creation: CloudCreation;
-	/** Moves to another of the person's organizations. */
-	changeOrganization(orgId: string): Promise<void>;
+	/** Moves to another of the person's organizations, named by id or handle where the platform moves without asking. */
+	changeOrganization(org: string): Promise<void>;
+	/** Asks which of the person's organizations to work in, where that needs no new sign-in; answers whether one was picked. */
+	pickOrganization?(): Promise<boolean>;
+	/** Other APIs the platform exports beside the current one, by name, for consumers written against them. */
+	readonly platformApis?: Readonly<Record<string, object>>;
 	/** Takes a URI handed to the editor that is this platform's own; answers whether it did. */
 	handleUri?(uri: { path: string; query: string }): boolean;
 }

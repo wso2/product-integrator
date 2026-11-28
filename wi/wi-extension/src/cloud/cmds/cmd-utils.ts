@@ -16,6 +16,8 @@
  * under the License.
  */
 
+import { existsSync, readFileSync } from "fs";
+import * as path from "path";
 import type { Component, Organization, PlatformSession, Project } from "@wso2/wso2-cloud-client";
 import { type ExtensionName, WICommandIds } from "@wso2/wso2-platform-core";
 import { ProgressLocation, type QuickPickItem, QuickPickItemKind, type WorkspaceFolder, commands, window, workspace } from "vscode";
@@ -147,6 +149,21 @@ export const toResourceName = (displayName: string): string =>
 		.replace(/-+$/, ""); // the cut can end on a hyphen
 
 export const toProjectName = toResourceName;
+
+/** A readable name for the project of a workspace: `[workspace].title` of its Ballerina.toml, else the handle in words. */
+export const workspaceProjectDisplayName = (workspacePath: string, projectHandle: string): string => {
+	const ballerinaTomlPath = path.join(workspacePath, "Ballerina.toml");
+	if (existsSync(ballerinaTomlPath)) {
+		const title = readFileSync(ballerinaTomlPath, "utf8").match(/^\[workspace\][^[]*title\s*=\s*"([^"]+)"/ms)?.[1];
+		if (title) {
+			return title;
+		}
+	}
+	return projectHandle
+		.split("-")
+		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+		.join(" ");
+};
 
 export const createNewProject = async (projectName?: string, isWorkspaceMapping?: boolean): Promise<Project> => {
 	const org = requireOrg();

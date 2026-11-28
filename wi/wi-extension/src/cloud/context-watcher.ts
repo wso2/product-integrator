@@ -33,7 +33,8 @@ export interface ContextWatchDeps {
  * Deleting the `.wso2` folder reports only the folder, so the folder is watched for deletion too.
  */
 export function watchContextFiles(deps: ContextWatchDeps): vscode.Disposable {
-	const files = deps.createFileSystemWatcher("**/.wso2/context.yaml");
+	// `.choreo` is where WSO2 Integrator 5.1 kept it before `.wso2`, as Devant's workspaces still may.
+	const files = deps.createFileSystemWatcher("**/{.wso2,.choreo}/context.yaml");
 	const folders = deps.createFileSystemWatcher("**/.wso2");
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	// A checkout or a save can touch the file several times in a row: read it once they settle.

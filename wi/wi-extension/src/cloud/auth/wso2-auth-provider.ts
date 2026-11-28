@@ -16,6 +16,7 @@
  * under the License.
  */
 
+import { ext } from "../../extensionVariables";
 import type { CloudOrganization, AuthState as WICloudAuthState } from "@wso2/wi-core";
 import { type AuthState, type Organization, type PlatformSession, type StoredSession, isCloudError } from "@wso2/wso2-cloud-client";
 import { CHOREO_CLOUD_PLATFORM, PROMPT_LOGIN_SCOPE, WSO2_CLOUD_AUTH_PROVIDER_ID, scopeForEnv, scopeForPlatform } from "@wso2/wso2-cloud-client/vscode";
@@ -149,7 +150,7 @@ export class WIAuthState implements Disposable {
 						}
 						return;
 					}
-					this.deps.logError("Could not refresh the Choreo Cloud session; keeping it", error as Error);
+					this.deps.logError(`Could not refresh the ${ext.backend.label} session; keeping it`, error as Error);
 				}
 			}
 			// A refresh replaced the stored session; its expiry and claims are the ones to publish.
@@ -211,7 +212,7 @@ export class WIAuthState implements Disposable {
 
 	/** Ends the session, telling the identity provider to revoke it. */
 	public async logout(silent = true): Promise<void> {
-		this.deps.log("Signing out from Choreo Cloud");
+		this.deps.log(`Signing out from ${ext.backend.label}`);
 		this.resetState("signed-out");
 		try {
 			await this.deps.platform.sessions.signOut({ revoke: true });
@@ -219,7 +220,7 @@ export class WIAuthState implements Disposable {
 			this.deps.logError("Error while signing out", error as Error);
 		}
 		if (!silent) {
-			window.showInformationMessage("Signed out of Choreo Cloud.");
+			window.showInformationMessage(`Signed out of ${ext.backend.label}.`);
 		}
 	}
 

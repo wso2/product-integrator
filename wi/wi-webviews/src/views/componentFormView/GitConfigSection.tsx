@@ -106,6 +106,8 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	const {
 		data: gitCredentials = [],
 		isLoading: isLoadingGitCred,
+		refetch: refetchGitCred,
+		isFetching: isFetchingGitCred,
 	} = useQuery({
 		queryKey: ["git-creds", { gitProvider, orgId, orgUuid }],
 		queryFn: () =>
@@ -255,6 +257,16 @@ export const ExistingGitConfigSection: FC<GitConfigSectionProps> = ({
 	if (!invalidRepoMsg && gitProvider && !platform.gitProviders.includes(gitProvider)) {
 		invalidRepoMsg = `Creating integrations from ${toSentenceCase(gitProvider).replaceAll("-", " ")} repositories is not supported on ${platform.label} yet. Push the integration to a GitHub repository and create it from there.`;
 		onInvalidRepoRefreshClick = refetchGitData;
+		blockCreation = true;
+	}
+
+	// A provider the platform builds from with credentials needs one configured in its console first.
+	if (!invalidRepoMsg && gitProvider && gitProvider !== GitProvider.GITHUB && !isLoadingGitCred && gitCredentials?.length === 0) {
+		onInvalidRepoActionClick = () => openConsole(wsClient, { orgHandle, section: "settings/credentials" });
+		invalidRepoMsg = `${toSentenceCase(gitProvider)} credentials needs to be configured.`;
+		invalidRepoAction = "Configure Credentials";
+		onInvalidRepoRefreshClick = refetchGitCred;
+		onInvalidRepoRefreshing = isFetchingGitCred;
 		blockCreation = true;
 	}
 

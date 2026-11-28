@@ -100,7 +100,11 @@ export function ComponentList({
 	return (
 		<ComponentListSection>
 			<ComponentListHeader>
-				<ComponentListLabel>{isBatch ? <>Select the integrations to create in {projectLink} in {platform.label}</> : <>Create this integration in {projectLink} in {platform.label}</>}</ComponentListLabel>
+				<ComponentListLabel>
+					{platform.deploysOnCreate
+						? isBatch ? <>Select Integrations to Deploy to {projectLink} in {platform.label}</> : <>Deploy integration to {projectLink} in {platform.label}</>
+						: isBatch ? <>Select the integrations to create in {projectLink} in {platform.label}</> : <>Create this integration in {projectLink} in {platform.label}</>}
+				</ComponentListLabel>
 				{isBatch && <SelectionCount>{selectedCount} of {creatableCount} selected</SelectionCount>}
 			</ComponentListHeader>
 

@@ -28,6 +28,7 @@ function backendWith(projects: Partial<CloudClient["projects"]>, components: Par
 		orgHandle: () => "acme",
 		sourceControl: {} as ChoreoCloudBackendDeps["sourceControl"],
 		submit: async () => ({ created: [], failed: [], total: 0 }),
+		projectForLocalEntry: async (): Promise<undefined> => undefined,
 		reselectOrganization: async () => undefined,
 		...deps,
 	});

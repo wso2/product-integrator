@@ -16,19 +16,15 @@
  * under the License.
  */
 
+import { DEVANT_LABEL } from "./label";
 import type { Organization } from "@wso2/wso2-cloud-client";
 import type { DevantClient } from "@wso2/wso2-cloud-client/devant/vscode";
 import { Uri, env, window } from "vscode";
 import { ext } from "../../../extensionVariables";
 
-/** The path the console's GitHub page sends the editor back to; Devant's callbacks are told apart by `platform=devant`. */
+/** The path the console's GitHub page sends the editor back to; Devant's callback also carries `platform=devant`. */
 export const GITHUB_CALLBACK_PATH = "/ghapp";
 const GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize";
-
-/** Whether a URI the editor was handed is Devant's GitHub callback. */
-export function isDevantGitHubCallback(uri: { path: string; query: string }): boolean {
-	return uri.path === GITHUB_CALLBACK_PATH && new URLSearchParams(uri.query).get("platform") === "devant";
-}
 
 /** The state the console's GitHub page reads: where to send the editor back to, and for which organization. */
 async function githubState(org: Organization): Promise<string> {
@@ -57,9 +53,9 @@ export async function completeGitHubCallback(client: DevantClient, query: string
 	const orgId = params.get("orgId");
 	if (!code || !orgId) {
 		// The install flow returns with no code: the app is on the owner now.
-		void window.showInformationMessage("The Devant GitHub app was installed. Refresh the form to see the repositories.");
+		void window.showInformationMessage(`The ${DEVANT_LABEL} GitHub app was installed. Refresh the form to see the repositories.`);
 		return;
 	}
 	await client.api.obtainGithubToken({ code, orgId });
-	void window.showInformationMessage("GitHub is connected to Devant. Refresh the form to see the repositories.");
+	void window.showInformationMessage(`GitHub is connected to ${DEVANT_LABEL}. Refresh the form to see the repositories.`);
 }

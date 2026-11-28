@@ -23,7 +23,7 @@ import { BridgeLayer } from "../../BridgeLayer";
 import { ext } from "../../extensionVariables";
 import { handleCloudError } from "../platform/error-handler";
 import { isPlatformReady, setExtensionName } from "./cmd-utils";
-import { pickPlatform, switchPlatform } from "./platform-cmd";
+import { pickPlatform, rememberPlatform, switchPlatform } from "./platform-cmd";
 import { cloudPlaceName, pickRegion } from "./region-cmd";
 
 export function signInCommand(context: ExtensionContext) {
@@ -35,6 +35,17 @@ export function signInCommand(context: ExtensionContext) {
 				isPlatformReady(ext);
 				if (!ext.authProvider) {
 					throw new Error("The cloud layer is not active yet.");
+				}
+				// A platform that switches organization without the browser does so here.
+				if (params?.reselectOrganization && ext.backend.pickOrganization) {
+					if (await ext.backend.pickOrganization()) {
+						await ext.authProvider.initAuth();
+						const session = ext.authProvider.session;
+						if (session) {
+							window.showInformationMessage(`Switched to the organization ${session.org.name}.`);
+						}
+					}
+					return;
 				}
 				// Choosing an organization again stays in the region the session is in.
 				if (!params?.reselectOrganization) {
@@ -50,6 +61,7 @@ export function signInCommand(context: ExtensionContext) {
 							await switchPlatform(chosen);
 							if (ext.authProvider.isLoggedIn && ext.authProvider.session) {
 								const kept = ext.authProvider.session;
+								await rememberPlatform();
 								window.showInformationMessage(`Signed in to ${cloudPlaceName()} as ${kept.user.email ?? kept.user.displayName} (${kept.org.name})`);
 								return;
 							}
@@ -67,6 +79,7 @@ export function signInCommand(context: ExtensionContext) {
 						await ext.authProvider.initAuth();
 						if (ext.authProvider.isLoggedIn && ext.authProvider.session) {
 							const kept = ext.authProvider.session;
+							await rememberPlatform();
 							window.showInformationMessage(`Signed in to ${cloudPlaceName()} as ${kept.user.email ?? kept.user.displayName} (${kept.org.name})`);
 							return;
 						}
@@ -81,6 +94,8 @@ export function signInCommand(context: ExtensionContext) {
 						return ext.authProvider!.signIn({ reselectOrganization: params?.reselectOrganization });
 					},
 				);
+				// The platform signed in to is this workspace's from now on; one only picked is not.
+				await rememberPlatform();
 				window.showInformationMessage(`Signed in to ${cloudPlaceName()} as ${session.user.email ?? session.user.displayName} (${session.org.name})`);
 			} catch (error) {
 				if (isCloudError(error) && error.code === "login_cancelled") {

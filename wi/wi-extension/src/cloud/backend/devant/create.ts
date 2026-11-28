@@ -16,6 +16,7 @@
  * under the License.
  */
 
+import { DEVANT_LABEL } from "./label";
 import type { WICloudCreateIntegrationParam, WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
 import { PlanLimitError, type Organization } from "@wso2/wso2-cloud-client";
 import type { DevantClient } from "@wso2/wso2-cloud-client/devant/vscode";
@@ -92,7 +93,8 @@ export async function submitDevantIntegrations(deps: DevantCreationDeps, request
 	const sourceComponentId = ext.context.workspaceState.get<string | null>(SOURCE_COMPONENT_KEY);
 	if (sourceComponentId) {
 		const listed = await api.getComponentList({ orgId: org.id, orgHandle: org.handle, projectId: devantProject.id, projectHandle: devantProject.handler });
-		const prebuilt = listed.find((item) => item.metadata.id === sourceComponentId && item.metadata.isPrebuilt);
+		// The clone keeps the integration as the editor addresses it, its name; the console's own links name its id.
+		const prebuilt = listed.find((item) => (item.metadata.id === sourceComponentId || item.metadata.name === sourceComponentId) && item.metadata.isPrebuilt);
 		if (prebuilt) {
 			return attachToPrebuilt(deps, prebuilt, org, devantProject, request, gitRoot);
 		}
@@ -133,9 +135,9 @@ export async function submitDevantIntegrations(deps: DevantCreationDeps, request
 		const message =
 			result.failed.length === 0
 				? result.created.length === 1
-					? "Created the integration in Devant."
-					: "Created the integrations in Devant."
-				: `Created ${result.created.length} of ${createParams.length} integrations in Devant.`;
+					? `Deployed the integration to ${DEVANT_LABEL}.`
+					: `Deployed the integrations to ${DEVANT_LABEL}.`
+				: `Deployed ${result.created.length} of ${createParams.length} integrations to ${DEVANT_LABEL}.`;
 		announce(message, org, project, result, workspaceFsPath);
 	}
 	if (result.failed.length > 0) {
@@ -209,8 +211,8 @@ async function assertWithinFreeLimit(client: DevantClient, org: Organization, co
 	}
 	const message =
 		remaining <= 0
-			? "Your organization has reached Devant's free usage limit. Upgrade the subscription to create more integrations."
-			: `You can create ${remaining} more integration(s). Upgrade the subscription to create more integrations.`;
+			? "Your organization has reached the free usage limit. Please upgrade your subscription to create more integrations"
+			: `You can only create ${remaining} more integration(s). Please upgrade your subscription to create more integrations.`;
 	const billingUrl = client.deployment().billingUrl;
 	if (billingUrl && org.uuid) {
 		void window.showErrorMessage(message, "Upgrade").then((choice) => {

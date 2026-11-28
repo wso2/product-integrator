@@ -24,6 +24,7 @@ import { handleCloudError } from "../platform/error-handler";
 import { contextStore, waitForContextStoreToLoad } from "../stores/context-store";
 import { isPlatformReady, requireSession, setExtensionName } from "./cmd-utils";
 import type { IOpenInConsoleParams } from "./open-in-console-cmd";
+import { SWITCH_PLATFORM_COMMAND } from "./platform-cmd";
 
 export function manageProjectContextCommand(context: ExtensionContext) {
 	context.subscriptions.push(
@@ -66,9 +67,12 @@ export function manageProjectContextCommand(context: ExtensionContext) {
 				}
 				quickPickOptions.push(
 					{ kind: QuickPickItemKind.Separator, label: "Account" },
-					{ label: "Switch Organization", description: `Signed in to ${session.org.name}`, detail: "Sign in again and choose another organization" },
-					{ label: "Sign Out", description: `Signed in as ${session.user.email ?? session.user.displayName}`, detail: "Sign Out of your account" },
+					{ label: "Switch Organization", description: `Signed in to ${session.org.name}`, detail: ext.backend.pickOrganization ? "Choose another of your organizations" : "Sign in again and choose another organization" },
 				);
+				if (ext.clients.platform.platforms.length > 1) {
+					quickPickOptions.push({ label: "Switch Platform", description: `On ${ext.backend.label}`, detail: "Work on another platform your projects are on" });
+				}
+				quickPickOptions.push({ label: "Sign Out", description: `Signed in as ${session.user.email ?? session.user.displayName}`, detail: "Sign Out of your account" });
 
 				const selection = await window.showQuickPick(quickPickOptions, { title: "Manage Project" });
 				if (selection?.label === "Open in Console") {
@@ -87,6 +91,8 @@ export function manageProjectContextCommand(context: ExtensionContext) {
 					contextStore.getState().refreshState();
 				} else if (selection?.label === "Switch Organization") {
 					commands.executeCommand(WICommandIds.SignIn, { reselectOrganization: true });
+				} else if (selection?.label === "Switch Platform") {
+					commands.executeCommand(SWITCH_PLATFORM_COMMAND);
 				} else if (selection?.label === "Sign Out") {
 					commands.executeCommand(WICommandIds.SignOut);
 				}

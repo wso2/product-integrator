@@ -16,12 +16,11 @@
  * under the License.
  */
 
+import { CLOUD_PLATFORM_STATE_KEY } from "@wso2/wso2-cloud-client/vscode";
 import { WICommandIds } from "@wso2/wso2-platform-core";
 import { type ExtensionContext, type QuickPickItem, commands, window } from "vscode";
 import { ext } from "../../extensionVariables";
-import { CHOREO_CLOUD_LABEL, CHOREO_CLOUD_PLATFORM } from "../backend/choreo-cloud";
-import { DEVANT_LABEL, DEVANT_PLATFORM } from "../backend/devant";
-import { WORKSPACE_PLATFORM_KEY } from "../backend/devant/detection";
+import { WORKSPACE_PLATFORM_KEY } from "../backend/workspace-platform";
 import { handleCloudError } from "../platform/error-handler";
 import { isPlatformReady } from "./cmd-utils";
 
@@ -29,10 +28,14 @@ export const SWITCH_PLATFORM_COMMAND = "wso2.integrator.cloud.auth.switchPlatfor
 /** The context key that says whether another platform than Choreo Cloud is offered; the switch command shows by it. */
 export const PLATFORMS_OFFERED_CONTEXT = "wso2.integrator.cloud.platformsOffered";
 
-const LABELS: Record<string, string> = { [CHOREO_CLOUD_PLATFORM]: CHOREO_CLOUD_LABEL, [DEVANT_PLATFORM]: DEVANT_LABEL };
+/** The context key menus read the platform in use from. */
+export const CLOUD_PLATFORM_CONTEXT = "wso2.integrator.cloud.platform";
+
+/** What the pick says beside a platform that is not the current one, by its name. */
+export const platformHints = new Map<string, string>();
 
 export function platformLabel(name: string): string {
-	return LABELS[name] ?? name;
+	return ext.clients.platform.platforms.find((item) => item.name === name)?.label ?? name;
 }
 
 /** Asks which platform to work on, the current one first; the current one without asking where there is no other. */
@@ -46,22 +49,31 @@ export async function pickPlatform(options: { title: string; placeHolder: string
 		ordered.map((item): QuickPickItem & { name: string } => ({
 			name: item.name,
 			label: platformLabel(item.name),
-			description: item.name === platform.platform ? "Current" : item.name === DEVANT_PLATFORM ? "For projects still on Devant" : undefined,
+			description: item.name === platform.platform ? "Current" : platformHints.get(item.name),
 		})),
 		{ ...options, ignoreFocusOut: true },
 	);
 	return picked?.name;
 }
 
-/** Moves to `name` live and remembers it for this workspace; the session there is used if there is one. */
+/** Moves to `name` live; the session there is used if there is one. */
 export async function switchPlatform(name: string): Promise<void> {
 	const platform = ext.clients.platform;
 	if (name === platform.platform) {
 		return;
 	}
 	await platform.switchPlatform(name);
-	await ext.context.workspaceState.update(WORKSPACE_PLATFORM_KEY, name);
 	await ext.authProvider?.initAuth();
+}
+
+/** Keeps the platform in use as this workspace's, and as the one to start on elsewhere. Nothing where only one is offered. */
+export async function rememberPlatform(): Promise<void> {
+	const platform = ext.clients.platform;
+	if (platform.platforms.length < 2) {
+		return;
+	}
+	await ext.context.workspaceState.update(WORKSPACE_PLATFORM_KEY, platform.platform);
+	await ext.context.globalState.update(CLOUD_PLATFORM_STATE_KEY, platform.platform);
 }
 
 export function switchPlatformCommand(context: ExtensionContext) {
@@ -79,6 +91,7 @@ export function switchPlatformCommand(context: ExtensionContext) {
 					return;
 				}
 				await switchPlatform(chosen);
+				await rememberPlatform();
 				if (ext.authProvider?.isLoggedIn) {
 					window.showInformationMessage(`Switched to ${ext.backend.label}.`);
 					return;

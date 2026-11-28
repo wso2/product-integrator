@@ -16,26 +16,31 @@
  * under the License.
  */
 
-import { NotFoundError, NotSupportedError, type Organization } from "@wso2/wso2-cloud-client";
+import { DEVANT_LABEL, DEVANT_PLATFORM } from "./label";
+import { NotFoundError, NotSupportedError, type Organization, UnauthenticatedError } from "@wso2/wso2-cloud-client";
 import type { DevantClient } from "@wso2/wso2-cloud-client/devant/vscode";
-import type { ComponentKind, Project as DevantProject } from "@wso2/wso2-platform-core";
+import type { ComponentKind, Project as DevantProject, IWso2PlatformExtensionAPI } from "@wso2/wso2-platform-core";
+import type { DevantExtensionApiDeps } from "./extension-api";
 import { window } from "vscode";
 import { ext } from "../../../extensionVariables";
 import type { CloudBackend } from "../port";
-import { legacyContextFiles } from "./context-file";
+import { workspaceProjectDisplayName } from "../../cmds/cmd-utils";
+import { legacyContextFiles, localContextEntry } from "./context-file";
 import { submitDevantIntegrations } from "./create";
-import { authorizeGitHub, completeGitHubCallback, installGitHubApp, isDevantGitHubCallback } from "./github";
+import { GITHUB_CALLBACK_PATH, authorizeGitHub, completeGitHubCallback, installGitHubApp } from "./github";
 import { toComponent, toProject, toRepository } from "./mapping";
 
-/** Devant's name in the platform switch, as the cloud client registers it. */
-export const DEVANT_PLATFORM = "devant";
-export const DEVANT_LABEL = "Devant";
+export { DEVANT_LABEL, DEVANT_PLATFORM };
+/** What the platform pick says beside Devant, for someone choosing between it and Choreo Cloud. */
+export const DEVANT_PLATFORM_HINT = "Your existing projects";
 
 export interface DevantBackendDeps {
 	/** The Devant client of the clients in use; undefined while another platform is. */
 	client(): DevantClient | undefined;
 	/** The organization signed in to. */
 	org(): Organization | undefined;
+	/** Builds the API WSO2 Integrator 5.1 exported, over this backend's client and what it listed last. */
+	extensionApi?(deps: DevantExtensionApiDeps): IWso2PlatformExtensionAPI;
 }
 
 /**
@@ -49,14 +54,14 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 	const client = (): DevantClient => {
 		const devant = deps.client();
 		if (!devant) {
-			throw new NotSupportedError("Devant is not the platform in use.", { reason: "platform_mismatch" });
+			throw new NotSupportedError(`${DEVANT_LABEL} is not the platform in use.`, { reason: "platform_mismatch" });
 		}
 		return devant;
 	};
 	const org = (): Organization => {
 		const current = deps.org();
 		if (!current) {
-			throw new NotSupportedError("Sign in to Devant first.", { reason: "not_signed_in" });
+			throw new UnauthenticatedError("no_session", `Sign in to ${DEVANT_LABEL} first.`);
 		}
 		return current;
 	};
@@ -71,7 +76,7 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 	const project = async (handle: string): Promise<DevantProject> => {
 		const found = projects.get(handle) ?? (await listProjects()).find((item) => item.handler === handle || item.id === handle);
 		if (!found) {
-			throw new NotFoundError(`Devant has no project ${handle} in this organization.`);
+			throw new NotFoundError(`${DEVANT_LABEL} has no project ${handle} in this organization.`);
 		}
 		return found;
 	};
@@ -91,16 +96,30 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 		const matches = (item: ComponentKind) => item.metadata.name === ref || item.metadata.handler === ref || item.metadata.id === ref;
 		const found = components.get(projectHandle)?.find(matches) ?? (await listComponents(projectHandle)).find(matches);
 		if (!found) {
-			throw new NotFoundError(`Devant has no integration ${ref} in the project ${projectHandle}.`);
+			throw new NotFoundError(`${DEVANT_LABEL} has no integration ${ref} in the project ${projectHandle}.`);
 		}
 		return found;
 	};
 
+	let legacyApi: IWso2PlatformExtensionAPI | undefined;
+
 	return {
+		get platformApis() {
+			if (!deps.extensionApi) {
+				return undefined;
+			}
+			legacyApi ??= deps.extensionApi({
+				client,
+				projectOf: (handle) => projects.get(handle),
+				componentOf: (projectHandle, name) => components.get(projectHandle)?.find((item) => item.metadata.name === name),
+			});
+			return { devant: legacyApi };
+		},
 		platform: DEVANT_PLATFORM,
 		label: DEVANT_LABEL,
 		cacheNamespace: `${DEVANT_PLATFORM}:`,
 		gitProviders: ["github", "bitbucket", "gitlab-server"],
+		deploysOnCreate: true,
 		projects: {
 			list: async () => (await listProjects()).map(toProject),
 			create: async (displayName) => {
@@ -113,6 +132,29 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 				});
 				projects.set(created.handler, created);
 				return toProject(created);
+			},
+			forLocalEntry: async (workspaceDir) => {
+				const entry = localContextEntry(workspaceDir);
+				if (!entry) {
+					return undefined;
+				}
+				const current = org();
+				if (entry.org !== current.handle) {
+					window.showWarningMessage(`The workspace names the organization ${entry.org}; you are signed in to ${current.handle}. The project is created in ${current.handle}.`);
+				}
+				const found =
+					(await listProjects()).find((item) => item.handler === entry.project) ??
+					(await client().api.createProject({
+						orgId: current.id,
+						orgHandler: current.handle,
+						projectName: workspaceProjectDisplayName(workspaceDir, entry.project),
+						projectHandler: entry.project,
+						region: client().region,
+					}));
+				projects.set(found.handler, found);
+				legacyContextFiles.unlink([workspaceDir], entry);
+				legacyContextFiles.link(workspaceDir, { org: current.handle, project: found.handler });
+				return toProject(found);
 			},
 		},
 		integrations: {
@@ -158,7 +200,7 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 				}
 				const projectUrl = `${orgUrl}/projects/${encodeURIComponent(link.project)}`;
 				if (!link.integration) {
-					return projectUrl;
+					return `${projectUrl}/home`;
 				}
 				const handler = components.get(link.project)?.find((item) => item.metadata.name === link.integration)?.metadata.handler ?? link.integration;
 				return `${projectUrl}/components/${encodeURIComponent(handler)}/${encodeURIComponent(link.page ?? "overview")}`;
@@ -179,19 +221,35 @@ export function devantCloudBackend(deps: DevantBackendDeps): CloudBackend {
 				),
 		},
 		handleUri: (uri) => {
-			if (!isDevantGitHubCallback(uri)) {
+			// While Devant is in use every GitHub return is its own; the marker may not survive the console's relay.
+			if (uri.path !== GITHUB_CALLBACK_PATH) {
 				return false;
 			}
 			completeGitHubCallback(client(), uri.query).catch((error) => {
 				ext.logError("Could not connect GitHub to Devant", error as Error);
-				void window.showErrorMessage(`Could not connect GitHub to Devant: ${error instanceof Error ? error.message : String(error)}`);
+				void window.showErrorMessage(`Could not connect GitHub to ${DEVANT_LABEL}: ${error instanceof Error ? error.message : String(error)}`);
 			});
 			return true;
 		},
-		changeOrganization: async (orgId) => {
-			const target = (await client().organizations()).find((item) => item.id === orgId || item.handle === orgId || item.uuid === orgId);
+		pickOrganization: async () => {
+			const current = deps.org();
+			const organizations = await client().organizations();
+			const picked = await window.showQuickPick(
+				organizations.map((item) => ({ label: item.name, description: item.handle === current?.handle ? "Current" : item.handle, handle: item.handle })),
+				{ title: "Switch Organization", placeHolder: "Select the organization to work in", ignoreFocusOut: true },
+			);
+			if (!picked || picked.handle === current?.handle) {
+				return false;
+			}
+			projects.clear();
+			components.clear();
+			await client().selectOrganization(picked.handle);
+			return true;
+		},
+		changeOrganization: async (wanted) => {
+			const target = (await client().organizations()).find((item) => item.id === wanted || item.handle === wanted || item.uuid === wanted);
 			if (!target) {
-				throw new NotFoundError(`You do not belong to a Devant organization ${orgId}.`);
+				throw new NotFoundError(`You do not belong to an organization ${wanted}.`);
 			}
 			projects.clear();
 			components.clear();

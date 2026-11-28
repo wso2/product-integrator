@@ -140,7 +140,7 @@ let changeGeneration = 0;
 
 /** Reads every context file in the workspace and, for a workspace folder without one, the one at its git root. */
 const getAllContexts = async (previousItems: { [key: string]: ContextItemEnriched }) => {
-	const contextFiles = (await workspace.findFiles("**/.wso2/context.yaml")).map((uri) => uri.fsPath);
+	const contextFiles = (await workspace.findFiles(ext.backend.contextFiles.pattern)).map((uri) => uri.fsPath);
 	const contextItems: { [key: string]: ContextItemEnriched } = {};
 	const sessionOrg = ext.authProvider?.org?.handle;
 

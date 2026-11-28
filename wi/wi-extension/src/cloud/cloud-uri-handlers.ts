@@ -84,9 +84,19 @@ export const openClonedDir = async (params: OpenClonedDirRequest & { orgHandle?:
 	if (!params.projectName) {
 		return;
 	}
-	const session = await requireSession("open project");
+	let session = await requireSession("open project");
 	if (!session) {
 		return;
+	}
+	// A platform that changes organization without the browser moves to the link's own.
+	if (params.orgHandle && params.orgHandle !== session.org.handle && ext.backend.pickOrganization) {
+		try {
+			await ext.backend.changeOrganization(params.orgHandle);
+			await ext.authProvider?.initAuth();
+			session = ext.authProvider?.session ?? session;
+		} catch (error) {
+			ext.log(`Not moving to the organization ${params.orgHandle}: ${error instanceof Error ? error.message : String(error)}`);
+		}
 	}
 	if (params.orgHandle && params.orgHandle !== session.org.handle) {
 		window
@@ -213,7 +223,7 @@ export const cloneOrOpenDir = async (
 const switchContextAndOpenDir = async (selectedPath: string, project: Project, integrationName?: string | null) => {
 	const org = ext.authProvider?.org;
 	if (!org) {
-		window.showErrorMessage("You are not signed in to Choreo Cloud. Please sign in and try again.");
+		window.showErrorMessage(`You are not signed in to ${ext.backend.label}. Please sign in and try again.`);
 		return;
 	}
 	const gitRoot = await getGitRoot(ext.context, selectedPath);

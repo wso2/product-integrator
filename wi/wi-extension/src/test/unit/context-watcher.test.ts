@@ -51,9 +51,9 @@ describe("context file watcher", () => {
 		const watchers = fakeWatchers();
 		let refreshes = 0;
 		const watch = watchContextFiles({ ...watchers, isLoggedIn: () => true, refresh: () => refreshes++, delayMs: 10 });
-		watchers.fire("**/.wso2/context.yaml", "create");
-		watchers.fire("**/.wso2/context.yaml", "change");
-		watchers.fire("**/.wso2/context.yaml", "delete");
+		watchers.fire("**/{.wso2,.choreo}/context.yaml", "create");
+		watchers.fire("**/{.wso2,.choreo}/context.yaml", "change");
+		watchers.fire("**/{.wso2,.choreo}/context.yaml", "delete");
 		await settle();
 		assert.strictEqual(refreshes, 1);
 		watch.dispose();
@@ -73,7 +73,7 @@ describe("context file watcher", () => {
 		const watchers = fakeWatchers();
 		let refreshes = 0;
 		const watch = watchContextFiles({ ...watchers, isLoggedIn: () => false, refresh: () => refreshes++, delayMs: 10 });
-		watchers.fire("**/.wso2/context.yaml", "change");
+		watchers.fire("**/{.wso2,.choreo}/context.yaml", "change");
 		await settle();
 		assert.strictEqual(refreshes, 0);
 		watch.dispose();
@@ -83,7 +83,7 @@ describe("context file watcher", () => {
 		const watchers = fakeWatchers();
 		let refreshes = 0;
 		const watch = watchContextFiles({ ...watchers, isLoggedIn: () => true, refresh: () => refreshes++, delayMs: 10 });
-		watchers.fire("**/.wso2/context.yaml", "change");
+		watchers.fire("**/{.wso2,.choreo}/context.yaml", "change");
 		watch.dispose();
 		await settle();
 		assert.strictEqual(refreshes, 0);

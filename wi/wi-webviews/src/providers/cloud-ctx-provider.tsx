@@ -49,11 +49,11 @@ interface ICloudContext {
     authStateLoading: boolean;
     contextStateLoading: boolean;
     consoleUrl?: string;
-    /** The platform in use; WSO2 Cloud until the extension has said. */
+    /** The platform in use; Choreo Cloud until the extension has said. */
     platform: CloudPlatformInfo;
 }
 
-const DEFAULT_PLATFORM: CloudPlatformInfo = { name: "choreo-cloud", label: "WSO2 Cloud", gitProviders: ["github"] };
+const DEFAULT_PLATFORM: CloudPlatformInfo = { name: "choreo-cloud", label: "Choreo Cloud", gitProviders: ["github"] };
 
 const defaultCloudContext: ICloudContext = {
     authState: undefined,

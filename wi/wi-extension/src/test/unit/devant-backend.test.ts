@@ -23,10 +23,10 @@ import * as path from "path";
 import type { DevantClient } from "@wso2/wso2-cloud-client/devant/vscode";
 import * as yaml from "js-yaml";
 import { devantCloudBackend } from "../../cloud/backend/devant";
-import { legacyContextFiles, parseLegacyContext } from "../../cloud/backend/devant/context-file";
-import { KNOWN_DEVANT_USER_KEY, WORKSPACE_PLATFORM_KEY, isDevantOffered, startingPlatform, workspacePlatform } from "../../cloud/backend/devant/detection";
+import { legacyContextFiles, localContextEntry, parseLegacyContext } from "../../cloud/backend/devant/context-file";
+import { KNOWN_DEVANT_USER_KEY, isDevantOffered, isKnownDevantUser, startingPlatform, startsOnDevantWhenSignedOut, workspacePlatform } from "../../cloud/backend/devant/detection";
+import { WORKSPACE_PLATFORM_KEY } from "../../cloud/backend/workspace-platform";
 import { toCreateRequest } from "../../cloud/backend/devant/create";
-import { isDevantGitHubCallback } from "../../cloud/backend/devant/github";
 import { toComponent, toRepository } from "../../cloud/backend/devant/mapping";
 
 class Memento {
@@ -89,6 +89,52 @@ describe("Devant context files", () => {
 		writeFileSync(file, yaml.dump([{ org: "acme", project: "shop" }]));
 		assert.strictEqual(workspacePlatform([root]), "devant");
 	});
+
+	it("reads nothing from the file of a new workspace, which names a project not yet created on either platform", () => {
+		mkdirSync(path.join(root, ".wso2"));
+		const file = path.join(root, ".wso2", "context.yaml");
+		writeFileSync(file, yaml.dump([{ org: "acme", project: "shop", local: true }]));
+		assert.strictEqual(workspacePlatform([root]), undefined);
+		writeFileSync(file, yaml.dump({ version: 2, contexts: [{ org: "acme", project: "shop", local: true }] }));
+		assert.strictEqual(workspacePlatform([root]), undefined);
+	});
+
+	it("finds the file at the repository's root from a folder inside it, and looks no further up", () => {
+		mkdirSync(path.join(root, ".wso2"));
+		writeFileSync(path.join(root, ".wso2", "context.yaml"), yaml.dump([{ org: "acme", project: "shop" }]));
+		const folder = path.join(root, "repo", "services", "orders");
+		mkdirSync(folder, { recursive: true });
+		assert.strictEqual(workspacePlatform([folder]), undefined, "no repository between the folder and the file");
+		mkdirSync(path.join(root, ".git"));
+		assert.strictEqual(workspacePlatform([folder]), "devant");
+		mkdirSync(path.join(root, "repo", ".git"));
+		assert.strictEqual(workspacePlatform([folder]), undefined, "the file is above the folder's repository");
+	});
+
+	it("keeps the mark of a project not yet created, and drops it when the project is linked", () => {
+		mkdirSync(path.join(root, ".wso2"));
+		const file = path.join(root, ".wso2", "context.yaml");
+		writeFileSync(file, yaml.dump([{ org: "acme", project: "billing" }, { org: "acme", project: "shop", local: true }]));
+		assert.deepStrictEqual(legacyContextFiles.read(file), [{ org: "acme", project: "billing" }, { org: "acme", project: "shop", local: true }]);
+		assert.deepStrictEqual(localContextEntry(root), { org: "acme", project: "shop", local: true });
+		legacyContextFiles.link(root, { org: "acme", project: "payments" });
+		assert.deepStrictEqual(yaml.load(readFileSync(file, "utf8")), [{ org: "acme", project: "billing" }, { org: "acme", project: "shop", local: true }, { org: "acme", project: "payments" }]);
+		legacyContextFiles.link(root, { org: "acme", project: "shop" });
+		assert.deepStrictEqual(yaml.load(readFileSync(file, "utf8")), [{ org: "acme", project: "billing" }, { org: "acme", project: "shop" }, { org: "acme", project: "payments" }]);
+		assert.strictEqual(localContextEntry(root), undefined);
+	});
+
+	it("reads the project not yet created from the document the Ballerina extension writes", () => {
+		mkdirSync(path.join(root, ".wso2"));
+		writeFileSync(path.join(root, ".wso2", "context.yaml"), yaml.dump({ version: 2, contexts: [{ org: "acme", project: "shop", local: true }] }));
+		assert.deepStrictEqual(localContextEntry(root), { org: "acme", project: "shop", local: true });
+	});
+
+	it("leaves a document that links other projects to Choreo Cloud", () => {
+		mkdirSync(path.join(root, ".wso2"));
+		writeFileSync(path.join(root, ".wso2", "context.yaml"), yaml.dump({ version: 2, contexts: [{ org: "acme", project: "billing" }, { org: "acme", project: "shop", local: true }] }));
+		assert.strictEqual(localContextEntry(root), undefined);
+	});
 });
 
 describe("Devant at start-up", () => {
@@ -106,20 +152,42 @@ describe("Devant at start-up", () => {
 
 	it("is not offered to someone never seen using it", () => {
 		assert.strictEqual(isDevantOffered(signs()), false);
-		assert.strictEqual(startingPlatform(signs(), undefined), undefined);
+		assert.strictEqual(startingPlatform(signs()), undefined);
+		assert.strictEqual(startsOnDevantWhenSignedOut(signs(), undefined), false);
 	});
 
-	it("starts someone who used 5.1 on Devant, once, and remembers they did", () => {
+	it("leaves someone who used 5.1 to their Choreo Cloud session, and to Devant only without one", () => {
 		const seen = signs({ "data-cache-zustand-storage-v5": "{}" });
-		assert.strictEqual(startingPlatform(seen, undefined), "devant");
+		assert.strictEqual(startingPlatform(seen), undefined, "Choreo Cloud's session is read first");
+		assert.strictEqual(startsOnDevantWhenSignedOut(seen, undefined), true);
 		assert.strictEqual(seen.globalState.get(KNOWN_DEVANT_USER_KEY), true);
-		assert.strictEqual(startingPlatform(seen, "choreo-cloud"), undefined, "the platform last used then decides");
+		assert.strictEqual(startsOnDevantWhenSignedOut(seen, "choreo-cloud"), false, "the platform last used then decides");
+	});
+
+	it("does not take a new workspace's file for a sign of Devant", () => {
+		const dir = mkdtempSync(path.join(tmpdir(), "wi-new-workspace-"));
+		mkdirSync(path.join(dir, ".wso2"));
+		writeFileSync(path.join(dir, ".wso2", "context.yaml"), yaml.dump([{ org: "acme", project: "shop", local: true }]));
+		const fresh = signs({}, [dir]);
+		assert.strictEqual(isKnownDevantUser(fresh), false);
+		assert.strictEqual(isDevantOffered(fresh), false);
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("opens a workspace linked to Devant there, whatever was used last", () => {
+		const dir = mkdtempSync(path.join(tmpdir(), "wi-devant-workspace-"));
+		mkdirSync(path.join(dir, ".choreo"));
+		writeFileSync(path.join(dir, ".choreo", "context.yaml"), yaml.dump([{ org: "acme", project: "shop" }]));
+		const linked = signs({}, [dir]);
+		assert.strictEqual(startingPlatform(linked), "devant");
+		assert.strictEqual(startsOnDevantWhenSignedOut(linked, undefined), false);
+		rmSync(dir, { recursive: true, force: true });
 	});
 
 	it("lets the workspace's own switch win, and offers Devant to someone who turned it on", () => {
 		const enabled = signs({}, [], true, { [WORKSPACE_PLATFORM_KEY]: "devant" });
 		assert.strictEqual(isDevantOffered(enabled), true);
-		assert.strictEqual(startingPlatform(enabled, "choreo-cloud"), "devant");
+		assert.strictEqual(startingPlatform(enabled), "devant");
 	});
 });
 
@@ -143,6 +211,10 @@ describe("Devant backend", () => {
 				},
 				deleteComponent: async (params: { componentId: string; projectId: string }) => {
 					calls.push(`delete ${params.componentId} ${params.projectId}`);
+				},
+				createProject: async (params: { projectName: string; projectHandler?: string; orgHandler: string }) => {
+					calls.push(`create ${params.projectHandler} "${params.projectName}" in ${params.orgHandler}`);
+					return { id: "uuid-new", handler: params.projectHandler, name: params.projectName, orgId: "101", createdData: "", region: "US", version: "1.0.0", description: "" };
 				},
 			},
 		}) as unknown as DevantClient;
@@ -180,6 +252,31 @@ describe("Devant backend", () => {
 		await assert.rejects(backend.changeOrganization("999"));
 	});
 
+	it("creates the project a new workspace names, with its handle, and links the workspace to it", async () => {
+		const dir = mkdtempSync(path.join(tmpdir(), "devant-local-"));
+		const file = path.join(dir, ".wso2", "context.yaml");
+		mkdirSync(path.join(dir, ".wso2"));
+		const calls: string[] = [];
+		const backend = devantCloudBackend({ client: () => fakeClient(calls), org: () => ({ id: "101", handle: "acme", name: "Acme" }) });
+		try {
+			assert.strictEqual(await backend.projects.forLocalEntry(dir), undefined, "no file names one");
+			writeFileSync(file, yaml.dump([{ org: "acme", project: "order-flows", local: true }]));
+			const created = await backend.projects.forLocalEntry(dir);
+			assert.strictEqual(created?.id, "order-flows");
+			assert.deepStrictEqual(calls, ["projects 101", 'create order-flows "Order Flows" in acme']);
+			assert.deepStrictEqual(yaml.load(readFileSync(file, "utf8")), [{ org: "acme", project: "order-flows" }]);
+
+			// One that exists is found, not created again; the Ballerina extension's document becomes the 5.1 list.
+			writeFileSync(file, yaml.dump({ version: 2, contexts: [{ org: "acme", project: "shop", local: true }] }));
+			calls.length = 0;
+			assert.strictEqual((await backend.projects.forLocalEntry(dir))?.id, "shop");
+			assert.deepStrictEqual(calls, ["projects 101"]);
+			assert.deepStrictEqual(yaml.load(readFileSync(file, "utf8")), [{ org: "acme", project: "shop" }]);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("maps a component with no source to no repository", () => {
 		const bare = { ...(COMPONENT as object), spec: { type: "service", subType: "", source: {}, build: {} } } as never;
 		assert.strictEqual(toRepository(bare), undefined);
@@ -213,9 +310,9 @@ describe("Devant create", () => {
 		assert.ok(request.type, "a known scope maps to a type");
 	});
 
-	it("takes only its own GitHub callbacks", () => {
-		assert.ok(isDevantGitHubCallback({ path: "/ghapp", query: "platform=devant&code=x&orgId=101" }));
-		assert.ok(!isDevantGitHubCallback({ path: "/ghapp", query: "code=x" }));
-		assert.ok(!isDevantGitHubCallback({ path: "/signin", query: "platform=devant" }));
+	it("leaves URIs other than GitHub's return to the shared handlers", () => {
+		const backend = devantCloudBackend({ client: () => ({}) as never, org: () => undefined });
+		assert.strictEqual(backend.handleUri?.({ path: "/open", query: "org=acme" }), false);
+		assert.strictEqual(backend.handleUri?.({ path: "/signin", query: "platform=devant" }), false);
 	});
 });

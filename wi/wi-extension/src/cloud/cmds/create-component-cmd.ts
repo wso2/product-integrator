@@ -16,7 +16,6 @@
  * under the License.
  */
 
-import { existsSync, readFileSync } from "fs";
 import * as os from "os";
 import * as path from "path";
 import type { WICloudCreateIntegrationParam, WICloudSubmitComponentsReq, WICloudSubmitComponentsResp } from "@wso2/wi-core";
@@ -47,7 +46,7 @@ import { getGitRemotes, getGitRoot, relativePath } from "../git/util";
 import { CancelledError, handleCloudError } from "../platform/error-handler";
 import { contextStore, repositorySubPathOf, repositoryUrlOf, waitForContextStoreToLoad } from "../stores/context-store";
 import { dataCacheStore } from "../stores/data-cache-store";
-import { isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensionName, toProjectName, toResourceName } from "./cmd-utils";
+import { isPlatformReady, requireSession, selectProjectWithCreateNew, setExtensionName, toProjectName, toResourceName, workspaceProjectDisplayName } from "./cmd-utils";
 import { showReloadWorkspaceMessage, showViewInConsoleMessage } from "./create-messages";
 
 /**
@@ -93,7 +92,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 					} else if (StateMachine.getContext().projectType === ProjectType.MI) {
 						buildPackLang = "microintegrator";
 					} else {
-						throw new Error("Please ensure that you are within a valid Ballerina or MI project to create an integration in Choreo Cloud");
+						throw new Error(`Please ensure that you are within a valid Ballerina or MI project to create an integration in ${ext.backend.label}`);
 					}
 				}
 				if (ext.isDevantCloudEditor && params?.integrations?.length > 1) {
@@ -122,7 +121,7 @@ export function createNewComponentCommand(context: ExtensionContext) {
 				let selectedProject = contextStore.getState().state.selected?.project;
 
 				if (params?.workspaceDir && !selectedProject) {
-					selectedProject = await createProjectFromLocalMetadata(params.workspaceDir);
+					selectedProject = await backend.projects.forLocalEntry(params.workspaceDir);
 				}
 				if (!selectedProject) {
 					selectedProject = (await selectProjectWithCreateNew(`Loading projects from '${session.org.name}'`, `Select the project from '${session.org.name}', to create the integration in`)).selectedProject;
@@ -633,7 +632,7 @@ const markCodeServerDeployed = async () => {
 };
 
 /** If the context file has an entry marked `local: true`, creates the project it names and clears the mark. */
-const createProjectFromLocalMetadata = async (workspacePath: string): Promise<Project | undefined> => {
+export const createProjectFromLocalMetadata = async (workspacePath: string): Promise<Project | undefined> => {
 	try {
 		const localEntry = localContextEntry(workspacePath);
 		if (!localEntry) {
@@ -661,17 +660,7 @@ const createProjectFromLocalMetadata = async (workspacePath: string): Promise<Pr
 			return finish(existing);
 		}
 
-		// A readable name from Ballerina.toml [workspace].title, else from the handle.
-		let displayName: string | undefined;
-		const ballerinaTomlPath = path.join(workspacePath, "Ballerina.toml");
-		if (existsSync(ballerinaTomlPath)) {
-			const titleMatch = readFileSync(ballerinaTomlPath, "utf8").match(/^\[workspace\][^[]*title\s*=\s*"([^"]+)"/ms);
-			displayName = titleMatch?.[1];
-		}
-		displayName ??= localEntry.project
-			.split("-")
-			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-			.join(" ");
+		const displayName = workspaceProjectDisplayName(workspacePath, localEntry.project);
 		const name = toProjectName(localEntry.project);
 		const created = await window.withProgress({ title: `Creating new cloud project ${displayName}...`, location: ProgressLocation.Notification }, () => cloud.projects.create({ name, displayName }));
 		dataCacheStore.getState().setProjects(session.org.handle, [...projects, created]);
